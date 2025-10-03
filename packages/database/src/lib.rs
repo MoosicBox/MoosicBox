@@ -188,6 +188,8 @@ pub enum DatabaseValue {
     UNumberOpt(Option<u64>),
     Real(f64),
     RealOpt(Option<f64>),
+    Real32(f32),
+    Real32Opt(Option<f32>),
     NowPlus(SqlInterval),
     Now,
     DateTime(NaiveDateTime),
@@ -254,7 +256,17 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_f64(&self) -> Option<f64> {
         match self {
+            Self::Real32(value) | Self::Real32Opt(Some(value)) => Some(f64::from(*value)),
             Self::Real(value) | Self::RealOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_f32(&self) -> Option<f32> {
+        match self {
+            Self::Real32(value) | Self::Real32Opt(Some(value)) => Some(*value),
             _ => None,
         }
     }
@@ -310,7 +322,7 @@ impl From<String> for DatabaseValue {
 
 impl From<f32> for DatabaseValue {
     fn from(val: f32) -> Self {
-        Self::Real(f64::from(val))
+        Self::Real32(val)
     }
 }
 
@@ -439,6 +451,33 @@ impl TryFrom<DatabaseValue> for i32 {
                 Ok(Self::try_from(value)?)
             }
             _ => Err(TryFromError::CouldNotConvert("i32".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for f32 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => Ok(value),
+            #[allow(clippy::cast_possible_truncation)]
+            DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => Ok(value as Self),
+            _ => Err(TryFromError::CouldNotConvert("f32".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for f64 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => Ok(value),
+            DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            _ => Err(TryFromError::CouldNotConvert("f64".into())),
         }
     }
 }

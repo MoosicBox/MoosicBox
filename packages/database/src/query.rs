@@ -176,6 +176,7 @@ impl Expression for DatabaseValue {
             Self::Null
                 | Self::BoolOpt(None)
                 | Self::RealOpt(None)
+                | Self::Real32Opt(None)
                 | Self::StringOpt(None)
                 | Self::NumberOpt(None)
                 | Self::UNumberOpt(None)

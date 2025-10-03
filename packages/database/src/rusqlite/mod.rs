@@ -399,7 +399,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None) => "NULL".to_string(),
+                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval(interval);
@@ -1549,7 +1550,8 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None) => {
+                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
@@ -1570,6 +1572,9 @@ fn rusqlite_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::NowPlus(interval) => {
@@ -1967,6 +1972,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                             crate::DatabaseValue::UNumber(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
                             _ => {
@@ -2178,6 +2184,7 @@ fn rusqlite_exec_modify_column_workaround(
                 crate::DatabaseValue::UNumber(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                 crate::DatabaseValue::Real(r) => r.to_string(),
+                crate::DatabaseValue::Real32(r) => r.to_string(),
                 crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
                 _ => {
@@ -2417,11 +2424,15 @@ fn modify_create_table_sql(
             | crate::DatabaseValue::NumberOpt(None)
             | crate::DatabaseValue::UNumberOpt(None)
             | crate::DatabaseValue::RealOpt(None)
+            | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
                 i.to_string()
             }
             crate::DatabaseValue::Real(f) | crate::DatabaseValue::RealOpt(Some(f)) => f.to_string(),
+            crate::DatabaseValue::Real32(f) | crate::DatabaseValue::Real32Opt(Some(f)) => {
+                f.to_string()
+            }
             crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
                 if *b { "1" } else { "0" }.to_string()
             }
@@ -2940,6 +2951,7 @@ fn bind_values(
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now
                 | DatabaseValue::NowPlus(..) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
@@ -2974,6 +2986,12 @@ fn bind_values(
                 }
                 DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
+                    statement.raw_bind_parameter(i, f64::from(*value))?;
                     if !constant_inc {
                         i += 1;
                     }

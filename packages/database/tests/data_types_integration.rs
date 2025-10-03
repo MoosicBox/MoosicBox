@@ -258,7 +258,6 @@ mod postgres_data_type_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
-    #[ignore = "PostgreSQL REAL type requires Real32 variant - will be added with proper f32/f64 distinction"]
     async fn test_postgres_floating_point_types() {
         let suite = PostgresDataTypeTests;
         suite.test_floating_point_types().await;
@@ -344,7 +343,6 @@ mod postgres_sqlx_data_type_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
-    #[ignore = "PostgreSQL REAL type requires Real32 variant - will be added with proper f32/f64 distinction"]
     async fn test_postgres_sqlx_floating_point_types() {
         let suite = PostgresSqlxDataTypeTests;
         suite.test_floating_point_types().await;

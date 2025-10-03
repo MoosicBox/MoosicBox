@@ -244,7 +244,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None) => "NULL".to_string(),
+                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowPlus(interval) => format_mysql_now_plus(interval),
                 _ => "?".to_string(),
@@ -755,6 +756,8 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real(r) => query_builder.bind(*r),
                 crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -804,6 +807,8 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real(r) => query_builder.bind(*r),
                 crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1282,6 +1287,8 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real(r) => query_builder.bind(*r),
                 crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1330,6 +1337,8 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real(r) => query_builder.bind(*r),
                 crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1701,7 +1710,8 @@ async fn mysql_sqlx_exec_create_table(
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None) => {
+                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
@@ -1722,6 +1732,9 @@ async fn mysql_sqlx_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::NowPlus(interval) => {
@@ -2075,6 +2088,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                             crate::DatabaseValue::UNumber(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
                             _ => {
@@ -2257,6 +2271,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                             crate::DatabaseValue::UNumber(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
                             _ => {
@@ -2626,6 +2641,7 @@ where
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
@@ -2642,6 +2658,9 @@ where
                     );
                 }
                 DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
+                    query = query.bind(*value);
+                }
+                DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
                     query = query.bind(*value);
                 }
                 DatabaseValue::NowPlus(_interval) => (),

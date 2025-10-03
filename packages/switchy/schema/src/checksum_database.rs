@@ -692,6 +692,9 @@ mod tests {
         DatabaseValue::Real(std::f64::consts::PI).update_digest(&mut hasher);
         DatabaseValue::RealOpt(Some(std::f64::consts::PI)).update_digest(&mut hasher);
         DatabaseValue::RealOpt(None).update_digest(&mut hasher);
+        DatabaseValue::Real32(std::f32::consts::PI).update_digest(&mut hasher);
+        DatabaseValue::Real32Opt(Some(std::f32::consts::PI)).update_digest(&mut hasher);
+        DatabaseValue::Real32Opt(None).update_digest(&mut hasher);
         DatabaseValue::Now.update_digest(&mut hasher);
         DatabaseValue::now()
             .plus_days(1)
@@ -955,6 +958,7 @@ mod tests {
 
 // Digest implementations for database types
 impl Digest for DatabaseValue {
+    #[allow(clippy::too_many_lines)]
     fn update_digest(&self, hasher: &mut Sha256) {
         match self {
             Self::Null => hasher.update(b"NULL"),
@@ -1024,6 +1028,18 @@ impl Digest for DatabaseValue {
             }
             Self::RealOpt(opt) => {
                 hasher.update(b"REALOPT:");
+                if let Some(r) = opt {
+                    hasher.update(r.to_le_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::Real32(r) => {
+                hasher.update(b"REAL32:");
+                hasher.update(r.to_le_bytes());
+            }
+            Self::Real32Opt(opt) => {
+                hasher.update(b"REAL32OPT:");
                 if let Some(r) = opt {
                     hasher.update(r.to_le_bytes());
                 } else {

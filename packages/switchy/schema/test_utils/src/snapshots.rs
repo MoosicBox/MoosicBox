@@ -663,13 +663,18 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         }
         DatabaseValue::Real(f) | DatabaseValue::RealOpt(Some(f)) => serde_json::Number::from_f64(f)
             .map_or(serde_json::Value::Null, serde_json::Value::Number),
+        DatabaseValue::Real32(f) | DatabaseValue::Real32Opt(Some(f)) => {
+            serde_json::Number::from_f64(f64::from(f))
+                .map_or(serde_json::Value::Null, serde_json::Value::Number)
+        }
         DatabaseValue::Null
         | DatabaseValue::StringOpt(None)
         | DatabaseValue::BoolOpt(None)
         | DatabaseValue::Int32Opt(None)
         | DatabaseValue::NumberOpt(None)
         | DatabaseValue::UNumberOpt(None)
-        | DatabaseValue::RealOpt(None) => serde_json::Value::Null,
+        | DatabaseValue::RealOpt(None)
+        | DatabaseValue::Real32Opt(None) => serde_json::Value::Null,
         DatabaseValue::DateTime(dt) => serde_json::Value::String(dt.to_string()),
         DatabaseValue::NowPlus(interval) => {
             serde_json::Value::String(format!("NOW + {interval:?}"))
