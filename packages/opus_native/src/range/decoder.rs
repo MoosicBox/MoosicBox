@@ -310,6 +310,70 @@ impl RangeDecoder {
 
         (self.total_bits * 8).saturating_sub(lg)
     }
+
+    /// Decodes a Laplace-distributed value per RFC 6716 Section 4.3.2.1.
+    ///
+    /// Reference implementation: `ec_laplace_decode()` in laplace.c
+    ///
+    /// # Arguments
+    ///
+    /// * `fs` - Probability of zero (fs0 parameter from `e_prob_model`)
+    /// * `decay` - Decay parameter for geometric distribution
+    ///
+    /// # Returns
+    ///
+    /// Signed integer from Laplace distribution
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoding fails
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    pub fn ec_laplace_decode(&mut self, fs: u32, decay: u32) -> Result<i32> {
+        const LAPLACE_MINP: u32 = 1;
+        const LAPLACE_LOG_MINP: u32 = 0;
+        const LAPLACE_NMIN: u32 = 16;
+
+        let mut val: i32 = 0;
+        let fm = self.ec_decode_bin(15)?;
+        let mut fl: u32 = 0;
+        let mut fs_current = fs;
+
+        if fm >= fs {
+            val += 1;
+            fl = fs;
+
+            let ft = 32768_u32
+                .saturating_sub(LAPLACE_MINP * (2 * LAPLACE_NMIN))
+                .saturating_sub(fs);
+            fs_current = (ft.saturating_mul(16384_u32.saturating_sub(decay))) >> 15;
+            fs_current = fs_current.saturating_add(LAPLACE_MINP);
+
+            while fs_current > LAPLACE_MINP && fm >= fl.saturating_add(2 * fs_current) {
+                fs_current *= 2;
+                fl = fl.saturating_add(fs_current);
+                fs_current =
+                    ((fs_current.saturating_sub(2 * LAPLACE_MINP)).saturating_mul(decay)) >> 15;
+                fs_current = fs_current.saturating_add(LAPLACE_MINP);
+                val += 1;
+            }
+
+            if fs_current <= LAPLACE_MINP {
+                let di = (fm.saturating_sub(fl)) >> (LAPLACE_LOG_MINP + 1);
+                val += di as i32;
+                fl = fl.saturating_add(2 * di * LAPLACE_MINP);
+            }
+
+            if fm < fl.saturating_add(fs_current) {
+                val = -val;
+            } else {
+                fl = fl.saturating_add(fs_current);
+            }
+        }
+
+        self.ec_dec_update(fl, fl.saturating_add(fs_current).min(32768), 32768)?;
+
+        Ok(val)
+    }
 }
 
 #[cfg(test)]
@@ -623,5 +687,33 @@ mod tests {
         assert!(result.is_ok());
         let k = result.unwrap();
         assert_eq!(k, 0);
+    }
+
+    #[test]
+    fn test_laplace_decode_zero() {
+        let data = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let result = decoder.ec_laplace_decode(16384, 6000);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_laplace_decode_nonzero() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let result = decoder.ec_laplace_decode(16384, 6000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_laplace_decode_various_decay() {
+        let data = vec![0xAA, 0x55, 0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let result = decoder.ec_laplace_decode(10000, 8000);
+        assert!(result.is_ok());
     }
 }
