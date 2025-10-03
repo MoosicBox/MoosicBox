@@ -193,7 +193,31 @@ impl CeltDecoder {
 
     /// Decodes coarse energy for all bands
     ///
-    /// RFC 6716 Section 4.3.2.1 (lines 6034-6077)
+    /// Implements 2-D prediction filter for energy envelope decoding using
+    /// time-domain (inter-frame) and frequency-domain (intra-frame) prediction.
+    ///
+    /// ## RFC References
+    ///
+    /// * RFC 6716 Section 4.3.2.1 (lines 6034-6077)
+    /// * Prediction filter: RFC lines 6055-6063
+    ///   - `A(z_l, z_b) = (1 - alpha*z_l^-1)*(1 - z_b^-1) / (1 - beta*z_b^-1)`
+    ///
+    /// ## Reference Implementation
+    ///
+    /// * Function: `unquant_coarse_energy()` in `celt/quant_bands.c`
+    /// * URL: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L427-490>
+    /// * IIR filter (L487): `prev[c] = prev[c] + q - MULT16_32_Q15(beta,q)`
+    ///
+    /// ## Critical Implementation Note
+    ///
+    /// The frequency prediction uses an IIR filter state update:
+    /// ```c
+    /// prev[c] = prev[c] + q - MULT16_32_Q15(beta,q);  // L487
+    /// ```
+    /// Equivalent to: `prev = prev + q*(1 - beta)`
+    ///
+    /// **Bug Fixed in Phase 4.2**: Initial implementation incorrectly used
+    /// `prev = beta * energy[band]` which violated RFC specification.
     ///
     /// # Arguments
     ///
@@ -264,6 +288,8 @@ impl CeltDecoder {
     ///
     /// RFC 6716 Section 4.3.2.2 (lines 6079-6087)
     ///
+    /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L492-510>
+    ///
     /// # Arguments
     ///
     /// * `range_decoder` - Range decoder state
@@ -313,6 +339,8 @@ impl CeltDecoder {
     /// Decodes final fine energy allocation from unused bits
     ///
     /// RFC 6716 Section 4.3.2.2 (lines 6089-6099)
+    ///
+    /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L512-539>
     ///
     /// # Arguments
     ///

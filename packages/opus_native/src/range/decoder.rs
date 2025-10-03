@@ -313,7 +313,9 @@ impl RangeDecoder {
 
     /// Decodes a Laplace-distributed value per RFC 6716 Section 4.3.2.1.
     ///
-    /// Reference implementation: `ec_laplace_decode()` in laplace.c
+    /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/laplace.c#L101-142>
+    ///
+    /// Constants: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/laplace.c#L38-42>
     ///
     /// # Arguments
     ///

@@ -2,6 +2,14 @@
 //!
 //! This module contains all probability distributions, tables, and
 //! constants required for CELT decoding.
+//!
+//! ## Reference Implementation
+//!
+//! All constants extracted from xiph/opus (Xiph.Org Foundation):
+//! * Repository: <https://gitlab.xiph.org/xiph/opus>
+//! * Commit: `34bba701ae97c913de719b1f7c10686f62cddb15`
+//! * License: BSD 3-Clause
+//! * Verified: 2025-10-02
 
 /// Number of CELT bands (RFC Table 55)
 pub const CELT_NUM_BANDS: usize = 21;
@@ -60,7 +68,8 @@ pub const CELT_DUAL_STEREO_PDF: &[u8] = &[2, 1, 0];
 /// Energy probability model for Laplace distribution
 ///
 /// RFC 6716 line 6073: "These parameters are held in the `e_prob_model` table"
-/// Reference: `quant_bands.c` in libopus
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L77-138>
 ///
 /// Format: `[frame_size_index][intra_flag][band * 2]`
 /// * `frame_size_index`: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
@@ -120,7 +129,8 @@ pub const ENERGY_PROB_MODEL: [[[u8; 42]; 2]; 4] = [
 /// Alpha coefficient for inter-frame time-domain prediction (frame-size dependent)
 ///
 /// RFC 6716 line 6062: "depend on the frame size in use when not using intra energy"
-/// Reference: `pred_coef[4]` in `quant_bands.c`
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L67-69>
 ///
 /// Values: [0.9, 0.8, 0.65, 0.5] = [29440, 26112, 21248, 16384] / 32768
 /// Index: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
@@ -134,12 +144,13 @@ pub const ENERGY_ALPHA_INTER: [f32; 4] = [
 /// Beta coefficient for intra-frame frequency-domain prediction
 ///
 /// RFC 6716 line 6063: "beta=4915/32768 when using intra energy"
-/// Reference: `beta_intra` in `quant_bands.c`
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L67-69>
 pub const ENERGY_BETA_INTRA: f32 = 4915.0 / 32768.0;
 
 /// Beta coefficient for inter-frame frequency-domain prediction (frame-size dependent)
 ///
-/// Reference: `beta_coef[4]` in `quant_bands.c`
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L67-69>
 ///
 /// Values: [30147, 22282, 12124, 6554] / 32768
 /// Index: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
