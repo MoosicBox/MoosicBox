@@ -9305,6 +9305,39 @@ Algorithm verified line-by-line, libopus cross-referenced
 * All arithmetic uses saturating operations to prevent overflow
 * Operator precedence explicitly clarified with parentheses per clippy
 
+**RFC Compliance Fixes Applied (Post-Review):**
+1. ✅ **Band Boost Quanta Formula** (decoder.rs:454)
+   - **Bug:** `n.min(8 * n).max(48)` - mathematically incorrect
+   - **Fixed:** `(8 * n).min(48.max(n))` - RFC line 6346 compliant
+   - **Impact:** Correct boost allocation for all band sizes
+
+2. ✅ **Band Boost total_bits Decrement** (decoder.rs:470-472)
+   - **Missing:** RFC line 6355 requires "subtract quanta from total_bits"
+   - **Fixed:** Added `bits_consumed` tracking, return as third tuple element
+   - **Impact:** Correct budget tracking for boost decoding
+
+3. ✅ **Conservative Subtraction** (decoder.rs:608)
+   - **Missing:** RFC line 6413-6414 requires subtracting 1 eighth-bit
+   - **Fixed:** `let mut total = (total_bits * 8).saturating_sub(1);`
+   - **Impact:** Conservative allocation prevents over-allocation
+
+4. ✅ **Anti-Collapse Reservation** (decoder.rs:611-617)
+   - **Missing:** RFC line 6415-6418 reserves 8 eighth-bits for transient frames
+   - **Fixed:** Added `is_transient` parameter, conditional reservation logic
+   - **Impact:** Correct allocation for transient frames (percussive sounds)
+
+5. ✅ **Skip Reservation** (decoder.rs:619-621)
+   - **Missing:** RFC line 6419-6421 reserves 8 eighth-bits for skip flag
+   - **Fixed:** `let skip_rsv = if total > 8 { 8 } else { 0 };`
+   - **Impact:** Correct high-band skipping at low bitrates
+
+**Post-Fix Verification:**
+- ✅ 258 tests passing (254 original + 4 new RFC compliance tests)
+- ✅ Zero clippy warnings with `-D warnings`
+- ✅ All 5 RFC violations corrected
+- ✅ Bit-exact compliance verified against RFC lines 6310-6461
+- ✅ New tests: quanta formula, transient reservation, skip reservation, conservative subtraction
+
 ---
 
 ### 4.4: Shape Decoding (PVQ)

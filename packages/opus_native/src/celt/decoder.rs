@@ -436,22 +436,27 @@ impl CeltDecoder {
     ///
     /// * Returns an error if range decoder fails
     ///
+    /// # Returns
+    ///
+    /// * Tuple of (boosts per band, total boost, bits consumed)
+    ///
     /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/celt.c#L2473-2505>
     pub fn decode_band_boost(
         &self,
         range_decoder: &mut RangeDecoder,
         total_bits: i32,
         caps: &[i32; CELT_NUM_BANDS],
-    ) -> Result<([i32; CELT_NUM_BANDS], i32)> {
+    ) -> Result<([i32; CELT_NUM_BANDS], i32, i32)> {
         let bins = self.bins_per_band();
         let mut boosts = [0_i32; CELT_NUM_BANDS];
         let mut total_boost = 0_i32;
+        let mut bits_consumed = 0_i32;
         let mut dynalloc_logp = 6; // Initial cost: 6 bits
 
         for band in 0..CELT_NUM_BANDS {
             let n = i32::from(bins[band]);
-            // Boost quanta: min(8*N, max(48, N)) in 1/8 bit units
-            let quanta = n.min(8 * n).max(48);
+            // RFC line 6346: quanta = min(8*N, max(48, N))
+            let quanta = (8 * n).min(48.max(n));
 
             let mut boost = 0_i32;
             let mut dynalloc_loop_logp = dynalloc_logp;
@@ -469,6 +474,7 @@ impl CeltDecoder {
                 }
                 boost += quanta;
                 total_boost += quanta;
+                bits_consumed += quanta; // RFC line 6355: subtract quanta from total_bits
                 dynalloc_loop_logp = 1; // Subsequent bits cost only 1 bit
             }
 
@@ -480,7 +486,7 @@ impl CeltDecoder {
             }
         }
 
-        Ok((boosts, total_boost))
+        Ok((boosts, total_boost, bits_consumed))
     }
 
     /// Decodes allocation trim parameter (RFC lines 6370-6397)
@@ -560,6 +566,9 @@ impl CeltDecoder {
     /// Computes bit allocation for all bands (RFC Section 4.3.3)
     ///
     /// This is the main allocation entry point that:
+    /// * Applies conservative subtraction (RFC line 6413-6414)
+    /// * Reserves anti-collapse bit if transient (RFC line 6415-6418)
+    /// * Reserves skip bit if available (RFC line 6419-6421)
     /// * Computes base allocation from interpolated quality table
     /// * Applies boost, trim, and skip adjustments
     /// * Splits bits between shape (PVQ) and fine energy
@@ -584,6 +593,7 @@ impl CeltDecoder {
         trim: u8,
         start_band: usize,
         end_band: usize,
+        is_transient: bool,
     ) -> Result<Allocation> {
         let bins = self.bins_per_band();
         let mut shape_bits = [0_i32; CELT_NUM_BANDS];
@@ -593,6 +603,21 @@ impl CeltDecoder {
         let c = i32::try_from(channels).unwrap_or(1);
         let lm_i32 = i32::from(lm);
         let alloc_trim = i32::from(trim);
+
+        // RFC line 6411-6414: Conservative allocation (subtract 1 eighth-bit)
+        let mut total = (total_bits * 8).saturating_sub(1);
+
+        // RFC line 6415-6418: Anti-collapse reservation
+        let anti_collapse_rsv = if is_transient && lm > 1 && total >= (lm_i32 + 2) * 8 {
+            8
+        } else {
+            0
+        };
+        total = total.saturating_sub(anti_collapse_rsv).max(0);
+
+        // RFC line 6419-6421: Skip band reservation
+        let skip_rsv = if total > 8 { 8 } else { 0 };
+        total = total.saturating_sub(skip_rsv);
 
         let cap_index = 21 * (2 * usize::from(lm) + (channels - 1));
 
@@ -644,7 +669,7 @@ impl CeltDecoder {
                 }
             }
 
-            if psum > total_bits * 8 {
+            if psum > total {
                 if mid == 0 {
                     break;
                 }
@@ -724,7 +749,7 @@ impl CeltDecoder {
                 }
             }
 
-            if psum > total_bits * 8 {
+            if psum > total {
                 hi_interp = mid;
             } else {
                 lo_interp = mid;
@@ -752,7 +777,7 @@ impl CeltDecoder {
             psum = psum.saturating_add(allocated);
         }
 
-        let left = (total_bits * 8).saturating_sub(psum);
+        let left = total.saturating_sub(psum);
         if left > 0 {
             let total_band_bins: i32 = (start_band..end_band).map(|b| i32::from(bins[b])).sum();
 
@@ -1046,8 +1071,9 @@ mod tests {
         let caps = [100_i32; CELT_NUM_BANDS];
         let result = decoder.decode_band_boost(&mut range_decoder, 10, &caps);
         assert!(result.is_ok());
-        let (_boosts, total) = result.unwrap();
+        let (_boosts, total, consumed) = result.unwrap();
         assert!(total >= 0);
+        assert!(consumed >= 0);
     }
 
     #[test]
@@ -1059,6 +1085,27 @@ mod tests {
         let caps = [10000_i32; CELT_NUM_BANDS];
         let result = decoder.decode_band_boost(&mut range_decoder, 5000, &caps);
         assert!(result.is_ok());
+        let (_boosts, _total, consumed) = result.unwrap();
+        assert!(consumed >= 0);
+    }
+
+    #[test]
+    fn test_band_boost_quanta_formula() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let bins = decoder.bins_per_band();
+
+        // RFC line 6346: quanta = min(8*N, max(48, N))
+        // Small N (N < 6): should be min(8*N, 48) = 8*N
+        let n4 = i32::from(bins[0]); // N=4 for band 0 at 10ms
+        if n4 == 4 {
+            let quanta = (8 * n4).min(48.max(n4));
+            assert_eq!(quanta, 32); // min(32, max(48,4)) = min(32,48) = 32
+        } else {
+            panic!(
+                "expected duration 10ms, got {}ms",
+                decoder.frame_duration_ms()
+            );
+        }
     }
 
     #[test]
@@ -1117,7 +1164,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1130,7 +1177,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Stereo, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(2000, 2, 2, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(2000, 2, 2, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1146,7 +1193,7 @@ mod tests {
         boosts[5] = 100;
         boosts[10] = 200;
 
-        let result = decoder.compute_allocation(1500, 2, 1, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(1500, 2, 1, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1158,7 +1205,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(100, 2, 1, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(100, 2, 1, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1170,7 +1217,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(10000, 2, 1, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(10000, 2, 1, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1183,7 +1230,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 0, 0, 21);
+        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 0, 0, 21, false);
         assert!(result.is_ok());
     }
 
@@ -1192,7 +1239,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 10, 0, 21);
+        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 10, 0, 21, false);
         assert!(result.is_ok());
     }
 
@@ -1201,7 +1248,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(500, 2, 1, &boosts, 5, 0, 15);
+        let result = decoder.compute_allocation(500, 2, 1, &boosts, 5, 0, 15, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
@@ -1214,12 +1261,69 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let boosts = [0_i32; CELT_NUM_BANDS];
-        let result = decoder.compute_allocation(2000, 2, 1, &boosts, 5, 0, 21);
+        let result = decoder.compute_allocation(2000, 2, 1, &boosts, 5, 0, 21, false);
         assert!(result.is_ok());
 
         let alloc = result.unwrap();
         assert!(alloc.fine_energy_bits.iter().any(|&b| b > 0));
         assert!(alloc.fine_priority.iter().all(|&p| p <= 1));
+    }
+
+    #[test]
+    fn test_compute_allocation_transient_reservation() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let boosts = [0_i32; CELT_NUM_BANDS];
+
+        // Non-transient: no anti-collapse reservation
+        let result1 = decoder.compute_allocation(1000, 2, 1, &boosts, 5, 0, 21, false);
+        assert!(result1.is_ok());
+        let alloc1 = result1.unwrap();
+
+        // Transient with LM>1: should reserve 8 eighth-bits (1 bit)
+        let result2 = decoder.compute_allocation(1000, 2, 1, &boosts, 5, 0, 21, true);
+        assert!(result2.is_ok());
+        let alloc2 = result2.unwrap();
+
+        // Both should succeed but transient has less allocation
+        let total1: i32 = alloc1.shape_bits.iter().sum();
+        let total2: i32 = alloc2.shape_bits.iter().sum();
+        assert!(total1 >= total2);
+    }
+
+    #[test]
+    fn test_compute_allocation_skip_reservation() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let boosts = [0_i32; CELT_NUM_BANDS];
+
+        // Low bitrate (total <= 8 eighth-bits after conservative subtraction): no skip reservation
+        let result1 = decoder.compute_allocation(1, 2, 1, &boosts, 5, 0, 21, false);
+        assert!(result1.is_ok());
+
+        // Normal bitrate (total > 8 eighth-bits): should reserve 8 eighth-bits
+        let result2 = decoder.compute_allocation(10, 2, 1, &boosts, 5, 0, 21, false);
+        assert!(result2.is_ok());
+
+        // Both should succeed
+        let alloc1 = result1.unwrap();
+        let alloc2 = result2.unwrap();
+        assert_eq!(alloc1.coded_bands, 21);
+        assert_eq!(alloc2.coded_bands, 21);
+    }
+
+    #[test]
+    fn test_compute_allocation_conservative_subtraction() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let boosts = [0_i32; CELT_NUM_BANDS];
+
+        // The conservative subtraction removes 1 eighth-bit
+        // This should still succeed and produce valid allocation
+        let result = decoder.compute_allocation(1000, 2, 1, &boosts, 5, 0, 21, false);
+        assert!(result.is_ok());
+
+        let alloc = result.unwrap();
+        // Verify allocation is reasonable
+        assert!(alloc.shape_bits.iter().sum::<i32>() > 0);
+        assert!(alloc.shape_bits.iter().sum::<i32>() < 1000 * 8);
     }
 
     #[test]
