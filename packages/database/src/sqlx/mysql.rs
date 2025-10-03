@@ -758,6 +758,10 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -809,6 +813,10 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1289,6 +1297,10 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1339,6 +1351,10 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1714,6 +1730,10 @@ async fn mysql_sqlx_exec_create_table(
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1735,6 +1755,10 @@ async fn mysql_sqlx_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
+                    query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::NowPlus(interval) => {
@@ -2316,11 +2340,11 @@ fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error>
         "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" => {
             Ok(DatabaseValue::Int32(owned.try_decode()?))
         }
+        #[cfg(feature = "decimal")]
+        "DECIMAL" => Ok(DatabaseValue::Decimal(owned.try_decode()?)),
         "BIGINT" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
         // MySQL floating point types
-        "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
-            Ok(DatabaseValue::Real64(owned.try_decode()?))
-        }
+        "FLOAT" | "DOUBLE" | "REAL" | "NUMERIC" => Ok(DatabaseValue::Real64(owned.try_decode()?)),
         // MySQL string types
         "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" | "BINARY"
         | "VARBINARY" | "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
@@ -2643,6 +2667,8 @@ where
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now => (),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
                 }
@@ -2661,6 +2687,10 @@ where
                     query = query.bind(*value);
                 }
                 DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
+                    query = query.bind(*value);
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
                 DatabaseValue::NowPlus(_interval) => (),

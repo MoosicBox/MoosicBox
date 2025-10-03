@@ -1068,6 +1068,20 @@ impl Digest for DatabaseValue {
                 hasher.update(b"DT:");
                 hasher.update(dt.to_string().as_bytes());
             }
+            #[cfg(feature = "decimal")]
+            Self::Decimal(d) => {
+                hasher.update(b"DECIMAL:");
+                hasher.update(d.to_string().as_bytes());
+            }
+            #[cfg(feature = "decimal")]
+            Self::DecimalOpt(opt) => {
+                hasher.update(b"DECIMALOPT:");
+                if let Some(r) = opt {
+                    hasher.update(r.to_string().as_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
         }
     }
 }

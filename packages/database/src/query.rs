@@ -171,16 +171,33 @@ impl Expression for DatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        matches!(
-            self,
-            Self::Null
-                | Self::BoolOpt(None)
-                | Self::Real64Opt(None)
-                | Self::Real32Opt(None)
-                | Self::StringOpt(None)
-                | Self::Int64Opt(None)
-                | Self::UInt64Opt(None)
-        )
+        #[cfg(not(feature = "decimal"))]
+        {
+            matches!(
+                self,
+                Self::Null
+                    | Self::BoolOpt(None)
+                    | Self::Real64Opt(None)
+                    | Self::Real32Opt(None)
+                    | Self::StringOpt(None)
+                    | Self::Int64Opt(None)
+                    | Self::UInt64Opt(None)
+            )
+        }
+        #[cfg(feature = "decimal")]
+        {
+            matches!(
+                self,
+                Self::Null
+                    | Self::BoolOpt(None)
+                    | Self::Real64Opt(None)
+                    | Self::Real32Opt(None)
+                    | Self::StringOpt(None)
+                    | Self::Int64Opt(None)
+                    | Self::UInt64Opt(None)
+                    | Self::DecimalOpt(None)
+            )
+        }
     }
 }
 

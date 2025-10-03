@@ -835,6 +835,12 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => {
+                    query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
@@ -892,6 +898,12 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => {
+                    query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
@@ -1264,6 +1276,8 @@ where
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now => (),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
                 }
@@ -1283,6 +1297,10 @@ where
                 }
                 DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
                     query = query.bind(f64::from(*value));
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
+                    query = query.bind(value.to_string());
                 }
                 DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
@@ -1359,9 +1377,10 @@ async fn sqlite_sqlx_exec_create_table(
             | crate::schema::DataType::Jsonb
             | crate::schema::DataType::Uuid
             | crate::schema::DataType::Xml
-            | crate::schema::DataType::Array(_)
+            | crate::schema::DataType::Array(..)
             | crate::schema::DataType::Inet
-            | crate::schema::DataType::MacAddr => query.push_str("TEXT"), // SQLite stores many types as text
+            | crate::schema::DataType::MacAddr
+            | crate::schema::DataType::Decimal(..) => query.push_str("TEXT"), // SQLite stores many types as text
             crate::schema::DataType::Char(size) => {
                 query.push_str("CHAR(");
                 query.push_str(&size.to_string());
@@ -1375,8 +1394,7 @@ async fn sqlite_sqlx_exec_create_table(
             | crate::schema::DataType::BigSerial => query.push_str("INTEGER"), // SQLite uses INTEGER for many numeric types
             crate::schema::DataType::Real
             | crate::schema::DataType::Double
-            | crate::schema::DataType::Decimal(_, _)
-            | crate::schema::DataType::Money => query.push_str("REAL"), // SQLite doesn't have exact decimal
+            | crate::schema::DataType::Money => query.push_str("REAL"),
             crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
                 query.push_str("BLOB");
             }
@@ -1401,6 +1419,10 @@ async fn sqlite_sqlx_exec_create_table(
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1423,6 +1445,12 @@ async fn sqlite_sqlx_exec_create_table(
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
                     query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
+                    query.push('\'');
+                    query.push_str(&x.to_string());
+                    query.push('\'');
                 }
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval_sqlx(interval);
@@ -2194,24 +2222,24 @@ fn sqlite_modify_create_table_sql(
         | crate::schema::DataType::BigSerial => "INTEGER",
         crate::schema::DataType::Real
         | crate::schema::DataType::Double
-        | crate::schema::DataType::Decimal(_, _)
         | crate::schema::DataType::Money => "REAL",
         crate::schema::DataType::Date
         | crate::schema::DataType::Time
         | crate::schema::DataType::DateTime
         | crate::schema::DataType::Text
-        | crate::schema::DataType::VarChar(_)
-        | crate::schema::DataType::Char(_)
+        | crate::schema::DataType::VarChar(..)
+        | crate::schema::DataType::Char(..)
         | crate::schema::DataType::Timestamp
         | crate::schema::DataType::Json
         | crate::schema::DataType::Jsonb
         | crate::schema::DataType::Uuid
         | crate::schema::DataType::Xml
-        | crate::schema::DataType::Array(_)
+        | crate::schema::DataType::Array(..)
         | crate::schema::DataType::Inet
         | crate::schema::DataType::MacAddr
-        | crate::schema::DataType::Custom(_) => "TEXT",
-        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB",
+        | crate::schema::DataType::Custom(..)
+        | crate::schema::DataType::Decimal(..) => "TEXT",
+        crate::schema::DataType::Blob | crate::schema::DataType::Binary(..) => "BLOB",
     };
 
     // Build the new column definition
@@ -2245,6 +2273,8 @@ fn sqlite_modify_create_table_sql(
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2253,6 +2283,10 @@ fn sqlite_modify_create_table_sql(
             }
             crate::DatabaseValue::Real32(f) | crate::DatabaseValue::Real32Opt(Some(f)) => {
                 f.to_string()
+            }
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                f64::try_from(*d).unwrap_or(0.0).to_string()
             }
             crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
                 if *b { "1" } else { "0" }.to_string()
@@ -3485,6 +3519,12 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => {
+                    query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
@@ -3538,6 +3578,12 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
                 crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
                 crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => {
+                    query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),

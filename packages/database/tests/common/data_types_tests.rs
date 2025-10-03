@@ -414,7 +414,10 @@ pub trait DataTypeTestSuite {
         assert!((double_retrieved - double_val).abs() < 1e-10);
     }
 
+    #[cfg(feature = "decimal")]
     async fn test_decimal_precision(&self) {
+        use rust_decimal_macros::dec;
+
         let Some(db) = self.get_database().await else {
             return;
         };
@@ -446,9 +449,9 @@ pub trait DataTypeTestSuite {
             .await
             .expect("Failed to create decimal_test table");
 
-        let price1 = 123.45;
-        let price2 = 999.99;
-        let price3 = 0.01;
+        let price1 = dec!(123.45);
+        let price2 = dec!(999.99);
+        let price3 = dec!(0.01);
 
         db.insert(table_name)
             .value("decimal_col", price1)
@@ -477,13 +480,13 @@ pub trait DataTypeTestSuite {
 
         assert_eq!(rows.len(), 3);
 
-        let val0 = rows[0].get("decimal_col").unwrap().as_f64().unwrap();
-        let val1 = rows[1].get("decimal_col").unwrap().as_f64().unwrap();
-        let val2 = rows[2].get("decimal_col").unwrap().as_f64().unwrap();
+        let val0 = rows[0].get("decimal_col").unwrap().as_decimal().unwrap();
+        let val1 = rows[1].get("decimal_col").unwrap().as_decimal().unwrap();
+        let val2 = rows[2].get("decimal_col").unwrap().as_decimal().unwrap();
 
-        assert!((val0 - price3).abs() < 0.01);
-        assert!((val1 - price1).abs() < 0.01);
-        assert!((val2 - price2).abs() < 0.01);
+        assert_eq!(val0, price3);
+        assert_eq!(val1, price1);
+        assert_eq!(val2, price2);
     }
 
     async fn test_boolean_type(&self) {

@@ -46,11 +46,18 @@ thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
+# Decimal support
+rust_decimal = { workspace = true, optional = true, features = [
+    "std",
+    "tokio-pg",
+] }
+
 [dev-dependencies]
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 native-tls = { workspace = true }
 postgres-native-tls = { workspace = true }
 pretty_assertions = { workspace = true }
+rust_decimal_macros = { workspace = true }
 switchy_async = { workspace = true, features = [
     "macros",
     "sync",
@@ -70,6 +77,7 @@ default = [
     "api",
     "auto-reverse",
     "cascade",
+    "decimal",
     "mysql",
     "postgres-sqlx",
     "schema",
@@ -164,3 +172,5 @@ placeholder-question-mark = []
 auto-reverse = []
 cascade      = ["schema"]
 schema       = []
+
+decimal = ["dep:rust_decimal", "sqlx?/rust_decimal"]

@@ -98,15 +98,18 @@ pub use switchy_database;
 pub use switchy_schema;
 
 /// Re-export the migration test builder for convenience
+#[cfg(feature = "sqlite")]
 pub use builder::MigrationTestBuilder;
 
 /// Mutation handling for advanced migration testing
 pub mod mutations;
 
 /// Test assertion helpers for database schema and migration verification
+#[cfg(feature = "sqlite")]
 pub mod assertions;
 
 /// Migration test builder for complex testing scenarios
+#[cfg(feature = "sqlite")]
 pub mod builder;
 
 /// Integration tests demonstrating new migration capabilities

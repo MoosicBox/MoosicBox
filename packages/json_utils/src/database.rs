@@ -45,6 +45,8 @@ where
             | DatabaseValue::UInt64Opt(None)
             | DatabaseValue::Real64Opt(None)
             | DatabaseValue::Real32Opt(None) => Ok(None),
+            #[cfg(feature = "decimal")]
+            DatabaseValue::DecimalOpt(None) => Ok(None),
             _ => self.to_value_type().map(|inner| Some(inner)),
         }
     }
@@ -382,6 +384,8 @@ where
             | Self::UInt64Opt(None)
             | Self::Real64Opt(None)
             | Self::Real32Opt(None) => Ok(None),
+            #[cfg(feature = "decimal")]
+            Self::DecimalOpt(None) => Ok(None),
             _ => self.to_value_type().map(Some),
         }
     }

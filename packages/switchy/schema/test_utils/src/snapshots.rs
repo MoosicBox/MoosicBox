@@ -682,5 +682,11 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
             serde_json::Value::String(format!("NOW + {interval:?}"))
         }
         DatabaseValue::Now => serde_json::Value::String("NOW".to_string()),
+        #[cfg(feature = "decimal")]
+        DatabaseValue::Decimal(d) | DatabaseValue::DecimalOpt(Some(d)) => {
+            serde_json::Value::String(d.to_string())
+        }
+        #[cfg(feature = "decimal")]
+        DatabaseValue::DecimalOpt(None) => serde_json::Value::Null,
     }
 }

@@ -61,7 +61,7 @@ switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
 ] }
-switchy_schema_test_utils = { workspace = true }
+switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 test-log = { workspace = true }
 
 [features]

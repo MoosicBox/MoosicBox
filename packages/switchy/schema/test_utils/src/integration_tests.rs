@@ -295,22 +295,20 @@ impl switchy_schema::migration::Migration<'static> for TestMigration {
 }
 
 #[cfg(test)]
+#[cfg(feature = "sqlite")]
 mod tests {
     use super::*;
 
-    #[cfg(feature = "sqlite")]
     #[switchy_async::test]
     async fn test_rollback_demonstration() {
         demonstrate_rollback_functionality().await.unwrap();
     }
 
-    #[cfg(feature = "sqlite")]
     #[switchy_async::test]
     async fn test_complex_breakpoint_demonstration() {
         demonstrate_complex_breakpoint_patterns().await.unwrap();
     }
 
-    #[cfg(feature = "sqlite")]
     #[switchy_async::test]
     async fn test_environment_variable_demonstration() {
         demonstrate_environment_variable_integration()

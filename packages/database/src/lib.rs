@@ -190,6 +190,10 @@ pub enum DatabaseValue {
     Real64Opt(Option<f64>),
     Real32(f32),
     Real32Opt(Option<f32>),
+    #[cfg(feature = "decimal")]
+    Decimal(rust_decimal::Decimal),
+    #[cfg(feature = "decimal")]
+    DecimalOpt(Option<rust_decimal::Decimal>),
     NowPlus(SqlInterval),
     Now,
     DateTime(NaiveDateTime),
@@ -271,6 +275,19 @@ impl DatabaseValue {
         }
     }
 
+    #[cfg(feature = "decimal")]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_decimal(&self) -> Option<rust_decimal::Decimal> {
+        match self {
+            Self::String(value) | Self::StringOpt(Some(value)) => {
+                value.parse::<rust_decimal::Decimal>().ok()
+            }
+            Self::Decimal(value) | Self::DecimalOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_datetime(&self) -> Option<NaiveDateTime> {
@@ -329,6 +346,13 @@ impl From<f32> for DatabaseValue {
 impl From<f64> for DatabaseValue {
     fn from(val: f64) -> Self {
         Self::Real64(val)
+    }
+}
+
+#[cfg(feature = "decimal")]
+impl From<rust_decimal::Decimal> for DatabaseValue {
+    fn from(val: rust_decimal::Decimal) -> Self {
+        Self::Decimal(val)
     }
 }
 
@@ -480,6 +504,18 @@ impl TryFrom<DatabaseValue> for f64 {
                 Ok(Self::from(value))
             }
             _ => Err(TryFromError::CouldNotConvert("f64".into())),
+        }
+    }
+}
+
+#[cfg(feature = "decimal")]
+impl TryFrom<DatabaseValue> for rust_decimal::Decimal {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("Decimal".into())),
         }
     }
 }

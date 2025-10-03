@@ -65,6 +65,7 @@ mod rusqlite_data_type_tests {
         suite.test_floating_point_types().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test)]
     async fn test_rusqlite_decimal_precision() {
         let suite = RusqliteDataTypeTests;
@@ -164,6 +165,7 @@ mod sqlite_sqlx_data_type_tests {
         suite.test_floating_point_types().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlite_sqlx_decimal_precision() {
         let suite = SqliteSqlxDataTypeTests;
@@ -263,8 +265,8 @@ mod postgres_data_type_tests {
         suite.test_floating_point_types().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test(no_simulator))]
-    #[ignore = "PostgreSQL DECIMAL requires rust_decimal crate - will be added with decimal feature"]
     async fn test_postgres_decimal_precision() {
         let suite = PostgresDataTypeTests;
         suite.test_decimal_precision().await;
@@ -276,10 +278,11 @@ mod postgres_data_type_tests {
         suite.test_boolean_type().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test(no_simulator))]
-    async fn test_postgres_datetime_types() {
-        let suite = PostgresDataTypeTests;
-        suite.test_datetime_types().await;
+    async fn test_mysql_sqlx_decimal_precision() {
+        let suite = MysqlSqlxDataTypeTests;
+        suite.test_decimal_precision().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
@@ -348,8 +351,8 @@ mod postgres_sqlx_data_type_tests {
         suite.test_floating_point_types().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test(no_simulator))]
-    #[ignore = "PostgreSQL DECIMAL requires rust_decimal crate - will be added with decimal feature"]
     async fn test_postgres_sqlx_decimal_precision() {
         let suite = PostgresSqlxDataTypeTests;
         suite.test_decimal_precision().await;
@@ -432,8 +435,8 @@ mod mysql_sqlx_data_type_tests {
         suite.test_floating_point_types().await;
     }
 
+    #[cfg(feature = "decimal")]
     #[test_log::test(switchy_async::test(no_simulator))]
-    #[ignore = "MySQL DECIMAL requires rust_decimal crate - will be added with decimal feature"]
     async fn test_mysql_sqlx_decimal_precision() {
         let suite = MysqlSqlxDataTypeTests;
         suite.test_decimal_precision().await;

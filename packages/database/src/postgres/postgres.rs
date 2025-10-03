@@ -1647,6 +1647,10 @@ async fn postgres_exec_create_table(
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1668,6 +1672,10 @@ async fn postgres_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
+                    query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::NowPlus(_) => {
@@ -3184,6 +3192,10 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Real64Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Real32(value) => value.to_sql(ty, out)?,
             DatabaseValue::Real32Opt(value) => value.to_sql(ty, out)?,
+            #[cfg(feature = "decimal")]
+            DatabaseValue::Decimal(value) => value.to_sql(ty, out)?,
+            #[cfg(feature = "decimal")]
+            DatabaseValue::DecimalOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::String(value) => {
                 if ty.name() == "interval" {
                     // For interval type, write as text format (UTF-8 bytes)

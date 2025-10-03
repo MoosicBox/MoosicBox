@@ -1512,9 +1512,10 @@ fn rusqlite_exec_create_table(
             | crate::schema::DataType::Jsonb
             | crate::schema::DataType::Uuid
             | crate::schema::DataType::Xml
-            | crate::schema::DataType::Array(_)
+            | crate::schema::DataType::Array(..)
             | crate::schema::DataType::Inet
-            | crate::schema::DataType::MacAddr => query.push_str("TEXT"),
+            | crate::schema::DataType::MacAddr
+            | crate::schema::DataType::Decimal(..) => query.push_str("TEXT"),
             crate::schema::DataType::Char(size) => {
                 query.push_str("CHAR(");
                 query.push_str(&size.to_string());
@@ -1528,7 +1529,6 @@ fn rusqlite_exec_create_table(
             | crate::schema::DataType::BigSerial => query.push_str("INTEGER"),
             crate::schema::DataType::Real
             | crate::schema::DataType::Double
-            | crate::schema::DataType::Decimal(_, _)
             | crate::schema::DataType::Money => query.push_str("REAL"),
             crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
                 query.push_str("BLOB");
@@ -1554,6 +1554,10 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1576,6 +1580,12 @@ fn rusqlite_exec_create_table(
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
                     query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
+                    query.push('\'');
+                    query.push_str(&x.to_string());
+                    query.push('\'');
                 }
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval(interval);
@@ -2378,10 +2388,11 @@ fn modify_create_table_sql(
         | crate::schema::DataType::Jsonb
         | crate::schema::DataType::Uuid
         | crate::schema::DataType::Xml
-        | crate::schema::DataType::Array(_)
+        | crate::schema::DataType::Array(..)
         | crate::schema::DataType::Inet
         | crate::schema::DataType::MacAddr
-        | crate::schema::DataType::Custom(_) => "TEXT",
+        | crate::schema::DataType::Custom(_)
+        | crate::schema::DataType::Decimal(..) => "TEXT",
         crate::schema::DataType::Bool
         | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
@@ -2390,7 +2401,6 @@ fn modify_create_table_sql(
         | crate::schema::DataType::BigSerial => "INTEGER",
         crate::schema::DataType::Real
         | crate::schema::DataType::Double
-        | crate::schema::DataType::Decimal(_, _)
         | crate::schema::DataType::Money => "REAL",
         crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB",
     };
@@ -2426,6 +2436,8 @@ fn modify_create_table_sql(
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2434,6 +2446,10 @@ fn modify_create_table_sql(
             }
             crate::DatabaseValue::Real32(f) | crate::DatabaseValue::Real32Opt(Some(f)) => {
                 f.to_string()
+            }
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                format!("'{d}'")
             }
             crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
                 if *b { "1" } else { "0" }.to_string()
@@ -2956,6 +2972,8 @@ fn bind_values(
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now
                 | DatabaseValue::NowPlus(..) => (),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, i32::from(*value))?;
                     if !constant_inc {
@@ -2994,6 +3012,13 @@ fn bind_values(
                 }
                 DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
                     statement.raw_bind_parameter(i, f64::from(*value))?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                #[cfg(feature = "decimal")]
+                DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
+                    statement.raw_bind_parameter(i, value.to_string())?;
                     if !constant_inc {
                         i += 1;
                     }

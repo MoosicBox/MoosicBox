@@ -36,8 +36,9 @@ test-log         = { workspace = true }
 tokio            = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["sqlite"]
+default = ["decimal", "sqlite"]
 
+decimal = ["switchy_database/decimal", "switchy_schema/decimal"]
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",
     "switchy_database_connection?/fail-on-warnings",
