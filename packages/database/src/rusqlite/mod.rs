@@ -396,6 +396,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -1551,6 +1552,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -1573,6 +1575,9 @@ fn rusqlite_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
@@ -2456,13 +2461,17 @@ fn modify_create_table_sql(
             crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
                 "NULL".to_string()
             }
+            crate::DatabaseValue::Int16(i) | crate::DatabaseValue::Int16Opt(Some(i)) => {
+                i.to_string()
+            }
             crate::DatabaseValue::Int32(i) | crate::DatabaseValue::Int32Opt(Some(i)) => {
                 i.to_string()
             }
             crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::Int32Opt(None)
+            crate::DatabaseValue::Int16Opt(None)
+            | crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::Int64Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
@@ -3003,6 +3012,7 @@ fn bind_values(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -3022,6 +3032,12 @@ fn bind_values(
                 }
                 DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, value)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                    statement.raw_bind_parameter(i, i64::from(*value))?;
                     if !constant_inc {
                         i += 1;
                     }

@@ -242,6 +242,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
@@ -750,6 +751,8 @@ impl Database for MySqlSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
@@ -809,6 +812,8 @@ impl Database for MySqlSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
@@ -1297,6 +1302,8 @@ impl Database for MysqlSqlxTransaction {
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
@@ -1355,6 +1362,8 @@ impl Database for MysqlSqlxTransaction {
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
@@ -1743,6 +1752,7 @@ async fn mysql_sqlx_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -1765,6 +1775,9 @@ async fn mysql_sqlx_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
@@ -2387,9 +2400,8 @@ fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error>
         // MySQL boolean types (TINYINT(1) is used for booleans)
         "BOOLEAN" | "BOOL" | "TINYINT" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
         // MySQL integer types - decode based on SQL type
-        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" => {
-            Ok(DatabaseValue::Int32(owned.try_decode()?))
-        }
+        "SMALLINT" => Ok(DatabaseValue::Int16(owned.try_decode()?)),
+        "MEDIUMINT" | "INT" | "INTEGER" => Ok(DatabaseValue::Int32(owned.try_decode()?)),
         #[cfg(feature = "decimal")]
         "DECIMAL" => Ok(DatabaseValue::Decimal(owned.try_decode()?)),
         "BIGINT" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
@@ -2711,6 +2723,7 @@ where
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -2723,6 +2736,9 @@ where
                 DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
+                }
+                DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                    query = query.bind(*value);
                 }
                 DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                     query = query.bind(*value);

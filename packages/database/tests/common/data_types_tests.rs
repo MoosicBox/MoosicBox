@@ -972,4 +972,184 @@ pub trait DataTypeTestSuite {
                 .unwrap_or_else(|| bool_val.as_i64().unwrap() != 0)
         );
     }
+
+    async fn test_int16_specific_type_and_retrieval(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "int16_specific_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "small_int_col".to_string(),
+                data_type: DataType::SmallInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "int_col".to_string(),
+                data_type: DataType::Int,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "big_int_col".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create int16_specific_test table");
+
+        db.insert(table_name)
+            .value("small_int_col", i16::MIN)
+            .value("int_col", i32::MIN)
+            .value("big_int_col", i64::MIN)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("small_int_col", i16::MAX)
+            .value("int_col", i32::MAX)
+            .value("big_int_col", i64::MAX)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("small_int_col", 100i16)
+            .value("int_col", 1000)
+            .value("big_int_col", 10000i64)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        assert!(
+            matches!(
+                rows[0].get("small_int_col").unwrap(),
+                DatabaseValue::Int16(_) | DatabaseValue::Int64(_)
+            ),
+            "SMALLINT column should return Int16 (or Int64 for SQLite), got {:?}",
+            rows[0].get("small_int_col").unwrap()
+        );
+        assert!(
+            matches!(
+                rows[0].get("int_col").unwrap(),
+                DatabaseValue::Int32(_) | DatabaseValue::Int64(_)
+            ),
+            "INT column should return Int32 or Int64, got {:?}",
+            rows[0].get("int_col").unwrap()
+        );
+        assert!(
+            matches!(
+                rows[0].get("big_int_col").unwrap(),
+                DatabaseValue::Int64(_) | DatabaseValue::Int32(_)
+            ),
+            "BIGINT column should return Int64, got {:?}",
+            rows[0].get("big_int_col").unwrap()
+        );
+
+        let small_val_0: i16 = rows[0]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_val_0, i16::MIN);
+
+        let small_val_1: i16 = rows[1]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_val_1, i16::MAX);
+
+        let small_val_2: i16 = rows[2]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_val_2, 100i16);
+
+        if rows[0].get("small_int_col").unwrap().as_i16().is_some() {
+            assert_eq!(
+                rows[0].get("small_int_col").unwrap().as_i16().unwrap(),
+                i16::MIN
+            );
+            assert_eq!(
+                rows[1].get("small_int_col").unwrap().as_i16().unwrap(),
+                i16::MAX
+            );
+            assert_eq!(
+                rows[2].get("small_int_col").unwrap().as_i16().unwrap(),
+                100i16
+            );
+        }
+
+        let int_val_0: i32 = rows[0].get("int_col").unwrap().clone().try_into().unwrap();
+        assert_eq!(int_val_0, i32::MIN);
+        let int_val_1: i32 = rows[1].get("int_col").unwrap().clone().try_into().unwrap();
+        assert_eq!(int_val_1, i32::MAX);
+
+        let big_val_0: i64 = rows[0]
+            .get("big_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(big_val_0, i64::MIN);
+        let big_val_1: i64 = rows[1]
+            .get("big_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(big_val_1, i64::MAX);
+
+        let small_as_i32: i32 = rows[0]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_as_i32, i32::from(i16::MIN));
+
+        let small_as_i64: i64 = rows[0]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_as_i64, i64::from(i16::MIN));
+    }
 }

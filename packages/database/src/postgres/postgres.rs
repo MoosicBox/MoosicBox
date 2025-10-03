@@ -300,6 +300,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -1644,6 +1645,7 @@ async fn postgres_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
@@ -1666,6 +1668,9 @@ async fn postgres_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "TRUE" } else { "FALSE" });
+                }
+                DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
@@ -3214,6 +3219,8 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
+            DatabaseValue::Int16(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Int16Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int32(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int32Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int64(value) => value.to_sql(ty, out)?,
