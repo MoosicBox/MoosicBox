@@ -72,6 +72,13 @@ mod rusqlite_data_type_tests {
         suite.test_decimal_precision().await;
     }
 
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_uuid_storage() {
+        let suite = RusqliteDataTypeTests;
+        suite.test_uuid_storage().await;
+    }
+
     #[test_log::test(switchy_async::test)]
     async fn test_rusqlite_boolean_type() {
         let suite = RusqliteDataTypeTests;
@@ -170,6 +177,13 @@ mod sqlite_sqlx_data_type_tests {
     async fn test_sqlite_sqlx_decimal_precision() {
         let suite = SqliteSqlxDataTypeTests;
         suite.test_decimal_precision().await;
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_sqlx_uuid_storage() {
+        let suite = SqliteSqlxDataTypeTests;
+        suite.test_uuid_storage().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
@@ -272,6 +286,13 @@ mod postgres_data_type_tests {
         suite.test_decimal_precision().await;
     }
 
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_uuid_storage() {
+        let suite = PostgresDataTypeTests;
+        suite.test_uuid_storage().await;
+    }
+
     #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_boolean_type() {
         let suite = PostgresDataTypeTests;
@@ -358,6 +379,13 @@ mod postgres_sqlx_data_type_tests {
         suite.test_decimal_precision().await;
     }
 
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_sqlx_uuid_storage() {
+        let suite = PostgresSqlxDataTypeTests;
+        suite.test_uuid_storage().await;
+    }
+
     #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_sqlx_boolean_type() {
         let suite = PostgresSqlxDataTypeTests;
@@ -440,6 +468,13 @@ mod mysql_sqlx_data_type_tests {
     async fn test_mysql_sqlx_decimal_precision() {
         let suite = MysqlSqlxDataTypeTests;
         suite.test_decimal_precision().await;
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_sqlx_uuid_storage() {
+        let suite = MysqlSqlxDataTypeTests;
+        suite.test_uuid_storage().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]

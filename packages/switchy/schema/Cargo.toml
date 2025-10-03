@@ -49,7 +49,7 @@ test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["all-discovery", "auto-reverse", "decimal"]
+default = ["all-discovery", "auto-reverse", "decimal", "uuid"]
 
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",
@@ -64,4 +64,5 @@ directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
 snapshots     = []
 test-utils    = []
+uuid          = ["switchy_database/uuid", "switchy_schema_test_utils/uuid"]
 validation    = []

@@ -688,5 +688,11 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         }
         #[cfg(feature = "decimal")]
         DatabaseValue::DecimalOpt(None) => serde_json::Value::Null,
+        #[cfg(feature = "uuid")]
+        DatabaseValue::Uuid(d) | DatabaseValue::UuidOpt(Some(d)) => {
+            serde_json::Value::String(d.to_string())
+        }
+        #[cfg(feature = "uuid")]
+        DatabaseValue::UuidOpt(None) => serde_json::Value::Null,
     }
 }

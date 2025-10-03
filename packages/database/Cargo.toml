@@ -52,6 +52,9 @@ rust_decimal = { workspace = true, optional = true, features = [
     "tokio-pg",
 ] }
 
+# UUID support
+uuid = { workspace = true, optional = true }
+
 [dev-dependencies]
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 native-tls = { workspace = true }
@@ -70,6 +73,7 @@ switchy_database_connection = { workspace = true, features = [
 ] }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true }
 
 [features]
 default = [
@@ -84,6 +88,7 @@ default = [
     "simulator",
     "sqlite-rusqlite",
     "sqlite-sqlx",
+    "uuid",
 ]
 
 fail-on-warnings = [
@@ -174,3 +179,4 @@ cascade      = ["schema"]
 schema       = []
 
 decimal = ["dep:rust_decimal", "sqlx?/rust_decimal"]
+uuid    = ["dep:uuid", "sqlx?/uuid"]

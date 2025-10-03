@@ -542,7 +542,7 @@ thiserror = "2.0.17"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.47.1" }
-tokio-postgres = { version = "0.7.14", features = ["with-chrono-0_4"] }
+tokio-postgres = { version = "0.7.14", features = ["with-chrono-0_4", "with-uuid-1"] }
 tokio-stream = "0.1.17"
 tokio-test = "0.4.4"
 tokio-tungstenite = { version = "0.28.0", features = [

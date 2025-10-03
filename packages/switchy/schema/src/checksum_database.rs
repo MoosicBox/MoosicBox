@@ -1082,6 +1082,20 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
+            #[cfg(feature = "uuid")]
+            Self::Uuid(d) => {
+                hasher.update(b"UUID:");
+                hasher.update(d.to_string().as_bytes());
+            }
+            #[cfg(feature = "uuid")]
+            Self::UuidOpt(opt) => {
+                hasher.update(b"UUIDOPT:");
+                if let Some(r) = opt {
+                    hasher.update(r.to_string().as_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
         }
     }
 }

@@ -336,6 +336,10 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval_sqlx(interval);
@@ -841,6 +845,12 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::DecimalOpt(d) => {
                     query_builder.bind(d.as_ref().map(ToString::to_string))
                 }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => {
+                    query_builder.bind(u.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
@@ -903,6 +913,12 @@ impl Database for SqliteSqlxDatabase {
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => {
                     query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => {
+                    query_builder.bind(u.as_ref().map(ToString::to_string))
                 }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
@@ -1278,6 +1294,8 @@ where
                 | DatabaseValue::Now => (),
                 #[cfg(feature = "decimal")]
                 DatabaseValue::DecimalOpt(None) => (),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
                 }
@@ -1300,6 +1318,10 @@ where
                 }
                 #[cfg(feature = "decimal")]
                 DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
+                    query = query.bind(value.to_string());
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(value) | DatabaseValue::UuidOpt(Some(value)) => {
                     query = query.bind(value.to_string());
                 }
                 DatabaseValue::NowPlus(_interval) => (),
@@ -1423,6 +1445,10 @@ async fn sqlite_sqlx_exec_create_table(
                 DatabaseValue::DecimalOpt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1450,6 +1476,12 @@ async fn sqlite_sqlx_exec_create_table(
                 DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push('\'');
                     query.push_str(&x.to_string());
+                    query.push('\'');
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(u) | DatabaseValue::UuidOpt(Some(u)) => {
+                    query.push('\'');
+                    query.push_str(&u.to_string());
                     query.push('\'');
                 }
                 DatabaseValue::NowPlus(interval) => {
@@ -1847,6 +1879,16 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                             crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            #[cfg(feature = "decimal")]
+                            crate::DatabaseValue::Decimal(d)
+                            | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                                format!("'{d}'")
+                            }
+                            #[cfg(feature = "uuid")]
+                            crate::DatabaseValue::Uuid(u)
+                            | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                                format!("'{u}'")
+                            }
                             _ => {
                                 return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
                                     type_name:
@@ -1996,6 +2038,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
 }
 
 #[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
 async fn sqlite_sqlx_exec_modify_column_workaround(
     connection: &mut SqliteConnection,
     table_name: &str,
@@ -2065,6 +2108,14 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
                 crate::DatabaseValue::Real64(r) => r.to_string(),
                 crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                    format!("'{d}'")
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                    format!("'{u}'")
+                }
                 _ => {
                     return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
                         type_name: "Unsupported default value type for MODIFY COLUMN".to_string(),
@@ -2275,6 +2326,8 @@ fn sqlite_modify_create_table_sql(
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
             #[cfg(feature = "decimal")]
             crate::DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::UuidOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2287,6 +2340,10 @@ fn sqlite_modify_create_table_sql(
             #[cfg(feature = "decimal")]
             crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
                 f64::try_from(*d).unwrap_or(0.0).to_string()
+            }
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                format!("'{u}'")
             }
             crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
                 if *b { "1" } else { "0" }.to_string()
@@ -3525,6 +3582,12 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::DecimalOpt(d) => {
                     query_builder.bind(d.as_ref().map(ToString::to_string))
                 }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => {
+                    query_builder.bind(u.as_ref().map(ToString::to_string))
+                }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
@@ -3583,6 +3646,12 @@ impl Database for SqliteSqlxTransaction {
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => {
                     query_builder.bind(d.as_ref().map(ToString::to_string))
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => {
+                    query_builder.bind(u.as_ref().map(ToString::to_string))
                 }
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),

@@ -401,6 +401,10 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval(interval);
@@ -1558,6 +1562,10 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::DecimalOpt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1585,6 +1593,12 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push('\'');
                     query.push_str(&x.to_string());
+                    query.push('\'');
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(u) | DatabaseValue::UuidOpt(Some(u)) => {
+                    query.push('\'');
+                    query.push_str(&u.to_string());
                     query.push('\'');
                 }
                 DatabaseValue::NowPlus(interval) => {
@@ -1985,6 +1999,16 @@ pub(crate) fn rusqlite_exec_alter_table(
                             crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            #[cfg(feature = "decimal")]
+                            crate::DatabaseValue::Decimal(d)
+                            | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                                format!("'{d}'")
+                            }
+                            #[cfg(feature = "uuid")]
+                            crate::DatabaseValue::Uuid(u)
+                            | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                                format!("'{u}'")
+                            }
                             _ => {
                                 return Err(DatabaseError::InvalidSchema(
                                     "Unsupported default value type for ALTER TABLE ADD COLUMN"
@@ -2197,6 +2221,14 @@ fn rusqlite_exec_modify_column_workaround(
                 crate::DatabaseValue::Real32(r) => r.to_string(),
                 crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                    format!("'{d}'")
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                    format!("'{u}'")
+                }
                 _ => {
                     return Err(DatabaseError::InvalidSchema(
                         "Unsupported default value type for MODIFY COLUMN".to_string(),
@@ -2438,6 +2470,8 @@ fn modify_create_table_sql(
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
             #[cfg(feature = "decimal")]
             crate::DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::UuidOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2450,6 +2484,10 @@ fn modify_create_table_sql(
             #[cfg(feature = "decimal")]
             crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
                 format!("'{d}'")
+            }
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                format!("'{u}'")
             }
             crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
                 if *b { "1" } else { "0" }.to_string()
@@ -2974,6 +3012,8 @@ fn bind_values(
                 | DatabaseValue::NowPlus(..) => (),
                 #[cfg(feature = "decimal")]
                 DatabaseValue::DecimalOpt(None) => (),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, i32::from(*value))?;
                     if !constant_inc {
@@ -3018,6 +3058,13 @@ fn bind_values(
                 }
                 #[cfg(feature = "decimal")]
                 DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
+                    statement.raw_bind_parameter(i, value.to_string())?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(value) | DatabaseValue::UuidOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, value.to_string())?;
                     if !constant_inc {
                         i += 1;

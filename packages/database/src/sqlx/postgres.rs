@@ -307,6 +307,10 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowPlus(_) => {
                     // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
@@ -781,6 +785,10 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -843,6 +851,10 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1321,6 +1333,10 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1379,6 +1395,10 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
                 #[cfg(feature = "decimal")]
                 crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u),
                 crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
@@ -1796,6 +1816,10 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::DecimalOpt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1822,6 +1846,12 @@ async fn postgres_sqlx_exec_create_table(
                 #[cfg(feature = "decimal")]
                 DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(u) | DatabaseValue::UuidOpt(Some(u)) => {
+                    query.push('\'');
+                    query.push_str(&u.to_string());
+                    query.push('\'');
                 }
                 DatabaseValue::NowPlus(_) => {
                     // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
@@ -2144,6 +2174,16 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                             crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            #[cfg(feature = "decimal")]
+                            crate::DatabaseValue::Decimal(d)
+                            | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                                format!("'{d}'")
+                            }
+                            #[cfg(feature = "uuid")]
+                            crate::DatabaseValue::Uuid(u)
+                            | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                                format!("'{u}'")
+                            }
                             _ => {
                                 return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
                                     type_name:
@@ -2302,6 +2342,15 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                         crate::DatabaseValue::Real32(r) => r.to_string(),
                         crate::DatabaseValue::Null => "NULL".to_string(),
                         crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                        #[cfg(feature = "decimal")]
+                        crate::DatabaseValue::Decimal(d)
+                        | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                            format!("'{d}'")
+                        }
+                        #[cfg(feature = "uuid")]
+                        crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                            format!("'{u}'")
+                        }
                         _ => {
                             return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
                                 type_name: "Unsupported default value type for MODIFY COLUMN"
@@ -2352,6 +2401,8 @@ fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
             let dt: chrono::DateTime<chrono::Utc> = owned.try_decode()?;
             Ok(DatabaseValue::DateTime(dt.naive_utc()))
         }
+        #[cfg(feature = "uuid")]
+        "UUID" => Ok(DatabaseValue::Uuid(owned.try_decode()?)),
         _ => Err(sqlx::Error::TypeNotFound {
             type_name: value.type_info().name().to_string(),
         }),
@@ -2679,6 +2730,8 @@ where
                 | DatabaseValue::Now => (),
                 #[cfg(feature = "decimal")]
                 DatabaseValue::DecimalOpt(None) => (),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
                 }
@@ -2702,6 +2755,10 @@ where
                 #[cfg(feature = "decimal")]
                 DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => {
                     query = query.bind(*value);
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(value) | DatabaseValue::UuidOpt(Some(value)) => {
+                    query = query.bind(value);
                 }
                 DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {

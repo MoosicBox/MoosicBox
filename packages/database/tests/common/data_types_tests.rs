@@ -489,6 +489,79 @@ pub trait DataTypeTestSuite {
         assert_eq!(val2, price2);
     }
 
+    #[cfg(feature = "uuid")]
+    async fn test_uuid_storage(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "uuid_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "uuid_col".to_string(),
+                data_type: DataType::Uuid,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create uuid_test table");
+
+        let uuid1 = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let uuid2 = uuid::Uuid::parse_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap();
+        let uuid3 = uuid::Uuid::parse_str("6ba7b811-9dad-11d1-80b4-00c04fd430c8").unwrap();
+
+        db.insert(table_name)
+            .value("uuid_col", uuid1)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("uuid_col", uuid2)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("uuid_col", uuid3)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        let val0 = rows[0].get("uuid_col").unwrap().as_uuid().unwrap();
+        let val1 = rows[1].get("uuid_col").unwrap().as_uuid().unwrap();
+        let val2 = rows[2].get("uuid_col").unwrap().as_uuid().unwrap();
+
+        assert_eq!(val0, uuid1);
+        assert_eq!(val1, uuid2);
+        assert_eq!(val2, uuid3);
+    }
+
     async fn test_boolean_type(&self) {
         let Some(db) = self.get_database().await else {
             return;

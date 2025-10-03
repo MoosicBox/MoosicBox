@@ -305,6 +305,10 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowPlus(_) => {
                     // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
@@ -1651,6 +1655,10 @@ async fn postgres_exec_create_table(
                 DatabaseValue::DecimalOpt(None) => {
                     query.push_str("NULL");
                 }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => {
+                    query.push_str("NULL");
+                }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
                     query.push_str(x);
@@ -1677,6 +1685,12 @@ async fn postgres_exec_create_table(
                 #[cfg(feature = "decimal")]
                 DatabaseValue::DecimalOpt(Some(x)) | DatabaseValue::Decimal(x) => {
                     query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "uuid")]
+                DatabaseValue::Uuid(u) | DatabaseValue::UuidOpt(Some(u)) => {
+                    query.push('\'');
+                    query.push_str(&u.to_string());
+                    query.push('\'');
                 }
                 DatabaseValue::NowPlus(_) => {
                     // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
@@ -1987,6 +2001,16 @@ pub(crate) async fn postgres_exec_alter_table(
                             crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            #[cfg(feature = "decimal")]
+                            crate::DatabaseValue::Decimal(d)
+                            | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                                format!("'{d}'")
+                            }
+                            #[cfg(feature = "uuid")]
+                            crate::DatabaseValue::Uuid(u)
+                            | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                                format!("'{u}'")
+                            }
                             _ => {
                                 log::error!(
                                     "Unsupported default value type for ALTER TABLE ADD COLUMN: {val:?}"
@@ -2132,6 +2156,15 @@ pub(crate) async fn postgres_exec_alter_table(
                         crate::DatabaseValue::Real32(r) => r.to_string(),
                         crate::DatabaseValue::Null => "NULL".to_string(),
                         crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                        #[cfg(feature = "decimal")]
+                        crate::DatabaseValue::Decimal(d)
+                        | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                            format!("'{d}'")
+                        }
+                        #[cfg(feature = "uuid")]
+                        crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                            format!("'{u}'")
+                        }
                         _ => {
                             log::error!(
                                 "Unsupported default value type for MODIFY COLUMN: {default:?}"
@@ -3196,6 +3229,10 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Decimal(value) => value.to_sql(ty, out)?,
             #[cfg(feature = "decimal")]
             DatabaseValue::DecimalOpt(value) => value.to_sql(ty, out)?,
+            #[cfg(feature = "uuid")]
+            DatabaseValue::Uuid(value) => value.to_sql(ty, out)?,
+            #[cfg(feature = "uuid")]
+            DatabaseValue::UuidOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::String(value) => {
                 if ty.name() == "interval" {
                     // For interval type, write as text format (UTF-8 bytes)

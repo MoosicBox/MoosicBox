@@ -194,6 +194,10 @@ pub enum DatabaseValue {
     Decimal(rust_decimal::Decimal),
     #[cfg(feature = "decimal")]
     DecimalOpt(Option<rust_decimal::Decimal>),
+    #[cfg(feature = "uuid")]
+    Uuid(uuid::Uuid),
+    #[cfg(feature = "uuid")]
+    UuidOpt(Option<uuid::Uuid>),
     NowPlus(SqlInterval),
     Now,
     DateTime(NaiveDateTime),
@@ -288,6 +292,17 @@ impl DatabaseValue {
         }
     }
 
+    #[cfg(feature = "uuid")]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_uuid(&self) -> Option<uuid::Uuid> {
+        match self {
+            Self::String(value) | Self::StringOpt(Some(value)) => value.parse::<uuid::Uuid>().ok(),
+            Self::Uuid(value) | Self::UuidOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_datetime(&self) -> Option<NaiveDateTime> {
@@ -359,6 +374,13 @@ impl From<rust_decimal::Decimal> for DatabaseValue {
 impl From<i8> for DatabaseValue {
     fn from(val: i8) -> Self {
         Self::Int32(i32::from(val))
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl From<uuid::Uuid> for DatabaseValue {
+    fn from(val: uuid::Uuid) -> Self {
+        Self::Uuid(val)
     }
 }
 
@@ -516,6 +538,18 @@ impl TryFrom<DatabaseValue> for rust_decimal::Decimal {
         match value {
             DatabaseValue::Decimal(value) | DatabaseValue::DecimalOpt(Some(value)) => Ok(value),
             _ => Err(TryFromError::CouldNotConvert("Decimal".into())),
+        }
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl TryFrom<DatabaseValue> for uuid::Uuid {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Uuid(value) | DatabaseValue::UuidOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("Uuid".into())),
         }
     }
 }

@@ -47,6 +47,8 @@ where
             | DatabaseValue::Real32Opt(None) => Ok(None),
             #[cfg(feature = "decimal")]
             DatabaseValue::DecimalOpt(None) => Ok(None),
+            #[cfg(feature = "uuid")]
+            DatabaseValue::UuidOpt(None) => Ok(None),
             _ => self.to_value_type().map(|inner| Some(inner)),
         }
     }
@@ -61,6 +63,8 @@ impl ToValueType<String> for &DatabaseValue {
         match &self {
             DatabaseValue::String(x) => Ok(x.to_string()),
             DatabaseValue::DateTime(datetime) => Ok(datetime.and_utc().to_rfc3339()),
+            #[cfg(feature = "uuid")]
+            DatabaseValue::Uuid(uuid) => Ok(uuid.to_string()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }

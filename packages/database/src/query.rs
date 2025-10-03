@@ -171,7 +171,7 @@ impl Expression for DatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        #[cfg(not(feature = "decimal"))]
+        #[cfg(all(not(feature = "decimal"), not(feature = "uuid")))]
         {
             matches!(
                 self,
@@ -184,7 +184,7 @@ impl Expression for DatabaseValue {
                     | Self::UInt64Opt(None)
             )
         }
-        #[cfg(feature = "decimal")]
+        #[cfg(all(feature = "decimal", not(feature = "uuid")))]
         {
             matches!(
                 self,
@@ -196,6 +196,35 @@ impl Expression for DatabaseValue {
                     | Self::Int64Opt(None)
                     | Self::UInt64Opt(None)
                     | Self::DecimalOpt(None)
+            )
+        }
+        #[cfg(all(not(feature = "decimal"), feature = "uuid"))]
+        {
+            matches!(
+                self,
+                Self::Null
+                    | Self::BoolOpt(None)
+                    | Self::Real64Opt(None)
+                    | Self::Real32Opt(None)
+                    | Self::StringOpt(None)
+                    | Self::Int64Opt(None)
+                    | Self::UInt64Opt(None)
+                    | Self::UuidOpt(None)
+            )
+        }
+        #[cfg(all(feature = "decimal", feature = "uuid"))]
+        {
+            matches!(
+                self,
+                Self::Null
+                    | Self::BoolOpt(None)
+                    | Self::Real64Opt(None)
+                    | Self::Real32Opt(None)
+                    | Self::StringOpt(None)
+                    | Self::Int64Opt(None)
+                    | Self::UInt64Opt(None)
+                    | Self::DecimalOpt(None)
+                    | Self::UuidOpt(None)
             )
         }
     }
