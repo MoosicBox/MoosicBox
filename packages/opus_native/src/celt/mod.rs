@@ -3,5 +3,6 @@
 
 mod constants;
 mod decoder;
+mod pvq;
 
 pub use decoder::CeltDecoder;
