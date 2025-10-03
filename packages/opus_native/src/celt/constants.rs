@@ -160,3 +160,79 @@ pub const ENERGY_BETA_INTER: [f32; 4] = [
     12124.0 / 32768.0,
     6554.0 / 32768.0,
 ];
+
+/// Static bit allocation table (RFC Table 57, lines 6234-6290)
+///
+/// Units: 1/32 bit per MDCT bin
+/// Dimensions: [band][quality]
+/// * band: 0-20 (21 CELT bands from Table 55)
+/// * quality: 0-10 (11 quality levels)
+///
+/// The allocation is computed as: `channels * N * alloc[band][q] << LM >> 2`
+/// where N = number of MDCT bins, LM = `log2(frame_size/120)`
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/static_modes_fixed.h#L246-268>
+pub const ALLOCATION_TABLE: [[u8; 11]; CELT_NUM_BANDS] = [
+    [0, 90, 110, 118, 126, 134, 144, 152, 162, 172, 200],
+    [0, 80, 100, 110, 119, 127, 137, 145, 155, 165, 200],
+    [0, 75, 90, 103, 112, 120, 130, 138, 148, 158, 200],
+    [0, 69, 84, 93, 104, 114, 124, 132, 142, 152, 200],
+    [0, 63, 78, 86, 95, 103, 113, 123, 133, 143, 200],
+    [0, 56, 71, 80, 89, 97, 107, 117, 127, 137, 200],
+    [0, 49, 65, 75, 83, 91, 101, 111, 121, 131, 200],
+    [0, 40, 58, 70, 78, 85, 95, 105, 115, 125, 200],
+    [0, 34, 51, 65, 72, 78, 88, 98, 108, 118, 198],
+    [0, 29, 45, 59, 66, 72, 82, 92, 102, 112, 193],
+    [0, 20, 39, 53, 60, 66, 76, 86, 96, 106, 188],
+    [0, 18, 32, 47, 54, 60, 70, 80, 90, 100, 183],
+    [0, 10, 26, 40, 47, 54, 64, 74, 84, 94, 178],
+    [0, 0, 20, 31, 39, 47, 57, 67, 77, 87, 173],
+    [0, 0, 12, 23, 32, 41, 51, 61, 71, 81, 168],
+    [0, 0, 0, 15, 25, 35, 45, 55, 65, 75, 163],
+    [0, 0, 0, 4, 17, 29, 39, 49, 59, 69, 158],
+    [0, 0, 0, 0, 12, 23, 33, 43, 53, 63, 153],
+    [0, 0, 0, 0, 1, 16, 26, 36, 46, 56, 148],
+    [0, 0, 0, 0, 0, 10, 15, 20, 30, 45, 129],
+    [0, 0, 0, 0, 0, 1, 1, 1, 1, 20, 104],
+];
+
+/// Allocation trim PDF (RFC Table 58, lines 6394-6397)
+///
+/// Used to decode the allocation trim parameter (0-10, default=5)
+/// * trim < 5: bias towards lower frequencies
+/// * trim > 5: bias towards higher frequencies
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/celt.c#L173>
+pub const TRIM_PDF: [u16; 11] = [2, 2, 5, 10, 22, 46, 22, 10, 5, 2, 2];
+
+/// Maximum allocation caps per band (from `compute_pulse_cache`)
+///
+/// Dimensions: [LM][stereo][band]
+/// * 168 bytes = 21 bands × 8 combinations (4 LM values × 2 stereo modes)
+/// * Index formula: `caps[band + 21 * (2*LM + (channels-1))]`
+///
+/// These caps limit the maximum bits allocated to each band to prevent
+/// PVQ encoder/decoder inefficiencies at very high rates.
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/static_modes_fixed.h#L70-75>
+pub const CACHE_CAPS: [u8; 168] = [
+    224, 224, 224, 224, 224, 224, 224, 224, 160, 160, 160, 160, 185, 185, 185, 178, 178, 168, 134,
+    61, 37, 224, 224, 224, 224, 224, 224, 224, 224, 240, 240, 240, 240, 207, 207, 207, 198, 198,
+    183, 144, 66, 40, 160, 160, 160, 160, 160, 160, 160, 160, 185, 185, 185, 185, 193, 193, 193,
+    183, 183, 172, 138, 64, 38, 240, 240, 240, 240, 240, 240, 240, 240, 207, 207, 207, 207, 204,
+    204, 204, 193, 193, 180, 143, 66, 40, 185, 185, 185, 185, 185, 185, 185, 185, 193, 193, 193,
+    193, 193, 193, 193, 183, 183, 172, 138, 65, 39, 207, 207, 207, 207, 207, 207, 207, 207, 204,
+    204, 204, 204, 201, 201, 201, 188, 188, 176, 141, 66, 40, 193, 193, 193, 193, 193, 193, 193,
+    193, 193, 193, 193, 193, 194, 194, 194, 184, 184, 173, 139, 65, 39, 204, 204, 204, 204, 204,
+    204, 204, 204, 201, 201, 201, 201, 198, 198, 198, 187, 187, 175, 140, 66, 40,
+];
+
+/// Conservative log2 in 1/8 bit units for intensity stereo reservation
+///
+/// Used to reserve bits for intensity stereo parameter in stereo frames.
+/// Index by number of coded bands (end - start).
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/rate.c#L48-53>
+pub const LOG2_FRAC_TABLE: [u8; 24] = [
+    0, 8, 13, 16, 19, 21, 23, 24, 26, 27, 28, 29, 30, 31, 32, 32, 33, 34, 34, 35, 36, 36, 37, 37,
+];
