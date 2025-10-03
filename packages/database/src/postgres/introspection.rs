@@ -104,7 +104,7 @@
 //!
 //! ## Numeric Values
 //! - Integer literals: `42` → `DatabaseValue::Number(42)`
-//! - Floating point: `3.14` → `DatabaseValue::Real(3.14)`
+//! - Floating point: `3.14` → `DatabaseValue::Real64(3.14)`
 //!
 //! ## Sequence Defaults
 //! - `nextval('sequence_name'::regclass)` → `None` (not representable)
@@ -315,7 +315,7 @@ fn parse_default_value(default_str: &str) -> Option<DatabaseValue> {
                             // Treat as string literal
                             Some(DatabaseValue::String(default_str.to_string()))
                         },
-                        |float_val| Some(DatabaseValue::Real(float_val)),
+                        |float_val| Some(DatabaseValue::Real64(float_val)),
                     )
                 },
                 |int_val| Some(DatabaseValue::Number(int_val)),

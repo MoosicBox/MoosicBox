@@ -43,7 +43,7 @@ where
             | DatabaseValue::StringOpt(None)
             | DatabaseValue::NumberOpt(None)
             | DatabaseValue::UNumberOpt(None)
-            | DatabaseValue::RealOpt(None)
+            | DatabaseValue::Real64Opt(None)
             | DatabaseValue::Real32Opt(None) => Ok(None),
             _ => self.to_value_type().map(|inner| Some(inner)),
         }
@@ -79,7 +79,7 @@ impl ToValueType<f32> for &DatabaseValue {
         match self {
             DatabaseValue::Real32(num) => Ok(*num),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::Real(num) => Ok(*num as f32),
+            DatabaseValue::Real64(num) => Ok(*num as f32),
             _ => Err(ParseError::ConvertType("f32".into())),
         }
     }
@@ -88,7 +88,7 @@ impl ToValueType<f32> for &DatabaseValue {
 impl ToValueType<f64> for &DatabaseValue {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
-            DatabaseValue::Real(num) => Ok(*num),
+            DatabaseValue::Real64(num) => Ok(*num),
             DatabaseValue::Real32(num) => Ok(f64::from(*num)),
             _ => Err(ParseError::ConvertType("f64".into())),
         }
@@ -380,7 +380,7 @@ where
             | Self::StringOpt(None)
             | Self::NumberOpt(None)
             | Self::UNumberOpt(None)
-            | Self::RealOpt(None)
+            | Self::Real64Opt(None)
             | Self::Real32Opt(None) => Ok(None),
             _ => self.to_value_type().map(Some),
         }
@@ -416,7 +416,7 @@ impl ToValueType<f32> for DatabaseValue {
         match self {
             Self::Real32(num) => Ok(num),
             #[allow(clippy::cast_possible_truncation)]
-            Self::Real(num) => Ok(num as f32),
+            Self::Real64(num) => Ok(num as f32),
             _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
@@ -425,7 +425,7 @@ impl ToValueType<f32> for DatabaseValue {
 impl ToValueType<f64> for DatabaseValue {
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
-            Self::Real(num) => Ok(num),
+            Self::Real64(num) => Ok(num),
             Self::Real32(num) => Ok(f64::from(num)),
             _ => Err(ParseError::ConvertType("f64".into())),
         }

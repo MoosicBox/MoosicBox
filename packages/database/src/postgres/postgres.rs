@@ -303,7 +303,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowPlus(_) => {
@@ -1643,7 +1643,7 @@ async fn postgres_exec_create_table(
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
@@ -1664,7 +1664,7 @@ async fn postgres_exec_create_table(
                 DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                DatabaseValue::Real64Opt(Some(x)) | DatabaseValue::Real64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
@@ -1975,7 +1975,7 @@ pub(crate) async fn postgres_exec_alter_table(
                             crate::DatabaseValue::Number(n) => n.to_string(),
                             crate::DatabaseValue::UNumber(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => b.to_string(),
-                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
@@ -2120,7 +2120,7 @@ pub(crate) async fn postgres_exec_alter_table(
                         crate::DatabaseValue::Number(n) => n.to_string(),
                         crate::DatabaseValue::UNumber(n) => n.to_string(),
                         crate::DatabaseValue::Bool(b) => b.to_string(),
-                        crate::DatabaseValue::Real(r) => r.to_string(),
+                        crate::DatabaseValue::Real64(r) => r.to_string(),
                         crate::DatabaseValue::Real32(r) => r.to_string(),
                         crate::DatabaseValue::Null => "NULL".to_string(),
                         crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
@@ -3041,7 +3041,9 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             "bool" => Self::Bool(bool_from_sql(raw)?),
             "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
             | "int8" => Self::Number(int8_from_sql(raw)?),
-            "real" | "float4" | "double precision" | "float8" => Self::Real(float8_from_sql(raw)?),
+            "real" | "float4" | "double precision" | "float8" => {
+                Self::Real64(float8_from_sql(raw)?)
+            }
             "varchar" | "char(n)" | "text" | "name" | "citext" => {
                 Self::String(text_from_sql(raw)?.to_string())
             }
@@ -3096,12 +3098,12 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                 .unwrap_or(Self::NumberOpt(None)),
             "real" | "float4" | "double precision" | "float8" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real(float8_from_sql(
-                        raw,
-                    )?))
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real64(
+                        float8_from_sql(raw)?,
+                    ))
                 })
                 .transpose()?
-                .unwrap_or(Self::RealOpt(None)),
+                .unwrap_or(Self::Real64Opt(None)),
             "varchar" | "char(n)" | "text" | "name" | "citext" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::String(
@@ -3178,8 +3180,8 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
                 i64::try_from(*value)?.to_sql(ty, out)?
             }
-            DatabaseValue::Real(value) => value.to_sql(ty, out)?,
-            DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Real64(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Real64Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Real32(value) => value.to_sql(ty, out)?,
             DatabaseValue::Real32Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::String(value) => {

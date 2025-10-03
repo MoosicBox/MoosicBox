@@ -475,7 +475,7 @@ mod tests {
                 "price",
                 DataType::Real,
                 true,
-                Some(DatabaseValue::Real(0.0)),
+                Some(DatabaseValue::Real64(0.0)),
             );
 
             // Generate reverse operation

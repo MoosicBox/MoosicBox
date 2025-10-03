@@ -71,7 +71,7 @@
 //! - String literals: `'value'` → `DatabaseValue::String("value")`
 //! - Numeric literals: `42` → `DatabaseValue::Number(42)`
 //! - Boolean literals: `1`/`TRUE`, `0`/`FALSE` → `DatabaseValue::Bool`
-//! - Real literals: `3.14` → `DatabaseValue::Real(3.14)`
+//! - Real literals: `3.14` → `DatabaseValue::Real64(3.14)`
 //! - Complex expressions → None (not parsed)
 //!
 //! ### PRAGMA Considerations
@@ -399,7 +399,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
                 DatabaseValue::NowPlus(interval) => {
@@ -1443,7 +1443,7 @@ impl From<Value> for DatabaseValue {
         match value {
             Value::Null => Self::Null,
             Value::Integer(value) => Self::Number(value),
-            Value::Real(value) => Self::Real(value),
+            Value::Real(value) => Self::Real64(value),
             Value::Text(value) => Self::String(value),
             Value::Blob(_value) => unimplemented!("Blob types are not supported yet"),
         }
@@ -1550,7 +1550,7 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
                 }
@@ -1571,7 +1571,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                DatabaseValue::Real64Opt(Some(x)) | DatabaseValue::Real64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real32Opt(Some(x)) | DatabaseValue::Real32(x) => {
@@ -1971,7 +1971,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                             crate::DatabaseValue::Number(n) => n.to_string(),
                             crate::DatabaseValue::UNumber(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
-                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Real32(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
                             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
@@ -2183,7 +2183,7 @@ fn rusqlite_exec_modify_column_workaround(
                 crate::DatabaseValue::Number(n) => n.to_string(),
                 crate::DatabaseValue::UNumber(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
-                crate::DatabaseValue::Real(r) => r.to_string(),
+                crate::DatabaseValue::Real64(r) => r.to_string(),
                 crate::DatabaseValue::Real32(r) => r.to_string(),
                 crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
@@ -2423,13 +2423,15 @@ fn modify_create_table_sql(
             crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::NumberOpt(None)
             | crate::DatabaseValue::UNumberOpt(None)
-            | crate::DatabaseValue::RealOpt(None)
+            | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
             crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::Real(f) | crate::DatabaseValue::RealOpt(Some(f)) => f.to_string(),
+            crate::DatabaseValue::Real64(f) | crate::DatabaseValue::Real64Opt(Some(f)) => {
+                f.to_string()
+            }
             crate::DatabaseValue::Real32(f) | crate::DatabaseValue::Real32Opt(Some(f)) => {
                 f.to_string()
             }
@@ -2950,7 +2952,7 @@ fn bind_values(
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now
                 | DatabaseValue::NowPlus(..) => (),
@@ -2984,7 +2986,7 @@ fn bind_values(
                         i += 1;
                     }
                 }
-                DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
+                DatabaseValue::Real64(value) | DatabaseValue::Real64Opt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;
@@ -3608,7 +3610,7 @@ impl Expression for RusqliteDatabaseValue {
             self.0,
             DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::RealOpt(None)
+                | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
@@ -3687,7 +3689,7 @@ fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseVal
         } else if let Ok(num) = s.parse::<i64>() {
             Some(crate::DatabaseValue::Number(num))
         } else if let Ok(real) = s.parse::<f64>() {
-            Some(crate::DatabaseValue::Real(real))
+            Some(crate::DatabaseValue::Real64(real))
         } else if s == "0" || s.to_uppercase() == "FALSE" {
             Some(crate::DatabaseValue::Bool(false))
         } else if s == "1" || s.to_uppercase() == "TRUE" {

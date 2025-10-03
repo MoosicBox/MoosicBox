@@ -531,7 +531,7 @@ fn parse_mysql_default_value(default_str: &str) -> Option<DatabaseValue> {
             }
 
             if let Ok(float_val) = default_str.parse::<f64>() {
-                return Some(DatabaseValue::Real(float_val));
+                return Some(DatabaseValue::Real64(float_val));
             }
 
             // For other complex expressions, return None

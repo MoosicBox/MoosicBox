@@ -689,9 +689,9 @@ mod tests {
         DatabaseValue::UNumber(42u64).update_digest(&mut hasher);
         DatabaseValue::UNumberOpt(Some(42u64)).update_digest(&mut hasher);
         DatabaseValue::UNumberOpt(None).update_digest(&mut hasher);
-        DatabaseValue::Real(std::f64::consts::PI).update_digest(&mut hasher);
-        DatabaseValue::RealOpt(Some(std::f64::consts::PI)).update_digest(&mut hasher);
-        DatabaseValue::RealOpt(None).update_digest(&mut hasher);
+        DatabaseValue::Real64(std::f64::consts::PI).update_digest(&mut hasher);
+        DatabaseValue::Real64Opt(Some(std::f64::consts::PI)).update_digest(&mut hasher);
+        DatabaseValue::Real64Opt(None).update_digest(&mut hasher);
         DatabaseValue::Real32(std::f32::consts::PI).update_digest(&mut hasher);
         DatabaseValue::Real32Opt(Some(std::f32::consts::PI)).update_digest(&mut hasher);
         DatabaseValue::Real32Opt(None).update_digest(&mut hasher);
@@ -1022,11 +1022,11 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
-            Self::Real(r) => {
+            Self::Real64(r) => {
                 hasher.update(b"REAL:");
                 hasher.update(r.to_le_bytes());
             }
-            Self::RealOpt(opt) => {
+            Self::Real64Opt(opt) => {
                 hasher.update(b"REALOPT:");
                 if let Some(r) = opt {
                     hasher.update(r.to_le_bytes());

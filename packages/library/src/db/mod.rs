@@ -801,7 +801,7 @@ pub async fn add_tracks(
                     "number",
                     DatabaseValue::Number(i64::from(insert.track.number)),
                 ),
-                ("duration", DatabaseValue::Real(insert.track.duration)),
+                ("duration", DatabaseValue::Real64(insert.track.duration)),
                 (
                     "album_id",
                     #[allow(clippy::cast_possible_wrap)]

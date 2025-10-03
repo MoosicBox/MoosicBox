@@ -186,8 +186,8 @@ pub enum DatabaseValue {
     NumberOpt(Option<i64>),
     UNumber(u64),
     UNumberOpt(Option<u64>),
-    Real(f64),
-    RealOpt(Option<f64>),
+    Real64(f64),
+    Real64Opt(Option<f64>),
     Real32(f32),
     Real32Opt(Option<f32>),
     NowPlus(SqlInterval),
@@ -257,7 +257,7 @@ impl DatabaseValue {
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             Self::Real32(value) | Self::Real32Opt(Some(value)) => Some(f64::from(*value)),
-            Self::Real(value) | Self::RealOpt(Some(value)) => Some(*value),
+            Self::Real64(value) | Self::Real64Opt(Some(value)) => Some(*value),
             _ => None,
         }
     }
@@ -328,7 +328,7 @@ impl From<f32> for DatabaseValue {
 
 impl From<f64> for DatabaseValue {
     fn from(val: f64) -> Self {
-        Self::Real(val)
+        Self::Real64(val)
     }
 }
 
@@ -462,7 +462,9 @@ impl TryFrom<DatabaseValue> for f32 {
         match value {
             DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => Ok(value),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => Ok(value as Self),
+            DatabaseValue::Real64(value) | DatabaseValue::Real64Opt(Some(value)) => {
+                Ok(value as Self)
+            }
             _ => Err(TryFromError::CouldNotConvert("f32".into())),
         }
     }
@@ -473,7 +475,7 @@ impl TryFrom<DatabaseValue> for f64 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
-            DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => Ok(value),
+            DatabaseValue::Real64(value) | DatabaseValue::Real64Opt(Some(value)) => Ok(value),
             DatabaseValue::Real32(value) | DatabaseValue::Real32Opt(Some(value)) => {
                 Ok(Self::from(value))
             }

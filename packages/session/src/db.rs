@@ -272,7 +272,7 @@ pub async fn update_session(
         values.push(("seek", DatabaseValue::Number(seek as i64)));
     }
     if let Some(volume) = session.volume {
-        values.push(("volume", DatabaseValue::Real(volume)));
+        values.push(("volume", DatabaseValue::Real64(volume)));
     }
 
     if values.is_empty() {

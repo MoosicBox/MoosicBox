@@ -194,7 +194,7 @@
 //!     data_type: DataType::Decimal(10, 2), // DECIMAL(10,2) for currency
 //!     nullable: false,
 //!     auto_increment: false,
-//!     default: Some(DatabaseValue::Real(0.0)),
+//!     default: Some(DatabaseValue::Real64(0.0)),
 //! };
 //!
 //! // Boolean and date types
