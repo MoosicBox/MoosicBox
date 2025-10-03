@@ -86,14 +86,14 @@ pub trait SavepointTestSuite {
                 data_type: DataType::BigInt,
                 nullable: true,
                 auto_increment: false,
-                default: Some(DatabaseValue::Number(0)),
+                default: Some(DatabaseValue::Int64(0)),
             })
             .column(Column {
                 name: "created_at".to_string(),
                 data_type: DataType::BigInt,
                 nullable: true,
                 auto_increment: false,
-                default: Some(DatabaseValue::Number(0)),
+                default: Some(DatabaseValue::Int64(0)),
             })
             .primary_key("id")
             .execute(db)

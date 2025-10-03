@@ -29,6 +29,6 @@ impl ToValueType<ScanLocation> for &switchy_database::Row {
 
 impl AsId for ScanLocation {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(i64::from(self.id))
+        DatabaseValue::Int64(i64::from(self.id))
     }
 }

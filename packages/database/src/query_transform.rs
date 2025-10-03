@@ -509,7 +509,7 @@ mod tests {
             let params = vec![
                 DatabaseValue::Now,
                 DatabaseValue::String("active".to_string()),
-                DatabaseValue::Number(42),
+                DatabaseValue::Int64(42),
             ];
 
             let (transformed, bindable) = transform_query_for_params(
@@ -753,7 +753,7 @@ mod tests {
             if i % 3 == 0 {
                 params.push(DatabaseValue::Now);
             } else {
-                params.push(DatabaseValue::Number(i));
+                params.push(DatabaseValue::Int64(i));
             }
         }
 

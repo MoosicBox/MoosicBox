@@ -389,7 +389,7 @@ pub async fn set_track_sizes(
                 (
                     "track_id",
                     #[allow(clippy::cast_possible_wrap)]
-                    DatabaseValue::Number(v.track_id as i64),
+                    DatabaseValue::Int64(v.track_id as i64),
                 ),
                 (
                     "format",
@@ -401,38 +401,35 @@ pub async fn set_track_sizes(
                 values.push((
                     "bytes",
                     #[allow(clippy::cast_possible_wrap)]
-                    DatabaseValue::NumberOpt(bytes.map(|x| x as i64)),
+                    DatabaseValue::Int64Opt(bytes.map(|x| x as i64)),
                 ));
             }
             if let Some(bit_depth) = v.bit_depth {
                 values.push((
                     "bit_depth",
-                    DatabaseValue::NumberOpt(bit_depth.map(i64::from)),
+                    DatabaseValue::Int64Opt(bit_depth.map(i64::from)),
                 ));
             }
             if let Some(audio_bitrate) = v.audio_bitrate {
                 values.push((
                     "audio_bitrate",
-                    DatabaseValue::NumberOpt(audio_bitrate.map(i64::from)),
+                    DatabaseValue::Int64Opt(audio_bitrate.map(i64::from)),
                 ));
             }
             if let Some(overall_bitrate) = v.overall_bitrate {
                 values.push((
                     "overall_bitrate",
-                    DatabaseValue::NumberOpt(overall_bitrate.map(i64::from)),
+                    DatabaseValue::Int64Opt(overall_bitrate.map(i64::from)),
                 ));
             }
             if let Some(sample_rate) = v.sample_rate {
                 values.push((
                     "sample_rate",
-                    DatabaseValue::NumberOpt(sample_rate.map(i64::from)),
+                    DatabaseValue::Int64Opt(sample_rate.map(i64::from)),
                 ));
             }
             if let Some(channels) = v.channels {
-                values.push((
-                    "channels",
-                    DatabaseValue::NumberOpt(channels.map(i64::from)),
-                ));
+                values.push(("channels", DatabaseValue::Int64Opt(channels.map(i64::from))));
             }
 
             values
@@ -733,7 +730,7 @@ pub async fn add_albums_and_get_albums(
                     (
                         "artist_id",
                         #[allow(clippy::cast_possible_wrap)]
-                        DatabaseValue::Number(album.artist_id as i64),
+                        DatabaseValue::Int64(album.artist_id as i64),
                     ),
                     ("title", DatabaseValue::String(album.title)),
                     (
@@ -799,13 +796,13 @@ pub async fn add_tracks(
             let mut values = vec![
                 (
                     "number",
-                    DatabaseValue::Number(i64::from(insert.track.number)),
+                    DatabaseValue::Int64(i64::from(insert.track.number)),
                 ),
                 ("duration", DatabaseValue::Real64(insert.track.duration)),
                 (
                     "album_id",
                     #[allow(clippy::cast_possible_wrap)]
-                    DatabaseValue::Number(insert.album_id as i64),
+                    DatabaseValue::Int64(insert.album_id as i64),
                 ),
                 ("title", DatabaseValue::String(insert.track.title.clone())),
                 (

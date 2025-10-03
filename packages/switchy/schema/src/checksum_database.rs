@@ -683,9 +683,9 @@ mod tests {
         DatabaseValue::Bool(true).update_digest(&mut hasher);
         DatabaseValue::BoolOpt(Some(false)).update_digest(&mut hasher);
         DatabaseValue::BoolOpt(None).update_digest(&mut hasher);
-        DatabaseValue::Number(42).update_digest(&mut hasher);
-        DatabaseValue::NumberOpt(Some(42)).update_digest(&mut hasher);
-        DatabaseValue::NumberOpt(None).update_digest(&mut hasher);
+        DatabaseValue::Int64(42).update_digest(&mut hasher);
+        DatabaseValue::Int64Opt(Some(42)).update_digest(&mut hasher);
+        DatabaseValue::Int64Opt(None).update_digest(&mut hasher);
         DatabaseValue::UInt64(42u64).update_digest(&mut hasher);
         DatabaseValue::UInt64Opt(Some(42u64)).update_digest(&mut hasher);
         DatabaseValue::UInt64Opt(None).update_digest(&mut hasher);
@@ -998,11 +998,11 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
-            Self::Number(n) => {
+            Self::Int64(n) => {
                 hasher.update(b"NUM:");
                 hasher.update(n.to_le_bytes());
             }
-            Self::NumberOpt(opt) => {
+            Self::Int64Opt(opt) => {
                 hasher.update(b"NUMOPT:");
                 if let Some(n) = opt {
                     hasher.update(n.to_le_bytes());

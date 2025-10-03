@@ -211,11 +211,11 @@ pub trait DataTypeTestSuite {
 
         assert!(matches!(
             rows[0].get("int_col").unwrap(),
-            DatabaseValue::Int32(_) | DatabaseValue::Number(_)
+            DatabaseValue::Int32(_) | DatabaseValue::Int64(_)
         ));
         assert!(matches!(
             rows[0].get("big_int_col").unwrap(),
-            DatabaseValue::Number(_) | DatabaseValue::Int32(_)
+            DatabaseValue::Int64(_) | DatabaseValue::Int32(_)
         ));
     }
 
@@ -842,7 +842,7 @@ pub trait DataTypeTestSuite {
                 data_type: DataType::BigInt,
                 nullable: false,
                 auto_increment: false,
-                default: Some(DatabaseValue::Number(9999i64)),
+                default: Some(DatabaseValue::Int64(9999i64)),
             })
             .column(Column {
                 name: "string_with_default".to_string(),

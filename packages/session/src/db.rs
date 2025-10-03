@@ -265,11 +265,11 @@ pub async fn update_session(
         values.push(("playing", DatabaseValue::Bool(playing)));
     }
     if let Some(position) = session.position {
-        values.push(("position", DatabaseValue::Number(i64::from(position))));
+        values.push(("position", DatabaseValue::Int64(i64::from(position))));
     }
     if let Some(seek) = session.seek {
         #[allow(clippy::cast_possible_truncation)]
-        values.push(("seek", DatabaseValue::Number(seek as i64)));
+        values.push(("seek", DatabaseValue::Int64(seek as i64)));
     }
     if let Some(volume) = session.volume {
         values.push(("volume", DatabaseValue::Real64(volume)));

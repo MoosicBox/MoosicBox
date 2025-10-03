@@ -84,7 +84,7 @@ mod rusqlite_datetime_tests {
         ) -> Option<NaiveDateTime> {
             let query = format!("SELECT {} FROM {} WHERE id = ?", column, table_name);
             let rows = db
-                .query_raw_params(&query, &[DatabaseValue::Number(id as i64)])
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
                 .await
                 .unwrap();
 
@@ -115,7 +115,7 @@ mod rusqlite_datetime_tests {
 
             match rows[0].get("id").unwrap() {
                 DatabaseValue::Int32(n) => n,
-                DatabaseValue::Number(n) => n as i32,
+                DatabaseValue::Int64(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
         }
@@ -378,7 +378,7 @@ mod sqlite_sqlx_datetime_tests {
         ) -> Option<NaiveDateTime> {
             let query = format!("SELECT {} FROM {} WHERE id = ?", column, table_name);
             let rows = db
-                .query_raw_params(&query, &[DatabaseValue::Number(id as i64)])
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
                 .await
                 .unwrap();
 
@@ -409,7 +409,7 @@ mod sqlite_sqlx_datetime_tests {
 
             match rows[0].get("id").unwrap() {
                 DatabaseValue::Int32(n) => n,
-                DatabaseValue::Number(n) => n as i32,
+                DatabaseValue::Int64(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
         }
@@ -673,7 +673,7 @@ mod postgres_sqlx_datetime_tests {
         ) -> Option<NaiveDateTime> {
             let query = format!("SELECT {} FROM {} WHERE id = $1", column, table_name);
             let rows = db
-                .query_raw_params(&query, &[DatabaseValue::Number(id as i64)])
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
                 .await
                 .unwrap();
 
@@ -700,7 +700,7 @@ mod postgres_sqlx_datetime_tests {
 
             match rows[0].get("id").unwrap() {
                 DatabaseValue::Int32(n) => n,
-                DatabaseValue::Number(n) => n as i32,
+                DatabaseValue::Int64(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
         }
@@ -966,7 +966,7 @@ mod mysql_sqlx_datetime_tests {
         ) -> Option<NaiveDateTime> {
             let query = format!("SELECT {} FROM {} WHERE id = ?", column, table_name);
             let rows = db
-                .query_raw_params(&query, &[DatabaseValue::Number(id as i64)])
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
                 .await
                 .unwrap();
 
@@ -993,7 +993,7 @@ mod mysql_sqlx_datetime_tests {
 
             match rows[0].get("id").unwrap() {
                 DatabaseValue::Int32(n) => n,
-                DatabaseValue::Number(n) => n as i32,
+                DatabaseValue::Int64(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
         }
@@ -1272,7 +1272,7 @@ mod postgres_raw_datetime_tests {
         ) -> Option<NaiveDateTime> {
             let query = format!("SELECT {} FROM {} WHERE id = $1", column, table_name);
             let rows = db
-                .query_raw_params(&query, &[DatabaseValue::Number(id as i64)])
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
                 .await
                 .unwrap();
 
@@ -1299,7 +1299,7 @@ mod postgres_raw_datetime_tests {
 
             match rows[0].get("id").unwrap() {
                 DatabaseValue::Int32(n) => n,
-                DatabaseValue::Number(n) => n as i32,
+                DatabaseValue::Int64(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
         }

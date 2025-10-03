@@ -15,7 +15,7 @@ use switchy_database::{Database, DatabaseValue};
 fn extract_bool(value: &DatabaseValue) -> bool {
     match value {
         DatabaseValue::Bool(b) => *b,
-        DatabaseValue::Number(n) => *n != 0,
+        DatabaseValue::Int64(n) => *n != 0,
         DatabaseValue::UInt64(n) => *n != 0,
         _ => panic!("Unexpected type for boolean column: {:?}", value),
     }

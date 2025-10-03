@@ -178,7 +178,7 @@
 //!     data_type: DataType::Int, // 32-bit integer
 //!     nullable: false,
 //!     auto_increment: false,
-//!     default: Some(DatabaseValue::Number(0)),
+//!     default: Some(DatabaseValue::Int64(0)),
 //! };
 //!
 //! let big_id = Column {
@@ -983,7 +983,7 @@ mod tests {
             "age".to_string(),
             DataType::Int,
             Some(false),
-            Some(DatabaseValue::Number(0)),
+            Some(DatabaseValue::Int64(0)),
         );
 
         assert_eq!(statement.table_name, "users");
@@ -998,7 +998,7 @@ mod tests {
                 assert_eq!(name, "age");
                 assert!(matches!(new_data_type, DataType::Int));
                 assert_eq!(new_nullable, &Some(false));
-                assert!(matches!(new_default, Some(DatabaseValue::Number(0))));
+                assert!(matches!(new_default, Some(DatabaseValue::Int64(0))));
             }
             _ => panic!("Expected ModifyColumn operation"),
         }
@@ -1125,7 +1125,7 @@ mod tests {
             name: "test_col".to_string(),
             data_type: DataType::Int,
             nullable: true,
-            default: Some(DatabaseValue::Number(42)),
+            default: Some(DatabaseValue::Int64(42)),
         };
 
         let cloned = operation.clone();
@@ -1150,8 +1150,8 @@ mod tests {
                 assert!(matches!(
                     (def1, def2),
                     (
-                        Some(DatabaseValue::Number(42)),
-                        Some(DatabaseValue::Number(42))
+                        Some(DatabaseValue::Int64(42)),
+                        Some(DatabaseValue::Int64(42))
                     )
                 ));
             }

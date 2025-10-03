@@ -62,6 +62,6 @@ impl AsModel<TidalConfig> for Row {
 
 impl AsId for TidalConfig {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(i64::from(self.id))
+        DatabaseValue::Int64(i64::from(self.id))
     }
 }

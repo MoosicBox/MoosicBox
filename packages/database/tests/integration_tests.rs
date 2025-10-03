@@ -1017,7 +1017,7 @@ mod simulator {
                 "data".to_string(),
                 switchy_database::schema::DataType::BigInt,
                 Some(true), // Make it nullable
-                Some(switchy_database::DatabaseValue::Number(0)),
+                Some(switchy_database::DatabaseValue::Int64(0)),
             )
             .execute(db)
             .await
@@ -1243,7 +1243,7 @@ mod simulator {
                 "id".to_string(),
                 switchy_database::schema::DataType::BigInt,
                 Some(false),
-                Some(switchy_database::DatabaseValue::Number(999)),
+                Some(switchy_database::DatabaseValue::Int64(999)),
             )
             .execute(db)
             .await;

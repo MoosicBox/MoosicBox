@@ -322,7 +322,7 @@ pub trait DateTimeTestSuite<I: Into<String>> {
                 self.gen_param(1).into(),
                 self.gen_param(2).into()
             ),
-            &[DatabaseValue::Now, DatabaseValue::Number(id as i64)],
+            &[DatabaseValue::Now, DatabaseValue::Int64(id as i64)],
         )
         .await
         .expect("Failed to update with NOW()");

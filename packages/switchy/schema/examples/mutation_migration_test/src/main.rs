@@ -128,7 +128,7 @@ impl Migration<'static> for CreatePostsTable {
                 nullable: true,
                 auto_increment: false,
                 data_type: DataType::Int, // SQLite stores boolean as integer
-                default: Some(DatabaseValue::Number(0)), // FALSE = 0
+                default: Some(DatabaseValue::Int64(0)), // FALSE = 0
             })
             .column(Column {
                 name: "created_at".to_string(),

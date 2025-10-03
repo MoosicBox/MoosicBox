@@ -303,7 +303,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -765,8 +765,8 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -823,8 +823,8 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1297,8 +1297,8 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1351,8 +1351,8 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1770,7 +1770,7 @@ async fn postgres_sqlx_exec_create_table(
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1787,7 +1787,7 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -2113,7 +2113,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     Some(val) => {
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
-                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => b.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2271,7 +2271,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 if let Some(default) = new_default {
                     let default_str = match default {
                         crate::DatabaseValue::String(s) => format!("'{s}'"),
-                        crate::DatabaseValue::Number(n) => n.to_string(),
+                        crate::DatabaseValue::Int64(n) => n.to_string(),
                         crate::DatabaseValue::UInt64(n) => n.to_string(),
                         crate::DatabaseValue::Bool(b) => b.to_string(),
                         crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2315,7 +2315,7 @@ fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
         "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" => {
             Ok(DatabaseValue::Int32(owned.try_decode()?))
         }
-        "BIGINT" | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Number(owned.try_decode()?)),
+        "BIGINT" | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
         "REAL" | "FLOAT4" => Ok(DatabaseValue::Real32(owned.try_decode()?)),
         "DOUBLE PRECISION" | "FLOAT8" => Ok(DatabaseValue::Real64(owned.try_decode()?)),
         "CHAR" | "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" | "BPCHAR" => {
@@ -2646,7 +2646,7 @@ where
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -2657,7 +2657,7 @@ where
                 DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+                DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     query = query.bind(*value);
                 }
                 DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {

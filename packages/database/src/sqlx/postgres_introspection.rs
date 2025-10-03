@@ -193,7 +193,7 @@ fn parse_sqlx_default_value(default_str: &str) -> Option<DatabaseValue> {
                         |float_val| Some(DatabaseValue::Real64(float_val)),
                     )
                 },
-                |int_val| Some(DatabaseValue::Number(int_val)),
+                |int_val| Some(DatabaseValue::Int64(int_val)),
             )
         }
     }

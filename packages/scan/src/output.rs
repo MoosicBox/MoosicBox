@@ -302,7 +302,7 @@ impl ScanAlbum {
         vec![
             (
                 "artist_id",
-                DatabaseValue::Number(i64::try_from(artist_id).unwrap()),
+                DatabaseValue::Int64(i64::try_from(artist_id).unwrap()),
             ),
             ("title", DatabaseValue::String(self.name)),
             (

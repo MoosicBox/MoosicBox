@@ -301,7 +301,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -1641,7 +1641,7 @@ async fn postgres_exec_create_table(
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1658,7 +1658,7 @@ async fn postgres_exec_create_table(
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -1972,7 +1972,7 @@ pub(crate) async fn postgres_exec_alter_table(
                     Some(val) => {
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
-                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => b.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2117,7 +2117,7 @@ pub(crate) async fn postgres_exec_alter_table(
                 if let Some(default) = new_default {
                     let default_str = match default {
                         crate::DatabaseValue::String(s) => format!("'{s}'"),
-                        crate::DatabaseValue::Number(n) => n.to_string(),
+                        crate::DatabaseValue::Int64(n) => n.to_string(),
                         crate::DatabaseValue::UInt64(n) => n.to_string(),
                         crate::DatabaseValue::Bool(b) => b.to_string(),
                         crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -3036,11 +3036,11 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
     ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("FromSql from_sql: ty={}, {ty:?}", ty.name());
         Ok(match ty.name() {
-            "int2" => Self::Number(int2_from_sql(raw)?.into()),
-            "int4" => Self::Number(int4_from_sql(raw)?.into()),
+            "int2" => Self::Int64(int2_from_sql(raw)?.into()),
+            "int4" => Self::Int64(int4_from_sql(raw)?.into()),
             "bool" => Self::Bool(bool_from_sql(raw)?),
             "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
-            | "int8" => Self::Number(int8_from_sql(raw)?),
+            | "int8" => Self::Int64(int8_from_sql(raw)?),
             "real" | "float4" | "double precision" | "float8" => {
                 Self::Real64(float8_from_sql(raw)?)
             }
@@ -3065,20 +3065,20 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
         Ok(match name {
             "int2" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Number(i64::from(
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Int64(i64::from(
                         int2_from_sql(raw)?,
                     )))
                 })
                 .transpose()?
-                .unwrap_or(Self::NumberOpt(None)),
+                .unwrap_or(Self::Int64Opt(None)),
             "int4" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Number(i64::from(
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Int64(i64::from(
                         int4_from_sql(raw)?,
                     )))
                 })
                 .transpose()?
-                .unwrap_or(Self::NumberOpt(None)),
+                .unwrap_or(Self::Int64Opt(None)),
             "bool" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Bool(bool_from_sql(
@@ -3090,12 +3090,12 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
             | "int8" => raw
                 .map(|raw| {
-                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Number(int8_from_sql(
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Int64(int8_from_sql(
                         raw,
                     )?))
                 })
                 .transpose()?
-                .unwrap_or(Self::NumberOpt(None)),
+                .unwrap_or(Self::Int64Opt(None)),
             "real" | "float4" | "double precision" | "float8" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real64(
@@ -3175,8 +3175,8 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
             DatabaseValue::Int32(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int32Opt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Number(value) => value.to_sql(ty, out)?,
-            DatabaseValue::NumberOpt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Int64(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Int64Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 i64::try_from(*value)?.to_sql(ty, out)?
             }

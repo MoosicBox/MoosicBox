@@ -110,7 +110,7 @@
 //!
 //! ## Literal Values
 //! - Quoted strings: `'value'` → `DatabaseValue::String("value")`
-//! - Numbers: `42`, `3.14` → `DatabaseValue::Number()` or `Real()`
+//! - Numbers: `42`, `3.14` → `DatabaseValue::Int64()` or `Real()`
 //! - `NULL` or empty → `None`
 //!
 //! ## Boolean Values
@@ -527,7 +527,7 @@ fn parse_mysql_default_value(default_str: &str) -> Option<DatabaseValue> {
 
             // Try to parse as number
             if let Ok(int_val) = default_str.parse::<i64>() {
-                return Some(DatabaseValue::Number(int_val));
+                return Some(DatabaseValue::Int64(int_val));
             }
 
             if let Ok(float_val) = default_str.parse::<f64>() {

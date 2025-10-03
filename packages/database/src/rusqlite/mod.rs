@@ -69,7 +69,7 @@
 //! `SQLite` stores default values as strings in the schema. Our parser handles:
 //! - `NULL` → None
 //! - String literals: `'value'` → `DatabaseValue::String("value")`
-//! - Numeric literals: `42` → `DatabaseValue::Number(42)`
+//! - Numeric literals: `42` → `DatabaseValue::Int64(42)`
 //! - Boolean literals: `1`/`TRUE`, `0`/`FALSE` → `DatabaseValue::Bool`
 //! - Real literals: `3.14` → `DatabaseValue::Real64(3.14)`
 //! - Complex expressions → None (not parsed)
@@ -397,7 +397,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -1442,7 +1442,7 @@ impl From<Value> for DatabaseValue {
     fn from(value: Value) -> Self {
         match value {
             Value::Null => Self::Null,
-            Value::Integer(value) => Self::Number(value),
+            Value::Integer(value) => Self::Int64(value),
             Value::Real(value) => Self::Real64(value),
             Value::Text(value) => Self::String(value),
             Value::Blob(_value) => unimplemented!("Blob types are not supported yet"),
@@ -1548,7 +1548,7 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1565,7 +1565,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -1968,7 +1968,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                     Some(val) => {
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
-                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2180,7 +2180,7 @@ fn rusqlite_exec_modify_column_workaround(
         Some(val) => {
             let val_str = match val {
                 crate::DatabaseValue::String(s) => format!("'{s}'"),
-                crate::DatabaseValue::Number(n) => n.to_string(),
+                crate::DatabaseValue::Int64(n) => n.to_string(),
                 crate::DatabaseValue::UInt64(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                 crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2417,11 +2417,11 @@ fn modify_create_table_sql(
             crate::DatabaseValue::Int32(i) | crate::DatabaseValue::Int32Opt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::Number(i) | crate::DatabaseValue::NumberOpt(Some(i)) => {
+            crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
             crate::DatabaseValue::Int32Opt(None)
-            | crate::DatabaseValue::NumberOpt(None)
+            | crate::DatabaseValue::Int64Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
@@ -2479,7 +2479,7 @@ mod sql_parsing_tests {
             "age",
             &crate::schema::DataType::BigInt,
             Some(false),
-            Some(&crate::DatabaseValue::Number(18)),
+            Some(&crate::DatabaseValue::Int64(18)),
         )
         .unwrap();
 
@@ -2950,7 +2950,7 @@ fn bind_values(
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -2974,7 +2974,7 @@ fn bind_values(
                         i += 1;
                     }
                 }
-                DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+                DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;
@@ -3612,7 +3612,7 @@ impl Expression for RusqliteDatabaseValue {
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::StringOpt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
         )
     }
@@ -3687,7 +3687,7 @@ fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseVal
             let content = &s[1..s.len() - 1];
             Some(crate::DatabaseValue::String(content.to_string()))
         } else if let Ok(num) = s.parse::<i64>() {
-            Some(crate::DatabaseValue::Number(num))
+            Some(crate::DatabaseValue::Int64(num))
         } else if let Ok(real) = s.parse::<f64>() {
             Some(crate::DatabaseValue::Real64(real))
         } else if s == "0" || s.to_uppercase() == "FALSE" {
@@ -4018,7 +4018,7 @@ mod tests {
         // Insert data within transaction
         let insert_stmt = crate::query::insert("test_table")
             .value("name", DatabaseValue::String("test_name".to_string()))
-            .value("value", DatabaseValue::Number(42));
+            .value("value", DatabaseValue::Int64(42));
 
         insert_stmt
             .execute(&*tx)
@@ -4045,7 +4045,7 @@ mod tests {
             rows[0].get("name"),
             Some(DatabaseValue::String("test_name".to_string()))
         );
-        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Number(42)));
+        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Int64(42)));
     }
 
     #[switchy_async::test(real_time)]
@@ -4061,7 +4061,7 @@ mod tests {
         // Insert data within the transaction
         let insert_stmt = crate::query::insert("test_table")
             .value("name", DatabaseValue::String("tx_data".to_string()))
-            .value("value", DatabaseValue::Number(100));
+            .value("value", DatabaseValue::Int64(100));
         insert_stmt
             .execute(&*tx)
             .await
@@ -4096,7 +4096,7 @@ mod tests {
             .await
             .expect("Failed to query after commit");
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Number(100)));
+        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Int64(100)));
     }
 
     #[switchy_async::test(real_time)]
@@ -4118,7 +4118,7 @@ mod tests {
             // Insert data in first transaction
             let insert_stmt = crate::query::insert("test_table")
                 .value("name", DatabaseValue::String("tx1_data".to_string()))
-                .value("value", DatabaseValue::Number(1));
+                .value("value", DatabaseValue::Int64(1));
             insert_stmt
                 .execute(&*tx)
                 .await
@@ -4143,7 +4143,7 @@ mod tests {
             // Insert data in second transaction - may encounter database lock with concurrent access
             let insert_stmt = crate::query::insert("test_table")
                 .value("name", DatabaseValue::String("tx2_data".to_string()))
-                .value("value", DatabaseValue::Number(2));
+                .value("value", DatabaseValue::Int64(2));
 
             // With connection pool, transactions may run concurrently and encounter locks
             match insert_stmt.execute(&*tx).await {
@@ -4198,7 +4198,7 @@ mod tests {
         // Insert data within transaction
         let insert_stmt = crate::query::insert("test_table")
             .value("name", DatabaseValue::String("rollback_test".to_string()))
-            .value("value", DatabaseValue::Number(100));
+            .value("value", DatabaseValue::Int64(100));
 
         insert_stmt
             .execute(&*tx)

@@ -655,7 +655,7 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         DatabaseValue::Int32(i) | DatabaseValue::Int32Opt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
-        DatabaseValue::Number(i) | DatabaseValue::NumberOpt(Some(i)) => {
+        DatabaseValue::Int64(i) | DatabaseValue::Int64Opt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
         DatabaseValue::UInt64(u) | DatabaseValue::UInt64Opt(Some(u)) => {
@@ -673,7 +673,7 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         | DatabaseValue::StringOpt(None)
         | DatabaseValue::BoolOpt(None)
         | DatabaseValue::Int32Opt(None)
-        | DatabaseValue::NumberOpt(None)
+        | DatabaseValue::Int64Opt(None)
         | DatabaseValue::UInt64Opt(None)
         | DatabaseValue::Real64Opt(None)
         | DatabaseValue::Real32Opt(None) => serde_json::Value::Null,

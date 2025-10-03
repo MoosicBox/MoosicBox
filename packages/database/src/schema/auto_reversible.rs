@@ -498,7 +498,7 @@ mod tests {
                 "new_column",
                 DataType::BigInt,
                 false,
-                Some(DatabaseValue::Number(42)),
+                Some(DatabaseValue::Int64(42)),
             );
 
             // Test that AddColumnOperation implements Executable trait correctly

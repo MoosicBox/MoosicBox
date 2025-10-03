@@ -422,7 +422,7 @@ mod db {
     impl AsId for NumberId {
         fn as_id(&self) -> DatabaseValue {
             #[allow(clippy::cast_lossless)]
-            DatabaseValue::Number(self.id as i64)
+            DatabaseValue::Int64(self.id as i64)
         }
     }
 
@@ -476,7 +476,7 @@ mod db {
             match self {
                 Self::String(x) | Self::StringOpt(Some(x)) => Ok(Id::String(x)),
                 #[allow(clippy::cast_sign_loss)]
-                Self::Number(x) | Self::NumberOpt(Some(x)) => Ok(Id::Number(x as u64)),
+                Self::Int64(x) | Self::Int64Opt(Some(x)) => Ok(Id::Number(x as u64)),
                 Self::UInt64(x) | Self::UInt64Opt(Some(x)) => Ok(Id::Number(x)),
                 _ => Err(ParseError::ConvertType("Id".into())),
             }

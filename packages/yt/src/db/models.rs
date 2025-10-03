@@ -58,6 +58,6 @@ impl AsModel<YtConfig> for Row {
 
 impl AsId for YtConfig {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(i64::from(self.id))
+        DatabaseValue::Int64(i64::from(self.id))
     }
 }

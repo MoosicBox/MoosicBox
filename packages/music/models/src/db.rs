@@ -60,7 +60,7 @@ impl AsModelResult<TrackSize, ParseError> for &switchy_database::Row {
 impl AsId for TrackSize {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Int64(self.id as i64)
     }
 }
 

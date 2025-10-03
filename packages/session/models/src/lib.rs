@@ -319,7 +319,7 @@ impl ToValueType<Session> for &switchy_database::Row {
 impl AsId for Session {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Int64(self.id as i64)
     }
 }
 
@@ -376,7 +376,7 @@ pub struct SessionPlaylistTracks(pub Vec<ApiTrack>);
 impl AsId for SessionPlaylist {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Int64(self.id as i64)
     }
 }
 

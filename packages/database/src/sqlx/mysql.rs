@@ -242,7 +242,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -750,8 +750,8 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -801,8 +801,8 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -1281,8 +1281,8 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -1331,8 +1331,8 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
-                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -1572,7 +1572,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             // MySQL might return as integer (1/0) or boolean
             match row.columns.first() {
                 Some((_, crate::DatabaseValue::Bool(has_deps))) => return Ok(*has_deps),
-                Some((_, crate::DatabaseValue::Number(n))) => return Ok(*n != 0),
+                Some((_, crate::DatabaseValue::Int64(n))) => return Ok(*n != 0),
                 _ => {}
             }
         }
@@ -1708,7 +1708,7 @@ async fn mysql_sqlx_exec_create_table(
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1725,7 +1725,7 @@ async fn mysql_sqlx_exec_create_table(
                 DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -2084,7 +2084,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                     Some(val) => {
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
-                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2267,7 +2267,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                     Some(val) => {
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
-                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2316,7 +2316,7 @@ fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error>
         "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" => {
             Ok(DatabaseValue::Int32(owned.try_decode()?))
         }
-        "BIGINT" => Ok(DatabaseValue::Number(owned.try_decode()?)),
+        "BIGINT" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
         // MySQL floating point types
         "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
             Ok(DatabaseValue::Real64(owned.try_decode()?))
@@ -2477,7 +2477,7 @@ async fn update_and_get_rows(
 
     let id_params: Vec<MySqlDatabaseValue> = ids
         .iter()
-        .map(|&id| MySqlDatabaseValue::from(crate::DatabaseValue::Number(id)))
+        .map(|&id| MySqlDatabaseValue::from(crate::DatabaseValue::Int64(id)))
         .collect();
 
     let all_update_params = [update_values, id_params.clone()].concat();
@@ -2638,7 +2638,7 @@ where
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::Int64Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -2649,7 +2649,7 @@ where
                 DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+                DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     query = query.bind(*value);
                 }
                 DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {

@@ -58,6 +58,6 @@ impl AsModel<LibraryConfig> for Row {
 
 impl AsId for LibraryConfig {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(i64::from(self.id))
+        DatabaseValue::Int64(i64::from(self.id))
     }
 }

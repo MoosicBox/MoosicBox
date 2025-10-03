@@ -178,7 +178,7 @@ impl Expression for DatabaseValue {
                 | Self::Real64Opt(None)
                 | Self::Real32Opt(None)
                 | Self::StringOpt(None)
-                | Self::NumberOpt(None)
+                | Self::Int64Opt(None)
                 | Self::UInt64Opt(None)
         )
     }

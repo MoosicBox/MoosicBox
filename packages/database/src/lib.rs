@@ -182,8 +182,8 @@ pub enum DatabaseValue {
     BoolOpt(Option<bool>),
     Int32(i32),
     Int32Opt(Option<i32>),
-    Number(i64),
-    NumberOpt(Option<i64>),
+    Int64(i64),
+    Int64Opt(Option<i64>),
     UInt64(u64),
     UInt64Opt(Option<u64>),
     Real64(f64),
@@ -218,7 +218,7 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i64(&self) -> Option<i64> {
         match self {
-            Self::Number(value) | Self::NumberOpt(Some(value)) => Some(*value),
+            Self::Int64(value) | Self::Int64Opt(Some(value)) => Some(*value),
             Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(i64::from(*value)),
             _ => None,
         }
@@ -232,7 +232,7 @@ impl DatabaseValue {
     pub fn as_u64(&self) -> Option<u64> {
         match self {
             Self::UInt64(value) | Self::UInt64Opt(Some(value)) => Some(*value),
-            Self::Number(value) | Self::NumberOpt(Some(value)) => Some(
+            Self::Int64(value) | Self::Int64Opt(Some(value)) => Some(
                 #[allow(clippy::cast_sign_loss)]
                 if *value >= 0 {
                     *value as u64
@@ -352,13 +352,13 @@ impl From<i32> for DatabaseValue {
 
 impl From<i64> for DatabaseValue {
     fn from(val: i64) -> Self {
-        Self::Number(val)
+        Self::Int64(val)
     }
 }
 
 impl From<isize> for DatabaseValue {
     fn from(val: isize) -> Self {
-        Self::Number(val as i64)
+        Self::Int64(val as i64)
     }
 }
 
@@ -412,7 +412,7 @@ impl TryFrom<DatabaseValue> for u64 {
             DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
-            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => Ok(value),
@@ -429,7 +429,7 @@ impl TryFrom<DatabaseValue> for i64 {
             DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                 Ok(Self::from(value))
             }
-            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => Ok(value),
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => Ok(value),
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
@@ -444,7 +444,7 @@ impl TryFrom<DatabaseValue> for i32 {
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
             DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => Ok(value),
-            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {

@@ -45,7 +45,7 @@ impl ToValueType<DownloadLocation> for &serde_json::Value {
 impl AsId for DownloadLocation {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Int64(self.id as i64)
     }
 }
 
@@ -338,6 +338,6 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
 impl AsId for DownloadTask {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Int64(self.id as i64)
     }
 }

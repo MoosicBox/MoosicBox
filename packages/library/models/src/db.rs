@@ -17,7 +17,7 @@ use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_al
 
 impl AsId for LibraryTrack {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id.try_into().unwrap())
+        DatabaseValue::Int64(self.id.try_into().unwrap())
     }
 }
 
@@ -61,7 +61,7 @@ impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
 
 impl AsId for LibraryArtist {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id.try_into().unwrap())
+        DatabaseValue::Int64(self.id.try_into().unwrap())
     }
 }
 
@@ -275,7 +275,7 @@ impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
 
 impl AsId for LibraryAlbum {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id.try_into().unwrap())
+        DatabaseValue::Int64(self.id.try_into().unwrap())
     }
 }
 
