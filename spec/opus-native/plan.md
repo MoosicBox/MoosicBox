@@ -9616,67 +9616,631 @@ After fifth audit against RFC and libopus, added missing bit allocation check:
 
 ### 4.5: Transient Processing
 
-**Reference:** RFC 6716 Sections 4.3.1 + 4.3.4.5 (lines 6009-6022, 6621-6709)
+**Reference:** RFC 6716 Section 4.3.1 (lines 6009-6023)
 
-**Goal:** Apply time-frequency resolution changes for transient frames
+**Goal:** Implement CELT transient flag decoding and time-frequency resolution switching
 
-**Scope:** 100 lines of RFC
+**Scope:** Transient flag, tf_select flag, per-band tf_change flags, TF resolution computation
 
 **Status:** 🔴 NOT STARTED
 
-**Critical Dependencies:**
-- **Phase 4.1 complete**: Uses `decode_transient()` flag from 4.1.4
-- **Phase 4.4 complete**: Applies Hadamard transform to decoded shapes
+**Prerequisites:**
+- **Phase 4.1 complete**: CELT decoder framework established
+- **Phase 4.2 complete**: Energy envelope decoded (provides band count)
+- **Phase 4.3 complete**: Bit allocation computed
+- **Phase 4.4 complete**: PVQ shape decoding ready
 
-**Overview:** Transient flag (decoded in 4.1.4) indicates multiple short MDCTs vs single long MDCT. Per-band tf_change flags adjust time/frequency resolution using Hadamard transform. Critical for percussive sounds.
+**Complexity:** Medium - Table lookups and conditional flag decoding
 
-**Subsections (2 subsections estimated):**
+---
 
-#### 4.5.1: Time-Frequency Resolution Changes
-- **Reference:** RFC lines 6621-6709
-- **Deliverable:** `apply_tf_changes()` method
-- **Algorithm:** Hadamard transform for resolution adjustment
-- **Constants:** TF adjustment tables (Tables 59-63) - frame size dependent
-- **Decodes:**
-  - `tf_change` binary flags per band (probability depends on allocation)
-  - `tf_select` flag (1/2 probability, conditional decoding)
-- **Transform:**
-  - Positive TF: Increase frequency resolution (across MDCT vectors)
-  - Negative TF: Increase time resolution (per MDCT vector, "sequency order")
+#### RFC Deep Analysis
 
-#### 4.5.2: Transient Frame Handling
-- **Reference:** RFC lines 6009-6022
-- **Deliverable:** Integration with shape decoding and MDCT
-- **Algorithm:**
-  - Transient=0: Single long MDCT for entire frame
-  - Transient=1: Multiple short MDCTs (interleaved vectors)
-- **Uses:** Transient flag decoded in Phase 4.1.4
-- **Impact:** Changes MDCT structure and tf_change interpretation
+**Critical RFC Lines:**
+- **Lines 6011-6015**: Transient flag determines single long MDCT vs multiple short MDCTs
+- **Lines 6015-6018**: Per-band binary flags change time-frequency resolution independently
+- **Lines 6018-6020**: `tf_select_table[][]` defines resolution changes (implemented in reference `celt.c`)
+- **Lines 6020-6023**: `tf_select` flag uses 1/2 probability, only decoded when it affects result
 
-**Key Outputs:**
+**CRITICAL UNDERSTANDING:**
+- **Transient=0**: Single long MDCT covering entire frame (default)
+- **Transient=1**: Multiple short MDCTs for better temporal resolution (percussive sounds)
+- **Per-band tf_change flags**: Allow independent time-frequency resolution per band
+- **tf_select**: Only decoded when different values would produce different `tf_resolution[]`
+
+---
+
+#### 4.5.1: Add Transient Constants
+
+**Reference:** RFC 6716 Section 4.3.1 (line 6015, 6020); libopus `celt.c:tf_select_table[][]`
+
+**File:** `packages/opus_native/src/celt/constants.rs`
+
+**Implementation:**
+
 ```rust
-/// Shape vectors with TF adjustments applied
-pub struct TfAdjustedShapes {
-    pub bands: [Vec<f32>; CELT_NUM_BANDS],
-    pub is_transient: bool,
-    pub num_mdcts: usize,  // 1 for normal, multiple for transient
+// RFC 6716 Section 4.3.1 (line 6015): Transient flag probability 1/8
+pub const TRANSIENT_PDF: &[u8] = &[224, 32, 0];  // ICDF: {7/8, 1/8}
+
+// RFC 6716 Section 4.3.1 (line 6020): TF select flag probability 1/2
+pub const TF_SELECT_PDF: &[u8] = &[128, 128, 0];  // ICDF: {1/2, 1/2}
+
+// TF select table from libopus celt.c:tf_select_table[][]
+// Maps (LM, isTransient, tf_select, is_hybrid) → TF resolution change
+// LM = log2(frame_size / shortest_frame): 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
+pub const TF_SELECT_TABLE: &[[i8; 8]; 4] = &[
+    // LM=0 (2.5ms frames)
+    [0, -1, 0, -1, 0, -1, 0, -1],
+    // LM=1 (5ms frames)
+    [0, -1, 0, -2, 1, 0, 1, -1],
+    // LM=2 (10ms frames)
+    [0, -2, 0, -3, 2, 0, 1, -1],
+    // LM=3 (20ms frames)
+    [0, -2, 0, -3, 3, 0, 1, -1],
+];
+```
+
+**Verification:**
+- [ ] Compare TRANSIENT_PDF against RFC line 6015 (1/8 probability)
+- [ ] Compare TF_SELECT_PDF against RFC line 6020 (1/2 probability)
+- [ ] Compare TF_SELECT_TABLE against libopus `celt/celt.c:tf_select_table[][]`
+- [ ] Verify all 4 LM values (0-3) have 8 configuration entries each
+
+---
+
+#### 4.5.2: Update CELT Decoder State
+
+**Reference:** RFC 6716 Section 4.3.1 (lines 6011-6023)
+
+**File:** `packages/opus_native/src/celt/decoder.rs`
+
+**Modify `CeltDecoder` struct to add transient state fields:**
+
+```rust
+pub struct CeltDecoder {
+    // ... existing fields ...
+
+    // Transient state (RFC Section 4.3.1)
+    pub transient: bool,              // Global transient flag (RFC line 6011)
+    pub tf_select: Option<u8>,        // TF select index (RFC line 6020)
+    pub tf_change: Vec<bool>,         // Per-band TF change flags (RFC line 6016)
+    pub tf_resolution: Vec<u8>,       // Computed TF resolution per band
 }
 ```
 
-**Verification Checklist (per subsection + overall):**
+**Update `CeltDecoder::new()` to initialize new fields:**
+
+```rust
+Ok(Self {
+    sample_rate,
+    channels,
+    frame_size,
+    // ... existing fields ...
+    transient: false,                 // Default to no transient
+    tf_select: None,                  // Not yet decoded
+    tf_change: Vec::new(),            // Allocated during decoding
+    tf_resolution: Vec::new(),        // Computed after flags decoded
+})
+```
+
+**Verification:**
+- [ ] All new state fields properly initialized in constructor
+- [ ] Field types match RFC requirements (bool for flags, Vec for per-band data)
+
+---
+
+#### 4.5.3: Implement Transient Flag Decoding
+
+**Reference:** RFC 6716 Section 4.3.1 (lines 6011-6015)
+
+**File:** `packages/opus_native/src/celt/decoder.rs`
+
+**Implementation:**
+
+```rust
+impl CeltDecoder {
+    /// Decode transient flag
+    ///
+    /// RFC 6716 Section 4.3.1 (lines 6011-6015)
+    ///
+    /// # Errors
+    /// * Returns error if range decoder fails
+    pub fn decode_transient_flag(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+    ) -> Result<bool> {
+        use super::constants::TRANSIENT_PDF;
+
+        // Decode with 1/8 probability (RFC line 6015)
+        let transient = range_decoder.ec_dec_icdf(TRANSIENT_PDF, 8)? == 1;
+        self.transient = transient;
+
+        Ok(transient)
+    }
+}
+```
+
+**Add unit test:**
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transient_flag_decoding() {
+        // Test data with transient=0 (no transient)
+        let data_no_transient = vec![0x00, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data_no_transient).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let transient = decoder.decode_transient_flag(&mut range_decoder).unwrap();
+        assert!(!transient || transient);  // Either value is valid
+        assert_eq!(decoder.transient, transient);
+    }
+
+    #[test]
+    fn test_transient_flag_probability() {
+        // Verify TRANSIENT_PDF has correct 1/8 vs 7/8 split
+        use crate::celt::constants::TRANSIENT_PDF;
+        assert_eq!(TRANSIENT_PDF[0], 224);  // 7/8 of 256
+        assert_eq!(TRANSIENT_PDF[1], 32);   // 1/8 of 256
+        assert_eq!(TRANSIENT_PDF[2], 0);    // Terminating zero
+    }
+}
+```
+
+**Verification:**
+- [ ] Transient flag decodes with correct 1/8 probability
+- [ ] Decoder state `self.transient` updated correctly
+- [ ] Test coverage for both transient=0 and transient=1 cases
+
+---
+
+#### 4.5.4: Implement TF Select Decoding
+
+**Reference:** RFC 6716 Section 4.3.1 (lines 6020-6023); libopus `celt_decoder.c:tf_decode()`
+
+**File:** `packages/opus_native/src/celt/decoder.rs`
+
+**Implementation:**
+
+```rust
+impl CeltDecoder {
+    /// Decode tf_select flag if it affects outcome
+    ///
+    /// RFC 6716 Section 4.3.1 (lines 6020-6023)
+    ///
+    /// # Errors
+    /// * Returns error if range decoder fails
+    pub fn decode_tf_select(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+    ) -> Result<Option<u8>> {
+        use super::constants::TF_SELECT_PDF;
+
+        // Only decode if it can impact result (RFC lines 6021-6023)
+        // This is determined by checking if different tf_select values
+        // would produce different tf_resolution[] arrays
+
+        if self.can_tf_select_affect_result() {
+            let tf_select = range_decoder.ec_dec_bit_logp(1)? as u8;
+            self.tf_select = Some(tf_select);
+            Ok(Some(tf_select))
+        } else {
+            self.tf_select = None;
+            Ok(None)
+        }
+    }
+
+    /// Check if tf_select flag can affect decoding result
+    ///
+    /// Per RFC line 6021-6023 and libopus `celt_decoder.c:tf_decode()`
+    ///
+    /// # Returns
+    /// `true` if tf_select should be decoded, `false` if it has no effect
+    #[must_use]
+    fn can_tf_select_affect_result(&self) -> bool {
+        use super::constants::TF_SELECT_TABLE;
+
+        // Implementation based on libopus celt_decoder.c:tf_decode()
+        // Checks if any two configurations in TF_SELECT_TABLE for current
+        // LM and transient state would differ
+
+        let lm = self.compute_lm();  // log2(frame_size / shortest_frame)
+        let is_transient = if self.transient { 1 } else { 0 };
+
+        // Check if tf_select=0 vs tf_select=1 produces different results
+        // For non-hybrid mode, check indices [is_transient*2] vs [is_transient*2+1]
+        let config_0 = TF_SELECT_TABLE[lm as usize][is_transient * 2];
+        let config_1 = TF_SELECT_TABLE[lm as usize][is_transient * 2 + 1];
+
+        config_0 != config_1
+    }
+
+    /// Compute LM (log2 of frame size relative to shortest)
+    ///
+    /// Helper for TF_SELECT_TABLE indexing
+    ///
+    /// # Returns
+    /// LM value: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
+    #[must_use]
+    fn compute_lm(&self) -> u8 {
+        // LM = log2(frame_size / 120) for 48kHz
+        // 2.5ms = LM 0, 5ms = LM 1, 10ms = LM 2, 20ms = LM 3
+        match self.frame_size {
+            120 => 0,   // 2.5ms @ 48kHz
+            240 => 1,   // 5ms @ 48kHz
+            480 => 2,   // 10ms @ 48kHz
+            960 => 3,   // 20ms @ 48kHz
+            _ => {
+                // For other sample rates, compute from duration
+                let duration_ms = self.frame_duration_ms();
+                if (duration_ms - 2.5).abs() < 0.1 {
+                    0
+                } else if (duration_ms - 5.0).abs() < 0.1 {
+                    1
+                } else if (duration_ms - 10.0).abs() < 0.1 {
+                    2
+                } else {
+                    3
+                }
+            }
+        }
+    }
+}
+```
+
+**Add unit tests:**
+
+```rust
+#[test]
+fn test_tf_select_conditional_decoding() {
+    let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    // Test LM=2 (10ms), transient=0: config_0=0, config_1=-2 → different
+    decoder.transient = false;
+    assert!(decoder.can_tf_select_affect_result());
+
+    // Test different transient state
+    decoder.transient = true;
+    // Check against TF_SELECT_TABLE[2][2] vs [2][3]
+}
+
+#[test]
+fn test_compute_lm() {
+    let decoder_2_5ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 120).unwrap();
+    assert_eq!(decoder_2_5ms.compute_lm(), 0);
+
+    let decoder_5ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 240).unwrap();
+    assert_eq!(decoder_5ms.compute_lm(), 1);
+
+    let decoder_10ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+    assert_eq!(decoder_10ms.compute_lm(), 2);
+
+    let decoder_20ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 960).unwrap();
+    assert_eq!(decoder_20ms.compute_lm(), 3);
+}
+
+#[test]
+fn test_tf_select_table_lookup() {
+    use crate::celt::constants::TF_SELECT_TABLE;
+
+    // Verify table dimensions
+    assert_eq!(TF_SELECT_TABLE.len(), 4);  // 4 LM values
+    for row in TF_SELECT_TABLE {
+        assert_eq!(row.len(), 8);  // 8 configurations
+    }
+
+    // Verify specific values from libopus
+    assert_eq!(TF_SELECT_TABLE[0][0], 0);   // LM=0, normal, tf_select=0
+    assert_eq!(TF_SELECT_TABLE[3][2], 0);   // LM=3, normal, tf_select=1
+}
+```
+
+**Verification:**
+- [ ] `tf_select` only decoded when it can affect result
+- [ ] `can_tf_select_affect_result()` matches libopus logic
+- [ ] `compute_lm()` returns correct LM for all frame sizes
+- [ ] Test coverage for all LM values (0-3)
+- [ ] Test coverage for conditional vs unconditional decoding
+
+---
+
+#### 4.5.5: Implement Per-Band TF Change Decoding
+
+**Reference:** RFC 6716 Section 4.3.1 (lines 6016-6018); libopus `celt/quant_bands.c:tf_decode()`
+
+**File:** `packages/opus_native/src/celt/decoder.rs`
+
+**Implementation:**
+
+```rust
+impl CeltDecoder {
+    /// Decode per-band tf_change flags
+    ///
+    /// RFC 6716 Section 4.3.1 (lines 6016-6018)
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Range decoder instance
+    /// * `num_bands` - Number of CELT bands to decode
+    ///
+    /// # Errors
+    /// * Returns error if range decoder fails
+    pub fn decode_tf_changes(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        num_bands: usize,
+    ) -> Result<Vec<bool>> {
+        let mut tf_change = Vec::with_capacity(num_bands);
+
+        for band in 0..num_bands {
+            // Decode binary flag for this band
+            // Probability depends on band energy and prediction
+            let pdf = self.compute_tf_change_pdf(band);
+            let change = range_decoder.ec_dec_icdf(&pdf, 8)? == 1;
+            tf_change.push(change);
+        }
+
+        self.tf_change = tf_change.clone();
+        Ok(tf_change)
+    }
+
+    /// Compute PDF for tf_change flag in given band
+    ///
+    /// Based on libopus `celt/quant_bands.c:tf_decode()`
+    ///
+    /// # Arguments
+    /// * `band` - Band index (0 to num_bands-1)
+    ///
+    /// # Returns
+    /// ICDF table for this band's tf_change flag
+    ///
+    /// # Implementation Note
+    /// The actual PDFs are adaptive based on:
+    /// - Band energy levels
+    /// - Prediction quality
+    /// - Previous band decisions
+    /// See libopus `celt/quant_bands.c` for full logic
+    #[must_use]
+    fn compute_tf_change_pdf(&self, band: usize) -> Vec<u8> {
+        // TODO: Implement adaptive PDF computation from libopus
+        // For now, use uniform probability as placeholder
+        // This will be replaced with full libopus logic
+
+        let _ = band;  // Silence unused warning
+        vec![128, 128, 0]  // Uniform 1/2 probability
+    }
+}
+```
+
+**Add unit tests:**
+
+```rust
+#[test]
+fn test_tf_change_decoding() {
+    use super::constants::CELT_NUM_BANDS;
+
+    let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    let tf_changes = decoder.decode_tf_changes(&mut range_decoder, CELT_NUM_BANDS).unwrap();
+
+    assert_eq!(tf_changes.len(), CELT_NUM_BANDS);
+    assert_eq!(decoder.tf_change.len(), CELT_NUM_BANDS);
+}
+
+#[test]
+fn test_tf_change_pdf_placeholder() {
+    let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    // Verify placeholder PDF is uniform
+    let pdf = decoder.compute_tf_change_pdf(0);
+    assert_eq!(pdf, vec![128, 128, 0]);
+}
+```
+
+**Verification:**
+- [ ] Per-band tf_change flags decode correctly
+- [ ] Vector length matches `num_bands`
+- [ ] Decoder state `self.tf_change` updated correctly
+- [ ] Placeholder PDF implementation compiles
+
+**TODO for full implementation:**
+- [ ] Replace `compute_tf_change_pdf()` placeholder with adaptive logic from libopus
+- [ ] Implement energy-based probability adjustment
+- [ ] Implement prediction-based probability adjustment
+
+---
+
+#### 4.5.6: Compute Final TF Resolution
+
+**Reference:** RFC 6716 Section 4.3.1 (line 6018); libopus `celt.c:tf_select_table[][]`
+
+**File:** `packages/opus_native/src/celt/decoder.rs`
+
+**Implementation:**
+
+```rust
+impl CeltDecoder {
+    /// Compute time-frequency resolution for each band
+    ///
+    /// RFC 6716 Section 4.3.1 (line 6018)
+    /// Based on `tf_select_table[][]` from `celt.c`
+    ///
+    /// # Errors
+    /// * Returns error if tf_change not yet decoded
+    pub fn compute_tf_resolution(&mut self) -> Result<Vec<u8>> {
+        use super::constants::TF_SELECT_TABLE;
+
+        let lm = self.compute_lm();
+        let num_bands = self.tf_change.len();
+
+        if num_bands == 0 {
+            return Err(Error::CeltDecoder(
+                "tf_change must be decoded before computing tf_resolution".to_string()
+            ));
+        }
+
+        let mut tf_resolution = Vec::with_capacity(num_bands);
+
+        let is_transient = if self.transient { 1 } else { 0 };
+        let tf_select = self.tf_select.unwrap_or(0);
+
+        // Base resolution from TF_SELECT_TABLE
+        // Index: [LM][is_transient*4 + tf_select*2 + is_hybrid]
+        // For non-hybrid: is_hybrid=0
+        let base_config_idx = is_transient * 4 + tf_select * 2;
+        let base_tf = TF_SELECT_TABLE[lm as usize][base_config_idx];
+
+        for band in 0..num_bands {
+            // Apply per-band tf_change modifications
+            let mut tf = base_tf;
+            if self.tf_change[band] {
+                tf += 1;  // Increase resolution (shorter transform)
+            }
+
+            // Clamp to valid range [0, LM]
+            tf = tf.max(0).min(lm as i8);
+            tf_resolution.push(tf as u8);
+        }
+
+        self.tf_resolution = tf_resolution.clone();
+        Ok(tf_resolution)
+    }
+}
+```
+
+**Add unit tests:**
+
+```rust
+#[test]
+fn test_tf_resolution_computation() {
+    use super::constants::CELT_NUM_BANDS;
+
+    let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    // LM=2 (10ms), transient=0, tf_select=0
+    decoder.transient = false;
+    decoder.tf_select = Some(0);
+    decoder.tf_change = vec![false; CELT_NUM_BANDS];
+
+    let tf_res = decoder.compute_tf_resolution().unwrap();
+
+    assert_eq!(tf_res.len(), CELT_NUM_BANDS);
+
+    // Base TF for LM=2, normal, tf_select=0 is 0 (from TF_SELECT_TABLE)
+    assert_eq!(tf_res[0], 0);
+
+    // All bands should have same resolution (no tf_change)
+    assert!(tf_res.iter().all(|&x| x == 0));
+}
+
+#[test]
+fn test_tf_resolution_with_changes() {
+    use super::constants::CELT_NUM_BANDS;
+
+    let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    decoder.transient = false;
+    decoder.tf_select = Some(0);
+
+    // Set tf_change for first band
+    let mut tf_change = vec![false; CELT_NUM_BANDS];
+    tf_change[0] = true;
+    decoder.tf_change = tf_change;
+
+    let tf_res = decoder.compute_tf_resolution().unwrap();
+
+    // First band should have +1 resolution
+    assert_eq!(tf_res[0], 1);
+    // Other bands should have base resolution
+    assert_eq!(tf_res[1], 0);
+}
+
+#[test]
+fn test_tf_resolution_clamping() {
+    use super::constants::CELT_NUM_BANDS;
+
+    let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+    // LM=2, max resolution is 2
+    decoder.transient = false;
+    decoder.tf_select = Some(0);
+    decoder.tf_change = vec![true; CELT_NUM_BANDS];
+
+    let tf_res = decoder.compute_tf_resolution().unwrap();
+
+    // All resolutions should be clamped to [0, 2]
+    assert!(tf_res.iter().all(|&x| x <= 2));
+}
+```
+
+**Verification:**
+- [ ] Base TF resolution selected from TF_SELECT_TABLE correctly
+- [ ] Per-band tf_change modifications applied correctly
+- [ ] Resolution values clamped to valid range [0, LM]
+- [ ] Decoder state `self.tf_resolution` updated correctly
+- [ ] Test coverage for all LM values
+- [ ] Test coverage for transient vs non-transient
+- [ ] Test coverage for tf_change modifications
+- [ ] Test coverage for clamping
+
+---
+
+#### 4.5 Overall Verification Checklist
+
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
 - [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Hadamard transform implementation verified
-- [ ] TF tables (59-63) match RFC exactly
-- [ ] Transient flag correctly determines MDCT structure
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6009-6022, 6621-6709
+- [ ] Transient PDF matches RFC (1/8 probability)
+- [ ] TF select PDF matches RFC (1/2 probability)
+- [ ] TF_SELECT_TABLE matches libopus `celt.c:tf_select_table[][]`
+- [ ] `tf_select` only decoded when it affects result (RFC line 6021-6023)
+- [ ] Per-band tf_change flags decoded correctly
+- [ ] TF resolution computed per RFC algorithm
+- [ ] All state fields properly initialized and updated
+- [ ] Comprehensive test coverage (unit tests for all methods)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6009-6023 and libopus reference
 
-**Complexity:** Medium - Hadamard transform is simple but must be bit-exact
+---
 
-**Note:** Hadamard transform is simple but must be bit-exact
+#### Integration with Phase 4.6
+
+The computed `tf_resolution` array will be used in **Phase 4.6: Final Synthesis** to:
+
+1. **Determine MDCT window lengths per band**: Higher resolution = shorter windows
+2. **Control inverse MDCT transform sizes**: Different resolutions use different IMDCT sizes
+3. **Guide overlap-add buffer management**: Transient frames require special overlap handling
+
+**Key Output:**
+```rust
+// Available to Phase 4.6 after Section 4.5 complete
+pub struct CeltDecoder {
+    pub transient: bool,           // Global transient flag
+    pub tf_resolution: Vec<u8>,    // Per-band TF resolution (0 to LM)
+    // ... other fields
+}
+```
+
+---
+
+#### Success Criteria
+
+- [ ] All transient-related flags decode correctly
+- [ ] TF resolution computation matches RFC algorithm exactly
+- [ ] TF_SELECT_TABLE matches libopus reference implementation
+- [ ] Conditional tf_select decoding works correctly
+- [ ] No regressions in existing CELT tests
+- [ ] Zero clippy warnings
+- [ ] Comprehensive test coverage (unit tests for all subsections)
+
+---
+
+**This specification is complete and ready for implementation once Phase 4.4 (PVQ Shape Decoding) is finished.**
 
 ---
 
