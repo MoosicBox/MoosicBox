@@ -398,7 +398,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
@@ -1549,7 +1549,7 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
@@ -1568,7 +1568,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real64Opt(Some(x)) | DatabaseValue::Real64(x) => {
@@ -1969,7 +1969,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
                             crate::DatabaseValue::Number(n) => n.to_string(),
-                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Real32(r) => r.to_string(),
@@ -2181,7 +2181,7 @@ fn rusqlite_exec_modify_column_workaround(
             let val_str = match val {
                 crate::DatabaseValue::String(s) => format!("'{s}'"),
                 crate::DatabaseValue::Number(n) => n.to_string(),
-                crate::DatabaseValue::UNumber(n) => n.to_string(),
+                crate::DatabaseValue::UInt64(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                 crate::DatabaseValue::Real64(r) => r.to_string(),
                 crate::DatabaseValue::Real32(r) => r.to_string(),
@@ -2422,11 +2422,11 @@ fn modify_create_table_sql(
             }
             crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::NumberOpt(None)
-            | crate::DatabaseValue::UNumberOpt(None)
+            | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
-            crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
+            crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
             crate::DatabaseValue::Real64(f) | crate::DatabaseValue::Real64Opt(Some(f)) => {
@@ -2951,7 +2951,7 @@ fn bind_values(
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now
@@ -2980,7 +2980,7 @@ fn bind_values(
                         i += 1;
                     }
                 }
-                DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;
@@ -3613,7 +3613,7 @@ impl Expression for RusqliteDatabaseValue {
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
         )
     }
 

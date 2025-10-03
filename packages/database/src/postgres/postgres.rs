@@ -302,7 +302,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
@@ -1642,7 +1642,7 @@ async fn postgres_exec_create_table(
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
@@ -1661,7 +1661,7 @@ async fn postgres_exec_create_table(
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real64Opt(Some(x)) | DatabaseValue::Real64(x) => {
@@ -1973,7 +1973,7 @@ pub(crate) async fn postgres_exec_alter_table(
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
                             crate::DatabaseValue::Number(n) => n.to_string(),
-                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => b.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Real32(r) => r.to_string(),
@@ -2118,7 +2118,7 @@ pub(crate) async fn postgres_exec_alter_table(
                     let default_str = match default {
                         crate::DatabaseValue::String(s) => format!("'{s}'"),
                         crate::DatabaseValue::Number(n) => n.to_string(),
-                        crate::DatabaseValue::UNumber(n) => n.to_string(),
+                        crate::DatabaseValue::UInt64(n) => n.to_string(),
                         crate::DatabaseValue::Bool(b) => b.to_string(),
                         crate::DatabaseValue::Real64(r) => r.to_string(),
                         crate::DatabaseValue::Real32(r) => r.to_string(),
@@ -3169,7 +3169,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("to_sql_checked: ty={}, {ty:?} {self:?}", ty.name());
         Ok(match &self.0 {
-            DatabaseValue::Null | DatabaseValue::UNumberOpt(None) => IsNull::Yes,
+            DatabaseValue::Null | DatabaseValue::UInt64Opt(None) => IsNull::Yes,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
@@ -3177,7 +3177,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Int32Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Number(value) => value.to_sql(ty, out)?,
             DatabaseValue::NumberOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 i64::try_from(*value)?.to_sql(ty, out)?
             }
             DatabaseValue::Real64(value) => value.to_sql(ty, out)?,

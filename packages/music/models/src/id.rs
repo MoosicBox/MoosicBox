@@ -456,7 +456,7 @@ mod db {
         fn from(val: Id) -> Self {
             match val {
                 Id::String(x) => Self::String(x),
-                Id::Number(x) => Self::UNumber(x),
+                Id::Number(x) => Self::UInt64(x),
             }
         }
     }
@@ -465,7 +465,7 @@ mod db {
         fn from(val: &Id) -> Self {
             match val {
                 Id::String(x) => Self::String(x.to_owned()),
-                Id::Number(x) => Self::UNumber(*x),
+                Id::Number(x) => Self::UInt64(*x),
             }
         }
     }
@@ -477,7 +477,7 @@ mod db {
                 Self::String(x) | Self::StringOpt(Some(x)) => Ok(Id::String(x)),
                 #[allow(clippy::cast_sign_loss)]
                 Self::Number(x) | Self::NumberOpt(Some(x)) => Ok(Id::Number(x as u64)),
-                Self::UNumber(x) | Self::UNumberOpt(Some(x)) => Ok(Id::Number(x)),
+                Self::UInt64(x) | Self::UInt64Opt(Some(x)) => Ok(Id::Number(x)),
                 _ => Err(ParseError::ConvertType("Id".into())),
             }
         }

@@ -333,7 +333,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
@@ -825,10 +825,10 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
                 crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UNumber(n) => {
+                crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
-                crate::DatabaseValue::UNumberOpt(n) => {
+                crate::DatabaseValue::UInt64Opt(n) => {
                     query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
                 }
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -882,10 +882,10 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
                 crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UNumber(n) => {
+                crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
-                crate::DatabaseValue::UNumberOpt(n) => {
+                crate::DatabaseValue::UInt64Opt(n) => {
                     query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
                 }
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -1260,7 +1260,7 @@ where
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
                 | DatabaseValue::Now => (),
@@ -1273,7 +1273,7 @@ where
                 DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                     query = query.bind(
                         i64::try_from(*value).map_err(|_| SqlxDatabaseError::InvalidRequest)?,
                     );
@@ -1396,7 +1396,7 @@ async fn sqlite_sqlx_exec_create_table(
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
-                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
                     query.push_str("NULL");
@@ -1415,7 +1415,7 @@ async fn sqlite_sqlx_exec_create_table(
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Real64Opt(Some(x)) | DatabaseValue::Real64(x) => {
@@ -1814,7 +1814,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
                             crate::DatabaseValue::Number(n) => n.to_string(),
-                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
                             crate::DatabaseValue::Null => "NULL".to_string(),
@@ -2032,7 +2032,7 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
             let val_str = match val {
                 crate::DatabaseValue::String(s) => format!("'{s}'"),
                 crate::DatabaseValue::Number(n) => n.to_string(),
-                crate::DatabaseValue::UNumber(n) => n.to_string(),
+                crate::DatabaseValue::UInt64(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                 crate::DatabaseValue::Real64(r) => r.to_string(),
                 crate::DatabaseValue::Null => "NULL".to_string(),
@@ -2241,11 +2241,11 @@ fn sqlite_modify_create_table_sql(
             }
             crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::NumberOpt(None)
-            | crate::DatabaseValue::UNumberOpt(None)
+            | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
-            crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
+            crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
                 i.to_string()
             }
             crate::DatabaseValue::Real64(f) | crate::DatabaseValue::Real64Opt(Some(f)) => {
@@ -3475,10 +3475,10 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
                 crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UNumber(n) => {
+                crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
-                crate::DatabaseValue::UNumberOpt(n) => {
+                crate::DatabaseValue::UInt64Opt(n) => {
                     query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
                 }
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
@@ -3528,10 +3528,10 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
                 crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UNumber(n) => {
+                crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
-                crate::DatabaseValue::UNumberOpt(n) => {
+                crate::DatabaseValue::UInt64Opt(n) => {
                     query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
                 }
                 crate::DatabaseValue::Real64(r) => query_builder.bind(*r),

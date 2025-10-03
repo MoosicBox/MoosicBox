@@ -42,7 +42,7 @@ where
             | DatabaseValue::BoolOpt(None)
             | DatabaseValue::StringOpt(None)
             | DatabaseValue::NumberOpt(None)
-            | DatabaseValue::UNumberOpt(None)
+            | DatabaseValue::UInt64Opt(None)
             | DatabaseValue::Real64Opt(None)
             | DatabaseValue::Real32Opt(None) => Ok(None),
             _ => self.to_value_type().map(|inner| Some(inner)),
@@ -101,7 +101,7 @@ impl ToValueType<i8> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             DatabaseValue::Number(num) => Ok(*num as i8),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as i8),
+            DatabaseValue::UInt64(num) => Ok(*num as i8),
             _ => Err(ParseError::ConvertType("i8".into())),
         }
     }
@@ -113,7 +113,7 @@ impl ToValueType<i16> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             DatabaseValue::Number(num) => Ok(*num as i16),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as i16),
+            DatabaseValue::UInt64(num) => Ok(*num as i16),
             _ => Err(ParseError::ConvertType("i16".into())),
         }
     }
@@ -125,7 +125,7 @@ impl ToValueType<i32> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             DatabaseValue::Number(num) => Ok(*num as i32),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as i32),
+            DatabaseValue::UInt64(num) => Ok(*num as i32),
             _ => Err(ParseError::ConvertType("i32".into())),
         }
     }
@@ -136,7 +136,7 @@ impl ToValueType<i64> for &DatabaseValue {
         match self {
             DatabaseValue::Number(num) => Ok(*num),
             #[allow(clippy::cast_possible_wrap)]
-            DatabaseValue::UNumber(num) => Ok(*num as i64),
+            DatabaseValue::UInt64(num) => Ok(*num as i64),
             _ => Err(ParseError::ConvertType("i64".into())),
         }
     }
@@ -152,7 +152,7 @@ impl ToValueType<isize> for &DatabaseValue {
                 clippy::cast_sign_loss,
                 clippy::cast_possible_wrap
             )]
-            DatabaseValue::UNumber(num) => Ok(*num as isize),
+            DatabaseValue::UInt64(num) => Ok(*num as isize),
             _ => Err(ParseError::ConvertType("isize".into())),
         }
     }
@@ -164,7 +164,7 @@ impl ToValueType<u8> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             DatabaseValue::Number(num) => Ok(*num as u8),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as u8),
+            DatabaseValue::UInt64(num) => Ok(*num as u8),
             _ => Err(ParseError::ConvertType("u8".into())),
         }
     }
@@ -176,7 +176,7 @@ impl ToValueType<u16> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             DatabaseValue::Number(num) => Ok(*num as u16),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as u16),
+            DatabaseValue::UInt64(num) => Ok(*num as u16),
             _ => Err(ParseError::ConvertType("u16".into())),
         }
     }
@@ -188,7 +188,7 @@ impl ToValueType<u32> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             DatabaseValue::Number(num) => Ok(*num as u32),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as u32),
+            DatabaseValue::UInt64(num) => Ok(*num as u32),
             _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
@@ -199,7 +199,7 @@ impl ToValueType<u64> for &DatabaseValue {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             DatabaseValue::Number(num) => Ok(*num as u64),
-            DatabaseValue::UNumber(num) => Ok(*num),
+            DatabaseValue::UInt64(num) => Ok(*num),
             _ => Err(ParseError::ConvertType("u64".into())),
         }
     }
@@ -211,7 +211,7 @@ impl ToValueType<usize> for &DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             DatabaseValue::Number(num) => Ok(*num as usize),
             #[allow(clippy::cast_possible_truncation)]
-            DatabaseValue::UNumber(num) => Ok(*num as usize),
+            DatabaseValue::UInt64(num) => Ok(*num as usize),
             _ => Err(ParseError::ConvertType("usize".into())),
         }
     }
@@ -379,7 +379,7 @@ where
             | Self::BoolOpt(None)
             | Self::StringOpt(None)
             | Self::NumberOpt(None)
-            | Self::UNumberOpt(None)
+            | Self::UInt64Opt(None)
             | Self::Real64Opt(None)
             | Self::Real32Opt(None) => Ok(None),
             _ => self.to_value_type().map(Some),
@@ -438,7 +438,7 @@ impl ToValueType<i8> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             Self::Number(num) => Ok(num as i8),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as i8),
+            Self::UInt64(num) => Ok(num as i8),
             _ => Err(ParseError::ConvertType("i8".into())),
         }
     }
@@ -450,7 +450,7 @@ impl ToValueType<i16> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             Self::Number(num) => Ok(num as i16),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as i16),
+            Self::UInt64(num) => Ok(num as i16),
             _ => Err(ParseError::ConvertType("i16".into())),
         }
     }
@@ -462,7 +462,7 @@ impl ToValueType<i32> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             Self::Number(num) => Ok(num as i32),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as i32),
+            Self::UInt64(num) => Ok(num as i32),
             _ => Err(ParseError::ConvertType("i32".into())),
         }
     }
@@ -473,7 +473,7 @@ impl ToValueType<i64> for DatabaseValue {
         match self {
             Self::Number(num) => Ok(num),
             #[allow(clippy::cast_possible_wrap)]
-            Self::UNumber(num) => Ok(num as i64),
+            Self::UInt64(num) => Ok(num as i64),
             _ => Err(ParseError::ConvertType("i64".into())),
         }
     }
@@ -485,7 +485,7 @@ impl ToValueType<isize> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation)]
             Self::Number(num) => Ok(num as isize),
             #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-            Self::UNumber(num) => Ok(num as isize),
+            Self::UInt64(num) => Ok(num as isize),
             _ => Err(ParseError::ConvertType("isize".into())),
         }
     }
@@ -497,7 +497,7 @@ impl ToValueType<u8> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             Self::Number(num) => Ok(num as u8),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as u8),
+            Self::UInt64(num) => Ok(num as u8),
             _ => Err(ParseError::ConvertType("u8".into())),
         }
     }
@@ -509,7 +509,7 @@ impl ToValueType<u16> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             Self::Number(num) => Ok(num as u16),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as u16),
+            Self::UInt64(num) => Ok(num as u16),
             _ => Err(ParseError::ConvertType("u16".into())),
         }
     }
@@ -521,7 +521,7 @@ impl ToValueType<u32> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             Self::Number(num) => Ok(num as u32),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as u32),
+            Self::UInt64(num) => Ok(num as u32),
             _ => Err(ParseError::ConvertType("u32".into())),
         }
     }
@@ -532,7 +532,7 @@ impl ToValueType<u64> for DatabaseValue {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             Self::Number(num) => Ok(num as u64),
-            Self::UNumber(num) => Ok(num),
+            Self::UInt64(num) => Ok(num),
             _ => Err(ParseError::ConvertType("u64".into())),
         }
     }
@@ -544,7 +544,7 @@ impl ToValueType<usize> for DatabaseValue {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             Self::Number(num) => Ok(num as usize),
             #[allow(clippy::cast_possible_truncation)]
-            Self::UNumber(num) => Ok(num as usize),
+            Self::UInt64(num) => Ok(num as usize),
             _ => Err(ParseError::ConvertType("usize".into())),
         }
     }
@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_to_value_type_u64() {
-        let value = &DatabaseValue::UNumber(123);
+        let value = &DatabaseValue::UInt64(123);
 
         assert_eq!(ToValueType::<u64>::to_value_type(value).unwrap(), 123_u64);
     }
@@ -689,7 +689,7 @@ mod tests {
     #[test]
     fn test_to_value_option_string_where_property_doesnt_exist() {
         let row = Row {
-            columns: vec![("test".to_string(), DatabaseValue::UNumber(123))],
+            columns: vec![("test".to_string(), DatabaseValue::UInt64(123))],
         };
         assert_eq!(row.to_value::<Option<String>>("bob").unwrap(), None);
     }
@@ -697,7 +697,7 @@ mod tests {
     #[test]
     fn test_to_value_option_u64_where_property_doesnt_exist() {
         let row = Row {
-            columns: vec![("test".to_string(), DatabaseValue::UNumber(123))],
+            columns: vec![("test".to_string(), DatabaseValue::UInt64(123))],
         };
         assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
     }
@@ -720,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_to_value_type_option_u64() {
-        let value = &DatabaseValue::UNumber(123);
+        let value = &DatabaseValue::UInt64(123);
         assert_eq!(
             ToValueType::<Option<u64>>::to_value_type(value).unwrap(),
             Some(123_u64)

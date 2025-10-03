@@ -241,7 +241,7 @@ pub async fn update_session(
 
     match &session.playback_target {
         PlaybackTarget::AudioZone { audio_zone_id } => {
-            values.push(("audio_zone_id", DatabaseValue::UNumber(*audio_zone_id)));
+            values.push(("audio_zone_id", DatabaseValue::UInt64(*audio_zone_id)));
         }
         PlaybackTarget::ConnectionOutput {
             connection_id,

@@ -184,8 +184,8 @@ pub enum DatabaseValue {
     Int32Opt(Option<i32>),
     Number(i64),
     NumberOpt(Option<i64>),
-    UNumber(u64),
-    UNumberOpt(Option<u64>),
+    UInt64(u64),
+    UInt64Opt(Option<u64>),
     Real64(f64),
     Real64Opt(Option<f64>),
     Real32(f32),
@@ -231,7 +231,7 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_u64(&self) -> Option<u64> {
         match self {
-            Self::UNumber(value) | Self::UNumberOpt(Some(value)) => Some(*value),
+            Self::UInt64(value) | Self::UInt64Opt(Some(value)) => Some(*value),
             Self::Number(value) | Self::NumberOpt(Some(value)) => Some(
                 #[allow(clippy::cast_sign_loss)]
                 if *value >= 0 {
@@ -364,31 +364,31 @@ impl From<isize> for DatabaseValue {
 
 impl From<u8> for DatabaseValue {
     fn from(val: u8) -> Self {
-        Self::UNumber(u64::from(val))
+        Self::UInt64(u64::from(val))
     }
 }
 
 impl From<u16> for DatabaseValue {
     fn from(val: u16) -> Self {
-        Self::UNumber(u64::from(val))
+        Self::UInt64(u64::from(val))
     }
 }
 
 impl From<u32> for DatabaseValue {
     fn from(val: u32) -> Self {
-        Self::UNumber(u64::from(val))
+        Self::UInt64(u64::from(val))
     }
 }
 
 impl From<u64> for DatabaseValue {
     fn from(val: u64) -> Self {
-        Self::UNumber(val)
+        Self::UInt64(val)
     }
 }
 
 impl From<usize> for DatabaseValue {
     fn from(val: usize) -> Self {
-        Self::UNumber(val as u64)
+        Self::UInt64(val as u64)
     }
 }
 
@@ -415,7 +415,7 @@ impl TryFrom<DatabaseValue> for u64 {
             DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
-            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => Ok(value),
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => Ok(value),
             _ => Err(TryFromError::CouldNotConvert("u64".into())),
         }
     }
@@ -430,7 +430,7 @@ impl TryFrom<DatabaseValue> for i64 {
                 Ok(Self::from(value))
             }
             DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => Ok(value),
-            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
             _ => Err(TryFromError::CouldNotConvert("i64".into())),
@@ -447,7 +447,7 @@ impl TryFrom<DatabaseValue> for i32 {
             DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
-            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
             _ => Err(TryFromError::CouldNotConvert("i32".into())),

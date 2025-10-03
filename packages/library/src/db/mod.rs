@@ -886,7 +886,7 @@ pub async fn add_api_sources(
                     "entity_type",
                     DatabaseValue::String(insert.entity_type.clone()),
                 ),
-                ("entity_id", DatabaseValue::UNumber(insert.entity_id)),
+                ("entity_id", DatabaseValue::UInt64(insert.entity_id)),
                 ("source", DatabaseValue::String(insert.source.clone())),
                 ("source_id", DatabaseValue::String(insert.source_id.clone())),
             ]

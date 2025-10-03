@@ -57,8 +57,8 @@ pub async fn update_audio_zone(
             .filter(|x| !existing.iter().any(|existing| existing.player_id == *x))
             .map(|x| {
                 vec![
-                    ("audio_zone_id", DatabaseValue::UNumber(inserted.id)),
-                    ("player_id", DatabaseValue::UNumber(x)),
+                    ("audio_zone_id", DatabaseValue::UInt64(inserted.id)),
+                    ("player_id", DatabaseValue::UInt64(x)),
                 ]
             })
             .collect::<Vec<_>>();
