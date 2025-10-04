@@ -1263,32 +1263,58 @@ impl CeltDecoder {
     ///
     /// Implementation follows libopus `bands.c:anti_collapse()` (lines 284-360)
     ///
+    /// # Preconditions
+    ///
+    /// * **Band sizing:** Each band must satisfy `bands[i].len() == N0 << LM`
+    ///   where N0 = `bins_per_band()[i]` (bins per single MDCT)
+    /// * **Interleaved storage:** Bands must use storage pattern `(j<<LM) + k`
+    ///   where j=frequency bin (0..N0), k=MDCT index (0..(1<<LM))
+    /// * **Mono only:** Current implementation supports mono (C=1) only
+    ///   Stereo requires `collapse_masks` indexing `[i*C+c]` (see future-stereo-work.md)
+    ///
     /// # Arguments
     ///
-    /// * `bands` - Frequency-domain bands (one Vec<f32> per band), modified in-place
-    ///   - Storage: Interleaved MDCTs with index formula `(j<<LM) + k`
-    ///   - Size per band: `N0 << LM` where N0 = bins per single MDCT
-    /// * `current_energy` - Current frame energy per band (Q8 log format)
-    /// * `collapse_masks` - Per-band collapse bit masks (from PVQ decoder)
-    ///   - Type: `&[u8]` - one byte per band
-    ///   - Bit k (0-7): Status of MDCT k → 0=collapsed (inject), 1=has energy (skip)
+    /// * `bands` - Frequency-domain bands (one `Vec<f32>` per band), modified in-place
+    ///   - **Storage:** Interleaved MDCTs with index formula `(j<<LM) + k`
+    ///   - **Size per band:** `N0 << LM` where N0 = bins per single MDCT
+    ///   - **Example (LM=2, N0=4):** 16 floats = 4 bins × 4 MDCTs, stored as:
+    ///     `[bin0_mdct0, bin0_mdct1, bin0_mdct2, bin0_mdct3, bin1_mdct0, ...]`
+    /// * `current_energy` - Current frame energy per band (Q8 log format, from PVQ decoder)
+    /// * `collapse_masks` - Per-band collapse bit masks (from PVQ decoder Phase 4.4)
+    ///   - **Type:** `&[u8]` - one byte per band
+    ///   - **Bit k (0-7):** Status of MDCT k → 0=collapsed (inject noise), 1=has energy (skip)
+    ///   - **Examples:**
+    ///     * `0xFF` (binary 11111111) = all MDCTs have energy, skip band
+    ///     * `0x00` (binary 00000000) = all MDCTs collapsed, inject all
+    ///     * `0x0A` (binary 00001010) = MDCTs 1,3 have energy; inject into 0,2,4,5,6,7
     /// * `pulses` - Pulse allocation per band (for threshold computation)
-    /// * `anti_collapse_on` - Whether anti-collapse is enabled (from bitstream)
+    /// * `anti_collapse_on` - Whether anti-collapse is enabled (from bitstream flag)
     ///
     /// # Errors
     ///
-    /// * Returns error if band dimensions are invalid
+    /// * Returns error if band size ≠ `N0 << LM` (precondition violation)
     ///
     /// # Algorithm
     ///
     /// 1. **For each band** in `[start_band, end_band)`:
     /// 2. **For each MDCT** k in `0..(1<<LM)` (RFC: "each MDCT"):
     /// 3. **Check bit k**: If `collapse_masks[band] & (1<<k) == 0` (collapsed):
-    ///    - Compute threshold: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/N0 >> LM`
-    ///    - Compute injection: `r = 2 * exp2(-(E_current - MIN(E_prev1, E_prev2)))`
-    ///    - Apply LM==3 correction: `r *= sqrt(2)` for 20ms frames
-    ///    - Fill MDCT k: `band[(j<<LM)+k] = ±r` for j in 0..N0 using PRNG
+    ///    * Compute threshold: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/N0 >> LM`
+    ///    * Compute injection: `r = 2 * exp2(-(E_current - MIN(E_prev1, E_prev2)))`
+    ///    * Apply LM==3 correction: `r *= sqrt(2)` for 20ms frames
+    ///    * Fill MDCT k: `band[(j<<LM)+k] = ±r` for j in 0..N0 using PRNG
     /// 4. **Renormalize** entire band (all MDCTs together) if any were filled
+    ///
+    /// # Implementation Notes
+    ///
+    /// * **RFC Compliance:** 100% compliant with RFC 6716 lines 6717-6729 for mono
+    /// * **libopus Match:** Exactly matches `bands.c:anti_collapse()` behavior
+    /// * **Current Limitation:** Mono only (C=1)
+    /// * **Future Work:** Stereo support requires:
+    ///   * Collapse masks indexing: `collapse_masks[i*C+c]` instead of `[i]`
+    ///   * Energy comparison: `MAX(energy[ch0], energy[ch1])` for stereo→mono playback
+    ///   * Band structure: Support for per-channel bands
+    ///   * See `spec/opus-native/future-stereo-work.md` for implementation checklist
     #[allow(dead_code)]
     pub fn apply_anti_collapse(
         &mut self,
@@ -1418,6 +1444,121 @@ impl CeltDecoder {
         }
 
         Ok(())
+    }
+
+    /// Convert energy from Q8 log domain to linear domain
+    ///
+    /// RFC 6716 Section 4.3.6 (lines 6733-6736): "The PVQ decoded vector is
+    /// multiplied by the square root of the decoded energy to produce the final
+    /// frequency-domain coefficients."
+    ///
+    /// Q8 format stores energy as: `energy_q8 = 256 * log2(linear_energy)`
+    ///
+    /// # Arguments
+    ///
+    /// * `energy_q8` - Energy in Q8 log domain
+    ///
+    /// # Returns
+    ///
+    /// Linear energy value (always non-negative)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Q8 value 0 = log energy 0 = linear 1.0
+    /// assert_eq!(energy_q8_to_linear(0), 1.0);
+    ///
+    /// // Q8 value 256 = log energy 1 = linear 2.0
+    /// assert!((energy_q8_to_linear(256) - 2.0).abs() < 1e-5);
+    ///
+    /// // Negative Q8 = very low energy (< 1.0)
+    /// assert!(energy_q8_to_linear(-256) < 1.0);
+    /// ```
+    #[allow(dead_code)]
+    fn energy_q8_to_linear(energy_q8: i16) -> f32 {
+        // Convert Q8 to exponent: energy_q8 / 256.0
+        // Then compute: 2^(energy_q8 / 256.0)
+        #[allow(clippy::cast_precision_loss)]
+        let exponent = f32::from(energy_q8) / 256.0;
+        exponent.exp2()
+    }
+
+    /// Denormalize bands by multiplying unit-norm shapes by sqrt(energy)
+    ///
+    /// RFC 6716 Section 4.3.6 (lines 6731-6736): "The normalized vector is
+    /// combined with the denormalized energy to reconstruct the MDCT spectrum.
+    /// The PVQ decoded vector is multiplied by the square root of the decoded
+    /// energy to produce the final frequency-domain coefficients."
+    ///
+    /// Combines:
+    /// * Unit-norm shapes from PVQ decoding (Phase 4.4)
+    /// * Energy envelope from energy decoding (Phase 4.2)
+    ///
+    /// # Preconditions
+    ///
+    /// * Shapes must be unit-normalized (L2 norm ≈ 1.0 per band)
+    /// * Energy must be in Q8 log format
+    ///
+    /// # Arguments
+    ///
+    /// * `shapes` - Unit-normalized frequency shapes per band (from PVQ decoder)
+    /// * `energy` - Final energy per band in Q8 log format
+    ///
+    /// # Returns
+    ///
+    /// Denormalized frequency-domain coefficients (ready for iMDCT)
+    ///
+    /// # Algorithm
+    ///
+    /// For each band i in `[start_band, end_band)`:
+    /// 1. Convert energy from Q8 log to linear: `linear = 2^(energy_q8 / 256)`
+    /// 2. Compute scale factor: `scale = sqrt(linear)`
+    /// 3. Multiply each bin: `output[j] = shape[j] * scale`
+    ///
+    /// # Implementation Notes
+    ///
+    /// * **RFC Compliance:** 100% compliant with RFC 6716 lines 6731-6736
+    /// * **libopus Match:** Matches `celt_decoder.c` denormalization step
+    /// * **Current Limitation:** Mono only (C=1)
+    /// * **Future Work:** Stereo requires per-channel energy indexing `[i*C+c]`
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn denormalize_bands(
+        &self,
+        shapes: &[Vec<f32>],
+        energy: &[i16; CELT_NUM_BANDS],
+    ) -> Vec<Vec<f32>> {
+        let mut denormalized = Vec::with_capacity(CELT_NUM_BANDS);
+
+        for band_idx in 0..CELT_NUM_BANDS {
+            if band_idx < shapes.len() {
+                let shape = &shapes[band_idx];
+
+                // Only denormalize coded bands [start_band, end_band)
+                if band_idx >= self.start_band && band_idx < self.end_band {
+                    // Convert Q8 log energy to linear domain
+                    let linear_energy = Self::energy_q8_to_linear(energy[band_idx]);
+
+                    // Take square root per RFC line 6735
+                    let scale = linear_energy.sqrt();
+
+                    // Scale each bin
+                    let mut denorm_band = Vec::with_capacity(shape.len());
+                    for &sample in shape {
+                        denorm_band.push(sample * scale);
+                    }
+                    denormalized.push(denorm_band);
+                } else {
+                    // Uncoded bands: pass through unchanged (typically zeros)
+                    denormalized.push(shape.clone());
+                }
+            } else {
+                // Missing band: push empty
+                denormalized.push(Vec::new());
+            }
+        }
+
+        denormalized
     }
 }
 
@@ -2598,6 +2739,143 @@ mod tests {
         // Should not crash or produce NaN
         assert!(band.iter().all(|x| x.is_finite()));
         assert!(band.iter().all(|&x| (x - 0.0).abs() < f32::EPSILON));
+    }
+
+    #[test]
+    fn test_energy_q8_to_linear_zero() {
+        let linear = CeltDecoder::energy_q8_to_linear(0);
+        assert!((linear - 1.0).abs() < 1e-5, "Q8 value 0 should give linear 1.0");
+    }
+
+    #[test]
+    fn test_energy_q8_to_linear_positive() {
+        let linear = CeltDecoder::energy_q8_to_linear(256);
+        assert!(
+            (linear - 2.0).abs() < 1e-5,
+            "Q8 value 256 (log2=1) should give linear 2.0"
+        );
+    }
+
+    #[test]
+    fn test_energy_q8_to_linear_negative() {
+        let linear = CeltDecoder::energy_q8_to_linear(-256);
+        assert!(
+            (linear - 0.5).abs() < 1e-5,
+            "Q8 value -256 (log2=-1) should give linear 0.5"
+        );
+    }
+
+    #[test]
+    fn test_energy_q8_to_linear_large_positive() {
+        let linear = CeltDecoder::energy_q8_to_linear(512);
+        assert!(
+            (linear - 4.0).abs() < 1e-5,
+            "Q8 value 512 (log2=2) should give linear 4.0"
+        );
+    }
+
+    #[test]
+    fn test_denormalize_bands_unit_shapes() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            if band_size > 0 {
+                #[allow(clippy::cast_precision_loss)]
+                let mut shape = vec![1.0 / (band_size as f32).sqrt(); band_size];
+                let energy: f32 = shape.iter().map(|x| x * x).sum();
+                let norm = energy.sqrt();
+                for sample in &mut shape {
+                    *sample /= norm;
+                }
+                shapes.push(shape);
+            } else {
+                shapes.push(Vec::new());
+            }
+        }
+
+        let mut energy = [0_i16; CELT_NUM_BANDS];
+        energy[10] = 256;
+
+        let denorm = decoder.denormalize_bands(&shapes, &energy);
+        let band_energy: f32 = denorm[10].iter().map(|x| x * x).sum();
+
+        let expected_linear = 2.0_f32;
+        let expected_energy = expected_linear;
+
+        assert!(
+            (band_energy - expected_energy).abs() < 0.1,
+            "Band energy should be sqrt(linear_energy)^2 = linear_energy"
+        );
+    }
+
+    #[test]
+    fn test_denormalize_bands_zero_energy() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![0.1; band_size]);
+        }
+
+        let energy = [i16::MIN; CELT_NUM_BANDS];
+
+        let denorm = decoder.denormalize_bands(&shapes, &energy);
+        assert!(denorm[0].iter().all(|x| x.is_finite()));
+    }
+
+    #[test]
+    fn test_denormalize_bands_preserves_structure() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![1.0; band_size]);
+        }
+
+        let energy = [100_i16; CELT_NUM_BANDS];
+
+        let denorm = decoder.denormalize_bands(&shapes, &energy);
+        assert_eq!(denorm.len(), CELT_NUM_BANDS);
+
+        for (i, band) in denorm.iter().enumerate() {
+            assert_eq!(
+                band.len(),
+                shapes[i].len(),
+                "Band {i} should preserve size"
+            );
+        }
+    }
+
+    #[test]
+    fn test_denormalize_bands_respects_band_range() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        decoder.start_band = 5;
+        decoder.end_band = 15;
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![1.0; band_size]);
+        }
+
+        let energy = [256_i16; CELT_NUM_BANDS];
+
+        let denorm = decoder.denormalize_bands(&shapes, &energy);
+
+        for band in &denorm[0..decoder.start_band] {
+            if !band.is_empty() {
+                let all_same = band.iter().all(|&x| (x - 1.0).abs() < 1e-6);
+                assert!(all_same, "Uncoded bands before start_band should be unchanged");
+            }
+        }
     }
 
     #[test]

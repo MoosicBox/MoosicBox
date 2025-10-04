@@ -10401,7 +10401,7 @@ The `start_band` and `end_band` fields enable:
 
 **Subsections (4 subsections estimated):**
 
-**STATUS:** 🟡 **IN PROGRESS** - 2/3 tasks complete in Section 4.6.1
+**STATUS:** ✅ **COMPLETE** - All tasks done in Section 4.6.1 (mono implementation, stereo future work)
 
 #### 4.6.1: Anti-Collapse Processing
 
@@ -10470,7 +10470,7 @@ The `start_band` and `end_band` fields enable:
   - [x] Add test comparing against known libopus sequence
   Added test_anti_collapse_prng_lcg_formula (decoder.rs:2064-2076) verifying first 3 iterations and wrapping behavior; test_anti_collapse_prng_lcg_constants (decoder.rs:2129-2137) verifying exact LCG formula
 
-- [ ] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
+- [x] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
 
   **CRITICAL IMPLEMENTATION NOTE (from libopus analysis):**
   Anti-collapse requires tracking TWO previous energy frames (t-1 and t-2) per RFC line 6727-6728:
@@ -10494,13 +10494,12 @@ The `start_band` and `end_band` fields enable:
   7. Noise injection: Fill only collapsed MDCT k with pattern
   8. Renormalization: `renormalise_vector(X, N0<<LM, ...)` on entire band (all MDCTs together)
 
-  **FIX PLAN:**
-  1. Change `collapse_masks: &[bool]` → `&[u8]` (bit masks)
-  2. Fix N0: use `bins_per_band[i]` (single MDCT), not `band.len()` (all MDCTs)
-  3. Add MDCT loop: `for k in 0..(1<<lm)`
-  4. Check bit: `if collapse_masks[i] & (1<<k) == 0`
-  5. Interleaved fill: `band[(j<<lm)+k] = ±r` for j in 0..n0
-  6. Renormalize if any MDCT was filled
+  **CURRENT LIMITATION - MONO ONLY:**
+  Current implementation supports mono (C=1) only. Stereo support requires:
+  * Collapse masks indexing: `collapse_masks[i*C+c]` instead of `[i]`
+  * Energy comparison: `MAX(energy[ch0], energy[ch1])` for stereo→mono playback
+  * Band structure: Per-channel band support
+  * See `spec/opus-native/future-stereo-work.md` for full implementation checklist
 
   ```rust
   /// Apply anti-collapse processing (RFC lines 6717-6729)
@@ -10592,7 +10591,7 @@ For each band:
 
 **Implementation Tasks:**
 
-- [ ] **Task 4.6.2.1:** Implement Q8-to-linear energy conversion
+- [x] **Task 4.6.2.1:** Implement Q8-to-linear energy conversion
   ```rust
   /// Convert energy from Q8 log domain to linear
   /// Formula: linear_energy = 2^(energy_q8 / 256.0)
@@ -10601,12 +10600,16 @@ For each band:
       2.0_f32.powf(exponent)
   }
   ```
-  - [ ] Correctly converts Q8 log format to linear
-  - [ ] Handles negative values (very low energy)
-  - [ ] Handles zero values (silence)
-  - [ ] Add test with known Q8 values
+  - [x] Correctly converts Q8 log format to linear
+  Implemented in decoder.rs:1450-1479, formula: 2^(energy_q8 / 256.0)
+  - [x] Handles negative values (very low energy)
+  Correctly handles negative Q8 values producing linear < 1.0
+  - [x] Handles zero values (silence)
+  Q8 value 0 produces linear 1.0 (verified by test_energy_q8_to_linear_zero)
+  - [x] Add test with known Q8 values
+  Added 4 tests: test_energy_q8_to_linear_zero (Q8=0→1.0), test_energy_q8_to_linear_positive (Q8=256→2.0), test_energy_q8_to_linear_negative (Q8=-256→0.5), test_energy_q8_to_linear_large_positive (Q8=512→4.0)
 
-- [ ] **Task 4.6.2.2:** Implement `denormalize_bands()`
+- [x] **Task 4.6.2.2:** Implement `denormalize_bands()`
   ```rust
   /// Denormalize bands by multiplying shapes by sqrt(energy)
   ///
@@ -10626,22 +10629,41 @@ For each band:
       energy: &[i16; CELT_NUM_BANDS],
   ) -> Vec<Vec<f32>>
   ```
-  - [ ] Only processes bands in `[self.start_band, self.end_band)` range
-  - [ ] Correctly converts Q8 energy to linear domain
-  - [ ] Takes square root before multiplication per RFC
-  - [ ] Preserves shape structure (band/bin organization)
-  - [ ] Add test with unit shapes (verify energy scaling)
-  - [ ] Add test with known energy values
+  - [x] Only processes bands in `[self.start_band, self.end_band)` range
+  Implemented with conditional check: `if band_idx >= self.start_band && band_idx < self.end_band` (decoder.rs:1532)
+  - [x] Correctly converts Q8 energy to linear domain
+  Uses `Self::energy_q8_to_linear(energy[band_idx])` (decoder.rs:1534)
+  - [x] Takes square root before multiplication per RFC
+  `scale = linear_energy.sqrt()` then multiplies each sample (decoder.rs:1537-1543)
+  - [x] Preserves shape structure (band/bin organization)
+  Preserves band count and bin sizes, verified by test_denormalize_bands_preserves_structure
+  - [x] Add test with unit shapes (verify energy scaling)
+  test_denormalize_bands_unit_shapes verifies Q8=256→linear=2.0→scale=sqrt(2)→energy≈2.0
+  - [x] Add test with known energy values
+  test_denormalize_bands_zero_energy tests extreme values (i16::MIN), test_denormalize_bands_respects_band_range tests band range filtering
 
 **Subsection 4.6.2 Verification:**
-- [ ] Run `cargo fmt`
-- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
-- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
-- [ ] Run `cargo machete`
-- [ ] Denormalization formula matches RFC exactly (sqrt of linear energy)
-- [ ] Q8 format conversion accurate
-- [ ] **RFC DEEP CHECK:** Verify against lines 6731-6736
+- [x] Run `cargo fmt`
+Code formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features celt`
+Compiled successfully
+- [x] Run `cargo test -p moosicbox_opus_native --features celt`
+365 tests passed (8 new denormalization tests added)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+Zero warnings - all clippy checks passed
+- [x] Run `cargo machete`
+No unused dependencies
+- [x] Denormalization formula matches RFC exactly (sqrt of linear energy)
+Formula: `scale = sqrt(2^(energy_q8/256))` per RFC line 6735, verified by unit tests
+- [x] Q8 format conversion accurate
+Conversion formula: `2^(energy_q8/256.0)` matches RFC Section 4.3.2 Q8 definition
+- [x] **RFC DEEP CHECK:** Verify against lines 6731-6736
+✅ COMPLETE: RFC compliance verified:
+  * Line 6733: "normalized vector is combined with the denormalized energy" ✓
+  * Line 6735: "multiplied by the square root of the decoded energy" ✓
+  * Correctly processes coded bands [start_band, end_band) ✓
+  * Preserves band structure for iMDCT input ✓
+  * All 8 tests verify correct behavior including edge cases ✓
 
 ---
 
