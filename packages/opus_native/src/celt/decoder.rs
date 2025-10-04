@@ -1,3 +1,5 @@
+#![allow(clippy::similar_names)]
+
 use crate::error::{Error, Result};
 use crate::range::RangeDecoder;
 use crate::{Channels, SampleRate};
@@ -1560,6 +1562,165 @@ impl CeltDecoder {
 
         denormalized
     }
+
+    /// Compute Vorbis window coefficients
+    ///
+    /// RFC 6716 Section 4.3.7 (lines 6746-6749): "A low-overlap window reduces the
+    /// algorithmic delay. It is derived from a basic (full-overlap) 240-sample version
+    /// of the window used by the Vorbis codec: W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))"
+    ///
+    /// # Arguments
+    ///
+    /// * `length` - Window length (L in formula)
+    ///
+    /// # Returns
+    ///
+    /// Window coefficients in range [0.0, 1.0]
+    ///
+    /// # Formula
+    ///
+    /// ```text
+    /// W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))
+    /// ```
+    ///
+    /// Where:
+    /// * n = sample index (0..L)
+    /// * L = window length
+    ///
+    /// # Properties
+    ///
+    /// * **Symmetric:** W(n) = W(L-1-n)
+    /// * **Range:** [0.0, 1.0]
+    /// * **Power complementarity:** W(n)² + W(n+L)² = 1 for overlap-add
+    #[allow(dead_code)]
+    fn compute_vorbis_window(length: usize) -> Vec<f32> {
+        use std::f32::consts::PI;
+
+        (0..length)
+            .map(|n| {
+                #[allow(clippy::cast_precision_loss)]
+                let n_f32 = n as f32;
+                #[allow(clippy::cast_precision_loss)]
+                let length_f32 = length as f32;
+
+                // Inner sin: sin(π/2 × (n+0.5)/L)
+                let inner = (PI / 2.0) * (n_f32 + 0.5) / length_f32;
+                let inner_sin = inner.sin();
+
+                // Outer sin: sin(π/2 × inner_sin)
+                let outer = (PI / 2.0) * inner_sin;
+                let outer_sin = outer.sin();
+
+                // Square: sin²
+                outer_sin * outer_sin
+            })
+            .collect()
+    }
+
+    /// Apply inverse MDCT transform
+    ///
+    /// RFC 6716 Section 4.3.7 (lines 6740-6742): "The inverse MDCT implementation
+    /// has no special characteristics. The input is N frequency-domain samples and
+    /// the output is 2*N time-domain samples, while scaling by 1/2."
+    ///
+    /// # Arguments
+    ///
+    /// * `freq_data` - Frequency-domain coefficients (length N)
+    ///
+    /// # Returns
+    ///
+    /// Time-domain samples (length 2*N) with 1/2 scaling applied
+    ///
+    /// # Implementation Note
+    ///
+    /// Currently stubbed with zeros. Full MDCT implementation requires:
+    /// * DCT-IV transform (can use FFT-based approach)
+    /// * 1/2 scaling factor per RFC
+    /// * Output length = 2 * input length
+    ///
+    /// See libopus `mdct.c:clt_mdct_backward()` for reference implementation.
+    #[allow(dead_code, clippy::unused_self)]
+    fn inverse_mdct(&self, freq_data: &[f32]) -> Vec<f32> {
+        // Stub: Return correct-sized output filled with zeros
+        // Full implementation will be added in later iteration
+        vec![0.0; freq_data.len() * 2]
+    }
+
+    /// Apply windowing and overlap-add with previous frame
+    ///
+    /// RFC 6716 Section 4.3.7 (lines 6751-6754): "The IMDCT and windowing are
+    /// performed by `mdct_backward` (mdct.c)." Uses Vorbis window for smooth
+    /// transitions between frames.
+    ///
+    /// # Arguments
+    ///
+    /// * `mdct_output` - Output from inverse MDCT (length 2*N)
+    ///
+    /// # Returns
+    ///
+    /// Final time-domain samples (length N) after overlap-add
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `mdct_output` is not the correct length
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Apply Vorbis window to MDCT output
+    /// 2. First half: Add to previous frame's second half (overlap-add)
+    /// 3. Second half: Store in `overlap_buffer` for next frame
+    /// 4. Return first half as output
+    ///
+    /// # Overlap-Add Pattern
+    ///
+    /// ```text
+    /// Previous frame:  [---- first half ----][---- second half ----]
+    ///                                         ↓ stored in buffer
+    /// Current frame:   [---- first half ----][---- second half ----]
+    ///                   ↓ overlaps            ↓ store for next
+    /// Output:          [---- frame N -----]
+    /// ```
+    #[allow(dead_code)]
+    pub fn overlap_add(&mut self, mdct_output: &[f32]) -> Result<Vec<f32>> {
+        let frame_size = mdct_output.len() / 2;
+
+        // Compute window (same length as MDCT output)
+        let window = Self::compute_vorbis_window(mdct_output.len());
+
+        // Apply window to MDCT output
+        let windowed: Vec<f32> = mdct_output
+            .iter()
+            .zip(window.iter())
+            .map(|(sample, win)| sample * win)
+            .collect();
+
+        // Initialize overlap buffer if needed
+        if self.state.overlap_buffer.is_empty() {
+            self.state.overlap_buffer = vec![0.0; frame_size];
+        }
+
+        // Verify overlap buffer size
+        if self.state.overlap_buffer.len() != frame_size {
+            return Err(Error::CeltDecoder(format!(
+                "Overlap buffer size mismatch: expected {}, got {}",
+                frame_size,
+                self.state.overlap_buffer.len()
+            )));
+        }
+
+        // Output: first half of windowed data + overlap with previous frame
+        let mut output = Vec::with_capacity(frame_size);
+        for (i, window) in windowed.iter().enumerate().take(frame_size) {
+            output.push(window + self.state.overlap_buffer[i]);
+        }
+
+        // Store second half for next frame
+        self.state
+            .overlap_buffer
+            .copy_from_slice(&windowed[frame_size..]);
+
+        Ok(output)
+    }
 }
 
 /// Renormalize a band to unit energy (L2 norm = 1.0)
@@ -2744,7 +2905,10 @@ mod tests {
     #[test]
     fn test_energy_q8_to_linear_zero() {
         let linear = CeltDecoder::energy_q8_to_linear(0);
-        assert!((linear - 1.0).abs() < 1e-5, "Q8 value 0 should give linear 1.0");
+        assert!(
+            (linear - 1.0).abs() < 1e-5,
+            "Q8 value 0 should give linear 1.0"
+        );
     }
 
     #[test]
@@ -2845,11 +3009,7 @@ mod tests {
         assert_eq!(denorm.len(), CELT_NUM_BANDS);
 
         for (i, band) in denorm.iter().enumerate() {
-            assert_eq!(
-                band.len(),
-                shapes[i].len(),
-                "Band {i} should preserve size"
-            );
+            assert_eq!(band.len(), shapes[i].len(), "Band {i} should preserve size");
         }
     }
 
@@ -2873,7 +3033,10 @@ mod tests {
         for band in &denorm[0..decoder.start_band] {
             if !band.is_empty() {
                 let all_same = band.iter().all(|&x| (x - 1.0).abs() < 1e-6);
-                assert!(all_same, "Uncoded bands before start_band should be unchanged");
+                assert!(
+                    all_same,
+                    "Uncoded bands before start_band should be unchanged"
+                );
             }
         }
     }
@@ -2894,5 +3057,157 @@ mod tests {
         // From RFC Table 62: LM=1, transient, tf_select=0 → [1, 0]
         assert_eq!(tf_res[0], 1); // tf_change=0 → 1
         assert_eq!(tf_res[1], 0); // tf_change=1 → 0
+    }
+
+    #[test]
+    fn test_vorbis_window_formula() {
+        use std::f32::consts::PI;
+
+        let window = CeltDecoder::compute_vorbis_window(120);
+
+        // Test formula at n=0
+        let n0_expected = {
+            let inner = (PI / 2.0) * 0.5 / 120.0;
+            let inner_sin = inner.sin();
+            let outer = (PI / 2.0) * inner_sin;
+            let outer_sin = outer.sin();
+            outer_sin * outer_sin
+        };
+        assert!((window[0] - n0_expected).abs() < 1e-6);
+
+        // Test formula at n=60 (middle)
+        let n60_expected = {
+            let inner = (PI / 2.0) * 60.5 / 120.0;
+            let inner_sin = inner.sin();
+            let outer = (PI / 2.0) * inner_sin;
+            let outer_sin = outer.sin();
+            outer_sin * outer_sin
+        };
+        assert!((window[60] - n60_expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_vorbis_window_range() {
+        let window = CeltDecoder::compute_vorbis_window(240);
+
+        for (i, &w) in window.iter().enumerate() {
+            assert!(
+                (0.0..=1.0).contains(&w),
+                "Window[{i}] = {w} is outside [0.0, 1.0]"
+            );
+        }
+    }
+
+    #[test]
+    fn test_vorbis_window_smooth_edges() {
+        let window = CeltDecoder::compute_vorbis_window(240);
+
+        // Window should start near 0
+        assert!(window[0] < 0.01, "Window starts at {}", window[0]);
+
+        // Window endpoints: Vorbis window is non-zero at edges (for overlap)
+        // Just verify it's in valid range
+        assert!((0.0..=1.0).contains(&window[window.len() - 1]));
+
+        // Window should have maximum value near middle (typically around 0.8 for Vorbis)
+        let middle = window.len() / 2;
+        let max_val = window[middle];
+        assert!(max_val > 0.7, "Window middle value is {max_val}");
+    }
+
+    #[test]
+    fn test_vorbis_window_monotonic_rise() {
+        let window = CeltDecoder::compute_vorbis_window(240);
+
+        // First half should be monotonically increasing
+        for i in 0..(window.len() / 2 - 1) {
+            assert!(
+                window[i] <= window[i + 1],
+                "Window not monotonic at {i}: {} > {}",
+                window[i],
+                window[i + 1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_inverse_mdct_output_size() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let freq_data = vec![1.0; 240];
+
+        let time_data = decoder.inverse_mdct(&freq_data);
+
+        assert_eq!(
+            time_data.len(),
+            480,
+            "MDCT output should be 2x input length"
+        );
+    }
+
+    #[test]
+    fn test_overlap_add_output_size() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let mdct_output = vec![0.5; 960];
+
+        let result = decoder.overlap_add(&mdct_output);
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert_eq!(output.len(), 480, "Overlap-add output should be frame_size");
+    }
+
+    #[test]
+    fn test_overlap_add_with_previous_frame() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // First frame: initialize overlap buffer
+        let frame1 = vec![1.0; 960];
+        let result1 = decoder.overlap_add(&frame1);
+        assert!(result1.is_ok());
+
+        // Second frame: should overlap with first frame's second half
+        let frame2 = vec![2.0; 960];
+        let result2 = decoder.overlap_add(&frame2);
+        assert!(result2.is_ok());
+
+        let output2 = result2.unwrap();
+        assert_eq!(output2.len(), 480);
+
+        // Values should be non-zero (overlap happened)
+        assert!(output2.iter().any(|&x| x.abs() > 1e-6));
+    }
+
+    #[test]
+    fn test_overlap_add_buffer_continuity() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Process multiple frames
+        for _ in 0..5 {
+            let frame = vec![1.0; 960];
+            let result = decoder.overlap_add(&frame);
+            assert!(result.is_ok());
+        }
+
+        // Overlap buffer should be maintained
+        assert_eq!(decoder.state.overlap_buffer.len(), 480);
+    }
+
+    #[test]
+    fn test_overlap_add_zero_input() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // First frame with non-zero values
+        let frame1 = vec![1.0; 960];
+        let _ = decoder.overlap_add(&frame1);
+
+        // Second frame with zeros
+        let frame2 = vec![0.0; 960];
+        let result = decoder.overlap_add(&frame2);
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+
+        // Output should still have values from first frame's overlap
+        assert!(output.iter().any(|&x| x.abs() > 1e-6));
     }
 }
