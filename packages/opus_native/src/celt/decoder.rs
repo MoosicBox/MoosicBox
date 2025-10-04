@@ -29,8 +29,18 @@ pub struct Allocation {
 
 /// CELT decoder state (RFC Section 4.3)
 pub struct CeltState {
-    /// Previous frame's final energy per band (Q8 format)
+    /// Previous frame's final energy per band (Q8 format) - frame t-1
+    ///
+    /// Used for energy prediction and anti-collapse processing.
     pub prev_energy: [i16; CELT_NUM_BANDS],
+
+    /// Two-frames-ago energy per band (Q8 format) - frame t-2
+    ///
+    /// Required for anti-collapse per RFC 6716 Section 4.3.5 (lines 6727-6728):
+    /// "energy corresponding to the minimum energy over the two previous frames"
+    ///
+    /// Matches libopus `oldLogE2` buffer.
+    pub prev_prev_energy: [i16; CELT_NUM_BANDS],
 
     /// Post-filter state (if enabled)
     pub post_filter_state: Option<PostFilterState>,
@@ -109,6 +119,7 @@ impl CeltState {
     pub fn new(frame_size: usize, channels: usize) -> Self {
         Self {
             prev_energy: [0; CELT_NUM_BANDS],
+            prev_prev_energy: [0; CELT_NUM_BANDS],
             post_filter_state: None,
             overlap_buffer: vec![0.0; frame_size * channels],
             anti_collapse_state: AntiCollapseState { seed: 0 },
@@ -118,6 +129,7 @@ impl CeltState {
     /// Resets decoder state (for packet loss recovery)
     pub fn reset(&mut self) {
         self.prev_energy.fill(0);
+        self.prev_prev_energy.fill(0);
         self.post_filter_state = None;
         self.overlap_buffer.fill(0.0);
         self.anti_collapse_state.seed = 0;
@@ -1240,6 +1252,162 @@ impl CeltDecoder {
         }
         range_decoder.ec_dec_bit_logp(1)
     }
+
+    /// Apply anti-collapse processing to prevent zero energy in bands
+    ///
+    /// RFC 6716 Section 4.3.5 (lines 6717-6729): "For each band of each MDCT where
+    /// a collapse is detected, a pseudo-random signal is inserted with an energy
+    /// corresponding to the minimum energy over the two previous frames. A
+    /// renormalization step is then required to ensure that the anti-collapse step
+    /// did not alter the energy preservation property."
+    ///
+    /// Implementation follows libopus `bands.c:anti_collapse()` (lines 284-360)
+    ///
+    /// # Arguments
+    ///
+    /// * `bands` - Frequency-domain bands (one Vec<f32> per band), modified in-place
+    /// * `current_energy` - Current frame energy per band (Q8 log format)
+    /// * `collapse_masks` - Per-band collapse detection masks (from PVQ decoder)
+    /// * `pulses` - Pulse allocation per band (for threshold computation)
+    /// * `anti_collapse_on` - Whether anti-collapse is enabled (from bitstream)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if band dimensions are invalid
+    ///
+    /// # Algorithm
+    ///
+    /// 1. **Collapse Detection**: Threshold = 0.5 * 2^(-depth/8) where depth = `(1+pulses)/band_width >> LM`
+    /// 2. **Injection Energy**: r = 2 * 2^(-(E_current - `MIN(E_prev1, E_prev2)`))
+    /// 3. **LM==3 Correction**: Multiply r by √2 for 20ms frames
+    /// 4. **Noise Injection**: For collapsed bands, fill with ±r random values
+    /// 5. **Renormalization**: Preserve total energy after injection
+    #[allow(dead_code)]
+    pub fn apply_anti_collapse(
+        &mut self,
+        bands: &mut [Vec<f32>],
+        current_energy: &[i16; CELT_NUM_BANDS],
+        collapse_masks: &[bool],
+        pulses: &[u16; CELT_NUM_BANDS],
+        anti_collapse_on: bool,
+    ) -> Result<()> {
+        if !anti_collapse_on {
+            return Ok(());
+        }
+
+        let lm = self.compute_lm();
+
+        // Process only coded bands [start_band, end_band)
+        for band_idx in self.start_band..self.end_band {
+            if band_idx >= CELT_NUM_BANDS {
+                break;
+            }
+
+            // Skip if band not collapsed
+            if !collapse_masks[band_idx] {
+                continue;
+            }
+
+            let band = &mut bands[band_idx];
+            if band.is_empty() {
+                continue;
+            }
+
+            let band_width = band.len();
+
+            // Compute depth: (1 + pulses[i]) / band_width >> LM
+            // This represents bits per coefficient
+            #[allow(clippy::cast_possible_truncation)]
+            let depth = ((1 + u32::from(pulses[band_idx])) / (band_width as u32)) >> lm;
+
+            // Threshold: 0.5 * 2^(-depth/8)
+            // libopus: thresh = 0.5f * celt_exp2(-0.125f * depth)
+            #[allow(clippy::cast_precision_loss)]
+            let thresh = 0.5_f32 * (-0.125_f32 * depth as f32).exp2();
+
+            // Get previous energies (Q8 format)
+            let prev1 = self.state.prev_energy[band_idx];
+            let prev2 = self.state.prev_prev_energy[band_idx];
+
+            // Energy difference: current - MIN(prev1, prev2)
+            // Convert from Q8 to log2 domain
+            let current_q8 = current_energy[band_idx];
+            let min_prev_q8 = prev1.min(prev2);
+
+            // Ediff in Q8 format (256 units = 1.0 in log2)
+            let ediff_q8 = i32::from(current_q8) - i32::from(min_prev_q8);
+
+            // Convert to actual exponent: 2^(-Ediff)
+            // r = 2 * 2^(-Ediff) = 2^(1 - Ediff)
+            #[allow(clippy::cast_precision_loss)]
+            let r_base = 2.0_f32 * (-ediff_q8 as f32 / 256.0).exp2();
+
+            // Apply LM==3 correction: multiply by sqrt(2) for 20ms frames
+            // libopus: if (LM==3) r *= 1.41421356f;
+            let r_corrected = if lm == 3 {
+                r_base * std::f32::consts::SQRT_2
+            } else {
+                r_base
+            };
+
+            // Clamp to threshold
+            let r = r_corrected.min(thresh);
+
+            // Normalize by sqrt(band_width << LM) to preserve energy
+            // libopus: r = r * sqrt_1 where sqrt_1 = 1.0/sqrt(N0<<LM)
+            #[allow(clippy::cast_precision_loss)]
+            let sqrt_norm = ((band_width << lm) as f32).sqrt();
+            let r_final = r / sqrt_norm;
+
+            // Inject pseudo-random noise with amplitude ±r_final
+            for sample in band.iter_mut() {
+                // Use anti-collapse PRNG
+                let random = self.state.anti_collapse_state.next_random();
+                // libopus: X[(j<<LM)+k] = (seed & 0x8000 ? r : -r)
+                *sample = if (random & 0x8000) != 0 {
+                    r_final
+                } else {
+                    -r_final
+                };
+            }
+
+            // Renormalize band to preserve total energy
+            // libopus: renormalise_vector(X, N0<<LM, Q15ONE, arch)
+            renormalize_band(band);
+        }
+
+        Ok(())
+    }
+}
+
+/// Renormalize a band to unit energy (L2 norm = 1.0)
+///
+/// This ensures energy preservation after anti-collapse noise injection.
+/// Matches libopus `renormalise_vector()` with Q15ONE target (1.0 in floating point).
+///
+/// # Arguments
+///
+/// * `band` - Band samples to normalize (modified in-place)
+fn renormalize_band(band: &mut [f32]) {
+    if band.is_empty() {
+        return;
+    }
+
+    // Compute L2 norm (energy)
+    let energy: f32 = band.iter().map(|x| x * x).sum();
+
+    if energy <= 1e-10 {
+        // Band is silent, nothing to normalize
+        return;
+    }
+
+    let norm = energy.sqrt();
+    let inv_norm = 1.0 / norm;
+
+    // Scale to unit norm
+    for sample in band.iter_mut() {
+        *sample *= inv_norm;
+    }
 }
 
 #[cfg(test)]
@@ -2148,6 +2316,165 @@ mod tests {
 
         let r = state.next_random();
         assert_eq!(r, 1_u32.wrapping_mul(1_664_525).wrapping_add(1_013_904_223));
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_disabled() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 10]; CELT_NUM_BANDS];
+        let energy = [100_i16; CELT_NUM_BANDS];
+        let collapse_masks = vec![true; CELT_NUM_BANDS];
+        let pulses = [10_u16; CELT_NUM_BANDS];
+
+        // With anti_collapse_on=false, should not modify bands
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, false);
+
+        assert!(result.is_ok());
+        // All bands should still be zero
+        assert!(bands[0].iter().all(|&x| (x - 0.0).abs() < f32::EPSILON));
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_non_collapsed_band() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut bands: Vec<Vec<f32>> = vec![vec![0.5; 10]; CELT_NUM_BANDS];
+        let energy = [100_i16; CELT_NUM_BANDS];
+        let mut collapse_masks = vec![false; CELT_NUM_BANDS]; // All non-collapsed
+        collapse_masks[5] = false; // Explicitly mark one as non-collapsed
+        let pulses = [10_u16; CELT_NUM_BANDS];
+
+        let original_bands = bands.clone();
+
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, true);
+
+        assert!(result.is_ok());
+        // Non-collapsed bands should not be modified
+        assert_eq!(bands[5], original_bands[5]);
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_collapsed_band() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Set up one collapsed band
+        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 8]; CELT_NUM_BANDS];
+        let mut energy = [100_i16; CELT_NUM_BANDS];
+        energy[3] = 50; // Band 3 has low energy
+
+        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
+        collapse_masks[3] = true; // Band 3 is collapsed
+
+        let pulses = [10_u16; CELT_NUM_BANDS];
+
+        // Set previous energies for injection calculation
+        decoder.state.prev_energy[3] = 60;
+        decoder.state.prev_prev_energy[3] = 55;
+
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, true);
+
+        assert!(result.is_ok());
+
+        // Band 3 should now have non-zero values (injected noise)
+        let has_nonzero = bands[3].iter().any(|&x| x.abs() > 1e-6);
+        assert!(has_nonzero, "Collapsed band should have noise injected");
+
+        // Band should be normalized (unit energy)
+        let energy_sum: f32 = bands[3].iter().map(|x| x * x).sum();
+        let norm = energy_sum.sqrt();
+        assert!(
+            (norm - 1.0).abs() < 0.01,
+            "Band should be normalized to unit energy, got {norm}"
+        );
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_energy_preservation() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 16]; CELT_NUM_BANDS];
+        let energy = [80_i16; CELT_NUM_BANDS];
+
+        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
+        collapse_masks[10] = true; // Collapse band 10
+
+        let pulses = [20_u16; CELT_NUM_BANDS];
+
+        decoder.state.prev_energy[10] = 70;
+        decoder.state.prev_prev_energy[10] = 75;
+
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, true);
+
+        assert!(result.is_ok());
+
+        // Verify renormalization preserved energy
+        let band_energy: f32 = bands[10].iter().map(|x| x * x).sum();
+        let band_norm = band_energy.sqrt();
+
+        // After renormalization, L2 norm should be 1.0
+        assert!(
+            (band_norm - 1.0).abs() < 0.01,
+            "Renormalization should preserve unit energy, got {band_norm}"
+        );
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_uses_min_of_two_prev() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 8]; CELT_NUM_BANDS];
+        let energy = [100_i16; CELT_NUM_BANDS];
+
+        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
+        collapse_masks[7] = true;
+
+        let pulses = [15_u16; CELT_NUM_BANDS];
+
+        // Set different previous energies - algorithm should use MIN
+        decoder.state.prev_energy[7] = 90; // Higher
+        decoder.state.prev_prev_energy[7] = 70; // Lower (should be used)
+
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, true);
+
+        assert!(result.is_ok());
+
+        // Band should have noise (verifies MIN was used in calculation)
+        let has_nonzero = bands[7].iter().any(|&x| x.abs() > 1e-6);
+        assert!(
+            has_nonzero,
+            "Should inject noise based on MIN(prev1, prev2)"
+        );
+    }
+
+    #[test]
+    fn test_renormalize_band() {
+        use super::renormalize_band;
+
+        let mut band = vec![0.5, 0.5, 0.5, 0.5]; // Energy = 4 * 0.25 = 1.0, norm = 1.0
+        renormalize_band(&mut band);
+
+        let energy: f32 = band.iter().map(|x| x * x).sum();
+        let norm = energy.sqrt();
+
+        assert!((norm - 1.0).abs() < 1e-6, "Band should have unit norm");
+    }
+
+    #[test]
+    fn test_renormalize_band_zero_energy() {
+        use super::renormalize_band;
+
+        let mut band = vec![0.0, 0.0, 0.0];
+        renormalize_band(&mut band);
+
+        // Should not crash or produce NaN
+        assert!(band.iter().all(|x| x.is_finite()));
+        assert!(band.iter().all(|&x| (x - 0.0).abs() < f32::EPSILON));
     }
 
     #[test]

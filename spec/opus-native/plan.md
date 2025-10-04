@@ -10471,6 +10471,22 @@ The `start_band` and `end_band` fields enable:
   Added test_anti_collapse_prng_lcg_formula (decoder.rs:2064-2076) verifying first 3 iterations and wrapping behavior; test_anti_collapse_prng_lcg_constants (decoder.rs:2129-2137) verifying exact LCG formula
 
 - [ ] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
+  
+  **CRITICAL IMPLEMENTATION NOTE (from libopus analysis):**
+  Anti-collapse requires tracking TWO previous energy frames (t-1 and t-2) per RFC line 6727-6728:
+  "energy corresponding to the minimum energy over the two previous frames"
+  
+  **Structural Change Required:**
+  - Must add `prev_prev_energy: [i16; CELT_NUM_BANDS]` to `CeltState`
+  - Energy update pattern: `prev_prev = prev; prev = current` (after each frame)
+  - Matches libopus: `oldLogE2` (t-2) and `oldLogE` (t-1)
+  
+  **libopus Algorithm (bands.c:284-360):**
+  1. Collapse detection: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/(band_width) >> LM`
+  2. Injection energy: `r = 2 * exp2(-(logE - MIN(prev1, prev2)))` with LM==3 correction
+  3. Noise injection: `X[j] = (seed & 0x8000) ? r : -r` using LCG
+  4. Renormalization: `renormalise_vector()` to preserve total energy
+  
   ```rust
   /// Apply anti-collapse processing (RFC lines 6717-6729)
   ///
@@ -10485,23 +10501,44 @@ The `start_band` and `end_band` fields enable:
       anti_collapse_on: bool,
   ) -> Result<()>
   ```
-  - [ ] Only processes bands in `[self.start_band, self.end_band)` range
-  - [ ] Correctly identifies collapsed bands (near-zero energy threshold)
-  - [ ] Uses `min(prev_energy[t-1], prev_energy[t-2])` for injection energy
-  - [ ] Pseudo-random signal uses `AntiCollapseState.next_random()`
-  - [ ] Renormalization preserves total energy per RFC
-  - [ ] Add test with collapsed band (all zeros)
-  - [ ] Add test with non-collapsed band (no modification)
+  - [x] Add `prev_prev_energy` field to `CeltState` structure
+  Added to CeltState (decoder.rs:44) with full documentation linking to RFC Section 4.3.5
+  - [x] Only processes bands in `[self.start_band, self.end_band)` range
+  Loop: `for band_idx in self.start_band..self.end_band` (decoder.rs:1303)
+  - [x] Correctly identifies collapsed bands (threshold from libopus)
+  Threshold formula: `thresh = 0.5 * (-0.125 * depth).exp2()` matches libopus (decoder.rs:1325)
+  - [x] Uses `min(prev_energy[t-1], prev_prev_energy[t-2])` for injection energy
+  `min_prev_q8 = prev1.min(prev2)` then `ediff_q8 = current - min_prev` (decoder.rs:1334-1337)
+  - [x] Pseudo-random signal uses `AntiCollapseState.next_random()`
+  Uses `self.state.anti_collapse_state.next_random()` for noise injection (decoder.rs:1370)
+  - [x] Implements LM==3 (20ms) sqrt(2) correction factor
+  `if lm == 3 { r_base * std::f32::consts::SQRT_2 }` (decoder.rs:1347-1351)
+  - [x] Renormalization preserves total energy per RFC
+  `renormalize_band()` function normalizes to unit L2 norm (decoder.rs:1386-1407)
+  - [x] Add test with collapsed band (all zeros)
+  test_apply_anti_collapse_collapsed_band verifies noise injection (decoder.rs:2361-2398)
+  - [x] Add test with non-collapsed band (no modification)
+  test_apply_anti_collapse_non_collapsed_band verifies no modification (decoder.rs:2343-2359)
+  - [x] Add test verifying energy preservation
+  test_apply_anti_collapse_energy_preservation verifies unit norm after renormalization (decoder.rs:2400-2430)
 
 **Subsection 4.6.1 Verification:**
-- [ ] Run `cargo fmt`
-- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
-- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
-- [ ] Run `cargo machete`
-- [ ] Anti-collapse PRNG matches libopus reference
-- [ ] Energy renormalization preserves total power
-- [ ] **RFC DEEP CHECK:** Verify against lines 6710-6729
+- [x] Run `cargo fmt`
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features celt`
+Compiled successfully
+- [x] Run `cargo test -p moosicbox_opus_native --features celt`
+356 tests passed (7 new anti-collapse tests added)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+Zero warnings - all clippy issues resolved
+- [x] Run `cargo machete`
+No unused dependencies
+- [x] Anti-collapse PRNG matches libopus reference
+LCG constants 1664525 and 1013904223 verified, formula: seed = seed * 1664525 + 1013904223
+- [x] Energy renormalization preserves total power
+`renormalize_band()` normalizes to unit L2 norm, verified by test_renormalize_band and test_apply_anti_collapse_energy_preservation
+- [x] **RFC DEEP CHECK:** Verify against lines 6710-6729
+✅ COMPLETE: Threshold formula matches libopus (0.5 * exp2(-depth/8)); injection energy uses MIN(prev1, prev2) per RFC line 6727-6728; LM==3 sqrt(2) correction applied; renormalization preserves energy per RFC line 6729; all 7 tests verify correct behavior
 
 ---
 
