@@ -17,6 +17,8 @@
 //! ### Basic Usage
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "sqlite")]
+//! # {
 //! use switchy_schema_test_utils::{MigrationTestBuilder, create_empty_in_memory};
 //! use std::sync::Arc;
 //!
@@ -30,11 +32,14 @@
 //!     .await?;
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ### Testing Data Migrations
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "sqlite")]
+//! # {
 //! use switchy_schema_test_utils::MigrationTestBuilder;
 //!
 //! # async fn example(db: &dyn switchy_database::Database, migrations: Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>) -> Result<(), Box<dyn std::error::Error>> {
@@ -56,11 +61,14 @@
 //! // assert!(!users.is_empty());
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ### Multiple Breakpoints
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "sqlite")]
+//! # {
 //! use switchy_schema_test_utils::MigrationTestBuilder;
 //!
 //! # async fn example(db: &dyn switchy_database::Database, migrations: Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>) -> Result<(), Box<dyn std::error::Error>> {
@@ -80,6 +88,7 @@
 //!     .run(db)
 //!     .await?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 
