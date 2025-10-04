@@ -1255,7 +1255,7 @@ impl CeltDecoder {
 
     /// Apply anti-collapse processing to prevent zero energy in bands
     ///
-    /// RFC 6716 Section 4.3.5 (lines 6717-6729): "For each band of each MDCT where
+    /// RFC 6716 Section 4.3.5 (lines 6717-6729): "For each band **of each MDCT** where
     /// a collapse is detected, a pseudo-random signal is inserted with an energy
     /// corresponding to the minimum energy over the two previous frames. A
     /// renormalization step is then required to ensure that the anti-collapse step
@@ -1266,8 +1266,12 @@ impl CeltDecoder {
     /// # Arguments
     ///
     /// * `bands` - Frequency-domain bands (one Vec<f32> per band), modified in-place
+    ///   - Storage: Interleaved MDCTs with index formula `(j<<LM) + k`
+    ///   - Size per band: `N0 << LM` where N0 = bins per single MDCT
     /// * `current_energy` - Current frame energy per band (Q8 log format)
-    /// * `collapse_masks` - Per-band collapse detection masks (from PVQ decoder)
+    /// * `collapse_masks` - Per-band collapse bit masks (from PVQ decoder)
+    ///   - Type: `&[u8]` - one byte per band
+    ///   - Bit k (0-7): Status of MDCT k → 0=collapsed (inject), 1=has energy (skip)
     /// * `pulses` - Pulse allocation per band (for threshold computation)
     /// * `anti_collapse_on` - Whether anti-collapse is enabled (from bitstream)
     ///
@@ -1277,17 +1281,20 @@ impl CeltDecoder {
     ///
     /// # Algorithm
     ///
-    /// 1. **Collapse Detection**: Threshold = 0.5 * 2^(-depth/8) where depth = `(1+pulses)/band_width >> LM`
-    /// 2. **Injection Energy**: r = 2 * 2^(-(E_current - `MIN(E_prev1, E_prev2)`))
-    /// 3. **LM==3 Correction**: Multiply r by √2 for 20ms frames
-    /// 4. **Noise Injection**: For collapsed bands, fill with ±r random values
-    /// 5. **Renormalization**: Preserve total energy after injection
+    /// 1. **For each band** in `[start_band, end_band)`:
+    /// 2. **For each MDCT** k in `0..(1<<LM)` (RFC: "each MDCT"):
+    /// 3. **Check bit k**: If `collapse_masks[band] & (1<<k) == 0` (collapsed):
+    ///    - Compute threshold: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/N0 >> LM`
+    ///    - Compute injection: `r = 2 * exp2(-(E_current - MIN(E_prev1, E_prev2)))`
+    ///    - Apply LM==3 correction: `r *= sqrt(2)` for 20ms frames
+    ///    - Fill MDCT k: `band[(j<<LM)+k] = ±r` for j in 0..N0 using PRNG
+    /// 4. **Renormalize** entire band (all MDCTs together) if any were filled
     #[allow(dead_code)]
     pub fn apply_anti_collapse(
         &mut self,
         bands: &mut [Vec<f32>],
         current_energy: &[i16; CELT_NUM_BANDS],
-        collapse_masks: &[bool],
+        collapse_masks: &[u8],
         pulses: &[u16; CELT_NUM_BANDS],
         anti_collapse_on: bool,
     ) -> Result<()> {
@@ -1296,6 +1303,7 @@ impl CeltDecoder {
         }
 
         let lm = self.compute_lm();
+        let num_mdcts = 1_usize << lm; // 2^LM MDCTs per band
 
         // Process only coded bands [start_band, end_band)
         for band_idx in self.start_band..self.end_band {
@@ -1303,22 +1311,34 @@ impl CeltDecoder {
                 break;
             }
 
-            // Skip if band not collapsed
-            if !collapse_masks[band_idx] {
-                continue;
-            }
-
             let band = &mut bands[band_idx];
             if band.is_empty() {
                 continue;
             }
 
-            let band_width = band.len();
+            // N0 = bins per single MDCT (from bins_per_band table)
+            // libopus: N0 = m->eBands[i+1] - m->eBands[i]
+            let n0 = usize::from(self.bins_per_band()[band_idx]);
 
-            // Compute depth: (1 + pulses[i]) / band_width >> LM
-            // This represents bits per coefficient
+            // Total band size must be N0 << LM
+            let expected_size = n0 << lm;
+            if band.len() != expected_size {
+                return Err(Error::CeltDecoder(format!(
+                    "Band {} size mismatch: expected {} (N0={} << LM={}), got {}",
+                    band_idx,
+                    expected_size,
+                    n0,
+                    lm,
+                    band.len()
+                )));
+            }
+
+            let collapse_mask = collapse_masks[band_idx];
+
+            // Compute depth: (1 + pulses[i]) / N0 >> LM
+            // libopus bands.c:284 - uses N0, not N0<<LM
             #[allow(clippy::cast_possible_truncation)]
-            let depth = ((1 + u32::from(pulses[band_idx])) / (band_width as u32)) >> lm;
+            let depth = ((1 + u32::from(pulses[band_idx])) / (n0 as u32)) >> lm;
 
             // Threshold: 0.5 * 2^(-depth/8)
             // libopus: thresh = 0.5f * celt_exp2(-0.125f * depth)
@@ -1330,7 +1350,7 @@ impl CeltDecoder {
             let prev2 = self.state.prev_prev_energy[band_idx];
 
             // Energy difference: current - MIN(prev1, prev2)
-            // Convert from Q8 to log2 domain
+            // RFC line 6727-6728: "minimum energy over the two previous frames"
             let current_q8 = current_energy[band_idx];
             let min_prev_q8 = prev1.min(prev2);
 
@@ -1353,27 +1373,48 @@ impl CeltDecoder {
             // Clamp to threshold
             let r = r_corrected.min(thresh);
 
-            // Normalize by sqrt(band_width << LM) to preserve energy
+            // Normalize by sqrt(N0<<LM) to preserve energy
             // libopus: r = r * sqrt_1 where sqrt_1 = 1.0/sqrt(N0<<LM)
             #[allow(clippy::cast_precision_loss)]
-            let sqrt_norm = ((band_width << lm) as f32).sqrt();
+            let sqrt_norm = ((n0 << lm) as f32).sqrt();
             let r_final = r / sqrt_norm;
 
-            // Inject pseudo-random noise with amplitude ±r_final
-            for sample in band.iter_mut() {
-                // Use anti-collapse PRNG
-                let random = self.state.anti_collapse_state.next_random();
-                // libopus: X[(j<<LM)+k] = (seed & 0x8000 ? r : -r)
-                *sample = if (random & 0x8000) != 0 {
-                    r_final
-                } else {
-                    -r_final
-                };
+            let mut renormalize = false;
+
+            // RFC line 6717: "For each band of each MDCT"
+            // libopus bands.c:342: for (k=0;k<(1<<LM);k++)
+            for k in 0..num_mdcts {
+                // Check bit k of collapse mask
+                // libopus bands.c:346: if (!(collapse_masks[i*C+c]&1<<k))
+                if (collapse_mask & (1_u8 << k)) == 0 {
+                    // MDCT k collapsed - inject pseudo-random noise
+
+                    // Fill only this MDCT with noise
+                    // libopus bands.c:349-353: for (j=0;j<N0;j++) X[(j<<LM)+k] = ...
+                    for j in 0..n0 {
+                        // Interleaved index: (j<<LM) + k
+                        let idx = (j << lm) + k;
+
+                        // Use anti-collapse PRNG
+                        let random = self.state.anti_collapse_state.next_random();
+
+                        // libopus: X[(j<<LM)+k] = (seed & 0x8000 ? r : -r)
+                        band[idx] = if (random & 0x8000) != 0 {
+                            r_final
+                        } else {
+                            -r_final
+                        };
+                    }
+
+                    renormalize = true;
+                }
             }
 
             // Renormalize band to preserve total energy
-            // libopus: renormalise_vector(X, N0<<LM, Q15ONE, arch)
-            renormalize_band(band);
+            // libopus bands.c:358-359: if (renormalize) renormalise_vector(X, N0<<LM, Q15ONE, arch)
+            if renormalize {
+                renormalize_band(band);
+            }
         }
 
         Ok(())
@@ -2322,9 +2363,17 @@ mod tests {
     fn test_apply_anti_collapse_disabled() {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 10]; CELT_NUM_BANDS];
+        // LM=2 (10ms @ 48kHz = 480 samples) → 4 MDCTs
+        // Band 0 has 4 bins per MDCT → 4<<2 = 16 total coefficients
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.0; n0 << 2] // LM=2
+            })
+            .collect();
+
         let energy = [100_i16; CELT_NUM_BANDS];
-        let collapse_masks = vec![true; CELT_NUM_BANDS];
+        let collapse_masks = vec![0x00_u8; CELT_NUM_BANDS]; // All MDCTs collapsed
         let pulses = [10_u16; CELT_NUM_BANDS];
 
         // With anti_collapse_on=false, should not modify bands
@@ -2340,10 +2389,16 @@ mod tests {
     fn test_apply_anti_collapse_non_collapsed_band() {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let mut bands: Vec<Vec<f32>> = vec![vec![0.5; 10]; CELT_NUM_BANDS];
+        // LM=2 → 4 MDCTs
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.5; n0 << 2]
+            })
+            .collect();
+
         let energy = [100_i16; CELT_NUM_BANDS];
-        let mut collapse_masks = vec![false; CELT_NUM_BANDS]; // All non-collapsed
-        collapse_masks[5] = false; // Explicitly mark one as non-collapsed
+        let collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS]; // All MDCTs have energy (bits set)
         let pulses = [10_u16; CELT_NUM_BANDS];
 
         let original_bands = bands.clone();
@@ -2360,13 +2415,19 @@ mod tests {
     fn test_apply_anti_collapse_collapsed_band() {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        // Set up one collapsed band
-        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 8]; CELT_NUM_BANDS];
+        // Band 3 has 4 bins per MDCT → 4<<2 = 16 total coefficients
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.0; n0 << 2]
+            })
+            .collect();
+
         let mut energy = [100_i16; CELT_NUM_BANDS];
         energy[3] = 50; // Band 3 has low energy
 
-        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
-        collapse_masks[3] = true; // Band 3 is collapsed
+        let mut collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS]; // Default: all have energy
+        collapse_masks[3] = 0x00; // Band 3: all 4 MDCTs collapsed
 
         let pulses = [10_u16; CELT_NUM_BANDS];
 
@@ -2396,11 +2457,17 @@ mod tests {
     fn test_apply_anti_collapse_energy_preservation() {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 16]; CELT_NUM_BANDS];
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.0; n0 << 2]
+            })
+            .collect();
+
         let energy = [80_i16; CELT_NUM_BANDS];
 
-        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
-        collapse_masks[10] = true; // Collapse band 10
+        let mut collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS];
+        collapse_masks[10] = 0x00; // Collapse all MDCTs in band 10
 
         let pulses = [20_u16; CELT_NUM_BANDS];
 
@@ -2427,11 +2494,17 @@ mod tests {
     fn test_apply_anti_collapse_uses_min_of_two_prev() {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let mut bands: Vec<Vec<f32>> = vec![vec![0.0; 8]; CELT_NUM_BANDS];
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.0; n0 << 2]
+            })
+            .collect();
+
         let energy = [100_i16; CELT_NUM_BANDS];
 
-        let mut collapse_masks = vec![false; CELT_NUM_BANDS];
-        collapse_masks[7] = true;
+        let mut collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS];
+        collapse_masks[7] = 0x00;
 
         let pulses = [15_u16; CELT_NUM_BANDS];
 
@@ -2449,6 +2522,56 @@ mod tests {
         assert!(
             has_nonzero,
             "Should inject noise based on MIN(prev1, prev2)"
+        );
+    }
+
+    #[test]
+    fn test_apply_anti_collapse_partial_mdct_collapse() {
+        // Test RFC line 6717: "For each band of each MDCT"
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![0.0; n0 << 2]
+            })
+            .collect();
+
+        let energy = [90_i16; CELT_NUM_BANDS];
+        let mut collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS];
+
+        // Band 5: MDCTs 0 and 2 collapsed (bits 0,2 = 0), MDCTs 1,3 have energy (bits 1,3 = 1)
+        // Binary: 0b1010 = 0x0A
+        collapse_masks[5] = 0x0A;
+
+        let pulses = [12_u16; CELT_NUM_BANDS];
+
+        decoder.state.prev_energy[5] = 85;
+        decoder.state.prev_prev_energy[5] = 80;
+
+        let result =
+            decoder.apply_anti_collapse(&mut bands, &energy, &collapse_masks, &pulses, true);
+
+        assert!(result.is_ok());
+
+        // Verify noise was injected only in MDCTs 0 and 2
+        let n0 = usize::from(decoder.bins_per_band()[5]);
+        let lm = 2;
+
+        // Check MDCT 0 (collapsed) - should have noise
+        let mdct0_has_noise = (0..n0).any(|j| bands[5][j << lm].abs() > 1e-6);
+        assert!(mdct0_has_noise, "MDCT 0 should have noise (collapsed)");
+
+        // Check MDCT 2 (collapsed) - should have noise
+        let mdct2_has_noise = (0..n0).any(|j| bands[5][(j << lm) + 2].abs() > 1e-6);
+        assert!(mdct2_has_noise, "MDCT 2 should have noise (collapsed)");
+
+        // Entire band should be normalized
+        let band_energy: f32 = bands[5].iter().map(|x| x * x).sum();
+        let norm = band_energy.sqrt();
+        assert!(
+            (norm - 1.0).abs() < 0.01,
+            "Band should be normalized after partial collapse"
         );
     }
 

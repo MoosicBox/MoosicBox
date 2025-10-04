@@ -10471,22 +10471,37 @@ The `start_band` and `end_band` fields enable:
   Added test_anti_collapse_prng_lcg_formula (decoder.rs:2064-2076) verifying first 3 iterations and wrapping behavior; test_anti_collapse_prng_lcg_constants (decoder.rs:2129-2137) verifying exact LCG formula
 
 - [ ] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
-  
+
   **CRITICAL IMPLEMENTATION NOTE (from libopus analysis):**
   Anti-collapse requires tracking TWO previous energy frames (t-1 and t-2) per RFC line 6727-6728:
   "energy corresponding to the minimum energy over the two previous frames"
-  
+
   **Structural Change Required:**
-  - Must add `prev_prev_energy: [i16; CELT_NUM_BANDS]` to `CeltState`
+  - Must add `prev_prev_energy: [i16; CELT_NUM_BANDS]` to `CeltState` ✅ DONE
   - Energy update pattern: `prev_prev = prev; prev = current` (after each frame)
   - Matches libopus: `oldLogE2` (t-2) and `oldLogE` (t-1)
-  
+
+  **CRITICAL RFC COMPLIANCE FIX (RFC 6716 line 6717):**
+  RFC states: "For each band **of each MDCT**" - must process EACH MDCT separately!
+
   **libopus Algorithm (bands.c:284-360):**
-  1. Collapse detection: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/(band_width) >> LM`
-  2. Injection energy: `r = 2 * exp2(-(logE - MIN(prev1, prev2)))` with LM==3 correction
-  3. Noise injection: `X[j] = (seed & 0x8000) ? r : -r` using LCG
-  4. Renormalization: `renormalise_vector()` to preserve total energy
-  
+  1. **MDCT loop:** `for (k=0; k<(1<<LM); k++)` - process each short MDCT separately
+  2. **Bit masks:** `collapse_masks[i*C+c] & (1<<k)` - bit k indicates if MDCT k collapsed
+  3. **Interleaved storage:** `X[(j<<LM)+k]` where j=freq bin, k=MDCT index
+  4. **N0 calculation:** `N0 = eBands[i+1] - eBands[i]` = bins per SINGLE MDCT (not total)
+  5. Collapse detection: `thresh = 0.5 * exp2(-depth/8)` where `depth = (1+pulses)/N0 >> LM`
+  6. Injection energy: `r = 2 * exp2(-(logE - MIN(prev1, prev2)))` with LM==3 correction
+  7. Noise injection: Fill only collapsed MDCT k with pattern
+  8. Renormalization: `renormalise_vector(X, N0<<LM, ...)` on entire band (all MDCTs together)
+
+  **FIX PLAN:**
+  1. Change `collapse_masks: &[bool]` → `&[u8]` (bit masks)
+  2. Fix N0: use `bins_per_band[i]` (single MDCT), not `band.len()` (all MDCTs)
+  3. Add MDCT loop: `for k in 0..(1<<lm)`
+  4. Check bit: `if collapse_masks[i] & (1<<k) == 0`
+  5. Interleaved fill: `band[(j<<lm)+k] = ±r` for j in 0..n0
+  6. Renormalize if any MDCT was filled
+
   ```rust
   /// Apply anti-collapse processing (RFC lines 6717-6729)
   ///
@@ -10504,23 +10519,33 @@ The `start_band` and `end_band` fields enable:
   - [x] Add `prev_prev_energy` field to `CeltState` structure
   Added to CeltState (decoder.rs:44) with full documentation linking to RFC Section 4.3.5
   - [x] Only processes bands in `[self.start_band, self.end_band)` range
-  Loop: `for band_idx in self.start_band..self.end_band` (decoder.rs:1303)
+  Loop: `for band_idx in self.start_band..self.end_band` (decoder.rs:1300)
+  - [x] **RFC COMPLIANCE FIX:** Process EACH MDCT separately (RFC line 6717)
+  Added MDCT loop `for k in 0..num_mdcts` where `num_mdcts = 1<<lm` (decoder.rs:1377)
+  - [x] **RFC COMPLIANCE FIX:** Use bit masks for collapse detection
+  Changed `collapse_masks: &[bool]` → `&[u8]` with bit check `(collapse_mask & (1<<k)) == 0` (decoder.rs:1297, 1379)
+  - [x] **RFC COMPLIANCE FIX:** Use N0 (bins per MDCT), not total band width
+  `n0 = bins_per_band[i]` for depth calculation `(1+pulses)/n0 >> LM` (decoder.rs:1314, 1324)
+  - [x] **RFC COMPLIANCE FIX:** Interleaved storage X[(j<<LM)+k]
+  Noise injection uses `band[(j << lm) + k]` for j in 0..n0 (decoder.rs:1385-1393)
   - [x] Correctly identifies collapsed bands (threshold from libopus)
-  Threshold formula: `thresh = 0.5 * (-0.125 * depth).exp2()` matches libopus (decoder.rs:1325)
+  Threshold formula: `thresh = 0.5 * (-0.125 * depth).exp2()` matches libopus (decoder.rs:1329)
   - [x] Uses `min(prev_energy[t-1], prev_prev_energy[t-2])` for injection energy
-  `min_prev_q8 = prev1.min(prev2)` then `ediff_q8 = current - min_prev` (decoder.rs:1334-1337)
+  `min_prev_q8 = prev1.min(prev2)` then `ediff_q8 = current - min_prev` (decoder.rs:1343-1347)
   - [x] Pseudo-random signal uses `AntiCollapseState.next_random()`
-  Uses `self.state.anti_collapse_state.next_random()` for noise injection (decoder.rs:1370)
+  Uses `self.state.anti_collapse_state.next_random()` for noise injection (decoder.rs:1388)
   - [x] Implements LM==3 (20ms) sqrt(2) correction factor
-  `if lm == 3 { r_base * std::f32::consts::SQRT_2 }` (decoder.rs:1347-1351)
+  `if lm == 3 { r_base * std::f32::consts::SQRT_2 }` (decoder.rs:1354-1358)
   - [x] Renormalization preserves total energy per RFC
-  `renormalize_band()` function normalizes to unit L2 norm (decoder.rs:1386-1407)
+  `renormalize_band()` function normalizes to unit L2 norm (decoder.rs:1400-1420), called only if any MDCT was filled (decoder.rs:1400)
   - [x] Add test with collapsed band (all zeros)
-  test_apply_anti_collapse_collapsed_band verifies noise injection (decoder.rs:2361-2398)
+  test_apply_anti_collapse_collapsed_band verifies noise injection (decoder.rs:2415-2454)
   - [x] Add test with non-collapsed band (no modification)
-  test_apply_anti_collapse_non_collapsed_band verifies no modification (decoder.rs:2343-2359)
+  test_apply_anti_collapse_non_collapsed_band verifies no modification (decoder.rs:2389-2413)
   - [x] Add test verifying energy preservation
-  test_apply_anti_collapse_energy_preservation verifies unit norm after renormalization (decoder.rs:2400-2430)
+  test_apply_anti_collapse_energy_preservation verifies unit norm after renormalization (decoder.rs:2457-2491)
+  - [x] Add test for partial MDCT collapse (NEW)
+  test_apply_anti_collapse_partial_mdct_collapse verifies RFC line 6717 "each MDCT" handling with bit mask 0x0A (decoder.rs:2529-2576)
 
 **Subsection 4.6.1 Verification:**
 - [x] Run `cargo fmt`
@@ -10528,7 +10553,7 @@ Formatted successfully
 - [x] Run `cargo build -p moosicbox_opus_native --features celt`
 Compiled successfully
 - [x] Run `cargo test -p moosicbox_opus_native --features celt`
-356 tests passed (7 new anti-collapse tests added)
+357 tests passed (8 new anti-collapse tests added, including partial MDCT collapse test)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
 Zero warnings - all clippy issues resolved
 - [x] Run `cargo machete`
@@ -10538,7 +10563,16 @@ LCG constants 1664525 and 1013904223 verified, formula: seed = seed * 1664525 + 
 - [x] Energy renormalization preserves total power
 `renormalize_band()` normalizes to unit L2 norm, verified by test_renormalize_band and test_apply_anti_collapse_energy_preservation
 - [x] **RFC DEEP CHECK:** Verify against lines 6710-6729
-✅ COMPLETE: Threshold formula matches libopus (0.5 * exp2(-depth/8)); injection energy uses MIN(prev1, prev2) per RFC line 6727-6728; LM==3 sqrt(2) correction applied; renormalization preserves energy per RFC line 6729; all 7 tests verify correct behavior
+✅ COMPLETE WITH FIXES: RFC line 6717 "For each band of each MDCT" now correctly implemented with:
+  * MDCT loop `for k in 0..(1<<lm)` processes each short MDCT separately
+  * Bit masks `&[u8]` with `collapse_mask & (1<<k)` check individual MDCTs
+  * Interleaved storage `band[(j<<lm)+k]` matches libopus X[(j<<LM)+k] exactly
+  * N0 calculation uses bins per MDCT (not total width) per libopus bands.c:284
+  * Threshold formula matches libopus (0.5 * exp2(-depth/8))
+  * Injection energy uses MIN(prev1, prev2) per RFC line 6727-6728
+  * LM==3 sqrt(2) correction applied per libopus bands.c:318
+  * Renormalization preserves energy per RFC line 6729 (all MDCTs together)
+  * All 8 tests verify correct behavior including partial MDCT collapse
 
 ---
 
