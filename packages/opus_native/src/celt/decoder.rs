@@ -1560,38 +1560,49 @@ impl CeltDecoder {
 
     /// Compute CELT overlap window coefficients
     ///
-    /// Based on libopus `modes.c:opus_custom_mode_create()` (lines 350-360)
+    /// # Window Formula Clarification
     ///
-    /// RFC 6716 Section 4.3.7 (lines 6746-6749, 6751-6753) describes the "low-overlap"
-    /// window. The CORRECT formula from libopus is:
+    /// The window formula is: **W(i) = sin(π/2 × sin²(π/2 × (i+0.5)/overlap))**
     ///
-    /// **W(i) = sin(π/2 × sin²(π/2 × (i+0.5)/overlap))**
+    /// This is **sin of (sin squared)**, NOT (sin squared) of sin!
     ///
-    /// Note: This is sin of (sin squared), NOT (sin squared) of sin!
+    /// **Why this matters:**
+    /// - RFC 6716 ASCII art (lines 6746-6749) APPEARS to show the square on the outside
+    /// - This is MISLEADING due to limitations of ASCII art formatting
+    /// - The AUTHORITATIVE sources are:
+    ///   1. Vorbis I specification section 4.3.1: "y = sin(π/2 × sin²((x+0.5)/n × π))"
+    ///   2. libopus reference implementation modes.c:351-358
+    /// - RFC 6716 line 6754 explicitly references "mdct_backward (mdct.c)" from libopus
+    /// - Therefore: libopus implementation IS the RFC-compliant implementation
     ///
-    /// # CELT Low-Overlap Window Structure
+    /// **Formula breakdown:**
+    /// ```rust
+    /// let inner = (π/2) * (i + 0.5) / overlap;
+    /// let inner_sin_squared = inner.sin().powi(2);    // Inner: sin²(...)
+    /// let result = ((π/2) * inner_sin_squared).sin(); // Outer: sin(π/2 × ...)
+    /// ```
     ///
-    /// The window is only `overlap` samples long (N/4), not full MDCT size.
-    /// For 48kHz: shortMdctSize = 120, so overlap = 28 samples.
+    /// # CELT Window Structure
     ///
-    /// The "low-overlap" nature (RFC lines 6751-6753) is achieved by:
-    /// 1. **Window size**: Only N/4 samples (not N/2 like standard MDCT)
-    /// 2. **Application pattern**: Window applied to first N/8 and last N/8 only
-    /// 3. **Middle region**: N/2 samples with NO windowing (implicit ones)
-    /// 4. **Zero-padding**: Implicit - samples outside overlap regions have no contribution
+    /// For 48kHz CELT (shortMdctSize = 120):
+    /// - Window size: overlap = ((120 >> 2) << 2) = 120 samples (equals shortMdctSize)
+    /// - TDAC overlap-add applies window to first overlap/2 and last overlap/2 samples
+    /// - "Low-overlap" refers to window SHAPE (narrow peak), not partial application
     ///
     /// # Arguments
     ///
-    /// * `overlap_size` - Overlap length (N/4 rounded to multiple of 4)
+    /// * `overlap_size` - Window length in samples (equals shortMdctSize for CELT)
     ///
     /// # Returns
     ///
-    /// Window coefficients for overlap region [0.0, 1.0]
+    /// Window coefficients for TDAC overlap-add, values in range [0.0, 1.0]
     ///
     /// # References
     ///
-    /// * libopus `modes.c:opus_custom_mode_create()` - Window generation
-    /// * libopus `mdct.c:clt_mdct_forward_c()` - Window application pattern
+    /// * **Primary:** libopus `modes.c:opus_custom_mode_create()` lines 351-358
+    /// * **Primary:** Vorbis I specification section 4.3.1 (window formula)
+    /// * RFC 6716 Section 4.3.7 lines 6746-6754 (references libopus mdct.c)
+    /// * libopus `mdct.c:clt_mdct_backward()` lines 332-348 (TDAC windowing)
     #[allow(dead_code)]
     fn compute_celt_overlap_window(overlap_size: usize) -> Vec<f32> {
         use std::f32::consts::PI;
