@@ -10402,68 +10402,407 @@ The `start_band` and `end_band` fields enable:
 **Subsections (4 subsections estimated):**
 
 #### 4.6.1: Anti-Collapse Processing
-- **Reference:** RFC lines 6710-6729
-- **Deliverable:** `apply_anti_collapse()` method
-- **Algorithm:** Prevent zero energy in transient frames
-- **Decodes:** Anti-collapse bit (1/2 probability) when transient flag set
-- **Uses:** `AntiCollapseState.seed` from Phase 4.1.3
-- **Process:**
-  1. For each short MDCT in transient frame
-  2. For each band with collapsed energy (zero)
-  3. Insert pseudo-random signal with min(prev_energy[2 frames])
-  4. Renormalize to preserve energy
-- **State Update:** Update seed for next frame
 
-#### 4.6.2: Denormalization
-- **Reference:** RFC lines 6731-6736
-- **Deliverable:** `denormalize_bands()` method
-- **Formula:** `output[i] = shape[i] * sqrt(energy)`
-- **Combines:**
-  - Energy from Phase 4.2 (Q8 format, base-2 log domain)
-  - Shape from Phase 4.4 (unit norm)
-- **Conversion:** Energy in log domain → linear for multiplication
-- **Implementation:** denormalise_bands() in reference bands.c
+**Reference:** RFC 6716 Section 4.3.5 (lines 6710-6729)
 
-#### 4.6.3: Inverse MDCT and Windowing
-- **Reference:** RFC lines 6738-6800
-- **Deliverable:** `inverse_mdct()` and `apply_window()` methods
-- **Algorithm:**
-  - N frequency samples → 2N time samples
-  - Scale by 1/2 per RFC requirement
-  - Apply Vorbis-derived low-overlap window
-  - Overlap-add with previous frame
-- **Window Formula:** W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))
-- **Uses:** `overlap_buffer` from `CeltState` (Phase 4.1.3)
-- **Output:** PCM audio samples (f32)
-- **Reference:** See `research/mdct-implementation.md` for implementation strategies
+**Purpose:** Prevent zero energy in short MDCTs during transient frames to avoid unpleasant artifacts
 
-#### 4.6.4: Main Frame Orchestration (CRITICAL)
-- **Reference:** RFC 6716 Section 4.3 (complete CELT decode flow)
-- **Deliverable:** `decode_celt_frame()` method - **PRIMARY CONSUMER OF `start_band`/`end_band` FIELDS**
-- **Purpose:** Wire together all Phase 4 components into complete CELT decoder
-- **Algorithm:**
-  1. Decode global flags (silence, post-filter, transient, intra) - Phase 4.1
-  2. **USE `self.start_band`, `self.end_band`** for TF decoding - Phase 4.5
-  3. **USE `self.start_band`, `self.end_band`** for energy decoding - Phase 4.2
-  4. **USE `self.start_band`, `self.end_band`** for bit allocation - Phase 4.3
-  5. **USE `self.start_band`, `self.end_band`** for PVQ shape decoding - Phase 4.4
-  6. Apply anti-collapse, denormalize, iMDCT, overlap-add - Phase 4.6
-- **CRITICAL:** This method **MUST** consume the `start_band` and `end_band` struct fields
-- **Implementation Pattern:**
+**RFC Algorithm (lines 6715-6729):**
+```
+1. IF transient flag is set:
+   a. Decode anti-collapse bit using 1/2 probability (ec_dec_bit_logp(1))
+
+2. IF anti-collapse bit is 1:
+   a. For each short MDCT in the transient frame:
+      i.   For each band with collapsed energy (zero):
+           - Insert pseudo-random signal
+           - Energy = min(prev_energy[frame-1], prev_energy[frame-2])
+      ii.  Renormalize to preserve total energy
+
+3. Update AntiCollapseState.seed for next frame
+```
+
+**Implementation Tasks:**
+
+- [ ] **Task 4.6.1.1:** Implement `decode_anti_collapse_bit()`
   ```rust
-  pub fn decode_celt_frame(&mut self, range_decoder: &mut RangeDecoder) -> Result<DecodedFrame> {
-      // CRITICAL: Use self.start_band and self.end_band, NOT hardcoded values
-      self.decode_tf_changes(range_decoder, self.start_band, self.end_band)?;
-      let allocation = self.compute_allocation(..., self.start_band, self.end_band, ...)?;
-      // ... etc for all band-processing methods
+  /// Decode anti-collapse flag (RFC lines 6715-6716)
+  /// Only decoded when transient flag is set. Uses uniform 1/2 probability.
+  pub fn decode_anti_collapse_bit(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+      if !self.transient {
+          return Ok(false);
+      }
+      range_decoder.ec_dec_bit_logp(1)
   }
   ```
-- **Verification:**
-  - [ ] **CRITICAL:** `start_band` and `end_band` fields used (NOT hardcoded `0`/`21`)
-  - [ ] `#[allow(dead_code)]` removed from both fields
-  - [ ] All band-processing methods receive `self.start_band`/`self.end_band`
-  - [ ] Test with `start_band=0, end_band=21` (normal mode)
-  - [ ] Test with `start_band=17, end_band=21` (narrowband mode simulation)
+  - [ ] Only decodes when `self.transient == true`
+  - [ ] Uses `ec_dec_bit_logp(1)` for 1/2 probability
+  - [ ] Add test with transient=true and transient=false cases
+
+- [ ] **Task 4.6.1.2:** Implement pseudo-random number generator in `AntiCollapseState`
+  ```rust
+  impl AntiCollapseState {
+      /// Linear congruential generator matching libopus celt/celt.c
+      /// Formula: seed = (seed * 1664525) + 1013904223
+      pub fn next_random(&mut self) -> u32 {
+          self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
+          self.seed
+      }
+
+      /// Generate random value in range [-1.0, 1.0]
+      pub fn next_random_f32(&mut self) -> f32 {
+          let r = self.next_random();
+          (r as f32) / (u32::MAX as f32 / 2.0) - 1.0
+      }
+  }
+  ```
+  - [ ] LCG constants match libopus exactly (1664525, 1013904223)
+  - [ ] Uses wrapping arithmetic for u32 overflow
+  - [ ] `next_random_f32()` produces values in [-1.0, 1.0]
+  - [ ] Add test comparing against known libopus sequence
+
+- [ ] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
+  ```rust
+  /// Apply anti-collapse processing (RFC lines 6717-6729)
+  ///
+  /// # Arguments
+  /// * `bands` - Decoded frequency bands (modified in-place)
+  /// * `energy` - Final energy per band (Q8 format)
+  /// * `anti_collapse_on` - Anti-collapse bit value
+  pub fn apply_anti_collapse(
+      &mut self,
+      bands: &mut [Vec<f32>],
+      energy: &[i16; CELT_NUM_BANDS],
+      anti_collapse_on: bool,
+  ) -> Result<()>
+  ```
+  - [ ] Only processes bands in `[self.start_band, self.end_band)` range
+  - [ ] Correctly identifies collapsed bands (near-zero energy threshold)
+  - [ ] Uses `min(prev_energy[t-1], prev_energy[t-2])` for injection energy
+  - [ ] Pseudo-random signal uses `AntiCollapseState.next_random()`
+  - [ ] Renormalization preserves total energy per RFC
+  - [ ] Add test with collapsed band (all zeros)
+  - [ ] Add test with non-collapsed band (no modification)
+
+**Subsection 4.6.1 Verification:**
+- [ ] Run `cargo fmt`
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+- [ ] Run `cargo machete`
+- [ ] Anti-collapse PRNG matches libopus reference
+- [ ] Energy renormalization preserves total power
+- [ ] **RFC DEEP CHECK:** Verify against lines 6710-6729
+
+---
+
+#### 4.6.2: Denormalization
+
+**Reference:** RFC 6716 Section 4.3.6 (lines 6731-6736)
+
+**Purpose:** Multiply unit-norm PVQ shapes by square root of decoded energy
+
+**RFC Algorithm (lines 6733-6736):**
+```
+For each band:
+1. Convert energy from Q8 log domain to linear: linear = 2^(energy_q8 / 256)
+2. Take square root: scale = sqrt(linear)
+3. Multiply each bin: output[i] = shape[i] * scale
+```
+
+**Implementation Tasks:**
+
+- [ ] **Task 4.6.2.1:** Implement Q8-to-linear energy conversion
+  ```rust
+  /// Convert energy from Q8 log domain to linear
+  /// Formula: linear_energy = 2^(energy_q8 / 256.0)
+  fn energy_q8_to_linear(energy_q8: i16) -> f32 {
+      let exponent = f32::from(energy_q8) / 256.0;
+      2.0_f32.powf(exponent)
+  }
+  ```
+  - [ ] Correctly converts Q8 log format to linear
+  - [ ] Handles negative values (very low energy)
+  - [ ] Handles zero values (silence)
+  - [ ] Add test with known Q8 values
+
+- [ ] **Task 4.6.2.2:** Implement `denormalize_bands()`
+  ```rust
+  /// Denormalize bands by multiplying shapes by sqrt(energy)
+  ///
+  /// Combines:
+  /// - Unit-norm shapes from PVQ decoding (Phase 4.4)
+  /// - Energy envelope from energy decoding (Phase 4.2)
+  ///
+  /// # Arguments
+  /// * `shapes` - Unit-normalized frequency shapes per band
+  /// * `energy` - Final energy per band (Q8 format)
+  ///
+  /// # Returns
+  /// Denormalized frequency-domain coefficients
+  pub fn denormalize_bands(
+      &self,
+      shapes: &[Vec<f32>],
+      energy: &[i16; CELT_NUM_BANDS],
+  ) -> Vec<Vec<f32>>
+  ```
+  - [ ] Only processes bands in `[self.start_band, self.end_band)` range
+  - [ ] Correctly converts Q8 energy to linear domain
+  - [ ] Takes square root before multiplication per RFC
+  - [ ] Preserves shape structure (band/bin organization)
+  - [ ] Add test with unit shapes (verify energy scaling)
+  - [ ] Add test with known energy values
+
+**Subsection 4.6.2 Verification:**
+- [ ] Run `cargo fmt`
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+- [ ] Run `cargo machete`
+- [ ] Denormalization formula matches RFC exactly (sqrt of linear energy)
+- [ ] Q8 format conversion accurate
+- [ ] **RFC DEEP CHECK:** Verify against lines 6731-6736
+
+---
+
+#### 4.6.3: Inverse MDCT and Windowing
+
+**Reference:** RFC 6716 Section 4.3.7 (lines 6738-6754)
+
+**Purpose:** Transform frequency domain to time domain with windowing and overlap-add
+
+**RFC Algorithm (lines 6740-6754):**
+```
+1. Apply inverse MDCT: N frequency samples → 2N time samples (with 1/2 scaling)
+2. Apply Vorbis window: W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))
+3. Overlap-add with previous frame
+4. Store second half in overlap_buffer for next frame
+```
+
+**Implementation Tasks:**
+
+- [ ] **Task 4.6.3.1:** Implement Vorbis window function
+  ```rust
+  /// Compute Vorbis window coefficients (RFC lines 6746-6749)
+  /// W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))
+  fn compute_vorbis_window(length: usize) -> Vec<f32> {
+      use std::f32::consts::PI;
+      (0..length)
+          .map(|n| {
+              let inner = PI / 2.0 * (n as f32 + 0.5) / length as f32;
+              let outer = (PI / 2.0) * inner.sin();
+              outer.sin().powi(2)
+          })
+          .collect()
+  }
+  ```
+  - [ ] Formula matches RFC exactly (nested sin, squared)
+  - [ ] Produces values in [0.0, 1.0] range
+  - [ ] Symmetric window (W(n) = W(length-1-n))
+  - [ ] Add test comparing against reference
+  - [ ] Verify power complementarity property
+
+- [ ] **Task 4.6.3.2:** Implement inverse MDCT
+  ```rust
+  /// Apply inverse MDCT transform (RFC lines 6740-6742)
+  ///
+  /// Transforms N frequency-domain samples to 2*N time-domain samples
+  /// with 1/2 scaling factor.
+  ///
+  /// # Implementation Note
+  /// Can use FFT-based MDCT or direct DCT-IV computation.
+  /// See research/mdct-implementation.md for strategies.
+  pub fn inverse_mdct(&self, freq_data: &[f32]) -> Vec<f32>
+  ```
+  - [ ] Output length is exactly 2 * input length
+  - [ ] Applies 1/2 scaling factor per RFC
+  - [ ] Implementation decision: FFT-based vs direct DCT-IV
+  - [ ] Add test with simple frequency input (single tone)
+  - [ ] Verify against reference test vectors
+  - [ ] **Note:** Can start with `todo!()` and implement in later iteration
+
+- [ ] **Task 4.6.3.3:** Implement overlap-add
+  ```rust
+  /// Apply windowing and overlap-add with previous frame
+  ///
+  /// # Arguments
+  /// * `mdct_output` - Output from inverse MDCT (length 2*N)
+  ///
+  /// # Returns
+  /// Final time-domain samples (length N after overlap-add)
+  pub fn overlap_add(&mut self, mdct_output: &[f32]) -> Vec<f32>
+  ```
+  - [ ] Window applied to MDCT output before overlap
+  - [ ] First half overlaps with previous frame
+  - [ ] Second half stored in `CeltState.overlap_buffer`
+  - [ ] Output length equals frame_size
+  - [ ] Add test with known overlap buffer values
+  - [ ] Verify smooth transitions between frames
+
+**Subsection 4.6.3 Verification:**
+- [ ] Run `cargo fmt`
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+- [ ] Run `cargo machete`
+- [ ] Window function matches RFC formula exactly
+- [ ] MDCT implementation bit-exact or perceptually identical to libopus
+- [ ] Overlap-add produces continuous audio across frames
+- [ ] **RFC DEEP CHECK:** Verify against lines 6738-6754
+
+---
+
+#### 4.6.4: Main Frame Orchestration (CRITICAL)
+
+**Reference:** RFC 6716 Section 4.3 (complete CELT decode flow)
+
+**Purpose:** Wire together all Phase 4 components into complete CELT frame decoder
+
+**CRITICAL REQUIREMENT:**
+**This method MUST consume the `start_band` and `end_band` struct fields that are currently marked `#[allow(dead_code)]`. Failure to use these fields will block Phase 5 (Mode Integration).**
+
+**Implementation Tasks:**
+
+- [ ] **Task 4.6.4.1:** Define `DecodedFrame` output struct
+  ```rust
+  /// Decoded CELT frame output
+  #[derive(Debug, Clone)]
+  pub struct DecodedFrame {
+      /// PCM audio samples (f32 format)
+      /// Length: frame_size * channels
+      pub samples: Vec<f32>,
+
+      /// Sample rate
+      pub sample_rate: SampleRate,
+
+      /// Number of channels
+      pub channels: Channels,
+  }
+  ```
+  - [ ] Add to `src/celt/decoder.rs`
+  - [ ] Include proper documentation
+  - [ ] Add `#[must_use]` if appropriate
+
+- [ ] **Task 4.6.4.2:** Implement `decode_celt_frame()` orchestration
+  ```rust
+  /// Decode complete CELT frame
+  ///
+  /// RFC 6716 Section 4.3 (complete decode flow)
+  ///
+  /// **CRITICAL:** Uses `self.start_band` and `self.end_band` fields
+  /// throughout the decode pipeline (NOT hardcoded values).
+  ///
+  /// # Decoding Pipeline
+  /// 1. Global flags (silence, post-filter, transient, intra) - Phase 4.1
+  /// 2. Time-frequency parameters - Phase 4.5
+  /// 3. Energy envelope - Phase 4.2
+  /// 4. Bit allocation - Phase 4.3
+  /// 5. PVQ shape decoding - Phase 4.4
+  /// 6. Anti-collapse, denormalization, iMDCT, overlap-add - Phase 4.6
+  pub fn decode_celt_frame(
+      &mut self,
+      range_decoder: &mut RangeDecoder,
+  ) -> Result<DecodedFrame> {
+      // Phase 4.1: Global flags
+      let silence = self.decode_silence(range_decoder)?;
+      if silence {
+          return Ok(self.generate_silence_frame());
+      }
+
+      // Phase 4.5: TF parameters - USE self.start_band, self.end_band
+      self.decode_tf_changes(range_decoder, self.start_band, self.end_band)?;
+      self.decode_tf_select(range_decoder, self.start_band, self.end_band)?;
+
+      // Phase 4.2: Energy - USE self.start_band, self.end_band
+      // Phase 4.3: Allocation - USE self.start_band, self.end_band
+      // Phase 4.4: Shapes - USE self.start_band, self.end_band
+      // Phase 4.6: Synthesis
+
+      // ... (see full specification in task description)
+  }
+  ```
+  - [ ] **CRITICAL:** Uses `self.start_band` and `self.end_band` (NOT `0` and `CELT_NUM_BANDS`)
+  - [ ] All band-processing methods receive band range from struct fields
+  - [ ] Handles silence flag immediately (early return)
+  - [ ] Proper error propagation with `?` operator
+  - [ ] Add comprehensive documentation
+  - [ ] **Note:** PVQ shape decoding may be stubbed initially if Phase 4.4 incomplete
+
+- [ ] **Task 4.6.4.3:** Remove `#[allow(dead_code)]` from band range fields
+  ```rust
+  // In CeltDecoder struct definition (around line 97-101):
+
+  /// Starting band index (usually 0, can be 17 for narrowband)
+  ///
+  /// Used throughout decode pipeline to limit processing to coded bands.
+  /// Set by Phase 5 (mode detection) and Phase 7 (CTL commands).
+  start_band: usize,  // ← REMOVE #[allow(dead_code)]
+
+  /// Ending band index (usually CELT_NUM_BANDS, can vary by bandwidth)
+  ///
+  /// Used throughout decode pipeline to limit processing to coded bands.
+  /// Set by Phase 5 (mode detection) and Phase 7 (CTL commands).
+  end_band: usize,  // ← REMOVE #[allow(dead_code)]
+  ```
+  - [ ] Remove both `#[allow(dead_code)]` annotations
+  - [ ] Update documentation if needed
+  - [ ] Verify no clippy warnings after removal
+
+- [ ] **Task 4.6.4.4:** Add integration test for normal mode
+  ```rust
+  #[test]
+  fn test_decode_celt_frame_normal_mode() {
+      let mut decoder = CeltDecoder::new(
+          SampleRate::Hz48000,
+          Channels::Mono,
+          480
+      ).unwrap();
+
+      // Verify start_band=0, end_band=21 (defaults)
+      assert_eq!(decoder.start_band, 0);
+      assert_eq!(decoder.end_band, CELT_NUM_BANDS);
+
+      // Test with mock bitstream
+      // ... verify decode succeeds
+  }
+  ```
+
+- [ ] **Task 4.6.4.5:** Add integration test for narrowband mode simulation
+  ```rust
+  #[test]
+  fn test_decode_celt_frame_narrowband_simulation() {
+      let mut decoder = CeltDecoder::new(
+          SampleRate::Hz48000,
+          Channels::Mono,
+          480
+      ).unwrap();
+
+      // Simulate narrowband mode (Phase 5 will set this via mode detection)
+      decoder.start_band = 17;
+      decoder.end_band = CELT_NUM_BANDS;
+
+      // Test with mock bitstream
+      // Verify only bands 17-20 are processed
+  }
+  ```
+
+- [ ] **Task 4.6.4.6:** Add grep verification check
+  - [ ] Run: `rg "decode.*\(.*,\s*0\s*,\s*(21|CELT_NUM_BANDS)" packages/opus_native/src/celt/decoder.rs`
+  - [ ] **MUST return ZERO matches** (no hardcoded band ranges in method calls)
+  - [ ] Document this check in verification checklist
+
+**Subsection 4.6.4 Verification:**
+- [ ] Run `cargo fmt`
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt`
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
+- [ ] Run `cargo machete`
+- [ ] **CRITICAL:** `#[allow(dead_code)]` removed from `start_band` and `end_band`
+- [ ] **CRITICAL:** `decode_celt_frame()` uses `self.start_band`/`self.end_band`
+- [ ] **CRITICAL:** Grep check passes (no hardcoded `0, 21` in band-processing calls)
+- [ ] Test with `start_band=0, end_band=21` (normal mode) passes
+- [ ] Test with `start_band=17, end_band=21` (narrowband simulation) passes
+- [ ] **RFC DEEP CHECK:** Complete decode flow matches RFC Section 4.3
 
 **Key Outputs:**
 ```rust
@@ -10500,9 +10839,31 @@ pub struct DecodedFrame {
 
 ---
 
+---
+
+#### 4.6.5: Dependencies and Implementation Notes
+
+**Existing Dependencies (Already in Workspace):**
+- `thiserror` - Error handling
+- Standard library only for basic implementation
+
+**Potential New Dependencies:**
+- [ ] **Decision Point:** MDCT implementation strategy
+  - **Option A:** Direct DCT-IV implementation (more control, RFC compliance easier)
+  - **Option B:** FFT-based via `rustfft` crate (more efficient, industry standard)
+  - **Recommendation:** Start with direct implementation for RFC compliance, optimize later
+
+**Implementation Notes:**
+- Anti-collapse PRNG must match libopus exactly (constants: 1664525, 1013904223)
+- Energy conversion: Q8 format = base-2 log with 8 fractional bits
+- MDCT can be stubbed initially with `todo!()` to unblock other subsections
+- Window function critical for audio quality - verify against reference carefully
+
+---
+
 #### 4.6 Overall Verification Checklist
 
-After completing ALL subsections (4.6.1-4.6.3):
+After completing ALL subsections (4.6.1-4.6.4):
 
 - [ ] Run `cargo fmt` (format entire workspace)
 - [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
@@ -10545,13 +10906,13 @@ PCM Audio Output!
 
 | Phase | RFC Lines | Subsections | Status | Complexity |
 |-------|-----------|-------------|--------|------------|
-| 4.1   | 213       | 4           | ✅ COMPLETE | - |
+| 4.1   | 213       | 4           | ✅ COMPLETE | Medium |
 | 4.2   | 76        | 4           | ✅ COMPLETE | Medium |
 | 4.3   | 350       | 6           | ✅ COMPLETE | High |
 | 4.4   | 247       | 5           | ✅ COMPLETE | High |
-| 4.5   | 100       | 2           | 🔴 NOT STARTED | Medium |
-| 4.6   | 150       | 3           | 🔴 NOT STARTED | High |
-| **Total** | **1136** | **24** | **4/6 complete (67%)** | - |
+| 4.5   | 100       | 2           | ✅ COMPLETE | Medium |
+| 4.6   | 150       | 4           | 🔴 NOT STARTED | High |
+| **Total** | **1136** | **25** | **5/6 complete (83%)** | - |
 
 ### Critical Files Created (estimated):
 - `packages/opus_native/src/celt/decoder.rs` - 2000+ lines
