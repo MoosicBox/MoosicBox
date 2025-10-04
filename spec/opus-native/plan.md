@@ -10499,7 +10499,8 @@ The `start_band` and `end_band` fields enable:
   * Collapse masks indexing: `collapse_masks[i*C+c]` instead of `[i]`
   * Energy comparison: `MAX(energy[ch0], energy[ch1])` for stereo→mono playback
   * Band structure: Per-channel band support
-  * See `spec/opus-native/future-stereo-work.md` for full implementation checklist
+  * Per-channel PRNG: `anti_collapse_state[c]` instead of single state
+  * **See Phase 5.5.5** for full stereo anti-collapse implementation
 
   ```rust
   /// Apply anti-collapse processing (RFC lines 6717-6729)
@@ -10664,6 +10665,13 @@ Conversion formula: `2^(energy_q8/256.0)` matches RFC Section 4.3.2 Q8 definitio
   * Correctly processes coded bands [start_band, end_band) ✓
   * Preserves band structure for iMDCT input ✓
   * All 8 tests verify correct behavior including edge cases ✓
+
+**CURRENT LIMITATION - MONO ONLY:**
+Current implementation supports mono (C=1) only. Stereo support requires:
+* Energy indexing: `energy[i*C+c]` instead of `energy[i]`
+* Per-channel denormalization loop
+* Handle intensity/dual/mid-side band structures
+* **See Phase 5.5.6** for full stereo denormalization implementation
 
 ---
 
@@ -11034,18 +11042,25 @@ PCM Audio Output!
 
 ## Phase 5: Mode Integration & Hybrid
 
-**Reference:** RFC 6716 Section 4.5 (lines 6859-7158)
-**Goal:** Integrate SILK and CELT decoders with seamless mode switching
-**Scope:** Hybrid mode decoding, configuration switching, redundancy handling
+**Reference:** RFC 6716 Section 4.5 (lines 6859-7158), Section 4.3.7-4.3.8 (Stereo)
+**Goal:** Integrate SILK and CELT decoders with seamless mode switching + CELT stereo support
+**Scope:** Hybrid mode decoding, configuration switching, redundancy handling, CELT stereo modes
 **Feature:** `hybrid`
 **Status:** 🔴 NOT STARTED (blocked by Phase 4 completion)
-**Prerequisites:** Phase 3 complete (SILK), Phase 4 complete (CELT)
+**Prerequisites:** Phase 3 complete (SILK), Phase 4 complete (CELT mono)
 **Complexity:** High
+
+**Phase 5 Components:**
+1. **Sections 5.1-5.4:** Mode integration (SILK ↔ CELT ↔ Hybrid transitions)
+2. **Section 5.5:** CELT stereo extension (Intensity/Dual/Mid-Side stereo)
+3. **Section 5.6:** Bandwidth detection
+4. **Section 5.7:** Overall integration
 
 **Test Vector Usage:**
 - Create hybrid mode test vectors in `test-vectors/integration/hybrid/` directory
 - Create mode switching test vectors in `test-vectors/integration/transitions/` directory
-- Test all mode combinations and transition scenarios
+- Create CELT stereo test vectors in `test-vectors/integration/stereo/` directory
+- Test all mode combinations, transition scenarios, and stereo modes
 
 ---
 
@@ -11477,7 +11492,577 @@ match bandwidth {
 
 ---
 
-### 5.5: Bandwidth Detection
+### 5.5: CELT Stereo Support
+
+**Reference:** RFC 6716 Section 4.3.7-4.3.8 (Intensity/Dual/Mid-Side Stereo)
+**Goal:** Extend CELT decoder from mono (C=1) to stereo (C=2)
+**Status:** 🔴 NOT STARTED (blocked by Phase 4 completion)
+**Prerequisites:** Phase 4.6 complete (CELT mono synthesis)
+**Complexity:** High
+
+**Overview:**
+
+Phase 4 implements CELT decoder for **mono only (C=1)**. This section extends all Phase 4 components to support **stereo (C=2)** with three stereo modes:
+
+* **Intensity Stereo** (RFC 4.3.7.1): Share single PVQ decode across both channels for some bands
+* **Dual Stereo** (RFC 4.3.7.2): Independent PVQ decode per channel
+* **Mid-Side Stereo** (RFC 4.3.8): Decode mid (M) and side (S) channels, then transform to L/R
+
+**Critical Design Notes:**
+
+* **Indexing pattern:** All per-band arrays change from `[i]` (mono) to `[i*C+c]` (stereo)
+* **Data flow:** Same sequence (Energy → Allocation → PVQ → Anti-Collapse → Denorm → iMDCT), but per-channel
+* **Backward compatibility:** Mono code (C=1) is special case of stereo code (C=2)
+
+---
+
+#### 5.5.1: Stereo Data Structure Extensions
+
+**Reference:** RFC 6716 Section 4.3.7 (Stereo PVQ), libopus `celt_decoder.c` stereo arrays
+**Goal:** Expand Phase 4 data structures from mono to stereo
+**Status:** 🔴 NOT STARTED
+
+**Required Changes:**
+
+**1. Energy Arrays (Phase 4.2 Extension):**
+```rust
+// Current (mono):
+prev_energy: [i16; CELT_NUM_BANDS]
+prev_prev_energy: [i16; CELT_NUM_BANDS]
+
+// Stereo:
+prev_energy: [i16; CELT_NUM_BANDS * 2]      // [i*C+c] indexing
+prev_prev_energy: [i16; CELT_NUM_BANDS * 2]
+```
+
+**2. Collapse Masks (Phase 4.4 Extension):**
+```rust
+// Current (mono):
+collapse_masks: Vec<u8>  // length = CELT_NUM_BANDS
+
+// Stereo:
+collapse_masks: Vec<u8>  // length = CELT_NUM_BANDS * C
+// Access: collapse_masks[i*C + c] where c=0 (left), c=1 (right)
+```
+
+**3. Anti-Collapse State (Phase 4.6.1 Extension):**
+```rust
+// Current (mono):
+pub struct CeltState {
+    anti_collapse_state: AntiCollapseState,  // Single PRNG
+    // ...
+}
+
+// Stereo:
+pub struct CeltState {
+    anti_collapse_state: [AntiCollapseState; 2],  // Per-channel PRNG
+    // ...
+}
+```
+
+**4. Band Arrays (Phase 4.4/4.6 Extension):**
+```rust
+// Current (mono):
+bands: Vec<Vec<f32>>  // [band_idx][bin]
+
+// Stereo option 1 (interleaved):
+bands: Vec<Vec<f32>>  // [band_idx * C + channel][bin]
+
+// Stereo option 2 (nested):
+bands: Vec<[Vec<f32>; 2]>  // [band_idx][channel][bin]
+```
+
+**Implementation Tasks:**
+
+- [ ] **Expand energy arrays to CELT_NUM_BANDS * C:**
+  * Update `CeltState` field definitions
+  * Update energy decode methods (Phase 4.2) for per-channel indexing
+  * Update anti-collapse energy access (Phase 4.6.1)
+
+- [ ] **Expand collapse_masks array:**
+  * Update PVQ decoder (Phase 4.4) allocation
+  * Update anti-collapse collapse mask access (Phase 4.6.1)
+
+- [ ] **Add per-channel AntiCollapseState:**
+  * Change `anti_collapse_state: AntiCollapseState` to array `[AntiCollapseState; 2]`
+  * Update reset logic to reset both channels
+  * Update anti-collapse to use correct channel's PRNG
+
+- [ ] **Choose band array structure:**
+  * Decide between interleaved vs nested approach
+  * Update all band accessors (PVQ, anti-collapse, denorm, iMDCT)
+  * Document indexing pattern in comments
+
+- [ ] **Add unit tests:**
+  * Test stereo energy array indexing
+  * Test collapse mask indexing `[i*C+c]`
+  * Test per-channel PRNG independence
+
+**Verification:**
+
+- [ ] All Phase 4 mono tests still pass (C=1 specialization)
+- [ ] Stereo array sizes correct (double mono size)
+- [ ] Indexing formulas match libopus (`[i*C+c]` pattern)
+
+---
+
+#### 5.5.2: Intensity Stereo
+
+**Reference:** RFC 6716 Section 4.3.7.1 (lines 6777-6791), libopus `quant_bands.c:unquant_intensity_stereo()`
+**Goal:** Implement intensity stereo mode (shared PVQ for some bands)
+**Status:** 🔴 NOT STARTED
+
+**RFC Algorithm (lines 6777-6791):**
+```
+1. Parse intensity stereo flag (if enabled in TOC)
+2. Determine intensity band range (bands sharing single PVQ decode)
+3. For intensity bands:
+   - Decode single PVQ shape
+   - Apply SAME shape to both L/R channels
+   - Scale by per-channel energy
+4. For non-intensity bands:
+   - Decode independent PVQ per channel
+```
+
+**Implementation Tasks:**
+
+- [ ] **Decode intensity stereo flag:**
+  ```rust
+  pub fn decode_intensity_stereo_flag(
+      &self,
+      range_decoder: &mut RangeDecoder,
+  ) -> Result<Option<usize>> {
+      // Returns intensity band cutoff, or None if disabled
+      // RFC: Uses variable probability based on bandwidth
+  }
+  ```
+
+- [ ] **Implement intensity band detection:**
+  * Determine which bands use intensity (0..intensity_cutoff)
+  * Remaining bands use dual stereo
+
+- [ ] **Update PVQ decoder for intensity:**
+  * For intensity bands: decode once, copy to both channels
+  * For dual bands: decode per-channel
+
+- [ ] **Add tests:**
+  * Test intensity flag decoding
+  * Test PVQ sharing for intensity bands
+  * Test dual decode for non-intensity bands
+
+**Verification:**
+
+- [ ] Intensity bands share single PVQ decode
+- [ ] Non-intensity bands have independent PVQ
+- [ ] Energy scaling correct per channel
+
+---
+
+#### 5.5.3: Dual Stereo
+
+**Reference:** RFC 6716 Section 4.3.7.2 (lines 6793-6800), libopus `quant_bands.c:unquant_coarse_energy_impl()`
+**Goal:** Implement dual stereo mode (independent PVQ per channel)
+**Status:** 🔴 NOT STARTED
+
+**RFC Algorithm (lines 6793-6800):**
+```
+1. Parse dual stereo flags per band
+2. For each band:
+   IF dual_stereo[band]:
+     - Decode left channel PVQ shape
+     - Decode right channel PVQ shape (independent)
+   ELSE:
+     - Use intensity stereo (single PVQ)
+```
+
+**Implementation Tasks:**
+
+- [ ] **Decode dual stereo flags:**
+  ```rust
+  pub fn decode_dual_stereo_flags(
+      &mut self,
+      range_decoder: &mut RangeDecoder,
+      intensity_cutoff: Option<usize>,
+  ) -> Result<Vec<bool>> {
+      // Returns per-band dual stereo flags
+      // Only for bands >= intensity_cutoff
+  }
+  ```
+
+- [ ] **Update PVQ loop for dual stereo:**
+  ```rust
+  for band in 0..CELT_NUM_BANDS {
+      if band < intensity_cutoff {
+          // Intensity: decode once, share
+          let shape = decode_pvq_shape(...)?;
+          bands[band*C + 0] = shape.clone();
+          bands[band*C + 1] = shape;
+      } else if dual_stereo_flags[band] {
+          // Dual: decode per channel
+          bands[band*C + 0] = decode_pvq_shape(...)?;
+          bands[band*C + 1] = decode_pvq_shape(...)?;
+      } else {
+          // Intensity in high bands
+          let shape = decode_pvq_shape(...)?;
+          bands[band*C + 0] = shape.clone();
+          bands[band*C + 1] = shape;
+      }
+  }
+  ```
+
+- [ ] **Add tests:**
+  * Test dual flag decoding
+  * Test independent PVQ for dual bands
+  * Test interaction with intensity stereo
+
+**Verification:**
+
+- [ ] Dual bands have independent PVQ decodes
+- [ ] Energy/collapse handling correct per channel
+- [ ] Matches libopus dual stereo behavior
+
+---
+
+#### 5.5.4: Mid-Side Stereo
+
+**Reference:** RFC 6716 Section 4.3.8 (lines 6802-6805), libopus `celt_decoder.c:celt_decode_with_ec()`
+**Goal:** Implement mid-side stereo transformation
+**Status:** 🔴 NOT STARTED
+
+**RFC Algorithm (lines 6802-6805):**
+```
+1. Decode mid-side flag (1 bit)
+2. IF mid-side enabled:
+   - Decode mid channel (M) as normal mono
+   - Decode side channel (S) with different energy probabilities
+   - Transform: L = (M + S) / sqrt(2)
+               R = (M - S) / sqrt(2)
+3. ELSE:
+   - Use left/right direct decode
+```
+
+**Implementation Tasks:**
+
+- [ ] **Decode mid-side flag:**
+  ```rust
+  pub fn decode_mid_side_flag(
+      &self,
+      range_decoder: &mut RangeDecoder,
+  ) -> Result<bool> {
+      // 1 bit indicating mid-side mode
+  }
+  ```
+
+- [ ] **Handle side channel energy:**
+  * Side channel uses different probability distribution
+  * Lower energy typically (RFC line 6803)
+
+- [ ] **Implement mid-side transformation:**
+  ```rust
+  fn apply_mid_side_transform(
+      mid: &[Vec<f32>],
+      side: &[Vec<f32>],
+  ) -> [Vec<Vec<f32>>; 2] {
+      let mut left = Vec::new();
+      let mut right = Vec::new();
+
+      for (m_band, s_band) in mid.iter().zip(side.iter()) {
+          let mut l_band = Vec::new();
+          let mut r_band = Vec::new();
+
+          for (&m, &s) in m_band.iter().zip(s_band.iter()) {
+              let norm = std::f32::consts::SQRT_2;
+              l_band.push((m + s) / norm);
+              r_band.push((m - s) / norm);
+          }
+
+          left.push(l_band);
+          right.push(r_band);
+      }
+
+      [left, right]
+  }
+  ```
+
+- [ ] **Add tests:**
+  * Test mid-side flag decoding
+  * Test mid-side transformation formula
+  * Test energy normalization (sqrt(2) factor)
+
+**Verification:**
+
+- [ ] Mid-side flag correctly decoded
+- [ ] Transformation preserves energy
+- [ ] Matches libopus mid-side behavior
+
+---
+
+#### 5.5.5: Stereo Anti-Collapse Updates
+
+**Reference:** Phase 4.6.1, libopus `bands.c:anti_collapse()` stereo indexing
+**Goal:** Update anti-collapse from mono to stereo
+**Status:** 🔴 NOT STARTED
+
+**Current Limitation (from Phase 4.6.1):**
+```rust
+// Phase 4.6.1 implemented mono only:
+collapse_masks[band_idx]           // Mono indexing
+current_energy[band_idx]           // Mono indexing
+self.state.anti_collapse_state     // Single PRNG
+```
+
+**Required Changes:**
+
+**1. Collapse Masks Indexing:**
+```rust
+// Current (mono):
+let collapse_mask = collapse_masks[band_idx];
+
+// Stereo:
+let collapse_mask_left = collapse_masks[band_idx * C + 0];
+let collapse_mask_right = collapse_masks[band_idx * C + 1];
+```
+
+**2. Energy MAX Logic for Stereo→Mono Playback:**
+```rust
+// RFC line 6727: "minimum energy over the two previous frames"
+// For stereo decoded as mono, use MAX of both channels
+
+let current_energy_effective = if C == 2 {
+    // Use max of left/right to prevent collapse in either channel
+    current_energy[band_idx * C + 0].max(current_energy[band_idx * C + 1])
+} else {
+    current_energy[band_idx]
+};
+```
+
+**3. Per-Channel PRNG:**
+```rust
+// Current (mono):
+let random = self.state.anti_collapse_state.next_random();
+
+// Stereo:
+let random_left = self.state.anti_collapse_state[0].next_random();
+let random_right = self.state.anti_collapse_state[1].next_random();
+```
+
+**Implementation Tasks:**
+
+- [ ] **Add channel parameter to `apply_anti_collapse()`:**
+  ```rust
+  pub fn apply_anti_collapse(
+      &mut self,
+      bands: &mut [Vec<f32>],
+      current_energy: &[i16],  // Now size BANDS * C
+      collapse_masks: &[u8],   // Now size BANDS * C
+      pulses: &[u16; CELT_NUM_BANDS],
+      anti_collapse_on: bool,
+      channels: usize,  // NEW: 1 or 2
+  ) -> Result<()>
+  ```
+
+- [ ] **Update collapse mask indexing:**
+  * Loop over channels: `for c in 0..channels`
+  * Index: `collapse_masks[band_idx * channels + c]`
+
+- [ ] **Implement energy MAX logic:**
+  * When `channels == 2`, use max of both channel energies
+  * Prevents collapse in stereo→mono scenarios
+
+- [ ] **Use per-channel PRNG:**
+  * Access: `self.state.anti_collapse_state[c].next_random()`
+  * Independent noise per channel
+
+- [ ] **Add stereo tests:**
+  * Test both channels collapsed
+  * Test one channel collapsed, one not
+  * Test stereo→mono energy MAX logic
+  * Test independent PRNG per channel
+
+**Verification:**
+
+- [ ] Stereo indexing matches libopus `[i*C+c]` pattern
+- [ ] Energy MAX prevents stereo collapse artifacts
+- [ ] Per-channel noise is independent
+- [ ] Mono code (C=1) still works unchanged
+
+---
+
+#### 5.5.6: Stereo Denormalization
+
+**Reference:** Phase 4.6.2, libopus `celt_decoder.c` stereo denormalization
+**Goal:** Update denormalization from mono to stereo
+**Status:** 🔴 NOT STARTED
+
+**Current Limitation (from Phase 4.6.2):**
+```rust
+// Phase 4.6.2 implemented mono only:
+energy[band_idx]  // Mono energy indexing
+```
+
+**Required Changes:**
+
+**1. Per-Channel Energy Indexing:**
+```rust
+// Current (mono):
+let linear_energy = Self::energy_q8_to_linear(energy[band_idx]);
+
+// Stereo:
+for c in 0..channels {
+    let linear_energy = Self::energy_q8_to_linear(energy[band_idx * channels + c]);
+    let scale = linear_energy.sqrt();
+
+    // Scale channel c's band
+    for &sample in &shapes[band_idx * channels + c] {
+        denorm_band.push(sample * scale);
+    }
+}
+```
+
+**2. Handle Intensity/Dual/Mid-Side Band Structures:**
+* Intensity bands: Same shape, different energy per channel
+* Dual bands: Different shapes, different energy
+* Mid-side: Transform AFTER denormalization
+
+**Implementation Tasks:**
+
+- [ ] **Update `denormalize_bands()` signature:**
+  ```rust
+  pub fn denormalize_bands(
+      &self,
+      shapes: &[Vec<f32>],      // Now size BANDS * C
+      energy: &[i16],           // Now size BANDS * C
+      channels: usize,          // NEW: 1 or 2
+  ) -> Result<Vec<Vec<f32>>>
+  ```
+
+- [ ] **Add per-channel loop:**
+  ```rust
+  for band_idx in self.start_band..self.end_band {
+      for c in 0..channels {
+          let shape_idx = band_idx * channels + c;
+          let energy_idx = band_idx * channels + c;
+
+          let linear_energy = Self::energy_q8_to_linear(energy[energy_idx]);
+          let scale = linear_energy.sqrt();
+
+          // Denormalize channel c
+          denormalized[shape_idx] = shapes[shape_idx]
+              .iter()
+              .map(|&x| x * scale)
+              .collect();
+      }
+  }
+  ```
+
+- [ ] **Add stereo tests:**
+  * Test per-channel energy scaling
+  * Test intensity bands (same shape, different energy)
+  * Test dual bands (different shapes, different energy)
+  * Test mid-side denormalization
+
+**Verification:**
+
+- [ ] Per-channel energy indexing correct
+- [ ] Stereo band structure preserved
+- [ ] Mono code (C=1) still works unchanged
+- [ ] Matches libopus denormalization output
+
+---
+
+#### 5.5.7: Overall Stereo Integration
+
+**Goal:** Integrate all stereo subsections into working stereo CELT decoder
+**Status:** 🔴 NOT STARTED
+
+**Integration Tasks:**
+
+- [ ] **Update main CELT decode flow:**
+  ```rust
+  pub fn decode_celt_frame(&mut self, ...) -> Result<DecodedFrame> {
+      let channels = self.channels.count();  // 1 or 2
+
+      // 1. Decode energy (per-channel)
+      let energy = self.decode_energy(range_decoder, channels)?;
+
+      // 2. Decode allocation
+      let allocation = self.compute_allocation(...)?;
+
+      // 3. Decode stereo mode flags
+      let intensity_cutoff = if channels == 2 {
+          self.decode_intensity_stereo_flag(range_decoder)?
+      } else {
+          None
+      };
+
+      let dual_stereo_flags = if channels == 2 {
+          self.decode_dual_stereo_flags(range_decoder, intensity_cutoff)?
+      } else {
+          vec![]
+      };
+
+      let mid_side = if channels == 2 {
+          self.decode_mid_side_flag(range_decoder)?
+      } else {
+          false
+      };
+
+      // 4. Decode PVQ shapes (stereo-aware)
+      let shapes = self.decode_pvq_shapes(
+          range_decoder,
+          &allocation,
+          intensity_cutoff,
+          &dual_stereo_flags,
+          channels,
+      )?;
+
+      // 5. Apply anti-collapse (stereo)
+      self.apply_anti_collapse(
+          &mut shapes,
+          &energy,
+          &collapse_masks,
+          &pulses,
+          anti_collapse_on,
+          channels,
+      )?;
+
+      // 6. Denormalize (stereo)
+      let mut denormalized = self.denormalize_bands(&shapes, &energy, channels)?;
+
+      // 7. Apply mid-side transform if needed
+      if mid_side {
+          denormalized = self.apply_mid_side_transform(&denormalized)?;
+      }
+
+      // 8. Inverse MDCT (per-channel)
+      let time_domain = self.inverse_mdct(&denormalized, channels)?;
+
+      Ok(time_domain)
+  }
+  ```
+
+- [ ] **Add stereo integration tests:**
+  * End-to-end intensity stereo decode
+  * End-to-end dual stereo decode
+  * End-to-end mid-side stereo decode
+  * Mixed intensity/dual within single frame
+
+- [ ] **Verify against libopus:**
+  * Compare stereo output with reference implementation
+  * Test all stereo mode combinations
+  * Verify channel separation
+
+**Verification:**
+
+- [ ] All stereo modes decode correctly
+- [ ] Output matches libopus reference
+- [ ] Mono code (C=1) unaffected
+- [ ] Zero clippy warnings
+- [ ] All tests pass
+
+---
+
+### 5.6: Bandwidth Detection
 
 **Reference:** RFC 6716 Section 2.1.3 (Audio Bandwidth), Section 3.1 (TOC byte)
 **Goal:** Detect and handle audio bandwidth from TOC
@@ -11551,7 +12136,7 @@ match bandwidth {
   }
   ```
 
-#### 5.5 Verification Checklist
+#### 5.6 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features hybrid` (compiles)
@@ -11563,7 +12148,7 @@ match bandwidth {
 
 ---
 
-### 5.6: Overall Phase 5 Integration
+### 5.7: Overall Phase 5 Integration
 
 **Goal:** Integrate all subsections into unified decoder
 **Status:** 🔴 NOT STARTED
