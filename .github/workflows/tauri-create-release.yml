@@ -9,6 +9,8 @@ jobs:
     create-release:
         runs-on: ubuntu-latest
 
+        environment: prod # This triggers the approval requirement
+
         steps:
             - uses: actions/checkout@v4
               with:
