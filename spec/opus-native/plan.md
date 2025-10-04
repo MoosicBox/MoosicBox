@@ -10401,6 +10401,8 @@ The `start_band` and `end_band` fields enable:
 
 **Subsections (4 subsections estimated):**
 
+**STATUS:** 🟡 **IN PROGRESS** - 2/3 tasks complete in Section 4.6.1
+
 #### 4.6.1: Anti-Collapse Processing
 
 **Reference:** RFC 6716 Section 4.3.5 (lines 6710-6729)
@@ -10424,7 +10426,7 @@ The `start_band` and `end_band` fields enable:
 
 **Implementation Tasks:**
 
-- [ ] **Task 4.6.1.1:** Implement `decode_anti_collapse_bit()`
+- [x] **Task 4.6.1.1:** Implement `decode_anti_collapse_bit()`
   ```rust
   /// Decode anti-collapse flag (RFC lines 6715-6716)
   /// Only decoded when transient flag is set. Uses uniform 1/2 probability.
@@ -10435,11 +10437,14 @@ The `start_band` and `end_band` fields enable:
       range_decoder.ec_dec_bit_logp(1)
   }
   ```
-  - [ ] Only decodes when `self.transient == true`
-  - [ ] Uses `ec_dec_bit_logp(1)` for 1/2 probability
-  - [ ] Add test with transient=true and transient=false cases
+  - [x] Only decodes when `self.transient == true`
+  Implemented in decoder.rs:1210-1236 with early return when !self.transient
+  - [x] Uses `ec_dec_bit_logp(1)` for 1/2 probability
+  Uses ec_dec_bit_logp(1) per RFC Section 4.3.5 lines 6715-6716
+  - [x] Add test with transient=true and transient=false cases
+  Added test_decode_anti_collapse_bit_transient_true (decoder.rs:2103-2113) and test_decode_anti_collapse_bit_transient_false (decoder.rs:2115-2127)
 
-- [ ] **Task 4.6.1.2:** Implement pseudo-random number generator in `AntiCollapseState`
+- [x] **Task 4.6.1.2:** Implement pseudo-random number generator in `AntiCollapseState`
   ```rust
   impl AntiCollapseState {
       /// Linear congruential generator matching libopus celt/celt.c
@@ -10456,10 +10461,14 @@ The `start_band` and `end_band` fields enable:
       }
   }
   ```
-  - [ ] LCG constants match libopus exactly (1664525, 1013904223)
-  - [ ] Uses wrapping arithmetic for u32 overflow
-  - [ ] `next_random_f32()` produces values in [-1.0, 1.0]
-  - [ ] Add test comparing against known libopus sequence
+  - [x] LCG constants match libopus exactly (1664525, 1013904223)
+  Implemented in decoder.rs:78-83 with exact constants 1_664_525 and 1_013_904_223
+  - [x] Uses wrapping arithmetic for u32 overflow
+  Uses wrapping_mul and wrapping_add for proper u32 overflow behavior
+  - [x] `next_random_f32()` produces values in [-1.0, 1.0]
+  Implemented in decoder.rs:93-103, converts u32 to f32 in [-1.0, 1.0] range
+  - [x] Add test comparing against known libopus sequence
+  Added test_anti_collapse_prng_lcg_formula (decoder.rs:2064-2076) verifying first 3 iterations and wrapping behavior; test_anti_collapse_prng_lcg_constants (decoder.rs:2129-2137) verifying exact LCG formula
 
 - [ ] **Task 4.6.1.3:** Implement `apply_anti_collapse()`
   ```rust

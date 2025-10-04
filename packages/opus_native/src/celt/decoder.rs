@@ -61,8 +61,47 @@ pub struct PostFilterState {
 /// Anti-collapse state (RFC Section 4.3.5)
 #[derive(Debug, Clone)]
 pub struct AntiCollapseState {
-    /// Seed for random number generator
+    /// Seed for random number generator (LCG: 1664525, 1013904223)
     pub seed: u32,
+}
+
+impl AntiCollapseState {
+    /// Linear congruential generator matching libopus celt/celt.c
+    ///
+    /// Formula: seed = (seed * 1664525) + 1013904223
+    ///
+    /// # RFC Reference
+    ///
+    /// RFC 6716 Section 4.3.5 (lines 6717-6729)
+    ///
+    /// # Note
+    ///
+    /// TODO(Task 4.6.1.3): Remove `#[allow(dead_code)]` when `apply_anti_collapse()` is implemented
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn, dead_code)]
+    pub fn next_random(&mut self) -> u32 {
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        self.seed
+    }
+
+    /// Generate random value in range [-1.0, 1.0]
+    ///
+    /// # Returns
+    ///
+    /// * Uniformly distributed value in [-1.0, 1.0]
+    ///
+    /// # Note
+    ///
+    /// TODO(Task 4.6.1.3): Remove `#[allow(dead_code)]` when `apply_anti_collapse()` is implemented
+    #[must_use]
+    #[allow(clippy::cast_precision_loss, dead_code)]
+    pub fn next_random_f32(&mut self) -> f32 {
+        let r = self.next_random();
+        (r as f32) / (u32::MAX as f32 / 2.0) - 1.0
+    }
 }
 
 impl CeltState {
@@ -1174,6 +1213,33 @@ impl CeltDecoder {
         self.tf_resolution.clone_from(&tf_resolution);
         Ok(tf_resolution)
     }
+
+    /// Decodes anti-collapse flag (RFC Section 4.3.5, lines 6715-6716)
+    ///
+    /// Only decoded when transient flag is set. Uses uniform 1/2 probability.
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder instance
+    ///
+    /// # Returns
+    ///
+    /// * `true` if anti-collapse should be applied, `false` otherwise
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoding fails
+    ///
+    /// # RFC Reference
+    ///
+    /// RFC 6716 Section 4.3.5 (lines 6715-6716): "When the frame has the
+    /// transient bit set, an anti-collapse bit is decoded."
+    pub fn decode_anti_collapse_bit(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+        if !self.transient {
+            return Ok(false);
+        }
+        range_decoder.ec_dec_bit_logp(1)
+    }
 }
 
 #[cfg(test)]
@@ -1986,6 +2052,102 @@ mod tests {
         assert_eq!(TF_SELECT_TABLE[1][1][1], [1, -1]); // 5ms
         assert_eq!(TF_SELECT_TABLE[2][1][1], [1, -1]); // 10ms
         assert_eq!(TF_SELECT_TABLE[3][1][1], [1, -1]); // 20ms
+    }
+
+    // Phase 4.6.1: Anti-Collapse Processing Tests
+
+    #[test]
+    fn test_anti_collapse_prng_lcg_formula() {
+        use super::AntiCollapseState;
+
+        let mut state = AntiCollapseState { seed: 0 };
+
+        // First iteration: 0 * 1664525 + 1013904223 = 1013904223
+        let r1 = state.next_random();
+        assert_eq!(r1, 1_013_904_223);
+
+        // Second iteration: 1013904223 * 1664525 + 1013904223 = ...
+        let r2 = state.next_random();
+        assert_eq!(
+            r2,
+            1_013_904_223_u32
+                .wrapping_mul(1_664_525)
+                .wrapping_add(1_013_904_223)
+        );
+
+        // Verify wrapping behavior
+        let r3 = state.next_random();
+        assert!(r3 > 0); // Should wrap around, not panic
+    }
+
+    #[test]
+    fn test_anti_collapse_prng_range() {
+        use super::AntiCollapseState;
+
+        let mut state = AntiCollapseState { seed: 42 };
+
+        // Generate multiple random values and verify range
+        for _ in 0..100 {
+            let val = state.next_random_f32();
+            assert!(
+                (-1.0..=1.0).contains(&val),
+                "Value {val} outside [-1.0, 1.0] range"
+            );
+        }
+    }
+
+    #[test]
+    fn test_anti_collapse_prng_distribution() {
+        use super::AntiCollapseState;
+
+        let mut state = AntiCollapseState { seed: 123 };
+
+        // Verify values are distributed (not all the same)
+        let samples: Vec<f32> = (0..10).map(|_| state.next_random_f32()).collect();
+        let all_same = samples
+            .windows(2)
+            .all(|w| (w[0] - w[1]).abs() < f32::EPSILON);
+        assert!(!all_same, "PRNG should produce varying values");
+    }
+
+    #[test]
+    fn test_decode_anti_collapse_bit_transient_true() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        decoder.transient = true;
+
+        // Should decode bit when transient is true
+        let result = decoder.decode_anti_collapse_bit(&mut range_decoder);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decode_anti_collapse_bit_transient_false() {
+        let data = vec![0x00, 0x00, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // transient defaults to false
+        assert!(!decoder.transient);
+
+        // Should return false immediately without decoding
+        let result = decoder.decode_anti_collapse_bit(&mut range_decoder);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_anti_collapse_prng_lcg_constants() {
+        use super::AntiCollapseState;
+
+        // Verify LCG constants match libopus exactly
+        // From libopus celt/celt.c: seed = seed * 1664525 + 1013904223
+        let mut state = AntiCollapseState { seed: 1 };
+
+        let r = state.next_random();
+        assert_eq!(r, 1_u32.wrapping_mul(1_664_525).wrapping_add(1_013_904_223));
     }
 
     #[test]
