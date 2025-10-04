@@ -236,3 +236,75 @@ pub const CACHE_CAPS: [u8; 168] = [
 pub const LOG2_FRAC_TABLE: [u8; 24] = [
     0, 8, 13, 16, 19, 21, 23, 24, 26, 27, 28, 29, 30, 31, 32, 32, 33, 34, 34, 35, 36, 36, 37, 37,
 ];
+
+/// TF resolution adjustment table from RFC 6716 Tables 60-63
+///
+/// RFC 6716 Section 4.3.4.5 (lines 6633-6697)
+///
+/// Maps (LM, isTransient, `tf_select`, `tf_change`) → TF resolution adjustment
+/// * LM = `log2(frame_size / shortest_frame)`: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
+/// * isTransient: 0=non-transient (long MDCT), 1=transient (short MDCTs)
+/// * `tf_select`: 0 or 1 (only decoded when it affects result per RFC line 6020-6023)
+/// * `tf_change`: 0=no change from base, 1=change from base (per-band flag)
+///
+/// Index formula: `TF_SELECT_TABLE[LM][isTransient][tf_select][tf_change]`
+///
+/// Each entry is a signed adjustment to the base TF resolution.
+/// * Negative values increase time resolution (shorter transforms)
+/// * Positive values increase frequency resolution (longer transforms)
+///
+/// Reference: RFC 6716 Tables 60-63
+pub const TF_SELECT_TABLE: [[[[i8; 2]; 2]; 2]; 4] = [
+    // LM=0 (2.5ms frames)
+    [
+        // Non-transient
+        [
+            [0, -1], // tf_select=0, [tf_change=0, tf_change=1] (Table 60)
+            [0, -1], // tf_select=1, [tf_change=0, tf_change=1] (Table 61)
+        ],
+        // Transient
+        [
+            [0, -1], // tf_select=0 (Table 62)
+            [0, -1], // tf_select=1 (Table 63)
+        ],
+    ],
+    // LM=1 (5ms frames)
+    [
+        // Non-transient
+        [
+            [0, -1], // tf_select=0 (Table 60)
+            [0, -2], // tf_select=1 (Table 61)
+        ],
+        // Transient
+        [
+            [1, 0],  // tf_select=0 (Table 62)
+            [1, -1], // tf_select=1 (Table 63)
+        ],
+    ],
+    // LM=2 (10ms frames)
+    [
+        // Non-transient
+        [
+            [0, -2], // tf_select=0 (Table 60)
+            [0, -3], // tf_select=1 (Table 61)
+        ],
+        // Transient
+        [
+            [2, 0],  // tf_select=0 (Table 62)
+            [1, -1], // tf_select=1 (Table 63)
+        ],
+    ],
+    // LM=3 (20ms frames)
+    [
+        // Non-transient
+        [
+            [0, -2], // tf_select=0 (Table 60)
+            [0, -3], // tf_select=1 (Table 61)
+        ],
+        // Transient
+        [
+            [3, 0],  // tf_select=0 (Table 62)
+            [1, -1], // tf_select=1 (Table 63)
+        ],
+    ],
+];

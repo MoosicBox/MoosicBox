@@ -91,6 +91,44 @@ pub struct CeltDecoder {
     channels: Channels,
     frame_size: usize, // In samples
     state: CeltState,
+
+    // Band configuration (matching libopus st->start and st->end)
+    /// Starting band index (usually 0, can be 17 for narrowband)
+    ///
+    /// **CRITICAL TODO (Phase 4.6):** Remove `#[allow(dead_code)]` and use in `decode_celt_frame()`
+    ///
+    /// This field MUST be consumed by the main orchestration function:
+    /// ```ignore
+    /// self.decode_tf_changes(range_decoder, self.start_band, self.end_band)?;
+    /// self.compute_allocation(..., self.start_band, self.end_band, ...)?;
+    /// ```
+    ///
+    /// Will be SET by:
+    /// - Phase 5: Mode detection (narrowband sets `start_band = 17`)
+    /// - Phase 7: CTL commands (`CELT_SET_START_BAND_REQUEST`)
+    #[allow(dead_code)]
+    start_band: usize,
+    /// Ending band index (usually `CELT_NUM_BANDS`, can vary by bandwidth)
+    ///
+    /// **CRITICAL TODO (Phase 4.6):** Remove `#[allow(dead_code)]` and use in `decode_celt_frame()`
+    ///
+    /// This field MUST be consumed by the main orchestration function.
+    ///
+    /// Will be SET by:
+    /// - Phase 5: Custom mode detection via TOC byte
+    /// - Phase 7: CTL commands (`CELT_SET_END_BAND_REQUEST`)
+    #[allow(dead_code)]
+    end_band: usize,
+
+    // Transient state (RFC Section 4.3.1)
+    /// Global transient flag (RFC line 6011)
+    transient: bool,
+    /// TF select index (RFC line 6020)
+    tf_select: Option<u8>,
+    /// Per-band TF change flags (RFC line 6016)
+    tf_change: Vec<bool>,
+    /// Computed TF resolution per band
+    tf_resolution: Vec<u8>,
 }
 
 impl CeltDecoder {
@@ -126,6 +164,12 @@ impl CeltDecoder {
             channels,
             frame_size,
             state: CeltState::new(frame_size, num_channels),
+            start_band: 0,
+            end_band: CELT_NUM_BANDS,
+            transient: false,
+            tf_select: None,
+            tf_change: Vec::new(),
+            tf_resolution: Vec::new(),
         })
     }
 
@@ -153,14 +197,16 @@ impl CeltDecoder {
         range_decoder.ec_dec_bit_logp(1)
     }
 
-    /// Decodes transient flag (RFC Table 56)
+    /// Decodes transient flag (RFC Section 4.3.1, lines 6011-6015)
     ///
     /// # Errors
     ///
     /// Returns an error if range decoding fails.
-    pub fn decode_transient(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+    pub fn decode_transient_flag(&mut self, range_decoder: &mut RangeDecoder) -> Result<bool> {
         let value = range_decoder.ec_dec_icdf(CELT_TRANSIENT_PDF, 8)?;
-        Ok(value == 1)
+        let transient = value == 1;
+        self.transient = transient;
+        Ok(transient)
     }
 
     /// Decodes intra flag (RFC Table 56)
@@ -851,6 +897,283 @@ impl CeltDecoder {
             balance,
         })
     }
+
+    /// Compute LM (log2 of frame size relative to shortest)
+    ///
+    /// Helper for `TF_SELECT_TABLE` indexing
+    ///
+    /// # Returns
+    ///
+    /// LM value: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
+    #[must_use]
+    fn compute_lm(&self) -> u8 {
+        // LM = log2(frame_size / 120) for 48kHz
+        match self.frame_size {
+            120 => 0, // 2.5ms @ 48kHz
+            240 => 1, // 5ms @ 48kHz
+            480 => 2, // 10ms @ 48kHz
+            960 => 3, // 20ms @ 48kHz
+            _ => {
+                // For other sample rates, compute from duration
+                let duration_ms = self.frame_duration_ms();
+                if (duration_ms - 2.5).abs() < 0.1 {
+                    0
+                } else if (duration_ms - 5.0).abs() < 0.1 {
+                    1
+                } else if (duration_ms - 10.0).abs() < 0.1 {
+                    2
+                } else {
+                    3
+                }
+            }
+        }
+    }
+
+    /// Check if `tf_select` flag can affect decoding result
+    ///
+    /// RFC 6716 lines 6020-6023: "The `tf_select` flag uses a 1/2 probability,
+    /// but is only decoded if it can have an impact on the result knowing
+    /// the value of all per-band `tf_change` flags."
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - First band index that was decoded
+    /// * `end` - Last band index that was decoded (exclusive)
+    ///
+    /// # Returns
+    ///
+    /// `true` if `tf_select` should be decoded, `false` if it has no effect
+    #[must_use]
+    fn should_decode_tf_select(&self, start: usize, end: usize) -> bool {
+        use super::constants::TF_SELECT_TABLE;
+
+        let lm = self.compute_lm();
+        let lm_idx = lm as usize;
+        let is_transient_idx = usize::from(self.transient);
+
+        // Check only the coded bands [start, end)
+        for band in start..end {
+            let tf_change_idx = usize::from(self.tf_change[band]);
+
+            // Get TF values for both tf_select options using direct table lookup
+            let tf_0 = TF_SELECT_TABLE[lm_idx][is_transient_idx][0][tf_change_idx];
+            let tf_1 = TF_SELECT_TABLE[lm_idx][is_transient_idx][1][tf_change_idx];
+
+            // Apply clamping to both values
+            #[allow(clippy::cast_possible_wrap)]
+            let lm_i8 = lm as i8;
+            let tf_0_clamped = tf_0.max(0).min(lm_i8);
+            let tf_1_clamped = tf_1.max(0).min(lm_i8);
+
+            if tf_0_clamped != tf_1_clamped {
+                return true; // tf_select affects at least this band
+            }
+        }
+
+        false // tf_select has no effect on any band
+    }
+
+    /// Decode `tf_select` flag if it affects outcome
+    ///
+    /// RFC 6716 Section 4.3.1 (lines 6020-6023)
+    ///
+    /// **CRITICAL:** Must be called AFTER `decode_tf_changes()` per RFC Table 56.
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder instance
+    /// * `start` - First band index that was decoded
+    /// * `end` - Last band index that was decoded (exclusive)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    /// * Returns error if `tf_change` not yet decoded
+    pub fn decode_tf_select(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        start: usize,
+        end: usize,
+    ) -> Result<Option<u8>> {
+        // Validate that tf_change was decoded first (RFC Table 56 ordering)
+        if self.tf_change.is_empty() {
+            return Err(Error::CeltDecoder(
+                "decode_tf_changes() must be called before decode_tf_select()".to_string(),
+            ));
+        }
+
+        // Only decode if it can impact result (RFC lines 6021-6023)
+        // Decision is based on actual tf_change values that were decoded
+        if self.should_decode_tf_select(start, end) {
+            let tf_select = u8::from(range_decoder.ec_dec_bit_logp(1)?);
+            self.tf_select = Some(tf_select);
+            Ok(Some(tf_select))
+        } else {
+            self.tf_select = None;
+            Ok(None)
+        }
+    }
+
+    /// Decode per-band `tf_change` flags for coded bands
+    ///
+    /// RFC 6716 Section 4.3.4.5 (lines 6625-6631)
+    ///
+    /// Only decodes flags for bands in the range `[start, end)`. Bands outside
+    /// this range retain their default value of `false`.
+    ///
+    /// Uses relative coding: first CODED band uses absolute PDF, subsequent
+    /// bands decode deltas from the previous band using XOR.
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder instance
+    /// * `start` - First band index to decode (inclusive)
+    /// * `end` - Last band index to decode (exclusive)
+    ///
+    /// # Returns
+    ///
+    /// Vector of length `CELT_NUM_BANDS` where:
+    /// * `tf_change[band]` for `band in [start, end)` contains decoded values
+    /// * `tf_change[band]` for `band < start or band >= end` is `false`
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    /// * Returns error if `start >= end`
+    /// * Returns error if `end > CELT_NUM_BANDS`
+    pub fn decode_tf_changes(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        start: usize,
+        end: usize,
+    ) -> Result<Vec<bool>> {
+        // Validate parameters
+        if start >= end {
+            return Err(Error::CeltDecoder(format!(
+                "start ({start}) must be less than end ({end})"
+            )));
+        }
+
+        if end > CELT_NUM_BANDS {
+            return Err(Error::CeltDecoder(format!(
+                "end ({end}) must not exceed CELT_NUM_BANDS ({CELT_NUM_BANDS})"
+            )));
+        }
+
+        // Initialize all bands to false (default for uncoded bands)
+        let mut tf_change = vec![false; CELT_NUM_BANDS];
+        let mut prev_change = false;
+
+        // Only decode for bands in range [start, end)
+        for (band, item) in tf_change.iter_mut().enumerate().take(end).skip(start) {
+            let is_first = band == start; // First CODED band, not band 0
+            let pdf = Self::compute_tf_change_pdf(is_first, self.transient);
+
+            let decoded = range_decoder.ec_dec_icdf(&pdf, 8)? == 1;
+
+            let change = if is_first {
+                decoded // First band: absolute value
+            } else {
+                prev_change ^ decoded // Subsequent bands: XOR for relative coding
+            };
+
+            *item = change;
+            prev_change = change;
+        }
+
+        self.tf_change.clone_from(&tf_change);
+        Ok(tf_change)
+    }
+
+    /// Compute PDF for `tf_change` flag in given band
+    ///
+    /// RFC 6716 Section 4.3.4.5 (lines 6625-6631)
+    ///
+    /// # Arguments
+    ///
+    /// * `is_first_band` - True if this is the first coded band
+    /// * `is_transient` - True if frame marked as transient
+    ///
+    /// # Returns
+    ///
+    /// ICDF table for this band's `tf_change` flag
+    ///
+    /// # Probabilities (RFC lines 6625-6631)
+    ///
+    /// * First band, transient: {3,1}/4 → ICDF [4, 1, 0]
+    /// * First band, non-transient: {15,1}/16 → ICDF [16, 1, 0]
+    /// * Subsequent bands, transient: {15,1}/16 → ICDF [16, 1, 0] (for delta)
+    /// * Subsequent bands, non-transient: {31,1}/32 → ICDF [32, 1, 0] (for delta)
+    #[must_use]
+    fn compute_tf_change_pdf(is_first_band: bool, is_transient: bool) -> Vec<u8> {
+        if is_first_band {
+            // First band: absolute coding
+            if is_transient {
+                vec![4, 1, 0] // {3,1}/4 probability
+            } else {
+                vec![16, 1, 0] // {15,1}/16 probability
+            }
+        } else {
+            // Subsequent bands: relative coding (delta from previous)
+            if is_transient {
+                vec![16, 1, 0] // {15,1}/16 probability for delta
+            } else {
+                vec![32, 1, 0] // {31,1}/32 probability for delta
+            }
+        }
+    }
+
+    /// Compute time-frequency resolution for each band
+    ///
+    /// RFC 6716 Section 4.3.4.5 (lines 6633-6697, Tables 60-63)
+    ///
+    /// Uses direct table lookup based on frame parameters and per-band `tf_change` flags.
+    ///
+    /// Computes resolution for ALL bands (`0..CELT_NUM_BANDS`). Bands outside the
+    /// range that was decoded in `decode_tf_changes()` will use their default
+    /// `tf_change=false` value from initialization.
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if `tf_change` not yet decoded
+    pub fn compute_tf_resolution(&mut self) -> Result<Vec<u8>> {
+        use super::constants::TF_SELECT_TABLE;
+
+        let lm = self.compute_lm();
+        let num_bands = self.tf_change.len();
+
+        if num_bands == 0 {
+            return Err(Error::CeltDecoder(
+                "tf_change must be decoded before computing tf_resolution".to_string(),
+            ));
+        }
+
+        let mut tf_resolution = Vec::with_capacity(CELT_NUM_BANDS);
+
+        let is_transient_idx = usize::from(self.transient);
+        let tf_select_idx = usize::from(self.tf_select.unwrap_or(0));
+        let lm_idx = lm as usize;
+
+        // Compute resolution for ALL bands
+        // Bands outside [start_band, end_band) use tf_change=false (default)
+        for band in 0..CELT_NUM_BANDS {
+            let tf_change_idx = usize::from(self.tf_change[band]);
+
+            // Direct table lookup from RFC Tables 60-63
+            // No arithmetic operations - just index into the 4D table
+            let tf = TF_SELECT_TABLE[lm_idx][is_transient_idx][tf_select_idx][tf_change_idx];
+
+            // Clamp to valid range [0, LM]
+            #[allow(clippy::cast_possible_wrap)]
+            let lm_i8 = lm as i8;
+            let tf_clamped = tf.max(0).min(lm_i8);
+            #[allow(clippy::cast_sign_loss)]
+            tf_resolution.push(tf_clamped as u8);
+        }
+
+        self.tf_resolution.clone_from(&tf_resolution);
+        Ok(tf_resolution)
+    }
 }
 
 #[cfg(test)]
@@ -926,12 +1249,12 @@ mod tests {
     }
 
     #[test]
-    fn test_transient_flag_decoding() {
+    fn test_transient_flag_decoding_basic() {
         let data = vec![0x80, 0x00, 0x00, 0x00];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
-        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let result = decoder.decode_transient(&mut range_decoder);
+        let result = decoder.decode_transient_flag(&mut range_decoder);
         assert!(result.is_ok());
         let _ = result.unwrap();
     }
@@ -1338,5 +1661,348 @@ mod tests {
 
         assert_eq!(alloc.coded_bands, 21);
         assert_eq!(alloc.balance, 0);
+    }
+
+    // Phase 4.5: Transient Processing Tests
+
+    #[test]
+    fn test_transient_flag_state_update() {
+        let data = vec![0x00, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        assert!(!decoder.transient);
+        let transient = decoder.decode_transient_flag(&mut range_decoder).unwrap();
+        // State should be updated to match decoded value
+        assert_eq!(decoder.transient, transient);
+    }
+
+    #[test]
+    fn test_compute_lm() {
+        let decoder_2_5ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 120).unwrap();
+        assert_eq!(decoder_2_5ms.compute_lm(), 0);
+
+        let decoder_5ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 240).unwrap();
+        assert_eq!(decoder_5ms.compute_lm(), 1);
+
+        let decoder_10ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        assert_eq!(decoder_10ms.compute_lm(), 2);
+
+        let decoder_20ms = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 960).unwrap();
+        assert_eq!(decoder_20ms.compute_lm(), 3);
+    }
+
+    #[test]
+    fn test_should_decode_tf_select_with_actual_tf_change() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // LM=2 (10ms), transient=true
+        // base_tf_0 = 2 (config 4), base_tf_1 = 1 (config 6)
+        decoder.transient = true;
+
+        // All tf_change=false: tf_0=2, tf_1=1 → different, should decode
+        decoder.tf_change = vec![false; CELT_NUM_BANDS];
+        assert!(decoder.should_decode_tf_select(0, CELT_NUM_BANDS));
+
+        // All tf_change=true: tf_0=3→clamped to 2, tf_1=2 → SAME after clamping, should NOT decode
+        decoder.tf_change = vec![true; CELT_NUM_BANDS];
+        assert!(!decoder.should_decode_tf_select(0, CELT_NUM_BANDS));
+
+        // Mixed tf_change: at least one band differs → should decode
+        let mut mixed = vec![true; CELT_NUM_BANDS];
+        mixed[0] = false; // Band 0: tf_change=false → tf_0=2, tf_1=1 → different
+        decoder.tf_change = mixed;
+        assert!(decoder.should_decode_tf_select(0, CELT_NUM_BANDS));
+
+        // LM=2, transient=false
+        // base_tf_0 = 0 (config 0), base_tf_1 = 0 (config 2) → same
+        decoder.transient = false;
+        decoder.tf_change = vec![false; CELT_NUM_BANDS];
+        assert!(!decoder.should_decode_tf_select(0, CELT_NUM_BANDS));
+
+        decoder.tf_change = vec![true; CELT_NUM_BANDS];
+        assert!(!decoder.should_decode_tf_select(0, CELT_NUM_BANDS));
+    }
+
+    #[test]
+    fn test_tf_select_conditional_decoding() {
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Must decode tf_change first per RFC Table 56
+        decoder.transient = true; // LM=2, transient=true
+        decoder
+            .decode_tf_changes(&mut range_decoder, 0, CELT_NUM_BANDS)
+            .unwrap();
+
+        // Now decode tf_select - should decode since it affects result for LM=2, transient=true
+        let result = decoder
+            .decode_tf_select(&mut range_decoder, 0, CELT_NUM_BANDS)
+            .unwrap();
+        assert!(result.is_some());
+        assert_eq!(decoder.tf_select, result);
+    }
+
+    #[test]
+    fn test_tf_select_error_without_tf_change() {
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Attempt to decode tf_select without decoding tf_change first
+        let result = decoder.decode_tf_select(&mut range_decoder, 0, CELT_NUM_BANDS);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tf_change_decoding() {
+        // Need enough data for 21 bands
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let tf_changes = decoder
+            .decode_tf_changes(&mut range_decoder, 0, CELT_NUM_BANDS)
+            .unwrap();
+
+        assert_eq!(tf_changes.len(), CELT_NUM_BANDS);
+        assert_eq!(decoder.tf_change.len(), CELT_NUM_BANDS);
+    }
+
+    #[test]
+    fn test_tf_change_pdf_first_band_transient() {
+        let pdf = CeltDecoder::compute_tf_change_pdf(true, true);
+        assert_eq!(pdf, vec![4, 1, 0]); // {3,1}/4 from RFC
+    }
+
+    #[test]
+    fn test_tf_change_pdf_first_band_normal() {
+        let pdf = CeltDecoder::compute_tf_change_pdf(true, false);
+        assert_eq!(pdf, vec![16, 1, 0]); // {15,1}/16 from RFC
+    }
+
+    #[test]
+    fn test_tf_change_pdf_subsequent_transient() {
+        let pdf = CeltDecoder::compute_tf_change_pdf(false, true);
+        assert_eq!(pdf, vec![16, 1, 0]); // {15,1}/16 for delta
+    }
+
+    #[test]
+    fn test_tf_change_pdf_subsequent_normal() {
+        let pdf = CeltDecoder::compute_tf_change_pdf(false, false);
+        assert_eq!(pdf, vec![32, 1, 0]); // {31,1}/32 for delta
+    }
+
+    #[test]
+    fn test_tf_resolution_computation() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // LM=2 (10ms), transient=0, tf_select=0
+        decoder.transient = false;
+        decoder.tf_select = Some(0);
+        decoder.tf_change = vec![false; CELT_NUM_BANDS];
+
+        let tf_res = decoder.compute_tf_resolution().unwrap();
+
+        assert_eq!(tf_res.len(), CELT_NUM_BANDS);
+
+        // Base TF for LM=2, normal, tf_select=0 is 0 (from TF_SELECT_TABLE)
+        assert_eq!(tf_res[0], 0);
+
+        // All bands should have same resolution (no tf_change)
+        assert!(tf_res.iter().all(|&x| x == 0));
+    }
+
+    #[test]
+    fn test_tf_resolution_with_changes() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        decoder.transient = false;
+        decoder.tf_select = Some(0);
+
+        // Set tf_change for first band
+        let mut tf_change = vec![false; CELT_NUM_BANDS];
+        tf_change[0] = true;
+        decoder.tf_change = tf_change;
+
+        let tf_res = decoder.compute_tf_resolution().unwrap();
+
+        // LM=2 (10ms), non-transient, tf_select=0
+        // tf_change=0 → 0, tf_change=1 → -2 (clamped to 0)
+        assert_eq!(tf_res[0], 0);
+        assert_eq!(tf_res[1], 0);
+    }
+
+    #[test]
+    fn test_tf_resolution_clamping() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // LM=2, max resolution is 2
+        decoder.transient = false;
+        decoder.tf_select = Some(0);
+        decoder.tf_change = vec![true; CELT_NUM_BANDS];
+
+        let tf_res = decoder.compute_tf_resolution().unwrap();
+
+        // All resolutions should be clamped to [0, 2]
+        assert!(tf_res.iter().all(|&x| x <= 2));
+    }
+
+    #[test]
+    fn test_tf_resolution_error_without_tf_change() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Try to compute resolution without decoding tf_change first
+        let result = decoder.compute_tf_resolution();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tf_select_table_dimensions() {
+        use crate::celt::constants::TF_SELECT_TABLE;
+
+        // Verify 4D table structure
+        assert_eq!(TF_SELECT_TABLE.len(), 4); // 4 LM values
+        for lm_table in &TF_SELECT_TABLE {
+            assert_eq!(lm_table.len(), 2); // 2 transient modes
+            for trans_table in lm_table {
+                assert_eq!(trans_table.len(), 2); // 2 tf_select values
+                for sel_table in trans_table {
+                    assert_eq!(sel_table.len(), 2); // 2 tf_change values
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_rfc_table_60_non_transient_tf_select_0() {
+        use crate::celt::constants::TF_SELECT_TABLE;
+
+        // Table 60: Non-transient, tf_select=0
+        assert_eq!(TF_SELECT_TABLE[0][0][0], [0, -1]); // 2.5ms
+        assert_eq!(TF_SELECT_TABLE[1][0][0], [0, -1]); // 5ms
+        assert_eq!(TF_SELECT_TABLE[2][0][0], [0, -2]); // 10ms
+        assert_eq!(TF_SELECT_TABLE[3][0][0], [0, -2]); // 20ms
+    }
+
+    #[test]
+    fn test_rfc_table_61_non_transient_tf_select_1() {
+        use crate::celt::constants::TF_SELECT_TABLE;
+
+        // Table 61: Non-transient, tf_select=1
+        assert_eq!(TF_SELECT_TABLE[0][0][1], [0, -1]); // 2.5ms
+        assert_eq!(TF_SELECT_TABLE[1][0][1], [0, -2]); // 5ms
+        assert_eq!(TF_SELECT_TABLE[2][0][1], [0, -3]); // 10ms
+        assert_eq!(TF_SELECT_TABLE[3][0][1], [0, -3]); // 20ms
+    }
+
+    #[test]
+    fn test_rfc_table_62_transient_tf_select_0() {
+        use crate::celt::constants::TF_SELECT_TABLE;
+
+        // Table 62: Transient, tf_select=0
+        assert_eq!(TF_SELECT_TABLE[0][1][0], [0, -1]); // 2.5ms
+        assert_eq!(TF_SELECT_TABLE[1][1][0], [1, 0]); // 5ms
+        assert_eq!(TF_SELECT_TABLE[2][1][0], [2, 0]); // 10ms
+        assert_eq!(TF_SELECT_TABLE[3][1][0], [3, 0]); // 20ms
+    }
+
+    #[test]
+    fn test_tf_change_partial_bands() {
+        // Test decoding only bands 0..15 (narrowband cutoff)
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        decoder.transient = false;
+
+        // Decode only first 15 bands
+        let tf_changes = decoder
+            .decode_tf_changes(&mut range_decoder, 0, 15)
+            .unwrap();
+
+        // All bands should be initialized
+        assert_eq!(tf_changes.len(), CELT_NUM_BANDS);
+        assert_eq!(decoder.tf_change.len(), CELT_NUM_BANDS);
+
+        // Bands 15..21 should be false (not decoded)
+        for band in tf_changes.iter().take(CELT_NUM_BANDS).skip(15) {
+            assert!(!band);
+        }
+    }
+
+    #[test]
+    fn test_tf_change_with_start_offset() {
+        // Test decoding bands 17..21 (narrowband mode where start=17)
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        decoder.transient = true;
+
+        // Decode only bands 17..21
+        let tf_changes = decoder
+            .decode_tf_changes(&mut range_decoder, 17, 21)
+            .unwrap();
+
+        // Bands 0..17 should be false (not decoded)
+        for band in tf_changes.iter().take(17) {
+            assert!(!band);
+        }
+    }
+
+    #[test]
+    fn test_tf_change_validation_start_gte_end() {
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // start >= end should fail
+        let result = decoder.decode_tf_changes(&mut range_decoder, 10, 10);
+        assert!(result.is_err());
+
+        let result = decoder.decode_tf_changes(&mut range_decoder, 15, 10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tf_change_validation_end_exceeds_num_bands() {
+        let data = vec![0xFF; 64];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // end > CELT_NUM_BANDS should fail
+        let result = decoder.decode_tf_changes(&mut range_decoder, 0, 25);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rfc_table_63_transient_tf_select_1() {
+        use crate::celt::constants::TF_SELECT_TABLE;
+
+        // Table 63: Transient, tf_select=1
+        assert_eq!(TF_SELECT_TABLE[0][1][1], [0, -1]); // 2.5ms
+        assert_eq!(TF_SELECT_TABLE[1][1][1], [1, -1]); // 5ms
+        assert_eq!(TF_SELECT_TABLE[2][1][1], [1, -1]); // 10ms
+        assert_eq!(TF_SELECT_TABLE[3][1][1], [1, -1]); // 20ms
+    }
+
+    #[test]
+    fn test_tf_resolution_rfc_compliance() {
+        // Test that compute_tf_resolution uses table lookup correctly
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 240).unwrap();
+
+        // LM=1 (5ms), transient, tf_select=0, tf_change=[false, true, ...]
+        decoder.transient = true;
+        decoder.tf_select = Some(0);
+        decoder.tf_change = vec![false; CELT_NUM_BANDS];
+        decoder.tf_change[1] = true;
+
+        let tf_res = decoder.compute_tf_resolution().unwrap();
+
+        // From RFC Table 62: LM=1, transient, tf_select=0 → [1, 0]
+        assert_eq!(tf_res[0], 1); // tf_change=0 → 1
+        assert_eq!(tf_res[1], 0); // tf_change=1 → 0
     }
 }
