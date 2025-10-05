@@ -30,6 +30,12 @@ pub struct Allocation {
 
     /// Skip flag reservation in 1/8 bit units (8 or 0)
     pub skip_rsv: i32,
+
+    /// Intensity stereo reservation in 1/8 bit units (RFC 6423-6426)
+    pub intensity_rsv: i32,
+
+    /// Dual stereo reservation in 1/8 bit units (8 or 0) (RFC 6427-6429)
+    pub dual_stereo_rsv: i32,
 }
 
 /// Decoded CELT frame output
@@ -387,6 +393,69 @@ impl CeltDecoder {
         if !skip_rsv {
             return Ok(false);
         }
+        range_decoder.ec_dec_bit_logp(1)
+    }
+
+    /// Decode intensity stereo parameter (RFC Table 56 line 5976)
+    ///
+    /// Intensity stereo controls which frequency bands use intensity stereo coding.
+    /// The parameter indicates the first band to use intensity stereo.
+    ///
+    /// # Parameters
+    ///
+    /// * `range_decoder` - Range decoder positioned at intensity symbol
+    /// * `num_coded_bands` - Number of coded bands (`end_band` - `start_band`)
+    ///
+    /// # Returns
+    ///
+    /// Intensity band index:
+    /// * 0 = no intensity stereo (all bands coded separately)
+    /// * N = intensity stereo starts from band N
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if range decoder fails
+    ///
+    /// # RFC Reference
+    ///
+    /// RFC 6716 line 5976: "intensity | uniform | Section 4.3.3"
+    /// Distribution: uniform over \[0, `num_coded_bands`\]
+    pub fn decode_intensity(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        num_coded_bands: usize,
+    ) -> Result<u8> {
+        // Uniform distribution over [0, num_coded_bands] (inclusive)
+        let intensity =
+            range_decoder.ec_dec_uint(u32::try_from(num_coded_bands + 1).unwrap_or(u32::MAX))?;
+
+        Ok(u8::try_from(intensity).unwrap_or(0))
+    }
+
+    /// Decode dual stereo flag (RFC Table 56 line 5978)
+    ///
+    /// Dual stereo controls whether mid-side stereo coding is used.
+    /// When enabled, channels are coded as mid (L+R) and side (L-R).
+    ///
+    /// # Parameters
+    ///
+    /// * `range_decoder` - Range decoder positioned at dual stereo symbol
+    ///
+    /// # Returns
+    ///
+    /// * `true` - Dual stereo enabled (mid-side coding)
+    /// * `false` - Dual stereo disabled (left-right coding)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if range decoder fails
+    ///
+    /// # RFC Reference
+    ///
+    /// RFC 6716 line 5978: "dual | {1, 1}/2"
+    /// Distribution: uniform binary (50/50)
+    pub fn decode_dual_stereo(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+        // PDF: {1, 1}/2 = uniform binary distribution
         range_decoder.ec_dec_bit_logp(1)
     }
 
@@ -866,6 +935,46 @@ impl CeltDecoder {
         let skip_rsv = if total > 8 { 8 } else { 0 };
         total = total.saturating_sub(skip_rsv);
 
+        // RFC line 6423-6429: Intensity and dual stereo reservations
+        #[allow(unused_mut)]
+        let mut intensity_rsv;
+        #[allow(unused_mut)]
+        let mut dual_stereo_rsv;
+
+        if channels == 2 {
+            // Calculate number of coded bands
+            let num_coded_bands = end_band - start_band;
+
+            // Conservative log2 in 8th bits (RFC line 6424-6425)
+            // Uses LOG2_FRAC_TABLE from rate.c
+            intensity_rsv = if num_coded_bands > 0 && num_coded_bands <= LOG2_FRAC_TABLE.len() {
+                i32::from(LOG2_FRAC_TABLE[num_coded_bands - 1])
+            } else {
+                0
+            };
+
+            // Check if we have enough bits for intensity (RFC line 6425-6427)
+            if intensity_rsv > 0 && intensity_rsv <= total {
+                total = total.saturating_sub(intensity_rsv);
+
+                // Dual stereo reservation (RFC line 6427-6429)
+                if total > 8 {
+                    dual_stereo_rsv = 8;
+                    total = total.saturating_sub(dual_stereo_rsv);
+                } else {
+                    dual_stereo_rsv = 0;
+                }
+            } else {
+                // Not enough bits for intensity - set to zero (RFC line 6426)
+                intensity_rsv = 0;
+                dual_stereo_rsv = 0;
+            }
+        } else {
+            // Mono: no stereo reservations
+            intensity_rsv = 0;
+            dual_stereo_rsv = 0;
+        }
+
         let cap_index = 21 * (2 * usize::from(lm) + (channels - 1));
 
         let mut thresh = [0_i32; CELT_NUM_BANDS];
@@ -1097,6 +1206,8 @@ impl CeltDecoder {
             coded_bands: end_band,
             balance,
             skip_rsv,
+            intensity_rsv,
+            dual_stereo_rsv,
         })
     }
 
@@ -2019,19 +2130,10 @@ impl CeltDecoder {
         let total_boost = boost.iter().sum();
         let trim = self.decode_allocation_trim(range_decoder, total_bits, total_boost)?;
 
-        // 12. intensity + 13. dual (RFC Table 56 lines 5976-5978)
-        // FIXED 4.6.7.4: Only decode stereo params for stereo frames (RFC 6423)
-        let mut total_bits_mut = total_bits;
-        let (_intensity, _dual_stereo) = if self.channels == Channels::Stereo {
-            self.decode_stereo_params(range_decoder, self.end_band, &mut total_bits_mut)?
-        } else {
-            (0, false)
-        };
-
-        // Compute allocation (handles anti-collapse and skip reservations internally)
-        // FIXED 4.6.7.1: Removed duplicate reservations - compute_allocation does them
+        // Compute allocation (handles ALL reservations: anti-collapse, skip, intensity, dual)
+        // FIXED 4.6.8.2: Now includes intensity/dual reservations per RFC 6423-6429
         let allocation = self.compute_allocation(
-            total_bits_mut,
+            total_bits,
             lm,
             num_channels,
             &boost,
@@ -2042,8 +2144,24 @@ impl CeltDecoder {
         )?;
 
         // 11. skip (RFC Table 56 line 5974)
-        // FIXED 4.6.7.1: Use skip_rsv from allocation (calculated in compute_allocation)
         let _skip = self.decode_skip(range_decoder, allocation.skip_rsv > 0)?;
+
+        // 12. intensity (RFC Table 56 line 5976)
+        // FIXED 4.6.8.4: Decode AFTER skip (correct Table 56 order)
+        let _intensity = if allocation.intensity_rsv > 0 {
+            let num_coded_bands = self.end_band - self.start_band;
+            self.decode_intensity(range_decoder, num_coded_bands)?
+        } else {
+            0
+        };
+
+        // 13. dual (RFC Table 56 line 5978)
+        // FIXED 4.6.8.4: Decode AFTER intensity (correct Table 56 order)
+        let _dual_stereo = if allocation.dual_stereo_rsv > 0 {
+            self.decode_dual_stereo(range_decoder)?
+        } else {
+            false
+        };
 
         // 14. fine energy (RFC Table 56 line 5980)
         let fine_energy =
@@ -2627,11 +2745,15 @@ mod tests {
             coded_bands: 21,
             balance: 0,
             skip_rsv: 0,
+            intensity_rsv: 0,
+            dual_stereo_rsv: 0,
         };
 
         assert_eq!(alloc.coded_bands, 21);
         assert_eq!(alloc.balance, 0);
         assert_eq!(alloc.skip_rsv, 0);
+        assert_eq!(alloc.intensity_rsv, 0);
+        assert_eq!(alloc.dual_stereo_rsv, 0);
     }
 
     // Phase 4.5: Transient Processing Tests
