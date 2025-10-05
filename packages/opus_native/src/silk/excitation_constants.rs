@@ -1,6 +1,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use crate::silk::decoder::Bandwidth;
+use crate::Bandwidth;
 
 pub const LCG_SEED_PDF: &[u8] = &[192, 128, 64, 0];
 

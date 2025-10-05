@@ -34,7 +34,7 @@
 use crate::error::{Error, Result};
 use crate::range::RangeDecoder;
 use crate::util::ilog;
-use crate::{Channels, SampleRate};
+use crate::{Bandwidth, Channels, SampleRate};
 
 use super::frame::{FrameType, QuantizationOffsetType};
 
@@ -120,73 +120,6 @@ const FRAME_TYPE_PDF_INACTIVE: &[u8] = &[230, 0];
 // RFC shows PDF ACTIVE: {24, 74, 148, 10}/256 (4 frame types for active)
 // Converted to ICDF for ec_dec_icdf()
 const FRAME_TYPE_PDF_ACTIVE: &[u8] = &[232, 158, 10, 0];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub struct TocInfo {
-    pub config: u8,
-    pub is_stereo: bool,
-    pub frame_count_code: u8,
-}
-
-impl TocInfo {
-    #[must_use]
-    #[allow(dead_code)]
-    pub const fn parse(toc_byte: u8) -> Self {
-        Self {
-            config: toc_byte >> 3,
-            is_stereo: (toc_byte >> 2) & 0x1 == 1,
-            frame_count_code: toc_byte & 0x3,
-        }
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub const fn uses_silk(self) -> bool {
-        self.config < 16
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub const fn is_hybrid(self) -> bool {
-        matches!(self.config, 12..=15)
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub const fn bandwidth(self) -> Bandwidth {
-        match self.config {
-            0..=3 | 16..=19 => Bandwidth::Narrowband,
-            4..=7 => Bandwidth::Mediumband,
-            8..=11 | 20..=23 => Bandwidth::Wideband,
-            12..=13 | 24..=27 => Bandwidth::SuperWideband,
-            14..=15 | 28..=31 => Bandwidth::Fullband,
-            _ => unreachable!(),
-        }
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub const fn frame_size_ms(self) -> u8 {
-        let index = (self.config % 4) as usize;
-        match self.config {
-            0..=11 => [10, 20, 40, 60][index],
-            12..=15 => [10, 20, 10, 20][index],
-            16..=31 => [2, 5, 10, 20][index],
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum Bandwidth {
-    Narrowband,
-    Mediumband,
-    Wideband,
-    SuperWideband,
-    Fullband,
-}
 
 #[derive(Debug, Clone)]
 pub struct HeaderBits {
@@ -383,12 +316,16 @@ impl SilkDecoder {
         let flags_value = match frame_size_ms {
             10 | 20 => return Ok(vec![true]),
             40 => {
-                const PDF_40MS: &[u8] = &[0, 53, 53, 150];
-                range_decoder.ec_dec_icdf(PDF_40MS, 8)?
+                // RFC 6716 Table 4 (line 1987): LBRR 40ms PDF {0, 53, 53, 150}/256
+                // Converted to ICDF (skip leading 256): [203, 150, 0]
+                const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+                range_decoder.ec_dec_icdf(LBRR_40MS_ICDF, 8)?
             }
             60 => {
-                const PDF_60MS: &[u8] = &[0, 41, 20, 29, 41, 15, 28, 82];
-                range_decoder.ec_dec_icdf(PDF_60MS, 8)?
+                // RFC 6716 Table 4 (line 1989): LBRR 60ms PDF {0, 41, 20, 29, 41, 15, 28, 82}/256
+                // Converted to ICDF (skip leading 256): [215, 195, 166, 125, 110, 82, 0]
+                const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+                range_decoder.ec_dec_icdf(LBRR_60MS_ICDF, 8)?
             }
             _ => return Err(Error::SilkDecoder("invalid frame size".to_string())),
         };
@@ -2580,28 +2517,6 @@ mod tests {
                 .num_silk_frames,
             3
         );
-    }
-
-    #[test]
-    fn test_toc_parsing_silk_nb() {
-        let toc = TocInfo::parse(0b0000_0000);
-        assert_eq!(toc.config, 0);
-        assert!(!toc.is_stereo);
-        assert_eq!(toc.frame_count_code, 0);
-        assert!(toc.uses_silk());
-        assert!(!toc.is_hybrid());
-        assert_eq!(toc.bandwidth(), Bandwidth::Narrowband);
-        assert_eq!(toc.frame_size_ms(), 10);
-    }
-
-    #[test]
-    fn test_toc_parsing_hybrid_swb() {
-        let toc = TocInfo::parse(0b0110_0101);
-        assert_eq!(toc.config, 12);
-        assert!(toc.is_stereo);
-        assert!(toc.uses_silk());
-        assert!(toc.is_hybrid());
-        assert_eq!(toc.bandwidth(), Bandwidth::SuperWideband);
     }
 
     #[test]

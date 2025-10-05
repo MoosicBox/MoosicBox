@@ -3,12 +3,15 @@
 #[cfg(feature = "celt")]
 pub mod celt;
 pub mod error;
+pub mod framing;
 pub mod range;
 #[cfg(feature = "silk")]
 pub mod silk;
+pub mod toc;
 mod util;
 
 pub use error::{Error, Result};
+pub use toc::{Bandwidth, Configuration, FrameSize, OpusMode, Toc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channels {
