@@ -28,6 +28,9 @@ pub struct Allocation {
     /// Remaining bits for rebalancing
     pub balance: i32,
 
+    /// Anti-collapse reservation in 1/8 bit units (8 or 0) (RFC 6415-6418)
+    pub anti_collapse_rsv: i32,
+
     /// Skip flag reservation in 1/8 bit units (8 or 0)
     pub skip_rsv: i32,
 
@@ -1208,6 +1211,7 @@ impl CeltDecoder {
             fine_priority,
             coded_bands: end_band,
             balance,
+            anti_collapse_rsv,
             skip_rsv,
             intensity_rsv,
             dual_stereo_rsv,
@@ -1495,24 +1499,35 @@ impl CeltDecoder {
     ///
     /// Only decoded when transient flag is set. Uses uniform 1/2 probability.
     ///
+    /// Only decoded if reservation was made per RFC lines 6415-6418:
+    /// * Frame is transient
+    /// * LM >= 2 (10ms or 20ms frames)
+    /// * Enough bits available: total >= (LM+2) * 8
+    ///
     /// # Arguments
     ///
-    /// * `range_decoder` - Range decoder instance
+    /// * `range_decoder` - Range decoder positioned at anti-collapse symbol
+    /// * `anti_collapse_rsv` - Whether reservation was made (from `Allocation.anti_collapse_rsv > 0`)
     ///
     /// # Returns
     ///
-    /// * `true` if anti-collapse should be applied, `false` otherwise
+    /// * `true` - Anti-collapse processing enabled
+    /// * `false` - Anti-collapse processing disabled (or not reserved)
     ///
     /// # Errors
     ///
-    /// * Returns error if range decoding fails
+    /// Returns an error if range decoder fails
     ///
     /// # RFC Reference
     ///
-    /// RFC 6716 Section 4.3.5 (lines 6715-6716): "When the frame has the
-    /// transient bit set, an anti-collapse bit is decoded."
-    pub fn decode_anti_collapse_bit(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
-        if !self.transient {
+    /// RFC 6716 line 5984: "anti-collapse | {1, 1}/2 | Section 4.3.5"
+    /// libopus: celt_decoder.c:1088-1091 (conditional on `anti_collapse_rsv` > 0)
+    pub fn decode_anti_collapse_bit(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        anti_collapse_rsv: bool,
+    ) -> Result<bool> {
+        if !anti_collapse_rsv {
             return Ok(false);
         }
         range_decoder.ec_dec_bit_logp(1)
@@ -2186,7 +2201,8 @@ impl CeltDecoder {
         }
 
         // 16. anti-collapse (RFC Table 56 line 5984)
-        let anti_collapse_on = self.decode_anti_collapse_bit(range_decoder)?;
+        let anti_collapse_on =
+            self.decode_anti_collapse_bit(range_decoder, allocation.anti_collapse_rsv > 0)?;
 
         // 17. finalize (final energy bits) (RFC Table 56 line 5986)
         #[allow(clippy::cast_sign_loss)]
@@ -2749,6 +2765,7 @@ mod tests {
             fine_priority: [0; CELT_NUM_BANDS],
             coded_bands: 21,
             balance: 0,
+            anti_collapse_rsv: 0,
             skip_rsv: 0,
             intensity_rsv: 0,
             dual_stereo_rsv: 0,
@@ -2756,6 +2773,7 @@ mod tests {
 
         assert_eq!(alloc.coded_bands, 21);
         assert_eq!(alloc.balance, 0);
+        assert_eq!(alloc.anti_collapse_rsv, 0);
         assert_eq!(alloc.skip_rsv, 0);
         assert_eq!(alloc.intensity_rsv, 0);
         assert_eq!(alloc.dual_stereo_rsv, 0);
@@ -3143,29 +3161,24 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_anti_collapse_bit_transient_true() {
+    fn test_decode_anti_collapse_bit_with_reservation() {
         let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
-        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        decoder.transient = true;
-
-        // Should decode bit when transient is true
-        let result = decoder.decode_anti_collapse_bit(&mut range_decoder);
+        // Should decode bit when reservation is true (simulates anti_collapse_rsv > 0)
+        let result = decoder.decode_anti_collapse_bit(&mut range_decoder, true);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_decode_anti_collapse_bit_transient_false() {
+    fn test_decode_anti_collapse_bit_no_reservation() {
         let data = vec![0x00, 0x00, 0x00, 0x00];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        // transient defaults to false
-        assert!(!decoder.transient);
-
-        // Should return false immediately without decoding
-        let result = decoder.decode_anti_collapse_bit(&mut range_decoder);
+        // Should return false immediately without decoding when no reservation
+        let result = decoder.decode_anti_collapse_bit(&mut range_decoder, false);
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }

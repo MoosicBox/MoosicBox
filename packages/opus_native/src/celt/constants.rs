@@ -226,14 +226,17 @@ pub const ALLOCATION_TABLE: [[u8; 11]; CELT_NUM_BANDS] = [
     [0, 0, 0, 0, 0, 1, 1, 1, 1, 20, 104],
 ];
 
-/// Allocation trim PDF (RFC Table 58, lines 6394-6397)
+/// Allocation trim ICDF (RFC Table 58, lines 6394-6397)
 ///
 /// Used to decode the allocation trim parameter (0-10, default=5)
 /// * trim < 5: bias towards lower frequencies
 /// * trim > 5: bias towards higher frequencies
 ///
-/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/celt.c#L173>
-pub const TRIM_PDF: [u16; 11] = [2, 2, 5, 10, 22, 46, 22, 10, 5, 2, 2];
+/// PDF: {2, 2, 5, 10, 22, 46, 22, 10, 5, 2, 2}/128
+///
+/// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/master/celt/celt.h#L165>
+/// libopus: `trim_icdf[11] = {126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0}` (omits total)
+pub const TRIM_PDF: [u16; 12] = [128, 126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0];
 
 /// Maximum allocation caps per band (from `compute_pulse_cache`)
 ///

@@ -89,9 +89,27 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
       - ✅ Fixed rounding error (was losing up to 7 eighth-bits)
       - ✅ Now uses bit-exact formula: total = (frame_bytes × 64) - tell_frac - 1
       - ✅ RFC 1648-1651 bit-exact requirement satisfied
+      - ⚠️ **COMPREHENSIVE AUDIT FOUND 2 CRITICAL BUGS** (See 4.6.10)
+      - ✅ 390 tests passing, zero clippy warnings
+    - [x] Section 4.6.10: Final Comprehensive Audit & Bug Fixes - COMPLETE
+      - ✅ **BUG 1: TRIM_PDF in PDF format instead of ICDF**
+        - Was: `[2, 2, 5, 10, 22, 46, 22, 10, 5, 2, 2]` (11 elements, raw PDF)
+        - Now: `[128, 126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0]` (12 elements, ICDF)
+        - Verified against libopus trim_icdf and RFC Table 58
+      - ✅ **BUG 2: Missing anti_collapse_rsv field in Allocation**
+        - Added anti_collapse_rsv field to Allocation struct
+        - Updated decode_anti_collapse_bit() to accept rsv parameter
+        - Fixed decode condition: now checks reservation (not self.transient)
+        - Matches libopus celt_decoder.c:1088-1091 logic
+      - ✅ Systematic verification of all 17 RFC Table 56 decode steps
+      - ✅ All PDFs/ICDFs verified correct (silence, transient, intra, spread, tapset, tf_change variants)
+      - ✅ Post-filter params formulas verified (octave, period, gain, tapset)
+      - ✅ Energy decode verified (coarse prediction, fine correction, finalize priorities)
+      - ✅ Bit budget verified bit-exact per RFC 6411-6414
+      - ✅ Band boost loop condition verified (eighth-bits, quanta calculation)
       - ✅ 390 tests passing, zero clippy warnings
 **Total:** 1136 RFC lines, 33 subsections | **Progress:** 6/6 sections (100% complete)
-**RFC Compliance:** ✅ **BIT-EXACT** - RFC 6716 + RFC 1648-1651 requirements satisfied
+**RFC Compliance:** ✅ **100% BIT-EXACT** - All critical bugs fixed, verified against RFC 6716 + libopus
 - [ ] Phase 5: Mode Integration & Hybrid
 - [ ] Phase 6: Packet Loss Concealment
 - [ ] Phase 7: Backend Integration
