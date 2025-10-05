@@ -65,6 +65,14 @@ pub const CELT_INTRA_PDF: &[u8] = &[8, 1, 0];
 #[allow(dead_code)]
 pub const CELT_DUAL_STEREO_PDF: &[u8] = &[2, 1, 0];
 
+/// Spread parameter PDF: {7, 2, 21, 2}/32 (RFC Table 56 line 5968)
+///
+/// Controls PVQ rotation amount per RFC Section 4.3.4.3 (lines 6543-6600)
+pub const CELT_SPREAD_PDF: &[u8] = &[32, 25, 23, 2, 0];
+
+/// Post-filter tapset PDF: {2, 1, 1}/4 (RFC Section 4.3.7.1 line 6769)
+pub const CELT_TAPSET_PDF: &[u8] = &[4, 2, 1, 0];
+
 /// Energy probability model for Laplace distribution
 ///
 /// RFC 6716 line 6073: "These parameters are held in the `e_prob_model` table"

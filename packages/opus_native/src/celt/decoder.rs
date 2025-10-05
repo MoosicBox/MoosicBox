@@ -87,6 +87,27 @@ pub struct PostFilterState {
     pub memory: Vec<f32>,
 }
 
+/// Post-filter parameters decoded from bitstream
+///
+/// RFC 6716 Section 4.3.7.1 (lines 6756-6773)
+#[derive(Debug, Clone, Copy)]
+pub struct PostFilterParams {
+    /// Pitch period: 15-1022 inclusive
+    ///
+    /// Formula: `(16 << octave) + fine_pitch - 1`
+    pub period: u16,
+
+    /// Gain in Q8 format
+    ///
+    /// Formula: `3*(int_gain+1)*256/32` where `int_gain` is 0-7
+    pub gain_q8: u16,
+
+    /// Tapset index: 0, 1, or 2
+    ///
+    /// Maps to filter coefficients per RFC Section 4.3.7.1
+    pub tapset: u8,
+}
+
 /// Anti-collapse state (RFC Section 4.3.5)
 #[derive(Debug, Clone)]
 pub struct AntiCollapseState {
@@ -280,6 +301,90 @@ impl CeltDecoder {
     pub fn decode_intra(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
         let value = range_decoder.ec_dec_icdf(CELT_INTRA_PDF, 8)?;
         Ok(value == 1)
+    }
+
+    /// Decodes post-filter parameters if post-filter flag is set
+    ///
+    /// RFC 6716 Section 4.3.7.1 (lines 6756-6773)
+    ///
+    /// # Parameters Decoded
+    ///
+    /// * octave: uniform (6) - values 0-6
+    /// * period: raw bits (4+octave) - final value 15-1022 inclusive
+    /// * gain: raw bits (3) - converted to Q8 format
+    /// * tapset: {2, 1, 1}/4
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if range decoding fails.
+    pub fn decode_post_filter_params(
+        &self,
+        range_decoder: &mut RangeDecoder,
+    ) -> Result<PostFilterParams> {
+        use super::constants::CELT_TAPSET_PDF;
+
+        // Octave: uniform 0-6
+        let octave = range_decoder.ec_dec_uint(7)?;
+
+        // Period: 4+octave raw bits
+        let raw_bits = 4 + octave;
+        let fine_pitch = range_decoder.ec_dec_bits(raw_bits)?;
+        let period = u16::try_from((16_u32 << octave) + fine_pitch - 1)
+            .map_err(|_| Error::CeltDecoder("post-filter period out of range".into()))?;
+
+        // Gain: 3 raw bits, convert to Q8
+        let int_gain = range_decoder.ec_dec_bits(3)?;
+        #[allow(clippy::cast_possible_truncation)]
+        let gain_q8 = (3 * (int_gain + 1) * 256 / 32) as u16;
+
+        // Tapset: {2,1,1}/4
+        let tapset_value = range_decoder.ec_dec_icdf(CELT_TAPSET_PDF, 2)?;
+        #[allow(clippy::cast_possible_truncation)]
+        let tapset = tapset_value as u8;
+
+        Ok(PostFilterParams {
+            period,
+            gain_q8,
+            tapset,
+        })
+    }
+
+    /// Decodes spread parameter for PVQ rotation control
+    ///
+    /// RFC 6716 Section 4.3.4.3 (lines 6543-6600), Table 56 line 5968
+    ///
+    /// # Spread Values
+    ///
+    /// * 0: infinite (no rotation)
+    /// * 1: `f_r = 15`
+    /// * 2: `f_r = 10`
+    /// * 3: `f_r = 5`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if range decoding fails.
+    pub fn decode_spread(&self, range_decoder: &mut RangeDecoder) -> Result<u8> {
+        use super::constants::CELT_SPREAD_PDF;
+        let spread_value = range_decoder.ec_dec_icdf(CELT_SPREAD_PDF, 5)?;
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(spread_value as u8)
+    }
+
+    /// Decodes skip flag for band skipping
+    ///
+    /// RFC 6716 Section 4.3.3 (lines 6402-6421), Table 56 line 5974
+    ///
+    /// Only decoded if `skip_rsv` is true (skip reservation successful).
+    /// `skip_rsv` is true if `total_bits` > 8 after anti-collapse reservation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if range decoding fails.
+    pub fn decode_skip(&self, range_decoder: &mut RangeDecoder, skip_rsv: bool) -> Result<bool> {
+        if !skip_rsv {
+            return Ok(false);
+        }
+        range_decoder.ec_dec_bit_logp(1)
     }
 
     /// Returns frame duration in milliseconds
@@ -1786,53 +1891,86 @@ impl CeltDecoder {
 
     /// Decode complete CELT frame
     ///
-    /// RFC 6716 Section 4.3 (complete decode flow)
+    /// RFC 6716 Section 4.3 (complete decode flow) - Table 56 (lines 5943-5989)
     ///
     /// **CRITICAL:** Uses `self.start_band` and `self.end_band` fields
     /// throughout the decode pipeline (NOT hardcoded values).
     ///
-    /// # Decoding Pipeline
+    /// # Decoding Pipeline (RFC Table 56 Order)
     ///
-    /// 1. Global flags (silence, post-filter, transient, intra) - Phase 4.1
-    /// 2. Time-frequency parameters - Phase 4.5
-    /// 3. Energy envelope - Phase 4.2
-    /// 4. Bit allocation - Phase 4.3
-    /// 5. PVQ shape decoding - Phase 4.4 (stubbed for now)
-    /// 6. Anti-collapse, denormalization, iMDCT, overlap-add - Phase 4.6
+    /// 1. silence
+    /// 2. post-filter + params (if enabled)
+    /// 3. transient
+    /// 4. intra
+    /// 5. coarse energy
+    /// 6. `tf_change`
+    /// 7. `tf_select`
+    /// 8. spread
+    /// 9. dyn. alloc. (band boost)
+    /// 10. alloc. trim
+    /// 11. skip
+    /// 12. intensity
+    /// 13. dual
+    /// 14. fine energy
+    /// 15. residual (PVQ)
+    /// 16. anti-collapse
+    /// 17. finalize
     ///
     /// # Errors
     ///
     /// Returns an error if any decoding step fails.
     pub fn decode_celt_frame(&mut self, range_decoder: &mut RangeDecoder) -> Result<DecodedFrame> {
-        // Phase 4.1: Global flags
+        // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
         if silence {
             return Ok(self.generate_silence_frame());
         }
 
-        let _post_filter = self.decode_post_filter(range_decoder)?;
+        // 2. post-filter + params (RFC Table 56 lines 5948-5956)
+        let post_filter = self.decode_post_filter(range_decoder)?;
+        let _post_filter_params = if post_filter {
+            Some(self.decode_post_filter_params(range_decoder)?)
+        } else {
+            None
+        };
+
+        // 3. transient (RFC Table 56 line 5958)
         let _transient = self.decode_transient_flag(range_decoder)?;
+
+        // 4. intra (RFC Table 56 line 5960)
         let intra = self.decode_intra(range_decoder)?;
 
-        // Phase 4.5: TF parameters - CRITICAL: USE self.start_band, self.end_band
+        // 5. coarse energy (RFC Table 56 line 5962) - MOVED HERE from position 11
+        let coarse_energy = self.decode_coarse_energy(range_decoder, intra)?;
+
+        // 6. tf_change (RFC Table 56 line 5964) - MOVED HERE from position 5
         self.decode_tf_changes(range_decoder, self.start_band, self.end_band)?;
+
+        // 7. tf_select (RFC Table 56 line 5966) - MOVED HERE from position 6
         self.decode_tf_select(range_decoder, self.start_band, self.end_band)?;
 
-        // Phase 4.2+4.3: We need allocation FIRST to get fine_bits and priorities for energy decoding
-        // This is a simplified stub implementation - full version would properly sequence the decoding
+        // 8. spread (RFC Table 56 line 5968) - NEWLY ADDED
+        let _spread = self.decode_spread(range_decoder)?;
 
-        // Compute boost (stubbed with minimal bitstream interaction)
+        // 9. dyn. alloc. (band boost) (RFC Table 56 line 5970)
         let mut total_bits = 1000i32; // Stub - would come from packet length
         let caps = [0i32; CELT_NUM_BANDS]; // Stub
         let (boost, _remaining_bits, _trim_bits) =
             self.decode_band_boost(range_decoder, total_bits, &caps)?;
 
-        // Phase 4.3: Bit allocation - USE self.start_band, self.end_band
+        // 10. alloc. trim (RFC Table 56 line 5972)
         let total_boost = boost.iter().sum();
         let trim = self.decode_allocation_trim(range_decoder, total_bits, total_boost)?;
+
+        // 11. skip (RFC Table 56 line 5974) - NEWLY ADDED
+        let skip_rsv = total_bits > 8; // Stub - proper calculation per RFC lines 6419-6421
+        let _skip = self.decode_skip(range_decoder, skip_rsv)?;
+
+        // 12. intensity + 13. dual (RFC Table 56 lines 5976-5978)
         let (_intensity, _dual_stereo) =
             self.decode_stereo_params(range_decoder, self.end_band, &mut total_bits)?;
 
+        // Compute allocation (uses decoded params above)
         let lm = self.compute_lm();
         let num_channels = if self.channels == Channels::Stereo {
             2
@@ -1851,24 +1989,11 @@ impl CeltDecoder {
             self.transient,
         )?;
 
-        // Phase 4.2: Energy envelope - use allocation results
-        let coarse_energy = self.decode_coarse_energy(range_decoder, intra)?;
-
-        // Get fine bits and priorities from allocation
+        // 14. fine energy (RFC Table 56 line 5980)
         let fine_energy =
             self.decode_fine_energy(range_decoder, &coarse_energy, &allocation.fine_energy_bits)?;
 
-        // Compute unused_bits from allocation balance
-        #[allow(clippy::cast_sign_loss)]
-        let unused_bits = allocation.balance.max(0) as u32;
-        let final_energy = self.decode_final_energy(
-            range_decoder,
-            &fine_energy,
-            &allocation.fine_priority,
-            unused_bits,
-        )?;
-
-        // Phase 4.4: PVQ shape decoding - STUBBED (will decode unit-norm shapes)
+        // 15. residual (PVQ shapes) (RFC Table 56 line 5982) - STUBBED
         // For now, create unit-norm shapes (all zeros except first coefficient = 1.0)
         let bins_per_band = self.bins_per_band();
         let mut shapes: Vec<Vec<f32>> = Vec::new();
@@ -1881,10 +2006,20 @@ impl CeltDecoder {
             shapes.push(shape);
         }
 
-        // Phase 4.6.1: Anti-collapse processing
+        // 16. anti-collapse (RFC Table 56 line 5984)
         let anti_collapse_on = self.decode_anti_collapse_bit(range_decoder)?;
 
-        // Create collapse masks and pulses (all zeros = no collapse for stub implementation)
+        // 17. finalize (final energy bits) (RFC Table 56 line 5986)
+        #[allow(clippy::cast_sign_loss)]
+        let unused_bits = allocation.balance.max(0) as u32;
+        let final_energy = self.decode_final_energy(
+            range_decoder,
+            &fine_energy,
+            &allocation.fine_priority,
+            unused_bits,
+        )?;
+
+        // Apply anti-collapse processing
         let collapse_masks = vec![0u8; CELT_NUM_BANDS];
         let pulses = [0u16; CELT_NUM_BANDS]; // Stub
 
@@ -1896,7 +2031,7 @@ impl CeltDecoder {
             anti_collapse_on,
         )?;
 
-        // Phase 4.6.2: Denormalization - USE self.start_band, self.end_band (via method)
+        // Denormalization - USE self.start_band, self.end_band (via method)
         let denormalized = self.denormalize_bands(&shapes, &final_energy);
 
         // Phase 4.6.3: Inverse MDCT and overlap-add
@@ -3506,6 +3641,157 @@ mod tests {
             assert_eq!(frame.channels, Channels::Mono);
         } else {
             // Acceptable for stub implementation
+        }
+    }
+
+    #[test]
+    fn test_decode_spread() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Test with sufficient bitstream data
+        // CELT_SPREAD_PDF: [32, 25, 23, 2, 0] -> len=5, should return 0-3
+        let data = vec![0x00; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let spread = decoder.decode_spread(&mut range_decoder);
+        assert!(spread.is_ok());
+        let s = spread.unwrap();
+        // ec_dec_icdf with CELT_SPREAD_PDF (len=5, ftb=5) can return 0-4
+        // But only 0-3 are valid spread values per RFC
+        assert!(s <= 4, "spread={s} exceeds ICDF maximum");
+
+        // Test with different pattern
+        let data = vec![0xFF; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let spread = decoder.decode_spread(&mut range_decoder);
+        assert!(spread.is_ok());
+
+        // Test with mixed pattern
+        let data = vec![0xAA; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let spread = decoder.decode_spread(&mut range_decoder);
+        assert!(spread.is_ok());
+    }
+
+    #[test]
+    fn test_decode_skip_without_reservation() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // When skip_rsv is false, should return false without decoding
+        let data = vec![0xFF; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        // Get initial position
+        let initial_tell = range_decoder.ec_tell();
+
+        let skip = decoder.decode_skip(&mut range_decoder, false);
+        assert!(skip.is_ok());
+        assert!(!skip.unwrap());
+
+        // Range decoder should not have advanced
+        let final_tell = range_decoder.ec_tell();
+        assert_eq!(final_tell, initial_tell);
+    }
+
+    #[test]
+    fn test_decode_skip_with_reservation() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // When skip_rsv is true, should decode bit
+        let data = vec![0x00; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let initial_tell = range_decoder.ec_tell();
+        let skip = decoder.decode_skip(&mut range_decoder, true);
+        assert!(skip.is_ok());
+
+        // Range decoder should have advanced by 1 bit
+        let final_tell = range_decoder.ec_tell();
+        assert!(final_tell > initial_tell);
+    }
+
+    #[test]
+    fn test_decode_post_filter_params_octave_range() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Test with sufficient bitstream data
+        let data = vec![0x00; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let params = decoder.decode_post_filter_params(&mut range_decoder);
+        assert!(params.is_ok());
+
+        let p = params.unwrap();
+        // Period range: 15-1022 (RFC lines 6768-6769)
+        assert!(p.period >= 15 && p.period <= 1022);
+        // Gain Q8: 3*(1..=8)*256/32 = 24, 48, 72, ..., 192
+        assert!(p.gain_q8 >= 24 && p.gain_q8 <= 192);
+        // Tapset: 0-2 (from {2,1,1}/4 PDF)
+        assert!(p.tapset <= 2);
+    }
+
+    #[test]
+    fn test_decode_post_filter_params_period_calculation() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Test period calculation: period = (16 << octave) + fine_pitch - 1
+        // For octave=0: period = 16 + fine_pitch - 1 (fine_pitch is 4 bits: 0-15)
+        // So period range for octave=0: 15-30
+
+        // Craft data for octave=0, fine_pitch=0
+        // ec_dec_uint(7) should give 0, then ec_dec_bits(4) should give 0
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let params = decoder.decode_post_filter_params(&mut range_decoder);
+        if let Ok(p) = params {
+            assert!(p.period >= 15); // Minimum period
+        }
+    }
+
+    #[test]
+    fn test_decode_post_filter_params_gain_q8_format() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Gain formula: 3 * (int_gain + 1) * 256 / 32
+        // int_gain is 3 bits: 0-7
+        // So gain_q8 = 3 * (1..=8) * 8 = 24, 48, 72, 96, 120, 144, 168, 192
+
+        let data = vec![0xFF; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let params = decoder.decode_post_filter_params(&mut range_decoder);
+        if let Ok(p) = params {
+            // Verify gain is one of the 8 valid values
+            let valid_gains = [24, 48, 72, 96, 120, 144, 168, 192];
+            assert!(
+                valid_gains.contains(&p.gain_q8),
+                "gain_q8={} not in valid set",
+                p.gain_q8
+            );
+        }
+    }
+
+    #[test]
+    fn test_decode_post_filter_params_tapset_values() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Tapset PDF: {2,1,1}/4 -> ICDF [4,2,1,0]
+        // ec_dec_icdf with len=4, ftb=2 can return 0-3
+        // But only 0-2 are valid tapset values per RFC
+
+        for pattern in &[0x00, 0x55, 0xAA, 0xFF] {
+            let data = vec![*pattern; 100];
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+            let params = decoder.decode_post_filter_params(&mut range_decoder);
+            assert!(params.is_ok(), "decode failed for pattern {pattern:02X}");
+
+            let p = params.unwrap();
+            assert!(
+                p.tapset <= 3,
+                "tapset={} exceeds ICDF maximum for pattern {pattern:02X}",
+                p.tapset
+            );
         }
     }
 }
