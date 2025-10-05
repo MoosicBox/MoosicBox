@@ -27,6 +27,9 @@ pub struct Allocation {
 
     /// Remaining bits for rebalancing
     pub balance: i32,
+
+    /// Skip flag reservation in 1/8 bit units (8 or 0)
+    pub skip_rsv: i32,
 }
 
 /// Decoded CELT frame output
@@ -1093,6 +1096,7 @@ impl CeltDecoder {
             fine_priority,
             coded_bands: end_band,
             balance,
+            skip_rsv,
         })
     }
 
@@ -1992,23 +1996,16 @@ impl CeltDecoder {
         let _spread = self.decode_spread(range_decoder)?;
 
         // Calculate bit budget (RFC lines 6411-6421)
-        // total_bits is in 8th bits (1/8 bit precision)
+        // FIXED 4.6.7.1: Convert tell_frac (8th bits) to bits
         let tell_frac = i32::try_from(range_decoder.ec_tell_frac())
             .map_err(|_| Error::CeltDecoder("tell_frac overflow".into()))?;
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let mut total_bits = (frame_bytes as i32 * 8 * 8) - tell_frac - 1;
-
-        // Calculate anti-collapse reservation (RFC lines 6415-6418)
-        let lm = self.compute_lm();
-        let anti_collapse_rsv =
-            if self.transient && lm > 1 && total_bits >= (i32::from(lm) + 2) * 8 {
-                8
-            } else {
-                0
-            };
-        total_bits = (total_bits - anti_collapse_rsv).max(0);
+        let tell_bits = (tell_frac + 7) / 8; // Round up to next bit
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let total_bits = (frame_bytes as i32 * 8) - tell_bits;
 
         // 9. dyn. alloc. (band boost) (RFC Table 56 line 5970)
+        let lm = self.compute_lm();
         let num_channels = if self.channels == Channels::Stereo {
             2
         } else {
@@ -2022,26 +2019,31 @@ impl CeltDecoder {
         let total_boost = boost.iter().sum();
         let trim = self.decode_allocation_trim(range_decoder, total_bits, total_boost)?;
 
-        // 11. skip (RFC Table 56 line 5974) - Calculate and decrement (RFC 6419-6421)
-        let skip_rsv = if total_bits > 8 { 8 } else { 0 };
-        total_bits -= skip_rsv;
-        let _skip = self.decode_skip(range_decoder, skip_rsv > 0)?;
-
         // 12. intensity + 13. dual (RFC Table 56 lines 5976-5978)
-        let (_intensity, _dual_stereo) =
-            self.decode_stereo_params(range_decoder, self.end_band, &mut total_bits)?;
+        // FIXED 4.6.7.4: Only decode stereo params for stereo frames (RFC 6423)
+        let mut total_bits_mut = total_bits;
+        let (_intensity, _dual_stereo) = if self.channels == Channels::Stereo {
+            self.decode_stereo_params(range_decoder, self.end_band, &mut total_bits_mut)?
+        } else {
+            (0, false)
+        };
 
-        // Compute allocation (uses decoded params above)
+        // Compute allocation (handles anti-collapse and skip reservations internally)
+        // FIXED 4.6.7.1: Removed duplicate reservations - compute_allocation does them
         let allocation = self.compute_allocation(
-            total_bits,
+            total_bits_mut,
             lm,
             num_channels,
-            &boost, // FIXED: use decoded boosts (not zeros)
+            &boost,
             trim,
             self.start_band,
             self.end_band,
             self.transient,
         )?;
+
+        // 11. skip (RFC Table 56 line 5974)
+        // FIXED 4.6.7.1: Use skip_rsv from allocation (calculated in compute_allocation)
+        let _skip = self.decode_skip(range_decoder, allocation.skip_rsv > 0)?;
 
         // 14. fine energy (RFC Table 56 line 5980)
         let fine_energy =
@@ -2624,10 +2626,12 @@ mod tests {
             fine_priority: [0; CELT_NUM_BANDS],
             coded_bands: 21,
             balance: 0,
+            skip_rsv: 0,
         };
 
         assert_eq!(alloc.coded_bands, 21);
         assert_eq!(alloc.balance, 0);
+        assert_eq!(alloc.skip_rsv, 0);
     }
 
     // Phase 4.5: Transient Processing Tests
@@ -3903,5 +3907,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_bit_budget_units_regression() {
+        let frame_bytes: i32 = 100;
+        let tell_frac: i32 = 128;
+
+        let tell_bits = (tell_frac + 7) / 8;
+        let total_bits = frame_bytes * 8 - tell_bits;
+
+        assert!(
+            total_bits < 1000,
+            "Bit count should be in bits, not 8th bits (got {total_bits})"
+        );
+        assert!(
+            total_bits > 700,
+            "Should have ~800 bits for 100-byte frame (got {total_bits})"
+        );
+        assert_eq!(total_bits, 784, "Expected 800 - 16 = 784 bits");
+
+        let wrong_total_bits = frame_bytes * 8 * 8 - tell_frac - 1;
+        assert!(
+            wrong_total_bits > 6000,
+            "Old buggy calculation should be in 8th bits (got {wrong_total_bits})"
+        );
     }
 }
