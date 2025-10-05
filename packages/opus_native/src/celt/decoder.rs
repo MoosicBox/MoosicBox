@@ -760,7 +760,7 @@ impl CeltDecoder {
     pub fn decode_band_boost(
         &self,
         range_decoder: &mut RangeDecoder,
-        total_bits: i32,
+        total_bits_8th: i32,
         caps: &[i32; CELT_NUM_BANDS],
     ) -> Result<([i32; CELT_NUM_BANDS], i32, i32)> {
         let bins = self.bins_per_band();
@@ -778,9 +778,10 @@ impl CeltDecoder {
             let mut dynalloc_loop_logp = dynalloc_logp;
 
             // Decode boost symbols while we have budget
+            // FIXED 4.6.9.3: total_bits_8th already in eighth-bits
             while dynalloc_loop_logp * 8
                 + i32::try_from(range_decoder.ec_tell_frac()).unwrap_or(i32::MAX)
-                < total_bits * 8 + total_boost
+                < total_bits_8th + total_boost
                 && boost < caps[band]
             {
                 let bit = range_decoder
@@ -818,14 +819,15 @@ impl CeltDecoder {
     pub fn decode_allocation_trim(
         &self,
         range_decoder: &mut RangeDecoder,
-        total_bits: i32,
+        total_bits_8th: i32,
         total_boost: i32,
     ) -> Result<u8> {
         let mut trim = 5_u8; // Default: no bias
 
         // Only decode if we have enough bits (6 bits = 48 eighth-bits)
+        // FIXED 4.6.9.3: total_bits_8th already in eighth-bits
         let tell = i32::try_from(range_decoder.ec_tell_frac()).unwrap_or(i32::MAX);
-        if tell + 48 <= total_bits * 8 - total_boost {
+        if tell + 48 <= total_bits_8th - total_boost {
             trim = range_decoder.ec_dec_icdf_u16(&TRIM_PDF, 7)?; // ftb=7 (2^7=128)
         }
 
@@ -902,7 +904,7 @@ impl CeltDecoder {
     )]
     pub fn compute_allocation(
         &self,
-        total_bits: i32,
+        total_bits_8th: i32,
         lm: u8,
         channels: usize,
         boosts: &[i32; CELT_NUM_BANDS],
@@ -920,8 +922,9 @@ impl CeltDecoder {
         let lm_i32 = i32::from(lm);
         let alloc_trim = i32::from(trim);
 
-        // RFC line 6411-6414: Conservative allocation (subtract 1 eighth-bit)
-        let mut total = (total_bits * 8).saturating_sub(1);
+        // RFC line 6411-6414: Already calculated as (frame_bytes×64 - tell_frac - 1)
+        // FIXED 4.6.9.2: total_bits_8th already in eighth-bits (bit-exact)
+        let mut total = total_bits_8th;
 
         // RFC line 6415-6418: Anti-collapse reservation
         let anti_collapse_rsv = if is_transient && lm > 1 && total >= (lm_i32 + 2) * 8 {
@@ -2106,14 +2109,15 @@ impl CeltDecoder {
         // 8. spread (RFC Table 56 line 5968) - NEWLY ADDED
         let _spread = self.decode_spread(range_decoder)?;
 
-        // Calculate bit budget (RFC lines 6411-6421)
-        // FIXED 4.6.7.1: Convert tell_frac (8th bits) to bits
+        // Calculate bit budget (RFC lines 6411-6414) - BIT-EXACT
+        // FIXED 4.6.9.1: Use bit-exact formula (no rounding!)
+        // RFC: total = (frame_bytes × 8 × 8) - ec_tell_frac() - 1
+        // This preserves all fractional precision in eighth-bits
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let tell_frac = i32::try_from(range_decoder.ec_tell_frac())
             .map_err(|_| Error::CeltDecoder("tell_frac overflow".into()))?;
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let tell_bits = (tell_frac + 7) / 8; // Round up to next bit
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let total_bits = (frame_bytes as i32 * 8) - tell_bits;
+        let total_bits_8th = (frame_bytes as i32 * 8 * 8) - tell_frac - 1;
 
         // 9. dyn. alloc. (band boost) (RFC Table 56 line 5970)
         let lm = self.compute_lm();
@@ -2124,16 +2128,17 @@ impl CeltDecoder {
         };
         let caps = self.compute_caps(lm, num_channels);
         let (boost, _remaining_bits, _trim_bits) =
-            self.decode_band_boost(range_decoder, total_bits, &caps)?;
+            self.decode_band_boost(range_decoder, total_bits_8th, &caps)?;
 
         // 10. alloc. trim (RFC Table 56 line 5972)
         let total_boost = boost.iter().sum();
-        let trim = self.decode_allocation_trim(range_decoder, total_bits, total_boost)?;
+        let trim = self.decode_allocation_trim(range_decoder, total_bits_8th, total_boost)?;
 
         // Compute allocation (handles ALL reservations: anti-collapse, skip, intensity, dual)
         // FIXED 4.6.8.2: Now includes intensity/dual reservations per RFC 6423-6429
+        // FIXED 4.6.9.1: Pass total_bits_8th (already in eighth-bits, bit-exact)
         let allocation = self.compute_allocation(
-            total_bits,
+            total_bits_8th,
             lm,
             num_channels,
             &boost,
@@ -4034,25 +4039,44 @@ mod tests {
     #[test]
     fn test_bit_budget_units_regression() {
         let frame_bytes: i32 = 100;
-        let tell_frac: i32 = 128;
 
-        let tell_bits = (tell_frac + 7) / 8;
-        let total_bits = frame_bytes * 8 - tell_bits;
+        // Test case 1: tell_frac with fractional part (not divisible by 8)
+        let tell_frac: i32 = 133; // Has fractional part (133 = 16×8 + 5)
 
-        assert!(
-            total_bits < 1000,
-            "Bit count should be in bits, not 8th bits (got {total_bits})"
+        // CORRECT (bit-exact RFC 6411-6414):
+        // total = frame_bytes × 64 - tell_frac - 1
+        let total_bits_8th = frame_bytes * 64 - tell_frac - 1;
+
+        // Exact calculation: 100 × 64 - 133 - 1 = 6400 - 134 = 6266
+        assert_eq!(total_bits_8th, 6266, "Expected exact bit-exact calculation");
+
+        // OLD buggy calculation with rounding (what we had before)
+        // tell_bits = (133 + 7) / 8 = 140 / 8 = 17 (rounds up!)
+        // old_total = (800 - 17) × 8 - 1 = 783 × 8 - 1 = 6263
+        let tell_bits_rounded = (tell_frac + 7) / 8;
+        let old_total = (frame_bytes * 8 - tell_bits_rounded) * 8 - 1;
+
+        assert_eq!(tell_bits_rounded, 17); // Verify rounding happened
+        assert_eq!(old_total, 6263);
+
+        // Difference: 3 eighth-bits of precision lost due to rounding!
+        assert_ne!(total_bits_8th, old_total, "Precision loss from rounding");
+        assert_eq!(
+            total_bits_8th - old_total,
+            3,
+            "Lost 3 eighth-bits from rounding"
         );
-        assert!(
-            total_bits > 700,
-            "Should have ~800 bits for 100-byte frame (got {total_bits})"
-        );
-        assert_eq!(total_bits, 784, "Expected 800 - 16 = 784 bits");
 
-        let wrong_total_bits = frame_bytes * 8 * 8 - tell_frac - 1;
-        assert!(
-            wrong_total_bits > 6000,
-            "Old buggy calculation should be in 8th bits (got {wrong_total_bits})"
+        // Test case 2: tell_frac perfectly divisible by 8 (no fraction)
+        let tell_frac2: i32 = 128; // Exactly 16 bits
+        let total_exact2 = frame_bytes * 64 - tell_frac2 - 1;
+        let tell_bits2 = (tell_frac2 + 7) / 8;
+        let old_total2 = (frame_bytes * 8 - tell_bits2) * 8 - 1;
+
+        // In this case, rounding doesn't lose precision (no fractional part)
+        assert_eq!(
+            total_exact2, old_total2,
+            "No precision loss when no fraction"
         );
     }
 }
