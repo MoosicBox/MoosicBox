@@ -482,7 +482,7 @@ reqwest = { version = "0.12.23", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
-roxmltree = "0.20.0"
+roxmltree = "0.21.0"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
