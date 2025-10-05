@@ -387,6 +387,36 @@ impl CeltDecoder {
         range_decoder.ec_dec_bit_logp(1)
     }
 
+    /// Compute allocation caps per RFC lines 6305-6316
+    ///
+    /// Returns maximum bit allocation per band based on cache table.
+    ///
+    /// # Reference
+    ///
+    /// libopus `celt.c` `init_caps()`
+    #[must_use]
+    fn compute_caps(&self, lm: u8, channels: usize) -> [i32; CELT_NUM_BANDS] {
+        use super::constants::CACHE_CAPS50;
+
+        let mut caps = [0i32; CELT_NUM_BANDS];
+        let bins = self.bins_per_band();
+        let stereo = usize::from(channels == 2);
+        let nb_bands = CELT_NUM_BANDS;
+
+        for band in 0..CELT_NUM_BANDS {
+            let n = i32::from(bins[band]);
+            let idx = nb_bands * (2 * usize::from(lm) + stereo) + band;
+
+            if idx < CACHE_CAPS50.len() {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                let channels_i32 = channels as i32;
+                caps[band] = (i32::from(CACHE_CAPS50[idx]) + 64) * channels_i32 * n / 4;
+            }
+        }
+
+        caps
+    }
+
     /// Returns frame duration in milliseconds
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
@@ -1916,10 +1946,19 @@ impl CeltDecoder {
     /// 16. anti-collapse
     /// 17. finalize
     ///
+    /// # Parameters
+    ///
+    /// * `range_decoder` - Range decoder positioned at start of CELT frame
+    /// * `frame_bytes` - Size of CELT frame in bytes (from packet header)
+    ///
     /// # Errors
     ///
     /// Returns an error if any decoding step fails.
-    pub fn decode_celt_frame(&mut self, range_decoder: &mut RangeDecoder) -> Result<DecodedFrame> {
+    pub fn decode_celt_frame(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        frame_bytes: usize,
+    ) -> Result<DecodedFrame> {
         // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
         if silence {
@@ -1952,9 +1991,30 @@ impl CeltDecoder {
         // 8. spread (RFC Table 56 line 5968) - NEWLY ADDED
         let _spread = self.decode_spread(range_decoder)?;
 
+        // Calculate bit budget (RFC lines 6411-6421)
+        // total_bits is in 8th bits (1/8 bit precision)
+        let tell_frac = i32::try_from(range_decoder.ec_tell_frac())
+            .map_err(|_| Error::CeltDecoder("tell_frac overflow".into()))?;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let mut total_bits = (frame_bytes as i32 * 8 * 8) - tell_frac - 1;
+
+        // Calculate anti-collapse reservation (RFC lines 6415-6418)
+        let lm = self.compute_lm();
+        let anti_collapse_rsv =
+            if self.transient && lm > 1 && total_bits >= (i32::from(lm) + 2) * 8 {
+                8
+            } else {
+                0
+            };
+        total_bits = (total_bits - anti_collapse_rsv).max(0);
+
         // 9. dyn. alloc. (band boost) (RFC Table 56 line 5970)
-        let mut total_bits = 1000i32; // Stub - would come from packet length
-        let caps = [0i32; CELT_NUM_BANDS]; // Stub
+        let num_channels = if self.channels == Channels::Stereo {
+            2
+        } else {
+            1
+        };
+        let caps = self.compute_caps(lm, num_channels);
         let (boost, _remaining_bits, _trim_bits) =
             self.decode_band_boost(range_decoder, total_bits, &caps)?;
 
@@ -1962,27 +2022,21 @@ impl CeltDecoder {
         let total_boost = boost.iter().sum();
         let trim = self.decode_allocation_trim(range_decoder, total_bits, total_boost)?;
 
-        // 11. skip (RFC Table 56 line 5974) - NEWLY ADDED
-        let skip_rsv = total_bits > 8; // Stub - proper calculation per RFC lines 6419-6421
-        let _skip = self.decode_skip(range_decoder, skip_rsv)?;
+        // 11. skip (RFC Table 56 line 5974) - Calculate and decrement (RFC 6419-6421)
+        let skip_rsv = if total_bits > 8 { 8 } else { 0 };
+        total_bits -= skip_rsv;
+        let _skip = self.decode_skip(range_decoder, skip_rsv > 0)?;
 
         // 12. intensity + 13. dual (RFC Table 56 lines 5976-5978)
         let (_intensity, _dual_stereo) =
             self.decode_stereo_params(range_decoder, self.end_band, &mut total_bits)?;
 
         // Compute allocation (uses decoded params above)
-        let lm = self.compute_lm();
-        let num_channels = if self.channels == Channels::Stereo {
-            2
-        } else {
-            1
-        };
-        let boosts = [0i32; CELT_NUM_BANDS]; // Stub
         let allocation = self.compute_allocation(
             total_bits,
             lm,
             num_channels,
-            &boosts,
+            &boost, // FIXED: use decoded boosts (not zeros)
             trim,
             self.start_band,
             self.end_band,
@@ -3607,7 +3661,7 @@ mod tests {
         let data = vec![0xFF; 200];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
         // Either succeeds or fails gracefully with proper error
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -3634,7 +3688,7 @@ mod tests {
         let data = vec![0x00; 200]; // Different pattern
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
         // Verify decode doesn't panic with narrowband settings
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -3792,6 +3846,62 @@ mod tests {
                 "tapset={} exceeds ICDF maximum for pattern {pattern:02X}",
                 p.tapset
             );
+        }
+    }
+
+    #[test]
+    fn test_decode_celt_frame_with_various_frame_bytes() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Test with different frame sizes
+        for frame_bytes in [50, 100, 200, 500] {
+            let data = vec![0x00; frame_bytes];
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+            let result = decoder.decode_celt_frame(&mut range_decoder, frame_bytes);
+
+            // Should not panic with correct bit budget calculation
+            // Result may be Ok or Err depending on stub implementations
+            if let Ok(frame) = result {
+                assert_eq!(frame.sample_rate, SampleRate::Hz48000);
+                assert_eq!(frame.channels, Channels::Mono);
+            }
+            // Else: Acceptable for stub PVQ/MDCT implementations
+        }
+    }
+
+    #[test]
+    fn test_compute_caps_mono() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Test with different LM values
+        for lm in 0..=3 {
+            let caps = decoder.compute_caps(lm, 1);
+
+            // All caps should be positive
+            for (band, &cap) in caps.iter().enumerate() {
+                assert!(cap >= 0, "Band {band} cap {cap} should be non-negative");
+            }
+        }
+    }
+
+    #[test]
+    fn test_compute_caps_stereo() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Stereo, 480).unwrap();
+
+        let caps_mono = decoder.compute_caps(2, 1);
+        let caps_stereo = decoder.compute_caps(2, 2);
+
+        // Stereo caps should be larger than mono (2x channels)
+        for band in 0..CELT_NUM_BANDS {
+            if caps_mono[band] > 0 {
+                assert!(
+                    caps_stereo[band] >= caps_mono[band],
+                    "Band {band}: stereo={} should be >= mono={}",
+                    caps_stereo[band],
+                    caps_mono[band]
+                );
+            }
         }
     }
 }

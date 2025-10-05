@@ -73,6 +73,28 @@ pub const CELT_SPREAD_PDF: &[u8] = &[32, 25, 23, 2, 0];
 /// Post-filter tapset PDF: {2, 1, 1}/4 (RFC Section 4.3.7.1 line 6769)
 pub const CELT_TAPSET_PDF: &[u8] = &[4, 2, 1, 0];
 
+/// Cache caps table for allocation maximums (RFC lines 6290-6316)
+///
+/// Precomputed maximum allocations in bits/sample for each band.
+/// Index calculation: `nbBands * (2*LM + stereo) + band`
+/// where nbBands=21, LM=0..3, stereo=0..1
+///
+/// Array size: 21 bands * 8 configurations = 168 values
+///
+/// Reference: libopus `static_modes_float.h` `cache_caps50[]`
+#[allow(clippy::unreadable_literal)]
+pub const CACHE_CAPS50: &[i16] = &[
+    224, 224, 224, 224, 224, 224, 224, 224, 160, 160, 160, 160, 185, 185, 185, 178, 178, 168, 134,
+    61, 37, 224, 224, 224, 224, 224, 224, 224, 224, 240, 240, 240, 240, 207, 207, 207, 198, 198,
+    183, 144, 66, 40, 160, 160, 160, 160, 160, 160, 160, 160, 185, 185, 185, 185, 193, 193, 193,
+    183, 183, 172, 138, 64, 38, 240, 240, 240, 240, 240, 240, 240, 240, 207, 207, 207, 207, 204,
+    204, 204, 193, 193, 180, 143, 66, 40, 185, 185, 185, 185, 185, 185, 185, 185, 193, 193, 193,
+    193, 193, 193, 193, 183, 183, 172, 138, 65, 39, 207, 207, 207, 207, 207, 207, 207, 207, 204,
+    204, 204, 204, 201, 201, 201, 188, 188, 176, 141, 66, 40, 193, 193, 193, 193, 193, 193, 193,
+    193, 193, 193, 193, 193, 194, 194, 194, 184, 184, 173, 139, 65, 39, 204, 204, 204, 204, 204,
+    204, 204, 204, 201, 201, 201, 201, 198, 198, 198, 187, 187, 175, 140, 66, 40,
+];
+
 /// Energy probability model for Laplace distribution
 ///
 /// RFC 6716 line 6073: "These parameters are held in the `e_prob_model` table"

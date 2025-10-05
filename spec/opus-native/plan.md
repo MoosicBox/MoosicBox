@@ -54,7 +54,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   Mono delay: Critical 1-sample delay for seamless stereo/mono switching
   Resampling: Optional feature with Table 54 delays (normative), moosicbox_resampler integration (non-normative)
 - [x] Phase 4: CELT Decoder Implementation
-**STATUS:** ✅ **RFC COMPLIANT** - All 6 sections complete, RFC Table 56 decode order verified
+**STATUS:** ✅ **RFC COMPLIANT** - All 6 sections complete, bitstream decode RFC compliant
   - [x] Section 4.1: CELT Decoder Framework - COMPLETE
   - [x] Section 4.2: Energy Envelope Decoding - COMPLETE (lines 8578-9159)
   - [x] Section 4.3: Bit Allocation - COMPLETE (lines 9161-9349)
@@ -65,10 +65,16 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
     - [x] Section 4.6.5: RFC Compliance Remediation - COMPLETE (4/4 subsections)
       - ✅ All 17 RFC Table 56 parameters decoded in correct order
       - ✅ Missing parameters added: spread, skip, post-filter params
-      - ✅ Band boost algorithm verified correct
-      - ✅ 386 tests passing, zero clippy warnings
-**Total:** 1136 RFC lines, 24 subsections | **Progress:** 6/6 sections (100%)
-**RFC Compliance:** ✅ Zero violations - Ready for Phase 5
+      - ✅ Decode order fixed: coarse energy, tf_change, tf_select moved
+      - ✅ 7 tests added, 386 tests passing total
+    - [x] Section 4.6.6: Fix Implementation Compromises - COMPLETE (3/5 subsections, 2 deferred)
+      - ✅ Bit budget calculation fixed (frame_bytes parameter added)
+      - ✅ Caps calculation implemented (CACHE_CAPS50 table added)
+      - ✅ Boost usage bug fixed
+      - 📋 PVQ/MDCT/Post-filter stubs documented (deferred)
+      - ✅ 3 tests added, 389 tests passing total, zero clippy warnings
+**Total:** 1136 RFC lines, 30 subsections | **Progress:** 6/6 sections (100%)
+**RFC Compliance:** ✅ Bitstream decode compliant - PVQ/MDCT stubs remain
 - [ ] Phase 5: Mode Integration & Hybrid
 - [ ] Phase 6: Packet Loss Concealment
 - [ ] Phase 7: Backend Integration
@@ -11533,11 +11539,484 @@ After completing ALL subsections (4.6.1-4.6.4):
 
 ---
 
+#### 4.6.6: Fix Implementation Compromises
+
+**Status:** ✅ **COMPLETE** - All critical bugs fixed, stubs documented
+
+**Purpose:** Address stubs and bugs found during RFC compliance review
+
+**Compromise Analysis:**
+
+During RFC compliance review, **7 critical compromises** were identified. While bitstream **decode order** is RFC compliant, **parameter usage** contains stubs and bugs preventing real packet decoding.
+
+| # | Issue | Type | Severity | RFC Reference | Impact |
+|---|-------|------|----------|---------------|--------|
+| 1 | `total_bits` hardcoded to 1000 | STUB | CRITICAL | 6411-6412 | All allocation wrong |
+| 2 | `caps[]` all zeros | STUB | CRITICAL | 6290-6316 | Dynamic allocation wrong |
+| 3 | `skip_rsv` side effects missing | PARTIAL | MEDIUM | 6419-6421 | Total not decremented |
+| 4 | `boosts` decoded but not used | BUG | MEDIUM | 6318-6368 | Allocation ignores boosts |
+| 5 | PVQ shapes stubbed | STUB | CRITICAL | Section 4.3.4 | No spectral decoding |
+| 6 | MDCT stubbed | STUB | CRITICAL | Section 4.3.6 | No time-domain output |
+| 7 | Post-filter params decoded but not applied | STUB | LOW | 6756-6790 | Missing enhancement |
+
+---
+
+##### 4.6.6.1: Fix Bit Budget Management
+
+**Status:** ✅ **COMPLETE**
+
+**Purpose:** Correctly calculate and track bit budget throughout decode pipeline
+
+**RFC Reference:** Lines 6411-6421
+
+**Tasks:**
+
+- [x] **Task 4.6.6.1.1:** Add `frame_bytes` parameter to decode_celt_frame()
+
+  **Current Signature:**
+  ```rust
+  pub fn decode_celt_frame(&mut self, range_decoder: &mut RangeDecoder) -> Result<DecodedFrame>
+  ```
+
+  **New Signature:**
+  ```rust
+  pub fn decode_celt_frame(
+      &mut self,
+      range_decoder: &mut RangeDecoder,
+      frame_bytes: usize,  // NEW: actual packet size in bytes
+  ) -> Result<DecodedFrame>
+  ```
+
+  **Rationale:**
+  - `frame_bytes` comes from Opus packet header (Phase 5)
+  - For Phase 4 testing, pass explicit value
+  - RFC 6411: "taking the size of the coded frame times 8"
+
+  **Implementation Location:** `decoder.rs:1922`
+  **Completed:** Signature updated, all call sites updated (tests at lines 3619, 3646, 3858)
+
+- [x] **Task 4.6.6.1.2:** Calculate initial total_bits correctly
+
+  **RFC Algorithm (lines 6411-6414):**
+  ```
+  1. total = frame_bytes * 8
+  2. total -= ec_tell_frac()
+  3. total -= 1  (conservative)
+  ```
+
+  **Replace Line 1956:**
+  ```rust
+  // OLD:
+  let mut total_bits = 1000i32; // Stub - would come from packet length
+
+  // NEW:
+  let tell_frac = i32::try_from(range_decoder.ec_tell_frac())
+      .map_err(|_| Error::CeltDecoder("tell_frac overflow".into()))?;
+  let mut total_bits = (frame_bytes as i32 * 8 * 8) - tell_frac - 1;
+  ```
+
+  **Note:** total_bits is in **8th bits** (1/8 bit precision), hence `* 8 * 8`
+  **Completed:** Lines 1993-1996
+
+- [x] **Task 4.6.6.1.3:** Implement anti_collapse_rsv reservation
+
+  **RFC Algorithm (lines 6415-6418):**
+  ```
+  IF (transient && LM > 1 && total >= (LM+2)*8):
+      anti_collapse_rsv = 8
+  ELSE:
+      anti_collapse_rsv = 0
+  total = max(0, total - anti_collapse_rsv)
+  ```
+
+  **Add after coarse energy decode (before band boost):**
+  ```rust
+  // Calculate anti-collapse reservation (RFC lines 6415-6418)
+  let lm = self.compute_lm();
+  let anti_collapse_rsv = if self.transient && lm > 1 && total_bits >= (i32::from(lm) + 2) * 8 {
+      8
+  } else {
+      0
+  };
+  total_bits = (total_bits - anti_collapse_rsv).max(0);
+  ```
+  **Completed:** Lines 1999-2006
+
+- [x] **Task 4.6.6.1.4:** Fix skip_rsv calculation and decrement
+
+  **RFC Algorithm (lines 6419-6421):**
+  ```
+  skip_rsv = 8 if total > 8 else 0
+  total -= skip_rsv
+  ```
+
+  **Replace Lines 1966-1967:**
+  ```rust
+  // OLD:
+  let skip_rsv = total_bits > 8; // Stub - proper calculation per RFC lines 6419-6421
+  let _skip = self.decode_skip(range_decoder, skip_rsv)?;
+
+  // NEW:
+  let skip_rsv = if total_bits > 8 { 8 } else { 0 };
+  total_bits -= skip_rsv;
+  let _skip = self.decode_skip(range_decoder, skip_rsv > 0)?;
+  ```
+  **Completed:** Lines 2023-2026
+
+- [x] **Task 4.6.6.1.5:** Update decode_stereo_params to properly reserve bits
+
+  **Current Issue:** Method modifies total_bits but changes may not propagate correctly
+
+  **Verify RFC Algorithm (lines 6423-6429):**
+  ```
+  IF stereo:
+      intensity_rsv = LOG2_FRAC_TABLE[num_bands]
+      IF intensity_rsv > total:
+          intensity_rsv = 0
+      ELSE:
+          total -= intensity_rsv
+          IF total > 8:
+              dual_stereo_rsv = 8
+              total -= dual_stereo_rsv
+  ```
+
+  **Review Current Implementation:** `decoder.rs:745-778`
+  - Check if total_bits updates propagate correctly
+  - Ensure intensity_rsv uses correct table
+  - Verify dual_stereo_rsv logic
+  **Completed:** Method already correct (decoder.rs:745-778), passes mutable total_bits
+
+**Verification Checklist:**
+- [x] `total_bits` calculated from `frame_bytes * 8 * 8 - tell_frac - 1`
+  **Result:** Line 1996
+- [x] `anti_collapse_rsv` calculated and total decremented
+  **Result:** Lines 1999-2006
+- [x] `skip_rsv` calculated correctly (8 or 0, not bool)
+  **Result:** Line 2023 - returns `8` or `0`
+- [x] `total_bits` decremented by skip_rsv
+  **Result:** Line 2024
+- [x] All reservations happen in correct RFC order
+  **Result:** anti-collapse (line 1999) → skip (line 2023) → intensity/dual (line 2028)
+
+---
+
+##### 4.6.6.2: Implement Caps Calculation
+
+**Status:** ✅ **COMPLETE**
+
+**Purpose:** Calculate maximum allocation per band from cache table
+
+**RFC Reference:** Lines 6290-6316
+
+**Tasks:**
+
+- [x] **Task 4.6.6.2.1:** Add cache_caps50 constant table
+
+  **Data Source:** libopus `static_modes_float.h` or RFC reference implementation
+
+  **File:** `packages/opus_native/src/celt/constants.rs`
+
+  **Structure:**
+  ```rust
+  /// Cache caps table (RFC lines 6290-6316)
+  ///
+  /// Indexed by: nbBands * (2*LM + stereo)
+  /// Values are in bits/sample before scaling
+  ///
+  /// Reference: libopus static_modes_float.h cache_caps50[]
+  pub const CACHE_CAPS50: &[i16] = &[
+      // TODO: Extract from libopus source
+      // Array size: 21 bands * (2*3 LM values + 2 stereo) = 21 * 8 = 168 values
+  ];
+  ```
+
+  **Implementation Steps:**
+  1. ✅ Download libopus source from xiph.org (fetched via webfetch)
+  2. ✅ Extract `cache_caps50[]` from `celt/static_modes_float.h`
+  3. ✅ Verify array dimensions match CELT_NUM_BANDS * (2*3 + 1) * 2 (168 values)
+  4. ✅ Convert to Rust constant array
+  **Completed:** `constants.rs:76-91` - 168 values, `CACHE_CAPS50: &[i16]`
+
+- [x] **Task 4.6.6.2.2:** Implement compute_caps() function
+
+  **RFC Algorithm (lines 6305-6316):**
+  ```
+  FOR each band:
+      nbBands = 21 (CELT_NUM_BANDS)
+      stereo = 0 if mono, 1 if stereo
+      N = bins_per_band[band]
+      i = nbBands * (2*LM + stereo)
+      cap[band] = (CACHE_CAPS50[i] + 64) * channels * N / 4
+  ```
+
+  **Add to decoder.rs:**
+  ```rust
+  /// Compute allocation caps per RFC lines 6305-6316
+  ///
+  /// # Reference
+  /// libopus celt.c init_caps()
+  fn compute_caps(&self, lm: u8, channels: usize) -> [i32; CELT_NUM_BANDS] {
+      let mut caps = [0i32; CELT_NUM_BANDS];
+      let bins = self.bins_per_band();
+      let stereo = if channels == 2 { 1 } else { 0 };
+      let nb_bands = CELT_NUM_BANDS;
+
+      for band in 0..CELT_NUM_BANDS {
+          let n = i32::from(bins[band]);
+          let idx = nb_bands * (2 * usize::from(lm) + stereo) + band;
+
+          if idx < CACHE_CAPS50.len() {
+              caps[band] = (i32::from(CACHE_CAPS50[idx]) + 64)
+                           * channels as i32
+                           * n
+                           / 4;
+          }
+      }
+
+      caps
+  }
+  ```
+  **Completed:** `decoder.rs:391-416`
+
+- [x] **Task 4.6.6.2.3:** Use computed caps in decode_celt_frame
+
+  **Replace Line 1957:**
+  ```rust
+  // OLD:
+  let caps = [0i32; CELT_NUM_BANDS]; // Stub
+
+  // NEW:
+  let lm = self.compute_lm();
+  let num_channels = if self.channels == Channels::Stereo { 2 } else { 1 };
+  let caps = self.compute_caps(lm, num_channels);
+  ```
+  **Completed:** Lines 2008-2014
+
+**Verification Checklist:**
+- [x] CACHE_CAPS50 constant extracted from libopus
+  **Result:** `constants.rs:76-91`, extracted from libopus `static_modes_float.h`
+- [x] Array size verified (21 * 8 = 168 values)
+  **Result:** 168 values confirmed
+- [x] compute_caps() implements RFC formula exactly
+  **Result:** `decoder.rs:391-416`
+- [x] Index calculation: `nbBands * (2*LM + stereo) + band`
+  **Result:** Line 408
+- [x] Formula: `(caps[idx] + 64) * channels * N / 4`
+  **Result:** Line 411
+
+---
+
+##### 4.6.6.3: Fix Boost Usage in Allocation
+
+**Status:** ✅ **COMPLETE**
+
+**Purpose:** Use decoded boosts in compute_allocation
+
+**Issue:** Line 1980 creates new zero array instead of using `boost` from line 1958
+
+**Tasks:**
+
+- [x] **Task 4.6.6.3.1:** Pass decoded boosts to compute_allocation
+
+  **Replace Lines 1980-1990:**
+  ```rust
+  // OLD:
+  let boosts = [0i32; CELT_NUM_BANDS]; // Stub
+  let allocation = self.compute_allocation(
+      total_bits,
+      lm,
+      num_channels,
+      &boosts,  // <-- WRONG: using zeros instead of decoded boosts
+      trim,
+      self.start_band,
+      self.end_band,
+      self.transient,
+  )?;
+
+  // NEW:
+  let allocation = self.compute_allocation(
+      total_bits,
+      lm,
+      num_channels,
+      &boost,  // <-- CORRECT: use decoded boosts from line 1958
+      trim,
+      self.start_band,
+      self.end_band,
+      self.transient,
+  )?;
+  ```
+  **Completed:** Line 2037
+
+**Verification:**
+- [x] Remove unused `boosts` variable at line 1980
+  **Result:** Removed
+- [x] Pass `boost` (from decode_band_boost) directly to compute_allocation
+  **Result:** Line 2037 - `&boost` passed directly
+- [x] Verify compute_allocation uses boosts correctly in allocation logic
+  **Result:** compute_allocation signature already uses boosts parameter
+
+---
+
+##### 4.6.6.4: PVQ and MDCT Implementation Strategy
+
+**Purpose:** Plan implementation approach for remaining stubs
+
+**Tasks:**
+
+- [ ] **Task 4.6.6.4.1:** Document PVQ stub limitations
+
+  **Current Status:** Lines 1996-2007 create unit-norm stubs
+
+  **Phase 4 Decision:** KEEP STUB
+  - PVQ is complex (RFC Section 4.3.4, ~200 lines)
+  - Requires U-V decomposition, pulse allocation, splitting
+  - Create separate Phase 4.7 or defer to Phase 8
+
+  **Update Comment:**
+  ```rust
+  // 15. residual (PVQ shapes) (RFC Table 56 line 5982)
+  // STUB: Phase 4.6 focuses on decode order and bit budget
+  // PVQ implementation deferred to Phase 4.7 (RFC Section 4.3.4)
+  // Current: Unit-norm shapes (first coefficient = 1.0)
+  ```
+
+- [ ] **Task 4.6.6.4.2:** Document MDCT stub limitations
+
+  **Current Status:** Line 2044 calls stubbed inverse_mdct()
+
+  **Phase 4 Decision:** KEEP STUB
+  - MDCT is complex (requires FFT or DCT-IV)
+  - Window function generation required
+  - Create separate Phase 4.8 or defer to Phase 8
+
+  **Update Comment:**
+  ```rust
+  // Phase 4.6.3: Inverse MDCT and overlap-add
+  // STUB: MDCT implementation deferred to Phase 4.8
+  // Current: Returns zeros (no time-domain conversion)
+  ```
+
+---
+
+##### 4.6.6.5: Update Documentation and Tests
+
+**Status:** ✅ **COMPLETE**
+
+**Tasks:**
+
+- [x] **Task 4.6.6.5.1:** Update plan.md status
+
+  **Phase 4.6.6 Summary Table:**
+  | Issue | Status | Fix |
+  |-------|--------|-----|
+  | total_bits calculation | ✅ FIXED | Section 4.6.6.1 |
+  | caps calculation | ✅ FIXED | Section 4.6.6.2 |
+  | skip_rsv side effects | ✅ FIXED | Section 4.6.6.1.4 |
+  | boosts usage | ✅ FIXED | Section 4.6.6.3 |
+  | PVQ shapes | 📋 DEFERRED | Phase 4.7 planned |
+  | MDCT | 📋 DEFERRED | Phase 4.8 planned |
+  | Post-filter apply | 📋 DEFERRED | Phase 4.9 planned |
+
+- [x] **Task 4.6.6.5.2:** Add integration test with real frame_bytes
+
+  **Tests Added:**
+  - `test_decode_celt_frame_with_various_frame_bytes` (decoder.rs:3851-3869) - Tests with 50, 100, 200, 500 bytes
+  - `test_compute_caps_mono` (decoder.rs:3871-3882) - Verifies caps computation for mono
+  - `test_compute_caps_stereo` (decoder.rs:3884-3901) - Verifies stereo caps >= mono caps
+
+- [x] **Task 4.6.6.5.3:** Update all decode_celt_frame call sites
+
+  **Files to Update:**
+  1. Integration tests: `decoder.rs` test module
+  2. Public API wrappers (if any)
+  3. Phase 5 mode integration (future)
+
+  **Search Pattern:**
+  ```bash
+  rg "decode_celt_frame\(" packages/opus_native/
+  ```
+
+  **Update each call site:**
+  - ✅ `test_decode_celt_frame_normal_mode` (line 3619)
+  - ✅ `test_decode_celt_frame_narrowband_simulation` (line 3646)
+  - ✅ All new tests use frame_bytes parameter
+  **Result:** All 3 existing call sites updated
+
+---
+
+##### 4.6.6.6: Verification Checklist
+
+**After implementing all fixes:**
+
+**Bit Budget Management:**
+- [ ] `frame_bytes` parameter added to decode_celt_frame()
+- [ ] `total_bits` calculated as `frame_bytes * 64 - tell_frac - 1`
+- [ ] `anti_collapse_rsv` calculated per RFC 6415-6418
+- [ ] `skip_rsv` is `8` or `0` (not bool), total decremented
+- [ ] All reservations in correct order: anti-collapse → skip → intensity → dual
+
+**Caps Calculation:**
+- [ ] CACHE_CAPS50 constant extracted from libopus
+- [ ] compute_caps() implemented per RFC 6305-6316
+- [ ] Index formula correct: `nbBands * (2*LM + stereo) + band`
+- [ ] Cap formula correct: `(caps[idx] + 64) * channels * N / 4`
+
+**Boost Usage:**
+- [ ] Decoded `boost` array passed to compute_allocation
+- [ ] No zero-initialized `boosts` array created
+
+**Testing:**
+- [ ] All existing tests updated with frame_bytes parameter
+- [ ] New test added: test_decode_celt_frame_with_frame_bytes
+- [ ] Tests pass with various frame_bytes values (50, 100, 200, 500)
+- [ ] Zero clippy warnings
+
+**Documentation:**
+- [ ] plan.md updated with accurate compromise status
+- [ ] PVQ/MDCT stubs clearly documented with phase deferrals
+- [ ] RFC compliance status accurately reflects implementation
+
+---
+
+##### 4.6.6 Implementation Order
+
+1. **Section 4.6.6.1** (Bit Budget) - FIRST (enables testing others)
+2. **Section 4.6.6.2** (Caps) - SECOND (needs CACHE_CAPS50 data)
+3. **Section 4.6.6.3** (Boosts) - THIRD (trivial fix)
+4. **Section 4.6.6.5** (Tests/Docs) - FOURTH (verification)
+5. **Section 4.6.6.4** (PVQ/MDCT) - DEFERRED (complex, separate phases)
+
+---
+
+##### 4.6.6 Success Criteria
+
+**After Phase 4.6.6:**
+- ✅ Bit budget calculated from actual packet size
+- ✅ Allocation caps computed from cache table
+- ✅ Decoded boosts used in allocation
+- ✅ All bit reservations follow RFC algorithm
+- ✅ Tests pass with realistic frame_bytes values
+- ✅ Documentation accurately reflects implementation status
+
+**Still Deferred (Acceptable):**
+- 📋 PVQ implementation (Phase 4.7)
+- 📋 MDCT implementation (Phase 4.8)
+- 📋 Post-filter application (Phase 4.9)
+
+**Phase 4 Status After 4.6.6:**
+- **Decode Order:** ✅ RFC Compliant
+- **Bit Management:** ✅ RFC Compliant
+- **Allocation Logic:** ✅ RFC Compliant
+- **Spectral Decoding:** 📋 Deferred
+- **Time-Domain:** 📋 Deferred
+
+---
+
 ## Phase 4 Complete Summary
 
-**Status:** ✅ **COMPLETE** - CELT decoder RFC compliant, ready for Phase 5
+**Status:** ✅ **BITSTREAM RFC COMPLIANT** - Decode order + bit management complete, PVQ/MDCT stubs remain
 
-**After Phase 4.6.5, the CELT decoder is RFC COMPLIANT:**
+**After Phase 4.6.5 + 4.6.6, the CELT decoder is RFC COMPLIANT for bitstream decode:**
 
 ### Dependency Chain:
 ```
@@ -11570,13 +12049,31 @@ PCM Audio Output! (via stub MDCT - full synthesis in Phase 4 follow-up)
 | 4.6   | 150       | 9 (includes 4.6.5)  | ✅ RFC COMPLIANT | High |
 | **Total** | **1136** | **30** | **6/6 complete (100%)** | - |
 
-### RFC Compliance Summary (Phase 4.6.5):
+### RFC Compliance Summary:
+
+**Phase 4.6.5 (Decode Order) - COMPLETE:**
 - ✅ All 17 RFC Table 56 parameters decoded in correct order
 - ✅ 3 missing parameters added: spread, skip, post-filter params
 - ✅ Decode order fixed: coarse energy, tf_change, tf_select moved to correct positions
 - ✅ Band boost algorithm verified correct
 - ✅ 386 tests passing (7 new tests added)
 - ✅ Zero clippy warnings
+
+**Phase 4.6.6 (Implementation) - COMPLETE:**
+- ✅ total_bits calculated from frame_bytes per RFC 6411-6412
+- ✅ caps[] computed from CACHE_CAPS50 table per RFC 6290-6316
+- ✅ skip_rsv properly decrements total_bits per RFC 6419-6421
+- ✅ boosts passed to compute_allocation (bug fixed)
+- 📋 PVQ shapes stubbed (deferred to Phase 4.7)
+- 📋 MDCT stubbed (deferred to Phase 4.8)
+- 📋 Post-filter application stubbed (deferred to Phase 4.9)
+
+**Tests Added:** 3 new tests (389 total passing)
+- test_decode_celt_frame_with_various_frame_bytes
+- test_compute_caps_mono
+- test_compute_caps_stereo
+
+**Clippy:** ✅ Zero warnings
 
 ### Critical Files Created (actual):
 - `packages/opus_native/src/celt/decoder.rs` - **3646 lines** (includes all decode methods + state + tests)
@@ -11592,12 +12089,21 @@ PCM Audio Output! (via stub MDCT - full synthesis in Phase 4 follow-up)
 - **Test vectors**: Deferred to Phase 8
 - **Zero clippy warnings**: ✅ ENFORCED (-D warnings)
 
-### Phase 4.6.5 New Code:
+### Phase 4.6.5 + 4.6.6 New Code:
 - **3 decode methods**: decode_spread(), decode_skip(), decode_post_filter_params() (~80 lines)
+- **1 compute method**: compute_caps() (~26 lines)
 - **1 struct**: PostFilterParams (~37 lines)
-- **2 constants**: CELT_SPREAD_PDF, CELT_TAPSET_PDF (4 lines)
-- **7 tests**: spread (1), skip (2), post-filter params (4) (~125 lines)
-- **Total**: ~246 lines of new code
+- **3 constants**: CELT_SPREAD_PDF, CELT_TAPSET_PDF, CACHE_CAPS50 (~20 lines)
+- **10 tests**: spread (1), skip (2), post-filter params (4), frame_bytes (1), caps (2) (~175 lines)
+- **Total**: ~338 lines of new code
+
+### Final Results:
+- **Tests**: 389 passing (up from 379, added 10 new tests)
+- **Clippy**: Zero warnings (enforced with -D warnings)
+- **Compile Time**: 3m 48s (NixOS environment)
+- **RFC Compliance**: ✅ All 17 RFC Table 56 parameters + bit budget calculation
+- **Fixed Bugs**: 4 critical (total_bits, caps, skip_rsv, boosts)
+- **Documented Stubs**: 3 (PVQ, MDCT, post-filter application)
 
 ---
 
