@@ -522,50 +522,75 @@ impl SilkDecoder {
         self.lcg_seed = seed;
 
         // Step 6: Decode excitation signal (RFC Table 5 entries 14-18)
-        // Full excitation decode: rate level → pulse counts → locations → LSBs → signs → reconstruction
-        let rate_level = self.decode_rate_level(range_decoder, frame_type)?;
+        // RFC COMPLIANT 4-PHASE BATCH PROCESSING (Lines 4895-4897, 4977-4980, 5260-5263)
+        // Phase 1: ALL pulse counts → Phase 2: ALL locations → Phase 3: ALL LSBs → Phase 4: ALL signs
 
-        // Get shell block count for entire frame (RFC Table 44)
+        let rate_level = self.decode_rate_level(range_decoder, frame_type)?;
         let num_shell_blocks = Self::get_shell_block_count(bandwidth, self.frame_size_ms)?;
 
-        // Decode excitation for all shell blocks
-        let mut excitation_blocks: Vec<[i32; 16]> = Vec::with_capacity(num_shell_blocks);
+        // Storage for 4-phase batch decode
+        let mut pulse_counts = Vec::with_capacity(num_shell_blocks);
+        let mut lsb_counts = Vec::with_capacity(num_shell_blocks);
+        let mut pulse_locations = Vec::with_capacity(num_shell_blocks);
+        let mut magnitudes_vec = Vec::with_capacity(num_shell_blocks);
 
+        // PHASE 1: Decode ALL pulse counts consecutively (RFC lines 4895-4897)
+        // "The pulse counts for all of the shell blocks are coded consecutively,
+        //  before the content of any of the blocks"
         for _ in 0..num_shell_blocks {
-            // Decode pulse count (returns pulse count and LSB flag)
             let (pulse_count, lsb_count) = self.decode_pulse_count(range_decoder, rate_level)?;
+            pulse_counts.push(pulse_count);
+            lsb_counts.push(lsb_count);
+        }
 
-            // Decode pulse locations (only if pulse_count > 0)
+        // PHASE 2: Decode ALL pulse locations (RFC lines 4977-4980)
+        // "These locations are coded for all the shell blocks before any of the
+        //  remaining information for each block"
+        for &pulse_count in &pulse_counts {
             let locations = if pulse_count > 0 {
                 self.decode_pulse_locations(range_decoder, pulse_count)?
             } else {
                 [0_u8; 16]
             };
+            pulse_locations.push(locations);
+        }
 
-            // Decode LSBs (only if lsb_count > 0)
-            let magnitudes = if lsb_count > 0 {
-                self.decode_lsbs(range_decoder, &locations, lsb_count)?
+        // PHASE 3: Decode ALL LSBs block-by-block (RFC lines 5260-5263)
+        // "After the decoder reads the pulse locations for all blocks, it reads
+        //  the LSBs (if any) for each block in turn"
+        for block_idx in 0..num_shell_blocks {
+            let magnitudes = if lsb_counts[block_idx] > 0 {
+                self.decode_lsbs(
+                    range_decoder,
+                    &pulse_locations[block_idx],
+                    lsb_counts[block_idx],
+                )?
             } else {
                 // No LSBs - magnitudes are just the pulse locations
                 let mut mags = [0_u16; 16];
-                for i in 0..16 {
-                    mags[i] = u16::from(locations[i]);
+                for (i, mag) in mags.iter_mut().enumerate() {
+                    *mag = u16::from(pulse_locations[block_idx][i]);
                 }
                 mags
             };
+            magnitudes_vec.push(magnitudes);
+        }
 
-            // Decode signs
+        // PHASE 4: Decode ALL signs (RFC lines 5293-5295)
+        // "After decoding the pulse locations and the LSBs, the decoder knows
+        //  the magnitude of each coefficient"
+        let mut excitation_blocks: Vec<[i32; 16]> = Vec::with_capacity(num_shell_blocks);
+        for block_idx in 0..num_shell_blocks {
             let e_raw = self.decode_signs(
                 range_decoder,
-                &magnitudes,
+                &magnitudes_vec[block_idx],
                 frame_type,
                 quant_offset,
-                pulse_count,
+                pulse_counts[block_idx],
             )?;
 
             // Reconstruct excitation (applies Q23 format, offset, LCG noise)
             let e_q23 = self.reconstruct_excitation(&e_raw, frame_type, quant_offset);
-
             excitation_blocks.push(e_q23);
         }
 
@@ -595,15 +620,13 @@ impl SilkDecoder {
             };
 
             // RFC lines 2553-2567: Gain dequantization
-            // Convert gain index to Q16 format using RFC algorithm
+            // gain_indices contains log_gain values (0-63) directly from decode_subframe_gains
+            // No lookup table needed - the decoded value IS the log_gain
             let gain_q16 = if !gain_indices.is_empty() && (subframe_idx < gain_indices.len()) {
-                let gain_idx = gain_indices[subframe_idx];
-                // TODO: Need proper log_gain calculation from gain_idx
-                // For now use approximation until gain tables are located
-                let log_gain = i32::from(gain_idx) * 128; // Placeholder
+                let log_gain = i32::from(gain_indices[subframe_idx]);
                 Self::dequantize_gain(log_gain)
             } else {
-                65536 // Unity gain fallback
+                65536 // Unity gain fallback (Q16)
             };
 
             // RFC lines 3593-3626: Select LPC based on subframe for 20ms frames
@@ -3017,42 +3040,38 @@ impl SilkDecoder {
     ///
     /// Implements `silk_log2lin()` per RFC 6716 lines 2558-2563.
     ///
+    /// Computes `2^(inLog_Q7/128.0)` in Q16 format.
+    ///
     /// # Arguments
     ///
-    /// * `log_q7` - Logarithmic value in Q7 format (7 fractional bits)
+    /// * `in_log_q7` - Logarithmic value in Q7 format (7 fractional bits)
     ///
     /// # Returns
     ///
     /// Linear value in Q16 format (16 fractional bits)
     ///
-    /// # Algorithm
+    /// # Algorithm (RFC Exact)
     ///
-    /// * Extract integer part: `int_part = log_q7 >> 7`
-    /// * Extract fractional part: `frac_q7 = log_q7 - (int_part << 7)`
-    /// * Interpolate using 129-entry table: `out = (table[frac_q7] + table[frac_q7+1]) >> 1`
-    /// * Scale by integer part: `out = out << int_part`
+    /// ```text
+    /// i = inLog_Q7 >> 7           // Integer part
+    /// f = inLog_Q7 & 127          // Fractional part
+    /// pow2_i = 1 << i             // 2^i
+    /// return pow2_i + (((-174*f*(128-f)) >> 16) + f) * (pow2_i >> 7)
+    /// ```
     ///
     /// # RFC Reference
     ///
     /// Lines 2558-2563
-    ///
-    /// # Notes
-    ///
-    /// * Current implementation uses approximation until proper table is added
-    /// * TODO: Add `SILK_LOG2LIN_TABLE` constant array from RFC
     #[must_use]
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    const fn silk_log2lin(log_q7: i32) -> i32 {
-        let int_part = log_q7 >> 7;
-        let frac_q7 = log_q7 - (int_part << 7);
+    const fn silk_log2lin(in_log_q7: i32) -> i32 {
+        let i = in_log_q7 >> 7;
+        let f = in_log_q7 & 127;
+        let pow2_i = 1_i32 << i;
 
-        let out = 32768 + (frac_q7 * 256);
-
-        if int_part >= 0 {
-            out << int_part
-        } else {
-            out >> (-int_part)
-        }
+        // RFC formula: pow2_i + (((-174*f*(128-f)) >> 16) + f) * (pow2_i >> 7)
+        let frac_part = (((-174 * f * (128 - f)) >> 16) + f) * (pow2_i >> 7);
+        pow2_i + frac_part
     }
 
     /// Dequantize gain index to Q16 linear gain
@@ -3061,16 +3080,17 @@ impl SilkDecoder {
     ///
     /// # Arguments
     ///
-    /// * `log_gain` - Logarithmic gain value from gain tables
+    /// * `log_gain` - Logarithmic gain value (0-63 from `decode_subframe_gains`)
     ///
     /// # Returns
     ///
-    /// Linear gain in Q16 format (16 fractional bits)
+    /// Linear gain in Q16 format (16 fractional bits), range: 81920 to 1686110208
     ///
-    /// # Algorithm
+    /// # Algorithm (RFC Exact - Line 2556)
     ///
-    /// * Apply log-to-linear conversion: `silk_log2lin((0x001D1C71*log_gain>>16) + 2090)`
-    /// * This combines gain quantization scaling with log-to-linear mapping
+    /// ```text
+    /// gain_Q16 = silk_log2lin((0x1D1C71 * log_gain >> 16) + 2090)
+    /// ```
     ///
     /// # RFC Reference
     ///
@@ -3078,16 +3098,18 @@ impl SilkDecoder {
     ///
     /// # Notes
     ///
-    /// * Constant `0x001D1C71` (1941617 decimal) scales the logarithmic gain
+    /// * Constant `0x1D1C71` (1941617 decimal) scales the logarithmic gain
     /// * Constant 2090 is the bias added before log-to-linear conversion
-    /// * TODO: `log_gain` should come from proper gain tables lookup
+    /// * `log_gain` comes directly from `decode_subframe_gains` (no table lookup needed)
+    /// * Independent coding: `log_gain` = 0-63 (clamped `gain_idx`)
+    /// * Delta coding: `log_gain` = 0-63 (clamped computed value)
     #[must_use]
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     fn dequantize_gain(log_gain: i32) -> i32 {
         let scaled = (0x001D_1C71_i64 * i64::from(log_gain)) >> 16;
         #[allow(clippy::cast_possible_truncation)]
-        let log_q7 = (scaled as i32) + 2090;
-        Self::silk_log2lin(log_q7)
+        let in_log_q7 = (scaled as i32) + 2090;
+        Self::silk_log2lin(in_log_q7)
     }
 }
 
