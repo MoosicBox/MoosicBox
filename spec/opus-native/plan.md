@@ -17896,7 +17896,7 @@ pub fn decode_silk_frame(
     )?;
 
     let stereo_weights = if self.channels == Channels::Stereo {
-        Some(self.decode_stereo_weights(range_decoder)?)
+        Some(self.silk_decoder.decode_stereo_weights(range_decoder)?)
     } else {
         None
     };
@@ -17969,9 +17969,10 @@ pub fn decode_silk_frame(
     }
 
     // Phase 3: Stereo unmixing (RFC 5663-5723)
-    let final_samples = if let Some(weights) = stereo_weights {
+    let final_samples = if let Some((w0_q13, w1_q13)) = stereo_weights {
         // Stereo unmixing: mid/side → left/right
         // Method implemented in Phase 3: SilkDecoder::stereo_unmix() at decoder.rs:2238
+        // decode_stereo_weights returns (w0_q13, w1_q13) tuple per RFC 5663-5723
         let mid_channel = all_samples
             .iter()
             .step_by(2)
@@ -17989,8 +17990,8 @@ pub fn decode_silk_frame(
         self.silk_decoder.stereo_unmix(
             &mid_channel,
             Some(&side_channel),
-            weights.mid_weight,
-            weights.side_weight,
+            w0_q13,
+            w1_q13,
             self.bandwidth,
         )?
     } else {
