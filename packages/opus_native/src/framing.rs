@@ -79,49 +79,49 @@ impl FrameCountByte {
     }
 }
 
-fn decode_padding_length(data: &[u8], packet_len: usize) -> Result<usize> {
-    let mut offset = 0;
-    let mut padding_bytes = 0_usize;
+fn decode_padding_length(data: &[u8], packet_len: usize) -> Result<(usize, usize)> {
+    let mut len_indicator_bytes = 0;
+    let mut padding_data_bytes = 0_usize;
 
     loop {
-        if offset >= data.len() {
+        if len_indicator_bytes >= data.len() {
             return Err(Error::InvalidPacket("Incomplete padding".into()));
         }
 
-        let byte = data[offset];
-        offset += 1;
+        let byte = data[len_indicator_bytes];
+        len_indicator_bytes += 1;
 
         if byte == 255 {
-            padding_bytes += 254;
+            padding_data_bytes += 254;
         } else {
-            padding_bytes += byte as usize;
+            padding_data_bytes += byte as usize;
             break;
         }
     }
 
-    let total_padding_overhead = offset + padding_bytes;
+    let total_padding_overhead = len_indicator_bytes + padding_data_bytes;
     if total_padding_overhead > packet_len - 2 {
         return Err(Error::InvalidPacket("Padding exceeds packet size".into()));
     }
 
-    Ok(total_padding_overhead)
+    Ok((len_indicator_bytes, padding_data_bytes))
 }
 
 fn parse_code3_cbr(
     packet: &[u8],
     offset: usize,
     count: u8,
-    padding_overhead: usize,
+    padding_data_bytes: usize,
 ) -> Result<Vec<&[u8]>> {
-    let r = packet.len() - 2 - padding_overhead;
+    let available_for_frames = packet.len() - offset - padding_data_bytes;
 
-    if !r.is_multiple_of(count as usize) {
+    if !available_for_frames.is_multiple_of(count as usize) {
         return Err(Error::InvalidPacket(
             "CBR remainder not divisible by frame count".into(),
         ));
     }
 
-    let frame_len = r / (count as usize);
+    let frame_len = available_for_frames / (count as usize);
     let mut frames = Vec::with_capacity(count as usize);
 
     for i in 0..count {
@@ -137,15 +137,16 @@ fn parse_code3_vbr(
     packet: &[u8],
     mut offset: usize,
     count: u8,
-    padding_overhead: usize,
+    padding_data_bytes: usize,
 ) -> Result<Vec<&[u8]>> {
     let mut frames = Vec::with_capacity(count as usize);
+    let packet_end = packet.len() - padding_data_bytes;
 
     for _ in 0..(count - 1) {
         let (len, len_bytes) = decode_frame_length(&packet[offset..])?;
         offset += len_bytes;
 
-        if offset + len > packet.len() - padding_overhead {
+        if offset + len > packet_end {
             return Err(Error::InvalidPacket("VBR frame exceeds packet".into()));
         }
 
@@ -153,14 +154,13 @@ fn parse_code3_vbr(
         offset += len;
     }
 
-    let end = packet.len() - padding_overhead;
-    if offset > end {
+    if offset > packet_end {
         return Err(Error::InvalidPacket(
             "VBR packet too short for last frame".into(),
         ));
     }
 
-    frames.push(&packet[offset..end]);
+    frames.push(&packet[offset..packet_end]);
 
     Ok(frames)
 }
@@ -173,18 +173,18 @@ fn parse_code3(packet: &[u8]) -> Result<Vec<&[u8]>> {
     let fc_byte = FrameCountByte::parse(packet[1])?;
     let mut offset = 2;
 
-    let padding_overhead = if fc_byte.padding {
-        let po = decode_padding_length(&packet[offset..], packet.len())?;
-        offset += po;
-        po
+    let (len_indicator_bytes, padding_data_bytes) = if fc_byte.padding {
+        decode_padding_length(&packet[offset..], packet.len())?
     } else {
-        0
+        (0, 0)
     };
 
+    offset += len_indicator_bytes;
+
     if fc_byte.vbr {
-        parse_code3_vbr(packet, offset, fc_byte.count, padding_overhead)
+        parse_code3_vbr(packet, offset, fc_byte.count, padding_data_bytes)
     } else {
-        parse_code3_cbr(packet, offset, fc_byte.count, padding_overhead)
+        parse_code3_cbr(packet, offset, fc_byte.count, padding_data_bytes)
     }
 }
 
@@ -321,12 +321,12 @@ mod tests {
             0b0000_0011,
             0b0100_0001,
             5,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
             0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
         ];
         let frames = parse_frames(packet).unwrap();
         assert_eq!(frames.len(), 1);
@@ -336,9 +336,9 @@ mod tests {
     #[test]
     fn test_padding_chain() {
         let mut packet = vec![0b0000_0011, 0b0100_0001, 255, 255, 2];
+        packet.push(0x01);
         let padding_len = 254 + 254 + 2;
         packet.extend(std::iter::repeat_n(0x00, padding_len));
-        packet.push(0x01);
 
         let frames = parse_frames(&packet).unwrap();
         assert_eq!(frames.len(), 1);
@@ -354,5 +354,58 @@ mod tests {
     fn test_frame_count_zero_fails() {
         let packet = &[0b0000_0011, 0b0000_0000];
         assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_code1_frame_content_validation() {
+        let packet = &[0b0000_0001, 0xAA, 0xBB, 0xCC, 0xDD];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0], &[0xAA, 0xBB]);
+        assert_eq!(frames[1], &[0xCC, 0xDD]);
+    }
+
+    #[test]
+    fn test_code3_cbr_with_padding_content() {
+        let packet = &[
+            0b0000_0011,
+            0b0100_0010,
+            3,
+            0xAA,
+            0xBB,
+            0xCC,
+            0xDD,
+            0x00,
+            0x00,
+            0x00,
+        ];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0], &[0xAA, 0xBB]);
+        assert_eq!(frames[1], &[0xCC, 0xDD]);
+    }
+
+    #[test]
+    fn test_code3_vbr_with_padding_content() {
+        let packet = &[
+            0b0000_0011,
+            0b1100_0011,
+            2,
+            2,
+            0xAA,
+            0xBB,
+            3,
+            0xCC,
+            0xDD,
+            0xEE,
+            0xFF,
+            0x00,
+            0x00,
+        ];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 3);
+        assert_eq!(frames[0], &[0xAA, 0xBB]);
+        assert_eq!(frames[1], &[0xCC, 0xDD, 0xEE]);
+        assert_eq!(frames[2], &[0xFF]);
     }
 }
