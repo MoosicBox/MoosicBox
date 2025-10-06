@@ -24,4 +24,10 @@ pub enum Error {
 
     #[error("CELT decoder error: {0}")]
     CeltDecoder(String),
+
+    #[error("Invalid sample rate: {0}")]
+    InvalidSampleRate(String),
+
+    #[error("Invalid resampler delay: {0}")]
+    InvalidDelay(String),
 }

@@ -2087,10 +2087,29 @@ impl CeltDecoder {
     /// # Errors
     ///
     /// Returns an error if any decoding step fails.
+    /// Decode CELT frame with optional frequency-domain decimation
+    ///
+    /// # RFC Reference
+    /// * Lines 498-501: "decimate the MDCT layer output"
+    /// * Lines 5814-5831: Table 55 - Band cutoff frequencies (NORMATIVE)
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Range decoder
+    /// * `frame_bytes` - Frame size in bytes (for bit budget)
+    /// * `target_rate` - Target output sample rate (8/12/16/24/48 kHz)
+    ///
+    /// # Returns
+    /// Decoded frame at `target_rate`
+    ///
+    /// # Errors
+    /// * Returns error if decoding fails
+    /// * Returns error if `target_rate` unsupported
+    #[allow(clippy::too_many_lines)]
     pub fn decode_celt_frame(
         &mut self,
         range_decoder: &mut RangeDecoder,
         frame_bytes: usize,
+        target_rate: u32,
     ) -> Result<DecodedFrame> {
         // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
@@ -2236,6 +2255,36 @@ impl CeltDecoder {
             freq_data.extend_from_slice(band);
         }
 
+        // RFC 498-501: Apply frequency-domain decimation
+        // Zero high-frequency bands based on target rate (RFC Table 55)
+        // Band cutoffs chosen per Nyquist theorem: keep all bands up to target_rate/2
+        let end_band_for_rate = match target_rate {
+            8000 => 13,
+            12000 => 16,
+            16000 => 17,
+            24000 => 19,
+            48000 => 21,
+            _ => {
+                return Err(Error::InvalidSampleRate(format!(
+                    "Unsupported CELT target rate: {target_rate} (must be 8k/12k/16k/24k/48k)"
+                )));
+            }
+        };
+
+        if end_band_for_rate <= CELT_NUM_BANDS {
+            let bins_per_band = self.bins_per_band();
+
+            let bins_to_keep: usize = bins_per_band
+                .iter()
+                .take(end_band_for_rate)
+                .map(|&b| b as usize)
+                .sum();
+
+            for sample in freq_data.iter_mut().skip(bins_to_keep) {
+                *sample = 0.0;
+            }
+        }
+
         let time_data = self.inverse_mdct(&freq_data);
         let samples = self.overlap_add(&time_data)?;
 
@@ -2245,7 +2294,7 @@ impl CeltDecoder {
 
         Ok(DecodedFrame {
             samples,
-            sample_rate: self.sample_rate,
+            sample_rate: SampleRate::from_hz(target_rate)?,
             channels: self.channels,
         })
     }
@@ -3805,7 +3854,7 @@ mod tests {
         let data = vec![0xFF; 200];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200, 48000);
         // Either succeeds or fails gracefully with proper error
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -3832,7 +3881,7 @@ mod tests {
         let data = vec![0x00; 200]; // Different pattern
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200, 48000);
         // Verify decode doesn't panic with narrowband settings
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -4002,7 +4051,7 @@ mod tests {
             let data = vec![0x00; frame_bytes];
             let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-            let result = decoder.decode_celt_frame(&mut range_decoder, frame_bytes);
+            let result = decoder.decode_celt_frame(&mut range_decoder, frame_bytes, 48000);
 
             // Should not panic with correct bit budget calculation
             // Result may be Ok or Err depending on stub implementations
