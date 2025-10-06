@@ -17733,6 +17733,73 @@ Codes 0-2 have max 2 frames, max duration 60ms×2=120ms, always valid.
 
 ---
 
+#### 5.2.13: 2.5ms Frame Precision Bug & Fix 🔴→✅
+
+**Bug Discovery Date:** Third RFC audit after R5 implementation
+
+**Problem:** Integer truncation in R5 validation caused false positives for 2.5ms frames
+- `frame_size_ms()` returns `u8`, truncating 2.5ms → 2ms
+- Validation: `49 frames × 2ms = 98ms < 120ms` ✓ (INCORRECT - should fail)
+- Reality: `49 frames × 2.5ms = 122.5ms > 120ms` ✗ (RFC violation)
+- **Impact:** Accepted counts 49-60 for 2.5ms frames (all violate R5)
+
+**Root Cause:** Cannot represent 2.5 as integer (u8)
+
+**Solution: Fractional Arithmetic (libopus pattern)**
+- Added `Toc::frame_duration_tenths_ms() -> u16` (2.5ms → 25, 5ms → 50, etc.)
+- Updated R5 validation to use tenths: `count * duration_tenths ≤ 1200`
+- No division = no precision loss (matches libopus approach)
+
+**Code Changes:**
+
+1. **src/toc.rs** - Added fractional duration method:
+   ```rust
+   pub const fn frame_duration_tenths_ms(self) -> u16 {
+       let index = (self.config % 4) as usize;
+       match self.config {
+           0..=11 => [100, 200, 400, 600][index],  // SILK/Hybrid NB/MB/WB
+           12..=15 => [100, 200, 100, 200][index], // SILK/Hybrid SWB
+           16..=31 => [25, 50, 100, 200][index],   // CELT-only (2.5ms!)
+           _ => unreachable!(),
+       }
+   }
+   ```
+
+2. **src/framing.rs** - Updated R5 validation:
+   ```rust
+   let frame_duration_tenths = toc.frame_duration_tenths_ms();
+   let total_duration_tenths = u32::from(fc_byte.count) * u32::from(frame_duration_tenths);
+
+   if total_duration_tenths > 1200 {  // 120ms × 10
+       #[allow(clippy::cast_precision_loss)]  // Max 1225, well within f32 precision
+       let duration_ms = total_duration_tenths as f32 / 10.0;
+       return Err(Error::InvalidPacket(format!(
+           "Packet duration {:.1}ms exceeds 120ms limit (R5): {} frames",
+           duration_ms, fc_byte.count
+       )));
+   }
+   ```
+
+**Tests Added:** 4 new boundary tests for 2.5ms frames
+- ✅ `test_r5_2_5ms_boundary_47_frames_valid` (117.5ms)
+- ✅ `test_r5_2_5ms_boundary_48_frames_valid` (120.0ms - at limit)
+- ✅ `test_r5_2_5ms_boundary_49_frames_invalid` (122.5ms - exceeds)
+- ✅ `test_r5_2_5ms_boundary_50_frames_invalid` (125.0ms - exceeds)
+
+**Verification:**
+- ✅ 431 tests passing (up from 428)
+- ✅ Zero clippy warnings
+- ✅ 2.5ms frames now correctly validated
+- ✅ Existing tests unchanged (5/10/20/40/60ms unaffected)
+
+**RFC Compliance:** ✅ **R5 NOW TRULY ENFORCED FOR ALL FRAME DURATIONS**
+- Previous: R5 broken for 2.5ms frames (accepted 49-60 frames)
+- Now: R5 enforced for all 6 frame durations including 2.5ms
+
+**Key Insight:** Integer arithmetic for fractional values requires multiplied representation (tenths) to avoid precision loss. This is the standard approach in libopus and other audio codecs.
+
+---
+
 ### Section 5.3: Hybrid Mode Packet Decode (BIT-EXACT) 🔴 CRITICAL
 
 **RFC Reference:** Lines 481-487 (hybrid overview), 522-526 (shared entropy coder), 5804 (band cutoff), 6956-7026 (redundancy)

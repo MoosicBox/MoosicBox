@@ -173,13 +173,15 @@ fn parse_code3(packet: &[u8]) -> Result<Vec<&[u8]>> {
     let toc = Toc::parse(packet[0]);
     let fc_byte = FrameCountByte::parse(packet[1])?;
 
-    let frame_duration_ms = toc.frame_size_ms();
-    let total_duration_ms = u32::from(fc_byte.count) * u32::from(frame_duration_ms);
+    let frame_duration_tenths = toc.frame_duration_tenths_ms();
+    let total_duration_tenths = u32::from(fc_byte.count) * u32::from(frame_duration_tenths);
 
-    if total_duration_ms > 120 {
+    if total_duration_tenths > 1200 {
+        #[allow(clippy::cast_precision_loss)]
+        let duration_ms = total_duration_tenths as f32 / 10.0;
         return Err(Error::InvalidPacket(format!(
-            "Packet duration {}ms exceeds 120ms limit (R5): {} frames × {}ms",
-            total_duration_ms, fc_byte.count, frame_duration_ms
+            "Packet duration {:.1}ms exceeds 120ms limit (R5): {} frames",
+            duration_ms, fc_byte.count
         )));
     }
 
@@ -508,6 +510,34 @@ mod tests {
     #[test]
     fn test_r5_exceeds_120ms_60ms() {
         let packet = &[(3 << 3) | 0b011, 0b0000_0011, 0x01, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_2_5ms_boundary_47_frames_valid() {
+        let mut packet = vec![(16 << 3) | 0b011, 0b0010_1111];
+        packet.extend(vec![0x01; 94]);
+        let frames = parse_frames(&packet).unwrap();
+        assert_eq!(frames.len(), 47);
+    }
+
+    #[test]
+    fn test_r5_2_5ms_boundary_48_frames_valid() {
+        let mut packet = vec![(16 << 3) | 0b011, 0b0011_0000];
+        packet.extend(vec![0x01; 96]);
+        let frames = parse_frames(&packet).unwrap();
+        assert_eq!(frames.len(), 48);
+    }
+
+    #[test]
+    fn test_r5_2_5ms_boundary_49_frames_invalid() {
+        let packet = &[(16 << 3) | 0b011, 0b0011_0001, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_2_5ms_boundary_50_frames_invalid() {
+        let packet = &[(16 << 3) | 0b011, 0b0011_0010, 0x01, 0x01];
         assert!(parse_frames(packet).is_err());
     }
 }

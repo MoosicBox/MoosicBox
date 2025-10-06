@@ -70,6 +70,17 @@ impl Toc {
     }
 
     #[must_use]
+    pub const fn frame_duration_tenths_ms(self) -> u16 {
+        let index = (self.config % 4) as usize;
+        match self.config {
+            0..=11 => [100, 200, 400, 600][index],
+            12..=15 => [100, 200, 100, 200][index],
+            16..=31 => [25, 50, 100, 200][index],
+            _ => unreachable!(),
+        }
+    }
+
+    #[must_use]
     pub const fn configuration(self) -> Configuration {
         CONFIGURATIONS[self.config as usize]
     }
