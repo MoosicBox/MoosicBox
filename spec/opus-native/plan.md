@@ -17970,8 +17970,29 @@ pub fn decode_silk_frame(
 
     // Phase 3: Stereo unmixing (RFC 5663-5723)
     let final_samples = if let Some(weights) = stereo_weights {
-        // Call private stereo_unmix method (already exists, verify)
-        todo!("Call stereo unmixing")
+        // Stereo unmixing: mid/side → left/right
+        // Method implemented in Phase 3: SilkDecoder::stereo_unmix() at decoder.rs:2238
+        let mid_channel = all_samples
+            .iter()
+            .step_by(2)
+            .copied()
+            .collect::<Vec<f32>>();
+
+        let side_channel = all_samples
+            .iter()
+            .skip(1)
+            .step_by(2)
+            .copied()
+            .collect::<Vec<f32>>();
+
+        // Call stereo unmixing with weight interpolation
+        self.silk_decoder.stereo_unmix(
+            &mid_channel,
+            Some(&side_channel),
+            weights.mid_weight,
+            weights.side_weight,
+            self.bandwidth,
+        )?
     } else {
         all_samples
     };
@@ -18229,32 +18250,32 @@ impl Decoder {
                 num_samples as u64,
                 SignalSpec::new(input_rate, channels.into())
             );
-            
+
             // Deinterleave and convert (Q15: divide by 32768)
             for ch in 0..channels as usize {
                 for sample_idx in 0..num_samples {
                     let interleaved_idx = sample_idx * channels as usize + ch;
-                    audio_buffer.chan_mut(ch)[sample_idx] = 
+                    audio_buffer.chan_mut(ch)[sample_idx] =
                         f32::from(input[interleaved_idx]) / 32768.0;
                 }
             }
-            
+
             // Create resampler
             let resampler = Resampler::<f32>::new(
                 SignalSpec::new(input_rate, channels.into()),
                 output_rate as usize,
                 num_samples as u64, // Chunk size
             );
-            
+
             // RFC NORMATIVE REQUIREMENT: Verify delay (lines 5736-5738)
             // Query actual resampler delay
             // NOTE: If moosicbox_resampler doesn't expose delay(), document assumption
             // that rubato's polyphase resampling meets RFC minimums
-            
+
             // Attempt to query delay (may need to check moosicbox_resampler API)
             // let actual_delay_samples = resampler.delay_samples()?;
             // let actual_delay_ms = (actual_delay_samples as f32 * 1000.0) / input_rate as f32;
-            
+
             // For now, document the assumption:
             // rubato uses sinc interpolation with parameters that typically provide:
             // - 8→48 kHz: ~0.5-0.6 ms (meets RFC 0.538 ms)
@@ -18265,32 +18286,32 @@ impl Decoder {
             // 1. Query delay if moosicbox_resampler exposes it
             // 2. Measure delay empirically with impulse response
             // 3. Implement custom resampler matching RFC reference
-            
+
             // RFC allows tolerance (lines 5757-5762):
             // "may not be possible to achieve exactly these delays"
             // "deviations are unlikely to be perceptible"
-            
+
             // TODO: If moosicbox_resampler has delay query API, uncomment:
             /*
             const DELAY_TOLERANCE_MS: f32 = 0.1; // 100μs tolerance
-            
+
             if actual_delay_ms < required_delay_ms - DELAY_TOLERANCE_MS {
                 return Err(Error::InvalidDelay(format!(
                     "Resampler delay too small: {:.3}ms (RFC requires ≥{:.3}ms for {}Hz)",
                     actual_delay_ms, required_delay_ms, input_rate
                 )));
             }
-            
+
             if actual_delay_ms > required_delay_ms + DELAY_TOLERANCE_MS {
                 log::warn!(
                     "Resampler delay {:.3}ms exceeds RFC minimum {:.3}ms for {}Hz (acceptable per RFC 5739)",
                     actual_delay_ms, required_delay_ms, input_rate
                 );
             }
-            
+
             self.silk_resampler_delay_ms = actual_delay_ms;
             */
-            
+
             self.silk_resampler_state = Some(resampler);
             self.silk_resampler_input_rate = input_rate;
             self.silk_resampler_output_rate = output_rate;
@@ -18307,11 +18328,11 @@ impl Decoder {
             num_samples as u64,
             SignalSpec::new(input_rate, channels.into())
         );
-        
+
         for ch in 0..channels as usize {
             for sample_idx in 0..num_samples {
                 let interleaved_idx = sample_idx * channels as usize + ch;
-                audio_buffer.chan_mut(ch)[sample_idx] = 
+                audio_buffer.chan_mut(ch)[sample_idx] =
                     f32::from(input[interleaved_idx]) / 32768.0;  // Q15 format
             }
         }
@@ -18336,7 +18357,7 @@ impl Decoder {
 ```rust
 pub struct Decoder {
     // ... existing fields ...
-    
+
     #[cfg(feature = "silk")]
     silk_resampler_state: Option<Resampler<f32>>,
     #[cfg(feature = "silk")]
@@ -18357,10 +18378,10 @@ pub struct Decoder {
 #[derive(Debug, Error)]
 pub enum Error {
     // ... existing variants ...
-    
+
     #[error("Invalid sample rate: {0}")]
     InvalidSampleRate(String),
-    
+
     #[error("Invalid resampler delay: {0}")]
     InvalidDelay(String),
 }
@@ -18422,16 +18443,27 @@ pub enum Error {
 
 **⚠️ PREVIOUS ISSUE: Had `todo!()` placeholder - NOW FIXED**
 
-**Band Cutoff Table (RFC Table 55, lines 5814-5831):**
+**Band Cutoff Table (RFC Table 55, lines 5814-5868):**
 ```
-Target Rate | Keep Bands | Zero Bands | Frequency Range
-------------|------------|------------|----------------
-8 kHz       | 0-3        | 4-20       | 0-3200 Hz
-12 kHz      | 0-5        | 6-20       | 0-4800 Hz
-16 kHz      | 0-8        | 9-20       | 0-6400 Hz
-24 kHz      | 0-12       | 13-20      | 0-9600 Hz
-48 kHz      | 0-20       | none       | 0-19200 Hz
+Target Rate | Nyquist | Keep Bands | Zero Bands | Highest Freq Kept
+------------|---------|------------|------------|------------------
+8 kHz       | 4 kHz   | 0-12       | 13-20      | 4000 Hz
+12 kHz      | 6 kHz   | 0-15       | 16-20      | 6800 Hz
+16 kHz      | 8 kHz   | 0-16       | 17-20      | 8000 Hz
+24 kHz      | 12 kHz  | 0-18       | 19-20      | 12000 Hz
+48 kHz      | 24 kHz  | 0-20       | none       | 20000 Hz
 ```
+
+**CRITICAL**: Band selection based on Nyquist theorem - must include all frequencies up to sample_rate/2.
+
+**RFC Table 55 Band Frequencies**:
+- Bands 0-11: 0-3200 Hz
+- Band 12: 3200-4000 Hz (8 kHz Nyquist)
+- Bands 13-14: 4000-5600 Hz
+- Band 15: 5600-6800 Hz (12 kHz Nyquist includes this)
+- Band 16: 6800-8000 Hz (16 kHz Nyquist)
+- Bands 17-18: 8000-12000 Hz (24 kHz Nyquist at band 18 end)
+- Bands 19-20: 12000-20000 Hz
 
 **Solution:** Decimation happens INSIDE `decode_celt_frame()`, no separate method needed.
 
@@ -18467,44 +18499,46 @@ impl CeltDecoder {
         target_rate: u32,  // NEW PARAMETER
     ) -> Result<DecodedFrame> {
         // ... (existing decode logic through line 2234) ...
-        
+
         // Phase 4.6.3: Inverse MDCT and overlap-add
         // Combine all bands into single frequency-domain buffer
         let mut freq_data = Vec::new();
         for band in &denormalized {
             freq_data.extend_from_slice(band);
         }
-        
+
         // RFC 498-501: Apply frequency-domain decimation
         // Zero high-frequency bands based on target rate (RFC Table 55)
+        // Band cutoffs chosen per Nyquist theorem: keep all bands up to target_rate/2
         let end_band_for_rate = match target_rate {
-            8000 => 4,   // Keep bands 0-3 (0-3200 Hz per RFC Table 55)
-            12000 => 6,  // Keep bands 0-5 (0-4800 Hz per RFC Table 55)
-            16000 => 9,  // Keep bands 0-8 (0-6400 Hz per RFC Table 55)
-            24000 => 13, // Keep bands 0-12 (0-9600 Hz per RFC Table 55)
-            48000 => CELT_NUM_BANDS, // Keep all bands (no decimation)
+            8000 => 13,  // Keep bands 0-12 (up to 4000 Hz = Nyquist for 8 kHz)
+            12000 => 16, // Keep bands 0-15 (up to 6800 Hz > Nyquist for 12 kHz at 6000 Hz)
+            16000 => 17, // Keep bands 0-16 (up to 8000 Hz = Nyquist for 16 kHz)
+            24000 => 19, // Keep bands 0-18 (up to 12000 Hz = Nyquist for 24 kHz)
+            48000 => 21, // Keep bands 0-20 (all bands, no decimation)
             _ => return Err(Error::InvalidSampleRate(format!(
                 "Unsupported CELT target rate: {} (must be 8k/12k/16k/24k/48k)",
                 target_rate
             ))),
         };
-        
+
         // Zero high-frequency bands (RFC line 500: "zero out the high frequency portion")
-        if end_band_for_rate < CELT_NUM_BANDS {
+        // end_band_for_rate is EXCLUSIVE (first band to zero)
+        if end_band_for_rate <= CELT_NUM_BANDS {
             let bins_per_band = self.bins_per_band();
             let mut bins_to_keep = 0;
-            
+
             // Calculate total bins in bands we're keeping
             for band_idx in 0..end_band_for_rate {
                 bins_to_keep += bins_per_band[band_idx];
             }
-            
+
             // Zero all coefficients in high bands (frequency domain!)
             for i in bins_to_keep..freq_data.len() {
                 freq_data[i] = 0.0;
             }
         }
-        
+
         // Perform IMDCT on (possibly decimated) frequency data
         let time_data = self.inverse_mdct(&freq_data);
         let samples = self.overlap_add(&time_data)?;
@@ -18582,7 +18616,7 @@ impl SampleRate {
 
 - [ ] No `todo!()` placeholders remain
 
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 498-501 and Table 55 (lines 5814-5831) - confirm decimation happens in frequency domain on "MDCT layer output" per line 501 (NOT time-domain sample dropping), band cutoffs exactly match Table 55 (8kHz: bands 0-3 keep 0-3200Hz, 12kHz: 0-5 keep 0-4800Hz, 16kHz: 0-8 keep 0-6400Hz, 24kHz: 0-12 keep 0-9600Hz, 48kHz: 0-20 all frequencies), zeroing happens before IMDCT per line 500 "zero out the high frequency portion", output sample rate matches target_rate not internal 48kHz
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 498-501 and Table 55 (lines 5814-5868) - confirm decimation happens in frequency domain on "MDCT layer output" per line 501 (NOT time-domain sample dropping), band cutoffs follow Nyquist theorem using Table 55 exact frequencies (8kHz/4kHz Nyquist: bands 0-12 keep 0-4000Hz, 12kHz/6kHz Nyquist: bands 0-15 keep 0-6800Hz, 16kHz/8kHz Nyquist: bands 0-16 keep 0-8000Hz, 24kHz/12kHz Nyquist: bands 0-18 keep 0-12000Hz, 48kHz: bands 0-20 all frequencies), zeroing happens before IMDCT per line 500 "zero out the high frequency portion", output sample rate matches target_rate not internal 48kHz
 
 ---
 
@@ -18630,7 +18664,7 @@ mod sample_rate_conversion_tests {
             // Test error handling for invalid input rate (e.g., 11025 Hz)
             // Should return InvalidSampleRate error
         }
-        
+
         #[test]
         fn test_silk_resample_q15_format() {
             // Test Q15 conversion: verify 32768 scaling both ways
@@ -18677,11 +18711,11 @@ mod sample_rate_conversion_tests {
             // Check that band zeroing occurs before IMDCT
             // This can be done by inspecting freq_data after zeroing
         }
-        
+
         #[test]
         fn test_celt_band_cutoffs_rfc_table_55() {
-            // Verify band cutoff indices match RFC Table 55 exactly
-            // 8kHz: bands 0-3, 12kHz: 0-5, 16kHz: 0-8, 24kHz: 0-12
+            // Verify band cutoff indices match RFC Table 55 per Nyquist theorem
+            // 8kHz (Nyquist 4kHz): bands 0-12, 12kHz (6kHz): 0-15, 16kHz (8kHz): 0-16, 24kHz (12kHz): 0-18
         }
     }
 }
@@ -18722,7 +18756,7 @@ mod sample_rate_conversion_tests {
 
 - [ ] Band cutoff test verifies RFC Table 55 compliance
 
-- [ ] **RFC DEEP CHECK:** Verify tests cover all RFC Table 55 rate combinations (lines 5814-5831), SILK tests verify all three internal rates (8/12/16 kHz per bandwidth), output sample counts match formula (output_samples = input_samples × output_rate / input_rate), CELT tests verify frequency-domain operation (band zeroing before IMDCT, not time-domain decimation), Q15 format tests verify 32768 scaling matches standard audio practice, full i16 range [-32768, 32767] preserved
+- [ ] **RFC DEEP CHECK:** Verify tests cover all RFC Table 55 rate combinations (lines 5814-5868), SILK tests verify all three internal rates (8/12/16 kHz per bandwidth), output sample counts match formula (output_samples = input_samples × output_rate / input_rate), CELT tests verify frequency-domain operation with correct Nyquist-based band cutoffs (8kHz: bands 0-12, 12kHz: 0-15, 16kHz: 0-16, 24kHz: 0-18 per Table 55 frequencies), band zeroing before IMDCT not time-domain decimation, Q15 format tests verify 32768 scaling matches standard audio practice, full i16 range [-32768, 32767] preserved
 
 ---
 ### Section 5.5: Mode Decode Functions 🔴 CRITICAL
@@ -19040,7 +19074,7 @@ impl Decoder {
                 output[i] = (sample.clamp(-1.0, 1.0) * 32768.0) as i16;
             }
         }
-        
+
         let samples_per_channel = decoded_frame.samples.len() / channels as usize;
         Ok(samples_per_channel)
     }
