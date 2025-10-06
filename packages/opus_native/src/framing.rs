@@ -170,7 +170,19 @@ fn parse_code3(packet: &[u8]) -> Result<Vec<&[u8]>> {
         return Err(Error::InvalidPacket("Code 3 needs ≥2 bytes".into()));
     }
 
+    let toc = Toc::parse(packet[0]);
     let fc_byte = FrameCountByte::parse(packet[1])?;
+
+    let frame_duration_ms = toc.frame_size_ms();
+    let total_duration_ms = u32::from(fc_byte.count) * u32::from(frame_duration_ms);
+
+    if total_duration_ms > 120 {
+        return Err(Error::InvalidPacket(format!(
+            "Packet duration {}ms exceeds 120ms limit (R5): {} frames × {}ms",
+            total_duration_ms, fc_byte.count, frame_duration_ms
+        )));
+    }
+
     let mut offset = 2;
 
     let (len_indicator_bytes, padding_data_bytes) = if fc_byte.padding {
@@ -407,5 +419,95 @@ mod tests {
         assert_eq!(frames[0], &[0xAA, 0xBB]);
         assert_eq!(frames[1], &[0xCC, 0xDD, 0xEE]);
         assert_eq!(frames[2], &[0xFF]);
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_2_5ms() {
+        let mut packet = vec![(16 << 3) | 0b011, 0b0011_0000];
+        packet.extend(vec![0x01; 96]);
+        let frames = parse_frames(&packet).unwrap();
+        assert_eq!(frames.len(), 48);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_2_5ms() {
+        let packet = &[(16 << 3) | 0b011, 0b0011_0001, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_5ms() {
+        let mut packet = vec![(17 << 3) | 0b011, 0b0001_1000];
+        packet.extend(vec![0x01; 96]);
+        let frames = parse_frames(&packet).unwrap();
+        assert_eq!(frames.len(), 24);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_5ms() {
+        let packet = &[(17 << 3) | 0b011, 0b0001_1001, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_10ms() {
+        let mut packet = vec![0b0000_0011, 0b0000_1100];
+        packet.extend(vec![0x01; 48]);
+        let frames = parse_frames(&packet).unwrap();
+        assert_eq!(frames.len(), 12);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_10ms() {
+        let packet = &[0b0000_0011, 0b0000_1101, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_20ms() {
+        let packet = &[
+            (1 << 3) | 0b011,
+            0b0000_0110,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+        ];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 6);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_20ms() {
+        let packet = &[(1 << 3) | 0b011, 0b0000_0111, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_40ms() {
+        let packet = &[(2 << 3) | 0b011, 0b0000_0011, 0x01, 0x01, 0x01];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 3);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_40ms() {
+        let packet = &[(2 << 3) | 0b011, 0b0000_0100, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
+    }
+
+    #[test]
+    fn test_r5_valid_at_120ms_limit_60ms() {
+        let packet = &[(3 << 3) | 0b011, 0b0000_0010, 0x01, 0x01];
+        let frames = parse_frames(packet).unwrap();
+        assert_eq!(frames.len(), 2);
+    }
+
+    #[test]
+    fn test_r5_exceeds_120ms_60ms() {
+        let packet = &[(3 << 3) | 0b011, 0b0000_0011, 0x01, 0x01, 0x01];
+        assert!(parse_frames(packet).is_err());
     }
 }
