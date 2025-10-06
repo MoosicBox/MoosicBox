@@ -277,21 +277,13 @@ impl SilkDecoder {
         })
     }
 
-    /// Decode complete SILK frame
+    /// Decode complete SILK frame (public wrapper)
     ///
-    /// Orchestrates all SILK component decoders to produce decoded PCM samples
-    /// at internal sample rate (8/12/16 kHz depending on bandwidth).
-    ///
-    /// Used by both SILK-only mode and hybrid mode where SILK shares range
-    /// decoder state with CELT (RFC lines 522-526).
-    ///
-    /// # RFC Reference
-    /// * Lines 1743-1785: SILK decoder overview (Figure 14)
-    /// * Lines 2060-2179: Frame contents decode order (Table 5)
-    /// * Lines 5480-5723: Frame reconstruction pipeline
+    /// Dispatches to mono or stereo decoder based on channel configuration.
     ///
     /// # Arguments
     /// * `range_decoder` - Shared or exclusive range decoder
+    /// * `vad_flag` - Voice Activity Detection flag (decoded at Opus frame level per RFC Table 3)
     /// * `output` - Output buffer for decoded i16 PCM samples at internal rate
     ///
     /// # Returns
@@ -302,13 +294,54 @@ impl SilkDecoder {
     /// * `Error::InvalidPacket` - Packet structure invalid
     /// * `Error::RangeDecoder` - Range decoder error
     ///
-    /// # Panics
-    /// * Panics if LTP scale value exceeds i16 range (indicates corrupted data)
-    #[allow(clippy::too_many_lines)]
+    /// # RFC Compliance
+    /// * VAD flags must be decoded BEFORE calling this function (RFC Table 3, lines 1867-1879)
     pub fn decode_silk_frame(
         &mut self,
         range_decoder: &mut RangeDecoder,
+        vad_flag: bool,
         output: &mut [i16],
+    ) -> Result<usize> {
+        if self.channels == Channels::Stereo {
+            self.decode_silk_frame_stereo(range_decoder, (vad_flag, vad_flag), output)
+        } else {
+            self.decode_silk_frame_internal(range_decoder, vad_flag, output, 0)
+        }
+    }
+
+    /// Decode single-channel SILK frame (internal implementation)
+    ///
+    /// Orchestrates all SILK component decoders to produce decoded PCM samples
+    /// at internal sample rate (8/12/16 kHz depending on bandwidth).
+    ///
+    /// # RFC Reference
+    /// * Lines 1743-1785: SILK decoder overview (Figure 14)
+    /// * Lines 2060-2179: Frame contents decode order (Table 5)
+    /// * Lines 5480-5723: Frame reconstruction pipeline
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Shared or exclusive range decoder
+    /// * `vad_flag` - Voice Activity Detection flag
+    /// * `output` - Output buffer for decoded samples
+    /// * `channel_idx` - Channel index (0=mono/mid, 1=side)
+    ///
+    /// # Returns
+    /// Number of samples decoded
+    ///
+    /// # Errors
+    /// * `Error::SilkDecoder` - Component decode failure
+    /// * `Error::InvalidPacket` - Packet structure invalid
+    /// * `Error::RangeDecoder` - Range decoder error
+    ///
+    /// # Panics
+    /// * Panics if LTP scale value exceeds i16 range (indicates corrupted data)
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    fn decode_silk_frame_internal(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        vad_flag: bool,
+        output: &mut [i16],
+        channel_idx: usize,
     ) -> Result<usize> {
         // Phase 5 Section 5.3.1: Full SILK frame decode pipeline
         //
@@ -352,26 +385,10 @@ impl SilkDecoder {
 
         let total_samples = samples_per_subframe * num_subframes;
 
-        // RFC Table 5 Entry 1: Stereo Prediction Weights (if stereo)
-        let stereo_weights = if self.channels == Channels::Stereo {
-            Some(self.decode_stereo_weights(range_decoder)?)
-        } else {
-            None
-        };
+        // NOTE: Stereo weights and mid-only flag are handled by decode_silk_frame_stereo wrapper
+        // This internal function only decodes a single channel (mono, mid, or side)
 
-        // RFC Table 5 Entry 2: Mid-only Flag (if stereo)
-        // TODO: Implement mid-only flag decoding when stereo support is complete
-        // For now, always assume mid+side are both coded
-
-        // Step 1: Decode frame type and quantization offset (RFC Table 5 entry 3)
-        // Note: VAD flags are decoded in header before this function is called
-        // For single-frame decode, we decode them here
-        let vad_flags = self.decode_vad_flags(range_decoder)?;
-        if vad_flags.is_empty() {
-            return Err(Error::SilkDecoder("No VAD flags decoded".to_string()));
-        }
-        let vad_flag = vad_flags[0];
-
+        // RFC Table 5 Entry 3: Frame Type (vad_flag passed in from Opus frame level)
         let (frame_type, quant_offset) = self.decode_frame_type(range_decoder, vad_flag)?;
 
         // Step 2: Decode subframe gains (RFC Table 5 entry 4)
@@ -379,7 +396,7 @@ impl SilkDecoder {
             range_decoder,
             frame_type,
             num_subframes,
-            0,                  // channel 0 (mid channel)
+            channel_idx,
             self.decoder_reset, // is_first_frame
         )?;
 
@@ -388,7 +405,7 @@ impl SilkDecoder {
         let lsf_stage2 = self.decode_lsf_stage2(range_decoder, lsf_stage1, bandwidth)?;
 
         // RFC Table 5 Entry 7: LSF Interpolation Weight (20ms frames only)
-        let _lsf_interp_weight = if self.frame_size_ms == 20 {
+        let lsf_interp_weight = if self.frame_size_ms == 20 {
             // Decode interpolation weight (Q2 format, 0-4)
             // PDF from RFC Table 26: {13, 22, 29, 11, 181}/256
             let weight = range_decoder.ec_dec_icdf(
@@ -396,26 +413,77 @@ impl SilkDecoder {
                 8,
             )?;
             // If decoder reset or uncoded side channel, ignore and use 4
-            if self.decoder_reset { 4 } else { weight }
+            if self.decoder_reset || self.uncoded_side_channel {
+                4
+            } else {
+                weight
+            }
         } else {
             4 // 10ms frames always use w_Q2 = 4 (no interpolation)
         };
 
-        // Reconstruct normalized LSF coefficients
+        // Reconstruct normalized LSF coefficients for current frame
         let nlsf_q15 = Self::reconstruct_lsf(lsf_stage1, &lsf_stage2, bandwidth)?;
 
-        // Convert LSF to LPC coefficients
-        let lpc_q12 = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
+        // RFC lines 3593-3626: LSF Interpolation for 20ms frames
+        // For 20ms frames with w_Q2 < 4, interpolate LSF for first half
+        let (lpc_coeffs_first_half, lpc_coeffs_second_half) =
+            if self.frame_size_ms == 20 && lsf_interp_weight < 4 {
+                // Get previous LSF based on bandwidth
+                let prev_lsf_vec: Option<Vec<i16>> = match bandwidth {
+                    Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                        self.previous_lsf_nb.as_ref().map(|arr| arr.to_vec())
+                    }
+                    Bandwidth::Wideband => self.previous_lsf_wb.as_ref().map(|arr| arr.to_vec()),
+                    _ => None,
+                };
+                let prev_lsf = prev_lsf_vec.as_deref();
 
-        // Convert to i16 for SubframeParams
-        #[allow(clippy::cast_possible_truncation)]
-        let lpc_coeffs_q12: Vec<i16> = lpc_q12
-            .iter()
-            .map(|&x| {
-                // Clamp i32 to i16 range
-                x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
-            })
-            .collect();
+                if let Some(prev_lsf) = prev_lsf {
+                    // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
+                    let mut nlsf_interpolated_q15 = vec![0_i16; nlsf_q15.len()];
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                    for k in 0..nlsf_q15.len() {
+                        let n0 = i32::from(prev_lsf[k]);
+                        let n2 = i32::from(nlsf_q15[k]);
+                        let w = lsf_interp_weight as i32;
+                        nlsf_interpolated_q15[k] = (n0 + ((w * (n2 - n0)) >> 2)) as i16;
+                    }
+
+                    // Convert both interpolated and current LSF to LPC
+                    let lpc_first = Self::lsf_to_lpc(&nlsf_interpolated_q15, bandwidth)?;
+                    let lpc_second = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
+
+                    (lpc_first, lpc_second)
+                } else {
+                    // No previous LSF available - use current for both halves
+                    let lpc = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
+                    (lpc.clone(), lpc)
+                }
+            } else {
+                // 10ms frames or w_Q2 == 4: use current LSF for all subframes
+                let lpc = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
+                (lpc.clone(), lpc)
+            };
+
+        // Store current LSF for next frame
+        match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                if nlsf_q15.len() == 10 {
+                    let mut arr = [0_i16; 10];
+                    arr.copy_from_slice(&nlsf_q15);
+                    self.previous_lsf_nb = Some(arr);
+                }
+            }
+            Bandwidth::Wideband => {
+                if nlsf_q15.len() == 16 {
+                    let mut arr = [0_i16; 16];
+                    arr.copy_from_slice(&nlsf_q15);
+                    self.previous_lsf_wb = Some(arr);
+                }
+            }
+            _ => {}
+        }
 
         // Store gain indices for next frame
         if !gain_indices.is_empty() {
@@ -526,20 +594,42 @@ impl SilkDecoder {
                 exc
             };
 
-            // Create subframe params with decoded values
-            // Convert gain index to Q16 format using gain dequantization
-            // TODO: Implement proper gain dequantization from gain_indices
-            // For now use unity gain as placeholder
+            // RFC lines 2553-2567: Gain dequantization
+            // Convert gain index to Q16 format using RFC algorithm
             let gain_q16 = if !gain_indices.is_empty() && (subframe_idx < gain_indices.len()) {
-                // Simple linear mapping - should use proper dequantization table
                 let gain_idx = gain_indices[subframe_idx];
-                32768 + (i32::from(gain_idx) * 512) // Rough approximation
+                // TODO: Need proper log_gain calculation from gain_idx
+                // For now use approximation until gain tables are located
+                let log_gain = i32::from(gain_idx) * 128; // Placeholder
+                Self::dequantize_gain(log_gain)
             } else {
                 65536 // Unity gain fallback
             };
 
+            // RFC lines 3593-3626: Select LPC based on subframe for 20ms frames
+            // First half (subframes 0-1): interpolated LPC
+            // Second half (subframes 2-3): current LPC
+            #[allow(clippy::cast_possible_truncation)]
+            let lpc_for_subframe: Vec<i16> = if self.frame_size_ms == 20 && subframe_idx < 2 {
+                lpc_coeffs_first_half
+                    .iter()
+                    .map(|&x| x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16)
+                    .collect()
+            } else if self.frame_size_ms == 20 {
+                lpc_coeffs_second_half
+                    .iter()
+                    .map(|&x| x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16)
+                    .collect()
+            } else {
+                // 10ms frames: use same LPC for both subframes
+                lpc_coeffs_first_half
+                    .iter()
+                    .map(|&x| x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16)
+                    .collect()
+            };
+
             let params = SubframeParams {
-                lpc_coeffs_q12: lpc_coeffs_q12.clone(),
+                lpc_coeffs_q12: lpc_for_subframe,
                 gain_q16,
                 pitch_lag: if subframe_idx < pitch_lags.len() {
                     pitch_lags[subframe_idx]
@@ -567,37 +657,12 @@ impl SilkDecoder {
             all_samples.extend(samples);
         }
 
-        // Handle stereo unmixing if needed
-        let final_samples = if self.channels == Channels::Stereo {
-            // Use decoded stereo weights
-            let (w0_q13, w1_q13) = stereo_weights.unwrap_or((0, 0));
-
-            // Apply stereo unmixing (mid/side → left/right)
-            // Note: For full implementation, need to decode side channel separately
-            // For now, we only have mid channel (all_samples), so side is None
-            let (left, right) = self.stereo_unmix(
-                &all_samples,
-                None, // side channel should be decoded separately
-                w0_q13,
-                w1_q13,
-                bandwidth,
-            )?;
-
-            // Interleave left and right channels
-            let mut stereo = Vec::with_capacity(left.len() * 2);
-            for i in 0..left.len() {
-                stereo.push(left[i]);
-                stereo.push(right[i]);
-            }
-            stereo
-        } else {
-            // Mono output - samples stay as-is
-            all_samples
-        };
+        // This internal function only decodes a single channel
+        // Stereo unmixing is handled by decode_silk_frame_stereo wrapper
 
         // Convert f32 to i16 and write to output
         #[allow(clippy::cast_possible_truncation)]
-        for (i, &sample) in final_samples.iter().enumerate() {
+        for (i, &sample) in all_samples.iter().enumerate() {
             if i < output.len() {
                 // Clamp to [-1.0, 1.0] and convert to i16
                 let clamped = sample.clamp(-1.0, 1.0);
@@ -607,6 +672,117 @@ impl SilkDecoder {
 
         // Update state
         self.decoder_reset = false;
+
+        Ok(total_samples)
+    }
+
+    /// Decode stereo SILK frame (mid + side channels)
+    ///
+    /// Decodes stereo prediction weights, mid-only flag, then decodes both
+    /// mid and side channels, and applies stereo unmixing.
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Shared range decoder
+    /// * `vad_flags` - VAD flags for (mid, side) channels
+    /// * `output` - Interleaved stereo output buffer
+    ///
+    /// # Returns
+    /// Number of samples decoded per channel
+    ///
+    /// # Errors
+    /// * `Error::SilkDecoder` - Component decode failure
+    /// * `Error::RangeDecoder` - Range decoder error
+    ///
+    /// # RFC Reference
+    /// * Table 5 Entry 1-2: Stereo weights and mid-only flag
+    /// * Figures 15-16: Stereo decode flow
+    #[allow(clippy::similar_names)]
+    fn decode_silk_frame_stereo(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        vad_flags: (bool, bool),
+        output: &mut [i16],
+    ) -> Result<usize> {
+        let bandwidth = match self.sample_rate {
+            SampleRate::Hz8000 => Bandwidth::Narrowband,
+            SampleRate::Hz12000 => Bandwidth::Mediumband,
+            SampleRate::Hz16000 => Bandwidth::Wideband,
+            _ => {
+                return Err(Error::SilkDecoder(format!(
+                    "Invalid sample rate for SILK: {:?}",
+                    self.sample_rate
+                )));
+            }
+        };
+
+        let samples_per_subframe = match bandwidth {
+            Bandwidth::Narrowband => 40,
+            Bandwidth::Mediumband => 60,
+            Bandwidth::Wideband => 80,
+            _ => return Err(Error::SilkDecoder("Invalid bandwidth for SILK".to_string())),
+        };
+
+        let num_subframes = match self.frame_size_ms {
+            10 => 2,
+            20 => 4,
+            _ => {
+                return Err(Error::SilkDecoder(format!(
+                    "Frame size {}ms not supported",
+                    self.frame_size_ms
+                )));
+            }
+        };
+
+        let total_samples = samples_per_subframe * num_subframes;
+
+        // RFC Table 5 Entry 1: Stereo Prediction Weights
+        let (w0_q13, w1_q13) = self.decode_stereo_weights(range_decoder)?;
+
+        // RFC Table 5 Entry 2: Mid-only Flag
+        let mid_only = self.decode_mid_only_flag(range_decoder)?;
+
+        // Decode mid channel
+        let mut mid_samples_i16 = vec![0_i16; total_samples];
+        self.decode_silk_frame_internal(range_decoder, vad_flags.0, &mut mid_samples_i16, 0)?;
+
+        // Convert mid to f32 for stereo unmixing
+        let mid_samples: Vec<f32> = mid_samples_i16
+            .iter()
+            .map(|&s| f32::from(s) / 32768.0)
+            .collect();
+
+        // Decode side channel (if not mid-only)
+        let side_samples = if mid_only {
+            None
+        } else {
+            let mut side_samples_i16 = vec![0_i16; total_samples];
+            self.decode_silk_frame_internal(range_decoder, vad_flags.1, &mut side_samples_i16, 1)?;
+            let side_f32: Vec<f32> = side_samples_i16
+                .iter()
+                .map(|&s| f32::from(s) / 32768.0)
+                .collect();
+            Some(side_f32)
+        };
+
+        // Apply stereo unmixing
+        let (left, right) = self.stereo_unmix(
+            &mid_samples,
+            side_samples.as_deref(),
+            w0_q13,
+            w1_q13,
+            bandwidth,
+        )?;
+
+        // Interleave and convert to i16
+        #[allow(clippy::cast_possible_truncation)]
+        for i in 0..total_samples {
+            if i * 2 + 1 < output.len() {
+                let left_clamped = left[i].clamp(-1.0, 1.0);
+                let right_clamped = right[i].clamp(-1.0, 1.0);
+                output[i * 2] = (left_clamped * 32768.0) as i16;
+                output[i * 2 + 1] = (right_clamped * 32768.0) as i16;
+            }
+        }
 
         Ok(total_samples)
     }
@@ -744,6 +920,35 @@ impl SilkDecoder {
         self.previous_stereo_weights = Some(weights);
 
         Ok(weights)
+    }
+
+    /// Decodes mid-only flag for stereo frames
+    ///
+    /// Determines whether only the mid channel is coded (side channel uncoded).
+    /// Per RFC 6716 Table 5, this is decoded after stereo weights and before frame type.
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    ///
+    /// # Returns
+    ///
+    /// * `true` - Only mid channel is coded, side channel is zero
+    /// * `false` - Both mid and side channels are coded
+    ///
+    /// # RFC Reference
+    ///
+    /// * Table 5 Entry 2 (lines 2060-2179): Mid-only flag decode order
+    /// * Lines 1976-1978: Mid-only flag PDF `[192, 0]` (probability 75% false, 25% true)
+    pub fn decode_mid_only_flag(&mut self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+        const MID_ONLY_PDF: &[u8] = &[192, 0];
+        let mid_only = range_decoder.ec_dec_icdf(MID_ONLY_PDF, 8)?;
+
+        if mid_only == 1 {
+            self.uncoded_side_channel = true;
+        }
+
+        Ok(mid_only == 1)
     }
 
     /// Decodes frame type and quantization offset.
@@ -2617,11 +2822,11 @@ impl SilkDecoder {
 
             let prev_w0 = f32::from(state.prev_w0_q13) / 8192.0;
             let curr_w0 = f32::from(w0_q13) / 8192.0;
-            let w0 = prev_w0 + phase1_progress * (curr_w0 - prev_w0);
+            let w0 = phase1_progress.mul_add(curr_w0 - prev_w0, prev_w0);
 
             let prev_w1 = f32::from(state.prev_w1_q13) / 8192.0;
             let curr_w1 = f32::from(w1_q13) / 8192.0;
-            let w1 = prev_w1 + phase1_progress * (curr_w1 - prev_w1);
+            let w1 = phase1_progress.mul_add(curr_w1 - prev_w1, prev_w1);
 
             let mid_i = mid_channel[i];
 
@@ -2647,8 +2852,8 @@ impl SilkDecoder {
                 state.side_history
             };
 
-            let left_val = (1.0 + w1).mul_add(mid_i1, side_i1) + w0 * p0;
-            let right_val = (1.0 - w1).mul_add(mid_i1, -side_i1) - w0 * p0;
+            let left_val = w0.mul_add(p0, (1.0 + w1).mul_add(mid_i1, side_i1));
+            let right_val = w0.mul_add(-p0, (1.0 - w1).mul_add(mid_i1, -side_i1));
 
             left.push(left_val.clamp(-1.0, 1.0));
             right.push(right_val.clamp(-1.0, 1.0));
@@ -2806,6 +3011,83 @@ impl SilkDecoder {
         Err(Error::SilkDecoder(
             "Resampling not available - enable 'resampling' feature in Cargo.toml".to_string(),
         ))
+    }
+
+    /// Convert log-scale value to linear scale using RFC 6716 algorithm
+    ///
+    /// Implements `silk_log2lin()` per RFC 6716 lines 2558-2563.
+    ///
+    /// # Arguments
+    ///
+    /// * `log_q7` - Logarithmic value in Q7 format (7 fractional bits)
+    ///
+    /// # Returns
+    ///
+    /// Linear value in Q16 format (16 fractional bits)
+    ///
+    /// # Algorithm
+    ///
+    /// * Extract integer part: `int_part = log_q7 >> 7`
+    /// * Extract fractional part: `frac_q7 = log_q7 - (int_part << 7)`
+    /// * Interpolate using 129-entry table: `out = (table[frac_q7] + table[frac_q7+1]) >> 1`
+    /// * Scale by integer part: `out = out << int_part`
+    ///
+    /// # RFC Reference
+    ///
+    /// Lines 2558-2563
+    ///
+    /// # Notes
+    ///
+    /// * Current implementation uses approximation until proper table is added
+    /// * TODO: Add `SILK_LOG2LIN_TABLE` constant array from RFC
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    const fn silk_log2lin(log_q7: i32) -> i32 {
+        let int_part = log_q7 >> 7;
+        let frac_q7 = log_q7 - (int_part << 7);
+
+        let out = 32768 + (frac_q7 * 256);
+
+        if int_part >= 0 {
+            out << int_part
+        } else {
+            out >> (-int_part)
+        }
+    }
+
+    /// Dequantize gain index to Q16 linear gain
+    ///
+    /// Implements gain dequantization per RFC 6716 lines 2553-2567.
+    ///
+    /// # Arguments
+    ///
+    /// * `log_gain` - Logarithmic gain value from gain tables
+    ///
+    /// # Returns
+    ///
+    /// Linear gain in Q16 format (16 fractional bits)
+    ///
+    /// # Algorithm
+    ///
+    /// * Apply log-to-linear conversion: `silk_log2lin((0x001D1C71*log_gain>>16) + 2090)`
+    /// * This combines gain quantization scaling with log-to-linear mapping
+    ///
+    /// # RFC Reference
+    ///
+    /// Lines 2553-2567
+    ///
+    /// # Notes
+    ///
+    /// * Constant `0x001D1C71` (1941617 decimal) scales the logarithmic gain
+    /// * Constant 2090 is the bias added before log-to-linear conversion
+    /// * TODO: `log_gain` should come from proper gain tables lookup
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn dequantize_gain(log_gain: i32) -> i32 {
+        let scaled = (0x001D_1C71_i64 * i64::from(log_gain)) >> 16;
+        #[allow(clippy::cast_possible_truncation)]
+        let log_q7 = (scaled as i32) + 2090;
+        Self::silk_log2lin(log_q7)
     }
 }
 
