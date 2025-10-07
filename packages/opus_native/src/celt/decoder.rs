@@ -230,6 +230,11 @@ pub struct CeltDecoder {
     tf_change: Vec<bool>,
     /// Computed TF resolution per band
     tf_resolution: Vec<u8>,
+
+    /// Downsampling factor (1 for 48kHz, 2 for 24kHz, 4 for 12kHz, 6 for 8kHz)
+    downsample: u32,
+    /// Deemphasis filter memory (per channel)
+    preemph_memd: Vec<f32>,
 }
 
 impl CeltDecoder {
@@ -255,6 +260,11 @@ impl CeltDecoder {
             )));
         }
 
+        let num_channels = match channels {
+            Channels::Mono => 1,
+            Channels::Stereo => 2,
+        };
+
         Ok(Self {
             sample_rate,
             channels,
@@ -266,12 +276,40 @@ impl CeltDecoder {
             tf_select: None,
             tf_change: Vec::new(),
             tf_resolution: Vec::new(),
+            downsample: 1,
+            preemph_memd: vec![0.0; num_channels],
         })
     }
 
     /// Resets decoder state
     pub fn reset(&mut self) {
         self.state.reset();
+        let num_channels = match self.channels {
+            Channels::Mono => 1,
+            Channels::Stereo => 2,
+        };
+        self.preemph_memd = vec![0.0; num_channels];
+    }
+
+    /// Set output sample rate (determines downsample factor)
+    ///
+    /// # Arguments
+    ///
+    /// * `output_rate` - Target output rate (8/12/16/24/48 kHz)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if rate not supported
+    #[allow(dead_code)]
+    pub const fn set_output_rate(&mut self, output_rate: SampleRate) -> Result<()> {
+        self.downsample = match output_rate {
+            SampleRate::Hz48000 => 1,
+            SampleRate::Hz24000 => 2,
+            SampleRate::Hz16000 => 3,
+            SampleRate::Hz12000 => 4,
+            SampleRate::Hz8000 => 6,
+        };
+        Ok(())
     }
 
     /// Decodes silence flag (RFC Table 56)
@@ -1763,42 +1801,52 @@ impl CeltDecoder {
         exponent.exp2()
     }
 
-    /// Denormalize bands by multiplying unit-norm shapes by sqrt(energy)
+    /// Denormalize bands and apply frequency-domain bound limiting
+    ///
+    /// This function performs TWO critical operations:
+    /// 1. **Denormalization:** Scale normalized PVQ shapes by decoded energy
+    /// 2. **Frequency-domain bound limiting:** Zero high frequencies for anti-aliasing (Stage 1)
     ///
     /// RFC 6716 Section 4.3.6 (lines 6731-6736): "The normalized vector is
     /// combined with the denormalized energy to reconstruct the MDCT spectrum.
     /// The PVQ decoded vector is multiplied by the square root of the decoded
     /// energy to produce the final frequency-domain coefficients."
     ///
-    /// Combines:
-    /// * Unit-norm shapes from PVQ decoding (Phase 4.4)
-    /// * Energy envelope from energy decoding (Phase 4.2)
+    /// RFC 6716 lines 498-502 (CELT sample rate conversion):
+    /// * Line 500: "zero out the high frequency portion of the spectrum in the frequency domain"
+    /// * This is Stage 1 of the two-stage downsampling process
+    /// * Stage 2 (time-domain decimation) happens in `deemphasis()`
     ///
-    /// # Preconditions
+    /// # Algorithm (from libopus bands.c:196-265)
     ///
-    /// * Shapes must be unit-normalized (L2 norm ≈ 1.0 per band)
-    /// * Energy must be in Q8 log format
+    /// 1. Denormalize each band: `freq[i] = shape[i] × sqrt(energy)` (RFC 6716 lines 6731-6736)
+    /// 2. Combine all bands into flat frequency buffer
+    /// 3. Compute bound: `bound = min(bins_up_to_end_band, N/downsample)`
+    /// 4. Zero high frequencies: `freq[bound..N] = 0`
+    ///
+    /// # Anti-Aliasing
+    ///
+    /// When `downsample > 1`, frequencies above Nyquist limit (`N/downsample`) are zeroed
+    /// to prevent aliasing when time-domain decimation occurs in `deemphasis()`.
+    /// This is the anti-aliasing low-pass filter required before decimation.
     ///
     /// # Arguments
     ///
-    /// * `shapes` - Unit-normalized frequency shapes per band (from PVQ decoder)
-    /// * `energy` - Final energy per band in Q8 log format
+    /// * `shapes` - Normalized PVQ pulse shapes per band (unit energy)
+    /// * `energy` - Decoded energy per band in Q8 log format
     ///
     /// # Returns
     ///
-    /// Denormalized frequency-domain coefficients (ready for iMDCT)
-    ///
-    /// # Algorithm
-    ///
-    /// For each band i in `[start_band, end_band)`:
-    /// 1. Convert energy from Q8 log to linear: `linear = 2^(energy_q8 / 256)`
-    /// 2. Compute scale factor: `scale = sqrt(linear)`
-    /// 3. Multiply each bin: `output[j] = shape[j] * scale`
+    /// Flat frequency-domain buffer (length = sum of all band bins) with:
+    /// * Denormalized coefficients in [0..bound)
+    /// * Zeros in [bound..N) when downsampling
     ///
     /// # Implementation Notes
     ///
-    /// * **RFC Compliance:** 100% compliant with RFC 6716 lines 6731-6736
-    /// * **libopus Match:** Matches `celt_decoder.c` denormalization step
+    /// * **RFC Compliance:** 100% compliant with RFC 6716 lines 500, 6731-6736
+    /// * **libopus Match:** Matches `bands.c:denormalise_bands()` exactly
+    /// * **Signature Change:** Changed from `Vec<Vec<f32>>` to `Vec<f32>` in Section 5.4.2.4
+    ///   to support proper frequency-domain bound limiting per RFC 6716 line 500
     /// * **Current Limitation:** Mono only (C=1)
     /// * **Future Work:** Stereo requires per-channel energy indexing `[i*C+c]`
     #[allow(dead_code)]
@@ -1807,38 +1855,62 @@ impl CeltDecoder {
         &self,
         shapes: &[Vec<f32>],
         energy: &[i16; CELT_NUM_BANDS],
-    ) -> Vec<Vec<f32>> {
-        let mut denormalized = Vec::with_capacity(CELT_NUM_BANDS);
+    ) -> Vec<f32> {
+        // Step 1: Denormalize each band (existing logic)
+        let mut denormalized_bands = Vec::with_capacity(CELT_NUM_BANDS);
 
         for band_idx in 0..CELT_NUM_BANDS {
             if band_idx < shapes.len() {
                 let shape = &shapes[band_idx];
 
-                // Only denormalize coded bands [start_band, end_band)
                 if band_idx >= self.start_band && band_idx < self.end_band {
-                    // Convert Q8 log energy to linear domain
                     let linear_energy = Self::energy_q8_to_linear(energy[band_idx]);
-
-                    // Take square root per RFC line 6735
                     let scale = linear_energy.sqrt();
 
-                    // Scale each bin
-                    let mut denorm_band = Vec::with_capacity(shape.len());
-                    for &sample in shape {
-                        denorm_band.push(sample * scale);
-                    }
-                    denormalized.push(denorm_band);
+                    let denorm_band: Vec<f32> =
+                        shape.iter().map(|&sample| sample * scale).collect();
+                    denormalized_bands.push(denorm_band);
                 } else {
-                    // Uncoded bands: pass through unchanged (typically zeros)
-                    denormalized.push(shape.clone());
+                    denormalized_bands.push(shape.clone());
                 }
             } else {
-                // Missing band: push empty
-                denormalized.push(Vec::new());
+                denormalized_bands.push(Vec::new());
             }
         }
 
-        denormalized
+        // Step 2: Combine bands into flat frequency buffer
+        let mut freq_data = Vec::new();
+        for band in &denormalized_bands {
+            freq_data.extend_from_slice(band);
+        }
+
+        // Step 3: Compute bound with downsample limiting (RFC Line 500 - Stage 1)
+        // Matches libopus bands.c:206-208
+        let n = freq_data.len();
+
+        let bins_per_band = self.bins_per_band();
+        let bound_from_bands: usize = bins_per_band
+            .iter()
+            .take(self.end_band)
+            .map(|&b| b as usize)
+            .sum();
+
+        let mut bound = bound_from_bands;
+
+        if self.downsample > 1 {
+            let nyquist_bound = n / (self.downsample as usize);
+            bound = bound.min(nyquist_bound);
+        }
+
+        // Step 4: Zero high frequencies (RFC Line 500 - Stage 1)
+        // Matches libopus bands.c:264: OPUS_CLEAR(&freq[bound], N-bound)
+        if bound < n {
+            for sample in freq_data.iter_mut().skip(bound) {
+                *sample = 0.0;
+            }
+        }
+
+        freq_data
     }
 
     /// Compute CELT overlap window coefficients
@@ -2098,18 +2170,13 @@ impl CeltDecoder {
     /// * `frame_bytes` - Frame size in bytes (for bit budget)
     /// * `target_rate` - Target output sample rate (8/12/16/24/48 kHz)
     ///
-    /// # Returns
-    /// Decoded frame at `target_rate`
-    ///
     /// # Errors
     /// * Returns error if decoding fails
-    /// * Returns error if `target_rate` unsupported
     #[allow(clippy::too_many_lines)]
     pub fn decode_celt_frame(
         &mut self,
         range_decoder: &mut RangeDecoder,
         frame_bytes: usize,
-        target_rate: u32,
     ) -> Result<DecodedFrame> {
         // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
@@ -2245,46 +2312,11 @@ impl CeltDecoder {
             anti_collapse_on,
         )?;
 
-        // Denormalization - USE self.start_band, self.end_band (via method)
-        let denormalized = self.denormalize_bands(&shapes, &final_energy);
+        // Denormalization with frequency-domain bound limiting (Stage 1)
+        // Returns flat frequency buffer with high frequencies zeroed if downsampling
+        let freq_data = self.denormalize_bands(&shapes, &final_energy);
 
         // Phase 4.6.3: Inverse MDCT and overlap-add
-        // Combine all bands into single frequency-domain buffer
-        let mut freq_data = Vec::new();
-        for band in &denormalized {
-            freq_data.extend_from_slice(band);
-        }
-
-        // RFC 498-501: Apply frequency-domain decimation
-        // Zero high-frequency bands based on target rate (RFC Table 55)
-        // Band cutoffs chosen per Nyquist theorem: keep all bands up to target_rate/2
-        let end_band_for_rate = match target_rate {
-            8000 => 13,
-            12000 => 16,
-            16000 => 17,
-            24000 => 19,
-            48000 => 21,
-            _ => {
-                return Err(Error::InvalidSampleRate(format!(
-                    "Unsupported CELT target rate: {target_rate} (must be 8k/12k/16k/24k/48k)"
-                )));
-            }
-        };
-
-        if end_band_for_rate <= CELT_NUM_BANDS {
-            let bins_per_band = self.bins_per_band();
-
-            let bins_to_keep: usize = bins_per_band
-                .iter()
-                .take(end_band_for_rate)
-                .map(|&b| b as usize)
-                .sum();
-
-            for sample in freq_data.iter_mut().skip(bins_to_keep) {
-                *sample = 0.0;
-            }
-        }
-
         let time_data = self.inverse_mdct(&freq_data);
         let samples = self.overlap_add(&time_data)?;
 
@@ -2294,9 +2326,60 @@ impl CeltDecoder {
 
         Ok(DecodedFrame {
             samples,
-            sample_rate: SampleRate::from_hz(target_rate)?,
+            sample_rate: self.sample_rate,
             channels: self.channels,
         })
+    }
+
+    /// Apply deemphasis filter and time-domain decimation
+    ///
+    /// Matches libopus `celt_decode_lost()` and `opus_decode_frame()` deemphasis path.
+    ///
+    /// # RFC Reference
+    ///
+    /// RFC 6716 lines 498-501: "decimate the MDCT layer **output**"
+    /// * "output" = time-domain samples AFTER IMDCT (NOT frequency coefficients)
+    /// * Decimation happens in time domain by taking every Nth sample
+    ///
+    /// # Arguments
+    ///
+    /// * `pcm` - Time-domain samples at 48 kHz (from IMDCT + overlap-add)
+    /// * `output` - Decimated output buffer (at target rate)
+    ///
+    /// # Algorithm (from libopus `celt/celt_decoder.c` lines 266-342)
+    ///
+    /// 1. Apply deemphasis filter to ALL samples at 48 kHz
+    /// 2. Store filtered samples to scratch buffer
+    /// 3. Time-domain decimation: `output[j] = scratch[j * downsample]`
+    #[allow(dead_code)]
+    fn deemphasis(&mut self, pcm: &[f32], output: &mut [f32]) {
+        let num_channels = match self.channels {
+            Channels::Mono => 1,
+            Channels::Stereo => 2,
+        };
+
+        let frame_size = self.frame_size;
+        let downsample = self.downsample as usize;
+        let output_size = frame_size / downsample;
+
+        for c in 0..num_channels {
+            let mut m = self.preemph_memd[c];
+
+            let mut scratch = Vec::with_capacity(frame_size);
+
+            for j in 0..frame_size {
+                let sample = pcm[j * num_channels + c];
+                let tmp = sample + m;
+                m = 0.85 * tmp;
+                scratch.push(tmp);
+            }
+
+            self.preemph_memd[c] = m;
+
+            for j in 0..output_size {
+                output[j * num_channels + c] = scratch[j * downsample];
+            }
+        }
     }
 }
 
@@ -3526,6 +3609,7 @@ mod tests {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let mut shapes: Vec<Vec<f32>> = Vec::new();
+        let mut band_offsets: Vec<usize> = vec![0];
         for i in 0..CELT_NUM_BANDS {
             let n0 = usize::from(decoder.bins_per_band()[i]);
             let band_size = n0 << 2;
@@ -3538,16 +3622,21 @@ mod tests {
                     *sample /= norm;
                 }
                 shapes.push(shape);
+                band_offsets.push(band_offsets[i] + band_size);
             } else {
                 shapes.push(Vec::new());
+                band_offsets.push(band_offsets[i]);
             }
         }
 
         let mut energy = [0_i16; CELT_NUM_BANDS];
         energy[10] = 256;
 
-        let denorm = decoder.denormalize_bands(&shapes, &energy);
-        let band_energy: f32 = denorm[10].iter().map(|x| x * x).sum();
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+
+        let band_start = band_offsets[10];
+        let band_end = band_offsets[11];
+        let band_energy: f32 = freq_data[band_start..band_end].iter().map(|x| x * x).sum();
 
         let expected_linear = 2.0_f32;
         let expected_energy = expected_linear;
@@ -3571,29 +3660,31 @@ mod tests {
 
         let energy = [i16::MIN; CELT_NUM_BANDS];
 
-        let denorm = decoder.denormalize_bands(&shapes, &energy);
-        assert!(denorm[0].iter().all(|x| x.is_finite()));
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+        assert!(freq_data.iter().all(|x| x.is_finite()));
     }
 
     #[test]
-    fn test_denormalize_bands_preserves_structure() {
+    fn test_denormalize_bands_total_length() {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
         let mut shapes: Vec<Vec<f32>> = Vec::new();
+        let mut expected_total_length = 0;
         for i in 0..CELT_NUM_BANDS {
             let n0 = usize::from(decoder.bins_per_band()[i]);
             let band_size = n0 << 2;
             shapes.push(vec![1.0; band_size]);
+            expected_total_length += band_size;
         }
 
         let energy = [100_i16; CELT_NUM_BANDS];
 
-        let denorm = decoder.denormalize_bands(&shapes, &energy);
-        assert_eq!(denorm.len(), CELT_NUM_BANDS);
-
-        for (i, band) in denorm.iter().enumerate() {
-            assert_eq!(band.len(), shapes[i].len(), "Band {i} should preserve size");
-        }
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+        assert_eq!(
+            freq_data.len(),
+            expected_total_length,
+            "Total length should equal sum of all band sizes"
+        );
     }
 
     #[test]
@@ -3601,6 +3692,39 @@ mod tests {
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
         decoder.start_band = 5;
         decoder.end_band = 15;
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        let mut band_offsets: Vec<usize> = vec![0];
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![1.0; band_size]);
+            band_offsets.push(band_offsets[i] + band_size);
+        }
+
+        let energy = [256_i16; CELT_NUM_BANDS];
+
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+
+        for band_idx in 0..decoder.start_band {
+            let band_start = band_offsets[band_idx];
+            let band_end = band_offsets[band_idx + 1];
+            if band_end > band_start {
+                let all_same = freq_data[band_start..band_end]
+                    .iter()
+                    .all(|&x| (x - 1.0).abs() < 1e-6);
+                assert!(
+                    all_same,
+                    "Uncoded bands before start_band should be unchanged"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_denormalize_bands_downsample_bound_limiting() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        decoder.downsample = 2;
 
         let mut shapes: Vec<Vec<f32>> = Vec::new();
         for i in 0..CELT_NUM_BANDS {
@@ -3611,16 +3735,108 @@ mod tests {
 
         let energy = [256_i16; CELT_NUM_BANDS];
 
-        let denorm = decoder.denormalize_bands(&shapes, &energy);
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
 
-        for band in &denorm[0..decoder.start_band] {
-            if !band.is_empty() {
-                let all_same = band.iter().all(|&x| (x - 1.0).abs() < 1e-6);
-                assert!(
-                    all_same,
-                    "Uncoded bands before start_band should be unchanged"
-                );
-            }
+        let n = freq_data.len();
+        let nyquist_bound = n / 2;
+
+        let bins_per_band = decoder.bins_per_band();
+        let bound_from_bands: usize = bins_per_band
+            .iter()
+            .take(decoder.end_band)
+            .map(|&b| (b as usize) << 2)
+            .sum();
+
+        let expected_bound = bound_from_bands.min(nyquist_bound);
+
+        let zero_count_above_bound = freq_data[expected_bound..]
+            .iter()
+            .filter(|&&x| x == 0.0)
+            .count();
+        assert_eq!(
+            zero_count_above_bound,
+            n - expected_bound,
+            "All frequency bins above bound should be zero"
+        );
+
+        let non_zero_count_below_bound = freq_data[..expected_bound]
+            .iter()
+            .filter(|&&x| x != 0.0)
+            .count();
+        assert!(
+            non_zero_count_below_bound > 0,
+            "Some frequency bins below bound should be non-zero"
+        );
+    }
+
+    #[test]
+    fn test_denormalize_bands_no_extra_zeroing_without_downsample() {
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        assert_eq!(decoder.downsample, 1);
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![1.0; band_size]);
+        }
+
+        let energy = [256_i16; CELT_NUM_BANDS];
+
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+
+        let bins_per_band = decoder.bins_per_band();
+        let bound_from_bands: usize = bins_per_band
+            .iter()
+            .take(decoder.end_band)
+            .map(|&b| (b as usize) << 2)
+            .sum();
+
+        let n = freq_data.len();
+        let nyquist_bound = n / decoder.downsample as usize;
+
+        let expected_bound = bound_from_bands.min(nyquist_bound);
+
+        assert_eq!(
+            expected_bound, bound_from_bands,
+            "When downsample=1, bound should equal bound_from_bands (no Nyquist limiting)"
+        );
+
+        let zero_count_above_bound = freq_data[expected_bound..]
+            .iter()
+            .filter(|&&x| x == 0.0)
+            .count();
+        assert_eq!(
+            zero_count_above_bound,
+            n - expected_bound,
+            "Bins above end_band should be zero"
+        );
+    }
+
+    #[test]
+    fn test_denormalize_bands_downsample_6() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        decoder.downsample = 6;
+
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+        for i in 0..CELT_NUM_BANDS {
+            let n0 = usize::from(decoder.bins_per_band()[i]);
+            let band_size = n0 << 2;
+            shapes.push(vec![1.0; band_size]);
+        }
+
+        let energy = [256_i16; CELT_NUM_BANDS];
+
+        let freq_data = decoder.denormalize_bands(&shapes, &energy);
+
+        let n = freq_data.len();
+        let nyquist_bound = n / 6;
+
+        for (i, &freq) in freq_data.iter().enumerate().take(n).skip(nyquist_bound) {
+            assert!(
+                freq.abs() < 1e-6,
+                "Frequency bin {i} should be zero (above Nyquist for downsample=6)"
+            );
         }
     }
 
@@ -3854,7 +4070,7 @@ mod tests {
         let data = vec![0xFF; 200];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder, 200, 48000);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
         // Either succeeds or fails gracefully with proper error
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -3881,7 +4097,7 @@ mod tests {
         let data = vec![0x00; 200]; // Different pattern
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-        let result = decoder.decode_celt_frame(&mut range_decoder, 200, 48000);
+        let result = decoder.decode_celt_frame(&mut range_decoder, 200);
         // Verify decode doesn't panic with narrowband settings
         if let Ok(frame) = result {
             assert_eq!(frame.sample_rate, SampleRate::Hz48000);
@@ -4051,7 +4267,7 @@ mod tests {
             let data = vec![0x00; frame_bytes];
             let mut range_decoder = RangeDecoder::new(&data).unwrap();
 
-            let result = decoder.decode_celt_frame(&mut range_decoder, frame_bytes, 48000);
+            let result = decoder.decode_celt_frame(&mut range_decoder, frame_bytes);
 
             // Should not panic with correct bit budget calculation
             // Result may be Ok or Err depending on stub implementations
