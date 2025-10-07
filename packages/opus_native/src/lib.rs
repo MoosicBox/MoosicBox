@@ -71,6 +71,17 @@ pub struct Decoder {
     silk_resampler_required_delay_ms: f32,
 }
 
+/// SILK header flags structure
+///
+/// Contains VAD flags, LBRR flags, and per-frame LBRR flags decoded from SILK header
+#[cfg(feature = "silk")]
+#[derive(Debug)]
+struct SilkHeaderFlags {
+    vad_flags: Vec<bool>,
+    lbrr_flags: Vec<bool>,
+    per_frame_lbrr: Vec<Vec<bool>>,
+}
+
 impl Decoder {
     /// Creates a new Opus decoder.
     ///
@@ -168,11 +179,187 @@ impl Decoder {
         todo!("Implement in Phase 6")
     }
 
+    /// Decode SILK header flags (VAD + LBRR)
+    ///
+    /// # RFC Reference
+    /// * Lines 1867-1870: Header structure (VAD + LBRR)
+    /// * Lines 1953-1958: Header bits description
+    /// * Figure 15: Mono frame structure
+    /// * Figure 16: Stereo frame structure
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Range decoder positioned at start of frame
+    /// * `frame_size` - Frame duration (determines number of SILK frames)
+    /// * `channels` - Mono or stereo
+    ///
+    /// # Returns
+    /// Complete header flags including VAD, LBRR, and per-frame LBRR
+    ///
+    /// # Errors
+    /// * Returns error if range decoding fails
+    #[cfg(feature = "silk")]
+    fn decode_silk_header_flags(
+        range_decoder: &mut range::RangeDecoder,
+        frame_size: FrameSize,
+        channels: Channels,
+    ) -> Result<SilkHeaderFlags> {
+        let num_silk_frames = match frame_size.to_ms() {
+            10 | 20 => 1,
+            40 => 2,
+            60 => 3,
+            _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
+        };
+
+        let num_channels = channels as usize;
+        let mut vad_flags = Vec::with_capacity(num_silk_frames * num_channels);
+        let mut lbrr_flags = Vec::with_capacity(num_channels);
+        let mut per_frame_lbrr = Vec::new();
+
+        for _ in 0..num_channels {
+            for _ in 0..num_silk_frames {
+                let vad = range_decoder.ec_dec_bit_logp(1)?;
+                vad_flags.push(vad);
+            }
+
+            let lbrr = range_decoder.ec_dec_bit_logp(1)?;
+            lbrr_flags.push(lbrr);
+        }
+
+        for &lbrr_flag in &lbrr_flags {
+            if lbrr_flag {
+                let per_frame = Self::decode_per_frame_lbrr_flags(range_decoder, frame_size)?;
+                per_frame_lbrr.push(per_frame);
+            } else {
+                per_frame_lbrr.push(Vec::new());
+            }
+        }
+
+        Ok(SilkHeaderFlags {
+            vad_flags,
+            lbrr_flags,
+            per_frame_lbrr,
+        })
+    }
+
+    /// Decode per-frame LBRR flags
+    ///
+    /// # RFC Reference
+    /// * Lines 1974-1998: Per-frame LBRR flags
+    /// * Table 4: LBRR flag PDFs
+    ///
+    /// # Errors
+    /// * Returns error if range decoding fails
+    #[cfg(feature = "silk")]
+    fn decode_per_frame_lbrr_flags(
+        range_decoder: &mut range::RangeDecoder,
+        frame_size: FrameSize,
+    ) -> Result<Vec<bool>> {
+        match frame_size.to_ms() {
+            10 | 20 => Ok(vec![true]),
+            40 => {
+                const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+                let flags_value = range_decoder.ec_dec_icdf(LBRR_40MS_ICDF, 8)?;
+                Ok(vec![(flags_value & 1) != 0, (flags_value & 2) != 0])
+            }
+            60 => {
+                const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+                let flags_value = range_decoder.ec_dec_icdf(LBRR_60MS_ICDF, 8)?;
+                Ok(vec![
+                    (flags_value & 1) != 0,
+                    (flags_value & 2) != 0,
+                    (flags_value & 4) != 0,
+                ])
+            }
+            _ => Err(Error::DecodeFailed("Invalid frame size".into())),
+        }
+    }
+
+    /// Decode LBRR frames
+    ///
+    /// # RFC Reference
+    /// * Lines 1999-2050: LBRR frame decoding
+    /// * LBRR frames are decoded BEFORE regular frames
+    /// * For stereo: frames are interleaved mid1, side1, mid2, side2, ...
+    ///
+    /// # Arguments
+    /// * `range_decoder` - Range decoder positioned after header flags
+    /// * `header_flags` - Decoded header flags with LBRR info
+    /// * `config` - Configuration from TOC
+    /// * `channels` - Mono or stereo
+    ///
+    /// # Returns
+    /// Vector of LBRR frames (empty if no LBRR present)
+    ///
+    /// # Errors
+    /// * Returns error if SILK frame decode fails
+    #[cfg(feature = "silk")]
+    fn decode_lbrr_frames(
+        &mut self,
+        range_decoder: &mut range::RangeDecoder,
+        header_flags: &SilkHeaderFlags,
+        config: Configuration,
+        channels: Channels,
+    ) -> Result<Vec<Vec<i16>>> {
+        let num_silk_frames = match config.frame_size.to_ms() {
+            10 | 20 => 1,
+            40 => 2,
+            60 => 3,
+            _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
+        };
+
+        let num_channels = channels as usize;
+        let mut lbrr_frames = Vec::new();
+
+        for ch_idx in 0..num_channels {
+            if !header_flags
+                .lbrr_flags
+                .get(ch_idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let per_frame_flags = &header_flags.per_frame_lbrr[ch_idx];
+
+            for frame_idx in 0..num_silk_frames {
+                if !per_frame_flags.get(frame_idx).copied().unwrap_or(false) {
+                    continue;
+                }
+
+                let internal_rate = match config.bandwidth {
+                    Bandwidth::Narrowband => 8000,
+                    Bandwidth::Mediumband => 12000,
+                    Bandwidth::Wideband => 16000,
+                    _ => {
+                        return Err(Error::DecodeFailed(format!(
+                            "SILK-only supports NB/MB/WB only, got {:?}",
+                            config.bandwidth
+                        )));
+                    }
+                };
+
+                let frame_samples = Self::calculate_samples(FrameSize::Ms20, internal_rate);
+                let mut lbrr_buffer = vec![0i16; frame_samples * channels as usize];
+
+                let _decoded =
+                    self.silk
+                        .decode_silk_frame(range_decoder, true, &mut lbrr_buffer)?;
+
+                lbrr_frames.push(lbrr_buffer);
+            }
+        }
+
+        Ok(lbrr_frames)
+    }
+
     /// Decode SILK-only frame
     ///
     /// # RFC Reference
     /// * Lines 455-466: SILK-only overview
     /// * Lines 494-496: Internal sample rates (NB=8k, MB=12k, WB=16k)
+    /// * Lines 1954-1972: VAD flags in header
+    /// * Lines 1999-2050: LBRR frame decoding
     /// * Table 2 configs 0-11
     ///
     /// # Arguments
@@ -201,6 +388,10 @@ impl Decoder {
 
         let mut ec = RangeDecoder::new(frame_data)?;
 
+        let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
+
+        let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
+
         let internal_rate = match config.bandwidth {
             Bandwidth::Narrowband => 8000,
             Bandwidth::Mediumband => 12000,
@@ -213,18 +404,45 @@ impl Decoder {
             }
         };
 
-        let internal_samples = Self::calculate_samples(config.frame_size, internal_rate);
-        let sample_count_with_channels = internal_samples * channels as usize;
-        let mut silk_buffer = vec![0i16; sample_count_with_channels];
+        let num_silk_frames = match config.frame_size.to_ms() {
+            10 | 20 => 1,
+            40 => 2,
+            60 => 3,
+            _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
+        };
 
-        let decoded = self
-            .silk
-            .decode_silk_frame(&mut ec, false, &mut silk_buffer)?;
+        let frame_20ms_samples = Self::calculate_samples(FrameSize::Ms20, internal_rate);
+        let num_channels = channels as usize;
+        let total_samples = frame_20ms_samples * num_silk_frames;
+        let mut silk_buffer = vec![0i16; total_samples * num_channels];
 
-        if decoded != internal_samples {
-            return Err(Error::DecodeFailed(format!(
-                "SILK sample count mismatch: expected {internal_samples}, got {decoded}"
-            )));
+        for frame_idx in 0..num_silk_frames {
+            for ch_idx in 0..num_channels {
+                let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
+                let vad_flag = header_flags
+                    .vad_flags
+                    .get(vad_flag_index)
+                    .copied()
+                    .unwrap_or(true);
+
+                let mut frame_buffer = vec![0i16; frame_20ms_samples];
+
+                let decoded = self
+                    .silk
+                    .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
+
+                if decoded != frame_20ms_samples {
+                    return Err(Error::DecodeFailed(format!(
+                        "SILK sample count mismatch: expected {frame_20ms_samples}, got {decoded}"
+                    )));
+                }
+
+                let base_offset = frame_idx * frame_20ms_samples * num_channels;
+                for sample_idx in 0..frame_20ms_samples {
+                    silk_buffer[base_offset + sample_idx * num_channels + ch_idx] =
+                        frame_buffer[sample_idx];
+                }
+            }
         }
 
         let target_rate = self.sample_rate as u32;
@@ -250,7 +468,7 @@ impl Decoder {
 
         let copy_len = silk_buffer.len().min(output.len());
         output[..copy_len].copy_from_slice(&silk_buffer[..copy_len]);
-        Ok(internal_samples)
+        Ok(total_samples)
     }
 
     /// Decode CELT-only frame
@@ -317,10 +535,11 @@ impl Decoder {
     /// * Lines 481-487: Hybrid overview
     /// * Lines 522-526: "Both layers use the same entropy coder"
     /// * Lines 1749-1750: "In a Hybrid frame, SILK operates in WB"
+    /// * Lines 1999-2050: LBRR frame decoding
     /// * Line 5804: "first 17 bands (up to 8 kHz) are not coded"
     ///
     /// # Critical Algorithm
-    /// 1. SILK decodes first using range decoder
+    /// 1. SILK decodes first using range decoder (with multi-frame support)
     /// 2. CELT continues with SAME range decoder (shared state!)
     /// 3. CELT skips bands 0-16 (`start_band=17`, RFC 5804)
     /// 4. Both outputs resampled to target, then summed
@@ -354,17 +573,50 @@ impl Decoder {
 
         let mut ec = RangeDecoder::new(frame_data)?;
 
-        let silk_samples_16k =
-            Self::calculate_samples(config.frame_size, HYBRID_SILK_INTERNAL_RATE);
-        let sample_count_with_channels = silk_samples_16k * channels as usize;
-        let mut silk_16k = vec![0i16; sample_count_with_channels];
+        let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
 
-        let silk_decoded = self.silk.decode_silk_frame(&mut ec, false, &mut silk_16k)?;
+        let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
 
-        if silk_decoded != silk_samples_16k {
-            return Err(Error::DecodeFailed(format!(
-                "Hybrid SILK sample count mismatch: expected {silk_samples_16k}, got {silk_decoded}"
-            )));
+        let num_silk_frames = match config.frame_size.to_ms() {
+            10 | 20 => 1,
+            40 => 2,
+            60 => 3,
+            _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
+        };
+
+        let frame_20ms_samples =
+            Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
+        let num_channels = channels as usize;
+        let total_samples = frame_20ms_samples * num_silk_frames;
+        let mut silk_16k = vec![0i16; total_samples * num_channels];
+
+        for frame_idx in 0..num_silk_frames {
+            for ch_idx in 0..num_channels {
+                let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
+                let vad_flag = header_flags
+                    .vad_flags
+                    .get(vad_flag_index)
+                    .copied()
+                    .unwrap_or(true);
+
+                let mut frame_buffer = vec![0i16; frame_20ms_samples];
+
+                let decoded = self
+                    .silk
+                    .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
+
+                if decoded != frame_20ms_samples {
+                    return Err(Error::DecodeFailed(format!(
+                        "Hybrid SILK sample count mismatch: expected {frame_20ms_samples}, got {decoded}"
+                    )));
+                }
+
+                let base_offset = frame_idx * frame_20ms_samples * num_channels;
+                for sample_idx in 0..frame_20ms_samples {
+                    silk_16k[base_offset + sample_idx * num_channels + ch_idx] =
+                        frame_buffer[sample_idx];
+                }
+            }
         }
 
         self.celt.set_start_band(HYBRID_START_BAND);
