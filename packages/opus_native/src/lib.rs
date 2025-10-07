@@ -47,7 +47,25 @@ impl SampleRate {
     }
 }
 
+/// Opus decoder supporting SILK, CELT, and Hybrid modes.
+///
+/// # Feature Flags
+///
+/// This decoder supports optional compilation with no decoding features enabled
+/// (`--no-default-features`). In this configuration:
+/// * `Decoder::new()` - ✅ Succeeds (creates minimal decoder)
+/// * `Decoder::decode()` - ❌ Returns `Error::UnsupportedMode`
+/// * `Decoder::reset_state()` - ✅ Succeeds (no-op)
+///
+/// This is useful for minimal binaries that only need packet inspection,
+/// or for verifying that feature-gating is correctly implemented.
+///
+/// To enable decoding, use at least one of:
+/// * `silk` - SILK codec (NB/MB/WB)
+/// * `celt` - CELT codec (NB/WB/SWB/FB)
+/// * `hybrid` - Hybrid mode (implies both `silk` and `celt`)
 pub struct Decoder {
+    #[cfg_attr(not(any(feature = "silk", feature = "celt")), allow(dead_code))]
     sample_rate: SampleRate,
     #[allow(dead_code)]
     channels: Channels,
@@ -140,6 +158,7 @@ impl Decoder {
     /// * `Error::InvalidPacket` - Packet violates RFC R1-R7
     /// * `Error::UnsupportedMode` - Mode not enabled via features
     /// * `Error::DecodeFailed` - Decoder error
+    #[allow(clippy::too_many_lines)]
     pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) -> Result<usize> {
         let Some(packet) = input else {
             return Ok(self.handle_packet_loss(output, fec));
@@ -149,107 +168,123 @@ impl Decoder {
             return Err(Error::InvalidPacket("Packet must be ≥1 byte (R1)".into()));
         }
 
-        let toc = toc::Toc::parse(packet[0]);
-        let config = toc.configuration();
-
-        if toc.channels() != self.channels {
-            return Err(Error::InvalidPacket(format!(
-                "Channel mismatch: packet={:?}, decoder={:?}",
-                toc.channels(),
-                self.channels
-            )));
-        }
-
-        let frames = framing::parse_frames(packet)?;
-
-        // Mode changed - reset decoder state
-        if let Some(prev) = self.prev_mode
-            && prev != config.mode
+        #[cfg(not(any(feature = "silk", feature = "celt")))]
         {
-            let curr = config.mode;
-
-            #[cfg(feature = "silk")]
-            if prev == toc::OpusMode::CeltOnly
-                && (curr == toc::OpusMode::SilkOnly || curr == toc::OpusMode::Hybrid)
-            {
-                self.silk.reset_decoder_state();
-            }
-
-            #[cfg(feature = "celt")]
-            if curr == toc::OpusMode::CeltOnly || curr == toc::OpusMode::Hybrid {
-                self.celt.reset();
-            }
+            Err(Error::UnsupportedMode(
+                "No decoding features enabled. Enable at least one of: 'silk', 'celt'".into(),
+            ))
         }
 
-        let samples_per_frame = Self::calculate_samples(config.frame_size, self.sample_rate as u32);
-        let total_samples = samples_per_frame * frames.len();
-        let buffer_capacity = output.len() / self.channels as usize;
+        #[cfg(any(feature = "silk", feature = "celt"))]
+        {
+            let toc = toc::Toc::parse(packet[0]);
+            let config = toc.configuration();
 
-        if total_samples > buffer_capacity {
-            return Err(Error::InvalidPacket(format!(
-                "Output buffer too small: {frames} frames × {samples_per_frame} samples/frame = {total_samples} total samples, buffer capacity {buffer_capacity} samples/channel",
-                frames = frames.len(),
-            )));
-        }
-
-        let mut current_output_offset = 0;
-
-        for (frame_idx, frame_data) in frames.iter().enumerate() {
-            let frame_output_start = current_output_offset * self.channels as usize;
-            let frame_output_end =
-                (current_output_offset + samples_per_frame) * self.channels as usize;
-            let frame_output = &mut output[frame_output_start..frame_output_end];
-
-            let samples = match config.mode {
-                #[cfg(feature = "silk")]
-                toc::OpusMode::SilkOnly => {
-                    self.decode_silk_only(frame_data, config, toc.channels(), frame_output)?
-                }
-
-                #[cfg(feature = "celt")]
-                toc::OpusMode::CeltOnly => {
-                    self.decode_celt_only(frame_data, config, toc.channels(), frame_output)?
-                }
-
-                #[cfg(all(feature = "silk", feature = "celt"))]
-                toc::OpusMode::Hybrid => {
-                    self.decode_hybrid(frame_data, config, toc.channels(), frame_output)?
-                }
-
-                #[cfg(not(feature = "silk"))]
-                toc::OpusMode::SilkOnly => {
-                    return Err(Error::UnsupportedMode(
-                        "SILK mode requires 'silk' feature".into(),
-                    ));
-                }
-
-                #[cfg(not(feature = "celt"))]
-                toc::OpusMode::CeltOnly => {
-                    return Err(Error::UnsupportedMode(
-                        "CELT mode requires 'celt' feature".into(),
-                    ));
-                }
-
-                #[cfg(not(all(feature = "silk", feature = "celt")))]
-                toc::OpusMode::Hybrid => {
-                    return Err(Error::UnsupportedMode(
-                        "Hybrid mode requires both 'silk' and 'celt' features".into(),
-                    ));
-                }
-            };
-
-            if samples != samples_per_frame {
-                return Err(Error::DecodeFailed(format!(
-                    "Frame {frame_idx} sample count mismatch: expected {samples_per_frame}, got {samples}"
+            if toc.channels() != self.channels {
+                return Err(Error::InvalidPacket(format!(
+                    "Channel mismatch: packet={:?}, decoder={:?}",
+                    toc.channels(),
+                    self.channels
                 )));
             }
 
-            current_output_offset += samples;
+            let frames = framing::parse_frames(packet)?;
+
+            // Mode changed - reset decoder state
+            if let Some(prev) = self.prev_mode
+                && prev != config.mode
+            {
+                let curr = config.mode;
+
+                #[cfg(feature = "silk")]
+                if prev == toc::OpusMode::CeltOnly
+                    && (curr == toc::OpusMode::SilkOnly || curr == toc::OpusMode::Hybrid)
+                {
+                    self.silk.reset_decoder_state();
+
+                    #[cfg(feature = "resampling")]
+                    {
+                        self.silk_resampler_state = None;
+                    }
+                }
+
+                #[cfg(feature = "celt")]
+                if curr == toc::OpusMode::CeltOnly || curr == toc::OpusMode::Hybrid {
+                    self.celt.reset();
+                }
+            }
+
+            let samples_per_frame =
+                Self::calculate_samples(config.frame_size, self.sample_rate as u32);
+            let total_samples = samples_per_frame * frames.len();
+            let buffer_capacity = output.len() / self.channels as usize;
+
+            if total_samples > buffer_capacity {
+                return Err(Error::InvalidPacket(format!(
+                    "Output buffer too small: {frames} frames × {samples_per_frame} samples/frame = {total_samples} total samples, buffer capacity {buffer_capacity} samples/channel",
+                    frames = frames.len(),
+                )));
+            }
+
+            let mut current_output_offset = 0;
+
+            for (frame_idx, frame_data) in frames.iter().enumerate() {
+                let frame_output_start = current_output_offset * self.channels as usize;
+                let frame_output_end =
+                    (current_output_offset + samples_per_frame) * self.channels as usize;
+                let frame_output = &mut output[frame_output_start..frame_output_end];
+
+                let samples = match config.mode {
+                    #[cfg(feature = "silk")]
+                    toc::OpusMode::SilkOnly => {
+                        self.decode_silk_only(frame_data, config, toc.channels(), frame_output)?
+                    }
+
+                    #[cfg(feature = "celt")]
+                    toc::OpusMode::CeltOnly => {
+                        self.decode_celt_only(frame_data, config, toc.channels(), frame_output)?
+                    }
+
+                    #[cfg(all(feature = "silk", feature = "celt"))]
+                    toc::OpusMode::Hybrid => {
+                        self.decode_hybrid(frame_data, config, toc.channels(), frame_output)?
+                    }
+
+                    #[cfg(not(feature = "silk"))]
+                    toc::OpusMode::SilkOnly => {
+                        return Err(Error::UnsupportedMode(
+                            "SILK mode requires 'silk' feature".into(),
+                        ));
+                    }
+
+                    #[cfg(not(feature = "celt"))]
+                    toc::OpusMode::CeltOnly => {
+                        return Err(Error::UnsupportedMode(
+                            "CELT mode requires 'celt' feature".into(),
+                        ));
+                    }
+
+                    #[cfg(not(all(feature = "silk", feature = "celt")))]
+                    toc::OpusMode::Hybrid => {
+                        return Err(Error::UnsupportedMode(
+                            "Hybrid mode requires both 'silk' and 'celt' features".into(),
+                        ));
+                    }
+                };
+
+                if samples != samples_per_frame {
+                    return Err(Error::DecodeFailed(format!(
+                        "Frame {frame_idx} sample count mismatch: expected {samples_per_frame}, got {samples}"
+                    )));
+                }
+
+                current_output_offset += samples;
+            }
+
+            self.prev_mode = Some(config.mode);
+
+            Ok(total_samples)
         }
-
-        self.prev_mode = Some(config.mode);
-
-        Ok(total_samples)
     }
 
     /// Handle packet loss
@@ -295,6 +330,7 @@ impl Decoder {
     ///
     /// Number of samples per channel
     #[must_use]
+    #[cfg_attr(not(any(feature = "silk", feature = "celt")), allow(dead_code))]
     const fn calculate_samples(frame_size: FrameSize, sample_rate: u32) -> usize {
         let duration_tenths_ms = match frame_size {
             FrameSize::Ms2_5 => 25,
@@ -1029,5 +1065,35 @@ mod lbrr_tests {
         assert_eq!(LBRR_60MS_ICDF[4], 110);
         assert_eq!(LBRR_60MS_ICDF[5], 82);
         assert_eq!(LBRR_60MS_ICDF[6], 0);
+    }
+}
+
+#[cfg(all(test, not(any(feature = "silk", feature = "celt"))))]
+mod no_features_tests {
+    use super::*;
+
+    #[test]
+    fn test_decoder_new_succeeds_with_no_features() {
+        let decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo);
+        assert!(decoder.is_ok());
+    }
+
+    #[test]
+    fn test_decode_fails_with_no_features() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        let mut output = vec![0i16; 480];
+
+        let packet = vec![0b0000_0000];
+
+        let result = decoder.decode(Some(&packet), &mut output, false);
+        assert!(matches!(result, Err(Error::UnsupportedMode(_))));
+    }
+
+    // TODO: Remove ignore when implemented in Phase 6
+    #[ignore]
+    #[test]
+    fn test_reset_state_succeeds_with_no_features() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        decoder.reset_state();
     }
 }

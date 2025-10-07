@@ -158,7 +158,6 @@ impl StereoState {
         }
     }
 
-    #[allow(dead_code)]
     const fn reset(&mut self) {
         self.prev_w0_q13 = 0;
         self.prev_w1_q13 = 0;
@@ -1546,14 +1545,32 @@ impl SilkDecoder {
     /// transitioning FROM CELT-only mode TO SILK-only or Hybrid mode to avoid
     /// reusing "out of date" memory.
     ///
-    /// This sets `decoder_reset = true` which will cause:
-    /// - LSF interpolation to use `w_Q2=4` (RFC line 3603)
-    /// - Previous LSF state to be cleared
-    /// - Absolute pitch lag coding on next frame
-    pub const fn reset_decoder_state(&mut self) {
+    /// This method clears ALL decoder state to ensure bit-exact RFC compliance:
+    ///
+    /// **NORMATIVE Requirements (MUST reset):**
+    /// * LSF state - RFC 3595-3612 (interpolation uses `w_Q2=4`)
+    /// * Stereo prediction weights - RFC 2200-2205 (zeros after reset)
+    /// * LTP buffers - RFC 4740-4747, 5550-5565 (cleared to zeros)
+    /// * Stereo unmixing state - RFC 2197-2205, 5715-5722 (prior samples to zeros)
+    ///
+    /// **Additional State (consistency):**
+    /// * Gain indices - RFC 2517-2518 (independent coding after reset)
+    /// * Pitch lag - RFC 4136-4152 (absolute coding after reset)
+    /// * LCG seed, flags - Clean slate for new mode
+    pub fn reset_decoder_state(&mut self) {
         self.decoder_reset = true;
         self.previous_lsf_nb = None;
         self.previous_lsf_wb = None;
+        self.previous_stereo_weights = None;
+        self.ltp_state.reset();
+        if let Some(ref mut state) = self.stereo_state {
+            state.reset();
+        }
+
+        self.previous_gain_indices = [None, None];
+        self.previous_pitch_lag = None;
+        self.lcg_seed = 0;
+        self.uncoded_side_channel = false;
     }
 
     /// Converts normalized LSF coefficients to LPC coefficients (RFC 6716 Section 4.2.7.5.6, lines 3628-3892).
