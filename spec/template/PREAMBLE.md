@@ -10,8 +10,6 @@ The implementation will [describe deployment/rollout strategy]. The system is de
 
 ## Prerequisites
 
-- All commands must be run within `nix develop --command ...` on NixOS systems
-- All `cargo` commands assume you're in the nix shell environment
 - Follow MoosicBox coding conventions (BTreeMap/BTreeSet, workspace dependencies)
 
 ## Context
@@ -19,9 +17,9 @@ The implementation will [describe deployment/rollout strategy]. The system is de
 - Specs use checkboxes (`- [ ]`) to track progress
 - Four-phase workflow: preliminary check → deep analysis → execution → verification
 - NO COMPROMISES - halt on any deviation from spec
-  - Includes comprehensive test coverage for all business logic
-  - Tests must be written alongside implementation, not deferred
-  - Both success and failure paths must be tested
+    - Includes comprehensive test coverage for all business logic
+    - Tests must be written alongside implementation, not deferred
+    - Both success and failure paths must be tested
 - Living documents that evolve during implementation
 - After completing a checkbox, 'check' it and add details under it regarding the file/location updated as PROOF
 
