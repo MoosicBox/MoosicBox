@@ -765,6 +765,8 @@ impl Database for PostgresSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(i16::from(*n)),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i16::from)),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
@@ -833,6 +835,8 @@ impl Database for PostgresSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
@@ -1317,6 +1321,8 @@ impl Database for PostgresSqlxTransaction {
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
@@ -1381,6 +1387,8 @@ impl Database for PostgresSqlxTransaction {
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
@@ -1747,7 +1755,7 @@ async fn postgres_sqlx_exec_create_table(
                 query.push(')');
             }
             crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-            crate::schema::DataType::SmallInt => {
+            crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
                 if column.auto_increment {
                     query.push_str("SMALLSERIAL");
                 } else {
@@ -1813,6 +1821,7 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1836,6 +1845,9 @@ async fn postgres_sqlx_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "TRUE" } else { "FALSE" });
+                }
+                DatabaseValue::Int8Opt(Some(x)) | DatabaseValue::Int8(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
                     query.push_str(&x.to_string());
@@ -2142,7 +2154,9 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     crate::schema::DataType::Text => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
+                        "SMALLINT".to_string()
+                    }
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
                     crate::schema::DataType::Serial => "SERIAL".to_string(),
@@ -2274,7 +2288,9 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     crate::schema::DataType::Text => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
+                        "SMALLINT".to_string()
+                    }
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
                     crate::schema::DataType::Serial => "SERIAL".to_string(),
@@ -2397,6 +2413,7 @@ fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
     let owned = sqlx::ValueRef::to_owned(value);
     match value.type_info().name() {
         "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
+        "\"CHAR\"" => Ok(DatabaseValue::Int8(owned.try_decode()?)),
         "SMALLINT" | "SMALLSERIAL" | "INT2" => Ok(DatabaseValue::Int16(owned.try_decode()?)),
         "INT" | "SERIAL" | "INT4" => Ok(DatabaseValue::Int32(owned.try_decode()?)),
         "BIGINT" | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
@@ -2733,6 +2750,7 @@ where
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -2746,6 +2764,9 @@ where
                 DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
+                }
+                DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                    query = query.bind(i16::from(*value));
                 }
                 DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
                     query = query.bind(*value);

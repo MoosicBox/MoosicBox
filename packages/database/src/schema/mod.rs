@@ -227,6 +227,7 @@ pub enum DataType {
     Char(u16),
 
     // Integer types
+    TinyInt,
     SmallInt,
     Int,
     BigInt,

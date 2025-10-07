@@ -180,6 +180,8 @@ pub enum DatabaseValue {
     StringOpt(Option<String>),
     Bool(bool),
     BoolOpt(Option<bool>),
+    Int8(i8),
+    Int8Opt(Option<i8>),
     Int16(i16),
     Int16Opt(Option<i16>),
     Int32(i32),
@@ -217,8 +219,18 @@ impl DatabaseValue {
 
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
+    pub fn as_i8(&self) -> Option<i8> {
+        match self {
+            Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn as_i16(&self) -> Option<i16> {
         match self {
+            Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(i16::from(*value)),
             Self::Int16(value) | Self::Int16Opt(Some(value)) => Some(*value),
             _ => None,
         }
@@ -228,6 +240,7 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i32(&self) -> Option<i32> {
         match self {
+            Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(i32::from(*value)),
             Self::Int16(value) | Self::Int16Opt(Some(value)) => Some(i32::from(*value)),
             Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(*value),
             _ => None,
@@ -238,6 +251,7 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i64(&self) -> Option<i64> {
         match self {
+            Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(i64::from(*value)),
             Self::Int16(value) | Self::Int16Opt(Some(value)) => Some(i64::from(*value)),
             Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(i64::from(*value)),
             Self::Int64(value) | Self::Int64Opt(Some(value)) => Some(*value),
@@ -253,6 +267,14 @@ impl DatabaseValue {
     pub fn as_u64(&self) -> Option<u64> {
         match self {
             Self::UInt64(value) | Self::UInt64Opt(Some(value)) => Some(*value),
+            Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(
+                #[allow(clippy::cast_sign_loss)]
+                if *value >= 0 {
+                    *value as u64
+                } else {
+                    panic!("DatabaseValue::as_u64: value is negative")
+                },
+            ),
             Self::Int16(value) | Self::Int16Opt(Some(value)) => Some(
                 #[allow(clippy::cast_sign_loss)]
                 if *value >= 0 {
@@ -394,7 +416,7 @@ impl From<rust_decimal::Decimal> for DatabaseValue {
 
 impl From<i8> for DatabaseValue {
     fn from(val: i8) -> Self {
-        Self::Int16(i16::from(val))
+        Self::Int8(val)
     }
 }
 
@@ -476,6 +498,9 @@ impl TryFrom<DatabaseValue> for u64 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
             DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
@@ -496,6 +521,9 @@ impl TryFrom<DatabaseValue> for i64 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
             DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
                 Ok(Self::from(value))
             }
@@ -511,11 +539,37 @@ impl TryFrom<DatabaseValue> for i64 {
     }
 }
 
+impl TryFrom<DatabaseValue> for i8 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => Ok(value),
+            DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            _ => Err(TryFromError::CouldNotConvert("i8".into())),
+        }
+    }
+}
+
 impl TryFrom<DatabaseValue> for i16 {
     type Error = TryFromError;
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
             DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => Ok(value),
             DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
@@ -536,6 +590,9 @@ impl TryFrom<DatabaseValue> for i32 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
             DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
                 Ok(Self::from(value))
             }

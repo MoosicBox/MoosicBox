@@ -300,6 +300,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1572,7 +1573,7 @@ async fn postgres_exec_create_table(
                 query.push(')');
             }
             crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-            crate::schema::DataType::SmallInt => {
+            crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
                 if column.auto_increment {
                     query.push_str("SMALLSERIAL");
                 } else {
@@ -1645,6 +1646,7 @@ async fn postgres_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1668,6 +1670,9 @@ async fn postgres_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "TRUE" } else { "FALSE" });
+                }
+                DatabaseValue::Int8Opt(Some(x)) | DatabaseValue::Int8(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
                     query.push_str(&x.to_string());
@@ -1962,7 +1967,9 @@ pub(crate) async fn postgres_exec_alter_table(
                     crate::schema::DataType::Text => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
+                        "SMALLINT".to_string()
+                    }
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
                     crate::schema::DataType::Serial => "SERIAL".to_string(),
@@ -2087,7 +2094,9 @@ pub(crate) async fn postgres_exec_alter_table(
                     crate::schema::DataType::Text => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::TinyInt | crate::schema::DataType::SmallInt => {
+                        "SMALLINT".to_string()
+                    }
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
                     crate::schema::DataType::Serial => "SERIAL".to_string(),
@@ -3219,6 +3228,8 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
+            DatabaseValue::Int8(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Int8Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int16(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int16Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int32(value) => value.to_sql(ty, out)?,

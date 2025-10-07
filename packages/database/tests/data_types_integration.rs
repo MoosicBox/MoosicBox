@@ -110,6 +110,12 @@ mod rusqlite_data_type_tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_int8_specific_type_and_retrieval() {
+        let suite = RusqliteDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
     async fn test_rusqlite_int16_specific_type_and_retrieval() {
         let suite = RusqliteDataTypeTests;
         suite.test_int16_specific_type_and_retrieval().await;
@@ -220,6 +226,12 @@ mod sqlite_sqlx_data_type_tests {
     async fn test_sqlite_sqlx_default_values_all_types() {
         let suite = SqliteSqlxDataTypeTests;
         suite.test_default_values_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_sqlx_int8_specific_type_and_retrieval() {
+        let suite = SqliteSqlxDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
@@ -336,6 +348,12 @@ mod postgres_data_type_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_int8_specific_type_and_retrieval() {
+        let suite = PostgresDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_int16_specific_type_and_retrieval() {
         let suite = PostgresDataTypeTests;
         suite.test_int16_specific_type_and_retrieval().await;
@@ -433,6 +451,12 @@ mod postgres_sqlx_data_type_tests {
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_sqlx_int8_specific_type_and_retrieval() {
+        let suite = PostgresSqlxDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_sqlx_int16_specific_type_and_retrieval() {
         let suite = PostgresSqlxDataTypeTests;
         suite.test_int16_specific_type_and_retrieval().await;
@@ -527,6 +551,12 @@ mod mysql_sqlx_data_type_tests {
     async fn test_mysql_sqlx_default_values_all_types() {
         let suite = MysqlSqlxDataTypeTests;
         suite.test_default_values_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_sqlx_int8_specific_type_and_retrieval() {
+        let suite = MysqlSqlxDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]

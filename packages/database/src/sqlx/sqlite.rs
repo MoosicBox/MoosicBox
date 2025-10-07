@@ -331,6 +331,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -824,6 +825,8 @@ impl Database for SqliteSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
@@ -895,6 +898,8 @@ impl Database for SqliteSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
@@ -1291,6 +1296,7 @@ where
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1304,6 +1310,9 @@ where
                 DatabaseValue::UuidOpt(None) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
+                }
+                DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                    query = query.bind(i64::from(*value));
                 }
                 DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
                     query = query.bind(i64::from(*value));
@@ -1418,6 +1427,7 @@ async fn sqlite_sqlx_exec_create_table(
                 query.push(')');
             }
             crate::schema::DataType::Bool
+            | crate::schema::DataType::TinyInt
             | crate::schema::DataType::SmallInt
             | crate::schema::DataType::Int
             | crate::schema::DataType::BigInt
@@ -1443,6 +1453,7 @@ async fn sqlite_sqlx_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1466,6 +1477,9 @@ async fn sqlite_sqlx_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int8Opt(Some(x)) | DatabaseValue::Int8(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
                     query.push_str(&x.to_string());
@@ -1866,6 +1880,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                     | crate::schema::DataType::MacAddr => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool
+                    | crate::schema::DataType::TinyInt
                     | crate::schema::DataType::SmallInt
                     | crate::schema::DataType::Int
                     | crate::schema::DataType::BigInt
@@ -2080,6 +2095,7 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
         | crate::schema::DataType::MacAddr => "TEXT".to_string(),
         crate::schema::DataType::Char(len) => format!("CHAR({len})"),
         crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
         | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
         | crate::schema::DataType::BigInt
@@ -2279,6 +2295,7 @@ fn sqlite_modify_create_table_sql(
 
     let data_type_str = match new_data_type {
         crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
         | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
         | crate::schema::DataType::BigInt
@@ -2325,6 +2342,7 @@ fn sqlite_modify_create_table_sql(
             crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
                 "NULL".to_string()
             }
+            crate::DatabaseValue::Int8(i) | crate::DatabaseValue::Int8Opt(Some(i)) => i.to_string(),
             crate::DatabaseValue::Int16(i) | crate::DatabaseValue::Int16Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2334,7 +2352,8 @@ fn sqlite_modify_create_table_sql(
             crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::Int16Opt(None)
+            crate::DatabaseValue::Int8Opt(None)
+            | crate::DatabaseValue::Int16Opt(None)
             | crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::Int64Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
@@ -2476,6 +2495,7 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
                     // Apply CAST for the modified column to ensure proper type conversion
                     let cast_type = match new_data_type {
                         crate::schema::DataType::Bool |
+                        crate::schema::DataType::TinyInt |
                         crate::schema::DataType::SmallInt |
                         crate::schema::DataType::Int |
                         crate::schema::DataType::BigInt |
@@ -3577,6 +3597,8 @@ impl Database for SqliteSqlxTransaction {
         // Add parameters in order - sqlx uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
@@ -3644,6 +3666,8 @@ impl Database for SqliteSqlxTransaction {
         // Add parameters in order - sqlx uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
                 crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
                 crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
@@ -4628,6 +4652,7 @@ mod introspection_tests {
                 DataType::Text
                 | DataType::VarChar(_)
                 | DataType::Char(_)
+                | DataType::TinyInt
                 | DataType::SmallInt
                 | DataType::Int
                 | DataType::BigInt

@@ -396,6 +396,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1527,6 +1528,7 @@ fn rusqlite_exec_create_table(
                 query.push(')');
             }
             crate::schema::DataType::Bool
+            | crate::schema::DataType::TinyInt
             | crate::schema::DataType::SmallInt
             | crate::schema::DataType::Int
             | crate::schema::DataType::BigInt
@@ -1552,6 +1554,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -1575,6 +1578,9 @@ fn rusqlite_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int8Opt(Some(x)) | DatabaseValue::Int8(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int16Opt(Some(x)) | DatabaseValue::Int16(x) => {
                     query.push_str(&x.to_string());
@@ -1977,6 +1983,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                     | crate::schema::DataType::MacAddr => "TEXT".to_string(),
                     crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool
+                    | crate::schema::DataType::TinyInt
                     | crate::schema::DataType::SmallInt
                     | crate::schema::DataType::Int
                     | crate::schema::DataType::BigInt
@@ -2182,6 +2189,7 @@ fn rusqlite_exec_modify_column_workaround(
         | crate::schema::DataType::MacAddr => "TEXT".to_string(),
         crate::schema::DataType::Char(len) => format!("CHAR({len})"),
         crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
         | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
         | crate::schema::DataType::BigInt
@@ -2401,6 +2409,7 @@ fn column_requires_table_recreation(
 }
 
 #[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
 fn modify_create_table_sql(
     original_sql: &str,
     original_table_name: &str,
@@ -2431,6 +2440,7 @@ fn modify_create_table_sql(
         | crate::schema::DataType::Custom(_)
         | crate::schema::DataType::Decimal(..) => "TEXT",
         crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
         | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
         | crate::schema::DataType::BigInt
@@ -2461,6 +2471,7 @@ fn modify_create_table_sql(
             crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
                 "NULL".to_string()
             }
+            crate::DatabaseValue::Int8(i) | crate::DatabaseValue::Int8Opt(Some(i)) => i.to_string(),
             crate::DatabaseValue::Int16(i) | crate::DatabaseValue::Int16Opt(Some(i)) => {
                 i.to_string()
             }
@@ -2470,7 +2481,8 @@ fn modify_create_table_sql(
             crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::Int16Opt(None)
+            crate::DatabaseValue::Int8Opt(None)
+            | crate::DatabaseValue::Int16Opt(None)
             | crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::Int64Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
@@ -2685,6 +2697,7 @@ fn rusqlite_exec_table_recreation_workaround(
                         | crate::schema::DataType::MacAddr
                         | crate::schema::DataType::Custom(_) => "TEXT",
                         crate::schema::DataType::Bool
+                        | crate::schema::DataType::TinyInt
                         | crate::schema::DataType::SmallInt
                         | crate::schema::DataType::Int
                         | crate::schema::DataType::BigInt
@@ -2999,6 +3012,7 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
         .collect()
 }
 
+#[allow(clippy::too_many_lines)]
 fn bind_values(
     statement: &mut Statement<'_>,
     values: Option<&[RusqliteDatabaseValue]>,
@@ -3012,6 +3026,7 @@ fn bind_values(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int8Opt(None)
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
@@ -3032,6 +3047,12 @@ fn bind_values(
                 }
                 DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, value)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                    statement.raw_bind_parameter(i, i64::from(*value))?;
                     if !constant_inc {
                         i += 1;
                     }

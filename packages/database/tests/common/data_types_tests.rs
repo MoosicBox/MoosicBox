@@ -973,6 +973,161 @@ pub trait DataTypeTestSuite {
         );
     }
 
+    async fn test_int8_specific_type_and_retrieval(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "int8_specific_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "tiny_int_col".to_string(),
+                data_type: DataType::TinyInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "small_int_col".to_string(),
+                data_type: DataType::SmallInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "int_col".to_string(),
+                data_type: DataType::Int,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create int8_specific_test table");
+
+        db.insert(table_name)
+            .value("id", 1i64)
+            .value("tiny_int_col", i8::MIN)
+            .value("small_int_col", i16::MIN)
+            .value("int_col", i32::MIN)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 2i64)
+            .value("tiny_int_col", i8::MAX)
+            .value("small_int_col", i16::MAX)
+            .value("int_col", i32::MAX)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 3i64)
+            .value("tiny_int_col", 50i8)
+            .value("small_int_col", 100i16)
+            .value("int_col", 1000)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        assert!(
+            matches!(
+                rows[0].get("tiny_int_col").unwrap(),
+                DatabaseValue::Int8(_) | DatabaseValue::Int16(_) | DatabaseValue::Int64(_)
+            ),
+            "TINYINT column should return Int8 (or Int64 for SQLite, or Int16 for Postgres), got {:?}",
+            rows[0].get("tiny_int_col").unwrap()
+        );
+        assert!(
+            matches!(
+                rows[0].get("small_int_col").unwrap(),
+                DatabaseValue::Int16(_) | DatabaseValue::Int64(_)
+            ),
+            "SMALLINT column should return Int16 or (or Int64 for SQLite), got {:?}",
+            rows[0].get("small_int_col").unwrap()
+        );
+        assert!(
+            matches!(
+                rows[0].get("int_col").unwrap(),
+                DatabaseValue::Int32(_) | DatabaseValue::Int64(_)
+            ),
+            "INT column should return Int32 or (or Int64 for SQLite), got {:?}",
+            rows[0].get("int_col").unwrap()
+        );
+
+        let tiny_val_0: i8 = rows[0]
+            .get("tiny_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(tiny_val_0, i8::MIN);
+
+        let tiny_val_1: i8 = rows[1]
+            .get("tiny_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(tiny_val_1, i8::MAX);
+
+        let tiny_val_2: i8 = rows[2]
+            .get("tiny_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(tiny_val_2, 50i8);
+
+        if rows[0].get("tiny_int_col").unwrap().as_i8().is_some() {
+            assert_eq!(
+                rows[0].get("tiny_int_col").unwrap().as_i8().unwrap(),
+                i8::MIN
+            );
+            assert_eq!(
+                rows[1].get("tiny_int_col").unwrap().as_i8().unwrap(),
+                i8::MAX
+            );
+            assert_eq!(rows[2].get("tiny_int_col").unwrap().as_i8().unwrap(), 50i8);
+        }
+
+        let small_val_0: i16 = rows[0]
+            .get("small_int_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(small_val_0, i16::MIN);
+
+        let int_val_0: i32 = rows[0].get("int_col").unwrap().clone().try_into().unwrap();
+        assert_eq!(int_val_0, i32::MIN);
+    }
+
     async fn test_int16_specific_type_and_retrieval(&self) {
         let Some(db) = self.get_database().await else {
             return;
