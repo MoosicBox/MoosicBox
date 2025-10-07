@@ -312,6 +312,26 @@ impl CeltDecoder {
         Ok(())
     }
 
+    /// Set start band for decoding
+    ///
+    /// # Arguments
+    ///
+    /// * `start_band` - First band to decode (0-20)
+    #[allow(dead_code)]
+    pub const fn set_start_band(&mut self, start_band: usize) {
+        self.start_band = start_band;
+    }
+
+    /// Set end band for decoding
+    ///
+    /// # Arguments
+    ///
+    /// * `end_band` - One past last band to decode (0-21)
+    #[allow(dead_code)]
+    pub const fn set_end_band(&mut self, end_band: usize) {
+        self.end_band = end_band;
+    }
+
     /// Decodes silence flag (RFC Table 56)
     ///
     /// # Errors

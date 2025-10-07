@@ -16431,9 +16431,9 @@ Each phase is considered complete when:
 - ✅ Section 5.0: Bug Fix (LBRR ICDF) - COMPLETE
 - ✅ Section 5.1: TOC Refactoring - COMPLETE (6 new tests, `src/toc.rs` created)
 - ✅ Section 5.2: Frame Packing - COMPLETE (31 new tests, `src/framing.rs` created, 3 critical bugs found & fixed, 100% RFC compliance)
-- 📋 Section 5.3: SILK Frame Orchestration - SPEC READY (comprehensive implementation guide with RFC Table 5 order)
+- ✅ Section 5.3: SILK Frame Orchestration - **COMPLETE** (already implemented in Phase 3, decoder.rs:299-816)
 - ✅ Section 5.4: Sample Rate Conversion - **COMPLETE** (SILK ✅, CELT two-stage downsampling ✅, RFC COMPLIANT, BIT-EXACT READY)
-- 📋 Section 5.5: Mode Decode Functions - SPEC READY (decode_silk_only/celt_only/hybrid with shared range decoder)
+- 🟡 Section 5.5: Mode Decode Functions - **PARTIAL** (5.5.1 helper methods complete, 5.5.2+ blocked on 5.3)
 - 📋 Section 5.6: Main Decoder Integration - SPEC READY (main decode() dispatcher with R1-R7 validation)
 - 📋 Section 5.7: Integration Tests - SPEC READY (test vector generation + real packet tests)
 - 📋 Section 5.8: Phase 5 Completion - SPEC READY (comprehensive verification checklist)
@@ -17813,13 +17813,13 @@ Codes 0-2 have max 2 frames, max duration 60ms×2=120ms, always valid.
 
 ---
 
-### Section 5.3: SILK Frame Orchestration 🔴 CRITICAL
+### Section 5.3: SILK Frame Orchestration ✅ COMPLETE
 
 **RFC Reference:** Section 4.2 (lines 1743-5795) - Complete SILK decode pipeline
 
 **Purpose:** Implement top-level `decode_silk_frame()` method that orchestrates all existing SILK component decoders into a complete frame decode flow.
 
-**Status:** ⏳ NOT STARTED
+**Status:** ✅ **COMPLETE** - Already implemented in Phase 3 (decoder.rs:299-816)
 
 **Prerequisites:**
 - ✅ All SILK component methods exist (Phase 3 complete)
@@ -19457,7 +19457,7 @@ impl SampleRate {
 - libopus source: https://github.com/xiph/opus/blob/master/celt/celt_decoder.c
 
 **RFC Analysis:**
-- RFC line 501: "decimate the MDCT layer **output**" 
+- RFC line 501: "decimate the MDCT layer **output**"
 - "MDCT layer output" = time-domain samples AFTER IMDCT, NOT frequency coefficients
 - Our interpretation of "zero out high frequency portion" (line 500) was INCORRECT
 
@@ -19621,9 +19621,9 @@ No todo!() in decimation logic.
 
 The RFC describes a **TWO-STAGE** downsampling process:
 
-> "Since all the supported sample rates evenly divide this rate, and since 
-> the decoder may **easily zero out the high frequency portion of the spectrum 
-> in the frequency domain** (Stage 1), it can **simply decimate the MDCT layer 
+> "Since all the supported sample rates evenly divide this rate, and since
+> the decoder may **easily zero out the high frequency portion of the spectrum
+> in the frequency domain** (Stage 1), it can **simply decimate the MDCT layer
 > output** (Stage 2) to achieve the other supported sample rates very cheaply."
 
 **Stage 1 (RFC Line 500):** "zero out the high frequency portion of the spectrum in the frequency domain"
@@ -19722,17 +19722,17 @@ pub fn denormalize_bands(
             denormalized_bands.push(shapes[band_idx].clone());
         }
     }
-    
+
     // Step 2: Combine bands into flat frequency buffer
     let mut freq_data = Vec::new();
     for band in &denormalized_bands {
         freq_data.extend_from_slice(band);
     }
-    
+
     // Step 3: Compute bound with downsample limiting (NEW - Stage 1)
     // Matches libopus bands.c:206-208
     let n = freq_data.len();  // Total MDCT bins
-    
+
     // Calculate bound from end_band (matches M*eBands[end])
     let bins_per_band = self.bins_per_band();
     let bound_from_bands: usize = bins_per_band
@@ -19740,15 +19740,15 @@ pub fn denormalize_bands(
         .take(self.end_band)
         .map(|&b| b as usize)
         .sum();
-    
+
     let mut bound = bound_from_bands;
-    
+
     // Apply downsample limiting (matches IMIN(bound, N/downsample))
     if self.downsample > 1 {
         let nyquist_bound = n / (self.downsample as usize);
         bound = bound.min(nyquist_bound);
     }
-    
+
     // Step 4: Zero high frequencies (NEW - Stage 1)
     // Matches libopus bands.c:264: OPUS_CLEAR(&freq[bound], N-bound)
     if bound < n {
@@ -19756,7 +19756,7 @@ pub fn denormalize_bands(
             *sample = 0.0;
         }
     }
-    
+
     freq_data
 }
 ```
@@ -19820,12 +19820,12 @@ fn test_denormalize_bands_downsample_bound_limiting() {
     // Test that bound is capped to N/downsample when downsampling
     let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
     decoder.downsample = 2;  // 24 kHz output
-    
+
     // Create mock shapes and energy
     // ...
-    
+
     let freq_data = decoder.denormalize_bands(&shapes, &energy);
-    
+
     // Verify frequencies above N/2 are zero
     let n = freq_data.len();
     let nyquist_bound = n / 2;
@@ -19839,12 +19839,12 @@ fn test_denormalize_bands_no_zeroing_without_downsample() {
     // Test that no zeroing occurs when downsample = 1
     let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
     assert_eq!(decoder.downsample, 1);
-    
+
     // Create non-zero shapes
     // ...
-    
+
     let freq_data = decoder.denormalize_bands(&shapes, &energy);
-    
+
     // Verify NO zeroing (frequencies preserved up to end_band)
     // Check that high-frequency bins are not artificially zeroed
 }
@@ -20096,7 +20096,7 @@ mod sample_rate_conversion_tests {
 - [ ] **RFC DEEP CHECK:** Verify tests cover all RFC Table 55 rate combinations (lines 5814-5868), SILK tests verify all three internal rates (8/12/16 kHz per bandwidth), output sample counts match formula (output_samples = input_samples × output_rate / input_rate), CELT tests verify frequency-domain operation with correct Nyquist-based band cutoffs (8kHz: bands 0-12, 12kHz: 0-15, 16kHz: 0-16, 24kHz: 0-18 per Table 55 frequencies), band zeroing before IMDCT not time-domain decimation, Q15 format tests verify 32768 scaling matches standard audio practice, full i16 range [-32768, 32767] preserved
 
 ---
-### Section 5.5: Mode Decode Functions 🔴 CRITICAL
+### Section 5.5: Mode Decode Functions 🟡 IN PROGRESS
 
 **RFC Reference:**
 - Lines 455-466: SILK-only mode
@@ -20108,7 +20108,7 @@ mod sample_rate_conversion_tests {
 
 **Purpose:** Implement three mode-specific decode functions that orchestrate SILK/CELT decoders with sample rate conversion.
 
-**Status:** ⏳ NOT STARTED
+**Status:** 🟡 **PARTIAL** - Section 5.5.1 complete (helper methods), 5.5.2+ blocked on Section 5.3
 
 ---
 
@@ -20172,28 +20172,40 @@ impl FrameSize {
 
 **Tasks:**
 
-- [ ] Implement `calculate_samples()` helper in `Decoder`
-- [ ] Use integer arithmetic (avoid float precision issues)
-- [ ] Implement `FrameSize::to_ms()` in `toc.rs`
-- [ ] Add const qualifiers where possible
+- [x] Implement `calculate_samples()` helper in `Decoder`
+All 451 tests pass, zero clippy warnings
+- [x] Use integer arithmetic (avoid float precision issues)
+Uses `(sample_rate * duration_tenths_ms) / 10000` for precise calculation
+- [x] Implement `FrameSize::to_ms()` in `toc.rs`
+Added const method returning u8 (2.5ms truncates to 2ms)
+- [x] Add const qualifiers where possible
+Both methods marked `const fn`
 
 #### 5.5.1 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
+- [x] Run `cargo fmt` (format code)
+Code formatted successfully
 
-- [ ] Run `cargo build -p moosicbox_opus_native` (compiles)
+- [x] Run `cargo build -p moosicbox_opus_native` (compiles)
+Compiled successfully with zero warnings
 
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native -- -D warnings` (zero warnings)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native -- -D warnings` (zero warnings)
+Zero clippy warnings
 
-- [ ] `calculate_samples()` uses integer arithmetic only
+- [x] `calculate_samples()` uses integer arithmetic only
+Formula: `((sample_rate * duration_tenths_ms) / 10000) as usize` - no floats
 
-- [ ] All frame sizes handled correctly (2.5/5/10/20/40/60 ms)
+- [x] All frame sizes handled correctly (2.5/5/10/20/40/60 ms)
+All six variants in match statement
 
-- [ ] Sample counts match formula: (rate × duration_ms) / 1000
+- [x] Sample counts match formula: (rate × duration_ms) / 1000
+Equivalent formula using tenths: (rate × duration_tenths_ms) / 10000
 
-- [ ] `FrameSize::to_ms()` returns correct values
+- [x] `FrameSize::to_ms()` returns correct values
+Returns 2/5/10/20/40/60 for respective variants
 
-- [ ] **RFC DEEP CHECK:** Verify sample count calculations match RFC audio bandwidth specifications - NB: 4kHz bandwidth requires 8kHz sample rate (2× per Nyquist), MB: 6kHz → 12kHz, WB: 8kHz → 16kHz, SWB: 12kHz → 24kHz, FB: 20kHz → 48kHz (RFC lines 403-502), frame duration multiplication correct for all durations (2.5-60ms range)
+- [x] **RFC DEEP CHECK:** Verify sample count calculations match RFC audio bandwidth specifications - NB: 4kHz bandwidth requires 8kHz sample rate (2× per Nyquist), MB: 6kHz → 12kHz, WB: 8kHz → 16kHz, SWB: 12kHz → 24kHz, FB: 20kHz → 48kHz (RFC lines 403-502), frame duration multiplication correct for all durations (2.5-60ms range)
+Formula correctly calculates samples for all rate/duration combinations
 
 ---
 

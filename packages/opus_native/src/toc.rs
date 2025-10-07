@@ -112,6 +112,26 @@ pub enum FrameSize {
     Ms60,
 }
 
+impl FrameSize {
+    /// Convert to milliseconds (for SILK decoder configuration)
+    ///
+    /// # Note
+    ///
+    /// 2.5ms truncates to 2ms since u8 cannot represent 2.5.
+    /// This is acceptable since SILK doesn't support 2.5ms frames.
+    #[must_use]
+    pub const fn to_ms(self) -> u8 {
+        match self {
+            Self::Ms2_5 => 2,
+            Self::Ms5 => 5,
+            Self::Ms10 => 10,
+            Self::Ms20 => 20,
+            Self::Ms40 => 40,
+            Self::Ms60 => 60,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Configuration {
     pub mode: OpusMode,

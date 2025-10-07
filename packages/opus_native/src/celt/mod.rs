@@ -5,4 +5,5 @@ mod constants;
 mod decoder;
 mod pvq;
 
+pub use constants::CELT_NUM_BANDS;
 pub use decoder::CeltDecoder;
