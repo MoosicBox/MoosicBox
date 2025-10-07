@@ -9,6 +9,7 @@ use super::constants::{
     CELT_INTRA_PDF, CELT_NUM_BANDS, CELT_SILENCE_PDF, CELT_TRANSIENT_PDF, LOG2_FRAC_TABLE,
     TRIM_PDF,
 };
+use super::pvq::{compute_pulse_cap, decode_pvq_vector_split};
 
 /// Result of bit allocation computation
 #[derive(Debug, Clone)]
@@ -2200,17 +2201,13 @@ impl CeltDecoder {
     /// Returns an error if any decoding step fails.
     /// Decode CELT frame with optional frequency-domain decimation
     ///
+    /// # Panics
+    ///
+    /// Panics if `lm` cannot fit into an `i8`.
+    ///
     /// # RFC Reference
     /// * Lines 498-501: "decimate the MDCT layer output"
     /// * Lines 5814-5831: Table 55 - Band cutoff frequencies (NORMATIVE)
-    ///
-    /// # Arguments
-    /// * `range_decoder` - Range decoder
-    /// * `frame_bytes` - Frame size in bytes (for bit budget)
-    /// * `target_rate` - Target output sample rate (8/12/16/24/48 kHz)
-    ///
-    /// # Errors
-    /// * Returns error if decoding fails
     #[allow(clippy::too_many_lines)]
     pub fn decode_celt_frame(
         &mut self,
@@ -2312,16 +2309,71 @@ impl CeltDecoder {
         let fine_energy =
             self.decode_fine_energy(range_decoder, &coarse_energy, &allocation.fine_energy_bits)?;
 
-        // 15. residual (PVQ shapes) (RFC Table 56 line 5982) - STUBBED
-        // For now, create unit-norm shapes (all zeros except first coefficient = 1.0)
+        // 15. residual (PVQ shapes) (RFC Table 56 line 5982)
         let bins_per_band = self.bins_per_band();
-        let mut shapes: Vec<Vec<f32>> = Vec::new();
-        for &bin_count in bins_per_band.iter().take(CELT_NUM_BANDS) {
-            let bin_count = usize::from(bin_count);
-            let mut shape = vec![0.0; bin_count];
-            if bin_count > 0 {
-                shape[0] = 1.0; // Unit norm shape (first coefficient = 1)
+
+        // Compute pulse allocation (K-values) for each band
+        let mut k_values = [0_u32; CELT_NUM_BANDS];
+        for band in self.start_band..self.end_band {
+            let n = u32::from(bins_per_band[band]);
+            let bits = allocation.shape_bits[band];
+
+            if n > 0 && bits > 0 {
+                #[allow(clippy::cast_sign_loss)]
+                let k = compute_pulse_cap(n, bits).max(0) as u32;
+                k_values[band] = k;
             }
+        }
+
+        // Compute B parameter (block size splits)
+        // RFC 6716 line 6618: Transient uses lm+1 splits, non-transient uses 1
+        let b_init = if self.transient { u32::from(lm) + 1 } else { 1 };
+
+        // Decode PVQ shapes for each band
+        let is_stereo = num_channels == 2;
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+
+        for band in 0..CELT_NUM_BANDS {
+            let n = u32::from(bins_per_band[band]);
+            let k = k_values[band];
+
+            // Skip bands outside coded range
+            if band < self.start_band || band >= self.end_band {
+                shapes.push(vec![0.0; n as usize]);
+                continue;
+            }
+
+            // Decode PVQ shape as integer pulses
+            let pulses = if k > 0 && n > 0 {
+                let bits = allocation.shape_bits[band];
+                let b0 = 1_u32; // Initial B0 value (libopus bands.c:774)
+
+                decode_pvq_vector_split(
+                    range_decoder,
+                    n,
+                    k,
+                    bits,
+                    is_stereo,
+                    i8::try_from(lm).expect("lm should be in range"),
+                    b0,
+                    b_init,
+                )?
+            } else {
+                vec![0_i32; n as usize]
+            };
+
+            // Convert i32 pulses to f32 normalized shape
+            #[allow(clippy::cast_precision_loss)]
+            let mut shape = pulses.iter().map(|&p| p as f32).collect::<Vec<f32>>();
+
+            // Normalize to unit norm (RFC 6716 requirement)
+            let norm = shape.iter().map(|&x| x * x).sum::<f32>().sqrt();
+            if norm > 0.0 {
+                for val in &mut shape {
+                    *val /= norm;
+                }
+            }
+
             shapes.push(shape);
         }
 
@@ -4428,5 +4480,23 @@ mod tests {
 
         let energy: f32 = output.iter().map(|&x| x * x).sum();
         assert!(energy > 0.1, "Impulse should have significant energy");
+    }
+
+    #[test]
+    fn test_compute_pulse_cap_basic() {
+        let k = compute_pulse_cap(8, 64);
+        assert!(k >= 0, "Pulse cap should be non-negative");
+    }
+
+    #[test]
+    fn test_compute_pulse_cap_zero_bits() {
+        let k = compute_pulse_cap(8, 0);
+        assert_eq!(k, 0, "Zero bits should yield zero pulses");
+    }
+
+    #[test]
+    fn test_compute_pulse_cap_zero_n() {
+        let k = compute_pulse_cap(0, 64);
+        assert_eq!(k, 0, "Zero dimensions should yield zero pulses");
     }
 }

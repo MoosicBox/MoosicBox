@@ -246,8 +246,8 @@ fn frac_mul16(a: i32, b: i32) -> i32 {
 ///
 /// * Maximum pulses that can be encoded with given bits
 #[must_use]
-#[allow(dead_code, clippy::cast_possible_wrap)]
-fn compute_pulse_cap(n: u32, bits: i32) -> i32 {
+#[allow(clippy::cast_possible_wrap)]
+pub fn compute_pulse_cap(n: u32, bits: i32) -> i32 {
     if bits <= 0 || n == 0 {
         return 0;
     }
