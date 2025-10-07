@@ -162,6 +162,25 @@ impl Decoder {
 
         let frames = framing::parse_frames(packet)?;
 
+        // Mode changed - reset decoder state
+        if let Some(prev) = self.prev_mode
+            && prev != config.mode
+        {
+            let curr = config.mode;
+
+            #[cfg(feature = "silk")]
+            if prev == toc::OpusMode::CeltOnly
+                && (curr == toc::OpusMode::SilkOnly || curr == toc::OpusMode::Hybrid)
+            {
+                self.silk.reset_decoder_state();
+            }
+
+            #[cfg(feature = "celt")]
+            if curr == toc::OpusMode::CeltOnly || curr == toc::OpusMode::Hybrid {
+                self.celt.reset();
+            }
+        }
+
         let samples_per_frame = Self::calculate_samples(config.frame_size, self.sample_rate as u32);
         let total_samples = samples_per_frame * frames.len();
         let buffer_capacity = output.len() / self.channels as usize;

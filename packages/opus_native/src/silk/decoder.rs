@@ -1540,11 +1540,17 @@ impl SilkDecoder {
         self.uncoded_side_channel = true;
     }
 
-    /// Resets decoder state (e.g., after packet loss).
-    /// This will cause the next interpolation to use `w_Q2=4` (RFC line 3603).
-    // TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline
-    #[allow(dead_code)]
-    const fn reset_decoder_state(&mut self) {
+    /// Resets decoder state for mode transitions.
+    ///
+    /// RFC 6716 Section 4.5.2 (lines 7088-7102): SILK state must be reset when
+    /// transitioning FROM CELT-only mode TO SILK-only or Hybrid mode to avoid
+    /// reusing "out of date" memory.
+    ///
+    /// This sets `decoder_reset = true` which will cause:
+    /// - LSF interpolation to use `w_Q2=4` (RFC line 3603)
+    /// - Previous LSF state to be cleared
+    /// - Absolute pitch lag coding on next frame
+    pub const fn reset_decoder_state(&mut self) {
         self.decoder_reset = true;
         self.previous_lsf_nb = None;
         self.previous_lsf_wb = None;
