@@ -30,4 +30,10 @@ pub enum Error {
 
     #[error("Invalid resampler delay: {0}")]
     InvalidDelay(String),
+
+    #[error("Unsupported mode: {0}")]
+    UnsupportedMode(String),
+
+    #[error("Invalid mode: {0}")]
+    InvalidMode(String),
 }

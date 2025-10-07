@@ -122,12 +122,132 @@ impl Decoder {
 
     /// Decodes an Opus packet to signed 16-bit PCM.
     ///
-    /// # Errors
+    /// # RFC Reference
+    /// * Section 3.1: TOC byte parsing (lines 712-836)
+    /// * Section 3.2: Frame packing (lines 838-1169)
+    /// * Section 4: Decoding (lines 1257-1280)
+    /// * R1: Packet must be ≥1 byte (line 714)
     ///
-    /// Returns an error if decoding fails (not yet implemented - will be implemented in Phase 6).
+    /// # Arguments
+    /// * `input` - Optional input packet (None = packet loss)
+    /// * `output` - Output buffer for decoded PCM
+    /// * `fec` - Forward Error Correction flag
+    ///
+    /// # Returns
+    /// Number of samples decoded per channel
+    ///
+    /// # Errors
+    /// * `Error::InvalidPacket` - Packet violates RFC R1-R7
+    /// * `Error::UnsupportedMode` - Mode not enabled via features
+    /// * `Error::DecodeFailed` - Decoder error
     pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) -> Result<usize> {
-        let _ = (self, input, output, fec);
-        todo!("Implement in Phase 6")
+        let Some(packet) = input else {
+            return Ok(self.handle_packet_loss(output, fec));
+        };
+
+        if packet.is_empty() {
+            return Err(Error::InvalidPacket("Packet must be ≥1 byte (R1)".into()));
+        }
+
+        let toc = toc::Toc::parse(packet[0]);
+        let config = toc.configuration();
+
+        if toc.channels() != self.channels {
+            return Err(Error::InvalidPacket(format!(
+                "Channel mismatch: packet={:?}, decoder={:?}",
+                toc.channels(),
+                self.channels
+            )));
+        }
+
+        let frames = framing::parse_frames(packet)?;
+
+        let samples_per_frame = Self::calculate_samples(config.frame_size, self.sample_rate as u32);
+        let total_samples = samples_per_frame * frames.len();
+        let buffer_capacity = output.len() / self.channels as usize;
+
+        if total_samples > buffer_capacity {
+            return Err(Error::InvalidPacket(format!(
+                "Output buffer too small: {frames} frames × {samples_per_frame} samples/frame = {total_samples} total samples, buffer capacity {buffer_capacity} samples/channel",
+                frames = frames.len(),
+            )));
+        }
+
+        let mut current_output_offset = 0;
+
+        for (frame_idx, frame_data) in frames.iter().enumerate() {
+            let frame_output_start = current_output_offset * self.channels as usize;
+            let frame_output_end =
+                (current_output_offset + samples_per_frame) * self.channels as usize;
+            let frame_output = &mut output[frame_output_start..frame_output_end];
+
+            let samples = match config.mode {
+                #[cfg(feature = "silk")]
+                toc::OpusMode::SilkOnly => {
+                    self.decode_silk_only(frame_data, config, toc.channels(), frame_output)?
+                }
+
+                #[cfg(feature = "celt")]
+                toc::OpusMode::CeltOnly => {
+                    self.decode_celt_only(frame_data, config, toc.channels(), frame_output)?
+                }
+
+                #[cfg(all(feature = "silk", feature = "celt"))]
+                toc::OpusMode::Hybrid => {
+                    self.decode_hybrid(frame_data, config, toc.channels(), frame_output)?
+                }
+
+                #[cfg(not(feature = "silk"))]
+                toc::OpusMode::SilkOnly => {
+                    return Err(Error::UnsupportedMode(
+                        "SILK mode requires 'silk' feature".into(),
+                    ));
+                }
+
+                #[cfg(not(feature = "celt"))]
+                toc::OpusMode::CeltOnly => {
+                    return Err(Error::UnsupportedMode(
+                        "CELT mode requires 'celt' feature".into(),
+                    ));
+                }
+
+                #[cfg(not(all(feature = "silk", feature = "celt")))]
+                toc::OpusMode::Hybrid => {
+                    return Err(Error::UnsupportedMode(
+                        "Hybrid mode requires both 'silk' and 'celt' features".into(),
+                    ));
+                }
+            };
+
+            if samples != samples_per_frame {
+                return Err(Error::DecodeFailed(format!(
+                    "Frame {frame_idx} sample count mismatch: expected {samples_per_frame}, got {samples}"
+                )));
+            }
+
+            current_output_offset += samples;
+        }
+
+        self.prev_mode = Some(config.mode);
+
+        Ok(total_samples)
+    }
+
+    /// Handle packet loss
+    ///
+    /// Returns silence for now. Phase 6 will implement proper PLC.
+    ///
+    /// # Arguments
+    /// * `output` - Output buffer to fill with concealed samples
+    /// * `_fec` - FEC flag (unused in Phase 5)
+    ///
+    /// # Returns
+    /// Number of samples written per channel
+    fn handle_packet_loss(&self, output: &mut [i16], _fec: bool) -> usize {
+        for sample in output.iter_mut() {
+            *sample = 0;
+        }
+        output.len() / self.channels as usize
     }
 
     /// Decodes an Opus packet to floating point PCM.
