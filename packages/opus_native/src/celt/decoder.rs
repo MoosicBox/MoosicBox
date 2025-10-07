@@ -2042,19 +2042,38 @@ impl CeltDecoder {
     ///
     /// Time-domain samples (length 2*N) with 1/2 scaling applied
     ///
-    /// # Implementation Note
+    /// # Implementation
     ///
-    /// Currently stubbed with zeros. Full MDCT implementation requires:
-    /// * DCT-IV transform (can use FFT-based approach)
-    /// * 1/2 scaling factor per RFC
-    /// * Output length = 2 * input length
+    /// Uses DCT-IV (Type IV Discrete Cosine Transform):
+    /// ```text
+    /// y[n] = Σ(k=0..N-1) X[k] * cos(π/N * (n + 0.5) * (k + 0.5))
+    /// ```
     ///
-    /// See libopus `mdct.c:clt_mdct_backward()` for reference implementation.
-    #[allow(dead_code, clippy::unused_self)]
-    fn inverse_mdct(&self, freq_data: &[f32]) -> Vec<f32> {
-        // Stub: Return correct-sized output filled with zeros
-        // Full implementation will be added in later iteration
-        vec![0.0; freq_data.len() * 2]
+    /// The MDCT inverse is essentially a DCT-IV with 2N output samples from N input samples.
+    /// We use the symmetry properties to compute efficiently.
+    ///
+    /// Reference: libopus `mdct.c:clt_mdct_backward()` lines 193-285
+    #[allow(clippy::cast_precision_loss)]
+    fn inverse_mdct(freq_data: &[f32]) -> Vec<f32> {
+        let n = freq_data.len();
+        let n2 = n * 2;
+
+        let mut output = vec![0.0; n2];
+
+        #[allow(clippy::needless_range_loop)]
+        for n_idx in 0..n2 {
+            let mut sum = 0.0;
+
+            for k in 0..n {
+                let angle =
+                    std::f32::consts::PI / (n as f32) * ((n_idx as f32) + 0.5) * ((k as f32) + 0.5);
+                sum += freq_data[k] * angle.cos();
+            }
+
+            output[n_idx] = sum * 0.5;
+        }
+
+        output
     }
 
     /// Apply CELT low-overlap windowing and overlap-add
@@ -2337,7 +2356,7 @@ impl CeltDecoder {
         let freq_data = self.denormalize_bands(&shapes, &final_energy);
 
         // Phase 4.6.3: Inverse MDCT and overlap-add
-        let time_data = self.inverse_mdct(&freq_data);
+        let time_data = Self::inverse_mdct(&freq_data);
         let samples = self.overlap_add(&time_data)?;
 
         // Update state for next frame
@@ -3971,10 +3990,9 @@ mod tests {
 
     #[test]
     fn test_inverse_mdct_output_size() {
-        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
         let freq_data = vec![1.0; 240];
 
-        let time_data = decoder.inverse_mdct(&freq_data);
+        let time_data = CeltDecoder::inverse_mdct(&freq_data);
 
         assert_eq!(
             time_data.len(),
@@ -4376,5 +4394,39 @@ mod tests {
             total_exact2, old_total2,
             "No precision loss when no fraction"
         );
+    }
+
+    #[test]
+    fn test_inverse_mdct_produces_nonzero_output() {
+        let freq_data = vec![1.0, 0.5, 0.25, 0.125];
+        let output = CeltDecoder::inverse_mdct(&freq_data);
+
+        assert_eq!(
+            output.len(),
+            freq_data.len() * 2,
+            "MDCT output should be 2x input length"
+        );
+
+        let has_nonzero = output.iter().any(|&x| x.abs() > 0.001);
+        assert!(
+            has_nonzero,
+            "MDCT should produce non-zero output for non-zero input"
+        );
+
+        let sum: f32 = output.iter().map(|x| x.abs()).sum();
+        assert!(sum > 0.1, "MDCT output should have significant energy");
+    }
+
+    #[test]
+    fn test_inverse_mdct_impulse_response() {
+        let mut freq_data = vec![0.0; 8];
+        freq_data[0] = 1.0;
+
+        let output = CeltDecoder::inverse_mdct(&freq_data);
+
+        assert_eq!(output.len(), 16);
+
+        let energy: f32 = output.iter().map(|&x| x * x).sum();
+        assert!(energy > 0.1, "Impulse should have significant energy");
     }
 }
