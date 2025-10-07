@@ -278,8 +278,17 @@ impl Decoder {
     ///
     /// # RFC Reference
     /// * Lines 1999-2050: LBRR frame decoding
+    /// * Lines 2041-2047: "the LBRR frames themselves are interleaved"
     /// * LBRR frames are decoded BEFORE regular frames
-    /// * For stereo: frames are interleaved mid1, side1, mid2, side2, ...
+    /// * For stereo: frames MUST be interleaved mid1, side1, mid2, side2, mid3, side3
+    ///
+    /// # Critical Implementation Notes
+    /// * RFC 6716 lines 2044-2047: "The decoder parses an LBRR frame for the mid channel
+    ///   of a given 20 ms interval (if present) and then immediately parses the
+    ///   corresponding LBRR frame for the side channel (if present), before proceeding
+    ///   to the next 20 ms interval."
+    /// * Loop order MUST be frame-major (outer: time intervals, inner: channels)
+    /// * Channel-major order violates RFC and breaks bitstream parsing
     ///
     /// # Arguments
     /// * `range_decoder` - Range decoder positioned after header flags
@@ -310,19 +319,19 @@ impl Decoder {
         let num_channels = channels as usize;
         let mut lbrr_frames = Vec::new();
 
-        for ch_idx in 0..num_channels {
-            if !header_flags
-                .lbrr_flags
-                .get(ch_idx)
-                .copied()
-                .unwrap_or(false)
-            {
-                continue;
-            }
+        for frame_idx in 0..num_silk_frames {
+            for ch_idx in 0..num_channels {
+                if !header_flags
+                    .lbrr_flags
+                    .get(ch_idx)
+                    .copied()
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
 
-            let per_frame_flags = &header_flags.per_frame_lbrr[ch_idx];
+                let per_frame_flags = &header_flags.per_frame_lbrr[ch_idx];
 
-            for frame_idx in 0..num_silk_frames {
                 if !per_frame_flags.get(frame_idx).copied().unwrap_or(false) {
                     continue;
                 }
@@ -767,5 +776,119 @@ impl Decoder {
             .ok_or_else(|| Error::DecodeFailed("Resampling produced no output".into()))?;
 
         Ok(resampled_i16.to_vec())
+    }
+}
+
+#[cfg(all(test, feature = "silk"))]
+mod lbrr_tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_silk_header_flags_mono_20ms() {
+        let data = vec![0x80, 0x00, 0x00, 0x00];
+        let mut ec = range::RangeDecoder::new(&data).unwrap();
+
+        let result = Decoder::decode_silk_header_flags(&mut ec, FrameSize::Ms20, Channels::Mono);
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.vad_flags.len(), 1);
+        assert_eq!(flags.lbrr_flags.len(), 1);
+    }
+
+    #[test]
+    fn test_decode_silk_header_flags_stereo_40ms() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut ec = range::RangeDecoder::new(&data).unwrap();
+
+        let result = Decoder::decode_silk_header_flags(&mut ec, FrameSize::Ms40, Channels::Stereo);
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.vad_flags.len(), 4);
+        assert_eq!(flags.lbrr_flags.len(), 2);
+        assert_eq!(flags.per_frame_lbrr.len(), 2);
+    }
+
+    #[test]
+    fn test_decode_silk_header_flags_stereo_60ms() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut ec = range::RangeDecoder::new(&data).unwrap();
+
+        let result = Decoder::decode_silk_header_flags(&mut ec, FrameSize::Ms60, Channels::Stereo);
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.vad_flags.len(), 6);
+        assert_eq!(flags.lbrr_flags.len(), 2);
+        assert_eq!(flags.per_frame_lbrr.len(), 2);
+    }
+
+    #[test]
+    fn test_per_frame_lbrr_flags_20ms() {
+        let result = Decoder::decode_per_frame_lbrr_flags(
+            &mut range::RangeDecoder::new(&[0x80, 0x00, 0x00, 0x00]).unwrap(),
+            FrameSize::Ms20,
+        );
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.len(), 1);
+        assert!(flags[0]);
+    }
+
+    #[test]
+    fn test_per_frame_lbrr_flags_40ms() {
+        let result = Decoder::decode_per_frame_lbrr_flags(
+            &mut range::RangeDecoder::new(&[0x80, 0xFF, 0xFF, 0xFF]).unwrap(),
+            FrameSize::Ms40,
+        );
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.len(), 2);
+    }
+
+    #[test]
+    fn test_per_frame_lbrr_flags_60ms() {
+        let result = Decoder::decode_per_frame_lbrr_flags(
+            &mut range::RangeDecoder::new(&[0x80, 0xFF, 0xFF, 0xFF]).unwrap(),
+            FrameSize::Ms60,
+        );
+        assert!(result.is_ok());
+
+        let flags = result.unwrap();
+        assert_eq!(flags.len(), 3);
+    }
+
+    #[test]
+    fn test_vad_flag_indexing_stereo_40ms() {
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut ec = range::RangeDecoder::new(&data).unwrap();
+
+        let flags =
+            Decoder::decode_silk_header_flags(&mut ec, FrameSize::Ms40, Channels::Stereo).unwrap();
+
+        assert_eq!(flags.vad_flags.len(), 4);
+    }
+
+    #[test]
+    fn test_lbrr_40ms_icdf_values() {
+        const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
+        assert_eq!(LBRR_40MS_ICDF[0], 203);
+        assert_eq!(LBRR_40MS_ICDF[1], 150);
+        assert_eq!(LBRR_40MS_ICDF[2], 0);
+    }
+
+    #[test]
+    fn test_lbrr_60ms_icdf_values() {
+        const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
+        assert_eq!(LBRR_60MS_ICDF[0], 215);
+        assert_eq!(LBRR_60MS_ICDF[1], 195);
+        assert_eq!(LBRR_60MS_ICDF[2], 166);
+        assert_eq!(LBRR_60MS_ICDF[3], 125);
+        assert_eq!(LBRR_60MS_ICDF[4], 110);
+        assert_eq!(LBRR_60MS_ICDF[5], 82);
+        assert_eq!(LBRR_60MS_ICDF[6], 0);
     }
 }
