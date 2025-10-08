@@ -14,6 +14,28 @@ use crate::{
 
 pub use transaction::TursoTransaction;
 
+#[cfg(feature = "schema")]
+use std::sync::LazyLock;
+
+#[cfg(feature = "schema")]
+static FK_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(,]+|"[^"]+"|`[^`]+`)\s*\(([^)]+)\)([^,)]*)"#
+    ).expect("FK regex pattern should compile")
+});
+
+#[cfg(feature = "schema")]
+static ON_UPDATE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?i)ON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)")
+        .expect("ON UPDATE regex pattern should compile")
+});
+
+#[cfg(feature = "schema")]
+static ON_DELETE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)")
+        .expect("ON DELETE regex pattern should compile")
+});
+
 #[derive(Debug, Error)]
 pub enum TursoDatabaseError {
     #[error(transparent)]
@@ -799,13 +821,31 @@ async fn get_table_indexes(
     Ok(indexes)
 }
 
+/// Retrieves foreign key constraints for a table by parsing CREATE TABLE SQL.
+///
+/// # Known Limitations
+///
+/// * **Composite foreign keys**: Multiple columns are captured as a single string.
+///   Example: `FOREIGN KEY (a, b) REFERENCES t(x, y)` → column = "a, b"
+///   This matches `PRAGMA foreign_key_list` behavior in rusqlite/sqlx.
+///
+/// * **MATCH clauses**: Not captured or validated.
+///   Example: `REFERENCES t(id) MATCH SIMPLE` → `MATCH SIMPLE` ignored
+///
+/// * **DEFERRABLE clauses**: Not captured.
+///   Example: `REFERENCES t(id) DEFERRABLE INITIALLY DEFERRED` → clause ignored
+///
+/// * **Validation**: Does not verify that referenced tables/columns exist.
+///
+/// These limitations are acceptable because:
+/// 1. `SQLite`'s `PRAGMA foreign_key_list` also doesn't split composite keys
+/// 2. `MATCH`/`DEFERRABLE` are rarely used in `SQLite` applications
+/// 3. Validation happens at constraint enforcement time, not introspection
+///
+/// # Errors
+///
+/// Returns `DatabaseError` if query to `sqlite_master` fails.
 #[cfg(feature = "schema")]
-#[allow(
-    clippy::too_many_lines,
-    clippy::single_match_else,
-    clippy::option_if_let_else,
-    clippy::collapsible_if
-)]
 async fn get_table_foreign_keys(
     db: &TursoDatabase,
     table: &str,
@@ -833,92 +873,56 @@ async fn get_table_foreign_keys(
     let mut foreign_keys = BTreeMap::new();
 
     if let Some(sql) = create_sql {
-        let sql_upper = sql.to_uppercase();
-        if sql_upper.contains("FOREIGN KEY") {
-            let mut search_pos = 0;
-            while let Some(fk_pos) = sql_upper[search_pos..].find("FOREIGN KEY") {
-                let fk_abs_pos = search_pos + fk_pos;
-                let part_upper = &sql_upper[fk_abs_pos + 11..];
-                let part_orig = &sql[fk_abs_pos + 11..];
+        for cap in FK_PATTERN.captures_iter(&sql) {
+            let column = cap[1]
+                .trim()
+                .trim_matches('`')
+                .trim_matches('"')
+                .to_string();
+            let referenced_table = cap[2]
+                .trim()
+                .trim_matches('`')
+                .trim_matches('"')
+                .to_string();
+            let referenced_column = cap[3]
+                .trim()
+                .trim_matches('`')
+                .trim_matches('"')
+                .to_string();
 
-                if let Some(col_start) = part_upper.find('(') {
-                    if let Some(col_end) = part_upper[col_start..].find(')') {
-                        let column = part_orig[col_start + 1..col_start + col_end]
-                            .trim()
-                            .trim_matches('`')
-                            .trim_matches('"')
-                            .to_string();
+            let fk_actions = &cap[4];
 
-                        if let Some(ref_start) = part_upper.find("REFERENCES") {
-                            let ref_part_upper = &part_upper[ref_start + 10..];
-                            let ref_part_orig = &part_orig[ref_start + 10..];
-
-                            if let Some(ref_table_end) = ref_part_upper.find('(') {
-                                let referenced_table =
-                                    ref_part_orig[..ref_table_end].trim().to_string();
-
-                                if let Some(ref_col_end) = ref_part_upper[ref_table_end..].find(')')
-                                {
-                                    let referenced_column = ref_part_orig
-                                        [ref_table_end + 1..ref_table_end + ref_col_end]
-                                        .trim()
-                                        .trim_matches('`')
-                                        .trim_matches('"')
-                                        .to_string();
-
-                                    let on_update =
-                                        if ref_part_upper.contains("ON UPDATE NO ACTION") {
-                                            None
-                                        } else if ref_part_upper.contains("ON UPDATE CASCADE") {
-                                            Some("CASCADE".to_string())
-                                        } else if ref_part_upper.contains("ON UPDATE SET NULL") {
-                                            Some("SET NULL".to_string())
-                                        } else if ref_part_upper.contains("ON UPDATE SET DEFAULT") {
-                                            Some("SET DEFAULT".to_string())
-                                        } else if ref_part_upper.contains("ON UPDATE RESTRICT") {
-                                            Some("RESTRICT".to_string())
-                                        } else {
-                                            None
-                                        };
-
-                                    let on_delete =
-                                        if ref_part_upper.contains("ON DELETE NO ACTION") {
-                                            None
-                                        } else if ref_part_upper.contains("ON DELETE CASCADE") {
-                                            Some("CASCADE".to_string())
-                                        } else if ref_part_upper.contains("ON DELETE SET NULL") {
-                                            Some("SET NULL".to_string())
-                                        } else if ref_part_upper.contains("ON DELETE SET DEFAULT") {
-                                            Some("SET DEFAULT".to_string())
-                                        } else if ref_part_upper.contains("ON DELETE RESTRICT") {
-                                            Some("RESTRICT".to_string())
-                                        } else {
-                                            None
-                                        };
-
-                                    let fk_name = format!(
-                                        "{table}_{column}_{referenced_table}_{referenced_column}"
-                                    );
-
-                                    foreign_keys.insert(
-                                        fk_name.clone(),
-                                        ForeignKeyInfo {
-                                            name: fk_name,
-                                            column,
-                                            referenced_table,
-                                            referenced_column,
-                                            on_update,
-                                            on_delete,
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                    }
+            let on_update = ON_UPDATE_PATTERN.captures(fk_actions).and_then(|c| {
+                let action = c[1].to_uppercase();
+                if action == "NO ACTION" {
+                    None
+                } else {
+                    Some(action)
                 }
+            });
 
-                search_pos = fk_abs_pos + 11;
-            }
+            let on_delete = ON_DELETE_PATTERN.captures(fk_actions).and_then(|c| {
+                let action = c[1].to_uppercase();
+                if action == "NO ACTION" {
+                    None
+                } else {
+                    Some(action)
+                }
+            });
+
+            let fk_name = format!("{table}_{column}_{referenced_table}_{referenced_column}");
+
+            foreign_keys.insert(
+                fk_name.clone(),
+                ForeignKeyInfo {
+                    name: fk_name,
+                    column,
+                    referenced_table,
+                    referenced_column,
+                    on_update,
+                    on_delete,
+                },
+            );
         }
     }
 
@@ -2304,5 +2308,215 @@ mod tests {
         let fk = table_info.foreign_keys.values().next().unwrap();
         assert_eq!(fk.referenced_table, "parent");
         assert_eq!(fk.referenced_column, "id");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_unicode_table_names() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE café (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with accented name");
+
+        db.exec_raw(
+            "CREATE TABLE entrée (
+                id INTEGER PRIMARY KEY,
+                café_id INTEGER,
+                FOREIGN KEY (café_id) REFERENCES café(id) ON DELETE CASCADE
+            )",
+        )
+        .await
+        .expect("Failed to create child table with Unicode FK");
+
+        let table_info = db
+            .get_table_info("entrée")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should parse FK with Unicode table names"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.column, "café_id");
+        assert_eq!(fk.referenced_table, "café");
+        assert_eq!(fk.referenced_column, "id");
+        assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_cyrillic_identifiers() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE родитель (идентификатор INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with Cyrillic name");
+
+        db.exec_raw(
+            "CREATE TABLE ребёнок (
+                идентификатор INTEGER PRIMARY KEY,
+                родитель_ид INTEGER,
+                FOREIGN KEY (родитель_ид) REFERENCES родитель(идентификатор) ON UPDATE RESTRICT
+            )",
+        )
+        .await
+        .expect("Failed to create child table with Cyrillic FK");
+
+        let table_info = db
+            .get_table_info("ребёнок")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should parse FK with Cyrillic identifiers"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.column, "родитель_ид");
+        assert_eq!(fk.referenced_table, "родитель");
+        assert_eq!(fk.referenced_column, "идентификатор");
+        assert_eq!(fk.on_update, Some("RESTRICT".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_emoji_and_mixed_scripts() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE 部門 (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with CJK name");
+
+        db.exec_raw(
+            "CREATE TABLE 従業員 (
+                id INTEGER PRIMARY KEY,
+                部門_id INTEGER,
+                FOREIGN KEY (部門_id) REFERENCES 部門(id) ON DELETE SET NULL ON UPDATE SET DEFAULT
+            )",
+        )
+        .await
+        .expect("Failed to create child table with CJK FK");
+
+        let table_info = db
+            .get_table_info("従業員")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should parse FK with CJK characters"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.column, "部門_id");
+        assert_eq!(fk.referenced_table, "部門");
+        assert_eq!(fk.referenced_column, "id");
+        assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
+        assert_eq!(fk.on_update, Some("SET DEFAULT".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_multiple_different_actions() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                a_id INTEGER,
+                b_id INTEGER,
+                c_id INTEGER,
+                FOREIGN KEY (a_id) REFERENCES parent(id) ON DELETE CASCADE,
+                FOREIGN KEY (b_id) REFERENCES parent(id) ON UPDATE SET NULL,
+                FOREIGN KEY (c_id) REFERENCES parent(id) ON DELETE RESTRICT ON UPDATE SET DEFAULT
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            3,
+            "Should have 3 foreign keys"
+        );
+
+        let fk_a = table_info
+            .foreign_keys
+            .values()
+            .find(|fk| fk.column == "a_id")
+            .expect("Should have FK on a_id");
+        assert_eq!(fk_a.on_delete, Some("CASCADE".to_string()));
+        assert_eq!(fk_a.on_update, None, "a_id should not have ON UPDATE");
+
+        let fk_b = table_info
+            .foreign_keys
+            .values()
+            .find(|fk| fk.column == "b_id")
+            .expect("Should have FK on b_id");
+        assert_eq!(fk_b.on_delete, None, "b_id should not have ON DELETE");
+        assert_eq!(fk_b.on_update, Some("SET NULL".to_string()));
+
+        let fk_c = table_info
+            .foreign_keys
+            .values()
+            .find(|fk| fk.column == "c_id")
+            .expect("Should have FK on c_id");
+        assert_eq!(fk_c.on_delete, Some("RESTRICT".to_string()));
+        assert_eq!(fk_c.on_update, Some("SET DEFAULT".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_quoted_table_name_with_spaces() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE \"my parent\" (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with spaces");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                FOREIGN KEY (parent_id) REFERENCES \"my parent\"(id) ON DELETE CASCADE
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should have 1 foreign key"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.referenced_table, "my parent",
+            "Quotes should be stripped from table name"
+        );
+        assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
     }
 }

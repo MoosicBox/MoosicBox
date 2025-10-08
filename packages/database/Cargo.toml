@@ -158,7 +158,7 @@ sqlite-sqlx = [
     "sqlx/sqlite",
 ]
 sqlx = ["_any_backend"]
-turso = ["_any_backend", "dep:turso", "placeholder-question-mark"]
+turso = ["_any_backend", "dep:regex", "dep:turso", "placeholder-question-mark"]
 
 simulator = ["sqlite-rusqlite"]
 
