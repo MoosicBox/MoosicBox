@@ -20,7 +20,7 @@ use std::sync::LazyLock;
 #[cfg(feature = "schema")]
 static FK_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(,]+|"[^"]+"|`[^`]+`)\s*\(([^)]+)\)([^,)]*)"#
+        r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+((?:[^\s(,\[\]"'`]+|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[(?:[^\]])*\]|'(?:[^']|'')*'))\s*\(([^)]+)\)([^,)]*)"#
     ).expect("FK regex pattern should compile")
 });
 
@@ -874,21 +874,9 @@ async fn get_table_foreign_keys(
 
     if let Some(sql) = create_sql {
         for cap in FK_PATTERN.captures_iter(&sql) {
-            let column = cap[1]
-                .trim()
-                .trim_matches('`')
-                .trim_matches('"')
-                .to_string();
-            let referenced_table = cap[2]
-                .trim()
-                .trim_matches('`')
-                .trim_matches('"')
-                .to_string();
-            let referenced_column = cap[3]
-                .trim()
-                .trim_matches('`')
-                .trim_matches('"')
-                .to_string();
+            let column = strip_identifier_quotes(&cap[1]);
+            let referenced_table = strip_identifier_quotes(&cap[2]);
+            let referenced_column = strip_identifier_quotes(&cap[3]);
 
             let fk_actions = &cap[4];
 
@@ -927,6 +915,35 @@ async fn get_table_foreign_keys(
     }
 
     Ok(foreign_keys)
+}
+
+/// Strips quotes from `SQLite` identifiers and unescapes internal quotes.
+///
+/// Handles all 4 `SQLite` identifier quoting styles:
+/// - Double quotes: `"name"` or `"my ""quoted"" name"` → `my "quoted" name`
+/// - Backticks: `` `name` `` or `` `my ``tick`` name` `` → `my `tick` name`
+/// - Single quotes: `'name'` or `'my ''quoted'' name'` → `my 'quoted' name`
+/// - Square brackets: `[name]` → `name` (no escaping needed)
+/// - Unquoted: `name` → `name` (returned as-is)
+#[cfg(feature = "schema")]
+fn strip_identifier_quotes(identifier: &str) -> String {
+    let identifier = identifier.trim();
+
+    if identifier.len() < 2 {
+        return identifier.to_string();
+    }
+
+    if identifier.starts_with('"') && identifier.ends_with('"') {
+        identifier[1..identifier.len() - 1].replace("\"\"", "\"")
+    } else if identifier.starts_with('`') && identifier.ends_with('`') {
+        identifier[1..identifier.len() - 1].replace("``", "`")
+    } else if identifier.starts_with('[') && identifier.ends_with(']') {
+        identifier[1..identifier.len() - 1].to_string()
+    } else if identifier.starts_with('\'') && identifier.ends_with('\'') {
+        identifier[1..identifier.len() - 1].replace("''", "'")
+    } else {
+        identifier.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -2518,5 +2535,141 @@ mod tests {
             "Quotes should be stripped from table name"
         );
         assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_escaped_double_quotes_in_table_name() {
+        let db = create_test_db().await;
+
+        db.exec_raw(r#"CREATE TABLE "my ""parent"" table" (id INTEGER PRIMARY KEY)"#)
+            .await
+            .expect("Failed to create table with escaped quotes");
+
+        db.exec_raw(
+            r#"CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                pid INTEGER,
+                FOREIGN KEY (pid) REFERENCES "my ""parent"" table"(id) ON DELETE CASCADE
+            )"#,
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.referenced_table, r#"my "parent" table"#,
+            "Escaped quotes should be unescaped"
+        );
+        assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_escaped_backticks_in_table_name() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE `my ``parent`` table` (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with escaped backticks");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                pid INTEGER,
+                FOREIGN KEY (pid) REFERENCES `my ``parent`` table`(id) ON UPDATE RESTRICT
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.referenced_table, "my `parent` table",
+            "Escaped backticks should be unescaped"
+        );
+        assert_eq!(fk.on_update, Some("RESTRICT".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_square_bracket_quoted_table_name() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE [my parent table] (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with square brackets");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                pid INTEGER,
+                FOREIGN KEY (pid) REFERENCES [my parent table](id) ON DELETE SET NULL
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.referenced_table, "my parent table",
+            "Square brackets should be stripped"
+        );
+        assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_single_quoted_table_name() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE 'my parent' (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create table with single quotes");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                pid INTEGER,
+                FOREIGN KEY (pid) REFERENCES 'my parent'(id) ON UPDATE CASCADE
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.referenced_table, "my parent",
+            "Single quotes should be stripped"
+        );
+        assert_eq!(fk.on_update, Some("CASCADE".to_string()));
     }
 }

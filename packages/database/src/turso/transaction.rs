@@ -20,7 +20,7 @@ use std::sync::LazyLock;
 #[cfg(feature = "schema")]
 static FK_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(,]+|"[^"]+"|`[^`]+`)\s*\(([^)]+)\)([^,)]*)"#
+        r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+((?:[^\s(,\[\]"'`]+|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[(?:[^\]])*\]|'(?:[^']|'')*'))\s*\(([^)]+)\)([^,)]*)"#
     ).expect("FK regex pattern should compile")
 });
 
@@ -512,21 +512,9 @@ impl crate::Database for TursoTransaction {
 
             if let Some(sql) = create_sql {
                 for cap in FK_PATTERN.captures_iter(&sql) {
-                    let column = cap[1]
-                        .trim()
-                        .trim_matches('`')
-                        .trim_matches('"')
-                        .to_string();
-                    let referenced_table = cap[2]
-                        .trim()
-                        .trim_matches('`')
-                        .trim_matches('"')
-                        .to_string();
-                    let referenced_column = cap[3]
-                        .trim()
-                        .trim_matches('`')
-                        .trim_matches('"')
-                        .to_string();
+                    let column = strip_identifier_quotes(&cap[1]);
+                    let referenced_table = strip_identifier_quotes(&cap[2]);
+                    let referenced_column = strip_identifier_quotes(&cap[3]);
 
                     let fk_actions = &cap[4];
 
@@ -661,5 +649,34 @@ impl crate::Database for TursoTransaction {
     async fn column_exists(&self, table: &str, column: &str) -> Result<bool, DatabaseError> {
         let columns = self.get_table_columns(table).await?;
         Ok(columns.iter().any(|col| col.name == column))
+    }
+}
+
+/// Strips quotes from `SQLite` identifiers and unescapes internal quotes.
+///
+/// Handles all 4 `SQLite` identifier quoting styles:
+/// - Double quotes: `"name"` or `"my ""quoted"" name"` → `my "quoted" name`
+/// - Backticks: `` `name` `` or `` `my ``tick`` name` `` → `my `tick` name`
+/// - Single quotes: `'name'` or `'my ''quoted'' name'` → `my 'quoted' name`
+/// - Square brackets: `[name]` → `name` (no escaping needed)
+/// - Unquoted: `name` → `name` (returned as-is)
+#[cfg(feature = "schema")]
+fn strip_identifier_quotes(identifier: &str) -> String {
+    let identifier = identifier.trim();
+
+    if identifier.len() < 2 {
+        return identifier.to_string();
+    }
+
+    if identifier.starts_with('"') && identifier.ends_with('"') {
+        identifier[1..identifier.len() - 1].replace("\"\"", "\"")
+    } else if identifier.starts_with('`') && identifier.ends_with('`') {
+        identifier[1..identifier.len() - 1].replace("``", "`")
+    } else if identifier.starts_with('[') && identifier.ends_with(']') {
+        identifier[1..identifier.len() - 1].to_string()
+    } else if identifier.starts_with('\'') && identifier.ends_with('\'') {
+        identifier[1..identifier.len() - 1].replace("''", "'")
+    } else {
+        identifier.to_string()
     }
 }
