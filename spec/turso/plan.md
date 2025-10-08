@@ -219,33 +219,38 @@ This specification details the implementation of a Turso Database backend for Mo
   - [ ] Add imports:
     ```rust
     use async_trait::async_trait;
-    use std::sync::Arc;
+    use turso::{Builder, Connection, Database as TursoDb};
     use crate::{Database, DatabaseError, DatabaseValue, Row};
     ```
   - [ ] Implement TursoDatabase struct:
     ```rust
     pub struct TursoDatabase {
-        database: turso::Database,
+        database: TursoDb,  // Note: turso::Database, not self
     }
 
     impl TursoDatabase {
         #[must_use]
         pub async fn new(path: &str) -> Result<Self, TursoDatabaseError> {
-            let builder = turso::Builder::new_local(path);
+            let builder = Builder::new_local(path);
             let database = builder.build().await
-                .map_err(|e| TursoDatabaseError::Turso(e.to_string()))?;
+                .map_err(|e| TursoDatabaseError::Connection(e.to_string()))?;
 
             Ok(Self { database })
         }
     }
     ```
-  - [ ] Update error types to use actual `turso::Error`:
+  - [ ] Keep error types as String wrappers (no direct turso::Error dependency):
     ```rust
     #[derive(Debug, Error)]
     pub enum TursoDatabaseError {
         #[error("Turso error: {0}")]
-        Turso(String),  // Keep String for now, wrap turso::Error
-        // ...
+        Turso(String),
+        #[error("Connection error: {0}")]
+        Connection(String),
+        #[error("Query error: {0}")]
+        Query(String),
+        #[error("Transaction error: {0}")]
+        Transaction(String),
     }
     ```
 
@@ -257,37 +262,227 @@ This specification details the implementation of a Turso Database backend for Mo
 - [ ] Run `cargo build -p switchy_database --features turso` (compiles)
 - [ ] Run `cargo machete` (turso is used)
 
-### 2.3 Implement Database Trait (Partial - No Transactions Yet)
+### 2.3 Implement Value Conversion Helpers
+
+**VERIFIED FACT:** `turso::Value` is IDENTICAL to `rusqlite::Value` - same 5 variants!
+
+- [ ] Implement `turso::Value` → `DatabaseValue` conversion 🔴 **CRITICAL**
+  - [ ] Add to `packages/database/src/turso/mod.rs`:
+    ```rust
+    impl From<turso::Value> for DatabaseValue {
+        fn from(value: turso::Value) -> Self {
+            match value {
+                turso::Value::Null => Self::Null,
+                turso::Value::Integer(v) => Self::Int64(v),
+                turso::Value::Real(v) => Self::Real64(v),
+                turso::Value::Text(v) => Self::String(v),
+                turso::Value::Blob(_) => unimplemented!("Blob not supported yet"),
+            }
+        }
+    }
+    ```
+
+- [ ] Implement `DatabaseValue` → `turso::Value` conversion 🔴 **CRITICAL**
+  - [ ] Create helper function:
+    ```rust
+    fn database_value_to_turso_value(value: &DatabaseValue) -> Result<turso::Value, TursoDatabaseError> {
+        Ok(match value {
+            DatabaseValue::Null
+            | DatabaseValue::StringOpt(None)
+            | DatabaseValue::BoolOpt(None)
+            | DatabaseValue::Int8Opt(None)
+            | DatabaseValue::Int16Opt(None)
+            | DatabaseValue::Int32Opt(None)
+            | DatabaseValue::Int64Opt(None)
+            | DatabaseValue::UInt8Opt(None)
+            | DatabaseValue::UInt16Opt(None)
+            | DatabaseValue::UInt32Opt(None)
+            | DatabaseValue::UInt64Opt(None)
+            | DatabaseValue::Real32Opt(None)
+            | DatabaseValue::Real64Opt(None) => turso::Value::Null,
+
+            DatabaseValue::String(s) | DatabaseValue::StringOpt(Some(s)) => {
+                turso::Value::Text(s.clone())
+            }
+
+            DatabaseValue::Bool(b) | DatabaseValue::BoolOpt(Some(b)) => {
+                turso::Value::Integer(i64::from(*b))
+            }
+
+            DatabaseValue::Int8(i) | DatabaseValue::Int8Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::Int16(i) | DatabaseValue::Int16Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::Int32(i) | DatabaseValue::Int32Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::Int64(i) | DatabaseValue::Int64Opt(Some(i)) => {
+                turso::Value::Integer(*i)
+            }
+
+            DatabaseValue::UInt8(i) | DatabaseValue::UInt8Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::UInt16(i) | DatabaseValue::UInt16Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::UInt32(i) | DatabaseValue::UInt32Opt(Some(i)) => {
+                turso::Value::Integer(i64::from(*i))
+            }
+            DatabaseValue::UInt64(i) | DatabaseValue::UInt64Opt(Some(i)) => {
+                turso::Value::Integer(i64::try_from(*i).map_err(|_| {
+                    TursoDatabaseError::Query(format!("UInt64 value {} too large for i64", i))
+                })?)
+            }
+
+            DatabaseValue::Real32(r) | DatabaseValue::Real32Opt(Some(r)) => {
+                turso::Value::Real(f64::from(*r))
+            }
+            DatabaseValue::Real64(r) | DatabaseValue::Real64Opt(Some(r)) => {
+                turso::Value::Real(*r)
+            }
+
+            DatabaseValue::Now | DatabaseValue::NowPlus(..) => {
+                return Err(TursoDatabaseError::Query(
+                    "DatabaseValue::Now not supported for Turso parameters".to_string()
+                ));
+            }
+
+            DatabaseValue::DateTime(dt) => {
+                turso::Value::Text(dt.to_string())
+            }
+
+            #[cfg(feature = "decimal")]
+            DatabaseValue::Decimal(d) | DatabaseValue::DecimalOpt(Some(d)) => {
+                turso::Value::Text(d.to_string())
+            }
+            #[cfg(feature = "decimal")]
+            DatabaseValue::DecimalOpt(None) => turso::Value::Null,
+
+            #[cfg(feature = "uuid")]
+            DatabaseValue::Uuid(u) | DatabaseValue::UuidOpt(Some(u)) => {
+                turso::Value::Text(u.to_string())
+            }
+            #[cfg(feature = "uuid")]
+            DatabaseValue::UuidOpt(None) => turso::Value::Null,
+        })
+    }
+
+    fn to_turso_params(params: &[DatabaseValue]) -> Result<Vec<turso::Value>, TursoDatabaseError> {
+        params.iter().map(database_value_to_turso_value).collect()
+    }
+    ```
+
+#### 2.3 Verification Checklist
+- [ ] Value conversions compile
+- [ ] All DatabaseValue variants handled
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo clippy --all-targets -p switchy_database --features turso -- -D warnings` (zero warnings)
+- [ ] Run `cargo build -p switchy_database --features turso` (compiles)
+
+### 2.4 Implement Row Conversion Helper
+
+**VERIFIED FACT:** Must use `Statement.columns()` to get column names!
+
+- [ ] Implement row conversion helper 🔴 **CRITICAL**
+  - [ ] Create helper function:
+    ```rust
+    fn from_turso_row(
+        column_names: &[String],
+        row: &turso::Row,
+    ) -> Result<crate::Row, TursoDatabaseError> {
+        let mut columns = Vec::new();
+
+        for (i, name) in column_names.iter().enumerate() {
+            let value = row.get_value(i)
+                .map_err(|e| TursoDatabaseError::Query(e.to_string()))?;
+            columns.push((name.clone(), value.into()));
+        }
+
+        Ok(crate::Row { columns })
+    }
+    ```
+
+#### 2.4 Verification Checklist
+- [ ] Row conversion helper compiles
+- [ ] Uses column_names parameter correctly
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo clippy --all-targets -p switchy_database --features turso -- -D warnings` (zero warnings)
+- [ ] Run `cargo build -p switchy_database --features turso` (compiles)
+
+### 2.5 Implement Database Trait (Partial - No Transactions Yet)
 
 **CRITICAL NOTES:**
 - Implement all methods EXCEPT `begin_transaction()`
 - Use `unimplemented!()` for `begin_transaction()` temporarily
 - This allows phase to compile while deferring transactions to Phase 3
+- **MUST use `Statement.prepare()` to get column metadata for row conversion!**
 
 - [ ] Implement Database trait methods 🔴 **CRITICAL**
   - [ ] Add `#[async_trait]` attribute
-  - [ ] Implement query execution methods:
+  - [ ] Implement query execution methods using PREPARED STATEMENTS:
     ```rust
     #[async_trait]
     impl Database for TursoDatabase {
-        async fn query(
+        async fn query_raw_params(
             &self,
             query: &str,
-            params: Vec<DatabaseValue>,
+            params: &[DatabaseValue],
         ) -> Result<Vec<Row>, DatabaseError> {
             let conn = self.database.connect()
                 .map_err(|e| DatabaseError::Turso(
                     TursoDatabaseError::Connection(e.to_string())
                 ))?;
 
-            // Convert DatabaseValue to turso params
+            // MUST prepare statement to get column names
+            let mut stmt = conn.prepare(query).await
+                .map_err(|e| DatabaseError::Turso(
+                    TursoDatabaseError::Query(e.to_string())
+                ))?;
+
+            // Extract column names from statement metadata
+            let columns = stmt.columns();
+            let column_names: Vec<String> = columns.iter()
+                .map(|col| col.name().to_string())
+                .collect();
+
+            // Convert params: Vec<DatabaseValue> -> Vec<turso::Value>
+            let turso_params = to_turso_params(params)
+                .map_err(DatabaseError::Turso)?;
+
             // Execute query
-            // Convert turso::Row to switchy Row
-            todo!("Convert params and rows")
+            let mut rows = stmt.query(turso_params).await
+                .map_err(|e| DatabaseError::Turso(
+                    TursoDatabaseError::Query(e.to_string())
+                ))?;
+
+            // Convert rows: turso::Row -> switchy_database::Row
+            let mut results = Vec::new();
+            while let Some(row) = rows.next().await
+                .map_err(|e| DatabaseError::Turso(
+                    TursoDatabaseError::Query(e.to_string())
+                ))? {
+                results.push(from_turso_row(&column_names, &row)
+                    .map_err(DatabaseError::Turso)?);
+            }
+
+            Ok(results)
         }
 
         async fn exec(&self, query: &str) -> Result<(), DatabaseError> {
-            todo!("Execute statement")
+            let conn = self.database.connect()
+                .map_err(|e| DatabaseError::Turso(
+                    TursoDatabaseError::Connection(e.to_string())
+                ))?;
+
+            conn.execute(query, ()).await
+                .map_err(|e| DatabaseError::Turso(
+                    TursoDatabaseError::Query(e.to_string())
+                ))?;
+
+            Ok(())
         }
 
         async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
@@ -298,19 +493,24 @@ This specification details the implementation of a Turso Database backend for Mo
     }
     ```
 
-- [ ] Implement parameter conversion 🔴 **CRITICAL**
-  - [ ] Create helper to convert `Vec<DatabaseValue>` to Turso params
-  - [ ] Handle all DatabaseValue variants (String, Int, Float, Bool, Null, Bytes)
+#### 2.5 Verification Checklist
+- [ ] All non-transaction Database methods implemented
+- [ ] `begin_transaction()` uses `unimplemented!()` (temporary)
+- [ ] Uses prepared statements to get column names
+- [ ] Parameter conversion works for all types
+- [ ] Row conversion preserves data correctly
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo clippy --all-targets -p switchy_database --features turso -- -D warnings` (zero warnings)
+- [ ] Run `cargo build -p switchy_database --features turso` (compiles successfully)
 
-- [ ] Implement row conversion 🔴 **CRITICAL**
-  - [ ] Create helper to convert `turso::Row` to `switchy_database::Row`
-  - [ ] Map column names and values correctly
+### 2.6 Add Unit Tests
 
 - [ ] Add unit tests 🔴 **CRITICAL**
   - [ ] Create `#[cfg(test)]` module
   - [ ] Test database creation (file and in-memory)
   - [ ] Test basic query execution
   - [ ] Test parameter binding
+  - [ ] Test row conversion with column names
   - [ ] Test error handling
   - [ ] **Skip transaction tests** (Phase 3)
   - [ ] Example:
@@ -340,22 +540,41 @@ This specification details the implementation of a Turso Database backend for Mo
             // Test insert
             db.exec("INSERT INTO users VALUES (1, 'Alice')").await.unwrap();
 
-            // Test query
-            let rows = db.query("SELECT * FROM users", vec![]).await.unwrap();
+            // Test query with column name verification
+            let rows = db.query_raw_params("SELECT * FROM users", &[]).await.unwrap();
+            assert_eq!(rows.len(), 1);
+
+            // Verify column names are present
+            let row = &rows[0];
+            assert!(row.get("id").is_some());
+            assert!(row.get("name").is_some());
+        }
+
+        #[tokio::test]
+        async fn test_parameter_binding() {
+            let db = TursoDatabase::new(":memory:").await.unwrap();
+            db.exec("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
+
+            // Test with parameters
+            let params = vec![
+                DatabaseValue::Int64(42),
+                DatabaseValue::String("Bob".to_string()),
+            ];
+            db.query_raw_params("INSERT INTO users VALUES (?, ?)", &params).await.unwrap();
+
+            let rows = db.query_raw_params("SELECT * FROM users WHERE id = ?",
+                &[DatabaseValue::Int64(42)]).await.unwrap();
             assert_eq!(rows.len(), 1);
         }
     }
     ```
 
-#### 2.3 Verification Checklist
-- [ ] All non-transaction Database methods implemented
-- [ ] `begin_transaction()` uses `unimplemented!()` (temporary)
-- [ ] Parameter conversion works for all types
-- [ ] Row conversion preserves data correctly
-- [ ] Unit tests pass (excluding transaction tests)
+#### 2.6 Verification Checklist
+- [ ] Unit tests compile
+- [ ] All tests pass (excluding transaction tests)
+- [ ] Tests verify column names in results
+- [ ] Tests verify parameter binding
 - [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo clippy --all-targets -p switchy_database --features turso -- -D warnings` (zero warnings)
-- [ ] Run `cargo build -p switchy_database --features turso` (compiles successfully)
 - [ ] Run `cargo test -p switchy_database --features turso` (non-transaction tests pass)
 - [ ] Run `cargo machete` (all dependencies used)
 
@@ -955,3 +1174,214 @@ cargo build -p switchy_database --features turso            # With feature
 cargo build -p switchy_database --no-default-features       # Without
 cargo test -p switchy_database --features turso             # Test with feature
 ```
+
+---
+
+## Appendix A: Turso API Research Findings (Phase 2 Preparation)
+
+This section documents the complete API research conducted to resolve all open questions before starting Phase 2.
+
+### A.1 Turso Value Type (VERIFIED)
+
+**CRITICAL FINDING:** `turso::Value` is **IDENTICAL** to `rusqlite::Value`!
+
+```rust
+pub enum turso::Value {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(String),
+    Blob(Vec<u8>),
+}
+```
+
+**Implication:** Value conversion code can be copied nearly verbatim from rusqlite backend.
+
+### A.2 Row Conversion Pattern (VERIFIED)
+
+**Key Discovery:** `turso::Row` does NOT provide column names directly!
+
+```rust
+// turso::Row API
+impl Row {
+    pub fn get_value(&self, index: usize) -> Result<Value>  // Get value by index
+    pub fn column_count(&self) -> usize                      // Get column count
+}
+```
+
+**Solution:** Must use `Statement.columns()` to get column metadata:
+
+```rust
+// turso::Statement API
+impl Statement {
+    pub fn columns(&self) -> Vec<Column>  // ← Returns column metadata
+}
+
+// turso::Column API
+impl Column {
+    pub fn name(&self) -> &str              // ← Column name accessor!
+    pub fn decl_type(&self) -> Option<&str> // Column type (optional)
+}
+```
+
+**Implementation Pattern:**
+```rust
+// 1. Prepare statement to get column metadata
+let mut stmt = conn.prepare(query).await?;
+
+// 2. Extract column names
+let columns = stmt.columns();
+let column_names: Vec<String> = columns.iter()
+    .map(|col| col.name().to_string())
+    .collect();
+
+// 3. Execute query
+let mut rows = stmt.query(params).await?;
+
+// 4. Convert rows using column_names
+while let Some(row) = rows.next().await? {
+    let switchy_row = from_turso_row(&column_names, &row)?;
+    results.push(switchy_row);
+}
+```
+
+### A.3 Parameter Conversion Pattern (VERIFIED)
+
+**Turso uses `impl IntoParams` trait** (NOT manual parameter binding like rusqlite).
+
+```rust
+// turso::IntoParams has implementations for:
+// - Tuples: (), (A,), (A, B), ... up to 16 elements
+// - Arrays: [T; N], &[T; N]
+// - Vectors: Vec<T>, Vec<(String, T)>
+```
+
+**Our Strategy:** Convert `&[DatabaseValue]` to `Vec<turso::Value>`:
+
+```rust
+fn to_turso_params(params: &[DatabaseValue]) -> Result<Vec<turso::Value>, TursoDatabaseError> {
+    params.iter()
+        .map(database_value_to_turso_value)
+        .collect()
+}
+```
+
+Then pass `Vec<turso::Value>` to query methods (it implements `IntoParams`).
+
+### A.4 Connection Pattern (VERIFIED)
+
+**CRITICAL:** `Database::connect()` returns `Result<Connection>`, NOT just `Connection`!
+
+```rust
+// Correct API signatures
+impl Database {
+    pub async fn build() -> Result<Database>
+}
+
+impl Database {
+    pub fn connect(&self) -> Result<Connection>  // ← NOT async, returns Result!
+}
+
+impl Connection {
+    pub async fn query(&self, sql: &str, params: impl IntoParams) -> Result<Rows>
+    pub async fn execute(&self, sql: &str, params: impl IntoParams) -> Result<u64>
+    pub async fn prepare(&self, sql: &str) -> Result<Statement>  // ← For column metadata
+}
+```
+
+**Usage Pattern:**
+```rust
+let database = Builder::new_local(path).build().await?;
+let conn = database.connect()?;  // Returns Result, not async
+let mut stmt = conn.prepare(sql).await?;
+let rows = stmt.query(params).await?;
+```
+
+### A.5 Statement Preparation (VERIFIED - REQUIRED!)
+
+**Statement preparation is MANDATORY** to get column names for row conversion!
+
+```rust
+impl Statement {
+    pub async fn query(&mut self, params: impl IntoParams) -> Result<Rows>
+    pub async fn execute(&mut self, params: impl IntoParams) -> Result<u64>
+    pub fn columns(&self) -> Vec<Column>  // ← NEEDED for column names!
+    pub fn reset(&self)                   // Reset statement for reuse
+}
+```
+
+**Two Query Methods Available:**
+
+1. **Direct Query** (NO column metadata):
+   ```rust
+   conn.query(sql, params).await  // Returns Rows, but NO column names
+   ```
+
+2. **Prepared Statement** (WITH column metadata) ✅ **MUST USE THIS**:
+   ```rust
+   let mut stmt = conn.prepare(sql).await?;
+   let columns = stmt.columns();  // Get column metadata
+   let rows = stmt.query(params).await?;
+   ```
+
+**Decision:** We MUST use prepared statements (Method 2) because `switchy_database::Row` requires column names.
+
+### A.6 Complete Conversion Helpers
+
+#### Value Conversion: `turso::Value` → `DatabaseValue`
+```rust
+impl From<turso::Value> for DatabaseValue {
+    fn from(value: turso::Value) -> Self {
+        match value {
+            turso::Value::Null => Self::Null,
+            turso::Value::Integer(v) => Self::Int64(v),
+            turso::Value::Real(v) => Self::Real64(v),
+            turso::Value::Text(v) => Self::String(v),
+            turso::Value::Blob(_) => unimplemented!("Blob not supported yet"),
+        }
+    }
+}
+```
+
+#### Value Conversion: `DatabaseValue` → `turso::Value`
+See Phase 2.3 implementation in main plan (handles all 30+ variants).
+
+#### Row Conversion: `turso::Row` → `switchy_database::Row`
+```rust
+fn from_turso_row(
+    column_names: &[String],
+    row: &turso::Row,
+) -> Result<crate::Row, TursoDatabaseError> {
+    let mut columns = Vec::new();
+
+    for (i, name) in column_names.iter().enumerate() {
+        let value = row.get_value(i)
+            .map_err(|e| TursoDatabaseError::Query(e.to_string()))?;
+        columns.push((name.clone(), value.into()));
+    }
+
+    Ok(crate::Row { columns })
+}
+```
+
+### A.7 Summary of Key Differences from Rusqlite
+
+| Aspect | Rusqlite | Turso |
+|--------|----------|-------|
+| **Value Type** | `rusqlite::Value` (5 variants) | `turso::Value` (5 variants) ✅ **IDENTICAL** |
+| **Parameter Binding** | Manual `raw_bind_parameter()` | `impl IntoParams` trait |
+| **Column Names** | `Statement.column_names()` | `Statement.columns()` then `Column.name()` |
+| **Connection** | Sync, `Arc<Mutex<Pool>>` | Async, `database.connect()?` |
+| **Query Execution** | Sync | Async (all methods) |
+| **Row Iteration** | `rows.next()?` (sync) | `rows.next().await?` (async) |
+
+### A.8 Phase 2 Implementation Certainty
+
+✅ **ALL blockers resolved:**
+1. Column name extraction: Use `Statement.columns()`
+2. Statement preparation: Required for metadata
+3. Value types: Identical to rusqlite
+4. Parameter binding: Convert to `Vec<turso::Value>`
+5. Connection creation: `database.connect()` returns `Result<Connection>`
+
+**Phase 2 can proceed with 100% confidence!**
