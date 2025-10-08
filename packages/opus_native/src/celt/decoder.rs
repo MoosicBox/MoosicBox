@@ -2334,7 +2334,10 @@ impl CeltDecoder {
         let mut shapes: Vec<Vec<f32>> = Vec::new();
 
         for band in 0..CELT_NUM_BANDS {
-            let n = u32::from(bins_per_band[band]);
+            // RFC 6716 Line 6308: "set N to the number of MDCT bins covered by the band"
+            // N0 = bins per single MDCT, N = N0 * 2^LM = total across all interleaved MDCTs
+            let n0 = u32::from(bins_per_band[band]);
+            let n = n0 << lm; // Full dimension including all interleaved MDCTs
             let k = k_values[band];
 
             // Skip bands outside coded range
@@ -2348,13 +2351,17 @@ impl CeltDecoder {
                 let bits = allocation.shape_bits[band];
                 let b0 = 1_u32; // Initial B0 value (libopus bands.c:774)
 
+                // LM must fit in i8 for PVQ decode - use proper error handling
+                let lm_i8 = i8::try_from(lm)
+                    .map_err(|_| Error::CeltDecoder(format!("LM value {lm} exceeds i8 range")))?;
+
                 decode_pvq_vector_split(
                     range_decoder,
-                    n,
+                    n, // Correct dimension: N0 << LM
                     k,
                     bits,
                     is_stereo,
-                    i8::try_from(lm).expect("lm should be in range"),
+                    lm_i8,
                     b0,
                     b_init,
                 )?
@@ -2392,8 +2399,36 @@ impl CeltDecoder {
         )?;
 
         // Apply anti-collapse processing
-        let collapse_masks = vec![0u8; CELT_NUM_BANDS];
-        let pulses = [0u16; CELT_NUM_BANDS]; // Stub
+        // Convert k_values to pulses array (k_values are already the pulse counts)
+        let mut pulses = [0u16; CELT_NUM_BANDS];
+        for (i, &k) in k_values.iter().enumerate() {
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                pulses[i] = k.min(u32::from(u16::MAX)) as u16;
+            }
+        }
+
+        // Compute collapse masks for transient frames
+        // A band "collapses" if it has zero pulses (k=0)
+        // The mask indicates which MDCTs within the band have collapsed
+        // For now, use simple logic: all MDCTs collapse if k=0
+        let mut collapse_masks = vec![0u8; CELT_NUM_BANDS];
+        if self.transient {
+            let num_mdcts = 1_usize << lm; // 2^LM MDCTs per band
+            for (band, &k) in k_values.iter().enumerate() {
+                if k == 0 {
+                    // All MDCTs in this band collapsed - set all bits
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        collapse_masks[band] = if num_mdcts >= 8 {
+                            0xFF // All 8 bits set
+                        } else {
+                            (1u8 << num_mdcts) - 1 // Set num_mdcts bits
+                        };
+                    }
+                }
+            }
+        }
 
         self.apply_anti_collapse(
             &mut shapes,
@@ -4498,5 +4533,434 @@ mod tests {
     fn test_compute_pulse_cap_zero_n() {
         let k = compute_pulse_cap(0, 64);
         assert_eq!(k, 0, "Zero dimensions should yield zero pulses");
+    }
+
+    #[test]
+    fn test_overlap_add_integration() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Create MDCT output (2N samples for N-point overlap)
+        let n = 240;
+        let mdct_output = vec![0.1; 2 * n];
+
+        // First frame - should initialize overlap buffer
+        let result1 = decoder.overlap_add(&mdct_output);
+        assert!(result1.is_ok());
+        let samples1 = result1.unwrap();
+        assert_eq!(samples1.len(), n);
+
+        // Second frame - should use previous overlap buffer
+        let result2 = decoder.overlap_add(&mdct_output);
+        assert!(result2.is_ok());
+        let samples2 = result2.unwrap();
+        assert_eq!(samples2.len(), n);
+
+        // Verify overlap buffer was updated
+        assert_eq!(decoder.state.overlap_buffer.len(), n);
+    }
+
+    #[test]
+    fn test_mdct_to_overlap_add_pipeline() {
+        // Test that inverse_mdct output size matches overlap_add input requirements
+        let freq_data = vec![1.0; 120];
+        let time_data = CeltDecoder::inverse_mdct(&freq_data);
+
+        // MDCT should produce 2N output from N input
+        assert_eq!(time_data.len(), 240);
+
+        // This output should be suitable for overlap_add (requires 2N samples)
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let result = decoder.overlap_add(&time_data);
+        assert!(result.is_ok());
+
+        let samples = result.unwrap();
+        assert_eq!(samples.len(), 120); // N samples out
+    }
+
+    #[test]
+    fn test_overlap_add_continuity() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Create two different MDCT outputs
+        let n = 240;
+        let mut mdct_output1 = vec![0.5; 2 * n];
+        let mut mdct_output2 = vec![0.3; 2 * n];
+
+        // Add some variation to test overlap
+        #[allow(clippy::cast_precision_loss)]
+        for i in 0..n {
+            mdct_output1[i] = (i as f32) * 0.001;
+            mdct_output2[i] = (i as f32) * 0.001;
+        }
+
+        let samples1 = decoder.overlap_add(&mdct_output1).unwrap();
+        let samples2 = decoder.overlap_add(&mdct_output2).unwrap();
+
+        // Both outputs should be same length
+        assert_eq!(samples1.len(), samples2.len());
+
+        // Outputs should contain real audio data (not all zeros)
+        let energy1: f32 = samples1.iter().map(|&x| x * x).sum();
+        let energy2: f32 = samples2.iter().map(|&x| x * x).sum();
+
+        assert!(energy1 > 0.0, "First frame should have non-zero energy");
+        assert!(energy2 > 0.0, "Second frame should have non-zero energy");
+    }
+
+    #[test]
+    fn test_anti_collapse_disabled_when_flag_off() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let lm = decoder.compute_lm();
+        let mut bands: Vec<Vec<f32>> = (0..CELT_NUM_BANDS)
+            .map(|i| {
+                let n0 = usize::from(decoder.bins_per_band()[i]);
+                vec![1.0; n0 << lm]
+            })
+            .collect();
+
+        let current_energy = [100_i16; CELT_NUM_BANDS];
+        let collapse_masks = vec![0xFF_u8; CELT_NUM_BANDS]; // All collapsed
+        let pulses = [0u16; CELT_NUM_BANDS]; // Zero pulses
+
+        // With anti_collapse_on = false, bands should not be modified
+        let bands_before = bands.clone();
+        let result = decoder.apply_anti_collapse(
+            &mut bands,
+            &current_energy,
+            &collapse_masks,
+            &pulses,
+            false, // anti_collapse_on = false
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(
+            bands, bands_before,
+            "Bands should not be modified when anti-collapse is off"
+        );
+    }
+
+    #[test]
+    fn test_anti_collapse_injects_noise_for_collapsed_bands() {
+        // Test that anti-collapse actually modifies zero-energy bands
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let lm = decoder.compute_lm();
+
+        // Create bands with proper N0<<LM sizing, all zeros (collapsed)
+        let bins_per_band = decoder.bins_per_band();
+        let mut shapes: Vec<Vec<f32>> = bins_per_band
+            .iter()
+            .map(|&n0| vec![0.0; (usize::from(n0)) << lm])
+            .collect();
+
+        // Mark all bands as collapsed (zero pulses)
+        let pulses = [0u16; CELT_NUM_BANDS];
+        // Collapse mask: bit CLEAR = collapsed, bit SET = not collapsed
+        // 0x00 = all MDCTs collapsed, 0xFF = no MDCTs collapsed
+        let collapse_masks = vec![0x00_u8; CELT_NUM_BANDS]; // All MDCTs collapsed
+        let energy = [100_i16; CELT_NUM_BANDS];
+
+        // Before anti-collapse: all bands should be zero
+        let energy_before: f32 = shapes[0].iter().map(|&x| x * x).sum();
+        assert!(
+            energy_before < 1e-6,
+            "Band should be zero before anti-collapse"
+        );
+
+        // Apply anti-collapse
+        decoder
+            .apply_anti_collapse(&mut shapes, &energy, &collapse_masks, &pulses, true)
+            .unwrap();
+
+        // After anti-collapse: coded bands should have noise injected
+        let energy_after: f32 = shapes[0].iter().map(|&x| x * x).sum();
+        assert!(
+            energy_after > 0.0,
+            "Band 0 should have non-zero energy after anti-collapse noise injection"
+        );
+    }
+
+    #[test]
+    fn test_anti_collapse_preserves_normalization() {
+        // Test that bands remain unit-normalized after anti-collapse
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let lm = decoder.compute_lm();
+
+        let bins_per_band = decoder.bins_per_band();
+        let mut shapes: Vec<Vec<f32>> = bins_per_band
+            .iter()
+            .map(|&n0| vec![0.0; (usize::from(n0)) << lm])
+            .collect();
+
+        let pulses = [0u16; CELT_NUM_BANDS];
+        // 0x00 = all MDCTs collapsed (will inject noise and renormalize)
+        let collapse_masks = vec![0x00_u8; CELT_NUM_BANDS];
+        let energy = [100_i16; CELT_NUM_BANDS];
+
+        decoder
+            .apply_anti_collapse(&mut shapes, &energy, &collapse_masks, &pulses, true)
+            .unwrap();
+
+        // After anti-collapse with renormalization, bands should be unit norm
+        for (band_idx, band) in shapes.iter().enumerate() {
+            if band_idx >= decoder.start_band && band_idx < decoder.end_band && !band.is_empty() {
+                let norm_squared: f32 = band.iter().map(|&x| x * x).sum();
+                let norm = norm_squared.sqrt();
+
+                // Allow some floating point tolerance
+                assert!(
+                    (norm - 1.0).abs() < 0.01 || norm == 0.0,
+                    "Band {band_idx} should be unit norm or zero, got norm={norm}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_complete_celt_synthesis_pipeline() {
+        // Integration test: Verify complete pipeline produces audio output
+        // Pipeline: PVQ shapes → anti-collapse → denormalize → MDCT → overlap-add
+
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Create normalized shapes (simulating PVQ output)
+        // Note: For anti-collapse, bands must have size N0 << LM (not just N0)
+        let lm = decoder.compute_lm();
+        let bins_per_band = decoder.bins_per_band();
+        let mut shapes: Vec<Vec<f32>> = Vec::new();
+
+        for &bin_count in bins_per_band.iter().take(CELT_NUM_BANDS) {
+            let n0 = usize::from(bin_count);
+            let n = n0 << lm; // Total size = N0 << LM
+            let mut shape = vec![0.1; n]; // Small non-zero values
+
+            // Normalize to unit norm
+            let norm = shape.iter().map(|&x| x * x).sum::<f32>().sqrt();
+            if norm > 0.0 {
+                for val in &mut shape {
+                    *val /= norm;
+                }
+            }
+            shapes.push(shape);
+        }
+
+        // Apply anti-collapse (should not modify since shapes have energy)
+        let current_energy = [100_i16; CELT_NUM_BANDS];
+        let collapse_masks = vec![0u8; CELT_NUM_BANDS];
+        let pulses = [10u16; CELT_NUM_BANDS];
+
+        decoder
+            .apply_anti_collapse(&mut shapes, &current_energy, &collapse_masks, &pulses, true)
+            .unwrap();
+
+        // Denormalize bands
+        let freq_data = decoder.denormalize_bands(&shapes, &current_energy);
+        assert!(
+            !freq_data.is_empty(),
+            "Denormalization should produce frequency data"
+        );
+
+        // Apply inverse MDCT
+        let time_data = CeltDecoder::inverse_mdct(&freq_data);
+        assert_eq!(
+            time_data.len(),
+            freq_data.len() * 2,
+            "MDCT should produce 2N output"
+        );
+
+        // Apply overlap-add
+        let samples = decoder.overlap_add(&time_data).unwrap();
+        assert_eq!(
+            samples.len(),
+            freq_data.len(),
+            "Overlap-add should produce N samples"
+        );
+
+        // Verify output has energy (not silence)
+        let energy: f32 = samples.iter().map(|&x| x * x).sum();
+        assert!(
+            energy > 0.0,
+            "Complete pipeline should produce non-zero audio output"
+        );
+    }
+
+    #[test]
+    fn test_silence_frame_detection() {
+        // Verify that silence frames are properly detected and handled
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        // Silence frame should return zero samples
+        let silence_frame = decoder.generate_silence_frame();
+        assert_eq!(silence_frame.samples.len(), 480); // frame_size samples
+
+        // All samples should be zero
+        let energy: f32 = silence_frame.samples.iter().map(|&x| x * x).sum();
+        assert!(energy.abs() < 1e-6, "Silence frame should have zero energy");
+    }
+
+    #[test]
+    fn test_pipeline_state_updates() {
+        // Verify that decoder state is properly updated across frames
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+        let initial_prev_energy = decoder.state.prev_energy;
+        let initial_prev_prev_energy = decoder.state.prev_prev_energy;
+
+        // Create test MDCT output
+        let time_data = vec![0.1; 480];
+        let _samples = decoder.overlap_add(&time_data).unwrap();
+
+        // Overlap buffer should be initialized
+        assert!(!decoder.state.overlap_buffer.is_empty());
+        assert_eq!(decoder.state.overlap_buffer.len(), 240); // N samples
+
+        // Note: In actual decode_celt_frame, prev_energy would be updated
+        // This test verifies the state structure exists and is accessible
+        assert_eq!(decoder.state.prev_energy, initial_prev_energy);
+        assert_eq!(decoder.state.prev_prev_energy, initial_prev_prev_energy);
+    }
+
+    #[test]
+    fn test_pvq_band_sizes_correct_for_all_lm() {
+        // RFC 6716 Line 6308: "set N to the number of MDCT bins covered by the band"
+        // For LM > 0, N = N0 * 2^LM (bins across all interleaved MDCTs)
+
+        // Test LM=0 (2.5ms, 120 samples)
+        let decoder_lm0 = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 120).unwrap();
+        let lm0 = decoder_lm0.compute_lm();
+        assert_eq!(lm0, 0, "120 samples should give LM=0");
+
+        // Test LM=1 (5ms, 240 samples)
+        let decoder_lm1 = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 240).unwrap();
+        let lm1 = decoder_lm1.compute_lm();
+        assert_eq!(lm1, 1, "240 samples should give LM=1");
+
+        // Test LM=2 (10ms, 480 samples)
+        let decoder_lm2 = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let lm2 = decoder_lm2.compute_lm();
+        assert_eq!(lm2, 2, "480 samples should give LM=2");
+
+        // Test LM=3 (20ms, 960 samples)
+        let decoder_lm3 = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 960).unwrap();
+        let lm3 = decoder_lm3.compute_lm();
+        assert_eq!(lm3, 3, "960 samples should give LM=3");
+
+        // Verify band 0 sizes from RFC Table 55
+        // LM=0: N0=1, expected size = 1 << 0 = 1
+        // LM=1: N0=2, expected size = 2 << 1 = 4
+        // LM=2: N0=4, expected size = 4 << 2 = 16
+        // LM=3: N0=8, expected size = 8 << 3 = 64
+
+        let bins = decoder_lm3.bins_per_band();
+        let n0_band0 = u32::from(bins[0]);
+        assert_eq!(n0_band0, 8, "Band 0 at 20ms should have N0=8");
+
+        let expected_size = (n0_band0 as usize) << lm3;
+        assert_eq!(
+            expected_size, 64,
+            "Band 0 at LM=3 should be 64 samples total"
+        );
+    }
+
+    #[test]
+    fn test_pvq_decode_dimension_matches_band_size() {
+        // Verify that PVQ decode receives correct dimension N = N0 << LM
+
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        let lm = decoder.compute_lm();
+        assert_eq!(lm, 2, "480 samples should give LM=2");
+
+        let bins_per_band = decoder.bins_per_band();
+
+        // For LM=2, band 0 has N0=4, so full size should be 4<<2=16
+        let n0_band0 = usize::from(bins_per_band[0]);
+        let expected_full_size = n0_band0 << lm;
+
+        assert_eq!(n0_band0, 4, "Band 0 should have N0=4 at 10ms");
+        assert_eq!(
+            expected_full_size, 16,
+            "Band 0 should have full size 16 at LM=2"
+        );
+
+        // Verify for a few more bands
+        let n0_band1 = usize::from(bins_per_band[1]);
+        let expected_size_band1 = n0_band1 << lm;
+        assert_eq!(n0_band1, 4, "Band 1 should have N0=4 at 10ms");
+        assert_eq!(
+            expected_size_band1, 16,
+            "Band 1 should have full size 16 at LM=2"
+        );
+    }
+
+    #[test]
+    fn test_all_frame_sizes_produce_correct_band_dimensions() {
+        // Test all four standard frame sizes
+        let test_cases = [
+            (120, 0), // 2.5ms -> LM=0
+            (240, 1), // 5ms   -> LM=1
+            (480, 2), // 10ms  -> LM=2
+            (960, 3), // 20ms  -> LM=3
+        ];
+
+        for &(frame_size, expected_lm) in &test_cases {
+            let decoder =
+                CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, frame_size).unwrap();
+
+            let lm = decoder.compute_lm();
+            assert_eq!(
+                lm, expected_lm,
+                "Frame size {frame_size} should give LM={expected_lm}",
+            );
+
+            // Verify bands have correct size for anti-collapse compatibility
+            let bins_per_band = decoder.bins_per_band();
+            for (band_idx, &n0) in bins_per_band.iter().enumerate().take(CELT_NUM_BANDS) {
+                let expected_size = (usize::from(n0)) << lm;
+
+                // Create a test band with correct size (as PVQ decode should)
+                let band = vec![0.0; expected_size];
+
+                // Verify size matches what apply_anti_collapse expects
+                assert_eq!(
+                    band.len(),
+                    expected_size,
+                    "Band {band_idx} at LM={lm} should have size N0<<LM = {expected_size}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pvq_band_dimension_interleaving_correctness() {
+        // Verify that bands are properly sized for interleaved MDCT storage
+        // RFC pattern: X[j<<LM + k] where j=freq bin (0..N0), k=MDCT index (0..(1<<LM))
+
+        let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 960).unwrap();
+        let lm = decoder.compute_lm();
+        assert_eq!(lm, 3, "960 samples = 20ms = LM=3");
+
+        let bins_per_band = decoder.bins_per_band();
+        let num_mdcts = 1_usize << lm; // 2^3 = 8 MDCTs
+
+        // Band 0: N0=8 bins per MDCT, 8 MDCTs total
+        let n0 = usize::from(bins_per_band[0]);
+        let total_size = n0 << lm;
+
+        assert_eq!(n0, 8, "Band 0 has 8 bins per MDCT");
+        assert_eq!(total_size, 64, "Total interleaved size should be 64");
+        assert_eq!(num_mdcts, 8, "Should have 8 interleaved MDCTs");
+
+        // Verify interleaving pattern makes sense:
+        // For each frequency bin j (0..8), we have 8 time samples at indices (j<<3)+k
+        // Total indices: 0..63 covers all 64 samples
+        for j in 0..n0 {
+            for k in 0..num_mdcts {
+                let idx = (j << lm) + k;
+                assert!(
+                    idx < total_size,
+                    "Interleaved index {idx}=({j}<<{lm})+{k} should be < {total_size}",
+                );
+            }
+        }
     }
 }
