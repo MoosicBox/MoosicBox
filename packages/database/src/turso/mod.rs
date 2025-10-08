@@ -1,6 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+pub mod transaction;
+
 use thiserror::Error;
 use turso::{Builder, Database as TursoDb, Value as TursoValue};
 
@@ -9,6 +11,8 @@ use crate::{
     query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
+
+pub use transaction::TursoTransaction;
 
 #[derive(Debug, Error)]
 pub enum TursoDatabaseError {
@@ -46,7 +50,7 @@ impl TursoDatabase {
     }
 }
 
-fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
+pub(crate) fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
     let mut modifiers = Vec::new();
 
     if interval.years != 0 {
@@ -125,7 +129,7 @@ fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
     }
 }
 
-fn turso_transform_query_for_params(
+pub(crate) fn turso_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
 ) -> Result<(String, Vec<DatabaseValue>), crate::DatabaseError> {
@@ -163,7 +167,9 @@ impl From<TursoValue> for DatabaseValue {
     }
 }
 
-fn database_value_to_turso_value(value: &DatabaseValue) -> Result<TursoValue, TursoDatabaseError> {
+pub(crate) fn database_value_to_turso_value(
+    value: &DatabaseValue,
+) -> Result<TursoValue, TursoDatabaseError> {
     match value {
         DatabaseValue::Null => Ok(TursoValue::Null),
         DatabaseValue::String(s) | DatabaseValue::StringOpt(Some(s)) => {
@@ -231,11 +237,13 @@ fn database_value_to_turso_value(value: &DatabaseValue) -> Result<TursoValue, Tu
     }
 }
 
-fn to_turso_params(params: &[DatabaseValue]) -> Result<Vec<TursoValue>, TursoDatabaseError> {
+pub(crate) fn to_turso_params(
+    params: &[DatabaseValue],
+) -> Result<Vec<TursoValue>, TursoDatabaseError> {
     params.iter().map(database_value_to_turso_value).collect()
 }
 
-fn from_turso_row(
+pub(crate) fn from_turso_row(
     column_names: &[String],
     row: &turso::Row,
 ) -> Result<crate::Row, TursoDatabaseError> {
@@ -365,7 +373,15 @@ impl crate::Database for TursoDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
-        unimplemented!("Transactions not yet implemented for Turso backend")
+        let conn = self.database.connect().map_err(|e| {
+            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
+        })?;
+
+        let tx = TursoTransaction::new(conn)
+            .await
+            .map_err(crate::DatabaseError::Turso)?;
+
+        Ok(Box::new(tx))
     }
 
     async fn query(
@@ -1127,5 +1143,179 @@ mod tests {
             .await;
 
         assert!(result.is_ok(), "u64 within i64::MAX range should work");
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_commit() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_tx (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        tx.exec_raw("INSERT INTO test_tx VALUES (1, 'Alice')")
+            .await
+            .expect("Failed to insert");
+
+        Box::new(tx).commit().await.expect("Failed to commit");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_tx")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1, "Should have 1 row after commit");
+        assert_eq!(rows[0].get("id"), Some(DatabaseValue::Int64(1)));
+        assert_eq!(
+            rows[0].get("name"),
+            Some(DatabaseValue::String("Alice".to_string()))
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_rollback() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_tx_rollback (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        tx.exec_raw("INSERT INTO test_tx_rollback VALUES (1, 'Bob')")
+            .await
+            .expect("Failed to insert");
+
+        Box::new(tx).rollback().await.expect("Failed to rollback");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_tx_rollback")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 0, "Should have 0 rows after rollback");
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_query() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_tx_query (id INTEGER, value TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        db.exec_raw("INSERT INTO test_tx_query VALUES (1, 'original')")
+            .await
+            .expect("Failed to insert initial data");
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        tx.exec_raw("INSERT INTO test_tx_query VALUES (2, 'in_tx')")
+            .await
+            .expect("Failed to insert in transaction");
+
+        let rows = tx
+            .query_raw("SELECT * FROM test_tx_query ORDER BY id")
+            .await
+            .expect("Failed to query in transaction");
+
+        assert_eq!(rows.len(), 2, "Should see both rows within transaction");
+
+        Box::new(tx).commit().await.expect("Failed to commit");
+
+        let rows_after = db
+            .query_raw("SELECT * FROM test_tx_query ORDER BY id")
+            .await
+            .expect("Failed to query after commit");
+
+        assert_eq!(rows_after.len(), 2, "Should have 2 rows after commit");
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_params() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_tx_params (id INTEGER, name TEXT, active INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        let params = vec![
+            DatabaseValue::Int64(100),
+            DatabaseValue::String("Carol".to_string()),
+            DatabaseValue::Bool(true),
+        ];
+
+        let affected = tx
+            .exec_raw_params("INSERT INTO test_tx_params VALUES (?, ?, ?)", &params)
+            .await
+            .expect("Failed to insert with params");
+
+        assert_eq!(affected, 1, "Should affect 1 row");
+
+        let query_params = vec![DatabaseValue::Int64(100)];
+        let rows = tx
+            .query_raw_params("SELECT * FROM test_tx_params WHERE id = ?", &query_params)
+            .await
+            .expect("Failed to query with params");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].get("name"),
+            Some(DatabaseValue::String("Carol".to_string()))
+        );
+
+        Box::new(tx).commit().await.expect("Failed to commit");
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_nested_error() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        let nested_result = tx.begin_transaction().await;
+
+        assert!(
+            nested_result.is_err(),
+            "Should not allow nested transactions"
+        );
+        assert!(
+            matches!(
+                nested_result,
+                Err(crate::DatabaseError::AlreadyInTransaction)
+            ),
+            "Should return AlreadyInTransaction error"
+        );
+
+        Box::new(tx).rollback().await.expect("Failed to rollback");
     }
 }
