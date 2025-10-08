@@ -152,6 +152,8 @@ pub mod rusqlite;
 pub mod simulator;
 #[cfg(feature = "sqlx")]
 pub mod sqlx;
+#[cfg(feature = "turso")]
+pub mod turso;
 
 pub mod query;
 pub mod query_transform;
@@ -822,6 +824,9 @@ pub enum DatabaseError {
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
+    #[cfg(feature = "turso")]
+    #[error(transparent)]
+    Turso(#[from] turso::TursoDatabaseError),
     #[error("No row")]
     NoRow,
     #[cfg(feature = "schema")]
