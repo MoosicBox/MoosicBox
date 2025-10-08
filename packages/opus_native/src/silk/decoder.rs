@@ -663,7 +663,8 @@ impl SilkDecoder {
                 } else {
                     [0; 5]
                 },
-                ltp_scale_q14: i16::try_from(ltp_scale).expect("LTP scale exceeds i16 range"),
+                ltp_scale_q14: i16::try_from(ltp_scale)
+                    .expect("LTP scale values (12288, 8192, 15565) fit in i16::MAX"),
             };
 
             // Apply LTP synthesis (long-term prediction)
@@ -1894,7 +1895,7 @@ impl SilkDecoder {
 
         if use_absolute {
             let lag_high = i16::try_from(range_decoder.ec_dec_icdf(LTP_LAG_HIGH_PDF, 8)?)
-                .expect("lag_high must fin in i16");
+                .expect("ec_dec_icdf returns u8, always fits in i16");
 
             let (pdf_low, lag_scale, lag_min) = match bandwidth {
                 Bandwidth::Narrowband => (LTP_LAG_LOW_PDF_NB, 4, 16),
@@ -1904,7 +1905,7 @@ impl SilkDecoder {
             };
 
             let lag_low = i16::try_from(range_decoder.ec_dec_icdf(pdf_low, 8)?)
-                .expect("lag_low must fin in i16");
+                .expect("ec_dec_icdf returns u8, always fits in i16");
 
             let lag = lag_high * lag_scale + lag_low + lag_min;
 
@@ -1912,7 +1913,7 @@ impl SilkDecoder {
             Ok(lag)
         } else {
             let delta_lag_index = i16::try_from(range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)?)
-                .expect("delta_lag_index must fin in i16");
+                .expect("ec_dec_icdf returns u8, always fits in i16");
 
             if delta_lag_index == 0 {
                 self.decode_primary_pitch_lag(range_decoder, bandwidth, true)
@@ -2371,10 +2372,7 @@ impl SilkDecoder {
     /// # Errors
     ///
     /// * Range decoder errors from `ec_dec_icdf()`
-    ///
-    /// # Panics
-    ///
-    /// * If the magnitude is too large to be represented in a signed 16-bit integer
+    /// * Returns `Error::SilkDecoder` if magnitude exceeds `i16::MAX` (32767)
     ///
     /// # RFC Algorithm (lines 5293-5297)
     ///
@@ -2400,10 +2398,16 @@ impl SilkDecoder {
                 signed_excitation[i] = 0;
             } else {
                 let sign_bit = range_decoder.ec_dec_icdf(pdf, 8)?;
+                let magnitude_i16 = i16::try_from(magnitudes[i]).map_err(|_| {
+                    Error::SilkDecoder(format!(
+                        "magnitude {} exceeds i16::MAX (32767) at position {}",
+                        magnitudes[i], i
+                    ))
+                })?;
                 signed_excitation[i] = if sign_bit == 0 {
-                    -i16::try_from(magnitudes[i]).expect("magnitude too large")
+                    -magnitude_i16
                 } else {
-                    i16::try_from(magnitudes[i]).expect("magnitude too large")
+                    magnitude_i16
                 };
             }
         }
