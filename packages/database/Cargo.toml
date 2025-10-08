@@ -45,6 +45,7 @@ log         = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
+turso       = { workspace = true, optional = true }
 
 # Decimal support
 rust_decimal = { workspace = true, optional = true, features = [
@@ -88,6 +89,7 @@ default = [
     "simulator",
     "sqlite-rusqlite",
     "sqlite-sqlx",
+    "turso",
     "uuid",
 ]
 
@@ -155,8 +157,8 @@ sqlite-sqlx = [
     "sqlx",
     "sqlx/sqlite",
 ]
-turso = ["_any_backend", "placeholder-question-mark"]
 sqlx = ["_any_backend"]
+turso = ["_any_backend", "dep:turso", "placeholder-question-mark"]
 
 simulator = ["sqlite-rusqlite"]
 

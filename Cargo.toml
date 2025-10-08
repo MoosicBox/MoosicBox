@@ -574,6 +574,7 @@ whoami = "1.6.1"
 xml = "1.0.0"
 
 [patch.crates-io]
+flacenc = { git = "https://github.com/BSteffaniak/flacenc-rs", branch = "unpin-built-version" }
 # actix-files             = { git = "https://github.com/actix/actix-web" }
 # actix-http              = { git = "https://github.com/actix/actix-web" }
 # actix-http-test         = { git = "https://github.com/actix/actix-web" }
