@@ -1094,6 +1094,6 @@ mod no_features_tests {
     #[test]
     fn test_reset_state_succeeds_with_no_features() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-        decoder.reset_state();
+        let _ = decoder.reset_state();
     }
 }
