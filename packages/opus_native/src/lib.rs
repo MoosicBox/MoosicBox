@@ -1090,7 +1090,7 @@ mod no_features_tests {
     }
 
     // TODO: Remove ignore when implemented in Phase 6
-    #[ignore]
+    #[ignore = "Will be implemented in Phase 6"]
     #[test]
     fn test_reset_state_succeeds_with_no_features() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
