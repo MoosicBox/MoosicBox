@@ -64,6 +64,8 @@
         audioPackages =
           with pkgs;
           [
+            libopus # Opus codec library
+            opusTools # Opus codec tools (opusenc, opusdec, opusinfo)
             portaudio # Cross-platform audio (wraps CoreAudio on macOS, ALSA on Linux)
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
