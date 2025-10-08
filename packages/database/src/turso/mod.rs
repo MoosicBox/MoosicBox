@@ -835,58 +835,66 @@ async fn get_table_foreign_keys(
     if let Some(sql) = create_sql {
         let sql_upper = sql.to_uppercase();
         if sql_upper.contains("FOREIGN KEY") {
-            let parts: Vec<&str> = sql.split("FOREIGN KEY").collect();
-            for part in parts.iter().skip(1) {
-                if let Some(col_start) = part.find('(') {
-                    if let Some(col_end) = part[col_start..].find(')') {
-                        let column = part[col_start + 1..col_start + col_end]
+            let mut search_pos = 0;
+            while let Some(fk_pos) = sql_upper[search_pos..].find("FOREIGN KEY") {
+                let fk_abs_pos = search_pos + fk_pos;
+                let part_upper = &sql_upper[fk_abs_pos + 11..];
+                let part_orig = &sql[fk_abs_pos + 11..];
+
+                if let Some(col_start) = part_upper.find('(') {
+                    if let Some(col_end) = part_upper[col_start..].find(')') {
+                        let column = part_orig[col_start + 1..col_start + col_end]
                             .trim()
                             .trim_matches('`')
                             .trim_matches('"')
                             .to_string();
 
-                        if let Some(ref_start) = part.find("REFERENCES") {
-                            let ref_part = &part[ref_start + 10..];
-                            if let Some(ref_table_end) = ref_part.find('(') {
-                                let referenced_table = ref_part[..ref_table_end].trim().to_string();
+                        if let Some(ref_start) = part_upper.find("REFERENCES") {
+                            let ref_part_upper = &part_upper[ref_start + 10..];
+                            let ref_part_orig = &part_orig[ref_start + 10..];
 
-                                if let Some(ref_col_end) = ref_part[ref_table_end..].find(')') {
-                                    let referenced_column = ref_part
+                            if let Some(ref_table_end) = ref_part_upper.find('(') {
+                                let referenced_table =
+                                    ref_part_orig[..ref_table_end].trim().to_string();
+
+                                if let Some(ref_col_end) = ref_part_upper[ref_table_end..].find(')')
+                                {
+                                    let referenced_column = ref_part_orig
                                         [ref_table_end + 1..ref_table_end + ref_col_end]
                                         .trim()
                                         .trim_matches('`')
                                         .trim_matches('"')
                                         .to_string();
 
-                                    let on_update = if ref_part
-                                        .to_uppercase()
-                                        .contains("ON UPDATE CASCADE")
-                                    {
-                                        Some("CASCADE".to_string())
-                                    } else if ref_part.to_uppercase().contains("ON UPDATE SET NULL")
-                                    {
-                                        Some("SET NULL".to_string())
-                                    } else if ref_part.to_uppercase().contains("ON UPDATE RESTRICT")
-                                    {
-                                        Some("RESTRICT".to_string())
-                                    } else {
-                                        None
-                                    };
+                                    let on_update =
+                                        if ref_part_upper.contains("ON UPDATE NO ACTION") {
+                                            None
+                                        } else if ref_part_upper.contains("ON UPDATE CASCADE") {
+                                            Some("CASCADE".to_string())
+                                        } else if ref_part_upper.contains("ON UPDATE SET NULL") {
+                                            Some("SET NULL".to_string())
+                                        } else if ref_part_upper.contains("ON UPDATE SET DEFAULT") {
+                                            Some("SET DEFAULT".to_string())
+                                        } else if ref_part_upper.contains("ON UPDATE RESTRICT") {
+                                            Some("RESTRICT".to_string())
+                                        } else {
+                                            None
+                                        };
 
-                                    let on_delete = if ref_part
-                                        .to_uppercase()
-                                        .contains("ON DELETE CASCADE")
-                                    {
-                                        Some("CASCADE".to_string())
-                                    } else if ref_part.to_uppercase().contains("ON DELETE SET NULL")
-                                    {
-                                        Some("SET NULL".to_string())
-                                    } else if ref_part.to_uppercase().contains("ON DELETE RESTRICT")
-                                    {
-                                        Some("RESTRICT".to_string())
-                                    } else {
-                                        None
-                                    };
+                                    let on_delete =
+                                        if ref_part_upper.contains("ON DELETE NO ACTION") {
+                                            None
+                                        } else if ref_part_upper.contains("ON DELETE CASCADE") {
+                                            Some("CASCADE".to_string())
+                                        } else if ref_part_upper.contains("ON DELETE SET NULL") {
+                                            Some("SET NULL".to_string())
+                                        } else if ref_part_upper.contains("ON DELETE SET DEFAULT") {
+                                            Some("SET DEFAULT".to_string())
+                                        } else if ref_part_upper.contains("ON DELETE RESTRICT") {
+                                            Some("RESTRICT".to_string())
+                                        } else {
+                                            None
+                                        };
 
                                     let fk_name = format!(
                                         "{table}_{column}_{referenced_table}_{referenced_column}"
@@ -908,6 +916,8 @@ async fn get_table_foreign_keys(
                         }
                     }
                 }
+
+                search_pos = fk_abs_pos + 11;
             }
         }
     }
@@ -2038,5 +2048,261 @@ mod tests {
         assert_eq!(fk.referenced_table, "categories");
         assert_eq!(fk.on_update, Some("CASCADE".to_string()));
         assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_action_set_default() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER DEFAULT 0,
+                FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE SET DEFAULT
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.on_delete, Some("SET DEFAULT".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_action_no_action_explicit() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE NO ACTION
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.on_delete, None, "NO ACTION should map to None");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_action_default_when_omitted() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                FOREIGN KEY (parent_id) REFERENCES parent(id)
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.on_update, None,
+            "Omitted action should default to None (NO ACTION)"
+        );
+        assert_eq!(
+            fk.on_delete, None,
+            "Omitted action should default to None (NO ACTION)"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_all_five_actions() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        let test_cases = [
+            ("NO ACTION", None),
+            ("RESTRICT", Some("RESTRICT".to_string())),
+            ("SET NULL", Some("SET NULL".to_string())),
+            ("SET DEFAULT", Some("SET DEFAULT".to_string())),
+            ("CASCADE", Some("CASCADE".to_string())),
+        ];
+
+        for (action, expected) in &test_cases {
+            let table_name = format!("child_{}", action.to_lowercase().replace(' ', "_"));
+            db.exec_raw(&format!(
+                "CREATE TABLE {table_name} (
+                    id INTEGER PRIMARY KEY,
+                    parent_id INTEGER,
+                    FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE {action}
+                )"
+            ))
+            .await
+            .unwrap_or_else(|_| panic!("Failed to create {table_name}"));
+
+            let table_info = db
+                .get_table_info(&table_name)
+                .await
+                .expect("Failed to get table info")
+                .expect("Table should exist");
+
+            assert_eq!(table_info.foreign_keys.len(), 1);
+            let fk = table_info.foreign_keys.values().next().unwrap();
+            assert_eq!(
+                fk.on_delete, *expected,
+                "Action {action} not detected correctly"
+            );
+        }
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_lowercase_syntax() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                foreign key (parent_id) references parent(id) on delete cascade
+            )",
+        )
+        .await
+        .expect("Failed to create child table with lowercase FK");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should detect lowercase 'foreign key'"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.column, "parent_id");
+        assert_eq!(fk.referenced_table, "parent");
+        assert_eq!(fk.referenced_column, "id");
+        assert_eq!(
+            fk.on_delete,
+            Some("CASCADE".to_string()),
+            "Should detect lowercase 'on delete cascade'"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_mixed_case_actions() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                FOREIGN KEY (parent_id) REFERENCES parent(id) On UpDaTe CaScAdE On DeLeTe SeT nUlL
+            )",
+        )
+        .await
+        .expect("Failed to create child table with mixed case");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(
+            fk.on_update,
+            Some("CASCADE".to_string()),
+            "Should detect mixed case 'On UpDaTe CaScAdE'"
+        );
+        assert_eq!(
+            fk.on_delete,
+            Some("SET NULL".to_string()),
+            "Should detect mixed case 'On DeLeTe SeT nUlL'"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_fk_lowercase_references() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER,
+                foreign key (parent_id) references parent(id)
+            )",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let table_info = db
+            .get_table_info("child")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should detect lowercase 'references'"
+        );
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.referenced_table, "parent");
+        assert_eq!(fk.referenced_column, "id");
     }
 }

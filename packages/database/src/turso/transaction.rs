@@ -491,64 +491,72 @@ impl crate::Database for TursoTransaction {
             if let Some(sql) = create_sql {
                 let sql_upper = sql.to_uppercase();
                 if sql_upper.contains("FOREIGN KEY") {
-                    let parts: Vec<&str> = sql.split("FOREIGN KEY").collect();
-                    for part in parts.iter().skip(1) {
-                        if let Some(col_start) = part.find('(') {
-                            if let Some(col_end) = part[col_start..].find(')') {
-                                let column = part[col_start + 1..col_start + col_end]
+                    let mut search_pos = 0;
+                    while let Some(fk_pos) = sql_upper[search_pos..].find("FOREIGN KEY") {
+                        let fk_abs_pos = search_pos + fk_pos;
+                        let part_upper = &sql_upper[fk_abs_pos + 11..];
+                        let part_orig = &sql[fk_abs_pos + 11..];
+
+                        if let Some(col_start) = part_upper.find('(') {
+                            if let Some(col_end) = part_upper[col_start..].find(')') {
+                                let column = part_orig[col_start + 1..col_start + col_end]
                                     .trim()
                                     .trim_matches('`')
                                     .trim_matches('"')
                                     .to_string();
 
-                                if let Some(ref_start) = part.find("REFERENCES") {
-                                    let ref_part = &part[ref_start + 10..];
-                                    if let Some(ref_table_end) = ref_part.find('(') {
+                                if let Some(ref_start) = part_upper.find("REFERENCES") {
+                                    let ref_part_upper = &part_upper[ref_start + 10..];
+                                    let ref_part_orig = &part_orig[ref_start + 10..];
+
+                                    if let Some(ref_table_end) = ref_part_upper.find('(') {
                                         let referenced_table =
-                                            ref_part[..ref_table_end].trim().to_string();
+                                            ref_part_orig[..ref_table_end].trim().to_string();
 
                                         if let Some(ref_col_end) =
-                                            ref_part[ref_table_end..].find(')')
+                                            ref_part_upper[ref_table_end..].find(')')
                                         {
-                                            let referenced_column = ref_part
+                                            let referenced_column = ref_part_orig
                                                 [ref_table_end + 1..ref_table_end + ref_col_end]
                                                 .trim()
                                                 .trim_matches('`')
                                                 .trim_matches('"')
                                                 .to_string();
 
-                                            let on_update = if ref_part
-                                                .to_uppercase()
-                                                .contains("ON UPDATE CASCADE")
+                                            let on_update = if ref_part_upper
+                                                .contains("ON UPDATE NO ACTION")
                                             {
+                                                None
+                                            } else if ref_part_upper.contains("ON UPDATE CASCADE") {
                                                 Some("CASCADE".to_string())
-                                            } else if ref_part
-                                                .to_uppercase()
-                                                .contains("ON UPDATE SET NULL")
+                                            } else if ref_part_upper.contains("ON UPDATE SET NULL")
                                             {
                                                 Some("SET NULL".to_string())
-                                            } else if ref_part
-                                                .to_uppercase()
-                                                .contains("ON UPDATE RESTRICT")
+                                            } else if ref_part_upper
+                                                .contains("ON UPDATE SET DEFAULT")
+                                            {
+                                                Some("SET DEFAULT".to_string())
+                                            } else if ref_part_upper.contains("ON UPDATE RESTRICT")
                                             {
                                                 Some("RESTRICT".to_string())
                                             } else {
                                                 None
                                             };
 
-                                            let on_delete = if ref_part
-                                                .to_uppercase()
-                                                .contains("ON DELETE CASCADE")
+                                            let on_delete = if ref_part_upper
+                                                .contains("ON DELETE NO ACTION")
                                             {
+                                                None
+                                            } else if ref_part_upper.contains("ON DELETE CASCADE") {
                                                 Some("CASCADE".to_string())
-                                            } else if ref_part
-                                                .to_uppercase()
-                                                .contains("ON DELETE SET NULL")
+                                            } else if ref_part_upper.contains("ON DELETE SET NULL")
                                             {
                                                 Some("SET NULL".to_string())
-                                            } else if ref_part
-                                                .to_uppercase()
-                                                .contains("ON DELETE RESTRICT")
+                                            } else if ref_part_upper
+                                                .contains("ON DELETE SET DEFAULT")
+                                            {
+                                                Some("SET DEFAULT".to_string())
+                                            } else if ref_part_upper.contains("ON DELETE RESTRICT")
                                             {
                                                 Some("RESTRICT".to_string())
                                             } else {
@@ -575,6 +583,8 @@ impl crate::Database for TursoTransaction {
                                 }
                             }
                         }
+
+                        search_pos = fk_abs_pos + 11;
                     }
                 }
             }
