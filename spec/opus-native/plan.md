@@ -21934,338 +21934,721 @@ impl CeltDecoder {
 ## Phase 8: Integration & Testing
 
 **Reference:** RFC 6716 Section 6 (Conformance), Appendix A.4 (Test Vectors)
-**Goal:** Comprehensive testing and RFC conformance validation
-**Scope:** Test vectors, conformance tests, fuzzing, CI/CD
-**Status:** 🔴 NOT STARTED (blocked by Phases 4-7)
-**Prerequisites:** All decoder phases complete (1-7)
+**Goal:** Validate decoder correctness with RFC test vectors and real Opus packets
+**Scope:** Test vector generation, RFC conformance validation, fuzzing, deferred verification
+**Status:** 🟡 IN PROGRESS
+**Prerequisites:** Phases 1-5 complete (decoder implementation done)
 **Complexity:** Medium
+**Priority:** CRITICAL - Cannot claim RFC compliance without passing test vectors
 
-**Test Vector Infrastructure:**
-- Organize all test vectors per `test-vectors/README.md` structure
-- Create comprehensive conformance tests for all decoder modes
-- Reference research documentation for test strategy:
-  - `research/range-coding.md` - Range decoder test design
-  - `research/silk-overview.md` - SILK conformance test strategy
-  - `research/celt-overview.md` - CELT conformance test strategy
-  - `research/mdct-implementation.md` - MDCT validation test requirements
-
-**Test Vector Categories:**
-- `test-vectors/range-decoder/` - Range decoder conformance
-- `test-vectors/silk/` - SILK decoder (all sample rates, mono/stereo)
-- `test-vectors/celt/` - CELT decoder (all sample rates, frame sizes, transients)
-- `test-vectors/integration/` - End-to-end tests (speech, music, hybrid, transitions)
-- `test-vectors/edge-cases/` - Error conditions, malformed packets, boundary cases
+**Context:**
+We have a complete decoder implementation but ZERO verification with real Opus packets. Phase 8 validates that the decoder actually works by:
+1. Generating test vectors from libopus (the reference implementation)
+2. Running our decoder against these vectors and measuring SNR
+3. Completing deferred verification from Phase 5 (sections 5.7, 5.12)
 
 ---
 
 ### 8.1: Test Vector Infrastructure
 
 **Reference:** `test-vectors/README.md`, RFC 6716 Appendix A.4
-**Goal:** Organize and implement test vector infrastructure
+**Goal:** Create infrastructure to load and validate test vectors
 **Status:** 🔴 NOT STARTED
 
 #### Implementation Steps
 
-- [ ] **Create test vector directory structure:**
+##### 8.1.1: Create Test Vector Directory Structure
 
-  **Reference:** `test-vectors/README.md`
+Create the following directory structure in `packages/opus_native/test-vectors/`:
 
-  ```bash
-  test-vectors/
-  ├── README.md
-  ├── range-decoder/       # Range decoder tests (Phase 1)
-  ├── silk/                # SILK decoder tests (Phases 2-3)
-  │   ├── nb/              # Narrowband
-  │   ├── mb/              # Mediumband
-  │   ├── wb/              # Wideband
-  │   ├── mono/
-  │   └── stereo/
-  ├── celt/                # CELT decoder tests (Phase 4)
-  │   ├── 2.5ms/
-  │   ├── 5ms/
-  │   ├── 10ms/
-  │   ├── 20ms/
-  │   └── transients/
-  ├── integration/         # End-to-end tests
-  │   ├── hybrid/          # Hybrid mode (Phase 5)
-  │   ├── transitions/     # Mode switching (Phase 5)
-  │   └── plc/             # Packet loss (Phase 6)
-  └── edge-cases/          # Boundary conditions
-  ```
+```
+test-vectors/
+├── range-decoder/       # Range decoder conformance (Phase 1)
+├── silk/                # SILK decoder tests (Phases 2-3)
+│   ├── nb/              # Narrowband (8 kHz)
+│   ├── mb/              # Mediumband (12 kHz)
+│   ├── wb/              # Wideband (16 kHz)
+│   └── swb/             # Super-wideband (24 kHz)
+├── celt/                # CELT decoder tests (Phase 4)
+│   ├── nb/              # Narrowband (8 kHz)
+│   ├── wb/              # Wideband (16 kHz)
+│   ├── swb/             # Super-wideband (24 kHz)
+│   └── fb/              # Fullband (48 kHz)
+├── integration/         # End-to-end tests (Phase 5)
+└── edge-cases/          # Error conditions, malformed packets
+```
 
-- [ ] **Implement test vector loader:**
+Each test vector directory will contain subdirectories with:
+- `packet.bin` - Encoded Opus packet
+- `expected.pcm` - Expected PCM output (16-bit signed, little-endian)
+- `meta.json` - Metadata (sample_rate, channels, frame_size, mode)
 
-  ```rust
-  // tests/test_vectors/mod.rs
+##### 8.1.2: Implement Test Vector Loader
 
-  pub struct TestVector {
-      pub name: String,
-      pub input: Vec<u8>,      // Opus packet
-      pub expected: Vec<i16>,  // Expected PCM output
-      pub sample_rate: SampleRate,
-      pub channels: Channels,
-  }
+Create `tests/test_vectors/mod.rs`:
 
-  pub fn load_test_vectors(dir: &Path) -> Result<Vec<TestVector>> {
-      // Load all .opus + .pcm file pairs
-      todo!()
-  }
-  ```
+```rust
+use std::path::{Path, PathBuf};
+use std::fs;
 
-- [ ] **Create test vector runner:**
+#[derive(Debug, Clone)]
+pub struct TestVector {
+    pub name: String,
+    pub packet: Vec<u8>,
+    pub expected_pcm: Vec<i16>,
+    pub sample_rate: u32,
+    pub channels: u8,
+}
 
-  ```rust
-  #[test]
-  fn test_all_vectors() {
-      let vectors = load_test_vectors(Path::new("test-vectors/")).unwrap();
+impl TestVector {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
+        let name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or("Invalid filename")?
+            .to_string();
 
-      for vector in vectors {
-          let mut decoder = OpusDecoder::new(vector.sample_rate, vector.channels).unwrap();
-          let mut output = vec![0i16; vector.expected.len()];
+        let packet_path = path.join("packet.bin");
+        let pcm_path = path.join("expected.pcm");
+        let meta_path = path.join("meta.json");
 
-          decoder.decode(Some(&vector.input), &mut output, false).unwrap();
+        let packet = fs::read(packet_path)?;
+        let pcm_bytes = fs::read(pcm_path)?;
+        let meta_str = fs::read_to_string(meta_path)?;
 
-          assert_eq!(output, vector.expected, "Test vector {} failed", vector.name);
-      }
-  }
-  ```
+        let meta: serde_json::Value = serde_json::from_str(&meta_str)?;
+        let sample_rate = meta["sample_rate"].as_u64().ok_or("Missing sample_rate")? as u32;
+        let channels = meta["channels"].as_u64().ok_or("Missing channels")? as u8;
+
+        let expected_pcm = pcm_bytes
+            .chunks_exact(2)
+            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+
+        Ok(Self {
+            name,
+            packet,
+            expected_pcm,
+            sample_rate,
+            channels,
+        })
+    }
+
+    pub fn load_all(dir: impl AsRef<Path>) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
+        let dir = dir.as_ref();
+        let mut vectors = Vec::new();
+
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                if let Ok(vector) = Self::load(entry.path()) {
+                    vectors.push(vector);
+                }
+            }
+        }
+
+        Ok(vectors)
+    }
+}
+```
+
+##### 8.1.3: Add SNR Calculation Utilities
+
+Add to `tests/test_vectors/mod.rs`:
+
+```rust
+/// Calculate Signal-to-Noise Ratio in dB
+///
+/// SNR = 10 * log10(signal_power / noise_power)
+///
+/// Higher SNR = better match. Typical thresholds:
+/// * > 60 dB: Bit-exact or near-perfect
+/// * > 40 dB: Good quality match
+/// * > 20 dB: Acceptable match
+/// * < 20 dB: Poor match (likely incorrect)
+pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
+    if reference.len() != decoded.len() {
+        return f64::NEG_INFINITY;
+    }
+
+    let mut signal_power = 0.0;
+    let mut noise_power = 0.0;
+
+    for (ref_sample, dec_sample) in reference.iter().zip(decoded.iter()) {
+        let ref_f = f64::from(*ref_sample);
+        let dec_f = f64::from(*dec_sample);
+        let error = ref_f - dec_f;
+
+        signal_power += ref_f * ref_f;
+        noise_power += error * error;
+    }
+
+    if noise_power < 1e-10 {
+        return f64::INFINITY;  // Perfect match
+    }
+
+    10.0 * (signal_power / noise_power).log10()
+}
+
+pub fn test_vectors_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-vectors")
+}
+```
+
+##### 8.1.4: Create Integration Test Harness
+
+Create `tests/integration_tests.rs`:
+
+```rust
+mod test_vectors;
+
+use crate::test_vectors::*;
+
+#[test]
+fn test_decode_silk_vectors() {
+    for bandwidth in &["nb", "mb", "wb", "swb"] {
+        let vectors_dir = test_vectors_dir().join("silk").join(bandwidth);
+        if !vectors_dir.exists() {
+            continue;
+        }
+
+        let vectors = TestVector::load_all(&vectors_dir)
+            .expect("Failed to load SILK test vectors");
+
+        for vector in vectors {
+            let mut decoder = Decoder::new(
+                SampleRate::from_hz(vector.sample_rate).unwrap(),
+                if vector.channels == 1 { Channels::Mono } else { Channels::Stereo },
+            ).expect("Failed to create decoder");
+
+            let mut output = vec![0i16; vector.expected_pcm.len()];
+            let decoded_samples = decoder
+                .decode(Some(&vector.packet), &mut output, false)
+                .unwrap_or_else(|e| panic!("Failed to decode {}: {:?}", vector.name, e));
+
+            assert_eq!(
+                decoded_samples * usize::from(vector.channels),
+                output.len(),
+                "Sample count mismatch for {}",
+                vector.name
+            );
+
+            let snr = calculate_snr(&vector.expected_pcm, &output);
+            assert!(
+                snr > 40.0,
+                "SNR too low for {}: {} dB (expected > 40 dB)",
+                vector.name,
+                snr
+            );
+        }
+    }
+}
+
+#[test]
+fn test_decode_celt_vectors() {
+    for bandwidth in &["nb", "wb", "swb", "fb"] {
+        let vectors_dir = test_vectors_dir().join("celt").join(bandwidth);
+        if !vectors_dir.exists() {
+            continue;
+        }
+
+        let vectors = TestVector::load_all(&vectors_dir)
+            .expect("Failed to load CELT test vectors");
+
+        for vector in vectors {
+            let mut decoder = Decoder::new(
+                SampleRate::from_hz(vector.sample_rate).unwrap(),
+                if vector.channels == 1 { Channels::Mono } else { Channels::Stereo },
+            ).expect("Failed to create decoder");
+
+            let mut output = vec![0i16; vector.expected_pcm.len()];
+            let decoded_samples = decoder
+                .decode(Some(&vector.packet), &mut output, false)
+                .unwrap_or_else(|e| panic!("Failed to decode {}: {:?}", vector.name, e));
+
+            assert_eq!(
+                decoded_samples * usize::from(vector.channels),
+                output.len(),
+                "Sample count mismatch for {}",
+                vector.name
+            );
+
+            let snr = calculate_snr(&vector.expected_pcm, &output);
+            assert!(
+                snr > 40.0,
+                "SNR too low for {}: {} dB (expected > 40 dB)",
+                vector.name,
+                snr
+            );
+        }
+    }
+}
+
+#[test]
+fn test_decode_integration_vectors() {
+    let vectors_dir = test_vectors_dir().join("integration");
+    if !vectors_dir.exists() {
+        eprintln!("Skipping test: {:?} does not exist", vectors_dir);
+        return;
+    }
+
+    let vectors = TestVector::load_all(&vectors_dir)
+        .expect("Failed to load integration test vectors");
+
+    if vectors.is_empty() {
+        eprintln!("Skipping test: no test vectors found");
+        return;
+    }
+
+    for vector in vectors {
+        let mut decoder = Decoder::new(
+            SampleRate::from_hz(vector.sample_rate).unwrap(),
+            if vector.channels == 1 { Channels::Mono } else { Channels::Stereo },
+        ).expect("Failed to create decoder");
+
+        let mut output = vec![0i16; vector.expected_pcm.len()];
+        let decoded_samples = decoder
+            .decode(Some(&vector.packet), &mut output, false)
+            .unwrap_or_else(|e| panic!("Failed to decode {}: {:?}", vector.name, e));
+
+        assert_eq!(
+            decoded_samples * usize::from(vector.channels),
+            output.len(),
+            "Sample count mismatch for {}",
+            vector.name
+        );
+
+        let snr = calculate_snr(&vector.expected_pcm, &output);
+        assert!(
+            snr > 40.0,
+            "SNR too low for {}: {} dB (expected > 40 dB)",
+            vector.name,
+            snr
+        );
+    }
+}
+```
 
 #### 8.1 Verification Checklist
 
-- [ ] Test vector directory structure created
-- [ ] Loader implemented and working
-- [ ] Runner executes all vectors
-- [ ] Zero clippy warnings
+- [ ] Run `mkdir -p packages/opus_native/test-vectors/{range-decoder,silk/{nb,mb,wb,swb},celt/{nb,wb,swb,fb},integration,edge-cases}`
+- [ ] Create `tests/test_vectors/mod.rs` with loader and SNR utilities
+- [ ] Add `serde_json = { workspace = true }` to `[dev-dependencies]` in `Cargo.toml`
+- [ ] Create `tests/integration_tests.rs` with test harness
+- [ ] Run `cargo test -p moosicbox_opus_native --test integration_tests` (should skip tests until vectors exist)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --all-features -- -D warnings` (zero warnings)
 
 ---
 
-### 8.2: RFC Conformance Tests
+### 8.2: Generate Test Vectors from libopus
 
-**Reference:** RFC 6716 Section 6 (Conformance), Appendix A.4 (Test Vectors)
-**Goal:** Validate bit-exact RFC conformance
+**Reference:** libopus `opus_demo` tool, RFC 6716 test methodology
+**Goal:** Generate reference test vectors using libopus
 **Status:** 🔴 NOT STARTED
 
 #### Implementation Steps
 
-- [ ] **Extract RFC reference test vectors:**
+##### 8.2.1: Create Test Vector Generation Script
 
-  **Reference:** RFC 6716 Appendix A.4
+Create `packages/opus_native/scripts/generate_vectors.sh`:
 
-  ```bash
-  # Extract test vectors from RFC reference implementation
-  # If available from xiph.org or similar
-  ```
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-- [ ] **Create conformance test suite:**
+# Requires: opus-tools installed (opus_demo, opusenc, opusdec)
+# Install: apt install opus-tools (Debian/Ubuntu)
+#          brew install opus-tools (macOS)
+#          nix-shell -p opus-tools (NixOS)
 
-  ```rust
-  #[test]
-  fn test_rfc_conformance_all() {
-      // Test all RFC reference vectors
-      let rfc_vectors = load_rfc_test_vectors();
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_VECTORS_DIR="$SCRIPT_DIR/../test-vectors"
+TEMP_DIR="/tmp/opus_test_vectors"
 
-      for vector in rfc_vectors {
-          verify_rfc_conformance(&vector);
-      }
-  }
-  ```
+mkdir -p "$TEMP_DIR"
+cd "$TEMP_DIR"
 
-- [ ] **Cross-validate with libopus:**
+echo "Generating test vectors in: $TEST_VECTORS_DIR"
 
-  ```rust
-  #[test]
-  #[ignore]  // Requires libopus installed
-  fn test_matches_libopus() {
-      let test_files = collect_opus_files("test-vectors/");
+# Generate silent audio (for basic decoding tests)
+generate_silent_audio() {
+    local duration_ms=$1
+    local sample_rate=$2
+    local channels=$3
+    local filename=$4
 
-      for file in test_files {
-          let native_output = decode_with_native(&file);
-          let libopus_output = decode_with_libopus(&file);
+    local samples=$((duration_ms * sample_rate / 1000))
 
-          assert_pcm_matches(&native_output, &libopus_output, 1e-6);
-      }
-  }
-  ```
+    # Generate silent PCM (16-bit signed, little-endian)
+    dd if=/dev/zero bs=2 count=$((samples * channels)) of="$filename" 2>/dev/null
+}
+
+# Generate tone (for quality tests)
+generate_tone() {
+    local duration_ms=$1
+    local sample_rate=$2
+    local frequency=$3
+    local filename=$4
+
+    # Use sox or similar tool if available
+    # For now, use silent audio as placeholder
+    generate_silent_audio "$duration_ms" "$sample_rate" 1 "$filename"
+}
+
+# Encode and capture both packet and decoded output
+encode_and_capture() {
+    local input_pcm=$1
+    local output_dir=$2
+    local sample_rate=$3
+    local channels=$4
+    local bitrate=$5
+    local frame_size=$6
+    local mode=$7  # silk, celt, hybrid
+
+    mkdir -p "$output_dir"
+
+    # Encode with opus_demo (gives us the packet)
+    opus_demo -e voip "$sample_rate" "$channels" "$bitrate" "$frame_size" \
+        "$input_pcm" "$output_dir/encoded.opus"
+
+    # Decode with opus_demo (reference output)
+    opus_demo -d "$sample_rate" "$channels" \
+        "$output_dir/encoded.opus" "$output_dir/expected.pcm"
+
+    # Extract first packet (simplified - real script would handle multi-packet files)
+    head -c 256 "$output_dir/encoded.opus" > "$output_dir/packet.bin"
+
+    # Generate metadata
+    cat > "$output_dir/meta.json" <<EOF
+{
+  "sample_rate": $sample_rate,
+  "channels": $channels,
+  "bitrate": $bitrate,
+  "frame_size_ms": $frame_size,
+  "mode": "$mode"
+}
+EOF
+}
+
+# Generate SILK test vectors
+echo "Generating SILK test vectors..."
+
+# Narrowband (8 kHz)
+generate_silent_audio 20 8000 1 "silk_nb_mono.pcm"
+encode_and_capture "silk_nb_mono.pcm" "$TEST_VECTORS_DIR/silk/nb/silent_20ms_mono" 8000 1 12000 20 "silk"
+
+generate_silent_audio 20 8000 2 "silk_nb_stereo.pcm"
+encode_and_capture "silk_nb_stereo.pcm" "$TEST_VECTORS_DIR/silk/nb/silent_20ms_stereo" 8000 2 24000 20 "silk"
+
+# Mediumband (12 kHz)
+generate_silent_audio 20 12000 1 "silk_mb_mono.pcm"
+encode_and_capture "silk_mb_mono.pcm" "$TEST_VECTORS_DIR/silk/mb/silent_20ms_mono" 12000 1 16000 20 "silk"
+
+# Wideband (16 kHz)
+generate_silent_audio 20 16000 1 "silk_wb_mono.pcm"
+encode_and_capture "silk_wb_mono.pcm" "$TEST_VECTORS_DIR/silk/wb/silent_20ms_mono" 16000 1 20000 20 "silk"
+
+# Super-wideband (24 kHz) - requires hybrid mode
+generate_silent_audio 20 24000 1 "hybrid_swb_mono.pcm"
+encode_and_capture "hybrid_swb_mono.pcm" "$TEST_VECTORS_DIR/silk/swb/silent_20ms_mono" 24000 1 32000 20 "hybrid"
+
+# Generate CELT test vectors
+echo "Generating CELT test vectors..."
+
+# Various frame sizes at 48 kHz
+for frame_size in 2.5 5 10 20; do
+    frame_size_int=${frame_size/./}  # 2.5 -> 25
+    generate_silent_audio "$frame_size" 48000 1 "celt_${frame_size_int}ms.pcm"
+    encode_and_capture "celt_${frame_size_int}ms.pcm" \
+        "$TEST_VECTORS_DIR/celt/fb/silent_${frame_size_int}ms_mono" \
+        48000 1 64000 "$frame_size" "celt"
+done
+
+# Generate integration test vectors (hybrid mode, mode transitions)
+echo "Generating integration test vectors..."
+generate_silent_audio 60 48000 2 "integration_60ms.pcm"
+encode_and_capture "integration_60ms.pcm" \
+    "$TEST_VECTORS_DIR/integration/silent_60ms_stereo" \
+    48000 2 128000 20 "hybrid"
+
+echo "Test vector generation complete!"
+echo "Vectors saved to: $TEST_VECTORS_DIR"
+```
+
+Make executable: `chmod +x packages/opus_native/scripts/generate_vectors.sh`
+
+##### 8.2.2: Generate Initial Test Vector Set
+
+Run the generation script:
+
+```bash
+cd packages/opus_native
+./scripts/generate_vectors.sh
+```
+
+This will create test vectors for:
+- SILK: NB (8kHz), MB (12kHz), WB (16kHz), SWB (24kHz) - mono and stereo
+- CELT: Various frame sizes at 48kHz
+- Integration: Hybrid mode, mode transitions
+
+##### 8.2.3: Verify Test Vectors Load Correctly
+
+```bash
+cargo test -p moosicbox_opus_native --test integration_tests -- --nocapture
+```
+
+Should see tests execute (may fail if decoder has bugs - that's expected!).
 
 #### 8.2 Verification Checklist
 
-- [ ] RFC test vectors extracted
-- [ ] All RFC vectors pass
-- [ ] Cross-validation with libopus passes
-- [ ] Zero clippy warnings
+- [ ] Create `scripts/generate_vectors.sh`
+- [ ] Install `opus-tools` (via nix, apt, or brew)
+- [ ] Run `./scripts/generate_vectors.sh`
+- [ ] Verify directories contain `packet.bin`, `expected.pcm`, `meta.json`
+- [ ] Run `cargo test -p moosicbox_opus_native --test integration_tests`
+- [ ] Document test vector generation process in `test-vectors/README.md`
 
 ---
 
-### 8.3: Fuzzing Infrastructure
+### 8.3: RFC Conformance Validation
 
-**Reference:** `cargo fuzz` best practices
-**Goal:** Find edge cases, panics, and crashes via fuzzing
+**Reference:** RFC 6716 Section 6 (Conformance), libopus `opus_compare` tool
+**Goal:** Validate decoder produces correct output (SNR thresholds)
 **Status:** 🔴 NOT STARTED
 
 #### Implementation Steps
 
-- [ ] **Set up cargo-fuzz:**
+##### 8.3.1: Add SNR Threshold Validation
 
-  ```bash
-  cargo install cargo-fuzz
-  cargo fuzz init
-  ```
+The integration tests in 8.1.4 already include SNR checks. Adjust thresholds based on empirical results:
 
-- [ ] **Create fuzz targets:**
+- **SILK vectors:** SNR > 40 dB (lossy codec, some error expected)
+- **CELT vectors:** SNR > 40 dB (lossy codec)
+- **Range decoder vectors:** SNR > 60 dB (should be bit-exact for trivial packets)
 
-  ```rust
-  // fuzz/fuzz_targets/decode_opus.rs
+##### 8.3.2: Add Range Decoder Conformance Tests
 
-  #![no_main]
-  use libfuzzer_sys::fuzz_target;
-  use moosicbox_opus_native::OpusDecoder;
+Range decoder should be bit-exact. Add specific test:
 
-  fuzz_target!(|data: &[u8]| {
-      if data.is_empty() {
-          return;
-      }
+```rust
+#[test]
+fn test_range_decoder_bit_exact() {
+    let vectors_dir = test_vectors_dir().join("range-decoder");
+    if !vectors_dir.exists() {
+        eprintln!("Skipping: no range decoder test vectors");
+        return;
+    }
 
-      let mut decoder = OpusDecoder::new(
-          SampleRate::Hz48000,
-          Channels::Stereo,
-      ).unwrap();
+    let vectors = TestVector::load_all(&vectors_dir).unwrap();
 
-      let mut output = vec![0i16; 960];
+    for vector in vectors {
+        let mut decoder = Decoder::new(
+            SampleRate::from_hz(vector.sample_rate).unwrap(),
+            if vector.channels == 1 { Channels::Mono } else { Channels::Stereo },
+        ).unwrap();
 
-      // Should not panic on any input
-      let _ = decoder.decode(Some(data), &mut output, false);
-  });
-  ```
+        let mut output = vec![0i16; vector.expected_pcm.len()];
+        decoder.decode(Some(&vector.packet), &mut output, false).unwrap();
 
-- [ ] **Run fuzzing campaigns:**
+        // Range decoder should be bit-exact
+        assert_eq!(
+            output, vector.expected_pcm,
+            "Range decoder must be bit-exact for {}",
+            vector.name
+        );
+    }
+}
+```
 
-  ```bash
-  cargo fuzz run decode_opus -- -max_total_time=3600  # 1 hour
-  ```
+##### 8.3.3: Add Quality Score Reporting
+
+Implement `opus_compare`-style quality scoring (0-100 scale):
+
+```rust
+pub fn calculate_quality_score(reference: &[i16], decoded: &[i16]) -> f64 {
+    let snr = calculate_snr(reference, decoded);
+
+    // Map SNR to 0-100 scale (similar to opus_compare)
+    // SNR < 20 dB: 0-50 (poor)
+    // SNR 20-40 dB: 50-80 (acceptable to good)
+    // SNR > 40 dB: 80-100 (very good to excellent)
+
+    if snr < 20.0 {
+        snr / 20.0 * 50.0
+    } else if snr < 40.0 {
+        50.0 + (snr - 20.0) / 20.0 * 30.0
+    } else {
+        80.0 + (snr - 40.0).min(20.0) / 20.0 * 20.0
+    }
+}
+```
 
 #### 8.3 Verification Checklist
 
-- [ ] Fuzz targets created
-- [ ] Fuzzing runs without crashes
-- [ ] Found issues fixed
-- [ ] Zero clippy warnings
+- [ ] All SILK vectors pass with SNR > 40 dB
+- [ ] All CELT vectors pass with SNR > 40 dB
+- [ ] Range decoder vectors are bit-exact
+- [ ] Quality scores documented in test output
+- [ ] Run `cargo test -p moosicbox_opus_native --all-features` (all tests pass)
 
 ---
 
-### 8.4: Integration Test Suite
+### 8.4: Fuzzing Tests
 
-**Reference:** Real-world usage patterns
-**Goal:** Test end-to-end decoding with real audio files
+**Reference:** `cargo-fuzz`, libFuzzer best practices
+**Goal:** Find crashes, panics, and undefined behavior
 **Status:** 🔴 NOT STARTED
 
 #### Implementation Steps
 
-- [ ] **Collect test audio files:**
+##### 8.4.1: Set up cargo-fuzz
 
-  ```
-  test-audio/
-  ├── speech/
-  │   ├── male.opus
-  │   ├── female.opus
-  │   └── mixed.opus
-  ├── music/
-  │   ├── classical.opus
-  │   ├── rock.opus
-  │   └── electronic.opus
-  └── mixed/
-      ├── speech-music.opus
-      └── ambient.opus
-  ```
+```bash
+cargo install cargo-fuzz
+cd packages/opus_native
+cargo fuzz init
+```
 
-- [ ] **Create integration tests:**
+##### 8.4.2: Create Fuzz Target
 
-  ```rust
-  #[test]
-  fn test_decode_real_speech() {
-      let file = include_bytes!("../test-audio/speech/male.opus");
-      verify_decodes_successfully(file);
-  }
+Edit `fuzz/fuzz_targets/decode_opus.rs`:
 
-  #[test]
-  fn test_decode_real_music() {
-      let file = include_bytes!("../test-audio/music/classical.opus");
-      verify_decodes_successfully(file);
-  }
-  ```
+```rust
+#![no_main]
+use libfuzzer_sys::fuzz_target;
+use moosicbox_opus_native::{Decoder, SampleRate, Channels};
+
+fuzz_target!(|data: &[u8]| {
+    if data.is_empty() {
+        return;
+    }
+
+    // Try all sample rate and channel combinations
+    for sample_rate in &[SampleRate::Hz8000, SampleRate::Hz16000, SampleRate::Hz48000] {
+        for channels in &[Channels::Mono, Channels::Stereo] {
+            let Ok(mut decoder) = Decoder::new(*sample_rate, *channels) else {
+                continue;
+            };
+
+            let mut output = vec![0i16; 5760];  // Max frame size: 120ms @ 48kHz
+
+            // Should not panic on any input
+            let _ = decoder.decode(Some(data), &mut output, false);
+        }
+    }
+});
+```
+
+##### 8.4.3: Seed Corpus with Test Vectors
+
+```bash
+# Copy test vector packets to fuzz corpus
+mkdir -p fuzz/corpus/decode_opus
+find test-vectors -name "packet.bin" -exec cp {} fuzz/corpus/decode_opus/ \;
+```
+
+##### 8.4.4: Run Fuzzing Campaign
+
+```bash
+# Run for 24 hours
+cargo +nightly fuzz run decode_opus -- -max_total_time=86400
+```
+
+Monitor for crashes and fix any found issues.
 
 #### 8.4 Verification Checklist
 
-- [ ] Real audio files collected
-- [ ] All files decode successfully
-- [ ] Output sounds correct (manual verification)
-- [ ] Zero clippy warnings
+- [ ] Fuzz target created
+- [ ] Corpus seeded with test vectors
+- [ ] 24-hour fuzzing campaign completed
+- [ ] All found crashes fixed
+- [ ] No panics or undefined behavior
 
 ---
 
-### 8.5: Continuous Integration Setup
+### 8.5: Deferred Verification from Phase 5
 
-**Reference:** GitHub Actions best practices
-**Goal:** Automated testing on every commit
+**Reference:** Phase 5.7 (Integration Tests), Phase 5.12 (Hybrid Verification)
+**Goal:** Complete verification deferred from Phase 5
 **Status:** 🔴 NOT STARTED
 
 #### Implementation Steps
 
-- [ ] **Create CI workflow:**
+##### 8.5.1: Complete Phase 5.7 Integration Tests
 
-  ```yaml
-  # .github/workflows/opus-native-ci.yml
+Phase 5.7 deferred integration tests until test vectors were available. Now that we have test vectors in Section 8.2, we can complete 5.7:
 
-  name: Opus Native CI
+**Verification checklist from Phase 5.7:**
+- [ ] Test SILK-only mode with real packets (use `test-vectors/silk/`)
+- [ ] Test CELT-only mode with real packets (use `test-vectors/celt/`)
+- [ ] Test Hybrid mode with real packets (use `test-vectors/silk/swb/` or create hybrid-specific vectors)
+- [ ] Test mode transitions (encode multi-packet stream with libopus that switches modes)
 
-  on: [push, pull_request]
+Implementation: The integration tests created in Section 8.1.4 already cover SILK-only and CELT-only. Add hybrid-specific test:
 
-  jobs:
-    test:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v3
-        - uses: actions-rs/toolchain@v1
-          with:
-            toolchain: stable
+```rust
+#[test]
+fn test_hybrid_mode() {
+    let vectors_dir = test_vectors_dir().join("silk/swb");  // SWB uses hybrid
+    if !vectors_dir.exists() {
+        eprintln!("Skipping: no hybrid test vectors");
+        return;
+    }
 
-        - name: Run tests
-          run: cargo test -p moosicbox_opus_native --all-features
+    let vectors = TestVector::load_all(&vectors_dir).unwrap();
 
-        - name: Run clippy
-          run: cargo clippy --all-targets -p moosicbox_opus_native -- -D warnings
+    for vector in vectors {
+        // Verify TOC indicates hybrid mode
+        let toc = Toc::parse(vector.packet[0]);
+        assert!(toc.is_hybrid(), "Expected hybrid mode for SWB vector {}", vector.name);
 
-        - name: Check formatting
-          run: cargo fmt -p moosicbox_opus_native -- --check
+        let mut decoder = Decoder::new(
+            SampleRate::from_hz(vector.sample_rate).unwrap(),
+            if vector.channels == 1 { Channels::Mono } else { Channels::Stereo },
+        ).unwrap();
 
-        - name: Run benchmarks
-          run: cargo bench -p moosicbox_opus_native --no-run
-  ```
+        let mut output = vec![0i16; vector.expected_pcm.len()];
+        decoder.decode(Some(&vector.packet), &mut output, false)
+            .expect("Hybrid decode should succeed");
+
+        let snr = calculate_snr(&vector.expected_pcm, &output);
+        assert!(snr > 40.0, "Hybrid SNR too low: {} dB", snr);
+    }
+}
+```
+
+##### 8.5.2: Complete Phase 5.12 Hybrid Verification
+
+Phase 5.12 deferred hybrid verification until RFC test vectors were available. The test above completes this.
+
+**Additional verification:**
+- [ ] Verify SILK and CELT outputs are properly combined (check intermediate buffers if needed)
+- [ ] Verify resampling occurs if SILK rate ≠ output rate (add debug logging if needed)
 
 #### 8.5 Verification Checklist
 
-- [ ] CI workflow created
-- [ ] Tests run on every commit
-- [ ] Clippy checks enforced
-- [ ] Format checks enforced
-- [ ] Pipeline green
+- [ ] Phase 5.7 integration tests complete (all modes tested with real packets)
+- [ ] Phase 5.12 hybrid verification complete (hybrid mode tested with RFC vectors)
+- [ ] Update Phase 5.7 status in plan.md to ✅ COMPLETE
+- [ ] Update Phase 5.12 status in plan.md to ✅ COMPLETE
 
 ---
 
-### 8.6: Overall Phase 8 Integration
+### 8.6: Overall Phase 8 Validation
 
-**Goal:** Complete testing infrastructure
+**Goal:** Confirm decoder is RFC-compliant and ready for production
 **Status:** 🔴 NOT STARTED
 
 #### 8.6 Verification Checklist
 
-- [ ] Run `cargo fmt` (format entire workspace)
-- [ ] Run `cargo test -p moosicbox_opus_native --all-features` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --all-features -- -D warnings` (zero warnings)
-- [ ] All test vectors passing
-- [ ] RFC conformance 100%
-- [ ] Fuzzing finds no crashes
-- [ ] Real audio files decode correctly
-- [ ] CI pipeline green
+- [ ] Run `nix develop --command cargo fmt -p moosicbox_opus_native`
+- [ ] Run `nix develop --command cargo test -p moosicbox_opus_native --all-features` (all tests pass)
+- [ ] Run `nix develop --command cargo clippy --all-targets -p moosicbox_opus_native --all-features -- -D warnings` (zero warnings)
+- [ ] All test vectors passing (100% pass rate)
+- [ ] SNR thresholds met (SILK/CELT > 40 dB, range decoder bit-exact)
+- [ ] Fuzzing finds no crashes (24-hour campaign clean)
+- [ ] Phase 5.7 and 5.12 deferred verification complete
+- [ ] Update Phase 8 status in plan.md to ✅ COMPLETE
 
 ---
 
