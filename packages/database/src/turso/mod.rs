@@ -225,7 +225,9 @@ fn database_value_to_turso_value(value: &DatabaseValue) -> Result<TursoValue, Tu
         DatabaseValue::NowPlus(_) | DatabaseValue::Now => Err(TursoDatabaseError::UnsupportedType(
             "Now/NowPlus should be transformed before parameter binding".to_string(),
         )),
-        DatabaseValue::DateTime(dt) => Ok(TursoValue::Text(dt.format("%+").to_string())),
+        DatabaseValue::DateTime(dt) => {
+            Ok(TursoValue::Text(dt.format("%Y-%m-%d %H:%M:%S").to_string()))
+        }
     }
 }
 
@@ -539,5 +541,591 @@ impl crate::Database for TursoDatabase {
         _column: &str,
     ) -> Result<bool, crate::DatabaseError> {
         unimplemented!("Schema introspection not yet implemented for Turso backend")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Database;
+
+    async fn create_test_db() -> TursoDatabase {
+        TursoDatabase::new(":memory:")
+            .await
+            .expect("Failed to create in-memory Turso database")
+    }
+
+    #[switchy_async::test]
+    async fn test_database_creation_memory() {
+        let db = TursoDatabase::new(":memory:").await;
+        assert!(db.is_ok(), "Should create in-memory database");
+    }
+
+    #[switchy_async::test]
+    async fn test_database_creation_file() {
+        let temp_dir = std::env::temp_dir();
+        let db_path = temp_dir.join("test_turso.db");
+        let db_path_str = db_path.to_string_lossy();
+
+        let db = TursoDatabase::new(&db_path_str).await;
+        assert!(db.is_ok(), "Should create file-based database");
+
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[switchy_async::test]
+    async fn test_exec_raw_create_table() {
+        let db = create_test_db().await;
+        let result = db
+            .exec_raw("CREATE TABLE test_users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+            .await;
+        assert!(result.is_ok(), "Should create table");
+    }
+
+    #[switchy_async::test]
+    async fn test_exec_raw_params_insert() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_users (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![
+            DatabaseValue::Int64(1),
+            DatabaseValue::String("Alice".to_string()),
+        ];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_users (id, name) VALUES (?, ?)", &params)
+            .await;
+
+        assert!(result.is_ok(), "Should insert data");
+        assert_eq!(result.unwrap(), 1, "Should affect 1 row");
+    }
+
+    #[switchy_async::test]
+    async fn test_query_raw_basic() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_users (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        db.exec_raw("INSERT INTO test_users (id, name) VALUES (1, 'Bob')")
+            .await
+            .expect("Failed to insert data");
+
+        let rows = db
+            .query_raw("SELECT id, name FROM test_users")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1, "Should return 1 row");
+
+        let row = &rows[0];
+        assert!(row.get("id").is_some(), "Should have 'id' column");
+        assert!(row.get("name").is_some(), "Should have 'name' column");
+        assert_eq!(row.get("id"), Some(DatabaseValue::Int64(1)));
+        assert_eq!(
+            row.get("name"),
+            Some(DatabaseValue::String("Bob".to_string()))
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_query_raw_params() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_users (id INTEGER, name TEXT, active INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let insert_params = vec![
+            DatabaseValue::Int64(42),
+            DatabaseValue::String("Charlie".to_string()),
+            DatabaseValue::Bool(true),
+        ];
+
+        db.exec_raw_params(
+            "INSERT INTO test_users (id, name, active) VALUES (?, ?, ?)",
+            &insert_params,
+        )
+        .await
+        .expect("Failed to insert");
+
+        let query_params = vec![DatabaseValue::Int64(42)];
+
+        let rows = db
+            .query_raw_params("SELECT * FROM test_users WHERE id = ?", &query_params)
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.get("id"), Some(DatabaseValue::Int64(42)));
+        assert_eq!(
+            row.get("name"),
+            Some(DatabaseValue::String("Charlie".to_string()))
+        );
+        assert_eq!(row.get("active"), Some(DatabaseValue::Int64(1)));
+    }
+
+    #[switchy_async::test]
+    async fn test_parameter_binding_all_types() {
+        let db = create_test_db().await;
+
+        db.exec_raw(
+            "CREATE TABLE test_types (
+                int8_val INTEGER,
+                int16_val INTEGER,
+                int32_val INTEGER,
+                int64_val INTEGER,
+                uint8_val INTEGER,
+                uint16_val INTEGER,
+                uint32_val INTEGER,
+                real32_val REAL,
+                real64_val REAL,
+                text_val TEXT,
+                bool_val INTEGER,
+                null_val TEXT
+            )",
+        )
+        .await
+        .expect("Failed to create table");
+
+        let params = vec![
+            DatabaseValue::Int8(i8::MAX),
+            DatabaseValue::Int16(i16::MAX),
+            DatabaseValue::Int32(i32::MAX),
+            DatabaseValue::Int64(i64::MAX),
+            DatabaseValue::UInt8(u8::MAX),
+            DatabaseValue::UInt16(u16::MAX),
+            DatabaseValue::UInt32(u32::MAX),
+            DatabaseValue::Real32(1.23_f32),
+            DatabaseValue::Real64(4.567_890),
+            DatabaseValue::String("test string".to_string()),
+            DatabaseValue::Bool(true),
+            DatabaseValue::Null,
+        ];
+
+        let result = db
+            .exec_raw_params(
+                "INSERT INTO test_types VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                &params,
+            )
+            .await;
+
+        assert!(result.is_ok(), "Should insert all types");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_types")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+
+        assert_eq!(
+            row.get("int8_val"),
+            Some(DatabaseValue::Int64(i64::from(i8::MAX)))
+        );
+        assert_eq!(
+            row.get("int16_val"),
+            Some(DatabaseValue::Int64(i64::from(i16::MAX)))
+        );
+        assert_eq!(
+            row.get("int32_val"),
+            Some(DatabaseValue::Int64(i64::from(i32::MAX)))
+        );
+        assert_eq!(row.get("int64_val"), Some(DatabaseValue::Int64(i64::MAX)));
+        assert_eq!(
+            row.get("uint8_val"),
+            Some(DatabaseValue::Int64(i64::from(u8::MAX)))
+        );
+        assert_eq!(
+            row.get("uint16_val"),
+            Some(DatabaseValue::Int64(i64::from(u16::MAX)))
+        );
+        assert_eq!(
+            row.get("uint32_val"),
+            Some(DatabaseValue::Int64(i64::from(u32::MAX)))
+        );
+        assert!(matches!(row.get("bool_val"), Some(DatabaseValue::Int64(1))));
+        assert_eq!(row.get("null_val"), Some(DatabaseValue::Null));
+    }
+
+    #[switchy_async::test]
+    async fn test_parameter_binding_optional_types() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_opts (a INTEGER, b TEXT, c REAL)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![
+            DatabaseValue::Int64Opt(Some(100)),
+            DatabaseValue::StringOpt(None),
+            DatabaseValue::Real64Opt(Some(99.9)),
+        ];
+
+        db.exec_raw_params("INSERT INTO test_opts VALUES (?, ?, ?)", &params)
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_opts")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.get("a"), Some(DatabaseValue::Int64(100)));
+        assert_eq!(row.get("b"), Some(DatabaseValue::Null));
+        assert_eq!(row.get("c"), Some(DatabaseValue::Real64(99.9)));
+    }
+
+    #[cfg(feature = "decimal")]
+    #[switchy_async::test]
+    async fn test_decimal_storage_and_retrieval() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_decimals (id INTEGER, price TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let decimal_val = Decimal::from_str("123.456789").expect("Failed to parse decimal");
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::Decimal(decimal_val)];
+
+        db.exec_raw_params("INSERT INTO test_decimals VALUES (?, ?)", &params)
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_decimals")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(
+            row.get("price"),
+            Some(DatabaseValue::String("123.456789".to_string()))
+        );
+    }
+
+    #[cfg(feature = "uuid")]
+    #[switchy_async::test]
+    async fn test_uuid_storage_and_retrieval() {
+        use uuid::Uuid;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_uuids (id INTEGER, user_id TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let uuid_val = Uuid::new_v4();
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::Uuid(uuid_val)];
+
+        db.exec_raw_params("INSERT INTO test_uuids VALUES (?, ?)", &params)
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_uuids")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(
+            row.get("user_id"),
+            Some(DatabaseValue::String(uuid_val.to_string()))
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_datetime_storage_and_retrieval() {
+        use chrono::NaiveDateTime;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_dates (id INTEGER, created_at TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let dt = NaiveDateTime::parse_from_str("2024-01-15 12:30:45", "%Y-%m-%d %H:%M:%S")
+            .expect("Failed to parse datetime");
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::DateTime(dt)];
+
+        db.exec_raw_params("INSERT INTO test_dates VALUES (?, ?)", &params)
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_dates")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(
+            row.get("created_at"),
+            Some(DatabaseValue::String(
+                dt.format("%Y-%m-%d %H:%M:%S").to_string()
+            ))
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_now_transformation() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_now (id INTEGER, created_at TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::Now];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_now VALUES (?, ?)", &params)
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "Now should be transformed to datetime('now')"
+        );
+
+        let rows = db
+            .query_raw("SELECT * FROM test_now")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert!(
+            matches!(row.get("created_at"), Some(DatabaseValue::String(_))),
+            "Should have timestamp"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_now_plus_transformation() {
+        use crate::sql_interval::SqlInterval;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_now_plus (id INTEGER, expires_at TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let interval = SqlInterval {
+            years: 0,
+            months: 0,
+            days: 7,
+            hours: 2,
+            minutes: 30,
+            seconds: 0,
+            nanos: 0,
+        };
+
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::NowPlus(interval)];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_now_plus VALUES (?, ?)", &params)
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "NowPlus should be transformed to datetime with modifiers"
+        );
+
+        let rows = db
+            .query_raw("SELECT * FROM test_now_plus")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert!(
+            matches!(row.get("expires_at"), Some(DatabaseValue::String(_))),
+            "Should have future timestamp"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_error_handling_invalid_query() {
+        let db = create_test_db().await;
+
+        let result = db.query_raw("SELECT * FROM nonexistent_table").await;
+        assert!(result.is_err(), "Should return error for invalid query");
+    }
+
+    #[switchy_async::test]
+    async fn test_error_handling_type_mismatch() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_errors (id INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![DatabaseValue::String("not a number".to_string())];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_errors VALUES (?)", &params)
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "SQLite should handle TEXT -> INTEGER conversion"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_multiple_rows() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_multi (id INTEGER, value TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        for i in 1..=10 {
+            let params = vec![
+                DatabaseValue::Int64(i),
+                DatabaseValue::String(format!("value_{i}")),
+            ];
+            db.exec_raw_params("INSERT INTO test_multi VALUES (?, ?)", &params)
+                .await
+                .expect("Failed to insert");
+        }
+
+        let rows = db
+            .query_raw("SELECT * FROM test_multi ORDER BY id")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 10, "Should return 10 rows");
+
+        for (idx, row) in rows.iter().enumerate() {
+            let expected_id = i64::try_from(idx + 1).expect("Failed to convert");
+            assert_eq!(row.get("id"), Some(DatabaseValue::Int64(expected_id)));
+            assert_eq!(
+                row.get("value"),
+                Some(DatabaseValue::String(format!("value_{expected_id}")))
+            );
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_empty_result_set() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_empty (id INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_empty")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 0, "Should return empty result set");
+    }
+
+    #[switchy_async::test]
+    async fn test_column_name_preservation() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_cols (first_name TEXT, last_name TEXT, age INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        db.exec_raw("INSERT INTO test_cols VALUES ('John', 'Doe', 30)")
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT first_name, last_name, age FROM test_cols")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+
+        assert!(row.get("first_name").is_some(), "Should have first_name");
+        assert!(row.get("last_name").is_some(), "Should have last_name");
+        assert!(row.get("age").is_some(), "Should have age");
+
+        assert!(
+            row.get("FirstName").is_none(),
+            "Column names are case-sensitive"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_null_handling() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_nulls (id INTEGER, nullable_field TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::Null];
+
+        db.exec_raw_params("INSERT INTO test_nulls VALUES (?, ?)", &params)
+            .await
+            .expect("Failed to insert");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_nulls")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.get("nullable_field"), Some(DatabaseValue::Null));
+    }
+
+    #[switchy_async::test]
+    async fn test_uint64_overflow_error() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_uint64 (id INTEGER, big_val INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![DatabaseValue::Int64(1), DatabaseValue::UInt64(u64::MAX)];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_uint64 VALUES (?, ?)", &params)
+            .await;
+
+        assert!(
+            result.is_err(),
+            "u64::MAX should overflow i64 and cause error"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_uint64_valid_range() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_uint64_valid (id INTEGER, val INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let params = vec![
+            DatabaseValue::Int64(1),
+            DatabaseValue::UInt64(i64::MAX as u64),
+        ];
+
+        let result = db
+            .exec_raw_params("INSERT INTO test_uint64_valid VALUES (?, ?)", &params)
+            .await;
+
+        assert!(result.is_ok(), "u64 within i64::MAX range should work");
     }
 }

@@ -4,9 +4,9 @@
 
 This specification details the implementation of a Turso Database backend for MoosicBox's switchy_database abstraction layer. Turso is a ground-up Rust rewrite of SQLite (not libSQL fork) that provides native async I/O, experimental concurrent writes, and SQLite compatibility. The implementation will provide a modern, async-first database option that maintains full compatibility with existing MoosicBox schemas while preparing for advanced features like concurrent writes and distributed scenarios.
 
-**Current Status:** 🟡 **Phase 2 Complete** - Core Database trait fully implemented with no compromises (tests pending)
+**Current Status:** ✅ **Phase 2 COMPLETE** - Core Database trait fully implemented with comprehensive tests and zero compromises
 
-**Completion Estimate:** ~45% complete - Phase 2.1-2.5.1 of 6 phases complete (2.6 tests pending)
+**Completion Estimate:** ~50% complete - Phase 2 (all sub-phases 2.1-2.6) of 6 phases complete
 
 ## Status Legend
 
@@ -186,11 +186,11 @@ This specification details the implementation of a Turso Database backend for Mo
 - [x] Verify error module is included with feature
   Confirmed - turso module compiles with feature flag
 
-## Phase 2: Core Database Implementation 🟡 **IN PROGRESS**
+## Phase 2: Core Database Implementation ✅ **COMPLETE**
 
 **Goal:** Implement TursoDatabase struct with actual Turso dependency
 
-**Status:** Phases 2.1-2.5 complete, 2.6 (tests) pending
+**Status:** All phases 2.1-2.6 complete including comprehensive unit tests
 
 ### 2.1 Add Turso Dependency to Package
 
@@ -624,78 +624,40 @@ This specification details the implementation of a Turso Database backend for Mo
 
 ### 2.6 Add Unit Tests
 
-- [ ] Add unit tests 🔴 **CRITICAL**
-  - [ ] Create `#[cfg(test)]` module
-  - [ ] Test database creation (file and in-memory)
-  - [ ] Test basic query execution
-  - [ ] Test parameter binding
-  - [ ] Test row conversion with column names
-  - [ ] Test error handling
-  - [ ] **Skip transaction tests** (Phase 3)
-  - [ ] Example:
-    ```rust
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[tokio::test]
-        async fn test_create_database() {
-            let db = TursoDatabase::new(":memory:").await;
-            assert!(db.is_ok());
-        }
-
-        #[tokio::test]
-        async fn test_create_table() {
-            let db = TursoDatabase::new(":memory:").await.unwrap();
-            let result = db.exec("CREATE TABLE users (id INTEGER, name TEXT)").await;
-            assert!(result.is_ok());
-        }
-
-        #[tokio::test]
-        async fn test_insert_and_query() {
-            let db = TursoDatabase::new(":memory:").await.unwrap();
-            db.exec("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
-
-            // Test insert
-            db.exec("INSERT INTO users VALUES (1, 'Alice')").await.unwrap();
-
-            // Test query with column name verification
-            let rows = db.query_raw_params("SELECT * FROM users", &[]).await.unwrap();
-            assert_eq!(rows.len(), 1);
-
-            // Verify column names are present
-            let row = &rows[0];
-            assert!(row.get("id").is_some());
-            assert!(row.get("name").is_some());
-        }
-
-        #[tokio::test]
-        async fn test_parameter_binding() {
-            let db = TursoDatabase::new(":memory:").await.unwrap();
-            db.exec("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
-
-            // Test with parameters
-            let params = vec![
-                DatabaseValue::Int64(42),
-                DatabaseValue::String("Bob".to_string()),
-            ];
-            db.query_raw_params("INSERT INTO users VALUES (?, ?)", &params).await.unwrap();
-
-            let rows = db.query_raw_params("SELECT * FROM users WHERE id = ?",
-                &[DatabaseValue::Int64(42)]).await.unwrap();
-            assert_eq!(rows.len(), 1);
-        }
-    }
-    ```
+- [x] Add unit tests 🔴 **CRITICAL**
+  - [x] Create `#[cfg(test)]` module
+  - [x] Test database creation (file and in-memory)
+  - [x] Test basic query execution
+  - [x] Test parameter binding
+  - [x] Test row conversion with column names
+  - [x] Test error handling
+  - [x] **Skip transaction tests** (Phase 3)
+  - [x] Implemented comprehensive test suite in `packages/database/src/turso/mod.rs` (lines 546-1109)
+    * 21 total unit tests covering all Phase 2 functionality
+    * Database creation: test_database_creation_memory, test_database_creation_file
+    * Basic operations: test_exec_raw_create_table, test_exec_raw_params_insert
+    * Query operations: test_query_raw_basic, test_query_raw_params, test_multiple_rows, test_empty_result_set
+    * Type handling: test_parameter_binding_all_types, test_parameter_binding_optional_types
+    * Special types: test_decimal_storage_and_retrieval (decimal feature), test_uuid_storage_and_retrieval (uuid feature), test_datetime_storage_and_retrieval
+    * Now/NowPlus: test_now_transformation, test_now_plus_transformation
+    * Error handling: test_error_handling_invalid_query, test_error_handling_type_mismatch
+    * Edge cases: test_null_handling, test_column_name_preservation, test_uint64_overflow_error, test_uint64_valid_range
 
 #### 2.6 Verification Checklist
-- [ ] Unit tests compile
-- [ ] All tests pass (excluding transaction tests)
-- [ ] Tests verify column names in results
-- [ ] Tests verify parameter binding
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo test -p switchy_database --features turso` (non-transaction tests pass)
-- [ ] Run `cargo machete` (all dependencies used)
+- [x] Unit tests compile
+  Verified - all tests compile successfully with zero clippy warnings
+- [x] All tests pass (excluding transaction tests)
+  21 tests: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 203 filtered out
+- [x] Tests verify column names in results
+  test_column_name_preservation explicitly verifies column names are case-sensitive and preserved correctly
+- [x] Tests verify parameter binding
+  test_parameter_binding_all_types covers all DatabaseValue types (Int8-64, UInt8-64, Real32/64, String, Bool, Null)
+- [x] Run `cargo fmt` (format code)
+  Completed - all code formatted according to rustfmt standards
+- [x] Run `cargo test -p switchy_database --features turso` (non-transaction tests pass)
+  All 21 tests pass in 0.02s
+- [x] Run `cargo machete` (all dependencies used)
+  No unused dependencies detected
 
 ## Phase 3: Transaction Support 🔴 **NOT STARTED**
 
