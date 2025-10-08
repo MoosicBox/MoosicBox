@@ -525,39 +525,394 @@ impl crate::Database for TursoDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table: &str) -> Result<bool, crate::DatabaseError> {
-        unimplemented!("Schema introspection not yet implemented for Turso backend")
+    async fn table_exists(&self, table: &str) -> Result<bool, crate::DatabaseError> {
+        let query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+        let rows = self
+            .query_raw_params(query, &[DatabaseValue::String(table.to_string())])
+            .await?;
+        Ok(!rows.is_empty())
     }
 
     #[cfg(feature = "schema")]
     async fn list_tables(&self) -> Result<Vec<String>, crate::DatabaseError> {
-        unimplemented!("Schema introspection not yet implemented for Turso backend")
+        let query =
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+        let rows = self.query_raw(query).await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| row.get("name"))
+            .filter_map(|v| match v {
+                DatabaseValue::String(s) => Some(s),
+                _ => None,
+            })
+            .collect())
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table: &str,
+        table: &str,
     ) -> Result<Option<crate::schema::TableInfo>, crate::DatabaseError> {
-        unimplemented!("Schema introspection not yet implemented for Turso backend")
+        if !self.table_exists(table).await? {
+            return Ok(None);
+        }
+
+        let columns = self.get_table_columns(table).await?;
+
+        let columns_map = columns
+            .into_iter()
+            .map(|col| (col.name.clone(), col))
+            .collect();
+
+        let indexes = get_table_indexes(self, table).await?;
+        let foreign_keys = get_table_foreign_keys(self, table).await?;
+
+        Ok(Some(crate::schema::TableInfo {
+            name: table.to_string(),
+            columns: columns_map,
+            indexes,
+            foreign_keys,
+        }))
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table: &str,
+        table: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, crate::DatabaseError> {
-        unimplemented!("Schema introspection not yet implemented for Turso backend")
+        let query = format!("PRAGMA table_info({table})");
+        let rows = self.query_raw(&query).await?;
+
+        let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
+        let create_sql_rows = self
+            .query_raw_params(
+                create_sql_query,
+                &[DatabaseValue::String(table.to_string())],
+            )
+            .await?;
+
+        let create_sql = create_sql_rows
+            .into_iter()
+            .find_map(|row| match row.get("sql") {
+                Some(DatabaseValue::String(s)) => Some(s),
+                _ => None,
+            });
+
+        let mut columns = Vec::new();
+
+        for row in rows {
+            let ordinal = match row.get("cid") {
+                Some(DatabaseValue::Int64(i)) => {
+                    u32::try_from(i).unwrap_or_else(|_| u32::try_from(columns.len()).unwrap_or(0))
+                }
+                _ => u32::try_from(columns.len()).unwrap_or(0),
+            };
+
+            let name = match row.get("name") {
+                Some(DatabaseValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+
+            let type_str = match row.get("type") {
+                Some(DatabaseValue::String(s)) => s.clone(),
+                _ => String::from("TEXT"),
+            };
+
+            let not_null = match row.get("notnull") {
+                Some(DatabaseValue::Int64(i)) => i != 0,
+                _ => false,
+            };
+
+            let is_pk = match row.get("pk") {
+                Some(DatabaseValue::Int64(i)) => i != 0,
+                _ => false,
+            };
+
+            let default_value = match row.get("dflt_value") {
+                Some(DatabaseValue::String(s)) => Some(s.clone()),
+                _ => None,
+            };
+
+            let data_type = sqlite_type_to_data_type(&type_str);
+            let default_val = parse_default_value(default_value.as_deref());
+
+            let auto_increment = if is_pk {
+                check_autoincrement_in_sql(create_sql.as_deref(), &name)
+            } else {
+                false
+            };
+
+            columns.push(crate::schema::ColumnInfo {
+                name,
+                data_type,
+                nullable: !not_null,
+                is_primary_key: is_pk,
+                auto_increment,
+                default_value: default_val,
+                ordinal_position: ordinal + 1,
+            });
+        }
+
+        Ok(columns)
     }
 
     #[cfg(feature = "schema")]
-    async fn column_exists(
-        &self,
-        _table: &str,
-        _column: &str,
-    ) -> Result<bool, crate::DatabaseError> {
-        unimplemented!("Schema introspection not yet implemented for Turso backend")
+    async fn column_exists(&self, table: &str, column: &str) -> Result<bool, crate::DatabaseError> {
+        let columns = self.get_table_columns(table).await?;
+        Ok(columns.iter().any(|col| col.name == column))
     }
+}
+
+#[cfg(feature = "schema")]
+fn sqlite_type_to_data_type(sqlite_type: &str) -> crate::schema::DataType {
+    let normalized_type = sqlite_type.to_uppercase();
+
+    match normalized_type.as_str() {
+        "INTEGER" => crate::schema::DataType::BigInt,
+        "TEXT" => crate::schema::DataType::Text,
+        "REAL" | "DOUBLE" | "FLOAT" => crate::schema::DataType::Double,
+        "BLOB" => crate::schema::DataType::Blob,
+        "BOOLEAN" | "BOOL" => crate::schema::DataType::Bool,
+        "DATE" => crate::schema::DataType::Date,
+        "DATETIME" => crate::schema::DataType::DateTime,
+        "TIMESTAMP" => crate::schema::DataType::Timestamp,
+        "JSON" => crate::schema::DataType::Json,
+        _ => crate::schema::DataType::Custom(sqlite_type.to_string()),
+    }
+}
+
+#[cfg(feature = "schema")]
+fn parse_default_value(default_str: Option<&str>) -> Option<crate::DatabaseValue> {
+    default_str.and_then(|s| {
+        if s == "NULL" {
+            Some(crate::DatabaseValue::Null)
+        } else if s.starts_with('\'') && s.ends_with('\'') {
+            let content = &s[1..s.len() - 1];
+            Some(crate::DatabaseValue::String(content.to_string()))
+        } else if let Ok(num) = s.parse::<i64>() {
+            Some(crate::DatabaseValue::Int64(num))
+        } else if let Ok(real) = s.parse::<f64>() {
+            Some(crate::DatabaseValue::Real64(real))
+        } else if s == "0" || s.to_uppercase() == "FALSE" {
+            Some(crate::DatabaseValue::Bool(false))
+        } else if s == "1" || s.to_uppercase() == "TRUE" {
+            Some(crate::DatabaseValue::Bool(true))
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(feature = "schema")]
+fn check_autoincrement_in_sql(create_sql: Option<&str>, column_name: &str) -> bool {
+    let Some(sql) = create_sql else {
+        return false;
+    };
+
+    let normalized_sql = sql.to_uppercase();
+    let normalized_column = column_name.to_uppercase();
+
+    if let Some(column_start) = normalized_sql.find(&normalized_column) {
+        let column_portion = &normalized_sql[column_start..];
+
+        if column_portion.contains("PRIMARY KEY")
+            && let Some(pk_pos) = column_portion.find("PRIMARY KEY")
+        {
+            let after_pk = &column_portion[pk_pos + "PRIMARY KEY".len()..];
+
+            let end_pos = after_pk
+                .find(',')
+                .unwrap_or_else(|| after_pk.find(')').unwrap_or(after_pk.len()));
+            let column_rest = &after_pk[..end_pos];
+
+            return column_rest.contains("AUTOINCREMENT");
+        }
+    }
+
+    false
+}
+
+#[cfg(feature = "schema")]
+async fn get_table_indexes(
+    db: &TursoDatabase,
+    table: &str,
+) -> Result<std::collections::BTreeMap<String, crate::schema::IndexInfo>, crate::DatabaseError> {
+    use crate::Database;
+    use crate::schema::IndexInfo;
+    use std::collections::BTreeMap;
+
+    let index_query = "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?";
+    let index_rows = db
+        .query_raw_params(index_query, &[DatabaseValue::String(table.to_string())])
+        .await?;
+
+    let mut indexes = BTreeMap::new();
+
+    for index_row in index_rows {
+        let index_name = match index_row.get("name") {
+            Some(DatabaseValue::String(s)) => s.clone(),
+            _ => continue,
+        };
+
+        let Some(DatabaseValue::String(sql)) = index_row.get("sql") else {
+            let is_primary = index_name.starts_with("sqlite_autoindex_");
+            indexes.insert(
+                index_name.clone(),
+                IndexInfo {
+                    name: index_name,
+                    unique: false,
+                    columns: Vec::new(),
+                    is_primary,
+                },
+            );
+            continue;
+        };
+
+        let is_unique = sql.to_uppercase().contains("UNIQUE");
+        let is_primary = index_name.starts_with("sqlite_autoindex_");
+
+        let index_columns = sql
+            .find('(')
+            .and_then(|start| {
+                sql.rfind(')').map(|end| {
+                    let cols_str = &sql[start + 1..end];
+                    cols_str
+                        .split(',')
+                        .map(|s| s.trim().trim_matches('`').trim_matches('"').to_string())
+                        .collect()
+                })
+            })
+            .unwrap_or_default();
+
+        indexes.insert(
+            index_name.clone(),
+            IndexInfo {
+                name: index_name,
+                unique: is_unique,
+                columns: index_columns,
+                is_primary,
+            },
+        );
+    }
+
+    Ok(indexes)
+}
+
+#[cfg(feature = "schema")]
+#[allow(
+    clippy::too_many_lines,
+    clippy::single_match_else,
+    clippy::option_if_let_else,
+    clippy::collapsible_if
+)]
+async fn get_table_foreign_keys(
+    db: &TursoDatabase,
+    table: &str,
+) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, crate::DatabaseError>
+{
+    use crate::Database;
+    use crate::schema::ForeignKeyInfo;
+    use std::collections::BTreeMap;
+
+    let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
+    let create_sql_rows = db
+        .query_raw_params(
+            create_sql_query,
+            &[DatabaseValue::String(table.to_string())],
+        )
+        .await?;
+
+    let create_sql = create_sql_rows
+        .into_iter()
+        .find_map(|row| match row.get("sql") {
+            Some(DatabaseValue::String(s)) => Some(s),
+            _ => None,
+        });
+
+    let mut foreign_keys = BTreeMap::new();
+
+    if let Some(sql) = create_sql {
+        let sql_upper = sql.to_uppercase();
+        if sql_upper.contains("FOREIGN KEY") {
+            let parts: Vec<&str> = sql.split("FOREIGN KEY").collect();
+            for part in parts.iter().skip(1) {
+                if let Some(col_start) = part.find('(') {
+                    if let Some(col_end) = part[col_start..].find(')') {
+                        let column = part[col_start + 1..col_start + col_end]
+                            .trim()
+                            .trim_matches('`')
+                            .trim_matches('"')
+                            .to_string();
+
+                        if let Some(ref_start) = part.find("REFERENCES") {
+                            let ref_part = &part[ref_start + 10..];
+                            if let Some(ref_table_end) = ref_part.find('(') {
+                                let referenced_table = ref_part[..ref_table_end].trim().to_string();
+
+                                if let Some(ref_col_end) = ref_part[ref_table_end..].find(')') {
+                                    let referenced_column = ref_part
+                                        [ref_table_end + 1..ref_table_end + ref_col_end]
+                                        .trim()
+                                        .trim_matches('`')
+                                        .trim_matches('"')
+                                        .to_string();
+
+                                    let on_update = if ref_part
+                                        .to_uppercase()
+                                        .contains("ON UPDATE CASCADE")
+                                    {
+                                        Some("CASCADE".to_string())
+                                    } else if ref_part.to_uppercase().contains("ON UPDATE SET NULL")
+                                    {
+                                        Some("SET NULL".to_string())
+                                    } else if ref_part.to_uppercase().contains("ON UPDATE RESTRICT")
+                                    {
+                                        Some("RESTRICT".to_string())
+                                    } else {
+                                        None
+                                    };
+
+                                    let on_delete = if ref_part
+                                        .to_uppercase()
+                                        .contains("ON DELETE CASCADE")
+                                    {
+                                        Some("CASCADE".to_string())
+                                    } else if ref_part.to_uppercase().contains("ON DELETE SET NULL")
+                                    {
+                                        Some("SET NULL".to_string())
+                                    } else if ref_part.to_uppercase().contains("ON DELETE RESTRICT")
+                                    {
+                                        Some("RESTRICT".to_string())
+                                    } else {
+                                        None
+                                    };
+
+                                    let fk_name = format!(
+                                        "{table}_{column}_{referenced_table}_{referenced_column}"
+                                    );
+
+                                    foreign_keys.insert(
+                                        fk_name.clone(),
+                                        ForeignKeyInfo {
+                                            name: fk_name,
+                                            column,
+                                            referenced_table,
+                                            referenced_column,
+                                            on_update,
+                                            on_delete,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(foreign_keys)
 }
 
 #[cfg(test)]
@@ -1346,5 +1701,342 @@ mod tests {
             .expect("Failed to query");
 
         assert_eq!(rows.len(), 1, "Transaction was committed successfully");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_table_exists() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_table (id INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        assert!(
+            db.table_exists("test_table")
+                .await
+                .expect("Failed to check table existence"),
+            "test_table should exist"
+        );
+
+        assert!(
+            !db.table_exists("nonexistent_table")
+                .await
+                .expect("Failed to check table existence"),
+            "nonexistent_table should not exist"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE users (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create users table");
+
+        db.exec_raw("CREATE TABLE posts (id INTEGER, title TEXT)")
+            .await
+            .expect("Failed to create posts table");
+
+        let tables = db.list_tables().await.expect("Failed to list tables");
+
+        assert!(tables.len() >= 2, "Should have at least 2 tables");
+        assert!(tables.contains(&"users".to_string()));
+        assert!(tables.contains(&"posts".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_get_table_columns() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_columns (id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER, email TEXT DEFAULT 'none')")
+            .await
+            .expect("Failed to create table");
+
+        let columns = db
+            .get_table_columns("test_columns")
+            .await
+            .expect("Failed to get columns");
+
+        assert_eq!(columns.len(), 4, "Should have 4 columns");
+
+        let id_col = columns
+            .iter()
+            .find(|c| c.name == "id")
+            .expect("Should have id column");
+        assert!(id_col.is_primary_key, "id should be primary key");
+        assert_eq!(id_col.ordinal_position, 1);
+
+        let name_col = columns
+            .iter()
+            .find(|c| c.name == "name")
+            .expect("Should have name column");
+        assert!(!name_col.nullable, "name should not be nullable");
+        assert_eq!(name_col.ordinal_position, 2);
+
+        let age_col = columns
+            .iter()
+            .find(|c| c.name == "age")
+            .expect("Should have age column");
+        assert!(age_col.nullable, "age should be nullable");
+        assert_eq!(age_col.ordinal_position, 3);
+
+        let email_col = columns
+            .iter()
+            .find(|c| c.name == "email")
+            .expect("Should have email column");
+        assert!(
+            email_col.default_value.is_some(),
+            "email should have default value"
+        );
+        assert_eq!(email_col.ordinal_position, 4);
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_column_exists() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_columns (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        assert!(
+            db.column_exists("test_columns", "id")
+                .await
+                .expect("Failed to check column existence"),
+            "id column should exist"
+        );
+
+        assert!(
+            db.column_exists("test_columns", "name")
+                .await
+                .expect("Failed to check column existence"),
+            "name column should exist"
+        );
+
+        assert!(
+            !db.column_exists("test_columns", "nonexistent")
+                .await
+                .expect("Failed to check column existence"),
+            "nonexistent column should not exist"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_get_table_info() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_info (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+            .await
+            .expect("Failed to create table");
+
+        let table_info = db
+            .get_table_info("test_info")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.name, "test_info");
+        assert_eq!(table_info.columns.len(), 2);
+        assert!(table_info.columns.contains_key("id"));
+        assert!(table_info.columns.contains_key("name"));
+
+        let nonexistent = db
+            .get_table_info("nonexistent")
+            .await
+            .expect("Failed to get table info");
+
+        assert!(
+            nonexistent.is_none(),
+            "Nonexistent table should return None"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_autoincrement_detection() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_autoincr (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let columns = db
+            .get_table_columns("test_autoincr")
+            .await
+            .expect("Failed to get columns");
+
+        let id_col = columns
+            .iter()
+            .find(|c| c.name == "id")
+            .expect("Should have id column");
+
+        assert!(id_col.is_primary_key, "id should be primary key");
+        assert!(id_col.auto_increment, "id should be auto_increment");
+
+        let name_col = columns
+            .iter()
+            .find(|c| c.name == "name")
+            .expect("Should have name column");
+
+        assert!(
+            !name_col.auto_increment,
+            "name should not be auto_increment"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_primary_key_without_autoincrement() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_pk_only (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let columns = db
+            .get_table_columns("test_pk_only")
+            .await
+            .expect("Failed to get columns");
+
+        let id_col = columns
+            .iter()
+            .find(|c| c.name == "id")
+            .expect("Should have id column");
+
+        assert!(id_col.is_primary_key, "id should be primary key");
+        assert!(!id_col.auto_increment, "id should NOT be auto_increment");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_table_info_with_indexes() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        db.exec_raw("CREATE INDEX idx_users_name ON users(name)")
+            .await
+            .expect("Failed to create index");
+
+        let table_info = db
+            .get_table_info("users")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert!(
+            !table_info.indexes.is_empty(),
+            "Should have at least 1 index"
+        );
+
+        let has_name_index = table_info
+            .indexes
+            .values()
+            .any(|idx| idx.columns.contains(&"name".to_string()));
+        assert!(has_name_index, "Should have index on name column");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_table_info_with_foreign_keys() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .expect("Failed to create departments table");
+
+        db.exec_raw(
+            "CREATE TABLE employees (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                dept_id INTEGER,
+                FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE CASCADE
+            )",
+        )
+        .await
+        .expect("Failed to create employees table");
+
+        let table_info = db
+            .get_table_info("employees")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(
+            table_info.foreign_keys.len(),
+            1,
+            "Should have 1 foreign key"
+        );
+
+        let fk = table_info
+            .foreign_keys
+            .values()
+            .next()
+            .expect("Should have FK");
+        assert_eq!(fk.column, "dept_id");
+        assert_eq!(fk.referenced_table, "departments");
+        assert_eq!(fk.referenced_column, "id");
+        assert_eq!(fk.on_delete, Some("CASCADE".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_table_info_complete() {
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
+            .await
+            .expect("Failed to create categories");
+
+        db.exec_raw(
+            "CREATE TABLE products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                price REAL,
+                category_id INTEGER,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON UPDATE CASCADE ON DELETE SET NULL
+            )",
+        )
+        .await
+        .expect("Failed to create products");
+
+        db.exec_raw("CREATE INDEX idx_products_name ON products(name)")
+            .await
+            .expect("Failed to create index");
+
+        let table_info = db
+            .get_table_info("products")
+            .await
+            .expect("Failed to get table info")
+            .expect("Table should exist");
+
+        assert_eq!(table_info.columns.len(), 4);
+        assert!(table_info.columns.contains_key("id"));
+        assert!(table_info.columns.contains_key("name"));
+        assert!(table_info.columns.contains_key("price"));
+        assert!(table_info.columns.contains_key("category_id"));
+
+        let id_col = &table_info.columns["id"];
+        assert!(id_col.auto_increment, "id should have AUTOINCREMENT");
+
+        assert!(
+            !table_info.indexes.is_empty(),
+            "Should have at least 1 index"
+        );
+
+        assert_eq!(table_info.foreign_keys.len(), 1);
+        let fk = table_info.foreign_keys.values().next().unwrap();
+        assert_eq!(fk.column, "category_id");
+        assert_eq!(fk.referenced_table, "categories");
+        assert_eq!(fk.on_update, Some("CASCADE".to_string()));
+        assert_eq!(fk.on_delete, Some("SET NULL".to_string()));
     }
 }
