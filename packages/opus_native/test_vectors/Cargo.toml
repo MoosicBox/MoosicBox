@@ -1,0 +1,16 @@
+[package]
+authors     = { workspace = true }
+categories  = ["codec", "testing"]
+description = "Test vectors for moosicbox_opus_native decoder validation"
+edition     = { workspace = true }
+keywords    = ["audio", "codec", "opus", "testing", "vectors"]
+license     = { workspace = true }
+name        = "moosicbox_opus_native_test_vectors"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+serde_json = { workspace = true }
+
+[features]
+fail-on-warnings = []
