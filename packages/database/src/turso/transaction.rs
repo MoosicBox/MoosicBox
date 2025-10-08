@@ -1,7 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::pin::Pin;
+use std::{
+    pin::Pin,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use async_trait::async_trait;
 
@@ -13,12 +16,16 @@ use super::{
 
 pub struct TursoTransaction {
     connection: Pin<Box<turso::Connection>>,
+    committed: AtomicBool,
+    rolled_back: AtomicBool,
 }
 
 impl std::fmt::Debug for TursoTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TursoTransaction")
             .field("connection", &"<turso::Connection>")
+            .field("committed", &self.committed.load(Ordering::SeqCst))
+            .field("rolled_back", &self.rolled_back.load(Ordering::SeqCst))
             .finish()
     }
 }
@@ -39,6 +46,8 @@ impl TursoTransaction {
 
         Ok(Self {
             connection: Box::pin(connection),
+            committed: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
         })
     }
 }
@@ -46,18 +55,38 @@ impl TursoTransaction {
 #[async_trait]
 impl crate::DatabaseTransaction for TursoTransaction {
     async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        if self.committed.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionRolledBack);
+        }
+
         self.connection
             .execute("COMMIT", ())
             .await
             .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        self.committed.store(true, Ordering::SeqCst);
         Ok(())
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        if self.committed.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionRolledBack);
+        }
+
         self.connection
             .execute("ROLLBACK", ())
             .await
             .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        self.rolled_back.store(true, Ordering::SeqCst);
         Ok(())
     }
 

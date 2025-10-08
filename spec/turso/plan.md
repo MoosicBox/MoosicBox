@@ -672,9 +672,10 @@ This specification details the implementation of a Turso Database backend for Mo
   - [x] Add clippy configuration
   - [x] Implement TursoTransaction struct
   Created transaction.rs at line 1-357 with:
-  * TursoTransaction struct storing Pin<Box<turso::Connection>>
+  * TursoTransaction struct storing Pin<Box<turso::Connection>>, AtomicBool committed, AtomicBool rolled_back
   * Uses raw SQL "BEGIN DEFERRED"/"COMMIT"/"ROLLBACK" for transaction control
   * Implements Debug trait manually (turso::Connection doesn't derive Debug)
+  * State guards prevent double-commit/double-rollback (returns TransactionCommitted/TransactionRolledBack errors)
   * All Database trait methods forward to connection (query_raw, query_raw_params, exec_raw, exec_raw_params)
   * Nested transactions return AlreadyInTransaction error
     ```rust
@@ -697,12 +698,15 @@ This specification details the implementation of a Turso Database backend for Mo
 - [x] Implement DatabaseTransaction trait 🔴 **CRITICAL**
   - [x] Add `#[async_trait]` attribute
   - [x] Implement all required methods
-  DatabaseTransaction trait implemented at lines 43-84 with:
-  * commit() - executes "COMMIT" SQL (line 45-50)
-  * rollback() - executes "ROLLBACK" SQL (line 52-57)
+  DatabaseTransaction trait implemented at lines 49-100 with:
+  * commit() - checks state guards, executes "COMMIT" SQL, sets committed flag (lines 49-64)
+  * rollback() - checks state guards, executes "ROLLBACK" SQL, sets rolled_back flag (lines 66-81)
+  * State guards prevent double-commit (returns DatabaseError::TransactionCommitted)
+  * State guards prevent double-rollback (returns DatabaseError::TransactionRolledBack)
+  * State guards prevent commit-after-rollback and rollback-after-commit
   * savepoint() - returns unimplemented! (savepoints deferred to future phase)
   * find_cascade_targets(), has_any_dependents(), get_direct_dependents() - cascade feature methods return unimplemented!
-  Database trait implemented at lines 86-357 with all raw query/exec methods forwarding to the stored connection
+  Database trait implemented at lines 102-373 with all raw query/exec methods forwarding to the stored connection
     ```rust
     #[async_trait]
     impl DatabaseTransaction for TursoTransaction {
@@ -849,9 +853,50 @@ This specification details the implementation of a Turso Database backend for Mo
 - [x] Run `cargo clippy --all-targets -p switchy_database --features turso -- -D warnings` (zero warnings)
   Passed - zero warnings
 - [x] Run `cargo test -p switchy_database --features turso` (all tests pass including transactions)
-  26 tests pass: 21 from Phase 2 + 5 new transaction tests
+  27 tests pass: 21 from Phase 2 + 6 transaction tests (including state guard test)
 - [x] Run `cargo machete` (no unused dependencies)
   No unused dependencies detected
+
+### 3.4 Fix Transaction State Guard Inconsistencies ✅ **COMPLETE**
+
+During post-implementation review, discovered missing transaction state guards compared to rusqlite implementation.
+
+**Issue Identified:**
+- Missing `committed` and `rolled_back` `AtomicBool` flags in `TursoTransaction` struct
+- No guards in `commit()` and `rollback()` to prevent double-commit/double-rollback
+- Would have resulted in confusing database errors instead of clear application errors
+
+**Fix Applied:**
+- [x] Add state tracking fields to TursoTransaction struct (line 17-18)
+  * `committed: AtomicBool` - tracks if transaction was committed
+  * `rolled_back: AtomicBool` - tracks if transaction was rolled back
+
+- [x] Initialize flags in constructor (lines 42-44)
+  * Both flags initialized to `false` with `AtomicBool::new(false)`
+
+- [x] Add state guards in commit() method (lines 50-56)
+  * Check `committed` flag → return `DatabaseError::TransactionCommitted` if already committed
+  * Check `rolled_back` flag → return `DatabaseError::TransactionRolledBack` if already rolled back
+  * Set `committed` flag to `true` after successful commit (line 63)
+
+- [x] Add state guards in rollback() method (lines 67-73)
+  * Check `committed` flag → return `DatabaseError::TransactionCommitted` if already committed
+  * Check `rolled_back` flag → return `DatabaseError::TransactionRolledBack` if already rolled back
+  * Set `rolled_back` flag to `true` after successful rollback (line 80)
+
+- [x] Update Debug implementation (lines 20-26)
+  * Include `committed` and `rolled_back` state in debug output
+
+- [x] Add test for state guards (test_transaction_state_guards)
+  * Verifies transaction lifecycle works correctly with state tracking
+
+**Verification:**
+- All 27 tests pass (26 existing + 1 new state guard test)
+- Zero clippy warnings
+- Matches rusqlite implementation pattern exactly
+- Provides clear error messages for transaction state violations
+
+**No Compromises:** Transaction state management now matches rusqlite exactly, with proper guards preventing double-commit/double-rollback and providing clear error messages.
 
 ## Phase 4: Schema Introspection 🟡 **NOT STARTED**
 

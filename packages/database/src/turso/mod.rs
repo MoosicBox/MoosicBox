@@ -1318,4 +1318,33 @@ mod tests {
 
         Box::new(tx).rollback().await.expect("Failed to rollback");
     }
+
+    #[switchy_async::test]
+    async fn test_transaction_state_guards() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE test_state (id INTEGER)")
+            .await
+            .expect("Failed to create table");
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        tx.exec_raw("INSERT INTO test_state VALUES (1)")
+            .await
+            .expect("Failed to insert");
+
+        Box::new(tx).commit().await.expect("Commit should succeed");
+
+        let rows = db
+            .query_raw("SELECT * FROM test_state")
+            .await
+            .expect("Failed to query");
+
+        assert_eq!(rows.len(), 1, "Transaction was committed successfully");
+    }
 }
