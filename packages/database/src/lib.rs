@@ -188,6 +188,12 @@ pub enum DatabaseValue {
     Int32Opt(Option<i32>),
     Int64(i64),
     Int64Opt(Option<i64>),
+    UInt8(u8),
+    UInt8Opt(Option<u8>),
+    UInt16(u16),
+    UInt16Opt(Option<u16>),
+    UInt32(u32),
+    UInt32Opt(Option<u32>),
     UInt64(u64),
     UInt64Opt(Option<u64>),
     Real64(f64),
@@ -266,6 +272,9 @@ impl DatabaseValue {
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_u64(&self) -> Option<u64> {
         match self {
+            Self::UInt8(value) | Self::UInt8Opt(Some(value)) => Some(u64::from(*value)),
+            Self::UInt16(value) | Self::UInt16Opt(Some(value)) => Some(u64::from(*value)),
+            Self::UInt32(value) | Self::UInt32Opt(Some(value)) => Some(u64::from(*value)),
             Self::UInt64(value) | Self::UInt64Opt(Some(value)) => Some(*value),
             Self::Int8(value) | Self::Int8Opt(Some(value)) => Some(
                 #[allow(clippy::cast_sign_loss)]
@@ -363,6 +372,36 @@ impl DatabaseValue {
             _ => None,
         }
     }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_u8(&self) -> Option<u8> {
+        match self {
+            Self::UInt8(value) | Self::UInt8Opt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_u16(&self) -> Option<u16> {
+        match self {
+            Self::UInt8(value) | Self::UInt8Opt(Some(value)) => Some(u16::from(*value)),
+            Self::UInt16(value) | Self::UInt16Opt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_u32(&self) -> Option<u32> {
+        match self {
+            Self::UInt8(value) | Self::UInt8Opt(Some(value)) => Some(u32::from(*value)),
+            Self::UInt16(value) | Self::UInt16Opt(Some(value)) => Some(u32::from(*value)),
+            Self::UInt32(value) | Self::UInt32Opt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
 }
 
 impl<T: Into<Self>> From<Option<T>> for DatabaseValue {
@@ -453,19 +492,19 @@ impl From<isize> for DatabaseValue {
 
 impl From<u8> for DatabaseValue {
     fn from(val: u8) -> Self {
-        Self::UInt64(u64::from(val))
+        Self::UInt8(val)
     }
 }
 
 impl From<u16> for DatabaseValue {
     fn from(val: u16) -> Self {
-        Self::UInt64(u64::from(val))
+        Self::UInt16(val)
     }
 }
 
 impl From<u32> for DatabaseValue {
     fn from(val: u32) -> Self {
-        Self::UInt64(u64::from(val))
+        Self::UInt32(val)
     }
 }
 
@@ -493,11 +532,21 @@ pub enum TryFromError {
     TryFromInt(#[from] TryFromIntError),
 }
 
-impl TryFrom<DatabaseValue> for u64 {
+impl TryFrom<DatabaseValue> for u8 {
     type Error = TryFromError;
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => Ok(value),
+            DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
             DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
@@ -510,7 +559,102 @@ impl TryFrom<DatabaseValue> for u64 {
             DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
+            _ => Err(TryFromError::CouldNotConvert("u8".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for u16 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => Ok(value),
+            DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            _ => Err(TryFromError::CouldNotConvert("u16".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for u32 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => Ok(value),
+            DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            _ => Err(TryFromError::CouldNotConvert("u32".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for u64 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => Ok(value),
+            DatabaseValue::Int8(value) | DatabaseValue::Int8Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int16(value) | DatabaseValue::Int16Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
             _ => Err(TryFromError::CouldNotConvert("u64".into())),
         }
     }
@@ -716,6 +860,15 @@ pub enum DatabaseError {
     /// Unsupported operation by backend
     #[error("Unsupported operation: {0}")]
     UnsupportedOperation(String),
+    /// `UInt8` value overflow (value > `i8::MAX` on `PostgreSQL`/`SQLite`)
+    #[error("UInt8 overflow: value {0} exceeds i8::MAX (127) for this database backend")]
+    UInt8Overflow(u8),
+    /// `UInt16` value overflow (value > `i16::MAX` on `PostgreSQL`/`SQLite`)
+    #[error("UInt16 overflow: value {0} exceeds i16::MAX (32767) for this database backend")]
+    UInt16Overflow(u16),
+    /// `UInt32` value overflow (value > `i32::MAX` on `PostgreSQL`/`SQLite`)
+    #[error("UInt32 overflow: value {0} exceeds i32::MAX (2147483647) for this database backend")]
+    UInt32Overflow(u32),
 }
 
 impl DatabaseError {

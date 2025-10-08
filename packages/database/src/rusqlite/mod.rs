@@ -400,6 +400,9 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -1558,6 +1561,9 @@ fn rusqlite_exec_create_table(
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1589,6 +1595,15 @@ fn rusqlite_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt8Opt(Some(x)) | DatabaseValue::UInt8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt16Opt(Some(x)) | DatabaseValue::UInt16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt32Opt(Some(x)) | DatabaseValue::UInt32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -2481,10 +2496,22 @@ fn modify_create_table_sql(
             crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
+            crate::DatabaseValue::UInt8(i) | crate::DatabaseValue::UInt8Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt16(i) | crate::DatabaseValue::UInt16Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt32(i) | crate::DatabaseValue::UInt32Opt(Some(i)) => {
+                i.to_string()
+            }
             crate::DatabaseValue::Int8Opt(None)
             | crate::DatabaseValue::Int16Opt(None)
             | crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::Int64Opt(None)
+            | crate::DatabaseValue::UInt8Opt(None)
+            | crate::DatabaseValue::UInt16Opt(None)
+            | crate::DatabaseValue::UInt32Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
@@ -3030,6 +3057,9 @@ fn bind_values(
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -3071,6 +3101,27 @@ fn bind_values(
                 }
                 DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                    let signed = i8::try_from(*value).ok();
+                    statement.raw_bind_parameter(i, signed)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                    let signed = i16::try_from(*value).ok();
+                    statement.raw_bind_parameter(i, signed)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                    let signed = i32::try_from(*value).ok();
+                    statement.raw_bind_parameter(i, signed)?;
                     if !constant_inc {
                         i += 1;
                     }

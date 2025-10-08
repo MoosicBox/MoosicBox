@@ -1307,4 +1307,265 @@ pub trait DataTypeTestSuite {
             .unwrap();
         assert_eq!(small_as_i64, i64::from(i16::MIN));
     }
+
+    async fn test_uint8_specific_type_and_retrieval(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "uint8_specific_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "value_col".to_string(),
+                data_type: DataType::SmallInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create uint8_specific_test table");
+
+        db.insert(table_name)
+            .value("id", 1i64)
+            .value("value_col", 0u8)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 2i64)
+            .value("value_col", 127u8)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 3i64)
+            .value("value_col", 50u8)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        let val0: u8 = rows[0]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val0, 0u8);
+
+        let val1: u8 = rows[1]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val1, 127u8);
+
+        let val2: u8 = rows[2]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val2, 50u8);
+    }
+
+    async fn test_uint16_specific_type_and_retrieval(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "uint16_specific_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "value_col".to_string(),
+                data_type: DataType::SmallInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create uint16_specific_test table");
+
+        db.insert(table_name)
+            .value("id", 1i64)
+            .value("value_col", 0u16)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 2i64)
+            .value("value_col", 32767u16)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 3i64)
+            .value("value_col", 1000u16)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        let val0: u16 = rows[0]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val0, 0u16);
+
+        let val1: u16 = rows[1]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val1, 32767u16);
+
+        let val2: u16 = rows[2]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val2, 1000u16);
+    }
+
+    async fn test_uint32_specific_type_and_retrieval(&self) {
+        let Some(db) = self.get_database().await else {
+            return;
+        };
+
+        let table_name = "uint32_specific_test";
+        drop_table(table_name)
+            .if_exists(true)
+            .execute(&*db)
+            .await
+            .ok();
+
+        create_table(table_name)
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            })
+            .column(Column {
+                name: "value_col".to_string(),
+                data_type: DataType::Int,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id")
+            .execute(&*db)
+            .await
+            .expect("Failed to create uint32_specific_test table");
+
+        db.insert(table_name)
+            .value("id", 1i64)
+            .value("value_col", 0u32)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 2i64)
+            .value("value_col", 2_147_483_647u32)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        db.insert(table_name)
+            .value("id", 3i64)
+            .value("value_col", 100_000u32)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        let rows = db
+            .select(table_name)
+            .sort("id", SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+
+        let val0: u32 = rows[0]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val0, 0u32);
+
+        let val1: u32 = rows[1]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val1, 2_147_483_647u32);
+
+        let val2: u32 = rows[2]
+            .get("value_col")
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(val2, 100_000u32);
+    }
 }

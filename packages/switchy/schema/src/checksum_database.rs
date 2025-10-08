@@ -998,6 +998,18 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
+            Self::UInt8(n) => {
+                hasher.update(b"UINT8:");
+                hasher.update(n.to_le_bytes());
+            }
+            Self::UInt8Opt(opt) => {
+                hasher.update(b"UINT8OPT:");
+                if let Some(n) = opt {
+                    hasher.update(n.to_le_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
             Self::Int16(n) => {
                 hasher.update(b"INT16:");
                 hasher.update(n.to_le_bytes());
@@ -1010,12 +1022,36 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
+            Self::UInt16(n) => {
+                hasher.update(b"UINT16:");
+                hasher.update(n.to_le_bytes());
+            }
+            Self::UInt16Opt(opt) => {
+                hasher.update(b"UINT16OPT:");
+                if let Some(n) = opt {
+                    hasher.update(n.to_le_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
             Self::Int32(n) => {
                 hasher.update(b"INT32:");
                 hasher.update(n.to_le_bytes());
             }
             Self::Int32Opt(opt) => {
                 hasher.update(b"INT32OPT:");
+                if let Some(n) = opt {
+                    hasher.update(n.to_le_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::UInt32(n) => {
+                hasher.update(b"UINT32:");
+                hasher.update(n.to_le_bytes());
+            }
+            Self::UInt32Opt(opt) => {
+                hasher.update(b"UINT32OPT:");
                 if let Some(n) = opt {
                     hasher.update(n.to_le_bytes());
                 } else {

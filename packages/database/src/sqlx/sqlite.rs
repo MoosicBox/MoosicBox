@@ -335,6 +335,9 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
@@ -835,6 +838,32 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -908,6 +937,32 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1300,6 +1355,9 @@ where
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -1322,6 +1380,18 @@ where
                 }
                 DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     query = query.bind(*value);
+                }
+                DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                    let signed = i8::try_from(*value).ok();
+                    query = query.bind(signed);
+                }
+                DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                    let signed = i16::try_from(*value).ok();
+                    query = query.bind(signed);
+                }
+                DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                    let signed = i32::try_from(*value).ok();
+                    query = query.bind(signed);
                 }
                 DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                     query = query.bind(
@@ -1457,6 +1527,9 @@ async fn sqlite_sqlx_exec_create_table(
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1488,6 +1561,15 @@ async fn sqlite_sqlx_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt8Opt(Some(x)) | DatabaseValue::UInt8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt16Opt(Some(x)) | DatabaseValue::UInt16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt32Opt(Some(x)) | DatabaseValue::UInt32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -1902,6 +1984,9 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
                             crate::DatabaseValue::Int64(n) => n.to_string(),
+                            crate::DatabaseValue::UInt8(n) => n.to_string(),
+                            crate::DatabaseValue::UInt16(n) => n.to_string(),
+                            crate::DatabaseValue::UInt32(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2132,6 +2217,9 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
             let val_str = match val {
                 crate::DatabaseValue::String(s) => format!("'{s}'"),
                 crate::DatabaseValue::Int64(n) => n.to_string(),
+                crate::DatabaseValue::UInt8(n) => n.to_string(),
+                crate::DatabaseValue::UInt16(n) => n.to_string(),
+                crate::DatabaseValue::UInt32(n) => n.to_string(),
                 crate::DatabaseValue::UInt64(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
                 crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2281,6 +2369,7 @@ async fn column_requires_table_recreation(
 }
 
 #[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
 fn sqlite_modify_create_table_sql(
     original_sql: &str,
     original_table_name: &str,
@@ -2352,10 +2441,22 @@ fn sqlite_modify_create_table_sql(
             crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
                 i.to_string()
             }
+            crate::DatabaseValue::UInt8(i) | crate::DatabaseValue::UInt8Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt16(i) | crate::DatabaseValue::UInt16Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt32(i) | crate::DatabaseValue::UInt32Opt(Some(i)) => {
+                i.to_string()
+            }
             crate::DatabaseValue::Int8Opt(None)
             | crate::DatabaseValue::Int16Opt(None)
             | crate::DatabaseValue::Int32Opt(None)
             | crate::DatabaseValue::Int64Opt(None)
+            | crate::DatabaseValue::UInt8Opt(None)
+            | crate::DatabaseValue::UInt16Opt(None)
+            | crate::DatabaseValue::UInt32Opt(None)
             | crate::DatabaseValue::UInt64Opt(None)
             | crate::DatabaseValue::Real64Opt(None)
             | crate::DatabaseValue::Real32Opt(None)
@@ -3607,6 +3708,32 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -3676,6 +3803,32 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }

@@ -234,6 +234,12 @@ pub enum DataType {
     Serial,    // Auto-incrementing integer (PostgreSQL)
     BigSerial, // Auto-incrementing bigint (PostgreSQL)
 
+    // TODO: Unsigned integer types - schema support pending
+    // TinyIntUnsigned,  // 0-255 (MySQL) or 0-127 (PostgreSQL/SQLite)
+    // SmallIntUnsigned, // 0-65535 (MySQL) or 0-32767 (PostgreSQL/SQLite)
+    // IntUnsigned,      // 0-4294967295 (MySQL) or 0-2147483647 (PostgreSQL/SQLite)
+    // BigIntUnsigned,   // 0-18446744073709551615 (MySQL only)
+
     // Floating point types
     Real,
     Double,

@@ -655,10 +655,19 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         DatabaseValue::Int8(i) | DatabaseValue::Int8Opt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
+        DatabaseValue::UInt8(i) | DatabaseValue::UInt8Opt(Some(i)) => {
+            serde_json::Value::Number(i.into())
+        }
         DatabaseValue::Int16(i) | DatabaseValue::Int16Opt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
+        DatabaseValue::UInt16(i) | DatabaseValue::UInt16Opt(Some(i)) => {
+            serde_json::Value::Number(i.into())
+        }
         DatabaseValue::Int32(i) | DatabaseValue::Int32Opt(Some(i)) => {
+            serde_json::Value::Number(i.into())
+        }
+        DatabaseValue::UInt32(i) | DatabaseValue::UInt32Opt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
         DatabaseValue::Int64(i) | DatabaseValue::Int64Opt(Some(i)) => {
@@ -679,8 +688,11 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         | DatabaseValue::StringOpt(None)
         | DatabaseValue::BoolOpt(None)
         | DatabaseValue::Int8Opt(None)
+        | DatabaseValue::UInt8Opt(None)
         | DatabaseValue::Int16Opt(None)
+        | DatabaseValue::UInt16Opt(None)
         | DatabaseValue::Int32Opt(None)
+        | DatabaseValue::UInt32Opt(None)
         | DatabaseValue::Int64Opt(None)
         | DatabaseValue::UInt64Opt(None)
         | DatabaseValue::Real64Opt(None)

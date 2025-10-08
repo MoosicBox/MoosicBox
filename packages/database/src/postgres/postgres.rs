@@ -1650,6 +1650,9 @@ async fn postgres_exec_create_table(
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1681,6 +1684,15 @@ async fn postgres_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt8Opt(Some(x)) | DatabaseValue::UInt8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt16Opt(Some(x)) | DatabaseValue::UInt16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt32Opt(Some(x)) | DatabaseValue::UInt32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -3224,7 +3236,11 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("to_sql_checked: ty={}, {ty:?} {self:?}", ty.name());
         Ok(match &self.0 {
-            DatabaseValue::Null | DatabaseValue::UInt64Opt(None) => IsNull::Yes,
+            DatabaseValue::Null
+            | DatabaseValue::UInt8Opt(None)
+            | DatabaseValue::UInt16Opt(None)
+            | DatabaseValue::UInt32Opt(None)
+            | DatabaseValue::UInt64Opt(None) => IsNull::Yes,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
@@ -3236,6 +3252,15 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Int32Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int64(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int64Opt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                i8::try_from(*value)?.to_sql(ty, out)?
+            }
+            DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                i16::try_from(*value)?.to_sql(ty, out)?
+            }
+            DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                i32::try_from(*value)?.to_sql(ty, out)?
+            }
             DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                 i64::try_from(*value)?.to_sql(ty, out)?
             }

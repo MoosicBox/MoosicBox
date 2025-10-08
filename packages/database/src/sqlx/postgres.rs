@@ -398,6 +398,12 @@ impl From<SqlxDatabaseError> for DatabaseError {
     }
 }
 
+impl From<sqlx::Error> for DatabaseError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::PostgresSqlx(SqlxDatabaseError::Sqlx(value))
+    }
+}
+
 #[async_trait]
 impl Database for PostgresSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -775,6 +781,46 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                // DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                //     let signed = i16::from(*value);
+                //     query = query.bind(signed);
+                // }
+                // DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                //     let signed =
+                //         i16::try_from(*value).map_err(|_| DatabaseError::UInt16Overflow(*value))?;
+                //     query = query.bind(signed);
+                // }
+                // DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                //     let signed =
+                //         i32::try_from(*value).map_err(|_| DatabaseError::UInt32Overflow(*value))?;
+                //     query = query.bind(signed);
+                // }
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i16::from(*n);
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.map(i16::from);
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -845,6 +891,32 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i16::from(*n);
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.map(i16::from);
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1331,6 +1403,32 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1397,6 +1495,32 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
                 crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => {
+                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt8Opt(n) => {
+                    let signed = n.and_then(|v| i8::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16(n) => {
+                    let signed =
+                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt16Opt(n) => {
+                    let signed = n.and_then(|v| i16::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32(n) => {
+                    let signed =
+                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                    query_builder.bind(signed)
+                }
+                crate::DatabaseValue::UInt32Opt(n) => {
+                    let signed = n.and_then(|v| i32::try_from(v).ok());
+                    query_builder.bind(signed)
+                }
                 crate::DatabaseValue::UInt64(n) => {
                     query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
                 }
@@ -1825,6 +1949,9 @@ async fn postgres_sqlx_exec_create_table(
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None) => {
@@ -1856,6 +1983,15 @@ async fn postgres_sqlx_exec_create_table(
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::Int64Opt(Some(x)) | DatabaseValue::Int64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt8Opt(Some(x)) | DatabaseValue::UInt8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt16Opt(Some(x)) | DatabaseValue::UInt16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UInt32Opt(Some(x)) | DatabaseValue::UInt32(x) => {
                     query.push_str(&x.to_string());
                 }
                 DatabaseValue::UInt64Opt(Some(x)) | DatabaseValue::UInt64(x) => {
@@ -2194,6 +2330,9 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                         let val_str = match val {
                             crate::DatabaseValue::String(s) => format!("'{s}'"),
                             crate::DatabaseValue::Int64(n) => n.to_string(),
+                            crate::DatabaseValue::UInt8(n) => n.to_string(),
+                            crate::DatabaseValue::UInt16(n) => n.to_string(),
+                            crate::DatabaseValue::UInt32(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => b.to_string(),
                             crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2364,6 +2503,9 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     let default_str = match default {
                         crate::DatabaseValue::String(s) => format!("'{s}'"),
                         crate::DatabaseValue::Int64(n) => n.to_string(),
+                        crate::DatabaseValue::UInt8(n) => n.to_string(),
+                        crate::DatabaseValue::UInt16(n) => n.to_string(),
+                        crate::DatabaseValue::UInt32(n) => n.to_string(),
                         crate::DatabaseValue::UInt64(n) => n.to_string(),
                         crate::DatabaseValue::Bool(b) => b.to_string(),
                         crate::DatabaseValue::Real64(r) => r.to_string(),
@@ -2456,7 +2598,7 @@ async fn update_and_get_row(
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Option<crate::Row>, SqlxDatabaseError> {
+) -> Result<Option<crate::Row>, DatabaseError> {
     let index = AtomicU16::new(0);
     let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
@@ -2524,7 +2666,9 @@ async fn update_and_get_row(
     let mut stream = query.fetch(connection);
     let pg_row: Option<PgRow> = stream.next().await.transpose()?;
 
-    pg_row.map(|row| from_row(&column_names, &row)).transpose()
+    Ok(pg_row
+        .map(|row| from_row(&column_names, &row))
+        .transpose()?)
 }
 
 async fn update_and_get_rows(
@@ -2533,7 +2677,7 @@ async fn update_and_get_rows(
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let index = AtomicU16::new(0);
     let query = format!(
         "UPDATE {table_name} {} {} RETURNING *",
@@ -2598,7 +2742,7 @@ async fn update_and_get_rows(
 
     let query = bind_values(statement.query(), Some(&all_values))?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    Ok(to_rows(&column_names, query.fetch(connection)).await?)
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
@@ -2737,7 +2881,7 @@ fn format_identifier(identifier: &str) -> String {
 fn bind_values<'a, 'b>(
     mut query: Query<'a, Postgres, PgArguments>,
     values: Option<&'b [PgDatabaseValue]>,
-) -> Result<Query<'a, Postgres, PgArguments>, SqlxDatabaseError>
+) -> Result<Query<'a, Postgres, PgArguments>, DatabaseError>
 where
     'b: 'a,
 {
@@ -2754,6 +2898,9 @@ where
                 | DatabaseValue::Int16Opt(None)
                 | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
                 | DatabaseValue::UInt64Opt(None)
                 | DatabaseValue::Real64Opt(None)
                 | DatabaseValue::Real32Opt(None)
@@ -2776,6 +2923,20 @@ where
                 }
                 DatabaseValue::Int64(value) | DatabaseValue::Int64Opt(Some(value)) => {
                     query = query.bind(*value);
+                }
+                DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
+                    let signed = i16::from(*value);
+                    query = query.bind(signed);
+                }
+                DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
+                    let signed =
+                        i16::try_from(*value).map_err(|_| DatabaseError::UInt16Overflow(*value))?;
+                    query = query.bind(signed);
+                }
+                DatabaseValue::UInt32(value) | DatabaseValue::UInt32Opt(Some(value)) => {
+                    let signed =
+                        i32::try_from(*value).map_err(|_| DatabaseError::UInt32Overflow(*value))?;
+                    query = query.bind(signed);
                 }
                 DatabaseValue::UInt64(value) | DatabaseValue::UInt64Opt(Some(value)) => {
                     query = query.bind(
@@ -2880,7 +3041,7 @@ async fn select(
     joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
@@ -2911,7 +3072,7 @@ async fn select(
     let filters = bexprs_to_values_opt(filters);
     let query = bind_values(statement.query(), filters.as_deref())?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    Ok(to_rows(&column_names, query.fetch(connection)).await?)
 }
 
 async fn delete(
@@ -2919,7 +3080,7 @@ async fn delete(
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let index = AtomicU16::new(0);
 
     // PostgreSQL doesn't support LIMIT directly in DELETE statements
@@ -2960,7 +3121,7 @@ async fn delete(
 
     let query = bind_values(statement.query(), all_filters.as_deref())?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    Ok(to_rows(&column_names, query.fetch(connection)).await?)
 }
 
 async fn find_row(
@@ -2971,7 +3132,7 @@ async fn find_row(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
-) -> Result<Option<crate::Row>, SqlxDatabaseError> {
+) -> Result<Option<crate::Row>, DatabaseError> {
     let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
@@ -3003,19 +3164,19 @@ async fn find_row(
 
     let mut query = query.fetch(connection);
 
-    query
+    Ok(query
         .next()
         .await
         .transpose()?
         .map(|row| from_row(&column_names, &row))
-        .transpose()
+        .transpose()?)
 }
 
 async fn insert_and_get_row(
     connection: &mut PgConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
-) -> Result<crate::Row, SqlxDatabaseError> {
+) -> Result<crate::Row, DatabaseError> {
     let column_names = values
         .iter()
         .map(|(key, _v)| format_identifier(key))
@@ -3053,12 +3214,12 @@ async fn insert_and_get_row(
 
     let mut stream = query.fetch(connection);
 
-    stream
+    Ok(stream
         .next()
         .await
         .transpose()?
         .map(|row| from_row(&column_names, &row))
-        .ok_or(SqlxDatabaseError::NoRow)?
+        .ok_or(SqlxDatabaseError::NoRow)??)
 }
 
 /// # Errors
@@ -3070,7 +3231,7 @@ pub async fn update_multi(
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     mut limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let mut results = vec![];
 
     if values.is_empty() {
@@ -3118,7 +3279,7 @@ async fn update_chunk(
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -3126,7 +3287,7 @@ async fn update_chunk(
         v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
     }) {
         log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
-        return Err(SqlxDatabaseError::InvalidRequest);
+        return Err(SqlxDatabaseError::InvalidRequest.into());
     }
 
     let set_clause = values[0]
@@ -3216,7 +3377,7 @@ async fn update_chunk(
 
     let query = bind_values(statement.query(), Some(&all_values))?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    Ok(to_rows(&column_names, query.fetch(connection)).await?)
 }
 
 /// # Errors
@@ -3227,7 +3388,7 @@ pub async fn upsert_multi(
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let mut results = vec![];
 
     if values.is_empty() {
@@ -3263,7 +3424,7 @@ async fn upsert_chunk(
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -3271,7 +3432,7 @@ async fn upsert_chunk(
         v.len() != expected_value_size || v.iter().enumerate().any(|(i, c)| c.0 != first[i].0)
     }) {
         log::error!("Bad row: {bad_row:?}. Expected to match schema of first row: {first:?}");
-        return Err(SqlxDatabaseError::InvalidRequest);
+        return Err(SqlxDatabaseError::InvalidRequest.into());
     }
 
     let set_clause = values[0]
@@ -3339,7 +3500,7 @@ async fn upsert_chunk(
 
     let query = bind_values(statement.query(), Some(all_values))?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    Ok(to_rows(&column_names, query.fetch(connection)).await?)
 }
 
 async fn upsert(
@@ -3348,7 +3509,7 @@ async fn upsert(
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+) -> Result<Vec<crate::Row>, DatabaseError> {
     let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
@@ -3364,7 +3525,7 @@ async fn upsert_and_get_row(
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
-) -> Result<crate::Row, SqlxDatabaseError> {
+) -> Result<crate::Row, DatabaseError> {
     match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
             let updated = update_and_get_row(connection, table_name, values, filters, limit)
