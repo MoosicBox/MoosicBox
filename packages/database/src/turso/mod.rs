@@ -11,8 +11,9 @@
 //!
 //! * **Local databases only**: Supports file-based and in-memory (`:memory:`) databases
 //! * **No remote connections**: Cannot connect to Turso Cloud (use libSQL client for that)
-//! * **Query builder not implemented**: Use [`exec_raw`](crate::Database::exec_raw) and
-//!   [`exec_raw_params`](crate::Database::exec_raw_params) instead of the query builder API
+//! * **Blob types not supported**: Reading `BLOB` columns will panic with `unimplemented!()`.
+//!   This matches the rusqlite backend limitation exactly. Workaround: encode binary data as
+//!   base64 TEXT or store file paths instead of binary content.
 //! * **BETA status**: API may change, bugs may exist, not recommended for production use
 //!
 //! See [Appendix B in the spec](https://github.com/tursodatabase/turso) for details on

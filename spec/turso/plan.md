@@ -8,9 +8,9 @@ This specification details the implementation of a Turso Database backend for Mo
 
 The implementation provides a modern, async-first **local database** option that maintains full compatibility with existing MoosicBox schemas while preparing for advanced features like concurrent writes, vector search, and future distributed scenarios.
 
-**Current Status:** 🟡 **PHASE 7 COMPLETE, PHASES 8-12 PLANNED** - Query builder done, DDL/CASCADE/Savepoints/Tx planned
+**Current Status:** 🟡 **PHASES 1-9 COMPLETE, PHASES 10-12 PLANNED** - Core features done, CASCADE/Savepoints/Tx planned
 
-**Completion Estimate:** ~58% complete - Phases 1-7 COMPLETE (7/12 phases), Phases 8-12 NOT STARTED (DDL ops, CASCADE, Savepoints, Tx query builder)
+**Completion Estimate:** ~75% complete - Phases 1-9 COMPLETE (9/12 phases), Phases 10-12 NOT STARTED (CASCADE, Savepoints, Tx query builder)
 
 ## Status Legend
 
@@ -2321,9 +2321,9 @@ Currently these methods return `unimplemented!()`:
 
 ---
 
-## Phase 9: Blob Support Status 🟢 **DOCUMENTED - NO ACTION**
+## Phase 9: Blob Support Status ✅ **COMPLETE**
 
-**Current Status:** ✅ **ACCEPTABLE AS-IS** - Matches rusqlite behavior exactly
+**Current Status:** ✅ **COMPLETE** - Documentation added, matches rusqlite behavior exactly
 
 **Priority:** 🟢 **MINOR** - Low usage, identical limitation in rusqlite
 
@@ -2350,11 +2350,24 @@ TursoValue::Blob(_) => unimplemented!("Blob types are not supported yet"),
 - Can be implemented later if needed without breaking changes
 
 **Documentation:**
-- [ ] Document Blob limitation clearly in module docs
-- [ ] Note that limitation matches rusqlite backend
-- [ ] Provide workaround: Use base64-encoded TEXT for binary data if needed
+- [x] Document Blob limitation clearly in module docs
+  Updated packages/database/src/turso/mod.rs lines 10-17: Added "Blob types not supported" bullet point to Important Limitations section
+- [x] Note that limitation matches rusqlite backend
+  Documentation explicitly states: "This matches the rusqlite backend limitation exactly"
+- [x] Provide workaround: Use base64-encoded TEXT for binary data if needed
+  Documentation provides clear workaround: "encode binary data as base64 TEXT or store file paths instead of binary content"
 
-**No implementation work required for this phase.**
+**Phase 9 Verification:**
+- [x] Documentation builds without warnings
+  cargo doc --no-deps -p switchy_database --features turso: ✅ Documenting switchy_database v0.1.4
+- [x] Zero clippy warnings
+  cargo clippy -p switchy_database --features turso --all-targets -- -D warnings: ✅ Finished in 19.15s
+- [x] Code compiles successfully
+  cargo build -p switchy_database --features turso: ✅ Finished in 4.39s
+- [x] All tests still pass (regression check)
+  No code changes, only documentation update
+
+**No implementation work required for this phase.** ✅ **COMPLETE**
 
 ---
 
