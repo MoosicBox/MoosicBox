@@ -23737,3 +23737,66 @@ Each phase is considered complete when:
 
 ---
 
+
+---
+
+#### 8.2.5: Fix Range Decoder RFC Violation
+
+**Status:** 🔴 CRITICAL BUG - Discovered during integration testing
+
+**Problem:** Integration tests fail with `RangeDecoder("unexpected end of buffer during normalization")`
+
+**Root Cause Analysis:**
+
+Location: `packages/opus_native/src/range/decoder.rs:55-58`
+
+Current (incorrect) implementation returns an error when buffer is exhausted:
+```rust
+if self.position >= self.buffer.len() {
+    return Err(Error::RangeDecoder(
+        "unexpected end of buffer during normalization".to_string(),
+    ));
+}
+```
+
+**RFC 6716 Violation:**
+- RFC Section 4.1.2.1 (Lines 1447-1448): "If no more input bytes remain, it uses zero bits instead"
+- RFC Lines 1471-1473: "If the range decoder consumes all of the bytes belonging to the current frame, it MUST continue to use zero when any further input bytes are required"
+
+The range coder is designed to read past the end of actual data into the "raw bits" region (RFC lines 1463-1469). This overlap is intentional and normal.
+
+**Implementation Tasks:**
+
+- [ ] Fix normalize() function in range/decoder.rs
+  Replace error with zero-byte substitution per RFC requirement:
+  ```rust
+  let byte = if self.position < self.buffer.len() {
+      self.buffer[self.position]
+  } else {
+      0  // RFC 6716: MUST use zero when buffer exhausted
+  };
+  self.value = (self.value << 8) | u32::from(byte);
+  ```
+
+- [ ] Add RFC reference comment
+  Document why we use zero instead of error
+
+- [ ] Verify fix with integration tests
+  All 3 tests should now pass without #[ignore]
+
+- [ ] Confirm no regressions
+  All 487 existing tests must still pass
+
+- [ ] Verify audio quality
+  SNR > 40 dB for all test vectors
+
+**Expected Impact:**
+This single fix should resolve ALL three failing integration tests:
+- test_decode_silk_vectors
+- test_decode_celt_vectors
+- test_decode_integration_vectors
+
+**RFC References:**
+- Section 4.1.2.1 (Lines 1438-1452): Renormalization procedure
+- Lines 1463-1473: Normal for range decoder to read into raw bits region
+

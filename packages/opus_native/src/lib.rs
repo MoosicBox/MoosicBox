@@ -596,9 +596,22 @@ impl Decoder {
             _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
         };
 
-        let frame_20ms_samples = Self::calculate_samples(FrameSize::Ms20, internal_rate);
+        let silk_frame_size_ms = if config.frame_size.to_ms() <= 20 {
+            config.frame_size.to_ms()
+        } else {
+            20
+        };
+
+        self.silk = silk::SilkDecoder::new(
+            SampleRate::from_hz(internal_rate)?,
+            channels,
+            silk_frame_size_ms,
+        )?;
+
+        let frame_samples =
+            Self::calculate_samples(config.frame_size, internal_rate) / num_silk_frames;
         let num_channels = channels as usize;
-        let total_samples = frame_20ms_samples * num_silk_frames;
+        let total_samples = frame_samples * num_silk_frames;
         let mut silk_buffer = vec![0i16; total_samples * num_channels];
 
         for frame_idx in 0..num_silk_frames {
@@ -610,20 +623,20 @@ impl Decoder {
                     .copied()
                     .unwrap_or(true);
 
-                let mut frame_buffer = vec![0i16; frame_20ms_samples];
+                let mut frame_buffer = vec![0i16; frame_samples];
 
                 let decoded = self
                     .silk
                     .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
 
-                if decoded != frame_20ms_samples {
+                if decoded != frame_samples {
                     return Err(Error::DecodeFailed(format!(
-                        "SILK sample count mismatch: expected {frame_20ms_samples}, got {decoded}"
+                        "SILK sample count mismatch: expected {frame_samples}, got {decoded}"
                     )));
                 }
 
-                let base_offset = frame_idx * frame_20ms_samples * num_channels;
-                for sample_idx in 0..frame_20ms_samples {
+                let base_offset = frame_idx * frame_samples * num_channels;
+                for sample_idx in 0..frame_samples {
                     silk_buffer[base_offset + sample_idx * num_channels + ch_idx] =
                         frame_buffer[sample_idx];
                 }
@@ -710,8 +723,7 @@ impl Decoder {
             }
         }
 
-        let samples_per_channel = decoded_frame.samples.len() / channels as usize;
-        Ok(samples_per_channel)
+        Ok(decoded_frame.samples.len())
     }
 
     /// Decode hybrid mode frame (SILK low-freq + CELT high-freq)
@@ -769,10 +781,9 @@ impl Decoder {
             _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
         };
 
-        let frame_20ms_samples =
-            Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
+        let frame_samples = Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
         let num_channels = channels as usize;
-        let total_samples = frame_20ms_samples * num_silk_frames;
+        let total_samples = frame_samples * num_silk_frames;
         let mut silk_16k = vec![0i16; total_samples * num_channels];
 
         for frame_idx in 0..num_silk_frames {
@@ -784,20 +795,20 @@ impl Decoder {
                     .copied()
                     .unwrap_or(true);
 
-                let mut frame_buffer = vec![0i16; frame_20ms_samples];
+                let mut frame_buffer = vec![0i16; frame_samples];
 
                 let decoded = self
                     .silk
                     .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
 
-                if decoded != frame_20ms_samples {
+                if decoded != frame_samples {
                     return Err(Error::DecodeFailed(format!(
-                        "Hybrid SILK sample count mismatch: expected {frame_20ms_samples}, got {decoded}"
+                        "Hybrid SILK sample count mismatch: expected {frame_samples}, got {decoded}"
                     )));
                 }
 
-                let base_offset = frame_idx * frame_20ms_samples * num_channels;
-                for sample_idx in 0..frame_20ms_samples {
+                let base_offset = frame_idx * frame_samples * num_channels;
+                for sample_idx in 0..frame_samples {
                     silk_16k[base_offset + sample_idx * num_channels + ch_idx] =
                         frame_buffer[sample_idx];
                 }

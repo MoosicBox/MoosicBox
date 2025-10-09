@@ -50,15 +50,16 @@ impl RangeDecoder {
         Ok(decoder)
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn normalize(&mut self) -> Result<()> {
         while self.range <= 0x80_0000 {
-            if self.position >= self.buffer.len() {
-                return Err(Error::RangeDecoder(
-                    "unexpected end of buffer during normalization".to_string(),
-                ));
-            }
+            let byte = if self.position < self.buffer.len() {
+                self.buffer[self.position]
+            } else {
+                0
+            };
 
-            self.value = (self.value << 8) | u32::from(self.buffer[self.position]);
+            self.value = (self.value << 8) | u32::from(byte);
             self.range <<= 8;
             self.position += 1;
             self.total_bits += 8;
