@@ -1,3 +1,111 @@
+//! Turso Database backend implementation
+//!
+//! **⚠️ BETA**: Turso Database is currently in BETA (v0.2.2).
+//! Use caution with production data.
+//!
+//! This module provides a [`Database`](crate::Database) implementation using
+//! [Turso Database](https://github.com/tursodatabase/turso), a ground-up Rust
+//! rewrite of `SQLite` with modern async architecture.
+//!
+//! # Important Limitations
+//!
+//! * **Local databases only**: Supports file-based and in-memory (`:memory:`) databases
+//! * **No remote connections**: Cannot connect to Turso Cloud (use libSQL client for that)
+//! * **Query builder not implemented**: Use [`exec_raw`](crate::Database::exec_raw) and
+//!   [`exec_raw_params`](crate::Database::exec_raw_params) instead of the query builder API
+//! * **BETA status**: API may change, bugs may exist, not recommended for production use
+//!
+//! See [Appendix B in the spec](https://github.com/tursodatabase/turso) for details on
+//! the distinction between Turso Database (this implementation) and Turso Cloud (libSQL).
+//!
+//! # Features
+//!
+//! * **Native async I/O** with `io_uring` support (Linux)
+//! * **SQLite-compatible** file format and SQL dialect
+//! * **Full transaction support** (begin, commit, rollback, savepoints)
+//! * **Schema introspection** including bulletproof foreign key parsing
+//! * **Experimental features** (not exposed):
+//!   - Concurrent writes (MVCC via `BEGIN CONCURRENT`)
+//!   - Encryption at rest
+//!   - Vector search capabilities
+//!
+//! # Examples
+//!
+//! ## Basic Usage
+//!
+//! ```ignore
+//! use switchy_database::{Database, DatabaseValue};
+//! use switchy_database::turso::TursoDatabase;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Create a new database file
+//!     let db = TursoDatabase::new("database.db").await?;
+//!     let db: &dyn Database = &db;
+//!     
+//!     // Create a table
+//!     db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").await?;
+//!     
+//!     // Insert data using parameterized queries
+//!     db.exec_raw_params(
+//!         "INSERT INTO users (name) VALUES (?1)",
+//!         &[DatabaseValue::String("Alice".to_string())]
+//!     ).await?;
+//!     
+//!     // Query data
+//!     let rows = db.query_raw("SELECT id, name FROM users").await?;
+//!     println!("Found {} users", rows.len());
+//!     
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Transactions
+//!
+//! ```ignore
+//! use switchy_database::{Database, DatabaseValue};
+//! use switchy_database::turso::TursoDatabase;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let db = TursoDatabase::new("database.db").await?;
+//!     let db: &dyn Database = &db;
+//!     
+//!     // Begin a transaction
+//!     let tx = db.begin_transaction().await?;
+//!     
+//!     // Execute operations within the transaction
+//!     tx.exec_raw_params(
+//!         "INSERT INTO users (name) VALUES (?1)",
+//!         &[DatabaseValue::String("Bob".to_string())]
+//!     ).await?;
+//!     
+//!     // Commit the transaction
+//!     tx.commit().await?;
+//!     
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## In-Memory Database
+//!
+//! ```ignore
+//! use switchy_database::Database;
+//! use switchy_database::turso::TursoDatabase;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Use `:memory:` for an in-memory database
+//!     let db = TursoDatabase::new(":memory:").await?;
+//!     let db: &dyn Database = &db;
+//!     
+//!     // Database is fully functional but not persisted to disk
+//!     db.exec_raw("CREATE TABLE temp (value INTEGER)").await?;
+//!     
+//!     Ok(())
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 

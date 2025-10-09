@@ -33,6 +33,8 @@ members = [
     "packages/clippier",
     "packages/config",
     "packages/database",
+    "packages/database/examples/turso_basic",
+    "packages/database/examples/turso_transactions",
     "packages/database_connection",
     "packages/date_utils",
     "packages/downloader",

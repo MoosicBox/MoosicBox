@@ -16642,6 +16642,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "turso_basic_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "turso_core"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16722,6 +16730,14 @@ dependencies = [
  "strum_macros 0.26.4",
  "thiserror 2.0.17",
  "turso_macros",
+]
+
+[[package]]
+name = "turso_transactions_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_database",
+ "tokio",
 ]
 
 [[package]]

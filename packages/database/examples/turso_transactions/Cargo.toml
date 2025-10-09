@@ -1,0 +1,20 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database"]
+description = "Transaction usage examples for Turso Database backend"
+edition     = { workspace = true }
+keywords    = ["database", "example", "transactions", "turso"]
+license     = { workspace = true }
+name        = "turso_transactions_example"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+switchy_database = { workspace = true, features = ["turso"] }
+tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[bin]]
+name = "turso_transactions"
+path = "src/main.rs"

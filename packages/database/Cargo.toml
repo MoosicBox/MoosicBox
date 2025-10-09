@@ -71,6 +71,7 @@ switchy_async = { workspace = true, features = [
 switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
+    "turso",
 ] }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
