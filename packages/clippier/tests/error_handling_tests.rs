@@ -287,3 +287,28 @@ fn test_unicode_and_encoding_issues() {
 
     insta::assert_yaml_snapshot!("unicode_and_encoding_issues", test_data);
 }
+
+#[test]
+fn test_git_submodules_invalid_type() {
+    let toml_str = r#"
+        git-submodules = "yes"
+
+        [[config]]
+        os = "ubuntu"
+    "#;
+
+    let result = toml::from_str::<clippier::ClippierConf>(toml_str);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_git_submodules_invalid_type_in_config() {
+    let toml_str = r#"
+        [[config]]
+        os = "ubuntu"
+        git-submodules = "true"
+    "#;
+
+    let result = toml::from_str::<clippier::ClippierConf>(toml_str);
+    assert!(result.is_err());
+}

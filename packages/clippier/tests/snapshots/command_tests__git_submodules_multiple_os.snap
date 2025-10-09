@@ -1,0 +1,34 @@
+---
+source: packages/clippier/tests/command_tests.rs
+expression: result
+---
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: ubuntu
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: macos
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: windows
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~

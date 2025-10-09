@@ -1,0 +1,7 @@
+git-submodules = true
+
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"

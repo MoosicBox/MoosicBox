@@ -1,0 +1,63 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: parsed
+---
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: ubuntu
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: macos
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-a
+    - feature-b
+  gitSubmodules: true
+  name: with-submodules
+  nightly: false
+  os: windows
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-x
+    - feature-y
+  name: without-submodules
+  nightly: false
+  os: ubuntu
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-1
+    - feature-2
+  gitSubmodules: true
+  name: inherited-submodules
+  nightly: false
+  os: ubuntu
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-1
+    - feature-2
+  gitSubmodules: true
+  name: inherited-submodules
+  nightly: false
+  os: macos
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~

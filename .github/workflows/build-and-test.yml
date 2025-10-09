@@ -299,7 +299,8 @@ jobs:
                                           "ciSteps": (.ciSteps),
                                           "ciToolchains": (.ciToolchains),
                                           "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                          "nightly": (.nightly)
+                                          "nightly": (.nightly),
+                                          "gitSubmodules": (.gitSubmodules)
                                       }
                                       | del(.. | nulls)
                                   ]'
@@ -440,11 +441,12 @@ jobs:
 
                       DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg_name\" // empty")
                       if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                          # Get environment variables for this package from the matrix
+                          # Get environment variables and gitSubmodules for this package from the matrix
                           PACKAGE_ENV=$(echo "$affected_matrix" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
+                          PACKAGE_GIT_SUBMODULES=$(echo "$affected_matrix" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .gitSubmodules // empty' | head -1)
 
-                          # Create the Docker matrix entry with environment variables
-                          DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
+                          # Create the Docker matrix entry with environment variables and gitSubmodules
+                          DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" --arg submodules "$PACKAGE_GIT_SUBMODULES" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end) + (if $submodules != "" and $submodules != "empty" then {gitSubmodules: ($submodules | test("true"))} else {} end)')
 
                           MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
                       fi
@@ -840,6 +842,7 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+                  submodules: ${{ matrix.package.gitSubmodules == true }}
 
             - name: Enable patches
               if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == 'true' }}
@@ -1076,6 +1079,7 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+                  submodules: ${{ matrix.gitSubmodules == true }}
 
             - name: Enable patches
               if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == 'true' }}

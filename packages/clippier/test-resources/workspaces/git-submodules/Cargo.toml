@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "packages/with-submodules",
+    "packages/without-submodules",
+    "packages/inherited-submodules",
+]
+
+[workspace.dependencies]
+serde = "1.0"

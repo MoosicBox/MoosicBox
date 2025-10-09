@@ -110,6 +110,7 @@ pub struct ClippierConfiguration {
     pub required_features: Option<Vec<String>>,
     pub name: Option<String>,
     pub nightly: Option<bool>,
+    pub git_submodules: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -127,6 +128,7 @@ pub struct ClippierConf {
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     pub parallelization: Option<ParallelizationConfig>,
     pub nightly: Option<bool>,
+    pub git_submodules: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -440,6 +442,7 @@ pub fn process_configs(
                 skip_features: None,
                 required_features: None,
                 nightly: None,
+                git_submodules: None,
             }]
         },
         |x| x.config.clone(),
@@ -786,6 +789,16 @@ pub fn create_map(
                 serde_json::to_value(toolchains.join("\n"))?,
             );
         }
+    }
+
+    if let Some(git_submodules) = config
+        .git_submodules
+        .or_else(|| conf.and_then(|x| x.git_submodules))
+    {
+        map.insert(
+            "gitSubmodules".to_string(),
+            serde_json::to_value(git_submodules)?,
+        );
     }
 
     Ok(map)

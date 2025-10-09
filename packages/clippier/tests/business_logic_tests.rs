@@ -1053,3 +1053,150 @@ dependencies = [
 
     temp_dir
 }
+
+#[test]
+fn test_handle_features_command_with_git_submodules() {
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let json_output = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json_output).unwrap();
+
+    let with_submodules = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"].as_str() == Some("with-submodules"))
+        .expect("Should have with-submodules package");
+
+    assert_eq!(with_submodules["gitSubmodules"].as_bool(), Some(true));
+
+    let without_submodules = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"].as_str() == Some("without-submodules"))
+        .expect("Should have without-submodules package");
+
+    assert!(
+        without_submodules.get("gitSubmodules").is_none()
+            || without_submodules["gitSubmodules"].is_null()
+    );
+
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction(".**.path", "[TEMP_PATH]");
+    settings.bind(|| {
+        insta::assert_yaml_snapshot!("features_with_git_submodules", parsed);
+    });
+}
+
+#[test]
+fn test_git_submodules_inheritance() {
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+    let inherited_pkg = temp_dir.path().join("packages/inherited-submodules");
+
+    let result = clippier::process_configs(
+        &inherited_pkg,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    for config in &result {
+        let json = serde_json::to_value(config).unwrap();
+        assert_eq!(json["gitSubmodules"].as_bool(), Some(true));
+    }
+}
+
+#[test]
+fn test_git_submodules_override() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    let pkg_dir = temp_dir.path().join("packages/override-test");
+    std::fs::create_dir_all(pkg_dir.join("src")).unwrap();
+
+    let cargo_toml = r#"
+[package]
+name = "override-test"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+    "#;
+    std::fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+    std::fs::write(pkg_dir.join("src/lib.rs"), "// test").unwrap();
+
+    let clippier_toml = r#"
+git-submodules = false
+
+[[config]]
+os = "ubuntu"
+git-submodules = true
+
+[[config]]
+os = "macos"
+    "#;
+    std::fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+
+    let result = clippier::process_configs(
+        &pkg_dir, None, None, None, false, false, None, None, None, None,
+    )
+    .unwrap();
+
+    let ubuntu = result
+        .iter()
+        .find(|c| {
+            let json = serde_json::to_value(c).unwrap();
+            json["os"] == "ubuntu"
+        })
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(ubuntu).unwrap()["gitSubmodules"].as_bool(),
+        Some(true)
+    );
+
+    let macos = result
+        .iter()
+        .find(|c| {
+            let json = serde_json::to_value(c).unwrap();
+            json["os"] == "macos"
+        })
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(macos).unwrap()["gitSubmodules"].as_bool(),
+        Some(false)
+    );
+}

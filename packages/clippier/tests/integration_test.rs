@@ -186,3 +186,59 @@ fn test_no_transitive_impact() {
     []
     "###);
 }
+
+#[test]
+fn test_git_submodules_with_chunking_and_spreading() {
+    use clippier::{OutputType, handle_features_command};
+    use clippier_test_utilities::test_resources::load_test_workspace;
+
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        None,
+        None,
+        None,
+        Some(2),
+        None,
+        true,
+        true,
+        Some(12345),
+        None,
+        None,
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        OutputType::Json,
+    )
+    .unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+    let with_submodules_entries: Vec<_> = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["name"].as_str() == Some("with-submodules"))
+        .collect();
+
+    for entry in with_submodules_entries {
+        assert_eq!(entry["gitSubmodules"].as_bool(), Some(true));
+    }
+
+    let without_submodules_entries: Vec<_> = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["name"].as_str() == Some("without-submodules"))
+        .collect();
+
+    for entry in without_submodules_entries {
+        assert!(entry.get("gitSubmodules").is_none() || entry["gitSubmodules"].is_null());
+    }
+}

@@ -229,3 +229,99 @@ fn test_clippier_config_exists_for_api() {
 
     insta::assert_snapshot!("api_clippier_toml", api_clippier);
 }
+
+#[test]
+fn test_git_submodules_enabled() {
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+    let submodules_pkg = temp_dir.path().join("packages/with-submodules");
+
+    let result = clippier::process_configs(
+        &submodules_pkg,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(&result).unwrap();
+    let git_submodules = json[0]["gitSubmodules"].as_bool();
+    assert_eq!(git_submodules, Some(true));
+}
+
+#[test]
+fn test_git_submodules_disabled_by_default() {
+    let (temp_dir, _) = load_test_workspace("complex");
+    let api_path = temp_dir.path().join("packages/api");
+
+    let result = clippier::process_configs(
+        &api_path, None, None, None, false, false, None, None, None, None,
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(&result).unwrap();
+    assert!(json[0].get("gitSubmodules").is_none() || json[0]["gitSubmodules"].is_null());
+}
+
+#[test]
+fn test_git_submodules_multiple_os() {
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+    let submodules_pkg = temp_dir.path().join("packages/with-submodules");
+
+    let result = clippier::process_configs(
+        &submodules_pkg,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(result.len(), 3);
+
+    for config in &result {
+        let json = serde_json::to_value(config).unwrap();
+        assert_eq!(json["gitSubmodules"].as_bool(), Some(true));
+    }
+
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction(".**.path", "[TEMP_PATH]");
+    settings.bind(|| {
+        insta::assert_yaml_snapshot!("git_submodules_multiple_os", result);
+    });
+}
+
+#[test]
+fn test_git_submodules_not_present_without_config() {
+    let (temp_dir, _) = load_test_workspace("git-submodules");
+    let without_submodules_pkg = temp_dir.path().join("packages/without-submodules");
+
+    let result = clippier::process_configs(
+        &without_submodules_pkg,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    for config in &result {
+        let json = serde_json::to_value(config).unwrap();
+        assert!(json.get("gitSubmodules").is_none() || json["gitSubmodules"].is_null());
+    }
+}
