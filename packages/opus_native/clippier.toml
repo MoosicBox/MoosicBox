@@ -1,4 +1,0 @@
-git-submodules = true
-
-[[config]]
-os = "ubuntu"

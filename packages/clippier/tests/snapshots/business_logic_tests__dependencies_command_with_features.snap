@@ -3,4 +3,6 @@ source: packages/clippier/tests/business_logic_tests.rs
 expression: dependencies
 ---
 apt-get update && apt-get install -y build-essential
+apt-get update && apt-get install -y build-essential
+apt-get update && apt-get install -y nodejs npm
 apt-get update && apt-get install -y nodejs npm

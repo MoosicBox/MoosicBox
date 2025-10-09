@@ -3,6 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
 };
@@ -137,6 +138,14 @@ pub enum FeaturesList {
     NotChunked(Vec<String>),
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct PropagatedConfig {
+    pub git_submodules: Option<bool>,
+    pub dependencies: Vec<Step>,
+    pub ci_steps: Vec<Step>,
+    pub env: BTreeMap<String, ClippierEnv>,
+}
+
 // Utility functions - these are working implementations for tests
 pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
     if slice.is_empty() || n == 0 {
@@ -246,6 +255,391 @@ pub fn process_features(
     } else {
         FeaturesList::NotChunked(features)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DependencyKind {
+    WorkspaceReference,
+    WorkspaceMember,
+    External,
+}
+
+#[derive(Debug, Clone)]
+struct DependencyInfo<'a> {
+    name: &'a str,
+    kind: DependencyKind,
+    is_optional: bool,
+}
+
+pub struct WorkspaceContext {
+    root: std::path::PathBuf,
+    member_patterns: Vec<String>,
+    member_cache: RefCell<BTreeMap<String, std::path::PathBuf>>,
+    path_cache: RefCell<BTreeSet<std::path::PathBuf>>,
+    fully_loaded: RefCell<bool>,
+}
+
+impl WorkspaceContext {
+    fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let workspace_cargo = workspace_root.join("Cargo.toml");
+        let content = std::fs::read_to_string(&workspace_cargo)?;
+        let root_toml: Value = toml::from_str(&content)?;
+
+        let mut member_patterns = Vec::new();
+
+        if let Some(Value::Table(workspace)) = root_toml.get("workspace")
+            && let Some(Value::Array(member_list)) = workspace.get("members")
+        {
+            for member in member_list {
+                if let Value::String(member_pattern) = member {
+                    member_patterns.push(member_pattern.clone());
+                }
+            }
+        }
+
+        Ok(Self {
+            root: workspace_root.to_path_buf(),
+            member_patterns,
+            member_cache: RefCell::new(BTreeMap::new()),
+            path_cache: RefCell::new(BTreeSet::new()),
+            fully_loaded: RefCell::new(false),
+        })
+    }
+
+    fn is_member_by_path(&self, path: &Path) -> bool {
+        let Ok(canonical) = path.canonicalize() else {
+            return false;
+        };
+
+        if self.path_cache.borrow().contains(&canonical) {
+            return true;
+        }
+
+        for pattern in &self.member_patterns {
+            let member_path = self.root.join(pattern);
+            if let Ok(member_canonical) = member_path.canonicalize()
+                && member_canonical == canonical
+            {
+                self.path_cache.borrow_mut().insert(canonical.clone());
+
+                if let Some(name) = Self::read_package_name(&canonical) {
+                    self.member_cache.borrow_mut().insert(name, canonical);
+                }
+
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn ensure_fully_loaded(&self) {
+        if *self.fully_loaded.borrow() {
+            return;
+        }
+
+        log::trace!(
+            "🔄 Loading all {} workspace members",
+            self.member_patterns.len()
+        );
+        let start = std::time::Instant::now();
+
+        for pattern in &self.member_patterns {
+            let member_path = self.root.join(pattern);
+            if member_path.exists()
+                && let Ok(canonical) = member_path.canonicalize()
+                && !self.path_cache.borrow().contains(&canonical)
+                && let Some(actual_name) = Self::read_package_name(&canonical)
+            {
+                self.member_cache
+                    .borrow_mut()
+                    .insert(actual_name, canonical.clone());
+                self.path_cache.borrow_mut().insert(canonical);
+            }
+        }
+
+        *self.fully_loaded.borrow_mut() = true;
+        log::trace!(
+            "✅ Loaded {} members in {:?}",
+            self.member_cache.borrow().len(),
+            start.elapsed()
+        );
+    }
+
+    fn is_member_by_name(&self, name: &str) -> bool {
+        self.ensure_fully_loaded();
+        self.member_cache.borrow().contains_key(name)
+    }
+
+    fn find_member(&self, name: &str) -> Option<std::path::PathBuf> {
+        if let Some(path) = self.member_cache.borrow().get(name) {
+            return Some(path.clone());
+        }
+
+        if self.is_member_by_name(name) {
+            self.member_cache.borrow().get(name).cloned()
+        } else {
+            None
+        }
+    }
+
+    fn read_package_name(package_path: &Path) -> Option<String> {
+        let cargo_toml_path = package_path.join("Cargo.toml");
+        let content = std::fs::read_to_string(cargo_toml_path).ok()?;
+        let toml: Value = toml::from_str(&content).ok()?;
+        toml.get("package")?.get("name")?.as_str().map(String::from)
+    }
+}
+
+fn classify_dependency(
+    dep_value: &Value,
+    context: &WorkspaceContext,
+    package_path: &Path,
+) -> DependencyKind {
+    if let Value::Table(table) = dep_value {
+        if table.get("workspace") == Some(&Value::Boolean(true)) {
+            return DependencyKind::WorkspaceReference;
+        }
+
+        if let Some(Value::String(path_str)) = table.get("path") {
+            let dep_path = package_path.join(path_str);
+            if context.is_member_by_path(&dep_path) {
+                return DependencyKind::WorkspaceMember;
+            }
+        }
+    }
+
+    DependencyKind::External
+}
+
+fn iterate_dependencies<'a>(
+    cargo_toml: &'a Value,
+    context: &'a WorkspaceContext,
+    package_path: &'a Path,
+) -> impl Iterator<Item = DependencyInfo<'a>> + 'a {
+    const SECTIONS: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
+
+    SECTIONS.into_iter().flat_map(move |section_name| {
+        cargo_toml
+            .get(section_name)
+            .and_then(Value::as_table)
+            .into_iter()
+            .flat_map(move |deps_table| {
+                deps_table.iter().map(move |(dep_name, dep_value)| {
+                    let kind = classify_dependency(dep_value, context, package_path);
+                    let is_optional = if let Value::Table(table) = dep_value {
+                        table.get("optional") == Some(&Value::Boolean(true))
+                    } else {
+                        false
+                    };
+
+                    DependencyInfo {
+                        name: dep_name,
+                        kind,
+                        is_optional,
+                    }
+                })
+            })
+    })
+}
+
+fn extract_dependencies<F>(
+    cargo_toml: &Value,
+    context: &WorkspaceContext,
+    package_path: &Path,
+    filter: F,
+) -> Vec<String>
+where
+    F: Fn(&DependencyInfo) -> bool,
+{
+    let mut deps: Vec<String> = iterate_dependencies(cargo_toml, context, package_path)
+        .filter(filter)
+        .map(|dep| dep.name.to_string())
+        .collect();
+
+    deps.sort();
+    deps.dedup();
+    deps
+}
+
+fn extract_workspace_deps_simple(
+    cargo_toml: &Value,
+    context: &WorkspaceContext,
+    package_path: &Path,
+) -> Vec<String> {
+    extract_dependencies(cargo_toml, context, package_path, |dep| match dep.kind {
+        DependencyKind::WorkspaceMember => true,
+        DependencyKind::WorkspaceReference => context.is_member_by_name(dep.name),
+        DependencyKind::External => false,
+    })
+}
+
+fn merge_steps(mut base: Vec<Step>, overlay: Vec<Step>) -> Vec<Step> {
+    for step in overlay {
+        if !base.iter().any(|s| {
+            s.command == step.command
+                && s.toolchain == step.toolchain
+                && s.features == step.features
+        }) {
+            base.push(step);
+        }
+    }
+    base
+}
+
+fn merge_env_maps(
+    mut base: BTreeMap<String, ClippierEnv>,
+    overlay: BTreeMap<String, ClippierEnv>,
+) -> BTreeMap<String, ClippierEnv> {
+    for (key, value) in overlay {
+        base.insert(key, value);
+    }
+    base
+}
+
+fn merge_propagated_configs(base: PropagatedConfig, overlay: PropagatedConfig) -> PropagatedConfig {
+    PropagatedConfig {
+        git_submodules: match (base.git_submodules, overlay.git_submodules) {
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            (Some(false), None | Some(false)) | (None, Some(false)) => Some(false),
+            (None, None) => None,
+        },
+        dependencies: merge_steps(base.dependencies, overlay.dependencies),
+        ci_steps: merge_steps(base.ci_steps, overlay.ci_steps),
+        env: merge_env_maps(base.env, overlay.env),
+    }
+}
+
+#[allow(clippy::too_many_lines, clippy::similar_names)]
+fn collect_propagated_config(
+    context: &WorkspaceContext,
+    package_name: &str,
+    os_filter: Option<&str>,
+    visited: &mut BTreeSet<String>,
+    cache: &mut BTreeMap<String, PropagatedConfig>,
+) -> Result<PropagatedConfig, Box<dyn std::error::Error>> {
+    if let Some(cached) = cache.get(package_name) {
+        return Ok(cached.clone());
+    }
+
+    if visited.contains(package_name) {
+        log::trace!("🔁 Circular dependency detected for {package_name}, returning empty config");
+        return Ok(PropagatedConfig::default());
+    }
+
+    visited.insert(package_name.to_string());
+
+    log::trace!("📦 Collecting propagated config for package: {package_name}");
+
+    let package_path = context
+        .find_member(package_name)
+        .ok_or_else(|| format!("Package {package_name} not found in workspace"))?;
+    let cargo_toml_path = package_path.join("Cargo.toml");
+
+    if !cargo_toml_path.exists() {
+        log::trace!("⚠️ No Cargo.toml found for {package_name}, skipping");
+        visited.remove(package_name);
+        return Ok(PropagatedConfig::default());
+    }
+
+    let cargo_toml_content = std::fs::read_to_string(&cargo_toml_path)?;
+    let cargo_toml: Value = toml::from_str(&cargo_toml_content)?;
+
+    let clippier_toml_path = package_path.join("clippier.toml");
+    let own_config = if clippier_toml_path.exists() {
+        let content = std::fs::read_to_string(&clippier_toml_path)?;
+        let conf: ClippierConf = toml::from_str(&content)?;
+
+        let mut prop = PropagatedConfig {
+            git_submodules: conf.git_submodules,
+            dependencies: Vec::new(),
+            ci_steps: Vec::new(),
+            env: conf.env.unwrap_or_default(),
+        };
+
+        for config in &conf.config {
+            let os_matches = os_filter.is_none() || os_filter == Some(&config.os);
+
+            if os_matches {
+                if let Some(deps) = &config.dependencies {
+                    prop.dependencies.extend(deps.clone());
+                }
+                if let Some(steps) = &config.ci_steps {
+                    match steps {
+                        VecOrItem::Value(step) => prop.ci_steps.push(step.clone()),
+                        VecOrItem::Values(steps) => prop.ci_steps.extend(steps.clone()),
+                    }
+                }
+            }
+
+            if config.git_submodules.is_some() {
+                prop.git_submodules = prop.git_submodules.or(config.git_submodules);
+            }
+        }
+
+        if let Some(steps) = &conf.ci_steps {
+            match steps {
+                VecOrItem::Value(step) => prop.ci_steps.push(step.clone()),
+                VecOrItem::Values(steps) => prop.ci_steps.extend(steps.clone()),
+            }
+        }
+
+        prop
+    } else {
+        PropagatedConfig::default()
+    };
+
+    let workspace_deps = extract_workspace_deps_simple(&cargo_toml, context, &package_path);
+
+    let mut merged = PropagatedConfig::default();
+    for dep in workspace_deps {
+        log::trace!("  ↳ Processing dependency: {dep}");
+        match collect_propagated_config(context, &dep, os_filter, visited, cache) {
+            Ok(dep_config) => {
+                merged = merge_propagated_configs(merged, dep_config);
+            }
+            Err(e) => {
+                log::warn!("Failed to collect config for dependency {dep}: {e}");
+            }
+        }
+    }
+
+    merged = merge_propagated_configs(merged, own_config);
+
+    cache.insert(package_name.to_string(), merged.clone());
+
+    visited.remove(package_name);
+
+    log::trace!(
+        "✅ Collected config for {package_name}: git_submodules={:?}, deps={}, ci_steps={}, env={}",
+        merged.git_submodules,
+        merged.dependencies.len(),
+        merged.ci_steps.len(),
+        merged.env.len()
+    );
+
+    Ok(merged)
+}
+
+fn find_workspace_root_from_package(
+    package_path: &Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let mut current = package_path.to_path_buf();
+
+    while let Some(parent) = current.parent() {
+        let cargo_toml = parent.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let content = std::fs::read_to_string(&cargo_toml)?;
+            let toml_value: Value = toml::from_str(&content)?;
+
+            if toml_value.get("workspace").is_some() {
+                return Ok(parent.to_path_buf());
+            }
+        }
+        current = parent.to_path_buf();
+    }
+
+    Err("Workspace root not found".into())
 }
 
 #[must_use]
@@ -401,7 +795,7 @@ pub fn get_binary_name(
 /// # Panics
 ///
 /// * If the `path` argument cannot be converted to a string
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn process_configs(
     path: &Path,
     offset: Option<u16>,
@@ -450,6 +844,10 @@ pub fn process_configs(
 
     let mut packages = vec![];
 
+    let workspace_root =
+        find_workspace_root_from_package(path).unwrap_or_else(|_| path.to_path_buf());
+    let workspace_context = WorkspaceContext::new(&workspace_root)?;
+
     if let Some(name) = value
         .get("package")
         .and_then(|x| x.get("name"))
@@ -496,6 +894,8 @@ pub fn process_configs(
                 FeaturesList::Chunked(x) => {
                     for features in x {
                         packages.push(create_map(
+                            &workspace_context,
+                            &name,
                             conf.as_ref(),
                             &config,
                             path.to_str().unwrap(),
@@ -507,6 +907,8 @@ pub fn process_configs(
                 }
                 FeaturesList::NotChunked(x) => {
                     packages.push(create_map(
+                        &workspace_context,
+                        &name,
                         conf.as_ref(),
                         &config,
                         path.to_str().unwrap(),
@@ -628,8 +1030,10 @@ pub fn apply_max_parallel_rechunking(
 /// # Errors
 ///
 /// * If the configuration is invalid
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub fn create_map(
+    context: &WorkspaceContext,
+    package_name: &str,
     conf: Option<&ClippierConf>,
     config: &ClippierConfiguration,
     file: &str,
@@ -637,6 +1041,17 @@ pub fn create_map(
     required_features: Option<&[String]>,
     features: &[String],
 ) -> Result<serde_json::Map<String, serde_json::Value>, Box<dyn std::error::Error>> {
+    let mut visited = BTreeSet::new();
+    let mut cache = BTreeMap::new();
+    let propagated = collect_propagated_config(
+        context,
+        package_name,
+        Some(&config.os),
+        &mut visited,
+        &mut cache,
+    )
+    .unwrap_or_default();
+
     let mut map = serde_json::Map::new();
     map.insert("os".to_string(), serde_json::to_value(&config.os)?);
     map.insert("path".to_string(), serde_json::to_value(file)?);
@@ -655,7 +1070,14 @@ pub fn create_map(
             .into(),
     );
 
-    if let Some(dependencies) = &config.dependencies {
+    let all_dependencies = if let Some(dependencies) = &config.dependencies {
+        merge_steps(propagated.dependencies.clone(), dependencies.clone())
+    } else {
+        propagated.dependencies.clone()
+    };
+
+    if !all_dependencies.is_empty() {
+        let dependencies = &all_dependencies;
         let matches = dependencies
             .iter()
             .filter(|x| {
@@ -695,10 +1117,10 @@ pub fn create_map(
         }
     }
 
-    let mut env = conf
-        .and_then(|x| x.env.as_ref())
-        .cloned()
-        .unwrap_or_default();
+    let mut env = propagated.env.clone();
+    if let Some(conf_env) = conf.and_then(|x| x.env.as_ref()) {
+        env.extend(conf_env.clone());
+    }
     env.extend(config.env.clone().unwrap_or_default());
 
     let matches = env
@@ -745,13 +1167,13 @@ pub fn create_map(
         map.insert("cargo".to_string(), serde_json::to_value(cargo.join(" "))?);
     }
 
-    let mut ci_steps: Vec<_> = conf
-        .and_then(|x| x.ci_steps.as_ref())
-        .cloned()
-        .unwrap_or_default()
-        .into();
+    let mut ci_steps: Vec<_> = propagated.ci_steps.clone();
+    if let Some(conf_ci_steps) = conf.and_then(|x| x.ci_steps.as_ref()) {
+        let conf_ci_steps_vec: Vec<_> = conf_ci_steps.clone().into();
+        ci_steps = merge_steps(ci_steps, conf_ci_steps_vec);
+    }
     let config_ci_steps: Vec<_> = config.ci_steps.clone().unwrap_or_default().into();
-    ci_steps.extend(config_ci_steps);
+    ci_steps = merge_steps(ci_steps, config_ci_steps);
 
     let matches = ci_steps
         .iter()
@@ -791,8 +1213,9 @@ pub fn create_map(
         }
     }
 
-    if let Some(git_submodules) = config
+    if let Some(git_submodules) = propagated
         .git_submodules
+        .or(config.git_submodules)
         .or_else(|| conf.and_then(|x| x.git_submodules))
     {
         map.insert(
@@ -833,6 +1256,8 @@ pub fn find_workspace_dependencies(
     } else {
         log::trace!("📋 Using default features");
     }
+
+    let workspace_context = WorkspaceContext::new(workspace_root)?;
 
     // First, load the workspace and get all members
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
@@ -881,7 +1306,8 @@ pub fn find_workspace_dependencies(
             package_cargo_values.insert(package_name.to_string(), value.clone());
 
             // Extract dependencies that are workspace members - we'll resolve them later
-            let deps = extract_workspace_dependencies(&value, all_potential_deps);
+            let deps =
+                extract_workspace_dependencies(&value, &workspace_context, all_potential_deps);
             log::trace!("📊 Direct dependencies for {package_name}: {deps:?}");
             package_dependencies.insert(package_name.to_string(), deps);
         }
@@ -956,63 +1382,28 @@ pub fn find_workspace_dependencies(
 }
 
 /// Extracts all workspace dependencies from a Cargo.toml value
-fn extract_workspace_dependencies(cargo_value: &Value, all_potential_deps: bool) -> Vec<String> {
-    let mut deps = Vec::new();
-
-    // Helper function to extract deps from a dependency section
-    let extract_from_section = |section: &Value| -> Vec<String> {
-        let mut section_deps = Vec::new();
-        if let Some(dependencies) = section.as_table() {
-            for (dep_name, dep_value) in dependencies {
-                if all_potential_deps {
-                    if is_workspace_dependency(dep_value) {
-                        section_deps.push(dep_name.clone());
-                    }
-                } else {
-                    // For non-all-potential mode, include workspace deps that are either:
-                    // 1. Non-optional, or
-                    // 2. Optional but activated by default features
-                    if is_workspace_dependency(dep_value) {
-                        if let Value::Table(table) = dep_value {
-                            if table.get("optional") == Some(&Value::Boolean(true)) {
-                                // Optional dependency - check if activated by default features
-                                if is_optional_dependency_activated(cargo_value, dep_name, None) {
-                                    section_deps.push(dep_name.clone());
-                                }
-                            } else {
-                                // Non-optional workspace dependency
-                                section_deps.push(dep_name.clone());
-                            }
-                        } else {
-                            // Simple workspace dependency (not a table)
-                            section_deps.push(dep_name.clone());
-                        }
-                    }
-                }
-            }
+fn extract_workspace_dependencies(
+    cargo_value: &Value,
+    context: &WorkspaceContext,
+    all_potential_deps: bool,
+) -> Vec<String> {
+    let filter = |dep: &DependencyInfo| -> bool {
+        if dep.kind != DependencyKind::WorkspaceReference {
+            return false;
         }
-        section_deps
+
+        if all_potential_deps {
+            return true;
+        }
+
+        if dep.is_optional {
+            is_optional_dependency_activated(cargo_value, dep.name, None)
+        } else {
+            true
+        }
     };
 
-    // Check regular dependencies
-    if let Some(dependencies) = cargo_value.get("dependencies") {
-        deps.extend(extract_from_section(dependencies));
-    }
-
-    // Check dev dependencies
-    if let Some(dev_dependencies) = cargo_value.get("dev-dependencies") {
-        deps.extend(extract_from_section(dev_dependencies));
-    }
-
-    // Check build dependencies
-    if let Some(build_dependencies) = cargo_value.get("build-dependencies") {
-        deps.extend(extract_from_section(build_dependencies));
-    }
-
-    // Remove duplicates
-    deps.sort();
-    deps.dedup();
-    deps
+    extract_dependencies(cargo_value, context, &context.root, filter)
 }
 
 /// Checks if a dependency is activated by the given features

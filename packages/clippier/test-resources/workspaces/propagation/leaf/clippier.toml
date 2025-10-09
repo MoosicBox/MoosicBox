@@ -1,0 +1,20 @@
+git-submodules = true
+
+[env]
+FOO_PATH = "/usr/local/foo"
+BAR_VERSION = "2.0"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "apt-get install -y libfoo-dev"
+
+[[config.dependencies]]
+command = "apt-get install -y libbar-dev"
+
+[[config.ci-steps]]
+command = "curl -o vectors.tar.gz https://example.com/vectors.tar.gz"
+
+[[config.ci-steps]]
+command = "tar -xzf vectors.tar.gz"

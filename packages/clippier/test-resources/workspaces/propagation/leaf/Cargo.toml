@@ -1,0 +1,11 @@
+[package]
+name = "leaf"
+version.workspace = true
+edition.workspace = true
+
+[features]
+fail-on-warnings = []
+feature-a = []
+
+[dependencies]
+serde = "1.0"

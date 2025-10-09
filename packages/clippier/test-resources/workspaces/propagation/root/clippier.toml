@@ -1,0 +1,9 @@
+[env]
+ROOT_VAR = "root_value"
+FOO_PATH = "/override/foo"
+
+[[config]]
+os = "ubuntu"
+
+[[config.ci-steps]]
+command = "cargo test"

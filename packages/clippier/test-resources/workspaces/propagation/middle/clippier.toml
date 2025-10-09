@@ -1,0 +1,12 @@
+[env]
+MIDDLE_VAR = "middle_value"
+BAR_VERSION = "3.0"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "apt-get install -y libmiddle-dev"
+
+[[config.ci-steps]]
+command = "echo 'Setting up middle'"

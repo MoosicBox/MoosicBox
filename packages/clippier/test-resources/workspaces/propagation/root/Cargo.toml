@@ -1,0 +1,14 @@
+[package]
+name = "root"
+version.workspace = true
+edition.workspace = true
+
+[features]
+fail-on-warnings = []
+nightly = []
+
+[dev-dependencies]
+middle = { path = "../middle" }
+
+[dependencies]
+leaf = { path = "../leaf" }
