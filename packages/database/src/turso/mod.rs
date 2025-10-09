@@ -42,20 +42,20 @@
 //!     // Create a new database file
 //!     let db = TursoDatabase::new("database.db").await?;
 //!     let db: &dyn Database = &db;
-//!     
+//!
 //!     // Create a table
 //!     db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").await?;
-//!     
+//!
 //!     // Insert data using parameterized queries
 //!     db.exec_raw_params(
 //!         "INSERT INTO users (name) VALUES (?1)",
 //!         &[DatabaseValue::String("Alice".to_string())]
 //!     ).await?;
-//!     
+//!
 //!     // Query data
 //!     let rows = db.query_raw("SELECT id, name FROM users").await?;
 //!     println!("Found {} users", rows.len());
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -70,19 +70,19 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let db = TursoDatabase::new("database.db").await?;
 //!     let db: &dyn Database = &db;
-//!     
+//!
 //!     // Begin a transaction
 //!     let tx = db.begin_transaction().await?;
-//!     
+//!
 //!     // Execute operations within the transaction
 //!     tx.exec_raw_params(
 //!         "INSERT INTO users (name) VALUES (?1)",
 //!         &[DatabaseValue::String("Bob".to_string())]
 //!     ).await?;
-//!     
+//!
 //!     // Commit the transaction
 //!     tx.commit().await?;
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -98,10 +98,10 @@
 //!     // Use `:memory:` for an in-memory database
 //!     let db = TursoDatabase::new(":memory:").await?;
 //!     let db: &dyn Database = &db;
-//!     
+//!
 //!     // Database is fully functional but not persisted to disk
 //!     db.exec_raw("CREATE TABLE temp (value INTEGER)").await?;
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -607,51 +607,46 @@ impl crate::Database for TursoDatabase {
     #[cfg(feature = "schema")]
     async fn exec_create_table(
         &self,
-        _statement: &crate::schema::CreateTableStatement<'_>,
+        statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        turso_exec_create_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_drop_table(
         &self,
-        _statement: &crate::schema::DropTableStatement<'_>,
+        statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        turso_exec_drop_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_create_index(
         &self,
-        _statement: &crate::schema::CreateIndexStatement<'_>,
+        statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        turso_exec_create_index(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_drop_index(
         &self,
-        _statement: &crate::schema::DropIndexStatement<'_>,
+        statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        turso_exec_drop_index(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_alter_table(
         &self,
-        _statement: &crate::schema::AlterTableStatement<'_>,
+        statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        turso_exec_alter_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -792,6 +787,1167 @@ impl crate::Database for TursoDatabase {
         let columns = self.get_table_columns(table).await?;
         Ok(columns.iter().any(|col| col.name == column))
     }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn turso_exec_create_table(
+    conn: &turso::Connection,
+    statement: &crate::schema::CreateTableStatement<'_>,
+) -> Result<(), crate::DatabaseError> {
+    let mut query = "CREATE TABLE ".to_string();
+
+    if statement.if_not_exists {
+        query.push_str("IF NOT EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+    query.push('(');
+
+    let mut first = true;
+
+    for column in &statement.columns {
+        if first {
+            first = false;
+        } else {
+            query.push(',');
+        }
+
+        if column.auto_increment && statement.primary_key.is_none_or(|x| x != column.name) {
+            return Err(crate::DatabaseError::InvalidSchema(format!(
+                "Column '{}' must be the primary key to enable auto increment",
+                &column.name
+            )));
+        }
+
+        query.push_str(&column.name);
+        query.push(' ');
+
+        match column.data_type {
+            crate::schema::DataType::VarChar(size) => {
+                query.push_str("VARCHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::Text
+            | crate::schema::DataType::Date
+            | crate::schema::DataType::Time
+            | crate::schema::DataType::DateTime
+            | crate::schema::DataType::Timestamp
+            | crate::schema::DataType::Json
+            | crate::schema::DataType::Jsonb
+            | crate::schema::DataType::Uuid
+            | crate::schema::DataType::Xml
+            | crate::schema::DataType::Array(..)
+            | crate::schema::DataType::Inet
+            | crate::schema::DataType::MacAddr
+            | crate::schema::DataType::Decimal(..) => query.push_str("TEXT"),
+            crate::schema::DataType::Char(size) => {
+                query.push_str("CHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::Bool
+            | crate::schema::DataType::TinyInt
+            | crate::schema::DataType::SmallInt
+            | crate::schema::DataType::Int
+            | crate::schema::DataType::BigInt
+            | crate::schema::DataType::Serial
+            | crate::schema::DataType::BigSerial => query.push_str("INTEGER"),
+            crate::schema::DataType::Real
+            | crate::schema::DataType::Double
+            | crate::schema::DataType::Money => query.push_str("REAL"),
+            crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                query.push_str("BLOB");
+            }
+            crate::schema::DataType::Custom(ref type_name) => query.push_str(type_name),
+        }
+
+        if !column.nullable {
+            query.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &column.default {
+            query.push_str(" DEFAULT ");
+
+            match default {
+                crate::DatabaseValue::Null
+                | crate::DatabaseValue::StringOpt(None)
+                | crate::DatabaseValue::BoolOpt(None)
+                | crate::DatabaseValue::Int8Opt(None)
+                | crate::DatabaseValue::Int16Opt(None)
+                | crate::DatabaseValue::Int32Opt(None)
+                | crate::DatabaseValue::Int64Opt(None)
+                | crate::DatabaseValue::UInt8Opt(None)
+                | crate::DatabaseValue::UInt16Opt(None)
+                | crate::DatabaseValue::UInt32Opt(None)
+                | crate::DatabaseValue::UInt64Opt(None)
+                | crate::DatabaseValue::Real64Opt(None)
+                | crate::DatabaseValue::Real32Opt(None) => {
+                    query.push_str("NULL");
+                }
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(None) => {
+                    query.push_str("NULL");
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(None) => {
+                    query.push_str("NULL");
+                }
+                crate::DatabaseValue::StringOpt(Some(x)) | crate::DatabaseValue::String(x) => {
+                    query.push('\'');
+                    query.push_str(x);
+                    query.push('\'');
+                }
+                crate::DatabaseValue::BoolOpt(Some(x)) | crate::DatabaseValue::Bool(x) => {
+                    query.push_str(if *x { "1" } else { "0" });
+                }
+                crate::DatabaseValue::Int8Opt(Some(x)) | crate::DatabaseValue::Int8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::Int16Opt(Some(x)) | crate::DatabaseValue::Int16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::Int32Opt(Some(x)) | crate::DatabaseValue::Int32(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::Int64Opt(Some(x)) | crate::DatabaseValue::Int64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::UInt8Opt(Some(x)) | crate::DatabaseValue::UInt8(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::UInt16Opt(Some(x)) | crate::DatabaseValue::UInt16(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::UInt32Opt(Some(x)) | crate::DatabaseValue::UInt32(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::UInt64Opt(Some(x)) | crate::DatabaseValue::UInt64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::Real64Opt(Some(x)) | crate::DatabaseValue::Real64(x) => {
+                    query.push_str(&x.to_string());
+                }
+                crate::DatabaseValue::Real32Opt(Some(x)) | crate::DatabaseValue::Real32(x) => {
+                    query.push_str(&x.to_string());
+                }
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(Some(x)) | crate::DatabaseValue::Decimal(x) => {
+                    query.push('\'');
+                    query.push_str(&x.to_string());
+                    query.push('\'');
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                    query.push('\'');
+                    query.push_str(&u.to_string());
+                    query.push('\'');
+                }
+                crate::DatabaseValue::NowPlus(interval) => {
+                    let modifiers = format_sqlite_interval(interval);
+                    let modifier_str = modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    {
+                        use std::fmt::Write;
+                        write!(
+                            query,
+                            "(strftime('%Y-%m-%dT%H:%M:%f', datetime('now', {modifier_str})))"
+                        )
+                        .unwrap();
+                    }
+                }
+                crate::DatabaseValue::Now => {
+                    query.push_str("(strftime('%Y-%m-%dT%H:%M:%f', 'now'))");
+                }
+                crate::DatabaseValue::DateTime(x) => {
+                    query.push('\'');
+                    query.push_str(&x.and_utc().to_rfc3339());
+                    query.push('\'');
+                }
+            }
+        }
+    }
+
+    moosicbox_assert::assert!(!first);
+
+    if let Some(primary_key) = &statement.primary_key {
+        query.push_str(", PRIMARY KEY (");
+        query.push_str(primary_key);
+        query.push(')');
+    }
+
+    for (source, target) in &statement.foreign_keys {
+        query.push_str(", FOREIGN KEY (");
+        query.push_str(source);
+        query.push_str(") REFERENCES ");
+        query.push_str(target);
+    }
+
+    query.push(')');
+
+    conn.execute(&query, ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn turso_exec_drop_table(
+    conn: &turso::Connection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), crate::DatabaseError> {
+    #[cfg(feature = "cascade")]
+    {
+        use crate::schema::DropBehavior;
+        match statement.behavior {
+            DropBehavior::Cascade => {
+                return Err(crate::DatabaseError::InvalidQuery(
+                    "CASCADE not yet implemented for Turso DROP TABLE - see Phase 10".to_string(),
+                ));
+            }
+            DropBehavior::Restrict => {
+                return Err(crate::DatabaseError::InvalidQuery(
+                    "RESTRICT not yet implemented for Turso DROP TABLE - see Phase 10".to_string(),
+                ));
+            }
+            DropBehavior::Default => {}
+        }
+    }
+
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+
+    conn.execute(&query, ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn turso_exec_create_index(
+    conn: &turso::Connection,
+    statement: &crate::schema::CreateIndexStatement<'_>,
+) -> Result<(), crate::DatabaseError> {
+    let unique_str = if statement.unique { "UNIQUE " } else { "" };
+    let if_not_exists_str = if statement.if_not_exists {
+        "IF NOT EXISTS "
+    } else {
+        ""
+    };
+
+    let columns_str = statement
+        .columns
+        .iter()
+        .map(|col| format!("`{col}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "CREATE {}INDEX {}{} ON {} ({})",
+        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+    );
+
+    conn.execute(&sql, ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn turso_exec_drop_index(
+    conn: &turso::Connection,
+    statement: &crate::schema::DropIndexStatement<'_>,
+) -> Result<(), crate::DatabaseError> {
+    let if_exists_str = if statement.if_exists {
+        "IF EXISTS "
+    } else {
+        ""
+    };
+
+    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
+
+    conn.execute(&sql, ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn column_requires_table_recreation(
+    conn: &turso::Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, crate::DatabaseError> {
+    let params = to_turso_params(&[DatabaseValue::String(table_name.to_string())])
+        .map_err(crate::DatabaseError::Turso)?;
+
+    let mut stmt = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let column_info = stmt.columns();
+    let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+    let mut rows = stmt
+        .query(params)
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let row = rows
+        .next()
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        .ok_or_else(|| {
+            crate::DatabaseError::InvalidQuery(format!("Table '{table_name}' not found"))
+        })?;
+
+    let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+
+    let table_sql: String = turso_row
+        .get("sql")
+        .and_then(|v| match v {
+            DatabaseValue::String(s) => Some(s),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            crate::DatabaseError::InvalidQuery(format!("Table '{table_name}' not found"))
+        })?;
+
+    let table_sql_upper = table_sql.to_uppercase();
+    let column_name_upper = column_name.to_uppercase();
+
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("PRIMARY KEY")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let pk_pos = table_sql_upper.find("PRIMARY KEY");
+        if let (Some(col_pos), Some(pk_pos)) = (column_pos, pk_pos)
+            && pk_pos > col_pos
+            && (pk_pos - col_pos) < 200
+        {
+            return Ok(true);
+        }
+    }
+
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("UNIQUE")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let unique_pos = table_sql_upper.find("UNIQUE");
+        if let (Some(col_pos), Some(unique_pos)) = (column_pos, unique_pos)
+            && unique_pos > col_pos
+            && (unique_pos - col_pos) < 100
+        {
+            return Ok(true);
+        }
+    }
+
+    if table_sql_upper.contains("CHECK") && table_sql_upper.contains(&column_name_upper) {
+        return Ok(true);
+    }
+
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("GENERATED")
+    {
+        return Ok(true);
+    }
+
+    let params = to_turso_params(&[DatabaseValue::String(table_name.to_string())])
+        .map_err(crate::DatabaseError::Turso)?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+        )
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let column_info = stmt.columns();
+    let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+    let mut rows = stmt
+        .query(params)
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    while let Some(row) = rows
+        .next()
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+    {
+        let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+        if let Some(DatabaseValue::String(index_sql)) = turso_row.get("sql") {
+            let index_sql_upper = index_sql.to_uppercase();
+            if index_sql_upper.contains("UNIQUE") && index_sql_upper.contains(&column_name_upper) {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+fn modify_create_table_sql(
+    original_sql: &str,
+    original_table_name: &str,
+    new_table_name: &str,
+    column_name: &str,
+    new_data_type: &crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<String, crate::DatabaseError> {
+    let data_type_str = match new_data_type {
+        crate::schema::DataType::Text
+        | crate::schema::DataType::VarChar(_)
+        | crate::schema::DataType::Char(_)
+        | crate::schema::DataType::Date
+        | crate::schema::DataType::Time
+        | crate::schema::DataType::DateTime
+        | crate::schema::DataType::Timestamp
+        | crate::schema::DataType::Json
+        | crate::schema::DataType::Jsonb
+        | crate::schema::DataType::Uuid
+        | crate::schema::DataType::Xml
+        | crate::schema::DataType::Array(..)
+        | crate::schema::DataType::Inet
+        | crate::schema::DataType::MacAddr
+        | crate::schema::DataType::Custom(_)
+        | crate::schema::DataType::Decimal(..) => "TEXT",
+        crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
+        | crate::schema::DataType::SmallInt
+        | crate::schema::DataType::Int
+        | crate::schema::DataType::BigInt
+        | crate::schema::DataType::Serial
+        | crate::schema::DataType::BigSerial => "INTEGER",
+        crate::schema::DataType::Real
+        | crate::schema::DataType::Double
+        | crate::schema::DataType::Money => "REAL",
+        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB",
+    };
+
+    let mut new_column_def = format!("`{column_name}` {data_type_str}");
+
+    if let Some(nullable) = new_nullable
+        && !nullable
+    {
+        new_column_def.push_str(" NOT NULL");
+    }
+
+    if let Some(default_value) = new_default {
+        use std::fmt::Write;
+
+        let default_str = match default_value {
+            crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                format!("'{}'", s.replace('\'', "''"))
+            }
+            crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
+                "NULL".to_string()
+            }
+            crate::DatabaseValue::Int8(i) | crate::DatabaseValue::Int8Opt(Some(i)) => i.to_string(),
+            crate::DatabaseValue::Int16(i) | crate::DatabaseValue::Int16Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Int32(i) | crate::DatabaseValue::Int32Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Int64(i) | crate::DatabaseValue::Int64Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt8(i) | crate::DatabaseValue::UInt8Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt16(i) | crate::DatabaseValue::UInt16Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::UInt32(i) | crate::DatabaseValue::UInt32Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Int8Opt(None)
+            | crate::DatabaseValue::Int16Opt(None)
+            | crate::DatabaseValue::Int32Opt(None)
+            | crate::DatabaseValue::Int64Opt(None)
+            | crate::DatabaseValue::UInt8Opt(None)
+            | crate::DatabaseValue::UInt16Opt(None)
+            | crate::DatabaseValue::UInt32Opt(None)
+            | crate::DatabaseValue::UInt64Opt(None)
+            | crate::DatabaseValue::Real64Opt(None)
+            | crate::DatabaseValue::Real32Opt(None)
+            | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::UuidOpt(None) => "NULL".to_string(),
+            crate::DatabaseValue::UInt64(i) | crate::DatabaseValue::UInt64Opt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Real64(f) | crate::DatabaseValue::Real64Opt(Some(f)) => {
+                f.to_string()
+            }
+            crate::DatabaseValue::Real32(f) | crate::DatabaseValue::Real32Opt(Some(f)) => {
+                f.to_string()
+            }
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                format!("'{d}'")
+            }
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                format!("'{u}'")
+            }
+            crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                if *b { "1" } else { "0" }.to_string()
+            }
+            crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
+            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+            crate::DatabaseValue::NowPlus(_) => {
+                return Err(crate::DatabaseError::InvalidQuery(
+                    "NowPlus not supported in ModifyColumn DEFAULT".to_string(),
+                ));
+            }
+        };
+
+        write!(new_column_def, " DEFAULT {default_str}").unwrap();
+    }
+
+    let column_pattern = format!(
+        r"`?{}`?\s+\w+(\s+(NOT\s+NULL|PRIMARY\s+KEY|UNIQUE|CHECK\s*\([^)]+\)|DEFAULT\s+[^,\s)]+|GENERATED\s+[^,)]+))*",
+        regex::escape(column_name)
+    );
+
+    let re = regex::Regex::new(&column_pattern).map_err(|_| {
+        crate::DatabaseError::InvalidQuery(format!(
+            "Failed to create regex for column '{column_name}'"
+        ))
+    })?;
+
+    let modified_sql = re.replace(original_sql, new_column_def.as_str());
+    let final_sql = modified_sql.replace(original_table_name, new_table_name);
+
+    Ok(final_sql)
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn turso_exec_modify_column_workaround(
+    conn: &turso::Connection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), crate::DatabaseError> {
+    let type_str = match new_data_type {
+        crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+        crate::schema::DataType::Text
+        | crate::schema::DataType::Date
+        | crate::schema::DataType::Time
+        | crate::schema::DataType::DateTime
+        | crate::schema::DataType::Timestamp
+        | crate::schema::DataType::Json
+        | crate::schema::DataType::Jsonb
+        | crate::schema::DataType::Uuid
+        | crate::schema::DataType::Xml
+        | crate::schema::DataType::Array(_)
+        | crate::schema::DataType::Inet
+        | crate::schema::DataType::MacAddr => "TEXT".to_string(),
+        crate::schema::DataType::Char(len) => format!("CHAR({len})"),
+        crate::schema::DataType::Bool
+        | crate::schema::DataType::TinyInt
+        | crate::schema::DataType::SmallInt
+        | crate::schema::DataType::Int
+        | crate::schema::DataType::BigInt
+        | crate::schema::DataType::Serial
+        | crate::schema::DataType::BigSerial => "INTEGER".to_string(),
+        crate::schema::DataType::Real
+        | crate::schema::DataType::Double
+        | crate::schema::DataType::Decimal(_, _)
+        | crate::schema::DataType::Money => "REAL".to_string(),
+        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB".to_string(),
+        crate::schema::DataType::Custom(type_name) => type_name,
+    };
+
+    let temp_column = format!(
+        "{}_temp_{}",
+        column_name,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
+
+    conn.execute("BEGIN TRANSACTION", ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    let nullable_str = match new_nullable {
+        Some(true) | None => "",
+        Some(false) => " NOT NULL",
+    };
+
+    let default_str = match new_default {
+        Some(val) => {
+            let val_str = match val {
+                crate::DatabaseValue::String(s) => format!("'{s}'"),
+                crate::DatabaseValue::Int64(n) => n.to_string(),
+                crate::DatabaseValue::UInt64(n) => n.to_string(),
+                crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                crate::DatabaseValue::Real64(r) => r.to_string(),
+                crate::DatabaseValue::Real32(r) => r.to_string(),
+                crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                    format!("'{d}'")
+                }
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                    format!("'{u}'")
+                }
+                _ => {
+                    return Err(crate::DatabaseError::InvalidSchema(
+                        "Unsupported default value type for MODIFY COLUMN".to_string(),
+                    ));
+                }
+            };
+            format!(" DEFAULT {val_str}")
+        }
+        None => String::new(),
+    };
+
+    let result = async {
+        conn.execute(
+            &format!(
+                "ALTER TABLE {table_name} ADD COLUMN `{temp_column}` {type_str}{nullable_str}{default_str}"
+            ),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!(
+                "UPDATE {table_name} SET `{temp_column}` = CAST(`{column_name}` AS {type_str})"
+            ),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!("ALTER TABLE {table_name} DROP COLUMN `{column_name}`"),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!(
+                "ALTER TABLE {table_name} ADD COLUMN `{column_name}` {type_str}{nullable_str}{default_str}"
+            ),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!("UPDATE {table_name} SET `{column_name}` = `{temp_column}`"),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!("ALTER TABLE {table_name} DROP COLUMN `{temp_column}`"),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        Ok::<(), crate::DatabaseError>(())
+    }
+    .await;
+
+    match result {
+        Ok(()) => {
+            conn.execute("COMMIT", ())
+                .await
+                .map_err(TursoDatabaseError::Turso)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute("ROLLBACK", ()).await;
+            Err(e)
+        }
+    }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn turso_exec_table_recreation_workaround(
+    conn: &turso::Connection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: &crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), crate::DatabaseError> {
+    conn.execute("BEGIN TRANSACTION", ())
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+    let result = async {
+        let mut stmt = conn
+            .prepare("PRAGMA foreign_keys")
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let foreign_keys_enabled = if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+            column_names
+                .iter()
+                .find_map(|col| turso_row.get(col))
+                .and_then(|v| match v {
+                    DatabaseValue::Int32(i) => Some(i),
+                    #[allow(clippy::cast_possible_truncation)]
+                    DatabaseValue::Int64(i) => Some(i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        if foreign_keys_enabled == 1 {
+            conn.execute("PRAGMA foreign_keys=OFF", ())
+                .await
+                .map_err(TursoDatabaseError::Turso)?;
+        }
+
+        let params = to_turso_params(&[DatabaseValue::String(table_name.to_string())])
+            .map_err(crate::DatabaseError::Turso)?;
+
+        let mut stmt = conn
+            .prepare("SELECT sql FROM sqlite_master WHERE tbl_name=? AND type IN ('index','trigger','view') AND sql IS NOT NULL")
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(params)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut schema_objects = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+            if let Some(DatabaseValue::String(sql)) = turso_row.get("sql") {
+                schema_objects.push(sql.clone());
+            }
+        }
+
+        let params = to_turso_params(&[DatabaseValue::String(table_name.to_string())])
+            .map_err(crate::DatabaseError::Turso)?;
+
+        let mut stmt = conn
+            .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(params)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let row = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+            .ok_or_else(|| {
+                crate::DatabaseError::InvalidQuery(format!("Table '{table_name}' not found"))
+            })?;
+
+        let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+
+        let original_sql: String = turso_row
+            .get("sql")
+            .and_then(|v| match v {
+                DatabaseValue::String(s) => Some(s),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                crate::DatabaseError::InvalidQuery(format!("Table '{table_name}' not found"))
+            })?;
+
+        let temp_table = format!(
+            "{}_temp_{}",
+            table_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
+        let new_table_sql = modify_create_table_sql(
+            &original_sql,
+            table_name,
+            &temp_table,
+            column_name,
+            new_data_type,
+            new_nullable,
+            new_default,
+        )?;
+
+        conn.execute(&new_table_sql, ())
+            .await
+            .map_err(TursoDatabaseError::Turso)?;
+
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table_name})"))
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut columns = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+            if let Some(DatabaseValue::String(name)) = turso_row.get("name") {
+                columns.push(name.clone());
+            }
+        }
+
+        let column_list = columns
+            .iter()
+            .map(|col| {
+                if col == column_name {
+                    let cast_type = match new_data_type {
+                        crate::schema::DataType::Text
+                        | crate::schema::DataType::VarChar(_)
+                        | crate::schema::DataType::Char(_)
+                        | crate::schema::DataType::Date
+                        | crate::schema::DataType::Time
+                        | crate::schema::DataType::DateTime
+                        | crate::schema::DataType::Timestamp
+                        | crate::schema::DataType::Json
+                        | crate::schema::DataType::Jsonb
+                        | crate::schema::DataType::Uuid
+                        | crate::schema::DataType::Xml
+                        | crate::schema::DataType::Array(_)
+                        | crate::schema::DataType::Inet
+                        | crate::schema::DataType::MacAddr
+                        | crate::schema::DataType::Custom(_) => "TEXT",
+                        crate::schema::DataType::Bool
+                        | crate::schema::DataType::TinyInt
+                        | crate::schema::DataType::SmallInt
+                        | crate::schema::DataType::Int
+                        | crate::schema::DataType::BigInt
+                        | crate::schema::DataType::Serial
+                        | crate::schema::DataType::BigSerial => "INTEGER",
+                        crate::schema::DataType::Real
+                        | crate::schema::DataType::Double
+                        | crate::schema::DataType::Decimal(_, _)
+                        | crate::schema::DataType::Money => "REAL",
+                        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                            "BLOB"
+                        }
+                    };
+                    format!("CAST(`{col}` AS {cast_type}) AS `{col}`")
+                } else {
+                    format!("`{col}`")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        conn.execute(
+            &format!("INSERT INTO {temp_table} SELECT {column_list} FROM {table_name}"),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(&format!("DROP TABLE {table_name}"), ())
+            .await
+            .map_err(TursoDatabaseError::Turso)?;
+
+        conn.execute(
+            &format!("ALTER TABLE {temp_table} RENAME TO {table_name}"),
+            (),
+        )
+        .await
+        .map_err(TursoDatabaseError::Turso)?;
+
+        for schema_sql in schema_objects {
+            if !schema_sql.to_uppercase().contains("AUTOINDEX") {
+                conn.execute(&schema_sql, ())
+                    .await
+                    .map_err(TursoDatabaseError::Turso)?;
+            }
+        }
+
+        if foreign_keys_enabled == 1 {
+            conn.execute("PRAGMA foreign_keys=ON", ())
+                .await
+                .map_err(TursoDatabaseError::Turso)?;
+
+            let mut stmt = conn
+                .prepare("PRAGMA foreign_key_check")
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+            let column_info = stmt.columns();
+            let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+            let mut rows = stmt
+                .query(())
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+            let mut fk_violations = Vec::new();
+            while let Some(row) = rows
+                .next()
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+            {
+                let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
+                fk_violations.push(turso_row);
+            }
+
+            if !fk_violations.is_empty() {
+                return Err(crate::DatabaseError::ForeignKeyViolation(
+                    "Foreign key violations detected after table recreation".to_string(),
+                ));
+            }
+        }
+
+        Ok::<(), crate::DatabaseError>(())
+    }
+    .await;
+
+    match result {
+        Ok(()) => {
+            conn.execute("COMMIT", ())
+                .await
+                .map_err(TursoDatabaseError::Turso)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute("ROLLBACK", ()).await;
+            Err(e)
+        }
+    }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn turso_exec_alter_table(
+    conn: &turso::Connection,
+    statement: &crate::schema::AlterTableStatement<'_>,
+) -> Result<(), crate::DatabaseError> {
+    use crate::schema::AlterOperation;
+
+    for operation in &statement.operations {
+        match operation {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                let type_str = match data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text
+                    | crate::schema::DataType::Date
+                    | crate::schema::DataType::Time
+                    | crate::schema::DataType::DateTime
+                    | crate::schema::DataType::Timestamp
+                    | crate::schema::DataType::Json
+                    | crate::schema::DataType::Jsonb
+                    | crate::schema::DataType::Uuid
+                    | crate::schema::DataType::Xml
+                    | crate::schema::DataType::Array(_)
+                    | crate::schema::DataType::Inet
+                    | crate::schema::DataType::MacAddr => "TEXT".to_string(),
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
+                    crate::schema::DataType::Bool
+                    | crate::schema::DataType::TinyInt
+                    | crate::schema::DataType::SmallInt
+                    | crate::schema::DataType::Int
+                    | crate::schema::DataType::BigInt
+                    | crate::schema::DataType::Serial
+                    | crate::schema::DataType::BigSerial => "INTEGER".to_string(),
+                    crate::schema::DataType::Real
+                    | crate::schema::DataType::Double
+                    | crate::schema::DataType::Decimal(_, _)
+                    | crate::schema::DataType::Money => "REAL".to_string(),
+                    crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                        "BLOB".to_string()
+                    }
+                    crate::schema::DataType::Custom(type_name) => type_name.to_string(),
+                };
+
+                let nullable_str = if *nullable { "" } else { " NOT NULL" };
+                let default_str = match default {
+                    Some(val) => {
+                        let val_str = match val {
+                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::Int64(n) => n.to_string(),
+                            crate::DatabaseValue::UInt64(n) => n.to_string(),
+                            crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                            crate::DatabaseValue::Real64(r) => r.to_string(),
+                            crate::DatabaseValue::Real32(r) => r.to_string(),
+                            crate::DatabaseValue::Null => "NULL".to_string(),
+                            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            #[cfg(feature = "decimal")]
+                            crate::DatabaseValue::Decimal(d)
+                            | crate::DatabaseValue::DecimalOpt(Some(d)) => {
+                                format!("'{d}'")
+                            }
+                            #[cfg(feature = "uuid")]
+                            crate::DatabaseValue::Uuid(u)
+                            | crate::DatabaseValue::UuidOpt(Some(u)) => {
+                                format!("'{u}'")
+                            }
+                            _ => {
+                                return Err(crate::DatabaseError::InvalidSchema(
+                                    "Unsupported default value type for ALTER TABLE ADD COLUMN"
+                                        .to_string(),
+                                ));
+                            }
+                        };
+                        format!(" DEFAULT {val_str}")
+                    }
+                    None => String::new(),
+                };
+
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN `{}` {}{}{}",
+                    statement.table_name, name, type_str, nullable_str, default_str
+                );
+
+                conn.execute(&sql, ())
+                    .await
+                    .map_err(TursoDatabaseError::Turso)?;
+            }
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
+                #[cfg(feature = "cascade")]
+                {
+                    use crate::schema::DropBehavior;
+
+                    match behavior {
+                        DropBehavior::Cascade | DropBehavior::Restrict => {
+                            return Err(crate::DatabaseError::InvalidQuery(
+                                "CASCADE/RESTRICT not yet implemented for Turso ALTER TABLE DROP COLUMN - see Phase 10"
+                                    .to_string(),
+                            ));
+                        }
+                        DropBehavior::Default => {}
+                    }
+                }
+
+                let sql = format!(
+                    "ALTER TABLE {} DROP COLUMN `{}`",
+                    statement.table_name, name
+                );
+
+                conn.execute(&sql, ())
+                    .await
+                    .map_err(TursoDatabaseError::Turso)?;
+            }
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                let sql = format!(
+                    "ALTER TABLE {} RENAME COLUMN `{}` TO `{}`",
+                    statement.table_name, old_name, new_name
+                );
+
+                conn.execute(&sql, ())
+                    .await
+                    .map_err(TursoDatabaseError::Turso)?;
+            }
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                if column_requires_table_recreation(conn, statement.table_name, name).await? {
+                    turso_exec_table_recreation_workaround(
+                        conn,
+                        statement.table_name,
+                        name,
+                        new_data_type,
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )
+                    .await?;
+                } else {
+                    turso_exec_modify_column_workaround(
+                        conn,
+                        statement.table_name,
+                        name,
+                        new_data_type.clone(),
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "schema")]
