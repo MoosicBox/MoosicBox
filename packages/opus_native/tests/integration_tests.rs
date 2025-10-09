@@ -4,7 +4,7 @@ use moosicbox_opus_native_test_vectors::{
 };
 
 #[test]
-#[ignore = "Requires valid Opus test vectors (synthetic packets are invalid)"]
+#[ignore = "Decoder not yet complete enough to handle real libopus packets"]
 fn test_decode_silk_vectors() {
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
@@ -58,7 +58,7 @@ fn test_decode_silk_vectors() {
 }
 
 #[test]
-#[ignore = "Requires valid Opus test vectors (synthetic packets are invalid)"]
+#[ignore = "Decoder not yet complete enough to handle real libopus packets"]
 fn test_decode_celt_vectors() {
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
@@ -112,7 +112,7 @@ fn test_decode_celt_vectors() {
 }
 
 #[test]
-#[ignore = "Requires valid Opus test vectors (synthetic packets are invalid)"]
+#[ignore = "Decoder not yet complete enough to handle real libopus packets"]
 fn test_decode_integration_vectors() {
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");

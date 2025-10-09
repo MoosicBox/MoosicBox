@@ -96,6 +96,7 @@ members = [
     "packages/openport",
     "packages/opus",
     "packages/opus_native",
+    "packages/opus_native/libopus",
     "packages/opus_native/test_vectors",
     "packages/p2p",
     "packages/paging",
@@ -249,6 +250,7 @@ moosicbox_music_api_helpers        = { version = "0.1.1", default-features = fal
 moosicbox_music_api_models         = { version = "0.1.1", default-features = false, path = "packages/music_api/models" }
 moosicbox_music_models             = { version = "0.1.1", default-features = false, path = "packages/music/models" }
 moosicbox_opus                     = { version = "0.1.1", default-features = false, path = "packages/opus" }
+moosicbox_opus_native_libopus      = { version = "0.1.0", default-features = false, path = "packages/opus_native/libopus" }
 moosicbox_opus_native_test_vectors = { version = "0.1.0", default-features = false, path = "packages/opus_native/test_vectors" }
 moosicbox_paging                   = { version = "0.1.1", default-features = false, path = "packages/paging" }
 moosicbox_parsing_utils            = { version = "0.1.1", default-features = false, path = "packages/parsing_utils" }
@@ -376,6 +378,7 @@ chrono = { version = "0.4.42", default-features = false, features = [
     "serde",
 ] }
 clap = { version = "4.5.48", features = ["derive"] }
+cmake = "0.1.54"
 color-backtrace = { version = "0.7.1", default-features = false, features = [
     "use-btparse-crate",
 ] }

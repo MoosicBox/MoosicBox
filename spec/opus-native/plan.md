@@ -21953,7 +21953,7 @@ We have a complete decoder implementation but ZERO verification with real Opus p
 
 **Reference:** `test-vectors/README.md`, RFC 6716 Appendix A.4
 **Goal:** Create infrastructure to load and validate test vectors
-**Status:** 🔴 NOT STARTED
+**Status:** ✅ COMPLETE
 
 #### Implementation Steps
 
@@ -22275,198 +22275,374 @@ fn test_decode_integration_vectors() {
 
 ---
 
-### 8.2: Generate Test Vectors from libopus
+### 8.2: Test Vector Generation with libopus FFI
 
-**Reference:** libopus `opus_demo` tool, RFC 6716 test methodology
-**Goal:** Generate reference test vectors using libopus
-**Status:** 🔴 NOT STARTED
+**Goal:** Generate real RFC-compliant Opus packets using libopus encoder via FFI
+**Status:** 🔄 IN PROGRESS
 
-#### Implementation Steps
+**Problem:** Synthetic packets don't work due to complex Opus internal state requirements
 
-##### 8.2.1: Create Test Vector Generation Script
+**Solution:** Build libopus from source, expose minimal FFI, use encoder/decoder directly
 
-Create `packages/opus_native/scripts/generate_vectors.sh`:
+**RFC Reference:** RFC 6716 requires bit-exact decoder validation
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+---
 
-# Requires: opus-tools installed (opus_demo, opusenc, opusdec)
-# Install: apt install opus-tools (Debian/Ubuntu)
-#          brew install opus-tools (macOS)
-#          nix-shell -p opus-tools (NixOS)
+#### 8.2.1: Create moosicbox_opus_native_libopus Crate
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_VECTORS_DIR="$SCRIPT_DIR/../test-vectors"
-TEMP_DIR="/tmp/opus_test_vectors"
+**Location:** `packages/opus_native/libopus/`
 
-mkdir -p "$TEMP_DIR"
-cd "$TEMP_DIR"
+**Purpose:** Build libopus from source and expose minimal FFI for test vector generation only
 
-echo "Generating test vectors in: $TEST_VECTORS_DIR"
+**Implementation Tasks:**
 
-# Generate silent audio (for basic decoding tests)
-generate_silent_audio() {
-    local duration_ms=$1
-    local sample_rate=$2
-    local channels=$3
-    local filename=$4
-
-    local samples=$((duration_ms * sample_rate / 1000))
-
-    # Generate silent PCM (16-bit signed, little-endian)
-    dd if=/dev/zero bs=2 count=$((samples * channels)) of="$filename" 2>/dev/null
-}
-
-# Generate tone (for quality tests)
-generate_tone() {
-    local duration_ms=$1
-    local sample_rate=$2
-    local frequency=$3
-    local filename=$4
-
-    # Use sox or similar tool if available
-    # For now, use silent audio as placeholder
-    generate_silent_audio "$duration_ms" "$sample_rate" 1 "$filename"
-}
-
-# Encode and capture both packet and decoded output
-encode_and_capture() {
-    local input_pcm=$1
-    local output_dir=$2
-    local sample_rate=$3
-    local channels=$4
-    local bitrate=$5
-    local frame_size=$6
-    local mode=$7  # silk, celt, hybrid
-
-    mkdir -p "$output_dir"
-
-    # Encode with opus_demo (gives us the packet)
-    opus_demo -e voip "$sample_rate" "$channels" "$bitrate" "$frame_size" \
-        "$input_pcm" "$output_dir/encoded.opus"
-
-    # Decode with opus_demo (reference output)
-    opus_demo -d "$sample_rate" "$channels" \
-        "$output_dir/encoded.opus" "$output_dir/expected.pcm"
-
-    # Extract first packet (simplified - real script would handle multi-packet files)
-    head -c 256 "$output_dir/encoded.opus" > "$output_dir/packet.bin"
-
-    # Generate metadata
-    cat > "$output_dir/meta.json" <<EOF
-{
-  "sample_rate": $sample_rate,
-  "channels": $channels,
-  "bitrate": $bitrate,
-  "frame_size_ms": $frame_size,
-  "mode": "$mode"
-}
-EOF
-}
-
-# Generate SILK test vectors
-echo "Generating SILK test vectors..."
-
-# Narrowband (8 kHz)
-generate_silent_audio 20 8000 1 "silk_nb_mono.pcm"
-encode_and_capture "silk_nb_mono.pcm" "$TEST_VECTORS_DIR/silk/nb/silent_20ms_mono" 8000 1 12000 20 "silk"
-
-generate_silent_audio 20 8000 2 "silk_nb_stereo.pcm"
-encode_and_capture "silk_nb_stereo.pcm" "$TEST_VECTORS_DIR/silk/nb/silent_20ms_stereo" 8000 2 24000 20 "silk"
-
-# Mediumband (12 kHz)
-generate_silent_audio 20 12000 1 "silk_mb_mono.pcm"
-encode_and_capture "silk_mb_mono.pcm" "$TEST_VECTORS_DIR/silk/mb/silent_20ms_mono" 12000 1 16000 20 "silk"
-
-# Wideband (16 kHz)
-generate_silent_audio 20 16000 1 "silk_wb_mono.pcm"
-encode_and_capture "silk_wb_mono.pcm" "$TEST_VECTORS_DIR/silk/wb/silent_20ms_mono" 16000 1 20000 20 "silk"
-
-# Super-wideband (24 kHz) - requires hybrid mode
-generate_silent_audio 20 24000 1 "hybrid_swb_mono.pcm"
-encode_and_capture "hybrid_swb_mono.pcm" "$TEST_VECTORS_DIR/silk/swb/silent_20ms_mono" 24000 1 32000 20 "hybrid"
-
-# Generate CELT test vectors
-echo "Generating CELT test vectors..."
-
-# Various frame sizes at 48 kHz
-for frame_size in 2.5 5 10 20; do
-    frame_size_int=${frame_size/./}  # 2.5 -> 25
-    generate_silent_audio "$frame_size" 48000 1 "celt_${frame_size_int}ms.pcm"
-    encode_and_capture "celt_${frame_size_int}ms.pcm" \
-        "$TEST_VECTORS_DIR/celt/fb/silent_${frame_size_int}ms_mono" \
-        48000 1 64000 "$frame_size" "celt"
-done
-
-# Generate integration test vectors (hybrid mode, mode transitions)
-echo "Generating integration test vectors..."
-generate_silent_audio 60 48000 2 "integration_60ms.pcm"
-encode_and_capture "integration_60ms.pcm" \
-    "$TEST_VECTORS_DIR/integration/silent_60ms_stereo" \
-    48000 2 128000 20 "hybrid"
-
-echo "Test vector generation complete!"
-echo "Vectors saved to: $TEST_VECTORS_DIR"
-```
-
-Make executable: `chmod +x packages/opus_native/scripts/generate_vectors.sh`
-
-##### 8.2.2: Generate Initial Test Vector Set
-
-Run the generation script:
-
-```bash
-cd packages/opus_native
-./scripts/generate_vectors.sh
-```
-
-This will create test vectors for:
-- SILK: NB (8kHz), MB (12kHz), WB (16kHz), SWB (24kHz) - mono and stereo
-- CELT: Various frame sizes at 48kHz
-- Integration: Hybrid mode, mode transitions
-
-##### 8.2.3: Verify Test Vectors Load Correctly
-
-```bash
-cargo test -p moosicbox_opus_native --test integration_tests -- --nocapture
-```
-
-Should see tests execute (may fail if decoder has bugs - that's expected!).
-
-#### 8.2 Verification Checklist
-
-- [x] Created `moosicbox_opus_native_test_vectors` sub-crate (pure Rust)
+- [ ] Create directory structure
+  ```bash
+  mkdir -p packages/opus_native/libopus/src
   ```
-  packages/opus_native/test_vectors/
-  ├── Cargo.toml
-  ├── build.rs (pure Rust vector generation)
-  ├── src/lib.rs (test vector API)
-  └── README.md
+
+- [ ] Add opus git submodule
+  ```bash
+  cd packages/opus_native/libopus
+  git submodule add https://gitlab.xiph.org/xiph/opus.git opus
+  cd opus
+  git checkout v1.5.2
   ```
-- [x] Added to workspace in root `Cargo.toml`
+
+- [ ] Create `Cargo.toml`
   ```toml
-  "packages/opus_native/test_vectors",
-  moosicbox_opus_native_test_vectors = { version = "0.1.0", ... }
-  ```
-- [x] Implemented pure Rust `build.rs`
-  - No external dependencies (Python, bash, etc.)
-  - Generates synthetic test vectors during `cargo build`
-  - Cross-platform (works everywhere Rust works)
-  - Silent build (no logging noise)
-  ```
-  Compiling moosicbox_opus_native_test_vectors v0.1.0
-  Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.47s
-  ```
-- [x] Added `opusTools` to `flake.nix` for future use with proper vectors
-- [x] Created `.gitignore` in `packages/opus_native/`
-  ```gitignore
-  test_vectors/generated/
-  ```
-- [x] Integration tests use test_vectors crate
-  Tests gracefully skip when vectors aren't valid (current state)
+  [package]
+  name = "moosicbox_opus_native_libopus"
+  version = "0.1.0"
+  edition = { workspace = true }
+  license = { workspace = true }
+  description = "Internal: Minimal libopus FFI for test vector generation"
+  publish = false
 
-**Status:** Infrastructure complete and working. Test vectors auto-generate during build using pure Rust (no external dependencies). Zero clippy warnings. Integration tests marked with `#[ignore]` until valid test vectors are available (run with `cargo test -- --ignored` when ready).
+  [build-dependencies]
+  cmake = { workspace = true }
+
+  [features]
+  fail-on-warnings = []
+  ```
+  **Note:** `publish = false` prevents accidental crates.io publication
+
+- [ ] Create `build.rs` with CMake configuration
+  - Build libopus statically via cmake crate
+  - Define OPUS_BUILD_PROGRAMS=OFF (no opus_demo needed)
+  - Define OPUS_BUILD_TESTING=OFF (faster build)
+  - Define OPUS_BUILD_SHARED_LIBRARY=OFF (static linking)
+  - Link libopus statically
+  - Link libm on Unix systems
+
+- [ ] Create `src/lib.rs` with FFI bindings
+  **Part 1: Raw FFI (6 functions only)**
+  - `opus_encoder_create()` - Create encoder instance
+  - `opus_encode()` - Encode PCM to Opus packet
+  - `opus_encoder_destroy()` - Cleanup encoder
+  - `opus_decoder_create()` - Create decoder instance
+  - `opus_decode()` - Decode Opus packet to PCM
+  - `opus_decoder_destroy()` - Cleanup decoder
+
+  **Part 2: Constants**
+  - `OPUS_OK` - Success return code
+  - `OPUS_APPLICATION_VOIP` - SILK mode
+  - `OPUS_APPLICATION_AUDIO` - CELT/Hybrid mode
+
+  **Part 3: Safe Wrappers**
+  - `safe::Encoder` - RAII wrapper with `new()` and `encode()` methods
+  - `safe::Decoder` - RAII wrapper with `new()` and `decode()` methods
+  - Both implement `Drop` for automatic cleanup
+
+- [ ] Add roundtrip test
+  ```rust
+  #[test]
+  fn test_encode_decode_roundtrip() {
+      // Create encoder/decoder
+      // Encode 960 samples of silence
+      // Decode packet back to PCM
+      // Verify sample count matches
+  }
+  ```
+
+- [ ] Create `README.md` documenting purpose and usage
+
+**Verification Checklist:**
+- [ ] `cargo build -p moosicbox_opus_native_libopus` compiles successfully
+- [ ] `cargo test -p moosicbox_opus_native_libopus` passes (roundtrip test)
+- [ ] `cargo clippy -p moosicbox_opus_native_libopus --all-targets -- -D warnings` zero warnings
+- [ ] Works on Linux (NixOS verified)
+- [ ] Works on macOS (if applicable)
+- [ ] Works on Windows (if applicable)
+- [ ] libopus.a static library created in target/
+
+**Why Not Use audiopus-sys?**
+- audiopus-sys is runtime dependency (we need build-time only)
+- audiopus-sys has 100+ bindings (we need 6 functions)
+- audiopus-sys requires bindgen feature (clang dependency)
+- Our approach: minimal, build-time only, hand-written bindings
+
+---
+
+#### 8.2.2: Update test_vectors Crate to Use FFI
+
+**Location:** `packages/opus_native/test_vectors/`
+
+**Implementation Tasks:**
+
+- [ ] Update `Cargo.toml`
+  - Add `publish = false` to package section
+  - Add `moosicbox_opus_native_libopus = { workspace = true }` to build-dependencies
+
+- [ ] Rewrite `build.rs` to use libopus FFI
+  **Replace synthetic packet generation with:**
+
+  **Function: `generate_silk_nb_mono()`**
+  - Sample rate: 8000 Hz
+  - Channels: 1 (mono)
+  - Frame size: 160 samples (20ms)
+  - Application: OPUS_APPLICATION_VOIP (forces SILK mode)
+  - Input: Silence (deterministic output)
+  - Encode → packet.bin
+  - Decode → expected.pcm
+  - Write meta.json with mode="silk"
+
+  **Function: `generate_celt_fb_mono()`**
+  - Sample rate: 48000 Hz
+  - Channels: 1 (mono)
+  - Frame size: 480 samples (10ms)
+  - Application: OPUS_APPLICATION_AUDIO (forces CELT mode)
+  - Input: Silence (deterministic output)
+  - Encode → packet.bin
+  - Decode → expected.pcm
+  - Write meta.json with mode="celt"
+
+  **Function: `generate_integration_stereo()`**
+  - Sample rate: 48000 Hz
+  - Channels: 2 (stereo)
+  - Frame size: 960 samples (20ms)
+  - Application: OPUS_APPLICATION_AUDIO
+  - Input: Silence (deterministic output)
+  - Encode → packet.bin
+  - Decode → expected.pcm
+  - Write meta.json with mode="hybrid"
+
+- [ ] Verify `src/lib.rs` (no changes needed)
+  - TestVector::load() already implemented
+  - calculate_snr() already implemented
+  - test_vectors_dir() already implemented
+
+**Verification Checklist:**
+- [ ] `cargo build -p moosicbox_opus_native_test_vectors` succeeds
+- [ ] Test vectors generated in `target/debug/build/*/out/generated/`
+- [ ] All 3 directories created:
+  - silk/nb/basic_mono/
+  - celt/fb/basic_mono/
+  - integration/basic_stereo/
+- [ ] Each directory contains packet.bin, expected.pcm, meta.json
+- [ ] packet.bin files are NOT empty (contain real Opus packets)
+- [ ] packet.bin files are NOT synthetic (TOC byte indicates correct mode)
+- [ ] expected.pcm files contain decoded samples from libopus
+- [ ] meta.json files parse as valid JSON
+- [ ] No build warnings or errors
+
+---
+
+#### 8.2.3: Remove #[ignore] from Integration Tests
+
+**Location:** `packages/opus_native/tests/integration_tests.rs`
+
+**Current State:**
+Three integration tests exist but are marked with `#[ignore = "Requires valid Opus packets"]`:
+- `test_silk_narrowband()` - Tests SILK NB decoder
+- `test_celt_fullband()` - Tests CELT FB decoder
+- `test_integration_stereo()` - Tests stereo/hybrid decoder
+
+**Implementation Tasks:**
+
+- [ ] Remove `#[ignore]` attribute from `test_silk_narrowband()`
+  ```rust
+  // Before:
+  #[test]
+  #[ignore = "Requires valid Opus packets"]
+  fn test_silk_narrowband() { ... }
+
+  // After:
+  #[test]
+  fn test_silk_narrowband() { ... }
+  ```
+
+- [ ] Remove `#[ignore]` attribute from `test_celt_fullband()`
+  ```rust
+  // Before:
+  #[test]
+  #[ignore = "Requires valid Opus packets"]
+  fn test_celt_fullband() { ... }
+
+  // After:
+  #[test]
+  fn test_celt_fullband() { ... }
+  ```
+
+- [ ] Remove `#[ignore]` attribute from `test_integration_stereo()`
+  ```rust
+  // Before:
+  #[test]
+  #[ignore = "Requires valid Opus packets"]
+  fn test_integration_stereo() { ... }
+
+  // After:
+  #[test]
+  fn test_integration_stereo() { ... }
+  ```
+
+**Verification Checklist:**
+- [ ] `cargo test -p moosicbox_opus_native` runs all tests (no ignored tests)
+- [ ] All 3 integration tests PASS (not skipped)
+- [ ] Total test count increases from 479 to 482
+- [ ] SNR > 40 dB for SILK/CELT tests (quality validation)
+- [ ] Zero test failures
+- [ ] Zero clippy warnings
+
+**Expected Test Output:**
+```
+running 482 tests
+...
+test integration_tests::test_silk_narrowband ... ok
+test integration_tests::test_celt_fullband ... ok
+test integration_tests::test_integration_stereo ... ok
+...
+test result: ok. 482 passed; 0 failed; 0 ignored; 0 measured
+```
+
+---
+
+#### 8.2.4: Workspace Integration
+
+**Note:** Workspace configuration updates should be done incrementally as each crate is created, not as a separate final step.
+
+**Implementation Tasks:**
+
+**During 8.2.1 (When creating moosicbox_opus_native_libopus):**
+
+- [ ] Add to root `Cargo.toml` workspace members
+  ```toml
+  [workspace]
+  members = [
+      # ... existing members ...
+      "packages/opus_native/libopus",        # ADD when creating crate
+  ]
+  ```
+
+- [ ] Add to root `Cargo.toml` workspace dependencies
+  ```toml
+  [workspace.dependencies]
+  # ... existing dependencies ...
+  moosicbox_opus_native_libopus = { version = "0.1.0", path = "packages/opus_native/libopus" }
+  cmake = "0.1.54"  # ADD THIS (used by libopus build.rs)
+  ```
+
+- [ ] Create/update `.gitmodules` for opus submodule
+  ```gitmodules
+  [submodule "packages/opus_native/libopus/opus"]
+      path = packages/opus_native/libopus/opus
+      url = https://gitlab.xiph.org/xiph/opus.git
+  ```
+
+- [ ] Update `.gitignore` for libopus build artifacts
+  ```gitignore
+  # ADD THESE:
+  packages/opus_native/libopus/opus/build/
+  packages/opus_native/libopus/opus/cmake-build-*/
+  ```
+
+- [ ] Initialize git submodule
+  ```bash
+  git submodule update --init --recursive
+  ```
+
+- [ ] Verify workspace builds after adding libopus crate
+  ```bash
+  cargo build --workspace
+  cargo test -p moosicbox_opus_native_libopus
+  ```
+
+**During 8.2.2 (When updating test_vectors crate):**
+
+- [ ] Add test_vectors to workspace members (if not already present)
+  ```toml
+  [workspace]
+  members = [
+      # ... existing members ...
+      "packages/opus_native/test_vectors",   # Should already exist
+  ]
+  ```
+
+- [ ] Add test_vectors to workspace dependencies (if not already present)
+  ```toml
+  [workspace.dependencies]
+  moosicbox_opus_native_test_vectors = { version = "0.1.0", path = "packages/opus_native/test_vectors" }
+  ```
+
+- [ ] Update test_vectors `.gitignore` (if not already present)
+  ```gitignore
+  # Already exists:
+  packages/opus_native/test_vectors/generated/
+  ```
+
+- [ ] Verify test_vectors builds with libopus dependency
+  ```bash
+  cargo build -p moosicbox_opus_native_test_vectors
+  cargo tree -p moosicbox_opus_native_test_vectors
+  ```
+
+**Final Verification:**
+- [ ] `cargo build --workspace` compiles all crates
+- [ ] `git submodule status` shows opus@v1.5.2
+- [ ] Git does not track libopus build artifacts
+- [ ] Workspace Cargo.lock includes moosicbox_opus_native_libopus
+- [ ] `cargo tree -p moosicbox_opus_native_test_vectors` shows libopus as build-dependency
+
+---
+
+#### 8.2 Completion Criteria
+
+**All tasks complete when:**
+
+- [ ] moosicbox_opus_native_libopus crate builds successfully
+  - CMake configures libopus correctly
+  - FFI bindings compile without errors
+  - Roundtrip test passes
+  - Zero clippy warnings
+
+- [ ] Test vectors generated with REAL Opus packets
+  - packet.bin files contain valid RFC 6716 bitstreams
+  - expected.pcm files contain libopus reference output
+  - meta.json files have correct metadata
+  - All 3 test vectors created at build time
+
+- [ ] Integration tests pass without #[ignore]
+  - test_silk_narrowband passes
+  - test_celt_fullband passes
+  - test_integration_stereo passes
+  - SNR > 40 dB verified for SILK/CELT
+  - Total test count: 482 tests (479 existing + 3 new)
+
+- [ ] Quality metrics validated
+  - Zero clippy warnings across all targets and features
+  - Zero test failures
+
+- [ ] Cross-platform compatibility verified
+  - Linux build successful (NixOS verified)
+  - macOS build successful (if applicable)
+  - Windows build successful (if applicable)
+
+- [ ] Git repository clean
+  - Submodule initialized and tracked
+  - Build artifacts ignored
+  - No uncommitted changes
+
+**Status:** 🔄 IN PROGRESS
 
 ---
 

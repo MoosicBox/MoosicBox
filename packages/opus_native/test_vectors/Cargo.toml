@@ -8,9 +8,13 @@ license     = { workspace = true }
 name        = "moosicbox_opus_native_test_vectors"
 repository  = { workspace = true }
 version     = "0.1.0"
+publish     = false
 
 [dependencies]
 serde_json = { workspace = true }
+
+[build-dependencies]
+moosicbox_opus_native_libopus = { workspace = true }
 
 [features]
 fail-on-warnings = []

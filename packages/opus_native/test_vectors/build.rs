@@ -1,3 +1,5 @@
+use moosicbox_opus_native_libopus::safe::{Decoder, Encoder, OpusError};
+use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, OPUS_APPLICATION_VOIP};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -12,105 +14,122 @@ fn main() {
     fs::create_dir_all(generated_dir.join("integration/basic_stereo"))
         .expect("Failed to create integration/basic_stereo directory");
 
-    create_silk_nb_mono(&generated_dir);
-    create_celt_fb_mono(&generated_dir);
-    create_integration_stereo(&generated_dir);
+    generate_silk_nb_mono(&generated_dir).expect("Failed to generate SILK NB mono vector");
+    generate_celt_fb_mono(&generated_dir).expect("Failed to generate CELT FB mono vector");
+    generate_integration_stereo(&generated_dir)
+        .expect("Failed to generate integration stereo vector");
 }
 
-fn create_silk_nb_mono(base: &Path) {
+fn generate_silk_nb_mono(base: &Path) -> Result<(), OpusError> {
     let dir = base.join("silk/nb/basic_mono");
+    let sample_rate = 8000;
+    let channels = 1;
+    let frame_size = 160;
 
-    let toc = 0x00_u8;
-    let frame_length = 20;
-    let mut packet = vec![toc];
-    packet.extend(vec![0x00; frame_length]);
+    let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_VOIP)?;
+    let mut decoder = Decoder::new(sample_rate, channels)?;
 
-    fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
+    let input_pcm = vec![0i16; frame_size];
+    let mut packet = vec![0u8; 4000];
 
-    let sample_rate = 8000_u32;
-    let frame_duration_ms = 20;
-    let samples_per_frame = (sample_rate * frame_duration_ms) / 1000;
-
-    let samples: Vec<i16> = vec![0; samples_per_frame as usize];
-    let pcm_bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
-
-    fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
-
-    let meta = format!(
-        r#"{{
-  "sample_rate": {},
-  "channels": 1,
-  "frame_size_ms": {},
-  "mode": "silk"
-}}"#,
-        sample_rate, frame_duration_ms
-    );
-
-    fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
-}
-
-fn create_celt_fb_mono(base: &Path) {
-    let dir = base.join("celt/fb/basic_mono");
-
-    let toc = 0xF8_u8;
-    let frame_length = 40;
-    let mut packet = vec![toc];
-    packet.extend(vec![0x00; frame_length]);
+    let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;
+    packet.truncate(packet_len);
 
     fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
 
-    let sample_rate = 48000_u32;
-    let frame_duration_ms = 10;
-    let samples_per_frame = (sample_rate * frame_duration_ms) / 1000;
+    let mut output_pcm = vec![0i16; frame_size];
+    let decoded_samples = decoder.decode(&packet, &mut output_pcm, frame_size, false)?;
 
-    let samples: Vec<i16> = vec![0; samples_per_frame as usize];
-    let pcm_bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
-
-    fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
-
-    let meta = format!(
-        r#"{{
-  "sample_rate": {},
-  "channels": 1,
-  "frame_size_ms": {},
-  "mode": "celt"
-}}"#,
-        sample_rate, frame_duration_ms
-    );
-
-    fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
-}
-
-fn create_integration_stereo(base: &Path) {
-    let dir = base.join("integration/basic_stereo");
-
-    let toc = 0xFC_u8;
-    let frame_length = 60;
-    let mut packet = vec![toc];
-    packet.extend(vec![0x00; frame_length]);
-
-    fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
-
-    let sample_rate = 48000_u32;
-    let channels = 2;
-    let frame_duration_ms = 20;
-    let samples_per_frame = (sample_rate * frame_duration_ms) / 1000;
-    let total_samples = samples_per_frame * channels;
-
-    let samples: Vec<i16> = vec![0; total_samples as usize];
-    let pcm_bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
-
+    output_pcm.truncate(decoded_samples);
+    let pcm_bytes: Vec<u8> = output_pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
     fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
 
     let meta = format!(
         r#"{{
   "sample_rate": {},
   "channels": {},
-  "frame_size_ms": {},
+  "frame_size_ms": 20,
+  "mode": "silk"
+}}"#,
+        sample_rate, channels
+    );
+    fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
+
+    Ok(())
+}
+
+fn generate_celt_fb_mono(base: &Path) -> Result<(), OpusError> {
+    let dir = base.join("celt/fb/basic_mono");
+    let sample_rate = 48000;
+    let channels = 1;
+    let frame_size = 480;
+
+    let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_AUDIO)?;
+    let mut decoder = Decoder::new(sample_rate, channels)?;
+
+    let input_pcm = vec![0i16; frame_size];
+    let mut packet = vec![0u8; 4000];
+
+    let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;
+    packet.truncate(packet_len);
+
+    fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
+
+    let mut output_pcm = vec![0i16; frame_size];
+    let decoded_samples = decoder.decode(&packet, &mut output_pcm, frame_size, false)?;
+
+    output_pcm.truncate(decoded_samples);
+    let pcm_bytes: Vec<u8> = output_pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+    fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
+
+    let meta = format!(
+        r#"{{
+  "sample_rate": {},
+  "channels": {},
+  "frame_size_ms": 10,
   "mode": "celt"
 }}"#,
-        sample_rate, channels, frame_duration_ms
+        sample_rate, channels
     );
-
     fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
+
+    Ok(())
+}
+
+fn generate_integration_stereo(base: &Path) -> Result<(), OpusError> {
+    let dir = base.join("integration/basic_stereo");
+    let sample_rate = 48000;
+    let channels = 2;
+    let frame_size = 960;
+
+    let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_AUDIO)?;
+    let mut decoder = Decoder::new(sample_rate, channels)?;
+
+    let input_pcm = vec![0i16; frame_size * 2];
+    let mut packet = vec![0u8; 4000];
+
+    let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;
+    packet.truncate(packet_len);
+
+    fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
+
+    let mut output_pcm = vec![0i16; frame_size * 2];
+    let decoded_samples = decoder.decode(&packet, &mut output_pcm, frame_size, false)?;
+
+    output_pcm.truncate(decoded_samples * 2);
+    let pcm_bytes: Vec<u8> = output_pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+    fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
+
+    let meta = format!(
+        r#"{{
+  "sample_rate": {},
+  "channels": {},
+  "frame_size_ms": 20,
+  "mode": "hybrid"
+}}"#,
+        sample_rate, channels
+    );
+    fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
+
+    Ok(())
 }

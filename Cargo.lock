@@ -8580,9 +8580,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_opus_native_libopus"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
 name = "moosicbox_opus_native_test_vectors"
 version = "0.1.0"
 dependencies = [
+ "moosicbox_opus_native_libopus",
  "serde_json",
 ]
 
