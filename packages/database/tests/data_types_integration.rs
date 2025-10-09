@@ -260,7 +260,7 @@ mod sqlite_sqlx_data_type_tests {
 }
 
 // ===== POSTGRES RAW BACKEND TESTS =====
-#[cfg(all(feature = "postgres-raw", not(feature = "postgres-sqlx")))]
+#[cfg(feature = "postgres-raw")]
 mod postgres_data_type_tests {
     use super::*;
     use switchy_database::postgres::postgres::PostgresDatabase;
@@ -338,13 +338,6 @@ mod postgres_data_type_tests {
     async fn test_postgres_boolean_type() {
         let suite = PostgresDataTypeTests;
         suite.test_boolean_type().await;
-    }
-
-    #[cfg(feature = "decimal")]
-    #[test_log::test(switchy_async::test(no_simulator))]
-    async fn test_mysql_sqlx_decimal_precision() {
-        let suite = MysqlSqlxDataTypeTests;
-        suite.test_decimal_precision().await;
     }
 
     #[test_log::test(switchy_async::test(no_simulator))]
