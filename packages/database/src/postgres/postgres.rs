@@ -8,7 +8,8 @@ use chrono::NaiveDateTime;
 use deadpool_postgres::{Pool, PoolError};
 use futures::StreamExt;
 use postgres_protocol::types::{
-    bool_from_sql, float8_from_sql, int2_from_sql, int4_from_sql, int8_from_sql, text_from_sql,
+    bool_from_sql, float4_from_sql, float8_from_sql, int2_from_sql, int4_from_sql, int8_from_sql,
+    text_from_sql,
 };
 use thiserror::Error;
 use tokio::{pin, sync::Mutex};
@@ -3108,13 +3109,16 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             "bool" => Self::Bool(bool_from_sql(raw)?),
             "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
             | "int8" => Self::Int64(int8_from_sql(raw)?),
-            "real" | "float4" | "double precision" | "float8" => {
-                Self::Real64(float8_from_sql(raw)?)
-            }
-            "varchar" | "char(n)" | "text" | "name" | "citext" => {
+            "float4" => Self::Real32(float4_from_sql(raw)?),
+            "real" | "double precision" | "float8" => Self::Real64(float8_from_sql(raw)?),
+            "varchar" | "bpchar" | "char(n)" | "text" | "name" | "citext" => {
                 Self::String(text_from_sql(raw)?.to_string())
             }
             "timestamp" => Self::DateTime(NaiveDateTime::from_sql(ty, raw)?),
+            #[cfg(feature = "uuid")]
+            "uuid" => Self::Uuid(uuid::Uuid::from_sql(ty, raw)?),
+            #[cfg(feature = "decimal")]
+            "numeric" => Self::Decimal(rust_decimal::Decimal::from_sql(ty, raw)?),
             other => {
                 return Err(Box::new(PostgresDatabaseError::TypeNotFound {
                     type_name: other.to_string(),
@@ -3137,7 +3141,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                     )))
                 })
                 .transpose()?
-                .unwrap_or(Self::Int64Opt(None)),
+                .unwrap_or(Self::Null),
             "int4" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Int64(i64::from(
@@ -3145,7 +3149,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                     )))
                 })
                 .transpose()?
-                .unwrap_or(Self::Int64Opt(None)),
+                .unwrap_or(Self::Null),
             "bool" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Bool(bool_from_sql(
@@ -3153,7 +3157,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                     )?))
                 })
                 .transpose()?
-                .unwrap_or(Self::BoolOpt(None)),
+                .unwrap_or(Self::Null),
             "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
             | "int8" => raw
                 .map(|raw| {
@@ -3162,27 +3166,53 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                     )?))
                 })
                 .transpose()?
-                .unwrap_or(Self::Int64Opt(None)),
-            "real" | "float4" | "double precision" | "float8" => raw
+                .unwrap_or(Self::Null),
+            "float4" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real32(
+                        float4_from_sql(raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(Self::Null),
+            "real" | "double precision" | "float8" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Real64(
                         float8_from_sql(raw)?,
                     ))
                 })
                 .transpose()?
-                .unwrap_or(Self::Real64Opt(None)),
-            "varchar" | "char(n)" | "text" | "name" | "citext" => raw
+                .unwrap_or(Self::Null),
+            "varchar" | "bpchar" | "char(n)" | "text" | "name" | "citext" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::String(
                         text_from_sql(raw)?.to_string(),
                     ))
                 })
                 .transpose()?
-                .unwrap_or(Self::StringOpt(None)),
+                .unwrap_or(Self::Null),
             "timestamp" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::DateTime(
                         NaiveDateTime::from_sql(ty, raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(Self::Null),
+            #[cfg(feature = "uuid")]
+            "uuid" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Uuid(
+                        uuid::Uuid::from_sql(ty, raw)?,
+                    ))
+                })
+                .transpose()?
+                .unwrap_or(Self::Null),
+            #[cfg(feature = "decimal")]
+            "numeric" => raw
+                .map(|raw| {
+                    Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Decimal(
+                        rust_decimal::Decimal::from_sql(ty, raw)?,
                     ))
                 })
                 .transpose()?
@@ -3242,10 +3272,10 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             | DatabaseValue::UInt32Opt(None)
             | DatabaseValue::UInt64Opt(None) => IsNull::Yes,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
-            DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
-            DatabaseValue::Int8(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Int8Opt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Bool(value) => value.to_sql(ty, out)?,
+            DatabaseValue::BoolOpt(value) => value.to_sql(ty, out)?,
+            DatabaseValue::Int8(value) => i16::from(*value).to_sql(ty, out)?,
+            DatabaseValue::Int8Opt(value) => value.map(i16::from).to_sql(ty, out)?,
             DatabaseValue::Int16(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int16Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int32(value) => value.to_sql(ty, out)?,
@@ -3253,7 +3283,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Int64(value) => value.to_sql(ty, out)?,
             DatabaseValue::Int64Opt(value) => value.to_sql(ty, out)?,
             DatabaseValue::UInt8(value) | DatabaseValue::UInt8Opt(Some(value)) => {
-                i8::try_from(*value)?.to_sql(ty, out)?
+                i16::from(*value).to_sql(ty, out)?
             }
             DatabaseValue::UInt16(value) | DatabaseValue::UInt16Opt(Some(value)) => {
                 i16::try_from(*value)?.to_sql(ty, out)?
