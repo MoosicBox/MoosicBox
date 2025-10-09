@@ -127,7 +127,7 @@ pub use transaction::TursoTransaction;
 use std::sync::LazyLock;
 
 #[cfg(feature = "schema")]
-static FK_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+pub(crate) static FK_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r#"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+((?:[^\s(,\[\]"'`]+|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[(?:[^\]])*\]|'(?:[^']|'')*'))\s*\(([^)]+)\)([^,)]*)"#
     ).expect("FK regex pattern should compile")
@@ -1007,14 +1007,37 @@ async fn turso_exec_drop_table(
         use crate::schema::DropBehavior;
         match statement.behavior {
             DropBehavior::Cascade => {
-                return Err(crate::DatabaseError::InvalidQuery(
-                    "CASCADE not yet implemented for Turso DROP TABLE - see Phase 10".to_string(),
-                ));
+                // Get drop order (dependents first, target last)
+                let drop_order = turso_find_cascade_dependents(conn, statement.table_name).await?;
+
+                // Drop tables in order (Turso doesn't support PRAGMA foreign_keys,
+                // so we rely on the correct drop order to avoid FK violations)
+                for table in &drop_order {
+                    let drop_sql = if statement.if_exists {
+                        format!("DROP TABLE IF EXISTS {table}")
+                    } else {
+                        format!("DROP TABLE {table}")
+                    };
+
+                    conn.execute(&drop_sql, ())
+                        .await
+                        .map_err(TursoDatabaseError::Turso)?;
+                }
+
+                return Ok(());
             }
             DropBehavior::Restrict => {
-                return Err(crate::DatabaseError::InvalidQuery(
-                    "RESTRICT not yet implemented for Turso DROP TABLE - see Phase 10".to_string(),
-                ));
+                // Check if table has dependents
+                let has_deps = turso_has_dependents(conn, statement.table_name).await?;
+
+                if has_deps {
+                    return Err(crate::DatabaseError::InvalidQuery(format!(
+                        "Cannot drop table '{}' because other tables depend on it",
+                        statement.table_name
+                    )));
+                }
+
+                // No dependents, proceed with normal DROP
             }
             DropBehavior::Default => {}
         }
@@ -2191,7 +2214,7 @@ async fn get_table_foreign_keys(
 /// - Square brackets: `[name]` → `name` (no escaping needed)
 /// - Unquoted: `name` → `name` (returned as-is)
 #[cfg(feature = "schema")]
-fn strip_identifier_quotes(identifier: &str) -> String {
+pub(crate) fn strip_identifier_quotes(identifier: &str) -> String {
     let identifier = identifier.trim();
 
     if identifier.len() < 2 {
@@ -2209,6 +2232,279 @@ fn strip_identifier_quotes(identifier: &str) -> String {
     } else {
         identifier.to_string()
     }
+}
+
+/// Find all tables that depend on the given table (recursively)
+///
+/// Uses inline foreign key parsing from `sqlite_master` instead of PRAGMA
+/// (Turso doesn't support `PRAGMA foreign_key_list`).
+///
+/// Returns tables in drop order (dependents first, target last).
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if database queries fail or table name validation fails
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn turso_find_cascade_dependents(
+    conn: &turso::Connection,
+    table_name: &str,
+) -> Result<Vec<String>, crate::DatabaseError> {
+    let mut all_dependents = std::collections::BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut checked = std::collections::BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !checked.insert(current_table.clone()) {
+            continue;
+        }
+
+        // Get all tables
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut table_names = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            let name_value = row
+                .get_value(0)
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+            if let turso::Value::Text(name) = name_value {
+                table_names.push(name);
+            }
+        }
+
+        // Check each table for foreign keys referencing current_table
+        for check_table in table_names {
+            if check_table == current_table {
+                continue;
+            }
+
+            // Validate table name for security
+            crate::schema::dependencies::validate_table_name_for_pragma(&check_table)?;
+
+            // Get CREATE TABLE SQL to parse foreign keys
+            let sql = {
+                let mut sql_stmt = conn
+                    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+                    .await
+                    .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+                let mut sql_rows = sql_stmt
+                    .query((turso::Value::Text(check_table.clone()),))
+                    .await
+                    .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+                if let Some(sql_row) = sql_rows
+                    .next()
+                    .await
+                    .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+                {
+                    let sql_value = sql_row
+                        .get_value(0)
+                        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+                    match sql_value {
+                        turso::Value::Text(s) => Some(s),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some(create_sql) = sql {
+                // Parse foreign keys from CREATE TABLE SQL using Phase 4 regex
+                for cap in FK_PATTERN.captures_iter(&create_sql) {
+                    let referenced_table = strip_identifier_quotes(&cap[2]);
+
+                    if referenced_table == current_table {
+                        all_dependents.insert(check_table.clone());
+                        to_check.push(check_table.clone());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Build proper drop order (dependents first, target last)
+    let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+    drop_order.push(table_name.to_string());
+
+    Ok(drop_order)
+}
+
+/// Check if a table has any dependents (for RESTRICT)
+///
+/// Uses inline foreign key parsing from `sqlite_master` instead of PRAGMA
+/// (Turso doesn't support `PRAGMA foreign_key_list`).
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if database queries fail or table name validation fails
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn turso_has_dependents(
+    conn: &turso::Connection,
+    table_name: &str,
+) -> Result<bool, crate::DatabaseError> {
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let mut rows = stmt
+        .query(())
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let mut table_names = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+    {
+        let name_value = row
+            .get_value(0)
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        if let turso::Value::Text(name) = name_value {
+            table_names.push(name);
+        }
+    }
+
+    for check_table in table_names {
+        if check_table == table_name {
+            continue;
+        }
+
+        crate::schema::dependencies::validate_table_name_for_pragma(&check_table)?;
+
+        // Get CREATE TABLE SQL to parse foreign keys
+        let sql = {
+            let mut sql_stmt = conn
+                .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+            let mut sql_rows = sql_stmt
+                .query((turso::Value::Text(check_table.clone()),))
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+            if let Some(sql_row) = sql_rows
+                .next()
+                .await
+                .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+            {
+                let sql_value = sql_row
+                    .get_value(0)
+                    .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+                match sql_value {
+                    turso::Value::Text(s) => Some(s),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        };
+
+        if let Some(create_sql) = sql {
+            // Parse foreign keys from CREATE TABLE SQL using Phase 4 regex
+            for cap in FK_PATTERN.captures_iter(&create_sql) {
+                let referenced_table = strip_identifier_quotes(&cap[2]);
+
+                if referenced_table == table_name {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Get current foreign key enforcement state
+///
+/// **Note**: Turso does not currently support `PRAGMA foreign_keys`, so this function
+/// will return an error. Kept for future compatibility.
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if PRAGMA query fails (always fails on Turso v0.2.2)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+#[allow(dead_code)]
+async fn turso_get_foreign_key_state(
+    conn: &turso::Connection,
+) -> Result<bool, crate::DatabaseError> {
+    let mut stmt = conn
+        .prepare("PRAGMA foreign_keys")
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    let mut rows = stmt
+        .query(())
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    if let Some(row) = rows
+        .next()
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+    {
+        let enabled_value = row
+            .get_value(0)
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        match enabled_value {
+            turso::Value::Integer(i) => Ok(i != 0),
+            _ => Err(crate::DatabaseError::InvalidQuery(
+                "Expected integer for PRAGMA foreign_keys result".to_string(),
+            )),
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+/// Set foreign key enforcement state
+///
+/// **Note**: Turso does not currently support `PRAGMA foreign_keys`, so this function
+/// will return an error. Kept for future compatibility.
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if PRAGMA execute fails (always fails on Turso v0.2.2)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+#[allow(dead_code)]
+async fn turso_set_foreign_key_state(
+    conn: &turso::Connection,
+    enabled: bool,
+) -> Result<(), crate::DatabaseError> {
+    let pragma = if enabled {
+        "PRAGMA foreign_keys = ON"
+    } else {
+        "PRAGMA foreign_keys = OFF"
+    };
+
+    conn.execute(pragma, ())
+        .await
+        .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -3936,5 +4232,120 @@ mod tests {
             "Single quotes should be stripped"
         );
         assert_eq!(fk.on_update, Some("CASCADE".to_string()));
+    }
+
+    #[cfg(all(feature = "schema", feature = "cascade"))]
+    #[switchy_async::test]
+    async fn test_cascade_find_dependents_simple() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (id INTEGER, parent_id INTEGER, FOREIGN KEY(parent_id) REFERENCES parent(id))",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let conn = db.database.connect().expect("Failed to get connection");
+        let dependents = turso_find_cascade_dependents(&conn, "parent")
+            .await
+            .expect("Failed to find dependents");
+
+        assert_eq!(dependents.len(), 2, "Should find child and parent");
+        assert_eq!(dependents[0], "child", "Child should be first");
+        assert_eq!(dependents[1], "parent", "Parent should be last");
+    }
+
+    #[cfg(all(feature = "schema", feature = "cascade"))]
+    #[switchy_async::test]
+    async fn test_cascade_has_dependents_true() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (id INTEGER, parent_id INTEGER, FOREIGN KEY(parent_id) REFERENCES parent(id))",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let conn = db.database.connect().expect("Failed to get connection");
+        let has_deps = turso_has_dependents(&conn, "parent")
+            .await
+            .expect("Failed to check dependents");
+
+        assert!(has_deps, "Parent should have dependents");
+    }
+
+    #[cfg(all(feature = "schema", feature = "cascade"))]
+    #[switchy_async::test]
+    async fn test_cascade_has_dependents_false() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE standalone (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create standalone table");
+
+        let conn = db.database.connect().expect("Failed to get connection");
+        let has_deps = turso_has_dependents(&conn, "standalone")
+            .await
+            .expect("Failed to check dependents");
+
+        assert!(!has_deps, "Standalone table should have no dependents");
+    }
+
+    #[cfg(all(feature = "schema", feature = "cascade"))]
+    #[switchy_async::test]
+    async fn test_cascade_nested_dependencies() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        db.exec_raw("CREATE TABLE grandparent (id INTEGER PRIMARY KEY)")
+            .await
+            .expect("Failed to create grandparent table");
+
+        db.exec_raw(
+            "CREATE TABLE parent (id INTEGER PRIMARY KEY, grandparent_id INTEGER, FOREIGN KEY(grandparent_id) REFERENCES grandparent(id))",
+        )
+        .await
+        .expect("Failed to create parent table");
+
+        db.exec_raw(
+            "CREATE TABLE child (id INTEGER, parent_id INTEGER, FOREIGN KEY(parent_id) REFERENCES parent(id))",
+        )
+        .await
+        .expect("Failed to create child table");
+
+        let conn = db.database.connect().expect("Failed to get connection");
+        let dependents = turso_find_cascade_dependents(&conn, "grandparent")
+            .await
+            .expect("Failed to find dependents");
+
+        assert_eq!(
+            dependents.len(),
+            3,
+            "Should find child, parent, and grandparent"
+        );
+        assert!(
+            dependents.contains(&"child".to_string()),
+            "Should include child"
+        );
+        assert!(
+            dependents.contains(&"parent".to_string()),
+            "Should include parent"
+        );
+        assert_eq!(dependents[2], "grandparent", "Grandparent should be last");
     }
 }

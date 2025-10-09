@@ -119,22 +119,107 @@ impl crate::DatabaseTransaction for TursoTransaction {
     #[cfg(feature = "cascade")]
     async fn find_cascade_targets(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<crate::schema::DropPlan, DatabaseError> {
-        unimplemented!("Cascade not yet implemented for Turso backend")
+        let drop_order = super::turso_find_cascade_dependents(&self.connection, table_name).await?;
+
+        Ok(crate::schema::DropPlan::Simple(drop_order))
     }
 
     #[cfg(feature = "cascade")]
-    async fn has_any_dependents(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        unimplemented!("Cascade not yet implemented for Turso backend")
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        super::turso_has_dependents(&self.connection, table_name).await
     }
 
     #[cfg(feature = "cascade")]
     async fn get_direct_dependents(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
-        unimplemented!("Cascade not yet implemented for Turso backend")
+        let mut direct_dependents = std::collections::BTreeSet::new();
+
+        // Get all tables
+        let mut stmt = self
+            .connection
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let mut table_names = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?
+        {
+            let name_value = row
+                .get_value(0)
+                .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+            if let turso::Value::Text(name) = name_value {
+                table_names.push(name);
+            }
+        }
+
+        // Check each table for direct foreign keys referencing table_name
+        for check_table in table_names {
+            if check_table == table_name {
+                continue;
+            }
+
+            crate::schema::dependencies::validate_table_name_for_pragma(&check_table)?;
+
+            // Get CREATE TABLE SQL to parse foreign keys
+            let sql = {
+                let mut sql_stmt = self
+                    .connection
+                    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+                    .await
+                    .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+                let mut sql_rows = sql_stmt
+                    .query((turso::Value::Text(check_table.clone()),))
+                    .await
+                    .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+                if let Some(sql_row) = sql_rows
+                    .next()
+                    .await
+                    .map_err(|e| DatabaseError::Turso(e.into()))?
+                {
+                    let sql_value = sql_row
+                        .get_value(0)
+                        .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+                    match sql_value {
+                        turso::Value::Text(s) => Some(s),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some(create_sql) = sql {
+                // Parse foreign keys from CREATE TABLE SQL using Phase 4 regex
+                for cap in super::FK_PATTERN.captures_iter(&create_sql) {
+                    let referenced_table = super::strip_identifier_quotes(&cap[2]);
+
+                    if referenced_table == table_name {
+                        direct_dependents.insert(check_table.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(direct_dependents)
     }
 }
 
