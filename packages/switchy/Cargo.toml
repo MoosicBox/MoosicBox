@@ -148,6 +148,7 @@ database-sqlite-rusqlite = ["database", "switchy_database?/sqlite-rusqlite"]
 database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
 database-sqlx            = ["database", "switchy_database?/sqlx"]
 database-tls             = ["database", "switchy_database?/tls"]
+database-turso           = ["database", "switchy_database?/turso"]
 
 all-database-connection = [
     "database-connection",
@@ -223,6 +224,10 @@ database-connection-sqlx = [
 database-connection-tls = [
     "database-connection",
     "switchy_database_connection?/tls",
+]
+database-connection-turso = [
+    "database-connection",
+    "switchy_database_connection?/turso",
 ]
 
 all-fs = [

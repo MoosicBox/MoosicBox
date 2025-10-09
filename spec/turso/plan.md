@@ -8,9 +8,9 @@ This specification details the implementation of a Turso Database backend for Mo
 
 The implementation provides a modern, async-first **local database** option that maintains full compatibility with existing MoosicBox schemas while preparing for advanced features like concurrent writes, vector search, and future distributed scenarios.
 
-**Current Status:** ✅ **Phase 5 COMPLETE** - Connection initialization functions added to database_connection package
+**Current Status:** ✅ **Phase 5 COMPLETE** - Connection initialization and workspace features fully implemented
 
-**Completion Estimate:** ~92% complete - Phases 2-5.3 complete, Phase 5.4 and Phase 6 remain
+**Completion Estimate:** ~95% complete - Phases 1-5 COMPLETE, only Phase 6 (documentation/testing) remains
 
 ## Status Legend
 
@@ -1479,7 +1479,7 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 
 **Goal:** Add connection initialization functions to database_connection package
 
-**Status:** Phases 5.1-5.3 complete (init functions implemented), Phase 5.4 pending (workspace features)
+**Status:** ALL PHASES COMPLETE (5.1-5.4) - init functions implemented and workspace features wired
 
 **⚠️ IMPORTANT LIMITATION:** This implementation supports **local databases only** (file-based or in-memory). The `turso` crate (v0.2.2) does not currently support remote/cloud connections. See [Turso Cloud vs Turso Database](#turso-cloud-vs-turso-database-distinction) for details.
 
@@ -1613,22 +1613,28 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 - [x] Run `cargo machete` (no unused dependencies)
   ✅ No unused turso dependencies
 
-### 5.4 Add Workspace-Level Features
+### 5.4 Add Workspace-Level Features ✅ **COMPLETE**
 
-- [ ] Wire features through switchy package 🟡 **IMPORTANT**
-  - [ ] Edit `packages/switchy/Cargo.toml`
-  - [ ] Add features:
+- [x] Wire features through switchy package 🟡 **IMPORTANT**
+  - [x] Edit `packages/switchy/Cargo.toml`
+  - [x] Add features:
     ```toml
-    database-turso = ["switchy_database/turso"]
-    database-connection-turso = ["switchy_database_connection/turso"]
+    database-turso = ["database", "switchy_database?/turso"]
+    database-connection-turso = ["database-connection", "switchy_database_connection?/turso"]
     ```
+    Added at Cargo.toml:151 and 227-230
 
 #### 5.4 Verification Checklist
-- [ ] Features propagate correctly
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p switchy --features database-turso` (compiles)
-- [ ] Run `cargo build -p switchy --features database-connection-turso` (compiles)
-- [ ] Run `cargo machete` (workspace-wide check)
+- [x] Features propagate correctly
+  ✅ Both features enable turso crate in dependency tree
+- [x] Run `cargo fmt` (format code)
+  ✅ No formatting changes needed
+- [x] Run `cargo build -p switchy --features database-turso` (compiles)
+  ✅ Finished in 45.14s
+- [x] Run `cargo build -p switchy --features database-connection-turso` (compiles)
+  ✅ Finished in 44.72s
+- [x] Run `cargo machete` (workspace-wide check)
+  ✅ No turso-related unused dependencies
 
 ## Phase 6: Integration Testing and Documentation 🟢 **NOT STARTED**
 
