@@ -143,6 +143,9 @@ pub enum InitDbError {
     ))]
     #[error(transparent)]
     InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
+    #[cfg(feature = "turso")]
+    #[error(transparent)]
+    InitTurso(#[from] InitTursoError),
     #[error("Credentials are required")]
     CredentialsRequired,
     #[error(transparent)]
@@ -210,6 +213,11 @@ pub async fn init(
             #[cfg(feature = "postgres-sqlx")]
             return Ok(init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
             #[cfg(not(feature = "postgres-sqlx"))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "turso") {
+            #[cfg(feature = "turso")]
+            return Ok(init_turso_local(path).await?);
+            #[cfg(not(feature = "turso"))]
             panic!("Invalid database features")
         } else if cfg!(feature = "sqlite-rusqlite") {
             #[cfg(feature = "sqlite-rusqlite")]
@@ -420,6 +428,30 @@ pub async fn init_sqlite_sqlx(
     Ok(Box::new(SqliteSqlxDatabase::new(Arc::new(
         tokio::sync::Mutex::new(pool),
     ))))
+}
+
+#[cfg(feature = "turso")]
+#[derive(Debug, Error)]
+pub enum InitTursoError {
+    #[error(transparent)]
+    Turso(#[from] switchy_database::turso::TursoDatabaseError),
+}
+
+/// # Errors
+///
+/// * If fails to initialize the Turso database connection
+#[cfg(feature = "turso")]
+pub async fn init_turso_local(
+    path: Option<&std::path::Path>,
+) -> Result<Box<dyn Database>, InitTursoError> {
+    let db_path = path.map_or_else(
+        || ":memory:".to_string(),
+        |p| p.to_string_lossy().to_string(),
+    );
+
+    let db = switchy_database::turso::TursoDatabase::new(&db_path).await?;
+
+    Ok(Box::new(db))
 }
 
 #[cfg(feature = "postgres")]

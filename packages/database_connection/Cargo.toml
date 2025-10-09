@@ -82,5 +82,8 @@ postgres-sqlx = [
 sqlite = ["dep:tokio"]
 sqlite-rusqlite = ["dep:rusqlite", "sqlite", "switchy_database/sqlite-rusqlite"]
 sqlite-sqlx = ["sqlite", "sqlx", "sqlx/sqlite", "switchy_database/sqlite-sqlx"]
+turso = ["sqlite", "switchy_database/turso"]
+
+database-connection-turso = ["turso"]
 
 simulator = ["switchy_database/simulator"]
