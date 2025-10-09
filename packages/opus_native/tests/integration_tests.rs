@@ -150,6 +150,23 @@ fn test_decode_integration_vectors() {
             .decode(Some(&vector.packet), &mut output, false)
             .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
 
+        eprintln!(
+            "DEBUG {}: decoded_samples={}, expected_len={}, channels={}",
+            vector.name,
+            decoded_samples,
+            vector.expected_pcm.len(),
+            vector.channels
+        );
+        eprintln!(
+            "Expected[200..210]: {:?}",
+            &vector.expected_pcm
+                [200.min(vector.expected_pcm.len())..210.min(vector.expected_pcm.len())]
+        );
+        eprintln!(
+            "Actual[200..210]: {:?}",
+            &output[200.min(output.len())..210.min(output.len())]
+        );
+
         assert_eq!(
             decoded_samples * usize::from(vector.channels),
             output.len(),

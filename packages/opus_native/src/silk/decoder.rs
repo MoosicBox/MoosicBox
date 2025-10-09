@@ -426,44 +426,50 @@ impl SilkDecoder {
 
         // RFC lines 3593-3626: LSF Interpolation for 20ms frames
         // For 20ms frames with w_Q2 < 4, interpolate LSF for first half
-        let (lpc_coeffs_first_half, lpc_coeffs_second_half) =
-            if self.frame_size_ms == 20 && lsf_interp_weight < 4 {
-                // Get previous LSF based on bandwidth
-                let prev_lsf_vec: Option<Vec<i16>> = match bandwidth {
-                    Bandwidth::Narrowband | Bandwidth::Mediumband => {
-                        self.previous_lsf_nb.as_ref().map(|arr| arr.to_vec())
-                    }
-                    Bandwidth::Wideband => self.previous_lsf_wb.as_ref().map(|arr| arr.to_vec()),
-                    _ => None,
-                };
-                let prev_lsf = prev_lsf_vec.as_deref();
-
-                if let Some(prev_lsf) = prev_lsf {
-                    // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
-                    let mut nlsf_interpolated_q15 = vec![0_i16; nlsf_q15.len()];
-                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-                    for k in 0..nlsf_q15.len() {
-                        let n0 = i32::from(prev_lsf[k]);
-                        let n2 = i32::from(nlsf_q15[k]);
-                        let w = lsf_interp_weight as i32;
-                        nlsf_interpolated_q15[k] = (n0 + ((w * (n2 - n0)) >> 2)) as i16;
-                    }
-
-                    // Convert both interpolated and current LSF to LPC
-                    let lpc_first = Self::lsf_to_lpc(&nlsf_interpolated_q15, bandwidth)?;
-                    let lpc_second = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
-
-                    (lpc_first, lpc_second)
-                } else {
-                    // No previous LSF available - use current for both halves
-                    let lpc = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
-                    (lpc.clone(), lpc)
+        let (lpc_coeffs_first_half, lpc_coeffs_second_half) = if self.frame_size_ms == 20
+            && lsf_interp_weight < 4
+        {
+            // Get previous LSF based on bandwidth
+            let prev_lsf_vec: Option<Vec<i16>> = match bandwidth {
+                Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                    self.previous_lsf_nb.as_ref().map(|arr| arr.to_vec())
                 }
-            } else {
-                // 10ms frames or w_Q2 == 4: use current LSF for all subframes
-                let lpc = Self::lsf_to_lpc(&nlsf_q15, bandwidth)?;
-                (lpc.clone(), lpc)
+                Bandwidth::Wideband => self.previous_lsf_wb.as_ref().map(|arr| arr.to_vec()),
+                _ => None,
             };
+            let prev_lsf = prev_lsf_vec.as_deref();
+
+            if let Some(prev_lsf) = prev_lsf {
+                // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
+                let mut nlsf_interpolated_q15 = vec![0_i16; nlsf_q15.len()];
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                for k in 0..nlsf_q15.len() {
+                    let n0 = i32::from(prev_lsf[k]);
+                    let n2 = i32::from(nlsf_q15[k]);
+                    let w = lsf_interp_weight as i32;
+                    nlsf_interpolated_q15[k] = (n0 + ((w * (n2 - n0)) >> 2)) as i16;
+                }
+
+                // Convert both interpolated and current LSF to LPC with stability limiting
+                let lpc_first = Self::limit_lpc_coefficients(&nlsf_interpolated_q15, bandwidth)?;
+                let lpc_second = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
+
+                (
+                    lpc_first.iter().map(|&x| i32::from(x)).collect(),
+                    lpc_second.iter().map(|&x| i32::from(x)).collect(),
+                )
+            } else {
+                // No previous LSF available - use current for both halves
+                let lpc = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
+                let lpc_i32: Vec<i32> = lpc.iter().map(|&x| i32::from(x)).collect();
+                (lpc_i32.clone(), lpc_i32)
+            }
+        } else {
+            // 10ms frames or w_Q2 == 4: use current LSF for all subframes
+            let lpc = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
+            let lpc_i32: Vec<i32> = lpc.iter().map(|&x| i32::from(x)).collect();
+            (lpc_i32.clone(), lpc_i32)
+        };
 
         // Store current LSF for next frame
         match bandwidth {
@@ -675,7 +681,7 @@ impl SilkDecoder {
             };
 
             // Apply LPC synthesis (short-term prediction)
-            let (samples, _history) = self.lpc_synthesis(&residual, &params, bandwidth)?;
+            let (_unclamped, samples) = self.lpc_synthesis(&residual, &params, bandwidth)?;
 
             all_samples.extend(samples);
         }
@@ -1707,7 +1713,13 @@ impl SilkDecoder {
 
         // Step 4: Convert Q17 to Q12 (RFC line 4111)
         #[allow(clippy::cast_possible_truncation)]
-        let a_q12: Vec<i16> = a32_q17.iter().map(|&a| ((a + 16) >> 5) as i16).collect();
+        let a_q12: Vec<i16> = a32_q17
+            .iter()
+            .map(|&a| {
+                let q12 = (a + 16) >> 5;
+                q12.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+            })
+            .collect();
 
         Ok(a_q12)
     }
@@ -1737,7 +1749,8 @@ impl SilkDecoder {
             let maxabs_q12 = ((maxabs_q17 + 16) >> 5).min(163_838);
 
             // Step 3: Check if limiting is needed (RFC line 3911)
-            if maxabs_q12 <= 32767 {
+            // Use 16383 (Q12 representation of 4.0) as a safer limit to ensure stability
+            if maxabs_q12 <= 16383 {
                 break; // Coefficients fit in Q12, done
             }
 

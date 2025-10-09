@@ -649,12 +649,10 @@ impl Decoder {
             let resampled =
                 self.resample_silk(&silk_buffer, internal_rate, target_rate, channels)?;
 
-            let target_samples = Self::calculate_samples(config.frame_size, target_rate);
-
             let copy_len = resampled.len().min(output.len());
             output[..copy_len].copy_from_slice(&resampled[..copy_len]);
 
-            return Ok(target_samples);
+            return Ok(resampled.len());
         }
 
         #[cfg(not(feature = "resampling"))]
