@@ -211,7 +211,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     }
 
     fn check_frame_resize(&self, ctx: &egui::Context) -> bool {
-        let (width, height) = ctx.input(|i| (i.screen_rect.width(), i.screen_rect.height()));
+        let (width, height) = ctx.input(move |i| {
+            let content_rect = i.content_rect();
+            (content_rect.width(), content_rect.height())
+        });
 
         let current_width = *self.width.read().unwrap();
         let current_height = *self.height.read().unwrap();

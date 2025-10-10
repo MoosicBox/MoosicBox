@@ -54,8 +54,6 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
     "enable",
 ] }
 
-wgpu = { version = "=25.0.2", optional = true }
-
 [features]
 default = ["debug", "v1", "v2", "wgpu"]
 
@@ -74,7 +72,7 @@ fail-on-warnings = [
 ]
 
 glow = ["eframe/glow"]
-wgpu = ["dep:wgpu", "eframe/wgpu"]
+wgpu = ["eframe/wgpu"]
 
 wayland = ["eframe/wayland"]
 x11     = ["eframe/x11"]
