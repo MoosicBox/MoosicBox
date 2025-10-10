@@ -371,6 +371,10 @@ mod postgres_data_type_tests {
     impl DataTypeTestSuite for PostgresDataTypeTests {
         type DatabaseType = PostgresDatabase;
 
+        fn get_table_name(&self, test_suffix: &str) -> String {
+            format!("data_type_test_postgres_tokio_{}", test_suffix)
+        }
+
         async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
             let url = std::env::var("POSTGRES_TEST_URL").ok()?;
 
@@ -503,6 +507,10 @@ mod postgres_sqlx_data_type_tests {
 
     impl DataTypeTestSuite for PostgresSqlxDataTypeTests {
         type DatabaseType = PostgresSqlxDatabase;
+
+        fn get_table_name(&self, test_suffix: &str) -> String {
+            format!("data_type_test_postgres_sqlx_{test_suffix}")
+        }
 
         async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
             let url = std::env::var("POSTGRES_TEST_URL").ok()?;

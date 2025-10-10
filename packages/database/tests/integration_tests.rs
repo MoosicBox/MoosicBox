@@ -1923,6 +1923,10 @@ mod postgres_returning_tests {
     struct PostgresReturningTests;
 
     impl ReturningTestSuite for PostgresReturningTests {
+        fn get_table_name(&self, test_suffix: &str) -> String {
+            format!("ret_postgres_sqlx_{}", test_suffix)
+        }
+
         async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
             use sqlx::PgPool;
             use switchy_async::sync::Mutex;
@@ -2264,6 +2268,10 @@ mod postgres_native_returning_tests {
     struct PostgresNativeReturningTests;
 
     impl ReturningTestSuite for PostgresNativeReturningTests {
+        fn get_table_name(&self, test_suffix: &str) -> String {
+            format!("ret_postgres_tokio_{}", test_suffix)
+        }
+
         async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
             let url = std::env::var("POSTGRES_TEST_URL").ok()?;
 

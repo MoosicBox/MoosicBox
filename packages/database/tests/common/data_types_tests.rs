@@ -13,12 +13,17 @@ pub trait DataTypeTestSuite {
 
     async fn get_database(&self) -> Option<Arc<Self::DatabaseType>>;
 
+    fn get_table_name(&self, test_suffix: &str) -> String {
+        format!("data_type_test_{test_suffix}")
+    }
+
     async fn test_integer_types_boundary_values(&self) {
         let Some(db) = self.get_database().await else {
             return;
         };
 
-        let table_name = "int_boundary_test";
+        let table_name = self.get_table_name("int_boundary_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -156,7 +161,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "type_safety_test";
+        let table_name = self.get_table_name("type_safety_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -224,7 +230,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "string_test";
+        let table_name = self.get_table_name("string_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -346,7 +353,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "float_test";
+        let table_name = self.get_table_name("float_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -422,7 +430,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "decimal_test";
+        let table_name = self.get_table_name("decimal_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -495,7 +504,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "uuid_test";
+        let table_name = self.get_table_name("uuid_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -567,7 +577,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "bool_test";
+        let table_name = self.get_table_name("bool_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -650,7 +661,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "datetime_test";
+        let table_name = self.get_table_name("datetime_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -719,7 +731,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "null_test";
+        let table_name = self.get_table_name("null_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -832,7 +845,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "serial_test";
+        let table_name = self.get_table_name("serial_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -891,7 +905,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "default_test";
+        let table_name = self.get_table_name("default_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -978,7 +993,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "int8_specific_test";
+        let table_name = self.get_table_name("int8_specific_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -1133,7 +1149,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "int16_specific_test";
+        let table_name = self.get_table_name("int16_specific_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -1313,7 +1330,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "uint8_specific_test";
+        let table_name = self.get_table_name("uint8_specific_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -1400,7 +1418,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "uint16_specific_test";
+        let table_name = self.get_table_name("uint16_specific_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
@@ -1487,7 +1506,8 @@ pub trait DataTypeTestSuite {
             return;
         };
 
-        let table_name = "uint32_specific_test";
+        let table_name = self.get_table_name("uint32_specific_test");
+        let table_name = &table_name;
         drop_table(table_name)
             .if_exists(true)
             .execute(&*db)
