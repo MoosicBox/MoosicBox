@@ -1319,6 +1319,45 @@ mod simulator {
     }
 }
 
+// NOTE: Turso tests are currently DISABLED due to database locking issues in the upstream
+// Turso library (v0.2.2). See data_types_integration.rs for details.
+#[cfg(feature = "turso")]
+mod turso {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    async fn setup_db() -> Arc<Box<dyn Database>> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let thread_id = std::thread::current().id();
+        let temp_file = std::env::temp_dir().join(format!(
+            "test_turso_qb_{}_{}_{:?}_{}.db",
+            std::process::id(),
+            timestamp,
+            thread_id,
+            counter
+        ));
+        let db = switchy_database_connection::init_turso_local(Some(&temp_file))
+            .await
+            .unwrap();
+        let db = Arc::new(db);
+
+        db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+            .await
+            .unwrap();
+        db
+    }
+
+    generate_tests!();
+}
+
 mod common;
 
 #[cfg(feature = "schema")]
@@ -2131,6 +2170,86 @@ mod rusqlite_returning_tests {
     #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_rusqlite_complex_filters_return_correct_rows() {
         let suite = RusqliteReturningTests;
+        suite.test_complex_filters_return_correct_rows().await;
+    }
+}
+
+// Turso backend RETURNING tests
+// NOTE: Turso tests are currently DISABLED due to database locking issues. See data_types_integration.rs for details.
+#[cfg(all(feature = "turso", feature = "schema",))]
+mod turso_returning_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::turso::TursoDatabase;
+
+    struct TursoReturningTests;
+
+    impl ReturningTestSuite for TursoReturningTests {
+        async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
+            TursoDatabase::new(":memory:")
+                .await
+                .ok()
+                .map(|db| Arc::new(db) as Arc<dyn Database + Send + Sync>)
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_insert_returns_complete_row() {
+        let suite = TursoReturningTests;
+        suite.test_insert_returns_complete_row().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_update_returns_all_updated_rows() {
+        let suite = TursoReturningTests;
+        suite.test_update_returns_all_updated_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_update_with_limit_returns_limited_rows() {
+        let suite = TursoReturningTests;
+        suite.test_update_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_delete_returns_deleted_rows() {
+        let suite = TursoReturningTests;
+        suite.test_delete_returns_deleted_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_delete_with_limit_returns_limited_rows() {
+        let suite = TursoReturningTests;
+        suite.test_delete_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_upsert_returns_correct_row() {
+        let suite = TursoReturningTests;
+        suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_transaction_operations_return_data() {
+        let suite = TursoReturningTests;
+        suite.test_transaction_operations_return_data().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_empty_operations_return_empty() {
+        let suite = TursoReturningTests;
+        suite.test_empty_operations_return_empty().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_data_type_preservation_in_returns() {
+        let suite = TursoReturningTests;
+        suite.test_data_type_preservation_in_returns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_complex_filters_return_correct_rows() {
+        let suite = TursoReturningTests;
         suite.test_complex_filters_return_correct_rows().await;
     }
 }

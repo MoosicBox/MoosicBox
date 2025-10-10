@@ -1,5 +1,19 @@
 #![cfg(feature = "schema")]
 
+//! # Savepoint Integration Tests
+//!
+//! This file contains savepoint tests for database backends that support nested transactions
+//! using savepoints (SAVEPOINT/RELEASE/ROLLBACK TO syntax).
+//!
+//! ## Turso Backend Exclusion
+//!
+//! **Turso is currently excluded from these tests** because it does not yet support savepoints.
+//! This is a known limitation tracked in the upstream issue:
+//! <https://github.com/tursodatabase/turso/issues/1829>
+//!
+//! Once Turso adds savepoint support, a `turso_savepoint_tests` module should be added here
+//! following the same pattern as the rusqlite and sqlite-sqlx implementations.
+
 mod common;
 
 use common::savepoint_tests::SavepointTestSuite;

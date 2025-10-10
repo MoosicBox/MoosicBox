@@ -1506,3 +1506,295 @@ mod postgres_raw_datetime_tests {
         suite.test_mixed_now_operations("postgres_raw").await;
     }
 }
+
+// ===== TURSO BACKEND TESTS =====
+//
+// NOTE: Turso tests are currently DISABLED due to database locking issues in the upstream
+// Turso library (v0.2.2). The library holds write locks between operations causing
+// "database is locked" errors even in sequential test execution with in-memory databases.
+//
+// This appears to be a bug in the Turso library's connection pool or transaction management.
+// Tests should be re-enabled once the upstream issue is resolved.
+//
+// Tracked at: https://github.com/tursodatabase/turso/issues (locking/concurrency issues)
+//
+#[cfg(feature = "turso")]
+mod turso_datetime_tests {
+    use super::*;
+    use moosicbox_json_utils::database::ToValue as _;
+    use switchy_database::turso::TursoDatabase;
+
+    struct TursoDateTimeTests;
+
+    impl DateTimeTestSuite<&'static str> for TursoDateTimeTests {
+        type DatabaseType = TursoDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            TursoDatabase::new(":memory:").await.ok().map(Arc::new)
+        }
+
+        async fn create_test_table(&self, db: &Self::DatabaseType, table_name: &str) {
+            let query = format!(
+                r#"
+                CREATE TABLE IF NOT EXISTS {} (
+                    id INTEGER PRIMARY KEY,
+                    created_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    scheduled_for TIMESTAMP,
+                    description TEXT
+                )
+                "#,
+                table_name
+            );
+            db.exec_raw(&query)
+                .await
+                .expect("Failed to create datetime test table");
+        }
+
+        async fn cleanup_test_data(&self, db: &Self::DatabaseType, table_name: &str) {
+            let query = format!("DROP TABLE IF EXISTS {}", table_name);
+            db.exec_raw(&query)
+                .await
+                .expect("Failed to drop test table");
+        }
+
+        async fn get_timestamp_column(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            column: &str,
+            id: i32,
+        ) -> Option<NaiveDateTime> {
+            let query = format!("SELECT {} FROM {} WHERE id = ?", column, table_name);
+            let rows = db
+                .query_raw_params(&query, &[DatabaseValue::Int64(id as i64)])
+                .await
+                .unwrap();
+
+            if let Some(row) = rows.first() {
+                return Some(row.to_value(column).unwrap());
+            }
+            None
+        }
+
+        async fn get_row_id_by_description(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            description: &str,
+        ) -> i32 {
+            let query = format!(
+                "SELECT id FROM {} WHERE description = ? ORDER BY id LIMIT 1",
+                table_name
+            );
+            let rows = db
+                .query_raw_params(&query, &[DatabaseValue::String(description.to_string())])
+                .await
+                .expect("Failed to get row by description");
+
+            if rows.is_empty() {
+                panic!("No row found with description '{}'", description);
+            }
+
+            match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
+                DatabaseValue::Int64(n) => n as i32,
+                _ => panic!("Expected number for id"),
+            }
+        }
+
+        async fn insert_with_now(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            description: &str,
+        ) {
+            let query = format!(
+                "INSERT INTO {} (created_at, description) VALUES (?, ?)",
+                table_name
+            );
+            db.exec_raw_params(
+                &query,
+                &[
+                    DatabaseValue::Now,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with NOW()");
+        }
+
+        async fn insert_with_expires_at(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            expires_at: DatabaseValue,
+            description: &str,
+        ) {
+            let query = format!(
+                "INSERT INTO {} (expires_at, description) VALUES (?, ?)",
+                table_name
+            );
+            db.exec_raw_params(
+                &query,
+                &[expires_at, DatabaseValue::String(description.to_string())],
+            )
+            .await
+            .expect("Failed to insert with expires_at");
+        }
+
+        async fn insert_with_scheduled_for(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            scheduled_for: DatabaseValue,
+            description: &str,
+        ) {
+            let query = format!(
+                "INSERT INTO {} (scheduled_for, description) VALUES (?, ?)",
+                table_name
+            );
+            db.exec_raw_params(
+                &query,
+                &[
+                    scheduled_for,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with scheduled_for");
+        }
+
+        async fn insert_with_all_timestamps(
+            &self,
+            db: &Self::DatabaseType,
+            table_name: &str,
+            created_at: DatabaseValue,
+            expires_at: DatabaseValue,
+            scheduled_for: DatabaseValue,
+            description: &str,
+        ) {
+            let query = format!(
+                "INSERT INTO {} (created_at, expires_at, scheduled_for, description) VALUES (?, ?, ?, ?)",
+                table_name
+            );
+            db.exec_raw_params(
+                &query,
+                &[
+                    created_at,
+                    expires_at,
+                    scheduled_for,
+                    DatabaseValue::String(description.to_string()),
+                ],
+            )
+            .await
+            .expect("Failed to insert with all timestamps");
+        }
+
+        fn gen_param(&self, _i: u8) -> &'static str {
+            "?"
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_insert() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_insert("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_in_where_clause() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_in_where_clause("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_plus_days() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_plus_days("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_minus_days() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_minus_days("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_plus_hours_minutes_seconds() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_plus_hours_minutes_seconds("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_plus_minutes_normalization() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_plus_minutes_normalization("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_plus_complex_interval() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_plus_complex_interval("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_zero_interval_returns_now() {
+        let suite = TursoDateTimeTests;
+        suite.test_zero_interval_returns_now("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_mixed_parameters() {
+        let suite = TursoDateTimeTests;
+        suite.test_mixed_parameters("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_consistency_in_transaction() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_consistency_in_transaction("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_duration_conversion() {
+        let suite = TursoDateTimeTests;
+        suite.test_duration_conversion("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_plus_interval() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_plus_interval("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_now_minus_interval() {
+        let suite = TursoDateTimeTests;
+        suite.test_now_minus_interval("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_complex_interval_operations() {
+        let suite = TursoDateTimeTests;
+        suite.test_complex_interval_operations("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_update_with_now() {
+        let suite = TursoDateTimeTests;
+        suite.test_update_with_now("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_multiple_now_consistency() {
+        let suite = TursoDateTimeTests;
+        suite.test_multiple_now_consistency("turso").await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_mixed_now_operations() {
+        let suite = TursoDateTimeTests;
+        suite.test_mixed_now_operations("turso").await;
+    }
+}
