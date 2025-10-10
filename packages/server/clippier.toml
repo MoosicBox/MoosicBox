@@ -5,10 +5,6 @@ STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
 os = "ubuntu"
 
 [[config.dependencies]]
-command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
-features = ["cpal", "default"]
-
-[[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
 features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
 
@@ -28,21 +24,3 @@ features = ["default", "postgres-openssl", "tls"]
 
 [[config]]
 os = "macos"
-
-[[config.dependencies]]
-command  = "brew install jack"
-features = ["jack"]
-
-[[config.dependencies]]
-command = "brew install automake autoconf libtool"
-features = [
-    "all-decoders",
-    "all-encoders",
-    "all-formats",
-    "all-os-decoders",
-    "all-os-encoders",
-    "all-os-formats",
-    "decoder-opus",
-    "default",
-    "encoder-opus",
-]
