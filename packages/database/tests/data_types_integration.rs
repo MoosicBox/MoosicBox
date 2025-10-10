@@ -41,17 +41,6 @@ mod rusqlite_data_type_tests {
         }
     }
 
-    // ===== TURSO BACKEND TESTS =====
-    //
-    // NOTE: Turso tests are currently DISABLED due to database locking issues in the upstream
-    // Turso library (v0.2.2). The library holds write locks between operations causing
-    // "database is locked" errors even in sequential test execution with in-memory databases.
-    //
-    // This appears to be a bug in the Turso library's connection pool or transaction management.
-    // Tests should be re-enabled once the upstream issue is resolved.
-    //
-    // Tracked at: https://github.com/tursodatabase/turso/issues (locking/concurrency issues)
-    //
     #[cfg(feature = "turso")]
     mod turso_data_type_tests {
         use super::*;

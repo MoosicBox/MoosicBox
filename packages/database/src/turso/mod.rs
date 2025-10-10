@@ -113,8 +113,10 @@
 
 pub mod transaction;
 
+use std::sync::Arc;
 use thiserror::Error;
-use turso::{Builder, Database as TursoDb, Value as TursoValue};
+use tokio::sync::Mutex;
+use turso::{Builder, Value as TursoValue};
 
 use crate::{
     DatabaseValue,
@@ -162,23 +164,34 @@ pub enum TursoDatabaseError {
 
 #[derive(Debug)]
 pub struct TursoDatabase {
-    database: TursoDb,
+    connection: Arc<Mutex<turso::Connection>>,
 }
 
 impl TursoDatabase {
     /// Create a new Turso database instance
     ///
+    /// Creates a single shared connection for regular database operations. Transactions
+    /// will create separate connections as needed.
+    ///
     /// # Errors
     ///
-    /// * Returns `TursoDatabaseError::Connection` if the database connection cannot be established
+    /// * Returns `TursoDatabaseError::Connection` if the database cannot be opened or
+    ///   the initial connection cannot be established
     pub async fn new(path: &str) -> Result<Self, TursoDatabaseError> {
+        log::debug!("Creating Turso database: path={path}");
         let builder = Builder::new_local(path);
         let database = builder
             .build()
             .await
             .map_err(|e| TursoDatabaseError::Connection(e.to_string()))?;
 
-        Ok(Self { database })
+        log::debug!("Opening Turso connection: path={path}");
+        let connection = database.connect().map_err(TursoDatabaseError::Turso)?;
+
+        log::debug!("Turso database initialized: path={path}");
+        Ok(Self {
+            connection: Arc::new(Mutex::new(connection)),
+        })
     }
 }
 
@@ -635,33 +648,6 @@ fn build_sort_props(sorts: &[crate::query::Sort]) -> Vec<String> {
     sorts.iter().map(ToSql::to_sql).collect()
 }
 
-fn build_update_where_clause(
-    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
-    limit: Option<usize>,
-    query: Option<&str>,
-) -> String {
-    let clause = build_where_clause(filters);
-    let limit_clause = build_update_limit_clause(limit, query);
-
-    let clause = if limit_clause.is_empty() {
-        clause
-    } else if clause.is_empty() {
-        "WHERE".into()
-    } else {
-        clause + " AND"
-    };
-
-    format!("{clause} {limit_clause}").trim().to_string()
-}
-
-fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
-    limit.map_or_else(String::new, |limit| {
-        query.map_or_else(String::new, |query| {
-            format!("rowid IN ({query} LIMIT {limit})")
-        })
-    })
-}
-
 fn build_set_clause(values: &[(&str, Box<dyn crate::query::Expression>)]) -> String {
     if values.is_empty() {
         String::new()
@@ -728,6 +714,9 @@ async fn turso_select(
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
+    let filter_params = bexprs_to_values_opt(filters).unwrap_or_default();
+    log::trace!("Running select query: {query} with params: {filter_params:?}");
+
     let mut stmt = connection.prepare(&query).await?;
     let column_names: Vec<String> = stmt
         .columns()
@@ -735,7 +724,7 @@ async fn turso_select(
         .map(|c| c.name().to_string())
         .collect();
 
-    let params = to_turso_params(&bexprs_to_values_opt(filters).unwrap_or_default())?;
+    let params = to_turso_params(&filter_params)?;
     let mut rows = stmt.query(params).await?;
 
     let mut results = Vec::new();
@@ -743,6 +732,7 @@ async fn turso_select(
         results.push(from_turso_row(&column_names, &row)?);
     }
 
+    log::trace!("SELECT: returned {} rows", results.len());
     Ok(results)
 }
 
@@ -764,6 +754,9 @@ async fn turso_find_row(
         build_sort_clause(sort),
     );
 
+    let filter_params = bexprs_to_values_opt(filters).unwrap_or_default();
+    log::trace!("Running find_row query: {query} with params: {filter_params:?}");
+
     let mut stmt = connection.prepare(&query).await?;
     let column_names: Vec<String> = stmt
         .columns()
@@ -771,12 +764,14 @@ async fn turso_find_row(
         .map(|c| c.name().to_string())
         .collect();
 
-    let params = to_turso_params(&bexprs_to_values_opt(filters).unwrap_or_default())?;
+    let params = to_turso_params(&filter_params)?;
     let mut rows = stmt.query(params).await?;
 
     if let Some(row) = rows.next().await? {
+        log::trace!("find_row: row found");
         Ok(Some(from_turso_row(&column_names, &row)?))
     } else {
+        log::trace!("find_row: no row found");
         Ok(None)
     }
 }
@@ -786,18 +781,23 @@ async fn turso_insert_and_get_row(
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
 ) -> Result<crate::Row, TursoDatabaseError> {
-    let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-
-    let query = format!(
-        "INSERT INTO {table_name} ({}) {} RETURNING *",
-        columns.join(", "),
-        build_values_clause(values),
-    );
+    let query = if values.is_empty() {
+        format!("INSERT INTO {table_name} DEFAULT VALUES RETURNING *")
+    } else {
+        let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        format!(
+            "INSERT INTO {table_name} ({}) {} RETURNING *",
+            columns.join(", "),
+            build_values_clause(values),
+        )
+    };
 
     let all_values = values
         .iter()
         .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
         .collect::<Vec<_>>();
+
+    log::trace!("Running insert_and_get_row query: {query} with params: {all_values:?}");
 
     let mut stmt = connection.prepare(&query).await?;
     let column_names: Vec<String> = stmt
@@ -809,8 +809,14 @@ async fn turso_insert_and_get_row(
     let params = to_turso_params(&all_values)?;
     let mut rows = stmt.query(params).await?;
 
+    log::trace!("Fetching first row from INSERT RETURNING");
     if let Some(row) = rows.next().await? {
-        Ok(from_turso_row(&column_names, &row)?)
+        let result_row = from_turso_row(&column_names, &row)?;
+        log::trace!(
+            "INSERT RETURNING: row fetched successfully with columns: {:?}",
+            result_row.columns
+        );
+        Ok(result_row)
     } else {
         Err(TursoDatabaseError::Query(
             "INSERT did not return a row".to_string(),
@@ -818,6 +824,7 @@ async fn turso_insert_and_get_row(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn turso_update_and_get_rows(
     connection: &turso::Connection,
     table_name: &str,
@@ -825,21 +832,57 @@ async fn turso_update_and_get_rows(
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
-    let where_clause = build_where_clause(filters);
-    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+    if limit.is_none() {
+        let query = format!(
+            "UPDATE {table_name} {} {} RETURNING *",
+            build_set_clause(values),
+            build_where_clause(filters),
+        );
 
-    let query = format!(
-        "UPDATE {table_name} {} {} RETURNING *",
-        build_set_clause(values),
-        build_update_where_clause(filters, limit, select_query.as_deref()),
+        let mut all_values = values
+            .iter()
+            .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
+            .collect::<Vec<_>>();
+
+        let mut filter_values = filters
+            .map(|filters| {
+                filters
+                    .iter()
+                    .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        all_values.append(&mut filter_values);
+
+        log::trace!("Running update_and_get_rows query: {query} with params: {all_values:?}");
+
+        let mut stmt = connection.prepare(&query).await?;
+        let column_names: Vec<String> = stmt
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        let params = to_turso_params(&all_values)?;
+        let mut rows = stmt.query(params).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            results.push(from_turso_row(&column_names, &row)?);
+        }
+
+        log::trace!("UPDATE RETURNING: fetched {} rows", results.len());
+        return Ok(results);
+    }
+
+    let select_query = format!(
+        "SELECT rowid FROM {table_name} {} LIMIT {}",
+        build_where_clause(filters),
+        limit.unwrap(),
     );
 
-    let mut all_values = values
-        .iter()
-        .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
-        .collect::<Vec<_>>();
-
-    let mut filter_values = filters
+    let filter_values = filters
         .map(|filters| {
             filters
                 .iter()
@@ -848,19 +891,61 @@ async fn turso_update_and_get_rows(
         })
         .unwrap_or_default();
 
-    all_values.append(&mut filter_values.clone());
-    if limit.is_some() {
-        all_values.append(&mut filter_values);
+    log::trace!(
+        "Running update (select phase) query: {select_query} with params: {filter_values:?}"
+    );
+
+    let rowids = {
+        let mut stmt = connection.prepare(&select_query).await?;
+        let params = to_turso_params(&filter_values)?;
+        let mut rows = stmt.query(params).await?;
+
+        let mut rowids = Vec::new();
+        while let Some(row) = rows.next().await? {
+            rowids.push(row.get::<i64>(0)?);
+        }
+        log::trace!(
+            "UPDATE: selected {} rowids for LIMIT update: {:?}",
+            rowids.len(),
+            rowids
+        );
+        rowids
+    };
+
+    if rowids.is_empty() {
+        return Ok(Vec::new());
     }
 
-    let mut stmt = connection.prepare(&query).await?;
+    let placeholders = (0..rowids.len())
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let update_query = format!(
+        "UPDATE {table_name} {} WHERE rowid IN ({placeholders}) RETURNING *",
+        build_set_clause(values),
+    );
+
+    let mut update_values = values
+        .iter()
+        .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
+        .collect::<Vec<_>>();
+
+    let rowid_values: Vec<DatabaseValue> = rowids.into_iter().map(DatabaseValue::Int64).collect();
+
+    let mut rowid_params = rowid_values;
+    update_values.append(&mut rowid_params);
+
+    log::trace!("Running update query: {update_query} with params: {update_values:?}");
+
+    let mut stmt = connection.prepare(&update_query).await?;
     let column_names: Vec<String> = stmt
         .columns()
         .iter()
         .map(|c| c.name().to_string())
         .collect();
 
-    let params = to_turso_params(&all_values)?;
+    let params = to_turso_params(&update_values)?;
     let mut rows = stmt.query(params).await?;
 
     let mut results = Vec::new();
@@ -868,6 +953,7 @@ async fn turso_update_and_get_rows(
         results.push(from_turso_row(&column_names, &row)?);
     }
 
+    log::trace!("UPDATE RETURNING: fetched {} rows", results.len());
     Ok(results)
 }
 
@@ -888,15 +974,19 @@ async fn turso_delete(
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
-    let where_clause = build_where_clause(filters);
-    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+    let select_cols = if limit.is_some() {
+        "rowid, *".to_string()
+    } else {
+        "*".to_string()
+    };
 
-    let query = format!(
-        "DELETE FROM {table_name} {} RETURNING *",
-        build_update_where_clause(filters, limit, select_query.as_deref()),
+    let select_query = format!(
+        "SELECT {select_cols} FROM {table_name} {} {}",
+        build_where_clause(filters),
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}")),
     );
 
-    let mut all_filter_values = filters
+    let filter_values = filters
         .map(|filters| {
             filters
                 .iter()
@@ -905,25 +995,86 @@ async fn turso_delete(
         })
         .unwrap_or_default();
 
-    if limit.is_some() {
-        all_filter_values.extend(all_filter_values.clone());
-    }
+    log::trace!(
+        "Running delete (select phase) query: {select_query} with params: {filter_values:?}"
+    );
 
-    let mut stmt = connection.prepare(&query).await?;
-    let column_names: Vec<String> = stmt
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
+    let (results, rowids) = {
+        let mut stmt = connection.prepare(&select_query).await?;
+        let all_column_names: Vec<String> = stmt
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
 
-    let params = to_turso_params(&all_filter_values)?;
-    let mut rows = stmt.query(params).await?;
+        log::trace!(
+            "DELETE: query returned {} columns: {:?}",
+            all_column_names.len(),
+            all_column_names
+        );
 
-    let mut results = Vec::new();
-    while let Some(row) = rows.next().await? {
-        results.push(from_turso_row(&column_names, &row)?);
-    }
+        let mut column_names = all_column_names.clone();
+        if limit.is_some() && !column_names.is_empty() {
+            column_names.remove(0);
+        }
 
+        let params = to_turso_params(&filter_values)?;
+        let mut rows = stmt.query(params).await?;
+
+        let mut results = Vec::new();
+        let mut rowids = Vec::new();
+        while let Some(row) = rows.next().await? {
+            if limit.is_some() {
+                rowids.push(row.get::<i64>(0)?);
+                let mut row_columns = Vec::with_capacity(column_names.len());
+                for (col_idx, column_name) in column_names.iter().enumerate() {
+                    let value = row.get_value(col_idx + 1).map_err(|e| {
+                        TursoDatabaseError::Query(format!(
+                            "Failed to get column {} (index {}): {e}",
+                            column_name,
+                            col_idx + 1
+                        ))
+                    })?;
+                    row_columns.push((column_name.clone(), DatabaseValue::from(value)));
+                }
+                results.push(crate::Row {
+                    columns: row_columns,
+                });
+            } else {
+                results.push(from_turso_row(&column_names, &row)?);
+            }
+        }
+        (results, rowids)
+    };
+
+    let delete_query = if let Some(_limit) = limit {
+        if rowids.is_empty() {
+            return Ok(results);
+        }
+        let placeholders = (0..rowids.len())
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("DELETE FROM {table_name} WHERE rowid IN ({placeholders})")
+    } else {
+        format!("DELETE FROM {table_name} {}", build_where_clause(filters),)
+    };
+
+    let delete_params = if limit.is_some() {
+        to_turso_params(
+            &rowids
+                .into_iter()
+                .map(DatabaseValue::Int64)
+                .collect::<Vec<_>>(),
+        )?
+    } else {
+        to_turso_params(&filter_values)?
+    };
+
+    log::trace!("Running delete query: {delete_query}");
+    connection.execute(&delete_query, delete_params).await?;
+
+    log::trace!("DELETE: deleted {} rows", results.len());
     Ok(results)
 }
 
@@ -934,11 +1085,14 @@ async fn turso_upsert(
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    log::trace!("Running upsert on table: {table_name}");
     let rows = turso_update_and_get_rows(connection, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
+        log::trace!("UPSERT: no rows updated, performing insert");
         vec![turso_insert_and_get_row(connection, table_name, values).await?]
     } else {
+        log::trace!("UPSERT: updated {} rows", rows.len());
         rows
     })
 }
@@ -976,14 +1130,14 @@ async fn turso_upsert_and_get_row(
 #[async_trait::async_trait]
 impl crate::Database for TursoDatabase {
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(|e| {
-            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
-        })?;
+        log::trace!("query_raw: query:\n{query}");
+
+        let conn = self.connection.lock().await;
 
         let mut stmt = conn
             .prepare(query)
             .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+            .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
 
         let column_info = stmt.columns();
         let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
@@ -992,6 +1146,8 @@ impl crate::Database for TursoDatabase {
             .query(())
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        drop(conn);
 
         let mut results = Vec::new();
         while let Some(row) = rows
@@ -1002,6 +1158,7 @@ impl crate::Database for TursoDatabase {
             results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
         }
 
+        log::trace!("query_raw: returned {} rows", results.len());
         Ok(results)
     }
 
@@ -1010,11 +1167,11 @@ impl crate::Database for TursoDatabase {
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        log::trace!("query_raw_params: query: {query} with params: {params:?}");
+
         let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
 
-        let conn = self.database.connect().map_err(|e| {
-            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
-        })?;
+        let conn = self.connection.lock().await;
 
         let mut stmt = conn
             .prepare(&transformed_query)
@@ -1031,6 +1188,7 @@ impl crate::Database for TursoDatabase {
             .query(turso_params)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+        drop(conn);
 
         let mut results = Vec::new();
         while let Some(row) = rows
@@ -1041,18 +1199,21 @@ impl crate::Database for TursoDatabase {
             results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
         }
 
+        log::trace!("query_raw_params: returned {} rows", results.len());
         Ok(results)
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(|e| {
-            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
-        })?;
+        log::trace!("exec_raw: query:\n{statement}");
+
+        let conn = self.connection.lock().await;
 
         conn.execute(statement, ())
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+        drop(conn);
 
+        log::trace!("exec_raw: completed");
         Ok(())
     }
 
@@ -1061,11 +1222,11 @@ impl crate::Database for TursoDatabase {
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<u64, crate::DatabaseError> {
+        log::trace!("exec_raw_params: query: {query} with params: {params:?}");
+
         let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
 
-        let conn = self.database.connect().map_err(|e| {
-            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
-        })?;
+        let conn = self.connection.lock().await;
 
         let turso_params =
             to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
@@ -1079,21 +1240,22 @@ impl crate::Database for TursoDatabase {
             .execute(turso_params)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+        drop(conn);
 
+        log::trace!("exec_raw_params: affected {affected_rows} rows");
         Ok(affected_rows)
     }
 
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(|e| {
-            crate::DatabaseError::Turso(TursoDatabaseError::Connection(e.to_string()))
-        })?;
+        log::debug!("begin_transaction: reusing existing connection for transaction");
 
-        let tx = TursoTransaction::new(conn)
+        let tx = TursoTransaction::new(self.connection.clone())
             .await
             .map_err(crate::DatabaseError::Turso)?;
 
+        log::debug!("begin_transaction: transaction started");
         Ok(Box::new(tx))
     }
 
@@ -1101,7 +1263,7 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_select(
             &conn,
             query.table_name,
@@ -1120,7 +1282,7 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_find_row(
             &conn,
             query.table_name,
@@ -1138,13 +1300,13 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_update_and_get_rows(
             &conn,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
-            None,
+            statement.limit,
         )
         .await
         .map_err(crate::DatabaseError::Turso)?)
@@ -1154,7 +1316,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_update_and_get_row(
             &conn,
             statement.table_name,
@@ -1170,7 +1332,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(
             turso_insert_and_get_row(&conn, statement.table_name, &statement.values)
                 .await
@@ -1182,7 +1344,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_upsert(
             &conn,
             statement.table_name,
@@ -1198,7 +1360,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_upsert_and_get_row(
             &conn,
             statement.table_name,
@@ -1214,7 +1376,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
 
         let mut all_results = Vec::new();
         for values in &statement.values {
@@ -1223,6 +1385,7 @@ impl crate::Database for TursoDatabase {
                 .map_err(crate::DatabaseError::Turso)?;
             all_results.extend(results);
         }
+        drop(conn);
 
         Ok(all_results)
     }
@@ -1231,12 +1394,12 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         Ok(turso_delete(
             &conn,
             statement.table_name,
             statement.filters.as_deref(),
-            None,
+            statement.limit,
         )
         .await
         .map_err(crate::DatabaseError::Turso)?)
@@ -1246,7 +1409,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         let rows = turso_delete(
             &conn,
             statement.table_name,
@@ -1255,6 +1418,7 @@ impl crate::Database for TursoDatabase {
         )
         .await
         .map_err(crate::DatabaseError::Turso)?;
+        drop(conn);
         Ok(rows.into_iter().next())
     }
 
@@ -1263,7 +1427,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         turso_exec_create_table(&conn, statement).await
     }
 
@@ -1272,7 +1436,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         turso_exec_drop_table(&conn, statement).await
     }
 
@@ -1281,7 +1445,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         turso_exec_create_index(&conn, statement).await
     }
 
@@ -1290,7 +1454,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         turso_exec_drop_index(&conn, statement).await
     }
 
@@ -1299,7 +1463,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let conn = self.connection.lock().await;
         turso_exec_alter_table(&conn, statement).await
     }
 
@@ -1521,6 +1685,10 @@ async fn turso_exec_create_table(
             query.push_str(" NOT NULL");
         }
 
+        if column.auto_increment && statement.primary_key.is_some_and(|pk| pk == column.name) {
+            query.push_str(" PRIMARY KEY AUTOINCREMENT");
+        }
+
         if let Some(default) = &column.default {
             query.push_str(" DEFAULT ");
 
@@ -1628,7 +1796,16 @@ async fn turso_exec_create_table(
 
     moosicbox_assert::assert!(!first);
 
-    if let Some(primary_key) = &statement.primary_key {
+    let pk_in_column = statement.primary_key.is_some_and(|pk| {
+        statement
+            .columns
+            .iter()
+            .any(|col| col.name == pk && col.auto_increment)
+    });
+
+    if let Some(primary_key) = &statement.primary_key
+        && !pk_in_column
+    {
         query.push_str(", PRIMARY KEY (");
         query.push_str(primary_key);
         query.push(')');
@@ -4904,10 +5081,11 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let conn = db.database.connect().expect("Failed to get connection");
+        let conn = db.connection.lock().await;
         let dependents = turso_find_cascade_dependents(&conn, "parent")
             .await
             .expect("Failed to find dependents");
+        drop(conn);
 
         assert_eq!(dependents.len(), 2, "Should find child and parent");
         assert_eq!(dependents[0], "child", "Child should be first");
@@ -4931,10 +5109,11 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let conn = db.database.connect().expect("Failed to get connection");
+        let conn = db.connection.lock().await;
         let has_deps = turso_has_dependents(&conn, "parent")
             .await
             .expect("Failed to check dependents");
+        drop(conn);
 
         assert!(has_deps, "Parent should have dependents");
     }
@@ -4950,10 +5129,11 @@ mod tests {
             .await
             .expect("Failed to create standalone table");
 
-        let conn = db.database.connect().expect("Failed to get connection");
+        let conn = db.connection.lock().await;
         let has_deps = turso_has_dependents(&conn, "standalone")
             .await
             .expect("Failed to check dependents");
+        drop(conn);
 
         assert!(!has_deps, "Standalone table should have no dependents");
     }
@@ -4981,10 +5161,11 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let conn = db.database.connect().expect("Failed to get connection");
+        let conn = db.connection.lock().await;
         let dependents = turso_find_cascade_dependents(&conn, "grandparent")
             .await
             .expect("Failed to find dependents");
+        drop(conn);
 
         assert_eq!(
             dependents.len(),

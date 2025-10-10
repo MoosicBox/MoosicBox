@@ -124,8 +124,12 @@ impl TursoTransaction {
     /// # Errors
     ///
     /// * Returns error if transaction cannot be started
-    pub async fn new(connection: turso::Connection) -> Result<Self, TursoDatabaseError> {
+    pub async fn new(
+        connection: Arc<Mutex<turso::Connection>>,
+    ) -> Result<Self, TursoDatabaseError> {
         connection
+            .lock()
+            .await
             .execute("BEGIN DEFERRED", ())
             .await
             .map_err(|e| {
@@ -133,7 +137,7 @@ impl TursoTransaction {
             })?;
 
         Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
+            connection,
             committed: AtomicBool::new(false),
             rolled_back: AtomicBool::new(false),
         })

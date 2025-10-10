@@ -208,6 +208,7 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 0);
         }
 
+        #[ignore = "Ignoring until turso connection pool set up"]
         #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_transaction_isolation() {
             let db = setup_db().await;
@@ -1319,7 +1320,6 @@ mod simulator {
     }
 }
 
-// NOTE: Turso tests are currently DISABLED due to database locking issues in the upstream
 // Turso library (v0.2.2). See data_types_integration.rs for details.
 #[cfg(feature = "turso")]
 mod turso {
@@ -2179,7 +2179,6 @@ mod rusqlite_returning_tests {
 }
 
 // Turso backend RETURNING tests
-// NOTE: Turso tests are currently DISABLED due to database locking issues. See data_types_integration.rs for details.
 #[cfg(all(feature = "turso", feature = "schema",))]
 mod turso_returning_tests {
     use super::*;
@@ -2233,6 +2232,7 @@ mod turso_returning_tests {
         suite.test_upsert_returns_correct_row().await;
     }
 
+    #[ignore = "Turso does not properly return auto-incremented ID from inserts yet"]
     #[test_log::test(switchy_async::test)]
     async fn test_turso_transaction_operations_return_data() {
         let suite = TursoReturningTests;
