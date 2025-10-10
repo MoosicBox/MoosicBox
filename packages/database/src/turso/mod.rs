@@ -4348,4 +4348,54 @@ mod tests {
         );
         assert_eq!(dependents[2], "grandparent", "Grandparent should be last");
     }
+
+    #[switchy_async::test]
+    async fn test_savepoint_not_supported() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Turso v0.2.2 does not support SAVEPOINT
+        let result = tx.savepoint("sp1").await;
+
+        assert!(
+            result.is_err(),
+            "SAVEPOINT should return error in Turso v0.2.2"
+        );
+
+        match result {
+            Err(crate::DatabaseError::InvalidQuery(msg)) => {
+                assert!(
+                    msg.contains("does not support SAVEPOINT"),
+                    "Error should explain Turso limitation: {msg}"
+                );
+            }
+            Ok(_) => panic!("Expected InvalidQuery error, but savepoint was created successfully"),
+            Err(e) => panic!("Expected InvalidQuery error, got different error type: {e}"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_savepoint_invalid_name() {
+        use crate::Database;
+
+        let db = create_test_db().await;
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Try to create savepoint with invalid name (SQL injection attempt)
+        let result = tx.savepoint("sp1'; DROP TABLE users; --").await;
+        assert!(result.is_err(), "Invalid savepoint name should error");
+
+        // Try with special characters
+        let result = tx.savepoint("sp-test").await;
+        assert!(result.is_err(), "Savepoint name with dash should error");
+    }
 }
