@@ -7,7 +7,7 @@ features = ["jack"]
 
 [[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
-features = ["asio", "cpal", "default", "default-windows", "oboe-shared-stdcxx"]
+features = ["asio", "cpal", "default", "default-windows", "jack", "oboe-shared-stdcxx"]
 
 [[config]]
 os = "macos"
@@ -15,10 +15,6 @@ os = "macos"
 [[config.dependencies]]
 command  = "brew install jack"
 features = ["jack"]
-
-[[config.dependencies]]
-command  = "brew install automake autoconf libtool"
-features = ["default", "default-windows", "opus"]
 
 [[config]]
 os = "windows"
