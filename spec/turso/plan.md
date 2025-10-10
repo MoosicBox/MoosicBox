@@ -8,9 +8,9 @@ This specification details the implementation of a Turso Database backend for Mo
 
 The implementation provides a modern, async-first **local database** option that maintains full compatibility with existing MoosicBox schemas while preparing for advanced features like concurrent writes, vector search, and future distributed scenarios.
 
-**Current Status:** 🟢 **ALL PHASES 1-12 COMPLETE** - Full feature parity with rusqlite achieved, production-ready
+**Current Status:** 🟡 **PHASES 1-12 COMPLETE, PHASE 13 PLANNED** - Full feature parity with rusqlite achieved, connection pool design ready
 
-**Completion:** 100% complete - All 12 phases COMPLETE, zero compromises, zero clippy warnings, 59 tests passing
+**Completion:** Phases 1-12: 100% complete - zero compromises, zero clippy warnings, 59 tests passing | Phase 13: Connection pool implementation planned but not started
 
 ## Status Legend
 
@@ -35,13 +35,16 @@ The implementation provides a modern, async-first **local database** option that
   * libSQL: More mature but C-based fork, doesn't align with issue intent
   * Continue with rusqlite: Synchronous, blocking, single-writer
 
-### Connection Model ✅
-- **Decision Point**: No connection pooling wrapper in initial implementation
+### Connection Model ✅ (Updated in Phase 13)
+- **Decision Point**: Connection pooling implementation planned for Phase 13
+- **Initial Implementation (Phases 1-12)**: Single shared connection `Arc<Mutex<turso::Connection>>`
+- **Phase 13 Plan**: Lazy connection pool with configurable min/max connections
 - **Rationale**:
-  * Turso manages connections internally with async design
-  * Different model from rusqlite's Arc<Mutex<Vec<Conn>>>
-  * Let Turso handle async connection management
-- **Implementation**: Single `turso::Database` instance, connections via `.connect()`
+  * Phase 1-12: Simple shared connection for initial implementation
+  * Phase 13: Address transaction isolation and concurrency concerns
+  * Connection pool will call `database.connect()` multiple times
+  * Provides proper transaction isolation with dedicated connections
+- **Benefits**: Transaction isolation, concurrent operations, production-ready pooling
 
 ### Feature Rollout ✅
 - **Decision Point**: Implement alongside existing backends, gradual rollout
@@ -3069,6 +3072,891 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 - ✅ Added: Debug logging to match rusqlite behavior (logs row changes)
 - ✅ Updated: All callers of `turso_update_and_get_row` now pass appropriate `limit` parameter
 - ✅ Result: Zero compromises - 100% functional parity with rusqlite
+
+---
+
+## Phase 13: Connection Pool Implementation ❌ **NOT STARTED**
+
+**Current Status:** ❌ **NOT STARTED** - Connection pool to be implemented
+
+**Priority:** 🟡 **IMPORTANT** - Production performance and correctness
+
+**Dependencies:** Requires Phases 1-12 complete ✅
+
+**Goal:** Add a lazy connection pool to the Turso backend that manages multiple connections via `database.connect()`. This addresses transaction isolation issues and improves concurrency for production workloads.
+
+**Estimated Lines:** ~850 lines total
+- Connection pool core: ~450 lines
+- Integration: ~200 lines
+- Tests: ~200 lines
+
+### Executive Summary
+
+**Current Issue:** Single shared connection (`Arc<Mutex<Connection>>`) causes:
+- ❌ No transaction isolation (transactions see uncommitted data from main connection)
+- ❌ Serialized access (mutex contention under load)
+- ❌ `:memory:` database limitation for transactions
+
+**Solution:** Implement connection pool with:
+- ✅ Lazy connection creation (only when needed)
+- ✅ Configurable min/max connections (2-10 default)
+- ✅ Proper transaction isolation (dedicated connections)
+- ✅ Blocking with timeout when pool exhausted
+- ✅ RAII safety (automatic connection return)
+
+---
+
+### 13.1: Connection Pool Core Implementation
+
+**Goal:** Create the connection pooling infrastructure with lazy initialization and RAII guards
+
+**Status:** ❌ Not Started
+
+#### 13.1.1 Create Pool Configuration Structure
+
+- [ ] Create `packages/database/src/turso/pool.rs` 🔴 **CRITICAL**
+  - [ ] Add module declaration to `turso/mod.rs`: `mod pool;`
+  - [ ] Add exports: `pub use pool::{TursoConnectionPool, TursoPoolConfig};`
+  - [ ] Add clippy configuration
+  - [ ] Implement configuration structure:
+    ```rust
+    #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+    #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+    #![allow(clippy::multiple_crate_versions)]
+
+    use std::collections::VecDeque;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+    use tokio::sync::{Mutex, Notify};
+
+    /// Configuration for Turso connection pool
+    #[derive(Debug, Clone)]
+    pub struct TursoPoolConfig {
+        /// Minimum number of connections to maintain
+        pub min_connections: usize,
+
+        /// Maximum number of connections allowed
+        pub max_connections: usize,
+
+        /// Maximum time to wait for a connection before timing out
+        pub connection_timeout: std::time::Duration,
+
+        /// Whether to validate connections before use
+        pub test_on_acquire: bool,
+    }
+
+    impl Default for TursoPoolConfig {
+        fn default() -> Self {
+            Self {
+                min_connections: 2,
+                max_connections: 10,
+                connection_timeout: std::time::Duration::from_secs(30),
+                test_on_acquire: false,
+            }
+        }
+    }
+    ```
+
+##### 13.1.1 Verification Checklist
+- [ ] Configuration structure compiles
+- [ ] Default values are reasonable for production
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~40 lines
+
+---
+
+#### 13.1.2 Implement Pool Structure and Connection Tracking
+
+- [ ] Add core pool structures to `pool.rs` 🔴 **CRITICAL**
+  - [ ] Implement `PooledConnection` structure:
+    ```rust
+    struct PooledConnection {
+        /// The actual Turso connection
+        connection: Arc<Mutex<turso::Connection>>,
+
+        /// Connection ID for tracking
+        id: usize,
+
+        /// Whether this connection is currently in a transaction
+        in_transaction: AtomicBool,
+    }
+    ```
+  - [ ] Implement `TursoConnectionPool` structure:
+    ```rust
+    pub struct TursoConnectionPool {
+        /// The underlying turso::Database (used to create connections)
+        database: turso::Database,
+
+        /// Pool configuration
+        config: TursoPoolConfig,
+
+        /// Available connections ready for use
+        available: Arc<Mutex<VecDeque<PooledConnection>>>,
+
+        /// Total number of connections (available + in-use)
+        total_connections: Arc<AtomicUsize>,
+
+        /// Notifier for when connections become available
+        notify: Arc<Notify>,
+    }
+    ```
+  - [ ] Implement `Clone` for `TursoConnectionPool` (needed for pool sharing)
+  - [ ] No connections created yet (lazy initialization)
+
+##### 13.1.2 Verification Checklist
+- [ ] Pool structures compile
+- [ ] `Clone` trait implemented for pool
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~60 lines
+
+---
+
+#### 13.1.3 Implement Pool Constructor and Connection Creation
+
+- [ ] Implement pool constructor in `pool.rs` 🔴 **CRITICAL**
+  - [ ] Constructor signature:
+    ```rust
+    impl TursoConnectionPool {
+        /// Create a new connection pool
+        ///
+        /// # Errors
+        ///
+        /// * Returns error if database cannot be opened
+        pub async fn new(
+            path: &str,
+            config: TursoPoolConfig
+        ) -> Result<Self, super::TursoDatabaseError> {
+            let builder = turso::Builder::new_local(path);
+            let database = builder.build().await?;
+
+            Ok(Self {
+                database,
+                config,
+                available: Arc::new(Mutex::new(VecDeque::new())),
+                total_connections: Arc::new(AtomicUsize::new(0)),
+                notify: Arc::new(Notify::new()),
+            })
+        }
+    }
+    ```
+  - [ ] **NO connections created in constructor** (lazy initialization)
+
+  - [ ] Implement private connection creation:
+    ```rust
+    async fn create_connection(&self) -> Result<PooledConnection, super::TursoDatabaseError> {
+        let id = self.total_connections.fetch_add(1, Ordering::SeqCst);
+
+        let connection = self.database.connect()
+            .map_err(|e| {
+                self.total_connections.fetch_sub(1, Ordering::SeqCst);
+                super::TursoDatabaseError::Connection(e.to_string())
+            })?;
+
+        Ok(PooledConnection {
+            connection: Arc::new(Mutex::new(connection)),
+            id,
+            in_transaction: AtomicBool::new(false),
+        })
+    }
+    ```
+
+##### 13.1.3 Verification Checklist
+- [ ] Constructor compiles
+- [ ] `create_connection()` properly handles errors
+- [ ] Connection ID tracking works correctly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~50 lines
+
+---
+
+#### 13.1.4 Implement Connection Acquisition Logic
+
+- [ ] Implement `acquire()` method in `pool.rs` 🔴 **CRITICAL**
+  - [ ] Full acquisition logic with timeout:
+    ```rust
+    /// Acquire a connection from the pool
+    ///
+    /// * Returns immediately if connection available
+    /// * Creates new connection if under max limit
+    /// * Blocks until connection available if at max limit
+    /// * Times out after config.connection_timeout
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if timeout reached
+    /// * Returns error if connection creation fails
+    pub async fn acquire(&self) -> Result<PoolGuard, super::TursoDatabaseError> {
+        let deadline = tokio::time::Instant::now() + self.config.connection_timeout;
+
+        loop {
+            // Try to get available connection
+            {
+                let mut available = self.available.lock().await;
+                if let Some(pooled) = available.pop_front() {
+                    if self.config.test_on_acquire {
+                        if self.is_connection_valid(&pooled).await {
+                            return Ok(PoolGuard::new(pooled, self.clone()));
+                        }
+                        // Connection invalid, discard and continue
+                        self.total_connections.fetch_sub(1, Ordering::SeqCst);
+                        continue;
+                    }
+                    return Ok(PoolGuard::new(pooled, self.clone()));
+                }
+            }
+
+            // Try to create new connection if under limit
+            let current_total = self.total_connections.load(Ordering::SeqCst);
+            if current_total < self.config.max_connections {
+                if let Ok(new_conn) = self.create_connection().await {
+                    return Ok(PoolGuard::new(new_conn, self.clone()));
+                }
+            }
+
+            // Wait for notification or timeout
+            if tokio::time::Instant::now() >= deadline {
+                return Err(super::TursoDatabaseError::Connection(
+                    format!("Connection pool timeout after {:?}", self.config.connection_timeout)
+                ));
+            }
+
+            tokio::select! {
+                _ = self.notify.notified() => continue,
+                _ = tokio::time::sleep_until(deadline) => {
+                    return Err(super::TursoDatabaseError::Connection(
+                        "Connection pool timeout".to_string()
+                    ));
+                }
+            }
+        }
+    }
+    ```
+
+  - [ ] Implement connection validation helper:
+    ```rust
+    async fn is_connection_valid(&self, conn: &PooledConnection) -> bool {
+        let guard = conn.connection.lock().await;
+        guard.query("SELECT 1", ()).await.is_ok()
+    }
+    ```
+
+##### 13.1.4 Verification Checklist
+- [ ] Acquisition logic compiles
+- [ ] Timeout handling works correctly
+- [ ] Connection validation works
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~80 lines
+
+---
+
+#### 13.1.5 Implement RAII Guards for Connection Management
+
+- [ ] Implement `PoolGuard` structure in `pool.rs` 🔴 **CRITICAL**
+  - [ ] RAII guard that automatically returns connection:
+    ```rust
+    /// Guard that automatically returns connection to pool on drop
+    pub struct PoolGuard {
+        pooled: Option<PooledConnection>,
+        pool: TursoConnectionPool,
+    }
+
+    impl PoolGuard {
+        fn new(pooled: PooledConnection, pool: TursoConnectionPool) -> Self {
+            Self {
+                pooled: Some(pooled),
+                pool,
+            }
+        }
+
+        /// Get access to the underlying connection
+        #[must_use]
+        pub fn connection(&self) -> &Arc<Mutex<turso::Connection>> {
+            &self.pooled.as_ref().unwrap().connection
+        }
+    }
+
+    impl Drop for PoolGuard {
+        fn drop(&mut self) {
+            if let Some(pooled) = self.pooled.take() {
+                // Ensure not in transaction before returning to pool
+                if pooled.in_transaction.load(Ordering::SeqCst) {
+                    log::warn!("Connection {} dropped while in transaction - will be discarded", pooled.id);
+                    self.pool.total_connections.fetch_sub(1, Ordering::SeqCst);
+                } else {
+                    self.pool.release(pooled);
+                }
+            }
+        }
+    }
+    ```
+
+  - [ ] Implement connection release:
+    ```rust
+    impl TursoConnectionPool {
+        /// Return connection to pool
+        fn release(&self, pooled: PooledConnection) {
+            tokio::spawn({
+                let available = Arc::clone(&self.available);
+                let notify = Arc::clone(&self.notify);
+                async move {
+                    available.lock().await.push_back(pooled);
+                    notify.notify_one();
+                }
+            });
+        }
+    }
+    ```
+
+##### 13.1.5 Verification Checklist
+- [ ] `PoolGuard` structure compiles
+- [ ] `Drop` implementation is correct
+- [ ] Connection release works properly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~70 lines
+
+---
+
+#### 13.1.6 Implement Transaction-Specific Connection Handling
+
+- [ ] Implement `TransactionGuard` in `pool.rs` 🔴 **CRITICAL**
+  - [ ] Add transaction-specific acquisition:
+    ```rust
+    impl TursoConnectionPool {
+        /// Acquire a connection specifically for a transaction
+        ///
+        /// * Guarantees the connection won't be used elsewhere
+        /// * Marks connection as in-transaction
+        /// * Must be explicitly released after commit/rollback
+        ///
+        /// # Errors
+        ///
+        /// * Returns error if timeout reached
+        /// * Returns error if connection creation fails
+        pub async fn acquire_transaction(&self) -> Result<TransactionGuard, super::TursoDatabaseError> {
+            let guard = self.acquire().await?;
+
+            // Mark as in transaction
+            guard.pooled.as_ref().unwrap()
+                .in_transaction.store(true, Ordering::SeqCst);
+
+            Ok(TransactionGuard {
+                inner: guard,
+            })
+        }
+    }
+    ```
+
+  - [ ] Implement transaction guard:
+    ```rust
+    /// Guard for transaction connections
+    pub struct TransactionGuard {
+        inner: PoolGuard,
+    }
+
+    impl TransactionGuard {
+        #[must_use]
+        pub fn connection(&self) -> &Arc<Mutex<turso::Connection>> {
+            self.inner.connection()
+        }
+
+        /// Mark transaction as complete (commit or rollback)
+        pub fn complete(mut self) {
+            if let Some(pooled) = &self.inner.pooled {
+                pooled.in_transaction.store(false, Ordering::SeqCst);
+            }
+            // Drop will now return to pool
+        }
+    }
+    ```
+
+##### 13.1.6 Verification Checklist
+- [ ] Transaction guard compiles
+- [ ] Transaction marking works correctly
+- [ ] Connection isolation is guaranteed
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~60 lines
+
+---
+
+#### 13.1.7 Implement Connection Health Checks and Maintenance
+
+- [ ] Add health check methods to `pool.rs` 🟡 **IMPORTANT**
+  - [ ] Implement validation:
+    ```rust
+    impl TursoConnectionPool {
+        /// Validate connection is still usable
+        async fn validate_connection(&self, conn: &PooledConnection) -> bool {
+            match conn.connection.lock().await.query("SELECT 1", ()).await {
+                Ok(_) => true,
+                Err(e) => {
+                    log::warn!("Connection {} failed validation: {}", conn.id, e);
+                    false
+                }
+            }
+        }
+
+        /// Prune idle connections down to min_connections
+        pub async fn prune_idle_connections(&self) {
+            let mut available = self.available.lock().await;
+            let current_total = self.total_connections.load(Ordering::SeqCst);
+
+            if current_total <= self.config.min_connections {
+                return;
+            }
+
+            let to_remove = current_total - self.config.min_connections;
+            for _ in 0..to_remove.min(available.len()) {
+                if available.pop_front().is_some() {
+                    self.total_connections.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+        }
+    }
+    ```
+
+##### 13.1.7 Verification Checklist
+- [ ] Health check methods compile
+- [ ] Pruning logic is correct
+- [ ] Min connections respected
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~50 lines
+
+**Phase 13.1 Total:** ~410 lines
+
+---
+
+### 13.2: TursoDatabase Integration
+
+**Goal:** Replace single connection with connection pool in TursoDatabase
+
+**Status:** ❌ Not Started
+
+#### 13.2.1 Update TursoDatabase Structure
+
+- [ ] Modify `packages/database/src/turso/mod.rs` 🔴 **CRITICAL**
+  - [ ] Replace existing structure (around line 166):
+    ```rust
+    #[derive(Debug)]
+    pub struct TursoDatabase {
+        pool: TursoConnectionPool,  // Changed from: connection: Arc<Mutex<turso::Connection>>
+    }
+    ```
+
+  - [ ] Update constructor (around line 180):
+    ```rust
+    impl TursoDatabase {
+        /// Create a new Turso database instance with connection pool
+        ///
+        /// # Errors
+        ///
+        /// * Returns `TursoDatabaseError::Connection` if the database cannot be opened
+        pub async fn new(path: &str) -> Result<Self, TursoDatabaseError> {
+            Self::new_with_config(path, TursoPoolConfig::default()).await
+        }
+
+        /// Create a new Turso database instance with custom pool configuration
+        ///
+        /// # Errors
+        ///
+        /// * Returns `TursoDatabaseError::Connection` if the database cannot be opened
+        pub async fn new_with_config(
+            path: &str,
+            config: TursoPoolConfig
+        ) -> Result<Self, TursoDatabaseError> {
+            log::debug!("Creating Turso database: path={path}");
+            let pool = TursoConnectionPool::new(path, config).await?;
+
+            log::debug!("Turso database initialized: path={path}");
+            Ok(Self { pool })
+        }
+    }
+    ```
+
+##### 13.2.1 Verification Checklist
+- [ ] Structure update compiles
+- [ ] Constructor uses pool correctly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~30 lines
+
+---
+
+#### 13.2.2 Update Database Trait query_raw Methods
+
+- [ ] Update `query_raw()` in `mod.rs` (around line 261) 🔴 **CRITICAL**
+  - [ ] Replace connection acquisition:
+    ```rust
+    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+        let guard = self.pool.acquire().await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+        let conn = guard.connection().lock().await;
+
+        // Rest of implementation unchanged...
+    }
+    ```
+
+- [ ] Update `query_raw_params()` in `mod.rs` (around line 291) 🔴 **CRITICAL**
+  - [ ] Same pattern - acquire from pool instead of cloning Arc
+
+##### 13.2.2 Verification Checklist
+- [ ] Query methods compile
+- [ ] Pool acquisition works correctly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~20 lines (changes only)
+
+---
+
+#### 13.2.3 Update Database Trait exec_raw Methods
+
+- [ ] Update `exec_raw()` in `mod.rs` (around line 330) 🔴 **CRITICAL**
+  - [ ] Replace connection acquisition with pool
+
+- [ ] Update `exec_raw_params()` in `mod.rs` (around line 342) 🔴 **CRITICAL**
+  - [ ] Same pattern - acquire from pool
+
+##### 13.2.3 Verification Checklist
+- [ ] Exec methods compile
+- [ ] Pool acquisition works correctly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~15 lines (changes only)
+
+---
+
+#### 13.2.4 Update begin_transaction Implementation
+
+- [ ] Update `begin_transaction()` in `mod.rs` (around line 369) 🔴 **CRITICAL**
+  - [ ] Replace with pool-based implementation:
+    ```rust
+    async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+        let guard = self.pool.acquire_transaction().await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let tx = TursoTransaction::new(guard).await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        Ok(Box::new(tx))
+    }
+    ```
+
+##### 13.2.4 Verification Checklist
+- [ ] Transaction method compiles
+- [ ] Transaction isolation works correctly
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~15 lines (changes only)
+
+---
+
+#### 13.2.5 Update TursoTransaction to Use TransactionGuard
+
+- [ ] Update `packages/database/src/turso/transaction.rs` 🔴 **CRITICAL**
+  - [ ] Update struct (around line 13):
+    ```rust
+    pub struct TursoTransaction {
+        connection: Arc<Mutex<turso::Connection>>,
+        committed: AtomicBool,
+        rolled_back: AtomicBool,
+        _guard: super::pool::TransactionGuard,  // Hold guard to prevent connection reuse
+    }
+    ```
+
+  - [ ] Update constructor (around line 28):
+    ```rust
+    impl TursoTransaction {
+        #[must_use]
+        pub(crate) async fn new(
+            guard: super::pool::TransactionGuard
+        ) -> Result<Self, super::TursoDatabaseError> {
+            let connection = Arc::clone(guard.connection());
+
+            connection
+                .lock()
+                .await
+                .execute("BEGIN TRANSACTION", ())
+                .await
+                .map_err(|e| super::TursoDatabaseError::Transaction(e.to_string()))?;
+
+            Ok(Self {
+                connection,
+                committed: AtomicBool::new(false),
+                rolled_back: AtomicBool::new(false),
+                _guard: guard,
+            })
+        }
+    }
+    ```
+
+  - [ ] Update Drop implementation (around line 45):
+    ```rust
+    impl Drop for TursoTransaction {
+        fn drop(&mut self) {
+            if !self.committed.load(Ordering::SeqCst)
+                && !self.rolled_back.load(Ordering::SeqCst)
+            {
+                log::warn!("Transaction dropped without commit or rollback - auto-rollback");
+                // Mark as complete so guard can return to pool
+                self._guard.complete();
+            }
+        }
+    }
+    ```
+
+  - [ ] Update commit/rollback to call `_guard.complete()`
+
+##### 13.2.5 Verification Checklist
+- [ ] Transaction struct compiles
+- [ ] Guard lifecycle works correctly
+- [ ] Connection returned to pool after transaction
+- [ ] Run `cargo fmt -p switchy_database`
+- [ ] Run `cargo clippy -p switchy_database --features turso -- -D warnings`
+- [ ] Run `cargo build -p switchy_database --features turso`
+
+**Line Estimate:** ~50 lines (changes only)
+
+**Phase 13.2 Total:** ~130 lines (mostly modifications to existing code)
+
+---
+
+### 13.3: Testing and Validation
+
+**Goal:** Comprehensive tests for connection pool behavior
+
+**Status:** ❌ Not Started
+
+#### 13.3.1 Add Unit Tests for Connection Pool
+
+- [ ] Create test module in `pool.rs` 🔴 **CRITICAL**
+  - [ ] Test pool creation:
+    ```rust
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_pool_creation() {
+            let pool = TursoConnectionPool::new(":memory:", TursoPoolConfig::default())
+                .await.unwrap();
+            assert_eq!(pool.total_connections.load(Ordering::SeqCst), 0);
+        }
+    }
+    ```
+
+  - [ ] Test lazy connection creation
+  - [ ] Test connection reuse
+  - [ ] Test max connections limit
+  - [ ] Test timeout when pool exhausted
+  - [ ] Test blocking and unblocking
+
+##### 13.3.1 Verification Checklist
+- [ ] All pool unit tests pass
+- [ ] Tests cover all pool behaviors
+- [ ] Run `cargo test -p switchy_database --features turso --lib turso::pool::tests`
+- [ ] Zero clippy warnings
+- [ ] Run `cargo fmt -p switchy_database`
+
+**Line Estimate:** ~120 lines
+
+---
+
+#### 13.3.2 Add Transaction Isolation Tests
+
+- [ ] Add tests to `mod.rs` test module 🔴 **CRITICAL**
+  - [ ] Test transaction isolation with file-based database:
+    ```rust
+    #[tokio::test]
+    async fn test_transaction_isolation_with_pool() {
+        use tempfile::NamedTempFile;
+
+        let temp_file = NamedTempFile::new().unwrap();
+        let db_path = temp_file.path().to_str().unwrap();
+
+        let db = TursoDatabase::new(db_path).await.unwrap();
+        db.exec_raw("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
+        db.exec_raw("INSERT INTO users VALUES (1, 'Alice')").await.unwrap();
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+        tx.exec_raw("INSERT INTO users VALUES (2, 'Bob')").await.unwrap();
+
+        // Main DB should NOT see uncommitted data
+        let rows = db.query_raw("SELECT COUNT(*) FROM users").await.unwrap();
+        let count: i64 = rows[0].get("COUNT(*)").unwrap();
+        assert_eq!(count, 1, "Uncommitted transaction data should not be visible");
+
+        // Commit transaction
+        tx.commit().await.unwrap();
+
+        // Now main DB should see committed data
+        let rows = db.query_raw("SELECT COUNT(*) FROM users").await.unwrap();
+        let count: i64 = rows[0].get("COUNT(*)").unwrap();
+        assert_eq!(count, 2, "Committed transaction data should be visible");
+    }
+    ```
+
+  - [ ] Test concurrent transactions
+
+##### 13.3.2 Verification Checklist
+- [ ] Transaction isolation tests pass
+- [ ] Concurrent transaction tests pass
+- [ ] Run `cargo test -p switchy_database --features turso --lib turso::tests::test_transaction_isolation`
+- [ ] Zero clippy warnings
+- [ ] Run `cargo fmt -p switchy_database`
+
+**Line Estimate:** ~80 lines
+
+**Phase 13.3 Total:** ~200 lines
+
+---
+
+### 13.4: Documentation and Examples
+
+**Goal:** Document connection pool usage and update examples
+
+**Status:** ❌ Not Started
+
+#### 13.4.1 Update Module Documentation
+
+- [ ] Update `turso/mod.rs` module docs 🟡 **IMPORTANT**
+  - [ ] Document connection pool architecture
+  - [ ] Add configuration examples
+  - [ ] Document transaction isolation guarantees
+  - [ ] Update existing examples to use pool config
+
+##### 13.4.1 Verification Checklist
+- [ ] Documentation builds without warnings
+- [ ] Examples compile and run
+- [ ] Run `cargo doc --no-deps -p switchy_database --features turso`
+
+**Line Estimate:** ~30 lines (documentation)
+
+---
+
+#### 13.4.2 Update Example Crates
+
+- [ ] Update `turso_basic` example 🟡 **IMPORTANT**
+  - [ ] Show basic pool usage with defaults
+
+- [ ] Update `turso_transactions` example 🟡 **IMPORTANT**
+  - [ ] Show custom pool configuration
+  - [ ] Demonstrate transaction isolation
+
+##### 13.4.2 Verification Checklist
+- [ ] Examples compile
+- [ ] Examples run successfully
+- [ ] Run `cargo run -p turso_basic_example`
+- [ ] Run `cargo run -p turso_transactions_example`
+
+**Line Estimate:** ~20 lines (example updates)
+
+**Phase 13.4 Total:** ~50 lines
+
+---
+
+### Phase 13 Final Verification
+
+**Completion Checklist:**
+
+- [ ] All 4 sub-phases complete (13.1-13.4)
+- [ ] Zero `unimplemented!()` related to single-connection limitations
+- [ ] Connection pool tests passing (~6 new tests)
+- [ ] Transaction isolation tests passing (~2 new tests)
+- [ ] `cargo build -p switchy_database --features turso` succeeds
+- [ ] `cargo clippy -p switchy_database --features turso --all-targets -- -D warnings` (zero warnings)
+- [ ] `cargo test -p switchy_database --features turso` (all tests passing, including new pool tests)
+- [ ] `cargo test -p switchy_database --features turso --lib turso::pool::tests` passes
+- [ ] `cargo fmt -p switchy_database` completes
+- [ ] Documentation builds: `cargo doc --no-deps -p switchy_database --features turso`
+- [ ] Examples run: `cargo run -p turso_basic_example`, `cargo run -p turso_transactions_example`
+- [ ] Update plan.md marking Phase 13 as complete with proof
+
+**Total Phase 13 Lines:** ~850 lines
+- Phase 13.1 (Connection pool core): ~410 lines
+- Phase 13.2 (TursoDatabase integration): ~130 lines
+- Phase 13.3 (Tests): ~200 lines
+- Phase 13.4 (Documentation): ~50 lines
+- Overhead (imports, error handling): ~60 lines
+
+**Phase 13 Benefits:**
+
+✅ **Transaction Isolation** - Separate connections for transactions
+✅ **Concurrency** - Multiple concurrent operations without blocking
+✅ **File-based databases** - Works with persistent databases, not just `:memory:`
+✅ **Production-ready** - Configurable limits and timeouts
+✅ **RAII safety** - Automatic connection return via Drop
+✅ **Zero compromises** - Full feature parity with best practices
+
+**Known Limitations After Phase 13:**
+
+- ⚠️ Connection pool adds slight overhead vs single connection (negligible in practice)
+- ℹ️ Requires file-based database for true transaction isolation (SQLite limitation, not pool limitation)
+- ℹ️ Turso v0.2.2 AUTOINCREMENT RETURNING bug still exists (upstream Turso issue, unrelated to pooling)
+
+---
+
+### Appendix: Connection Pool Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      TursoDatabase                          │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │           TursoConnectionPool                         │  │
+│  │                                                       │  │
+│  │  ┌─────────────────────────────────────────────────┐  │  │
+│  │  │  turso::Database (creates connections)          │  │  │
+│  │  └─────────────────────────────────────────────────┘  │  │
+│  │                                                       │  │
+│  │  Available Queue (VecDeque<PooledConnection>)         │  │
+│  │  ┌────┐  ┌────┐  ┌────┐                               │  │
+│  │  │Conn│  │Conn│  │Conn│  ...  (idle connections)      │  │
+│  │  └────┘  └────┘  └────┘                               │  │
+│  │                                                       │  │
+│  │  Total Connections: AtomicUsize (active + idle)       │  │
+│  │  Notify: Notify (wakes waiting tasks)                 │  │
+│  │                                                       │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+
+Regular Operation:
+  db.query() → acquire() → PoolGuard → use → Drop → release()
+
+Transaction Operation:
+  db.begin_transaction() → acquire_transaction() →
+    TransactionGuard → TursoTransaction → commit/rollback →
+      _guard.complete() → Drop → release()
+```
 
 ---
 
