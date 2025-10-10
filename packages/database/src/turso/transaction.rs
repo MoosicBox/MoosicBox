@@ -445,142 +445,211 @@ impl crate::Database for TursoTransaction {
 
     async fn query(
         &self,
-        _query: &crate::query::SelectQuery<'_>,
+        query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use query_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_select(
+            &conn,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn query_first(
         &self,
-        _query: &crate::query::SelectQuery<'_>,
+        query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use query_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_find_row(
+            &conn,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_update(
         &self,
-        _statement: &crate::query::UpdateStatement<'_>,
+        statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_update_and_get_rows(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            None,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_update_first(
         &self,
-        _statement: &crate::query::UpdateStatement<'_>,
+        statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_update_and_get_row(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            Some(1),
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_insert(
         &self,
-        _statement: &crate::query::InsertStatement<'_>,
+        statement: &crate::query::InsertStatement<'_>,
     ) -> Result<Row, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(
+            super::turso_insert_and_get_row(&conn, statement.table_name, &statement.values)
+                .await
+                .map_err(DatabaseError::Turso)?,
         )
     }
 
     async fn exec_upsert(
         &self,
-        _statement: &crate::query::UpsertStatement<'_>,
+        statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_upsert(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_upsert_first(
         &self,
-        _statement: &crate::query::UpsertStatement<'_>,
+        statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Row, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_upsert_and_get_row(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_upsert_multi(
         &self,
-        _statement: &crate::query::UpsertMultiStatement<'_>,
+        statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
-        )
+        let mut all_results = Vec::new();
+        for values in &statement.values {
+            let results = {
+                let conn = self.connection.lock().await;
+                super::turso_upsert(&conn, statement.table_name, values, None, None)
+                    .await
+                    .map_err(DatabaseError::Turso)?
+            };
+            all_results.extend(results);
+        }
+
+        Ok(all_results)
     }
 
     async fn exec_delete(
         &self,
-        _statement: &crate::query::DeleteStatement<'_>,
+        statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.connection.lock().await;
+        Ok(super::turso_delete(
+            &conn,
+            statement.table_name,
+            statement.filters.as_deref(),
+            None,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_delete_first(
         &self,
-        _statement: &crate::query::DeleteStatement<'_>,
+        statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
-        )
+        let rows = {
+            let conn = self.connection.lock().await;
+            super::turso_delete(
+                &conn,
+                statement.table_name,
+                statement.filters.as_deref(),
+                Some(1),
+            )
+            .await
+            .map_err(DatabaseError::Turso)?
+        };
+        Ok(rows.into_iter().next())
     }
 
     #[cfg(feature = "schema")]
     async fn exec_create_table(
         &self,
-        _statement: &crate::schema::CreateTableStatement<'_>,
+        statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.connection.lock().await;
+        super::turso_exec_create_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_drop_table(
         &self,
-        _statement: &crate::schema::DropTableStatement<'_>,
+        statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.connection.lock().await;
+        super::turso_exec_drop_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_create_index(
         &self,
-        _statement: &crate::schema::CreateIndexStatement<'_>,
+        statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.connection.lock().await;
+        super::turso_exec_create_index(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_drop_index(
         &self,
-        _statement: &crate::schema::DropIndexStatement<'_>,
+        statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.connection.lock().await;
+        super::turso_exec_drop_index(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]
     async fn exec_alter_table(
         &self,
-        _statement: &crate::schema::AlterTableStatement<'_>,
+        statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        unimplemented!(
-            "Schema operations not yet implemented for Turso backend - use exec_raw instead"
-        )
+        let conn = self.connection.lock().await;
+        super::turso_exec_alter_table(&conn, statement).await
     }
 
     #[cfg(feature = "schema")]

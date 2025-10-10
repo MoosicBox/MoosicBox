@@ -391,6 +391,587 @@ pub(crate) fn from_turso_row(
     Ok(crate::Row { columns })
 }
 
+trait ToSql {
+    fn to_sql(&self) -> String;
+}
+
+impl<T: crate::query::Expression + ?Sized> ToSql for T {
+    #[allow(clippy::too_many_lines)]
+    fn to_sql(&self) -> String {
+        use crate::query::{ExpressionType, SortDirection};
+        match self.expression_type() {
+            ExpressionType::Eq(value) => {
+                if value.right.is_null() {
+                    format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
+                } else {
+                    format!("({} = {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::Gt(value) => {
+                if value.right.is_null() {
+                    panic!("Invalid > comparison with NULL");
+                } else {
+                    format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::In(value) => {
+                format!("{} IN ({})", value.left.to_sql(), value.values.to_sql())
+            }
+            ExpressionType::NotIn(value) => {
+                format!("{} NOT IN ({})", value.left.to_sql(), value.values.to_sql())
+            }
+            ExpressionType::Lt(value) => {
+                if value.right.is_null() {
+                    panic!("Invalid < comparison with NULL");
+                } else {
+                    format!("({} < {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::Or(value) => format!(
+                "({})",
+                value
+                    .conditions
+                    .iter()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(" OR ")
+            ),
+            ExpressionType::And(value) => format!(
+                "({})",
+                value
+                    .conditions
+                    .iter()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(" AND ")
+            ),
+            ExpressionType::Gte(value) => {
+                if value.right.is_null() {
+                    panic!("Invalid >= comparison with NULL");
+                } else {
+                    format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::Lte(value) => {
+                if value.right.is_null() {
+                    panic!("Invalid <= comparison with NULL");
+                } else {
+                    format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::Join(value) => format!(
+                "{} JOIN {} ON {}",
+                if value.left { "LEFT" } else { "" },
+                value.table_name,
+                value.on
+            ),
+            ExpressionType::Sort(value) => format!(
+                "({}) {}",
+                value.expression.to_sql(),
+                match value.direction {
+                    SortDirection::Asc => "ASC",
+                    SortDirection::Desc => "DESC",
+                }
+            ),
+            ExpressionType::NotEq(value) => {
+                if value.right.is_null() {
+                    format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
+                } else {
+                    format!("({} != {})", value.left.to_sql(), value.right.to_sql())
+                }
+            }
+            ExpressionType::InList(value) => value
+                .values
+                .iter()
+                .map(|value| value.to_sql())
+                .collect::<Vec<_>>()
+                .join(","),
+            ExpressionType::Coalesce(value) => format!(
+                "IFNULL({})",
+                value
+                    .values
+                    .iter()
+                    .map(|value| value.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            ExpressionType::Literal(value) => value.value.to_string(),
+            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::SelectQuery(value) => {
+                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
+                    joins
+                        .iter()
+                        .map(ToSql::to_sql)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                });
+
+                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
+                    if filters.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "WHERE {}",
+                            filters
+                                .iter()
+                                .map(|x| format!("({})", x.to_sql()))
+                                .collect::<Vec<_>>()
+                                .join(" AND ")
+                        )
+                    }
+                });
+
+                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
+                    if sorts.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "ORDER BY {}",
+                            sorts
+                                .iter()
+                                .map(ToSql::to_sql)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
+                });
+
+                let limit = value
+                    .limit
+                    .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
+
+                format!(
+                    "SELECT {} {} FROM {} {} {} {} {}",
+                    if value.distinct { "DISTINCT" } else { "" },
+                    value.columns.join(", "),
+                    value.table_name,
+                    joins,
+                    where_clause,
+                    sort_clause,
+                    limit
+                )
+            }
+            ExpressionType::DatabaseValue(value) => match value {
+                DatabaseValue::Null
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int8Opt(None)
+                | DatabaseValue::Int16Opt(None)
+                | DatabaseValue::Int32Opt(None)
+                | DatabaseValue::Int64Opt(None)
+                | DatabaseValue::UInt8Opt(None)
+                | DatabaseValue::UInt16Opt(None)
+                | DatabaseValue::UInt32Opt(None)
+                | DatabaseValue::UInt64Opt(None)
+                | DatabaseValue::Real64Opt(None)
+                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
+                #[cfg(feature = "decimal")]
+                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
+                #[cfg(feature = "uuid")]
+                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
+                DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
+                DatabaseValue::NowPlus(interval) => {
+                    let modifiers = format_sqlite_interval(interval);
+                    let modifier_str = modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("strftime('%Y-%m-%dT%H:%M:%f', datetime('now', {modifier_str}))")
+                }
+                _ => "?".to_string(),
+            },
+        }
+    }
+}
+
+fn build_join_clauses(joins: Option<&[crate::query::Join<'_>]>) -> String {
+    joins.map_or_else(String::new, |joins| {
+        joins
+            .iter()
+            .map(|join| {
+                format!(
+                    "{}JOIN {} ON {}",
+                    if join.left { "LEFT " } else { "" },
+                    join.table_name,
+                    join.on
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+}
+
+fn build_where_clause(filters: Option<&[Box<dyn crate::query::BooleanExpression>]>) -> String {
+    filters.map_or_else(String::new, |filters| {
+        if filters.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", build_where_props(filters).join(" AND "))
+        }
+    })
+}
+
+fn build_where_props(filters: &[Box<dyn crate::query::BooleanExpression>]) -> Vec<String> {
+    use std::ops::Deref;
+    filters
+        .iter()
+        .map(|filter| filter.deref().to_sql())
+        .collect()
+}
+
+fn build_sort_clause(sorts: Option<&[crate::query::Sort]>) -> String {
+    sorts.map_or_else(String::new, |sorts| {
+        if sorts.is_empty() {
+            String::new()
+        } else {
+            format!("ORDER BY {}", build_sort_props(sorts).join(", "))
+        }
+    })
+}
+
+fn build_sort_props(sorts: &[crate::query::Sort]) -> Vec<String> {
+    sorts.iter().map(ToSql::to_sql).collect()
+}
+
+fn build_update_where_clause(
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+    query: Option<&str>,
+) -> String {
+    let clause = build_where_clause(filters);
+    let limit_clause = build_update_limit_clause(limit, query);
+
+    let clause = if limit_clause.is_empty() {
+        clause
+    } else if clause.is_empty() {
+        "WHERE".into()
+    } else {
+        clause + " AND"
+    };
+
+    format!("{clause} {limit_clause}").trim().to_string()
+}
+
+fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
+    limit.map_or_else(String::new, |limit| {
+        query.map_or_else(String::new, |query| {
+            format!("rowid IN ({query} LIMIT {limit})")
+        })
+    })
+}
+
+fn build_set_clause(values: &[(&str, Box<dyn crate::query::Expression>)]) -> String {
+    if values.is_empty() {
+        String::new()
+    } else {
+        format!("SET {}", build_set_props(values).join(", "))
+    }
+}
+
+fn build_set_props(values: &[(&str, Box<dyn crate::query::Expression>)]) -> Vec<String> {
+    use std::ops::Deref;
+    values
+        .iter()
+        .map(|(name, value)| format!("{name}=({})", value.deref().to_sql()))
+        .collect()
+}
+
+fn build_values_clause(values: &[(&str, Box<dyn crate::query::Expression>)]) -> String {
+    if values.is_empty() {
+        "DEFAULT VALUES".to_string()
+    } else {
+        format!("VALUES({})", build_values_props(values).join(", "))
+    }
+}
+
+fn build_values_props(values: &[(&str, Box<dyn crate::query::Expression>)]) -> Vec<String> {
+    use std::ops::Deref;
+    values
+        .iter()
+        .map(|(_, value)| value.deref().to_sql())
+        .collect()
+}
+
+fn bexprs_to_values(values: &[Box<dyn crate::query::BooleanExpression>]) -> Vec<DatabaseValue> {
+    values
+        .iter()
+        .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+        .collect()
+}
+
+fn bexprs_to_values_opt(
+    values: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+) -> Option<Vec<DatabaseValue>> {
+    values.map(bexprs_to_values)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn turso_select(
+    connection: &turso::Connection,
+    table_name: &str,
+    distinct: bool,
+    columns: &[&str],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    joins: Option<&[crate::query::Join<'_>]>,
+    sort: Option<&[crate::query::Sort]>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let query = format!(
+        "SELECT {} {} FROM {table_name} {} {} {} {}",
+        if distinct { "DISTINCT" } else { "" },
+        columns.join(", "),
+        build_join_clauses(joins),
+        build_where_clause(filters),
+        build_sort_clause(sort),
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+    );
+
+    let mut stmt = connection.prepare(&query).await?;
+    let column_names: Vec<String> = stmt
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let params = to_turso_params(&bexprs_to_values_opt(filters).unwrap_or_default())?;
+    let mut rows = stmt.query(params).await?;
+
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().await? {
+        results.push(from_turso_row(&column_names, &row)?);
+    }
+
+    Ok(results)
+}
+
+async fn turso_find_row(
+    connection: &turso::Connection,
+    table_name: &str,
+    distinct: bool,
+    columns: &[&str],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    joins: Option<&[crate::query::Join<'_>]>,
+    sort: Option<&[crate::query::Sort]>,
+) -> Result<Option<crate::Row>, TursoDatabaseError> {
+    let query = format!(
+        "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
+        if distinct { "DISTINCT" } else { "" },
+        columns.join(", "),
+        build_join_clauses(joins),
+        build_where_clause(filters),
+        build_sort_clause(sort),
+    );
+
+    let mut stmt = connection.prepare(&query).await?;
+    let column_names: Vec<String> = stmt
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let params = to_turso_params(&bexprs_to_values_opt(filters).unwrap_or_default())?;
+    let mut rows = stmt.query(params).await?;
+
+    if let Some(row) = rows.next().await? {
+        Ok(Some(from_turso_row(&column_names, &row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+async fn turso_insert_and_get_row(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+) -> Result<crate::Row, TursoDatabaseError> {
+    let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+
+    let query = format!(
+        "INSERT INTO {table_name} ({}) {} RETURNING *",
+        columns.join(", "),
+        build_values_clause(values),
+    );
+
+    let all_values = values
+        .iter()
+        .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
+        .collect::<Vec<_>>();
+
+    let mut stmt = connection.prepare(&query).await?;
+    let column_names: Vec<String> = stmt
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let params = to_turso_params(&all_values)?;
+    let mut rows = stmt.query(params).await?;
+
+    if let Some(row) = rows.next().await? {
+        Ok(from_turso_row(&column_names, &row)?)
+    } else {
+        Err(TursoDatabaseError::Query(
+            "INSERT did not return a row".to_string(),
+        ))
+    }
+}
+
+async fn turso_update_and_get_rows(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let where_clause = build_where_clause(filters);
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+
+    let query = format!(
+        "UPDATE {table_name} {} {} RETURNING *",
+        build_set_clause(values),
+        build_update_where_clause(filters, limit, select_query.as_deref()),
+    );
+
+    let mut all_values = values
+        .iter()
+        .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
+        .collect::<Vec<_>>();
+
+    let mut filter_values = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    all_values.append(&mut filter_values.clone());
+    if limit.is_some() {
+        all_values.append(&mut filter_values);
+    }
+
+    let mut stmt = connection.prepare(&query).await?;
+    let column_names: Vec<String> = stmt
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let params = to_turso_params(&all_values)?;
+    let mut rows = stmt.query(params).await?;
+
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().await? {
+        results.push(from_turso_row(&column_names, &row)?);
+    }
+
+    Ok(results)
+}
+
+async fn turso_update_and_get_row(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<Option<crate::Row>, TursoDatabaseError> {
+    let rows = turso_update_and_get_rows(connection, table_name, values, filters, limit).await?;
+    Ok(rows.into_iter().next())
+}
+
+async fn turso_delete(
+    connection: &turso::Connection,
+    table_name: &str,
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let where_clause = build_where_clause(filters);
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+
+    let query = format!(
+        "DELETE FROM {table_name} {} RETURNING *",
+        build_update_where_clause(filters, limit, select_query.as_deref()),
+    );
+
+    let mut all_filter_values = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    let mut stmt = connection.prepare(&query).await?;
+    let column_names: Vec<String> = stmt
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let params = to_turso_params(&all_filter_values)?;
+    let mut rows = stmt.query(params).await?;
+
+    let mut results = Vec::new();
+    while let Some(row) = rows.next().await? {
+        results.push(from_turso_row(&column_names, &row)?);
+    }
+
+    Ok(results)
+}
+
+async fn turso_upsert(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let rows = turso_update_and_get_rows(connection, table_name, values, filters, limit).await?;
+
+    Ok(if rows.is_empty() {
+        vec![turso_insert_and_get_row(connection, table_name, values).await?]
+    } else {
+        rows
+    })
+}
+
+async fn turso_upsert_and_get_row(
+    connection: &turso::Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn crate::query::Expression>)],
+    filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<crate::Row, TursoDatabaseError> {
+    match turso_find_row(connection, table_name, false, &["*"], filters, None, None).await? {
+        Some(row) => {
+            let updated = turso_update_and_get_row(connection, table_name, values, filters, limit)
+                .await?
+                .ok_or_else(|| {
+                    TursoDatabaseError::Query("UPDATE did not return a row".to_string())
+                })?;
+
+            let str1 = format!("{row:?}");
+            let str2 = format!("{updated:?}");
+
+            if str1 == str2 {
+                log::trace!("No updates to {table_name}");
+            } else {
+                log::debug!("Changed {table_name} from {str1} to {str2}");
+            }
+
+            Ok(updated)
+        }
+        None => turso_insert_and_get_row(connection, table_name, values).await,
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::Database for TursoDatabase {
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, crate::DatabaseError> {
@@ -517,92 +1098,163 @@ impl crate::Database for TursoDatabase {
 
     async fn query(
         &self,
-        _query: &crate::query::SelectQuery<'_>,
+        query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use query_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_select(
+            &conn,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn query_first(
         &self,
-        _query: &crate::query::SelectQuery<'_>,
+        query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use query_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_find_row(
+            &conn,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_update(
         &self,
-        _statement: &crate::query::UpdateStatement<'_>,
+        statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_update_and_get_rows(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            None,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_update_first(
         &self,
-        _statement: &crate::query::UpdateStatement<'_>,
+        statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_update_and_get_row(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            Some(1),
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_insert(
         &self,
-        _statement: &crate::query::InsertStatement<'_>,
+        statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(
+            turso_insert_and_get_row(&conn, statement.table_name, &statement.values)
+                .await
+                .map_err(crate::DatabaseError::Turso)?,
         )
     }
 
     async fn exec_upsert(
         &self,
-        _statement: &crate::query::UpsertStatement<'_>,
+        statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_upsert(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_upsert_first(
         &self,
-        _statement: &crate::query::UpsertStatement<'_>,
+        statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_upsert_and_get_row(
+            &conn,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_upsert_multi(
         &self,
-        _statement: &crate::query::UpsertMultiStatement<'_>,
+        statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
-        )
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+
+        let mut all_results = Vec::new();
+        for values in &statement.values {
+            let results = turso_upsert(&conn, statement.table_name, values, None, None)
+                .await
+                .map_err(crate::DatabaseError::Turso)?;
+            all_results.extend(results);
+        }
+
+        Ok(all_results)
     }
 
     async fn exec_delete(
         &self,
-        _statement: &crate::query::DeleteStatement<'_>,
+        statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        Ok(turso_delete(
+            &conn,
+            statement.table_name,
+            statement.filters.as_deref(),
+            None,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_delete_first(
         &self,
-        _statement: &crate::query::DeleteStatement<'_>,
+        statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        unimplemented!(
-            "Query builder not yet implemented for Turso backend - use exec_raw_params instead"
+        let conn = self.database.connect().map_err(TursoDatabaseError::Turso)?;
+        let rows = turso_delete(
+            &conn,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?;
+        Ok(rows.into_iter().next())
     }
 
     #[cfg(feature = "schema")]
