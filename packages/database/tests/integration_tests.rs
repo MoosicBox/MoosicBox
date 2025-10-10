@@ -2255,11 +2255,7 @@ mod turso_returning_tests {
 }
 
 // PostgreSQL native backend RETURNING tests
-#[cfg(all(
-    feature = "postgres-raw",
-    feature = "schema",
-    not(feature = "postgres-sqlx")
-))]
+#[cfg(all(feature = "postgres-raw", feature = "schema",))]
 mod postgres_native_returning_tests {
     use super::*;
     use std::sync::Arc;
@@ -3640,11 +3636,7 @@ mod simulator_cascade_tests {
 }
 
 // PostgreSQL postgres-raw backend CASCADE tests
-#[cfg(all(
-    feature = "postgres-raw",
-    feature = "cascade",
-    not(feature = "postgres-sqlx")
-))]
+#[cfg(all(feature = "postgres-raw", feature = "cascade",))]
 mod postgres_cascade_tests {
     use super::*;
     use std::sync::Arc;
