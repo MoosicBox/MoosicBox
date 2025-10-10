@@ -393,9 +393,9 @@ ctrlc = "3.5.0"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
-eframe = { version = "0.32.3", default-features = false }
-egui = { version = "0.32.3", default-features = false }
-egui_extras = { version = "0.32.3", default-features = false }
+eframe = { version = "0.33.0", default-features = false }
+egui = { version = "0.33.0", default-features = false }
+egui_extras = { version = "0.33.0", default-features = false }
 enum-as-inner = "0.6.1"
 env_logger = "0.11.8"
 fdk-aac = "0.8.0"
