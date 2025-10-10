@@ -30,7 +30,11 @@
 
 - **Collections**: Always use `BTreeMap`/`BTreeSet`, never `HashMap`/`HashSet`
 - **Dependencies**: Use `workspace = true`, never path dependencies
-- **Clippy**: Required in every package: `#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]`
+- **Clippy**: Required in every package:
+    ```rust
+    #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+    #![allow(clippy::multiple_crate_versions)]
+    ```
 - **Error docs**: Use asterisks (\*) for bullet points, document all error conditions
 - **Must use**: Add `#[must_use]` to constructors and getters
 

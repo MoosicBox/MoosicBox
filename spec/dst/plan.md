@@ -2924,7 +2924,11 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
 - [x] Ensure consistent clippy warnings across all extractor modules
 
     - **Files**: `query.rs`, `json.rs`, `path.rs`, `header.rs`, `state.rs`
-    - **Standard**: All modules now have `#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]`
+    - **Standard**: All modules now have:
+          ```rust
+          #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+          #![allow(clippy::multiple_crate_versions)]
+          ```
     - **Consistency**: Uniform code quality standards
 
 - [x] Add feature flag documentation

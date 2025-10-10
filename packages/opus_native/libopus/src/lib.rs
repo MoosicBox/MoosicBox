@@ -2,7 +2,8 @@
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::multiple_crate_versions
 )]
 
 use std::ffi::c_int;

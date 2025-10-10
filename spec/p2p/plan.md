@@ -60,6 +60,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```rust
     #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
     #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+    #![allow(clippy::multiple_crate_versions)]
 
     // IMPORTANT: No modules or code in Phase 1
     // Modules will be added in later phases:

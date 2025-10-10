@@ -1009,6 +1009,7 @@ Tested: --no-default-features, --features silk, --features celt - all successful
 - [x] Create `src/lib.rs` with clippy lints:
   ```rust
   #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+  #![allow(clippy::multiple_crate_versions)]
 
   pub mod error;
   // Note: 'mod range;' will be added in Phase 1.3 when the module is created
@@ -4357,6 +4358,7 @@ Decode Long-Term Prediction (LTP) parameters for voiced SILK frames, including p
 **Add all RFC tables:**
 ```rust
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 // RFC 6716 Table 29: PDF for High Part of Primary Pitch Lag (lines 4169-4175)
 // NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534)
@@ -8867,6 +8869,7 @@ Added at lib.rs line 7
   ```rust
   #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
   #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+  #![allow(clippy::multiple_crate_versions)]
 
   mod decoder;
   mod constants;
@@ -8937,7 +8940,11 @@ Verified: celt/mod.rs, celt/decoder.rs, celt/constants.rs match SILK pattern
 - [x] Feature gate `#[cfg(feature = "celt")]` applied correctly
 Applied at lib.rs line 7
 - [x] Clippy lints match template requirements
-All clippy lints match: #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+All clippy lints match:
+  ```rust
+  #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+  #![allow(clippy::multiple_crate_versions)]
+  ```
 - [x] Basic test compiles and passes
 test_celt_decoder_creation passes
 - [x] **RFC DEEP CHECK:** Verify against RFC lines 5796-5933 - module structure, feature gates, basic initialization match RFC decoder architecture

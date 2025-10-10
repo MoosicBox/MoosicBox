@@ -1,4 +1,5 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 // RFC 6716 Table 29: PDF for High Part of Primary Pitch Lag (lines 4169-4175)
 // RFC shows PDF: {3, 3, 6, 11, 21, 30, 32, 19, 11, 10, 12, 13, 13, 12, 11, 9, 8, 7, 6, 4, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
