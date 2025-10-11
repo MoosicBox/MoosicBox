@@ -8,6 +8,7 @@ pub struct RangeDecoder {
     value: u32,
     range: u32,
     total_bits: u32,
+    leftover_bit: u32,
     end_position: usize,
     end_window: u32,
     end_bits_available: u32,
@@ -33,6 +34,7 @@ impl RangeDecoder {
         let b0 = data[0];
         let value = u32::from(127 - (b0 >> 1));
         let range = 128;
+        let leftover_bit = b0 & 1;
 
         let mut decoder = Self {
             buffer: data.to_vec(),
@@ -40,6 +42,7 @@ impl RangeDecoder {
             value,
             range,
             total_bits: 9,
+            leftover_bit: u32::from(leftover_bit),
             end_position: 0,
             end_window: 0,
             end_bits_available: 0,
@@ -53,15 +56,19 @@ impl RangeDecoder {
     #[allow(clippy::unnecessary_wraps)]
     fn normalize(&mut self) -> Result<()> {
         while self.range <= 0x80_0000 {
+            self.range <<= 8;
+
             let byte = if self.position < self.buffer.len() {
                 self.buffer[self.position]
             } else {
                 0
             };
-
-            self.value = (self.value << 8) | u32::from(byte);
-            self.range <<= 8;
             self.position += 1;
+
+            let sym = (self.leftover_bit << 7) | u32::from(byte >> 1);
+            self.leftover_bit = u32::from(byte & 1);
+
+            self.value = ((self.value << 8) + (255 - sym)) & 0x7FFF_FFFF;
             self.total_bits += 8;
         }
 
@@ -143,6 +150,8 @@ impl RangeDecoder {
 
     /// Decodes a symbol using an inverse CDF table per RFC 6716 Section 4.1.3.3.
     ///
+    /// This implementation matches libopus `ec_dec_icdf()` exactly (entdec.c lines 182-199).
+    ///
     /// ICDF tables MUST be terminated with a value of 0, as specified in RFC 6716
     /// Section 4.1.3.3 (line 1534): "the table is terminated by a value of 0
     /// (where fh[k] == ft)." This terminating zero represents the point where the
@@ -158,34 +167,59 @@ impl RangeDecoder {
     ///
     /// # Panics
     ///
-    /// Panics if `icdf` length is greater than `u32::MAX`.
+    /// Panics if `icdf` length is greater than `usize::MAX`.
+    ///
+    /// # Algorithm (libopus entdec.c lines 182-199)
+    ///
+    /// ```c
+    /// s = _this->rng;
+    /// d = _this->val;
+    /// r = s >> _ftb;
+    /// ret = -1;
+    /// do {
+    ///     t = s;
+    ///     s = IMUL32(r, _icdf[++ret]);
+    /// } while(d < s);
+    /// _this->val = d - s;
+    /// _this->rng = t - s;
+    /// ec_dec_normalize(_this);
+    /// return ret;
+    /// ```
     pub fn ec_dec_icdf(&mut self, icdf: &[u8], ftb: u32) -> Result<u32> {
-        let ft = 1_u32 << ftb;
-        let fs = self.ec_decode(ft)?;
-        let len = u32::try_from(icdf.len()).expect("icdf length must fin in u32");
+        let mut s = self.range;
+        let d = self.value;
+        let r = s >> ftb;
 
-        let mut k: u32 = 0;
-        while k < len && fs >= ft - u32::from(icdf[k as usize]) {
-            k += 1;
+        // Start ret at -1 (will be pre-incremented to 0 on first iteration)
+        // Using wrapping arithmetic for the pre-increment pattern
+        let mut ret: usize = usize::MAX; // -1 in two's complement
+        let mut t;
+
+        // Search ICDF table: find first k where val >= s = r * icdf[k]
+        // libopus: do { t=s; s=IMUL32(r,_icdf[++ret]); } while(d<s);
+        loop {
+            t = s;
+            ret = ret.wrapping_add(1); // Pre-increment (++ret)
+            s = r * u32::from(icdf[ret]);
+
+            if d >= s {
+                break;
+            }
         }
 
-        let fl = if k == 0 {
-            0
-        } else {
-            ft - u32::from(icdf[(k - 1) as usize])
-        };
-        let fh = if k >= len {
-            0
-        } else {
-            ft - u32::from(icdf[k as usize])
-        };
+        // Update decoder state
+        self.value = d - s;
+        self.range = t - s;
 
-        self.ec_dec_update(fl, fh, ft)?;
+        self.normalize()?;
 
-        Ok(k)
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(ret as u32)
     }
 
     /// Decodes symbol using 16-bit ICDF table (for high-precision PDFs)
+    ///
+    /// This implementation matches libopus `ec_dec_icdf16()` (entdec.c lines 201-218).
     ///
     /// # Errors
     ///
@@ -193,32 +227,34 @@ impl RangeDecoder {
     ///
     /// # Panics
     ///
-    /// * Panics if ICDF table length exceeds `u32::MAX` (unrealistic for valid Opus frames).
+    /// * Panics if ICDF table length exceeds `usize::MAX`.
     pub fn ec_dec_icdf_u16(&mut self, icdf: &[u16], ftb: u32) -> Result<u8> {
-        let ft = 1u32 << ftb;
-        let fs = self.ec_decode(ft)?;
-        let len = u32::try_from(icdf.len()).expect("icdf length must fit in u32");
+        let mut s = self.range;
+        let d = self.value;
+        let r = s >> ftb;
 
-        let mut k: u32 = 0;
-        while k < len && fs >= ft - u32::from(icdf[k as usize]) {
-            k += 1;
+        // Start ret at -1 (will be pre-incremented to 0 on first iteration)
+        let mut ret: usize = usize::MAX; // -1 in two's complement
+        let mut t;
+
+        // Search ICDF table: find first k where val >= s = r * icdf[k]
+        // libopus: do { t=s; s=IMUL32(r,_icdf[++ret]); } while(d<s);
+        loop {
+            t = s;
+            ret = ret.wrapping_add(1); // Pre-increment (++ret)
+            s = r * u32::from(icdf[ret]);
+            if d >= s {
+                break;
+            }
         }
 
-        let fl = if k == 0 {
-            0
-        } else {
-            ft - u32::from(icdf[(k - 1) as usize])
-        };
-        let fh = if k >= len {
-            0
-        } else {
-            ft - u32::from(icdf[k as usize])
-        };
-
-        self.ec_dec_update(fl, fh, ft)?;
+        // Update decoder state
+        self.value = d - s;
+        self.range = t - s;
+        self.normalize()?;
 
         #[allow(clippy::cast_possible_truncation)]
-        Ok(k as u8)
+        Ok(ret as u8)
     }
 
     /// Extracts raw bits from the end of the frame per RFC 6716 Section 4.1.4.

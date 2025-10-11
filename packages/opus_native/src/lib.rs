@@ -14,6 +14,8 @@ mod util;
 pub use error::{Error, Result};
 pub use toc::{Bandwidth, Configuration, FrameSize, OpusMode, Toc};
 
+use range::RangeDecoder;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channels {
     Mono = 1,
@@ -391,8 +393,8 @@ impl Decoder {
         let mut lbrr_flags = Vec::with_capacity(num_channels);
         let mut per_frame_lbrr = Vec::new();
 
-        for _ in 0..num_channels {
-            for _ in 0..num_silk_frames {
+        for _ch_idx in 0..num_channels {
+            for _frame_idx in 0..num_silk_frames {
                 let vad = range_decoder.ec_dec_bit_logp(1)?;
                 vad_flags.push(vad);
             }
@@ -569,8 +571,6 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        use crate::range::RangeDecoder;
-
         let mut ec = RangeDecoder::new(frame_data)?;
 
         let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;

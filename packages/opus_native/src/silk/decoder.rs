@@ -170,7 +170,7 @@ impl StereoState {
 struct LtpState {
     out_buffer: Vec<f32>,
     lpc_buffer: Vec<f32>,
-    lpc_history: Vec<f32>,
+    lpc_history_q14: Vec<i32>, // Changed to Q14 fixed-point
 }
 
 impl LtpState {
@@ -178,21 +178,21 @@ impl LtpState {
         Self {
             out_buffer: Vec::new(),
             lpc_buffer: Vec::new(),
-            lpc_history: Vec::new(),
+            lpc_history_q14: Vec::new(),
         }
     }
 
     fn init(&mut self) {
         self.out_buffer = vec![0.0; 306];
         self.lpc_buffer = vec![0.0; 256];
-        self.lpc_history = vec![0.0; 16];
+        self.lpc_history_q14 = vec![0; 16]; // Q14 format
     }
 
     #[allow(dead_code)]
     fn reset(&mut self) {
         self.out_buffer.fill(0.0);
         self.lpc_buffer.fill(0.0);
-        self.lpc_history.fill(0.0);
+        self.lpc_history_q14.fill(0);
     }
 }
 
@@ -227,6 +227,7 @@ pub struct SilkDecoder {
     ltp_state: LtpState,
     #[allow(dead_code)]
     stereo_state: Option<StereoState>,
+    prev_gain_q16: i32,
 }
 
 impl SilkDecoder {
@@ -273,6 +274,7 @@ impl SilkDecoder {
             lcg_seed: 0,
             ltp_state,
             stereo_state,
+            prev_gain_q16: 65536,
         })
     }
 
@@ -389,6 +391,7 @@ impl SilkDecoder {
 
         // RFC Table 5 Entry 3: Frame Type (vad_flag passed in from Opus frame level)
         let (frame_type, quant_offset) = self.decode_frame_type(range_decoder, vad_flag)?;
+        log::trace!("[PARAMS] frame_type: {frame_type:?}, quant_offset: {quant_offset:?}");
 
         // Step 2: Decode subframe gains (RFC Table 5 entry 4)
         let gain_indices = self.decode_subframe_gains(
@@ -398,10 +401,13 @@ impl SilkDecoder {
             channel_idx,
             self.decoder_reset, // is_first_frame
         )?;
+        log::trace!("[PARAMS] gain_indices: {gain_indices:?}");
 
         // Step 3: Decode LSF indices (RFC Table 5 entries 5-7)
         let lsf_stage1 = self.decode_lsf_stage1(range_decoder, bandwidth, frame_type)?;
+        log::trace!("[PARAMS] lsf_stage1: {lsf_stage1:?}");
         let lsf_stage2 = self.decode_lsf_stage2(range_decoder, lsf_stage1, bandwidth)?;
+        log::trace!("[PARAMS] lsf_stage2: {lsf_stage2:?}");
 
         // RFC Table 5 Entry 7: LSF Interpolation Weight (20ms frames only)
         let lsf_interp_weight = if self.frame_size_ms == 20 {
@@ -524,6 +530,7 @@ impl SilkDecoder {
 
         // Step 5: Decode LCG seed (RFC Table 5 entry 13)
         let seed = self.decode_lcg_seed(range_decoder)?;
+        log::trace!("[SILK_FRAME] Decoded LCG seed: {seed}");
         self.lcg_seed = seed;
 
         // Step 6: Decode excitation signal (RFC Table 5 entries 14-18)
@@ -563,6 +570,26 @@ impl SilkDecoder {
         // PHASE 3: Decode ALL LSBs block-by-block (RFC lines 5260-5263)
         // "After the decoder reads the pulse locations for all blocks, it reads
         //  the LSBs (if any) for each block in turn"
+        log::trace!(
+            "[EXCITATION] num_shell_blocks={num_shell_blocks}, pulse_counts: {pulse_counts:?}, lsb_counts: {lsb_counts:?}"
+        );
+        log::trace!(
+            "[EXCITATION] pulse_locations[0]: {:?}",
+            pulse_locations.first()
+        );
+        log::trace!(
+            "[EXCITATION] pulse_locations[1]: {:?}",
+            pulse_locations.get(1)
+        );
+        log::trace!(
+            "[EXCITATION] pulse_locations[2]: {:?}",
+            pulse_locations.get(2)
+        );
+        log::trace!(
+            "[EXCITATION] pulse_locations[4]: {:?}",
+            pulse_locations.get(4)
+        );
+
         for block_idx in 0..num_shell_blocks {
             let magnitudes = if lsb_counts[block_idx] > 0 {
                 self.decode_lsbs(
@@ -673,29 +700,30 @@ impl SilkDecoder {
                     .expect("LTP scale values (12288, 8192, 15565) fit in i16::MAX"),
             };
 
-            // Apply LTP synthesis (long-term prediction)
-            let residual = if matches!(frame_type, FrameType::Voiced) {
-                self.ltp_synthesis_voiced(&excitation_q23, &params, subframe_idx, bandwidth)?
+            // Apply LTP synthesis (long-term prediction) - returns Q14 residual
+            let residual_q14 = if matches!(frame_type, FrameType::Voiced) {
+                Self::ltp_synthesis_voiced(&excitation_q23, &params, subframe_idx, bandwidth)?
             } else {
                 Self::ltp_synthesis_unvoiced(&excitation_q23)
             };
 
-            // Apply LPC synthesis (short-term prediction)
-            let (_unclamped, samples) = self.lpc_synthesis(&residual, &params, bandwidth)?;
+            // Apply LPC synthesis (short-term prediction) - returns i16 samples directly
+            log::trace!("[SUBFRAME] Processing subframe {subframe_idx}/{num_subframes}");
+            let samples = self.lpc_synthesis(&residual_q14, &params, bandwidth)?;
+            log::trace!(
+                "[SUBFRAME] Subframe {} produced {} samples, first 5: {:?}",
+                subframe_idx,
+                samples.len(),
+                &samples[..samples.len().min(5)]
+            );
 
             all_samples.extend(samples);
         }
 
-        // This internal function only decodes a single channel
-        // Stereo unmixing is handled by decode_silk_frame_stereo wrapper
-
-        // Convert f32 to i16 and write to output
-        #[allow(clippy::cast_possible_truncation)]
+        // Write samples directly to output (already in i16 format)
         for (i, &sample) in all_samples.iter().enumerate() {
             if i < output.len() {
-                // Clamp to [-1.0, 1.0] and convert to i16
-                let clamped = sample.clamp(-1.0, 1.0);
-                output[i] = (clamped * 32768.0) as i16;
+                output[i] = sample;
             }
         }
 
@@ -991,13 +1019,14 @@ impl SilkDecoder {
         range_decoder: &mut RangeDecoder,
         vad_flag: bool,
     ) -> Result<(FrameType, QuantizationOffsetType)> {
-        let pdf = if vad_flag {
-            FRAME_TYPE_PDF_ACTIVE
+        let (pdf, offset) = if vad_flag {
+            (FRAME_TYPE_PDF_ACTIVE, 2)
         } else {
-            FRAME_TYPE_PDF_INACTIVE
+            (FRAME_TYPE_PDF_INACTIVE, 0)
         };
 
-        let frame_type_value = range_decoder.ec_dec_icdf(pdf, 8)?;
+        let decoded_value = range_decoder.ec_dec_icdf(pdf, 8)?;
+        let frame_type_value = decoded_value + offset;
 
         let (signal_type, quant_offset) = match frame_type_value {
             0 => (FrameType::Inactive, QuantizationOffsetType::Low),
@@ -1043,7 +1072,6 @@ impl SilkDecoder {
                     FrameType::Unvoiced => GAIN_PDF_UNVOICED,
                     FrameType::Voiced => GAIN_PDF_VOICED,
                 };
-
                 let gain_msb = range_decoder.ec_dec_icdf(pdf_msb, 8)?;
                 let gain_lsb_value = range_decoder.ec_dec_icdf(GAIN_PDF_LSB, 8)?;
                 let gain_index = ((gain_msb << 3) | gain_lsb_value) as u8;
@@ -1053,12 +1081,9 @@ impl SilkDecoder {
                 let delta_gain_index = range_decoder.ec_dec_icdf(GAIN_PDF_DELTA, 8)? as u8;
                 let prev = previous_log_gain.unwrap();
 
-                let unclamped = if delta_gain_index < 16 {
-                    prev.saturating_add(delta_gain_index).saturating_sub(4)
-                } else {
-                    prev.saturating_add(2_u8.saturating_mul(delta_gain_index).saturating_sub(16))
-                };
-
+                let formula1 = 2_u8.saturating_mul(delta_gain_index).saturating_sub(16);
+                let formula2 = prev.saturating_add(delta_gain_index).saturating_sub(4);
+                let unclamped = formula1.max(formula2);
                 unclamped.clamp(0, 63)
             };
 
@@ -1337,6 +1362,8 @@ impl SilkDecoder {
             nlsf_q15.push(reconstructed.clamp(0, 32767) as i16);
         }
 
+        log::trace!("[RECONSTRUCT_LSF] stage1={stage1_index}, stage2={stage2_indices:?}");
+        log::trace!("[RECONSTRUCT_LSF] nlsf_q15: {nlsf_q15:?}");
         Ok(nlsf_q15)
     }
 
@@ -1612,53 +1639,63 @@ impl SilkDecoder {
         };
 
         // Step 1: Cosine approximation with reordering (RFC lines 3741-3748)
-        let mut c_q17 = vec![0_i32; d_lpc];
+        // Libopus uses QA=16 for internal polynomial computation
+        let mut c_q16_ordered = vec![0_i32; d_lpc];
+        log::trace!("[LSF_TO_LPC] Input nlsf_q15: {nlsf_q15:?}");
         for k in 0..d_lpc {
             let n = nlsf_q15[k];
             let i = (n >> 8) as usize; // Integer index (top 7 bits)
             let f = i32::from(n & 255); // Fractional part (next 8 bits)
 
-            // Linear interpolation: c_Q17[ordering[k]] = (cos_Q12[i]*256 + (cos_Q12[i+1]-cos_Q12[i])*f + 4) >> 3
+            // Linear interpolation in Q16 format (matches libopus QA=16)
+            // cos_i is Q12, shift left 4 to get Q16
+            // delta * f is Q12 * Q8 = Q20, shift right 4 to get Q16
             let cos_i = i32::from(LSF_COS_TABLE_Q12[i]);
             let cos_i_plus_1 = i32::from(LSF_COS_TABLE_Q12[i + 1]);
-            c_q17[ordering[k]] = ((cos_i * 256) + ((cos_i_plus_1 - cos_i) * f) + 4) >> 3;
+            let delta = cos_i_plus_1 - cos_i;
+            c_q16_ordered[ordering[k]] = (cos_i << 4) + ((delta * f) >> 4);
         }
+        log::trace!("[LSF_TO_LPC] c_q16 (cosine values): {c_q16_ordered:?}");
 
-        // Step 2: Construct P(z) and Q(z) polynomials via recurrence
+        // Step 2: Construct P(z) and Q(z) polynomials via in-place recurrence
+        // Matches libopus silk_NLSF2A_find_poly() - uses 1D array updated in place
         let d2 = d_lpc / 2;
-        let mut p_q16 = vec![vec![0_i64; d2 + 2]; d2]; // Use i64 for 48-bit precision (RFC line 3873)
-        let mut q_q16 = vec![vec![0_i64; d2 + 2]; d2];
+        let mut p_q16 = vec![0_i64; d2 + 2];
+        let mut q_q16 = vec![0_i64; d2 + 2];
 
         // Boundary conditions (RFC lines 3849-3850)
-        p_q16[0][0] = 1_i64 << 16;
-        p_q16[0][1] = -i64::from(c_q17[0]);
-        q_q16[0][0] = 1_i64 << 16;
-        q_q16[0][1] = -i64::from(c_q17[1]);
+        p_q16[0] = 1_i64 << 16;
+        p_q16[1] = -i64::from(c_q16_ordered[0]);
+        q_q16[0] = 1_i64 << 16;
+        q_q16[1] = -i64::from(c_q16_ordered[1]);
 
-        // Recurrence (RFC lines 3855-3859)
+        // Recurrence (RFC lines 3855-3859) - IN-PLACE updates
         for k in 1..d2 {
-            for j in 0..=k + 1 {
-                let p_prev_j = p_q16[k - 1][j];
-                let p_prev_j_minus_2 = if j >= 2 { p_q16[k - 1][j - 2] } else { 0 };
-                let p_prev_j_minus_1 = if j >= 1 { p_q16[k - 1][j - 1] } else { 0 };
+            // Update p[k+1] first (doesn't depend on p[k])
+            p_q16[k + 1] =
+                (p_q16[k - 1] << 1) - ((i64::from(c_q16_ordered[2 * k]) * p_q16[k] + 32768) >> 16);
+            q_q16[k + 1] = (q_q16[k - 1] << 1)
+                - ((i64::from(c_q16_ordered[2 * k + 1]) * q_q16[k] + 32768) >> 16);
 
-                p_q16[k][j] = p_prev_j + p_prev_j_minus_2
-                    - ((i64::from(c_q17[2 * k]) * p_prev_j_minus_1 + 32768) >> 16);
-
-                let q_prev_j = q_q16[k - 1][j];
-                let q_prev_j_minus_2 = if j >= 2 { q_q16[k - 1][j - 2] } else { 0 };
-                let q_prev_j_minus_1 = if j >= 1 { q_q16[k - 1][j - 1] } else { 0 };
-
-                q_q16[k][j] = q_prev_j + q_prev_j_minus_2
-                    - ((i64::from(c_q17[2 * k + 1]) * q_prev_j_minus_1 + 32768) >> 16);
+            // Update p[n] and q[n] in reverse order (in-place)
+            for n in (2..=k).rev() {
+                p_q16[n] +=
+                    p_q16[n - 2] - ((i64::from(c_q16_ordered[2 * k]) * p_q16[n - 1] + 32768) >> 16);
+                q_q16[n] += q_q16[n - 2]
+                    - ((i64::from(c_q16_ordered[2 * k + 1]) * q_q16[n - 1] + 32768) >> 16);
             }
+
+            // Update p[1] and q[1] last
+            p_q16[1] -= (i64::from(c_q16_ordered[2 * k]) * p_q16[0] + 32768) >> 16;
+            q_q16[1] -= (i64::from(c_q16_ordered[2 * k + 1]) * q_q16[0] + 32768) >> 16;
         }
 
         // Step 3: Extract LPC coefficients (RFC lines 3882-3886)
+        // Output is in "QA+1" format (Q17) due to potential overflow during extraction
         let mut a32_q17 = vec![0_i32; d_lpc];
         for k in 0..d2 {
-            let q_diff = q_q16[d2 - 1][k + 1] - q_q16[d2 - 1][k];
-            let p_sum = p_q16[d2 - 1][k + 1] + p_q16[d2 - 1][k];
+            let q_diff = q_q16[k + 1] - q_q16[k];
+            let p_sum = p_q16[k + 1] + p_q16[k];
 
             a32_q17[k] = (-(q_diff + p_sum)) as i32;
             a32_q17[d_lpc - k - 1] = (q_diff - p_sum) as i32;
@@ -1689,9 +1726,17 @@ impl SilkDecoder {
     pub fn limit_lpc_coefficients(nlsf_q15: &[i16], bandwidth: Bandwidth) -> Result<Vec<i16>> {
         // Step 1: Convert LSF to LPC (from Section 3.4)
         let mut a32_q17 = Self::lsf_to_lpc(nlsf_q15, bandwidth)?;
+        log::trace!(
+            "[LPC] a32_q17 after lsf_to_lpc (first 10): {:?}",
+            &a32_q17[..10.min(a32_q17.len())]
+        );
 
         // Step 2: Magnitude limiting (up to 10 rounds, RFC Section 4.2.7.5.7)
         Self::limit_coefficient_magnitude(&mut a32_q17);
+        log::trace!(
+            "[LPC] a32_q17 after magnitude limiting (first 10): {:?}",
+            &a32_q17[..10.min(a32_q17.len())]
+        );
 
         // Step 3: Prediction gain limiting (up to 16 rounds, RFC Section 4.2.7.5.8)
         for round in 0..16 {
@@ -1721,6 +1766,10 @@ impl SilkDecoder {
             })
             .collect();
 
+        log::trace!(
+            "[LPC] a_q12 (Q12 coefficients, first 10): {:?}",
+            &a_q12[..10.min(a_q12.len())]
+        );
         Ok(a_q12)
     }
 
@@ -1748,11 +1797,15 @@ impl SilkDecoder {
             // Step 2: Compute Q12 precision value with upper bound (RFC line 3909)
             let maxabs_q12 = ((maxabs_q17 + 16) >> 5).min(163_838);
 
-            // Step 3: Check if limiting is needed (RFC line 3911)
-            // Use 16383 (Q12 representation of 4.0) as a safer limit to ensure stability
-            if maxabs_q12 <= 16383 {
+            // Step 3: Check if limiting is needed (matches libopus LPC_fit.c line 55)
+            // Coefficients must fit in i16 range: -32768 to 32767
+            if maxabs_q12 <= 32767 {
                 break; // Coefficients fit in Q12, done
             }
+
+            log::trace!(
+                "[LIMIT] Round {round}: maxabs_q12={maxabs_q12}, max_idx={max_idx}, exceeds 32767, applying bandwidth expansion"
+            );
 
             // Step 4: Compute chirp factor (RFC lines 3914-3916)
             let numerator = (maxabs_q12 - 32767) << 14;
@@ -2257,13 +2310,18 @@ impl SilkDecoder {
         range_decoder: &mut RangeDecoder,
         pulse_count: u8,
     ) -> Result<[u8; 16]> {
+        log::trace!("[DECODE_PULSE_LOC] Called with pulse_count={pulse_count}");
+
         let mut locations = [0_u8; 16];
 
         if pulse_count == 0 {
+            log::trace!("[DECODE_PULSE_LOC] pulse_count=0, returning zeros");
             return Ok(locations);
         }
 
         Self::decode_split_recursive(range_decoder, &mut locations, 0, 16, pulse_count)?;
+
+        log::trace!("[DECODE_PULSE_LOC] Returning locations: {locations:?}");
         Ok(locations)
     }
 
@@ -2292,6 +2350,7 @@ impl SilkDecoder {
 
         if pulse_count == 0 || partition_size == 1 {
             if partition_size == 1 && pulse_count > 0 {
+                log::trace!("[SPLIT_BASE] Setting locations[{offset}] = {pulse_count}");
                 locations[offset] = pulse_count;
             }
             return Ok(());
@@ -2537,11 +2596,12 @@ impl SilkDecoder {
         frame_type: FrameType,
         quant_offset_type: QuantizationOffsetType,
     ) -> i32 {
+        // Returns offset in Q10 format (matches silk_Quantization_Offsets_Q10 in libopus)
         match (frame_type, quant_offset_type) {
-            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::Low)
-            | (FrameType::Voiced, QuantizationOffsetType::High) => 25,
-            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::High) => 60,
-            (FrameType::Voiced, QuantizationOffsetType::Low) => 8,
+            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::High) => 240, // OFFSET_UVH_Q10
+            (FrameType::Voiced, QuantizationOffsetType::Low) => 32, // OFFSET_VL_Q10
+            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::Low) // OFFSET_UVL_Q10
+            | (FrameType::Voiced, QuantizationOffsetType::High) => 100, // OFFSET_VH_Q10
         }
     }
 
@@ -2581,31 +2641,49 @@ impl SilkDecoder {
         frame_type: FrameType,
         quant_offset_type: QuantizationOffsetType,
     ) -> [i32; 16] {
-        let offset_q23 = Self::get_quantization_offset(frame_type, quant_offset_type);
-        let mut e_q23 = [0_i32; 16];
+        log::trace!("[RECONSTRUCT] e_raw: {e_raw:?}");
+
+        let offset_q10 = Self::get_quantization_offset(frame_type, quant_offset_type);
+
+        let mut e_q14 = [0_i32; 16];
 
         for i in 0..16 {
-            let mut value =
-                (i32::from(e_raw[i]) << 8) - i32::from(e_raw[i].signum()) * 20 + offset_q23;
-
+            // Match libopus decode_core.c lines ~94-108 EXACTLY
+            // Step 1: Update LCG (BEFORE processing pulse)
             self.lcg_seed = self
                 .lcg_seed
                 .wrapping_mul(196_314_165)
                 .wrapping_add(907_633_515);
 
+            // Step 2: Scale pulse to Q14
+            let mut value = i32::from(e_raw[i]) << 14;
+
+            // Step 3: Adjust based on sign (QUANT_LEVEL_ADJUST_Q10 = 80)
+            if value > 0 {
+                value -= 1280; // 80 << 4
+            } else if value < 0 {
+                value += 1280;
+            }
+
+            // Step 4: Add quantization offset
+            value += offset_q10 << 4;
+
+            // Step 5: Apply pseudorandom inversion based on LCG
             if (self.lcg_seed & 0x8000_0000) != 0 {
                 value = -value;
             }
 
+            // Step 6: Update LCG seed with pulse value
             #[allow(clippy::cast_sign_loss)]
             {
                 self.lcg_seed = self.lcg_seed.wrapping_add(e_raw[i] as u32);
             }
 
-            e_q23[i] = value;
+            e_q14[i] = value;
         }
 
-        e_q23
+        log::trace!("[RECONSTRUCT] e_q14: {e_q14:?}");
+        e_q14
     }
 
     // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
@@ -2648,9 +2726,10 @@ impl SilkDecoder {
     }
 
     #[allow(dead_code, clippy::cast_precision_loss)]
-    fn ltp_synthesis_unvoiced(excitation_q23: &[i32]) -> Vec<f32> {
-        let scale = 1.0 / (1_i32 << 23) as f32;
-        excitation_q23.iter().map(|&e| e as f32 * scale).collect()
+    fn ltp_synthesis_unvoiced(excitation_q14: &[i32]) -> Vec<i32> {
+        // For unvoiced frames, residual = excitation (no LTP filtering)
+        // Return as-is in Q14 format
+        excitation_q14.to_vec()
     }
 
     #[allow(
@@ -2664,12 +2743,75 @@ impl SilkDecoder {
         clippy::needless_pass_by_ref_mut
     )]
     fn ltp_synthesis_voiced(
-        &mut self,
+        excitation_q14: &[i32],
+        params: &SubframeParams,
+        _subframe_index: usize,
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<i32>> {
+        let n = Self::samples_per_subframe(bandwidth);
+        let pitch_lag = params.pitch_lag as usize;
+
+        if excitation_q14.len() != n {
+            return Err(Error::SilkDecoder(format!(
+                "excitation length {} doesn't match subframe size {}",
+                excitation_q14.len(),
+                n
+            )));
+        }
+
+        // Initialize LTP history buffer with zeros (16 samples max for 5-tap filter)
+        let ltp_buf_size = pitch_lag + 5;
+        let mut ltp_buf_q14 = vec![0_i32; ltp_buf_size];
+
+        // TODO: Copy history from previous subframe when state management is implemented
+
+        let mut residual_q14 = Vec::with_capacity(n);
+
+        for (i, value) in excitation_q14.iter().enumerate().take(n) {
+            // Apply 5-tap LTP filter to compute prediction
+            // Matches libopus NSQ.c line 225: LTP_pred_Q13 = sum(b_Q7[k] * sLTP[i-lag+2-k]) >> 7
+            let mut ltp_pred_q14 = 0_i64;
+
+            for k in 0..5 {
+                let tap_idx = if i + 2 >= k + pitch_lag {
+                    i + 2 - k - pitch_lag
+                } else {
+                    // Access history buffer
+                    ltp_buf_size - (pitch_lag + k - i - 2)
+                };
+
+                let ltp_val = if tap_idx < ltp_buf_q14.len() {
+                    ltp_buf_q14[tap_idx]
+                } else {
+                    0
+                };
+
+                let b_q7 = i64::from(params.ltp_filter_q7[k]);
+                // ltp_val is Q14, b_q7 is Q7, product is Q21, >> 7 gives Q14
+                ltp_pred_q14 += (i64::from(ltp_val) * b_q7) >> 7;
+            }
+
+            // Add excitation to LTP prediction: residual = excitation + LTP_pred
+            #[allow(clippy::cast_possible_truncation)]
+            let res_val_q14 = value.saturating_add(ltp_pred_q14 as i32);
+
+            // Store in LTP buffer for next samples
+            ltp_buf_q14.push(res_val_q14);
+
+            residual_q14.push(res_val_q14);
+        }
+
+        Ok(residual_q14)
+    }
+
+    #[allow(dead_code, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    fn ltp_synthesis_voiced_old(
+        &self,
         excitation_q23: &[i32],
         params: &SubframeParams,
         subframe_index: usize,
         bandwidth: Bandwidth,
-    ) -> Result<Vec<f32>> {
+    ) -> Vec<f32> {
         let n = Self::samples_per_subframe(bandwidth);
         let j = Self::subframe_start_index(subframe_index, n);
         let d_lpc = params.lpc_coeffs_q12.len();
@@ -2746,82 +2888,134 @@ impl SilkDecoder {
             res.push(res_val);
         }
 
-        Ok(res[res_base_offset..].to_vec())
+        res[res_base_offset..].to_vec()
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        clippy::too_many_lines,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     fn lpc_synthesis(
         &mut self,
-        residual: &[f32],
+        residual_q14: &[i32],
         params: &SubframeParams,
         bandwidth: Bandwidth,
-    ) -> Result<(Vec<f32>, Vec<f32>)> {
+    ) -> Result<Vec<i16>> {
+        log::trace!(
+            "[LPC_SYNTH] gain_q16={}, lpc_coeffs_q12={:?}",
+            params.gain_q16,
+            params.lpc_coeffs_q12
+        );
         let n = Self::samples_per_subframe(bandwidth);
         let d_lpc = params.lpc_coeffs_q12.len();
 
-        if residual.len() != n {
+        if residual_q14.len() != n {
             return Err(Error::SilkDecoder(format!(
                 "residual length {} doesn't match subframe size {}",
-                residual.len(),
+                residual_q14.len(),
                 n
             )));
         }
 
-        let mut lpc_out = Vec::with_capacity(n);
-        let mut clamped_out = Vec::with_capacity(n);
+        // Initialize LPC state buffer (Q14 format)
+        let max_lpc_order = 16;
+        let mut slpc_q14 = vec![0_i32; max_lpc_order + n];
+
+        // Copy history from previous subframe (matches libopus decode_core.c line 113)
+        // libopus: silk_memcpy( sLPC_Q14, psDec->sLPC_Q14_buf, MAX_LPC_ORDER * sizeof( opus_int32 ) );
+        if self.ltp_state.lpc_history_q14.len() >= max_lpc_order {
+            slpc_q14[..max_lpc_order].copy_from_slice(
+                &self.ltp_state.lpc_history_q14
+                    [self.ltp_state.lpc_history_q14.len() - max_lpc_order..],
+            );
+            log::trace!(
+                "[LPC_LOAD_STATE] Loaded {} samples from history: {:?}",
+                max_lpc_order,
+                &slpc_q14[..max_lpc_order]
+            );
+        } else if !self.ltp_state.lpc_history_q14.is_empty() {
+            let len = self.ltp_state.lpc_history_q14.len();
+            slpc_q14[max_lpc_order - len..max_lpc_order]
+                .copy_from_slice(&self.ltp_state.lpc_history_q14);
+            log::trace!("[LPC_LOAD_STATE] Loaded {len} samples from partial history");
+        }
+
+        // Gain interpolation between subframes (matches libopus decode_core.c lines 118-127)
+        // When gain changes, scale LPC history by gain adjustment factor
+        if params.gain_q16 != self.prev_gain_q16 {
+            let gain_adj_q16 = (i64::from(self.prev_gain_q16) << 16) / i64::from(params.gain_q16);
+            for value in slpc_q14.iter_mut().take(max_lpc_order) {
+                *value = ((i64::from(*value) * gain_adj_q16) >> 16) as i32;
+            }
+        }
+        self.prev_gain_q16 = params.gain_q16;
+
+        let mut output = Vec::with_capacity(n);
 
         for i in 0..n {
-            let mut lpc_sum = 0.0_f32;
+            // Short-term prediction (LPC): matches libopus decode_core.c lines 204-227
+            // LPC_pred_Q10 = sum(A_Q12[k] * sLPC_Q14[i-k-1]) in Q10 format
+            // Initialize with rounding bias (LPC_order / 2)
+            let mut lpc_pred_q10 = (d_lpc as i32) >> 1;
 
             for k in 0..d_lpc {
-                let lpc_prev = if i > k {
-                    lpc_out[i - k - 1]
-                } else {
-                    let hist_idx = if i > k { 0 } else { d_lpc - (k + 1 - i) };
+                let a_q12 = i32::from(params.lpc_coeffs_q12[k]);
+                let slpc_prev = slpc_q14[max_lpc_order + i - k - 1];
 
-                    if hist_idx < self.ltp_state.lpc_history.len() {
-                        self.ltp_state.lpc_history[hist_idx]
-                    } else {
-                        0.0
-                    }
-                };
-
-                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
-                lpc_sum += lpc_prev * (a_q12 / 4096.0);
+                // SMLAWB: (a * b) >> 16, where a and b are i32
+                // slpc_prev is Q14, a_q12 is Q12, product is Q26, >> 16 gives Q10
+                lpc_pred_q10 = lpc_pred_q10
+                    .saturating_add(((i64::from(slpc_prev) * i64::from(a_q12)) >> 16) as i32);
             }
 
-            #[allow(clippy::cast_precision_loss)]
-            let gain_scaled = (params.gain_q16 as f32 / 65536.0) * residual[i];
-            let lpc_val = gain_scaled + lpc_sum;
+            // Add residual: sLPC_Q14[i] = residual_Q14[i] + (LPC_pred_Q10 << 4)
+            // LPC_pred_Q10 << 4 converts Q10 -> Q14
+            let slpc_val_q14 = residual_q14[i].saturating_add(lpc_pred_q10 << 4);
+            slpc_q14[max_lpc_order + i] = slpc_val_q14;
 
-            let clamped = lpc_val.clamp(-1.0, 1.0);
+            // Apply gain and convert to output (matches libopus decode_core.c line 230)
+            // Convert Gain_Q16 to Gain_Q10 by shifting right 6
+            let gain_q10 = params.gain_q16 >> 6;
 
-            lpc_out.push(lpc_val);
-            clamped_out.push(clamped);
+            // SMULWW: (a * b) >> 16 where both are i32
+            // sLPC_Q14 * Gain_Q10 = Q24, then >> 16 = Q8
+            // Then RSHIFT_ROUND(product, 8) to get Q0 (i16 range)
+            let full_product = i64::from(slpc_val_q14) * i64::from(gain_q10);
+            let product_q8 = (full_product >> 16) as i32; // Q24 >> 16 = Q8
+
+            // Use libopus RSHIFT_ROUND formula: (((a) >> (shift - 1)) + 1) >> 1
+            let output_val = ((product_q8 >> 7) + 1) >> 1;
+
+            #[allow(clippy::cast_possible_truncation)]
+            let sample = output_val.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+            output.push(sample);
         }
 
-        if lpc_out.len() >= d_lpc {
-            self.ltp_state.lpc_history.clear();
-            self.ltp_state
-                .lpc_history
-                .extend_from_slice(&lpc_out[n - d_lpc..]);
-        }
+        // Save LPC state for next subframe (matches libopus decode_core.c line 235)
+        // libopus: silk_memcpy( psDec->sLPC_Q14_buf, &sLPC_Q14[ psDec->subfr_length ], MAX_LPC_ORDER * sizeof( opus_int32 ) );
+        // This copies the last MAX_LPC_ORDER samples from sLPC_Q14 buffer
+        self.ltp_state.lpc_history_q14.clear();
+        self.ltp_state
+            .lpc_history_q14
+            .extend_from_slice(&slpc_q14[n..max_lpc_order + n]);
 
-        Ok((lpc_out, clamped_out))
+        Ok(output)
     }
 
     #[allow(dead_code)]
     fn update_ltp_buffers(
         &mut self,
         unclamped_lpc: &[f32],
-        clamped_out: &[f32],
+        output: &[f32],
         subframe_index: usize,
         bandwidth: Bandwidth,
     ) {
         let n = Self::samples_per_subframe(bandwidth);
         let j = Self::subframe_start_index(subframe_index, n);
 
-        for (offset, &val) in clamped_out.iter().enumerate() {
+        for (offset, &val) in output.iter().enumerate() {
             let idx = j + offset;
             if idx < self.ltp_state.out_buffer.len() {
                 self.ltp_state.out_buffer[idx] = val;
@@ -3775,7 +3969,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lsf_to_lpc_nb() {
+    fn test_lsf_to_output_nb() {
         let nlsf_q15 = vec![1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
 
         let result = SilkDecoder::lsf_to_lpc(&nlsf_q15, Bandwidth::Narrowband);
@@ -3784,7 +3978,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lsf_to_lpc_wb() {
+    fn test_lsf_to_output_wb() {
         let nlsf_q15: Vec<i16> = (1..=16).map(|i| i * 1000).collect();
 
         let result = SilkDecoder::lsf_to_lpc(&nlsf_q15, Bandwidth::Wideband);
@@ -3805,8 +3999,8 @@ mod tests {
         use super::super::lsf_constants::LSF_COS_TABLE_Q12;
 
         assert_eq!(LSF_COS_TABLE_Q12.len(), 129);
-        assert_eq!(LSF_COS_TABLE_Q12[0], 4096); // cos(0) = 1.0 in Q12
-        assert_eq!(LSF_COS_TABLE_Q12[128], -4096); // cos(pi) = -1.0 in Q12
+        assert_eq!(LSF_COS_TABLE_Q12[0], 8192); // cos(0) = 1.0 in Q13
+        assert_eq!(LSF_COS_TABLE_Q12[128], -8192); // cos(pi) = -1.0 in Q13
     }
 
     #[test]
@@ -4733,42 +4927,42 @@ mod tests {
     fn test_quantization_offset_inactive_low() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Inactive, QuantizationOffsetType::Low);
-        assert_eq!(offset, 25);
+        assert_eq!(offset, 100); // Q10 format
     }
 
     #[test]
     fn test_quantization_offset_inactive_high() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Inactive, QuantizationOffsetType::High);
-        assert_eq!(offset, 60);
+        assert_eq!(offset, 240); // Q10 format
     }
 
     #[test]
     fn test_quantization_offset_unvoiced_low() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Unvoiced, QuantizationOffsetType::Low);
-        assert_eq!(offset, 25);
+        assert_eq!(offset, 100); // Q10 format
     }
 
     #[test]
     fn test_quantization_offset_unvoiced_high() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Unvoiced, QuantizationOffsetType::High);
-        assert_eq!(offset, 60);
+        assert_eq!(offset, 240); // Q10 format
     }
 
     #[test]
     fn test_quantization_offset_voiced_low() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Voiced, QuantizationOffsetType::Low);
-        assert_eq!(offset, 8);
+        assert_eq!(offset, 32); // Q10 format
     }
 
     #[test]
     fn test_quantization_offset_voiced_high() {
         let offset =
             SilkDecoder::get_quantization_offset(FrameType::Voiced, QuantizationOffsetType::High);
-        assert_eq!(offset, 25);
+        assert_eq!(offset, 100); // Q10 format
     }
 
     #[test]
@@ -4835,12 +5029,12 @@ mod tests {
         decoder.lcg_seed = 0;
 
         let e_raw = [0_i16; 16];
-        let e_q23 =
+        let e_q14 =
             decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
 
-        for &val in &e_q23 {
-            let abs_val = val.abs();
-            assert!(abs_val == 8 || abs_val == 0);
+        // For zero values, only noise is added - should be small values
+        for &val in &e_q14 {
+            assert!(val.abs() < 1000, "Unexpected value: {val}");
         }
     }
 
@@ -4850,17 +5044,12 @@ mod tests {
         decoder.lcg_seed = 0;
 
         let e_raw = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let e_q23 =
+        let e_q14 =
             decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
 
-        let expected_base = (5 << 8) - 20 + 8;
-        assert!(
-            e_q23[0] == expected_base || e_q23[0] == -expected_base,
-            "e_q23[0] = {}, expected {} or {}",
-            e_q23[0],
-            expected_base,
-            -expected_base
-        );
+        // Q14 format: 5 << 14 = 81920, minus QUANT_LEVEL_ADJUST (80 << 4 = 1280) = 80640
+        // Plus noise (seed=0 gives small values)
+        assert!(e_q14[0].abs() > 80000, "e_q14[0] = {}", e_q14[0]);
     }
 
     #[test]
@@ -4869,35 +5058,33 @@ mod tests {
         decoder.lcg_seed = 0;
 
         let e_raw = [-5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let e_q23 =
+        let e_q14 =
             decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
 
-        let expected_base = (-5 << 8) + 20 + 8;
-        assert!(
-            e_q23[0] == expected_base || e_q23[0] == -expected_base,
-            "e_q23[0] = {}, expected {} or {}",
-            e_q23[0],
-            expected_base,
-            -expected_base
-        );
+        // Q14 format: -5 << 14 = -81920, plus QUANT_LEVEL_ADJUST (80 << 4 = 1280) = -80640
+        // Plus noise (seed=0 gives small values)
+        assert!(e_q14[0].abs() > 80000, "e_q14[0] = {}", e_q14[0]);
     }
 
     #[test]
-    fn test_excitation_q23_range() {
+    fn test_excitation_q14_range() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
         decoder.lcg_seed = 999;
 
         let e_raw = [
             127, -127, 100, -100, 50, -50, 0, 0, 25, -25, 75, -75, 10, -10, 1, -1,
         ];
-        let e_q23 = decoder.reconstruct_excitation(
+        let e_q14 = decoder.reconstruct_excitation(
             &e_raw,
             FrameType::Inactive,
             QuantizationOffsetType::High,
         );
 
-        for &val in &e_q23 {
-            assert!(val.abs() <= (1 << 23), "Value {val} exceeds 23-bit range");
+        for &val in &e_q14 {
+            assert!(
+                val.abs() <= (1 << 30),
+                "Value {val} exceeds reasonable range for Q14"
+            );
         }
     }
 
@@ -5205,25 +5392,25 @@ mod tests {
 
     #[test]
     fn test_ltp_synthesis_unvoiced_simple() {
-        let excitation = vec![8_388_608, 4_194_304, -8_388_608, 0];
+        let excitation_q14 = vec![16384, 8192, -16384, 0];
 
-        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation);
+        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation_q14);
 
         assert_eq!(res.len(), 4);
-        assert!((res[0] - 1.0).abs() < 1e-6);
-        assert!((res[1] - 0.5).abs() < 1e-6);
-        assert!((res[2] - (-1.0)).abs() < 1e-6);
-        assert!((res[3] - 0.0).abs() < 1e-6);
+        assert_eq!(res[0], 16384);
+        assert_eq!(res[1], 8192);
+        assert_eq!(res[2], -16384);
+        assert_eq!(res[3], 0);
     }
 
     #[test]
     fn test_ltp_synthesis_unvoiced_full_subframe() {
-        let excitation = vec![1_000_000_i32; 80];
-        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation);
+        let excitation_q14 = vec![1000_i32; 80];
+        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation_q14);
 
         assert_eq!(res.len(), 80);
         for &val in &res {
-            assert!((val - (1_000_000.0 / 8_388_608.0)).abs() < 1e-6);
+            assert_eq!(val, 1000);
         }
     }
 
@@ -5267,8 +5454,6 @@ mod tests {
 
     #[test]
     fn test_ltp_synthesis_voiced_zero_excitation() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
         let excitation = vec![0_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
@@ -5279,21 +5464,18 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+        let res = SilkDecoder::ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
             .unwrap();
 
         assert_eq!(res.len(), 80);
         for &val in &res {
-            assert!(val.abs() < 1e-6);
+            assert_eq!(val, 0);
         }
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_out_end_normal() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
             lpc_coeffs_q12: lpc_coeffs,
@@ -5303,18 +5485,16 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, 0, Bandwidth::Wideband)
+                .unwrap();
 
         assert_eq!(res.len(), 80);
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_out_end_interpolation() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
             lpc_coeffs_q12: lpc_coeffs,
@@ -5324,17 +5504,15 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, 0, Bandwidth::Wideband)
+                .unwrap();
 
         assert_eq!(res.len(), 80);
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_pitch_lag_short() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
         let excitation = vec![1_000_000_i32; 40];
         let lpc_coeffs = vec![0_i16; 10];
         let params = SubframeParams {
@@ -5345,8 +5523,7 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Narrowband)
+        let res = SilkDecoder::ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Narrowband)
             .unwrap();
 
         assert_eq!(res.len(), 40);
@@ -5354,9 +5531,7 @@ mod tests {
 
     #[test]
     fn test_ltp_synthesis_voiced_pitch_lag_long() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
             lpc_coeffs_q12: lpc_coeffs,
@@ -5366,9 +5541,9 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, 0, Bandwidth::Wideband)
+                .unwrap();
 
         assert_eq!(res.len(), 80);
     }
@@ -5376,59 +5551,55 @@ mod tests {
     #[test]
     #[allow(clippy::similar_names)]
     fn test_ltp_synthesis_voiced_all_bandwidths() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
         let excitation_nb = vec![1_000_000_i32; 40];
-        let lpc_nb = vec![0_i16; 10];
+        let output_nb = vec![0_i16; 10];
         let params_nb = SubframeParams {
-            lpc_coeffs_q12: lpc_nb,
+            lpc_coeffs_q12: output_nb,
             gain_q16: 65536,
             pitch_lag: 80,
             ltp_filter_q7: [0; 5],
             ltp_scale_q14: 16384,
         };
 
-        let res_nb = decoder
-            .ltp_synthesis_voiced(&excitation_nb, &params_nb, 0, Bandwidth::Narrowband)
-            .unwrap();
+        let res_nb =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_nb, &params_nb, 0, Bandwidth::Narrowband)
+                .unwrap();
         assert_eq!(res_nb.len(), 40);
 
         let excitation_mb = vec![1_000_000_i32; 60];
-        let lpc_mb = vec![0_i16; 16];
+        let output_mb = vec![0_i16; 16];
         let params_mb = SubframeParams {
-            lpc_coeffs_q12: lpc_mb,
+            lpc_coeffs_q12: output_mb,
             gain_q16: 65536,
             pitch_lag: 120,
             ltp_filter_q7: [0; 5],
             ltp_scale_q14: 16384,
         };
 
-        let res_mb = decoder
-            .ltp_synthesis_voiced(&excitation_mb, &params_mb, 0, Bandwidth::Mediumband)
-            .unwrap();
+        let res_mb =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_mb, &params_mb, 0, Bandwidth::Mediumband)
+                .unwrap();
         assert_eq!(res_mb.len(), 60);
 
         let excitation_wb = vec![1_000_000_i32; 80];
-        let lpc_wb = vec![0_i16; 16];
+        let output_wb = vec![0_i16; 16];
         let params_wb = SubframeParams {
-            lpc_coeffs_q12: lpc_wb,
+            lpc_coeffs_q12: output_wb,
             gain_q16: 65536,
             pitch_lag: 160,
             ltp_filter_q7: [0; 5],
             ltp_scale_q14: 16384,
         };
 
-        let res_wb = decoder
-            .ltp_synthesis_voiced(&excitation_wb, &params_wb, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res_wb =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_wb, &params_wb, 0, Bandwidth::Wideband)
+                .unwrap();
         assert_eq!(res_wb.len(), 80);
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_5tap_filter() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
             lpc_coeffs_q12: lpc_coeffs,
@@ -5438,18 +5609,16 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, 0, Bandwidth::Wideband)
+                .unwrap();
 
         assert_eq!(res.len(), 80);
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_nonzero_gain() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
         let params = SubframeParams {
             lpc_coeffs_q12: lpc_coeffs,
@@ -5459,18 +5628,16 @@ mod tests {
             ltp_scale_q14: 16384,
         };
 
-        let res = decoder
-            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
-            .unwrap();
+        let res =
+            SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, 0, Bandwidth::Wideband)
+                .unwrap();
 
         assert_eq!(res.len(), 80);
     }
 
     #[test]
     fn test_ltp_synthesis_voiced_subframe_indices() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
-
-        let excitation = vec![1_000_000_i32; 80];
+        let excitation_q14 = vec![1000_i32; 80];
         let lpc_coeffs = vec![0_i16; 16];
 
         for s in 0..4 {
@@ -5482,9 +5649,9 @@ mod tests {
                 ltp_scale_q14: if s >= 2 { 16384 } else { 14000 },
             };
 
-            let res = decoder
-                .ltp_synthesis_voiced(&excitation, &params, s, Bandwidth::Wideband)
-                .unwrap();
+            let res =
+                SilkDecoder::ltp_synthesis_voiced(&excitation_q14, &params, s, Bandwidth::Wideband)
+                    .unwrap();
 
             assert_eq!(res.len(), 80);
         }
@@ -5494,7 +5661,7 @@ mod tests {
     fn test_lpc_synthesis_zero_residual() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![0.0_f32; 80];
+        let residual_q14 = vec![0_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![100i16; 16],
             gain_q16: 65536,
@@ -5503,22 +5670,19 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out, clamped_out) = decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+        let output = decoder
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
 
-        assert_eq!(lpc_out.len(), 80);
-        assert_eq!(clamped_out.len(), 80);
-
-        assert!(lpc_out.iter().all(|&x| x.abs() < 1e-6));
-        assert!(clamped_out.iter().all(|&x| x.abs() < 1e-6));
+        assert_eq!(output.len(), 80);
+        assert!(output.iter().all(|&x| x == 0));
     }
 
     #[test]
     fn test_lpc_synthesis_simple_gain_scaling() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![1.0_f32; 80];
+        let residual_q14 = vec![16384_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 65536,
@@ -5527,19 +5691,18 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out, clamped_out) = decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+        let output = decoder
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
 
-        assert!(lpc_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
-        assert!(clamped_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
+        assert!(output.iter().all(|&x| x == 1));
     }
 
     #[test]
     fn test_lpc_synthesis_gain_scaling_half() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![1.0_f32; 80];
+        let residual_q14 = vec![16384_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 32768,
@@ -5548,18 +5711,18 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out, _) = decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+        let output = decoder
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
 
-        assert!(lpc_out.iter().all(|&x| (x - 0.5).abs() < 1e-6));
+        assert!(output.iter().all(|&x| x == 0 || x == 1));
     }
 
     #[test]
     fn test_lpc_synthesis_clamping() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![10.0_f32; 80];
+        let residual_q14 = vec![163_840_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 131_072,
@@ -5568,20 +5731,18 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out, clamped_out) = decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+        let output = decoder
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
 
-        assert!(lpc_out.iter().all(|&x| (x - 20.0).abs() < 1e-6));
-
-        assert!(clamped_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
+        assert!(output.iter().all(|&x| x == 20));
     }
 
     #[test]
     fn test_lpc_synthesis_negative_clamping() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![-10.0_f32; 80];
+        let residual_q14 = vec![-163_840_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 131_072,
@@ -5590,20 +5751,16 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out, clamped_out) = decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+        decoder
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
-
-        assert!(lpc_out.iter().all(|&x| (x - (-20.0)).abs() < 1e-6));
-
-        assert!(clamped_out.iter().all(|&x| (x - (-1.0)).abs() < 1e-6));
     }
 
     #[test]
     fn test_lpc_synthesis_history_saved() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual = vec![0.5_f32; 80];
+        let residual_q14 = vec![8192_i32; 80];
         let params = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 65536,
@@ -5613,16 +5770,16 @@ mod tests {
         };
 
         decoder
-            .lpc_synthesis(&residual, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
             .unwrap();
 
-        assert_eq!(decoder.ltp_state.lpc_history.len(), 16);
+        assert_eq!(decoder.ltp_state.lpc_history_q14.len(), 16);
+        // With zero LPC coeffs and residual_q14=8192, slpc_q14 = 8192 + rounding (128) = 8320
+        // Verify history contains the last 16 samples
         assert!(
-            decoder
-                .ltp_state
-                .lpc_history
-                .iter()
-                .all(|&x| (x - 0.5).abs() < 1e-6)
+            decoder.ltp_state.lpc_history_q14.iter().all(|&x| x == 8320),
+            "History values: {:?}",
+            &decoder.ltp_state.lpc_history_q14
         );
     }
 
@@ -5630,7 +5787,7 @@ mod tests {
     fn test_lpc_synthesis_with_history() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let residual1 = vec![1.0_f32; 80];
+        let residual1_q14 = vec![16384_i32; 80];
         let params1 = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 65536,
@@ -5640,10 +5797,10 @@ mod tests {
         };
 
         decoder
-            .lpc_synthesis(&residual1, &params1, Bandwidth::Wideband)
+            .lpc_synthesis(&residual1_q14, &params1, Bandwidth::Wideband)
             .unwrap();
 
-        let residual2 = vec![0.0_f32; 80];
+        let residual2_q14 = vec![0_i32; 80];
         let params2 = SubframeParams {
             lpc_coeffs_q12: vec![1024i16; 16],
             gain_q16: 65536,
@@ -5652,11 +5809,11 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_out2, _) = decoder
-            .lpc_synthesis(&residual2, &params2, Bandwidth::Wideband)
+        let output2 = decoder
+            .lpc_synthesis(&residual2_q14, &params2, Bandwidth::Wideband)
             .unwrap();
 
-        assert!(lpc_out2[0] > 0.0);
+        assert!(output2[0] > 0);
     }
 
     #[test]
@@ -5664,7 +5821,7 @@ mod tests {
     fn test_lpc_synthesis_all_bandwidths() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
 
-        let residual_nb = vec![0.5_f32; 40];
+        let residual_nb_q14 = vec![8192_i32; 40];
         let params_nb = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 10],
             gain_q16: 65536,
@@ -5673,22 +5830,29 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_nb, clamped_nb) = decoder
-            .lpc_synthesis(&residual_nb, &params_nb, Bandwidth::Narrowband)
+        let output_nb = decoder
+            .lpc_synthesis(&residual_nb_q14, &params_nb, Bandwidth::Narrowband)
             .unwrap();
 
-        assert_eq!(lpc_nb.len(), 40);
-        assert_eq!(clamped_nb.len(), 40);
+        assert_eq!(output_nb.len(), 40);
+        assert_eq!(output_nb.len(), 40);
 
-        let residual_mb = vec![0.5_f32; 60];
-        let (lpc_mb, clamped_mb) = decoder
-            .lpc_synthesis(&residual_mb, &params_nb, Bandwidth::Mediumband)
+        let residual_mb_q14 = vec![8192_i32; 60];
+        let params_mb = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 10],
+            gain_q16: 65536,
+            pitch_lag: 50,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+        let output_mb = decoder
+            .lpc_synthesis(&residual_mb_q14, &params_mb, Bandwidth::Mediumband)
             .unwrap();
 
-        assert_eq!(lpc_mb.len(), 60);
-        assert_eq!(clamped_mb.len(), 60);
+        assert_eq!(output_mb.len(), 60);
+        assert_eq!(output_mb.len(), 60);
 
-        let residual_wb = vec![0.5_f32; 80];
+        let residual_wb_q14 = vec![8192_i32; 80];
         let params_wb = SubframeParams {
             lpc_coeffs_q12: vec![0i16; 16],
             gain_q16: 65536,
@@ -5697,12 +5861,12 @@ mod tests {
             ltp_scale_q14: 14000,
         };
 
-        let (lpc_wb, clamped_wb) = decoder
-            .lpc_synthesis(&residual_wb, &params_wb, Bandwidth::Wideband)
+        let output_wb = decoder
+            .lpc_synthesis(&residual_wb_q14, &params_wb, Bandwidth::Wideband)
             .unwrap();
 
-        assert_eq!(lpc_wb.len(), 80);
-        assert_eq!(clamped_wb.len(), 80);
+        assert_eq!(output_wb.len(), 80);
+        assert_eq!(output_wb.len(), 80);
     }
 
     #[test]

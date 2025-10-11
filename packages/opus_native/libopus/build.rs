@@ -12,6 +12,7 @@ fn main() {
         .define("OPUS_BUILD_TESTING", "OFF")
         .define("OPUS_BUILD_SHARED_LIBRARY", "OFF")
         .define("BUILD_SHARED_LIBS", "OFF")
+        .define("OPUS_FIXED_POINT", "ON") // Force fixed-point mode for bit-exact decoding
         .build();
 
     let lib_dir = if dst.join("lib64").exists() {

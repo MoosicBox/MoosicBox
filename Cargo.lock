@@ -8571,6 +8571,7 @@ dependencies = [
 name = "moosicbox_opus_native"
 version = "0.1.0"
 dependencies = [
+ "log 0.4.28",
  "moosicbox_opus_native_test_vectors",
  "moosicbox_resampler",
  "symphonia",

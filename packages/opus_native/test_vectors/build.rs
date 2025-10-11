@@ -29,7 +29,11 @@ fn generate_silk_nb_mono(base: &Path) -> Result<(), OpusError> {
     let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_VOIP)?;
     let mut decoder = Decoder::new(sample_rate, channels)?;
 
-    let input_pcm = vec![0i16; frame_size];
+    // Use simple impulse for testing
+    let mut input_pcm = vec![0i16; frame_size];
+    input_pcm[0] = 1000;
+    input_pcm[10] = -500;
+    input_pcm[20] = 2000;
     let mut packet = vec![0u8; 4000];
 
     let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;

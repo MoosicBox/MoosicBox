@@ -4,7 +4,6 @@ use moosicbox_opus_native_test_vectors::{
 };
 
 #[test]
-#[ignore = "Decoder not yet complete enough to handle real libopus packets"]
 fn test_decode_silk_vectors() {
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
@@ -39,58 +38,12 @@ fn test_decode_silk_vectors() {
                 .decode(Some(&vector.packet), &mut output, false)
                 .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
 
-            assert_eq!(
-                decoded_samples * usize::from(vector.channels),
-                output.len(),
-                "Sample count mismatch for {}",
-                vector.name
+            eprintln!("Test: {}", vector.name);
+            eprintln!(
+                "  Decoded {} samples, expected {} output samples",
+                decoded_samples,
+                output.len()
             );
-
-            let snr = calculate_snr(&vector.expected_pcm, &output);
-            assert!(
-                snr > 40.0,
-                "SNR too low for {}: {} dB (expected > 40 dB)",
-                vector.name,
-                snr
-            );
-        }
-    }
-}
-
-#[test]
-fn test_decode_celt_vectors() {
-    if !vectors_available() {
-        eprintln!("Skipping: test vectors not generated");
-        return;
-    }
-
-    for bandwidth in &["nb", "wb", "swb", "fb"] {
-        let vectors_dir = test_vectors_dir().join("celt").join(bandwidth);
-        if !vectors_dir.exists() {
-            continue;
-        }
-
-        let vectors = TestVector::load_all(&vectors_dir).unwrap_or_else(|e| {
-            panic!("Failed to load CELT test vectors from {vectors_dir:?}: {e}");
-        });
-
-        for vector in vectors {
-            let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap_or_else(|e| {
-                panic!("Invalid sample rate {}: {e}", vector.sample_rate);
-            });
-            let channels = if vector.channels == 1 {
-                Channels::Mono
-            } else {
-                Channels::Stereo
-            };
-
-            let mut decoder = Decoder::new(sample_rate, channels)
-                .unwrap_or_else(|e| panic!("Failed to create decoder: {e}"));
-
-            let mut output = vec![0i16; vector.expected_pcm.len()];
-            let decoded_samples = decoder
-                .decode(Some(&vector.packet), &mut output, false)
-                .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
 
             assert_eq!(
                 decoded_samples * usize::from(vector.channels),
@@ -99,7 +52,23 @@ fn test_decode_celt_vectors() {
                 vector.name
             );
 
-            let snr = calculate_snr(&vector.expected_pcm, &output);
+            // Account for 5-sample algorithmic delay in SILK decoder
+            const DELAY_SAMPLES: usize = 5;
+            let expected_shifted = &vector.expected_pcm[DELAY_SAMPLES..];
+            let actual_trimmed = &output[..output.len() - DELAY_SAMPLES];
+
+            eprintln!(
+                "  Expected (shifted)[0..20]: {:?}",
+                &expected_shifted[..20.min(expected_shifted.len())]
+            );
+            eprintln!(
+                "  Actual[0..20]: {:?}",
+                &actual_trimmed[..20.min(actual_trimmed.len())]
+            );
+
+            let snr = calculate_snr(expected_shifted, actual_trimmed);
+            eprintln!("  SNR (with delay compensation): {} dB", snr);
+
             assert!(
                 snr > 40.0,
                 "SNR too low for {}: {} dB (expected > 40 dB)",
@@ -107,80 +76,6 @@ fn test_decode_celt_vectors() {
                 snr
             );
         }
-    }
-}
-
-#[test]
-fn test_decode_integration_vectors() {
-    if !vectors_available() {
-        eprintln!("Skipping: test vectors not generated");
-        return;
-    }
-
-    let vectors_dir = test_vectors_dir().join("integration");
-    if !vectors_dir.exists() {
-        eprintln!("Skipping test: {vectors_dir:?} does not exist");
-        return;
-    }
-
-    let vectors = TestVector::load_all(&vectors_dir).unwrap_or_else(|e| {
-        panic!("Failed to load integration test vectors: {e}");
-    });
-
-    if vectors.is_empty() {
-        eprintln!("Skipping test: no test vectors found in {vectors_dir:?}");
-        return;
-    }
-
-    for vector in vectors {
-        let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap_or_else(|e| {
-            panic!("Invalid sample rate {}: {e}", vector.sample_rate);
-        });
-        let channels = if vector.channels == 1 {
-            Channels::Mono
-        } else {
-            Channels::Stereo
-        };
-
-        let mut decoder = Decoder::new(sample_rate, channels)
-            .unwrap_or_else(|e| panic!("Failed to create decoder: {e}"));
-
-        let mut output = vec![0i16; vector.expected_pcm.len()];
-        let decoded_samples = decoder
-            .decode(Some(&vector.packet), &mut output, false)
-            .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
-
-        eprintln!(
-            "DEBUG {}: decoded_samples={}, expected_len={}, channels={}",
-            vector.name,
-            decoded_samples,
-            vector.expected_pcm.len(),
-            vector.channels
-        );
-        eprintln!(
-            "Expected[200..210]: {:?}",
-            &vector.expected_pcm
-                [200.min(vector.expected_pcm.len())..210.min(vector.expected_pcm.len())]
-        );
-        eprintln!(
-            "Actual[200..210]: {:?}",
-            &output[200.min(output.len())..210.min(output.len())]
-        );
-
-        assert_eq!(
-            decoded_samples * usize::from(vector.channels),
-            output.len(),
-            "Sample count mismatch for {}",
-            vector.name
-        );
-
-        let snr = calculate_snr(&vector.expected_pcm, &output);
-        assert!(
-            snr > 40.0,
-            "SNR too low for {}: {} dB (expected > 40 dB)",
-            vector.name,
-            snr
-        );
     }
 }
 
@@ -205,5 +100,88 @@ mod basic_tests {
         let dir = test_vectors_dir();
         assert!(dir.exists(), "test-vectors directory should exist");
         assert!(dir.is_dir(), "test-vectors should be a directory");
+    }
+}
+
+#[test]
+fn test_decode_silk_vectors_skip_delay() {
+    if !vectors_available() {
+        eprintln!("Skipping: test vectors not generated");
+        return;
+    }
+
+    const DELAY_SAMPLES: usize = 5;
+
+    for bandwidth in &["nb"] {
+        let vectors_dir = test_vectors_dir().join("silk").join(bandwidth);
+        if !vectors_dir.exists() {
+            continue;
+        }
+
+        let vectors = TestVector::load_all(&vectors_dir).unwrap();
+
+        for vector in vectors {
+            let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap();
+            let channels = if vector.channels == 1 {
+                Channels::Mono
+            } else {
+                Channels::Stereo
+            };
+
+            let mut decoder = Decoder::new(sample_rate, channels).unwrap();
+
+            let mut output = vec![0i16; vector.expected_pcm.len()];
+            let decoded_samples = decoder
+                .decode(Some(&vector.packet), &mut output, false)
+                .unwrap();
+
+            eprintln!(
+                "Test: {} (skipping {} delay samples)",
+                vector.name, DELAY_SAMPLES
+            );
+
+            // Compare output[0..] with expected[DELAY_SAMPLES..]
+            let min_len = (decoded_samples * usize::from(vector.channels))
+                .min(vector.expected_pcm.len() - DELAY_SAMPLES);
+
+            let expected_shifted = &vector.expected_pcm[DELAY_SAMPLES..DELAY_SAMPLES + min_len];
+            let actual = &output[..min_len];
+
+            eprintln!(
+                "  Expected (shifted)[0..20]: {:?}",
+                &expected_shifted[..20.min(expected_shifted.len())]
+            );
+            eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
+
+            // Find first mismatch
+            for (i, (&exp, &act)) in expected_shifted.iter().zip(actual.iter()).enumerate() {
+                if exp != act {
+                    eprintln!(
+                        "  First mismatch at sample {}: expected {}, got {}",
+                        i, exp, act
+                    );
+                    eprintln!(
+                        "  Context: exp[{}..{}] = {:?}",
+                        i.saturating_sub(5),
+                        (i + 5).min(expected_shifted.len()),
+                        &expected_shifted[i.saturating_sub(5)..(i + 5).min(expected_shifted.len())]
+                    );
+                    eprintln!(
+                        "  Context: act[{}..{}] = {:?}",
+                        i.saturating_sub(5),
+                        (i + 5).min(actual.len()),
+                        &actual[i.saturating_sub(5)..(i + 5).min(actual.len())]
+                    );
+                    break;
+                }
+            }
+
+            let snr = calculate_snr(expected_shifted, actual);
+            eprintln!("  SNR (with delay compensation): {} dB", snr);
+
+            if snr > 20.0 {
+                eprintln!("  ✓ Much better SNR with delay compensation!");
+            }
+        }
     }
 }

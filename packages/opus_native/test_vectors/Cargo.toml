@@ -14,7 +14,8 @@ version     = "0.1.0"
 ignored = ["moosicbox_opus_native_libopus"]
 
 [dependencies]
-serde_json = { workspace = true }
+moosicbox_opus_native_libopus = { workspace = true }
+serde_json                    = { workspace = true }
 
 [build-dependencies]
 moosicbox_opus_native_libopus = { workspace = true }
