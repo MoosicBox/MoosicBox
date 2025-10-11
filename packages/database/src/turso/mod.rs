@@ -169,7 +169,6 @@ impl From<turso::Error> for crate::DatabaseError {
 #[derive(Debug)]
 pub struct TursoDatabase {
     database: turso::Database,
-    connection: turso::Connection,
 }
 
 impl TursoDatabase {
@@ -190,14 +189,15 @@ impl TursoDatabase {
             .await
             .map_err(|e| TursoDatabaseError::Connection(e.to_string()))?;
 
-        log::debug!("Opening Turso connection: path={path}");
-        let connection = database.connect().map_err(TursoDatabaseError::Turso)?;
-
         log::debug!("Turso database initialized: path={path}");
-        Ok(Self {
-            database,
-            connection,
-        })
+        Ok(Self { database })
+    }
+
+    fn new_connection(&self) -> Result<turso::Connection, TursoDatabaseError> {
+        let connection = self.database.connect()?;
+        connection.busy_timeout(std::time::Duration::from_millis(10))?;
+
+        Ok(connection)
     }
 }
 
@@ -1139,7 +1139,7 @@ impl crate::Database for TursoDatabase {
         log::trace!("query_raw: query:\n{query}");
 
         let mut stmt = self
-            .connection
+            .new_connection()?
             .prepare(query)
             .await
             .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
@@ -1175,7 +1175,7 @@ impl crate::Database for TursoDatabase {
         let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
 
         let mut stmt = self
-            .connection
+            .new_connection()?
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1207,7 +1207,7 @@ impl crate::Database for TursoDatabase {
     async fn exec_raw(&self, statement: &str) -> Result<(), crate::DatabaseError> {
         log::trace!("exec_raw: query:\n{statement}");
 
-        self.connection
+        self.new_connection()?
             .execute(statement, ())
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1229,7 +1229,7 @@ impl crate::Database for TursoDatabase {
             to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
 
         let mut stmt = self
-            .connection
+            .new_connection()?
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1248,7 +1248,7 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
         log::debug!("begin_transaction: creating new connection for transaction");
 
-        let connection = self.database.connect()?;
+        let connection = self.new_connection()?;
 
         let tx = TursoTransaction::new(connection)
             .await
@@ -1263,7 +1263,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(select(
-            &self.connection,
+            &self.new_connection()?,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1281,7 +1281,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(find_row(
-            &self.connection,
+            &self.new_connection()?,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1298,7 +1298,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_rows(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1313,7 +1313,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_row(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1327,11 +1327,13 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        Ok(
-            insert_and_get_row(&self.connection, statement.table_name, &statement.values)
-                .await
-                .map_err(crate::DatabaseError::Turso)?,
+        Ok(insert_and_get_row(
+            &self.new_connection()?,
+            statement.table_name,
+            &statement.values,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_upsert(
@@ -1339,7 +1341,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(upsert(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1354,7 +1356,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
         Ok(upsert_and_get_row(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1370,9 +1372,15 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         let mut all_results = Vec::new();
         for values in &statement.values {
-            let results = upsert(&self.connection, statement.table_name, values, None, None)
-                .await
-                .map_err(crate::DatabaseError::Turso)?;
+            let results = upsert(
+                &self.new_connection()?,
+                statement.table_name,
+                values,
+                None,
+                None,
+            )
+            .await
+            .map_err(crate::DatabaseError::Turso)?;
             all_results.extend(results);
         }
 
@@ -1384,7 +1392,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(delete(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -1398,7 +1406,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         let rows = delete(
-            &self.connection,
+            &self.new_connection()?,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -1413,7 +1421,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_table(&self.connection, statement).await
+        exec_create_table(&self.new_connection()?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1421,7 +1429,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_table(&self.connection, statement).await
+        exec_drop_table(&self.new_connection()?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1429,7 +1437,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_index(&self.connection, statement).await
+        exec_create_index(&self.new_connection()?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1437,7 +1445,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_index(&self.connection, statement).await
+        exec_drop_index(&self.new_connection()?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1445,7 +1453,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_alter_table(&self.connection, statement).await
+        exec_alter_table(&self.new_connection()?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -5060,7 +5068,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&db.connection, "parent")
+        let dependents = find_cascade_dependents(&db.new_connection().unwrap(), "parent")
             .await
             .expect("Failed to find dependents");
 
@@ -5086,7 +5094,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let has_deps = has_dependents(&db.connection, "parent")
+        let has_deps = has_dependents(&db.new_connection().unwrap(), "parent")
             .await
             .expect("Failed to check dependents");
 
@@ -5104,7 +5112,7 @@ mod tests {
             .await
             .expect("Failed to create standalone table");
 
-        let has_deps = has_dependents(&db.connection, "standalone")
+        let has_deps = has_dependents(&db.new_connection().unwrap(), "standalone")
             .await
             .expect("Failed to check dependents");
 
@@ -5134,7 +5142,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&db.connection, "grandparent")
+        let dependents = find_cascade_dependents(&db.new_connection().unwrap(), "grandparent")
             .await
             .expect("Failed to find dependents");
 
