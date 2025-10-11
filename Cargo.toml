@@ -484,7 +484,7 @@ rangemap = "1.6.0"
 ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.14.5"
-regex = "1.11.3"
+regex = "1.12.1"
 reqwest = { version = "0.12.23", default-features = false, features = [
     "rustls-tls",
     "stream",
@@ -578,7 +578,7 @@ uuid = { version = "1.18.1", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 whoami = "1.6.1"
-xml = "1.0.0"
+xml = "1.0.1"
 
 [patch.crates-io]
 flacenc = { git = "https://github.com/BSteffaniak/flacenc-rs", branch = "unpin-built-version" }
