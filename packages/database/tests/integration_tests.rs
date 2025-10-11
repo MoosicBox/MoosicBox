@@ -208,7 +208,6 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 0);
         }
 
-        #[ignore = "Ignoring until turso connection pool set up"]
         #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_transaction_isolation() {
             let db = setup_db().await;

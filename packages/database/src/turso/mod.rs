@@ -162,8 +162,15 @@ pub enum TursoDatabaseError {
     UnsupportedType(String),
 }
 
+impl From<turso::Error> for crate::DatabaseError {
+    fn from(value: turso::Error) -> Self {
+        Self::Turso(value.into())
+    }
+}
+
 #[derive(Debug)]
 pub struct TursoDatabase {
+    database: turso::Database,
     connection: Arc<Mutex<turso::Connection>>,
 }
 
@@ -190,6 +197,7 @@ impl TursoDatabase {
 
         log::debug!("Turso database initialized: path={path}");
         Ok(Self {
+            database,
             connection: Arc::new(Mutex::new(connection)),
         })
     }
@@ -1249,9 +1257,11 @@ impl crate::Database for TursoDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
-        log::debug!("begin_transaction: reusing existing connection for transaction");
+        log::debug!("begin_transaction: creating new connection for transaction");
 
-        let tx = TursoTransaction::new(self.connection.clone())
+        let connection = self.database.connect()?;
+
+        let tx = TursoTransaction::new(connection)
             .await
             .map_err(crate::DatabaseError::Turso)?;
 
@@ -5184,6 +5194,7 @@ mod tests {
     }
 
     #[switchy_async::test]
+    #[should_panic = "Turso v0.2.2 does not support SAVEPOINT syntax yet. This feature will be available in future Turso versions. Consider using multiple transactions or upgrade to a newer Turso version when available."]
     async fn test_savepoint_not_supported() {
         use crate::Database;
 
