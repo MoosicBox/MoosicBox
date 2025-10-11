@@ -1,16 +1,19 @@
-use moosicbox_opus_native::{Channels, Decoder, SampleRate};
-use moosicbox_opus_native_test_vectors::{
-    TestVector, calculate_snr, test_vectors_dir, vectors_available,
-};
+use moosicbox_opus_native_test_vectors::{calculate_snr, test_vectors_dir};
 
+#[cfg(feature = "silk")]
 #[test]
 fn test_decode_silk_vectors() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
+    use moosicbox_opus_native_test_vectors::vectors_available;
+
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
         return;
     }
 
     for bandwidth in &["nb", "mb", "wb", "swb"] {
+        use moosicbox_opus_native_test_vectors::TestVector;
+
         let vectors_dir = test_vectors_dir().join("silk").join(bandwidth);
         if !vectors_dir.exists() {
             continue;
@@ -103,8 +106,12 @@ mod basic_tests {
     }
 }
 
+#[cfg(feature = "silk")]
 #[test]
 fn test_decode_silk_vectors_skip_delay() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
+    use moosicbox_opus_native_test_vectors::vectors_available;
+
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
         return;
@@ -113,6 +120,8 @@ fn test_decode_silk_vectors_skip_delay() {
     const DELAY_SAMPLES: usize = 5;
 
     for bandwidth in &["nb"] {
+        use moosicbox_opus_native_test_vectors::TestVector;
+
         let vectors_dir = test_vectors_dir().join("silk").join(bandwidth);
         if !vectors_dir.exists() {
             continue;

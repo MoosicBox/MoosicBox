@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
@@ -13,8 +14,6 @@ mod util;
 
 pub use error::{Error, Result};
 pub use toc::{Bandwidth, Configuration, FrameSize, OpusMode, Toc};
-
-use range::RangeDecoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channels {
@@ -109,6 +108,7 @@ impl Decoder {
     /// # Errors
     ///
     /// Returns an error if sub-decoder initialization fails.
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(sample_rate: SampleRate, channels: Channels) -> Result<Self> {
         Ok(Self {
             sample_rate,
@@ -571,7 +571,7 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        let mut ec = RangeDecoder::new(frame_data)?;
+        let mut ec = range::RangeDecoder::new(frame_data)?;
 
         let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
 
