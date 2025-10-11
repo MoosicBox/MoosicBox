@@ -700,7 +700,7 @@ fn bexprs_to_values_opt(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn turso_select(
+async fn select(
     connection: &turso::Connection,
     table_name: &str,
     distinct: bool,
@@ -742,7 +742,7 @@ async fn turso_select(
     Ok(results)
 }
 
-async fn turso_find_row(
+async fn find_row(
     connection: &turso::Connection,
     table_name: &str,
     distinct: bool,
@@ -782,7 +782,7 @@ async fn turso_find_row(
     }
 }
 
-async fn turso_insert_and_get_row(
+async fn insert_and_get_row(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
@@ -831,7 +831,7 @@ async fn turso_insert_and_get_row(
 }
 
 #[allow(clippy::too_many_lines)]
-async fn turso_update_and_get_rows(
+async fn update_and_get_rows(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
@@ -963,18 +963,18 @@ async fn turso_update_and_get_rows(
     Ok(results)
 }
 
-async fn turso_update_and_get_row(
+async fn update_and_get_row(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Option<crate::Row>, TursoDatabaseError> {
-    let rows = turso_update_and_get_rows(connection, table_name, values, filters, limit).await?;
+    let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
     Ok(rows.into_iter().next())
 }
 
-async fn turso_delete(
+async fn delete(
     connection: &turso::Connection,
     table_name: &str,
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
@@ -1084,7 +1084,7 @@ async fn turso_delete(
     Ok(results)
 }
 
-async fn turso_upsert(
+async fn upsert(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
@@ -1092,27 +1092,27 @@ async fn turso_upsert(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
     log::trace!("Running upsert on table: {table_name}");
-    let rows = turso_update_and_get_rows(connection, table_name, values, filters, limit).await?;
+    let rows = update_and_get_rows(connection, table_name, values, filters, limit).await?;
 
     Ok(if rows.is_empty() {
         log::trace!("UPSERT: no rows updated, performing insert");
-        vec![turso_insert_and_get_row(connection, table_name, values).await?]
+        vec![insert_and_get_row(connection, table_name, values).await?]
     } else {
         log::trace!("UPSERT: updated {} rows", rows.len());
         rows
     })
 }
 
-async fn turso_upsert_and_get_row(
+async fn upsert_and_get_row(
     connection: &turso::Connection,
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<crate::Row, TursoDatabaseError> {
-    match turso_find_row(connection, table_name, false, &["*"], filters, None, None).await? {
+    match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
         Some(row) => {
-            let updated = turso_update_and_get_row(connection, table_name, values, filters, limit)
+            let updated = update_and_get_row(connection, table_name, values, filters, limit)
                 .await?
                 .ok_or_else(|| {
                     TursoDatabaseError::Query("UPDATE did not return a row".to_string())
@@ -1129,7 +1129,7 @@ async fn turso_upsert_and_get_row(
 
             Ok(updated)
         }
-        None => turso_insert_and_get_row(connection, table_name, values).await,
+        None => insert_and_get_row(connection, table_name, values).await,
     }
 }
 
@@ -1262,7 +1262,7 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        Ok(turso_select(
+        Ok(select(
             &self.connection,
             query.table_name,
             query.distinct,
@@ -1280,7 +1280,7 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        Ok(turso_find_row(
+        Ok(find_row(
             &self.connection,
             query.table_name,
             query.distinct,
@@ -1297,7 +1297,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        Ok(turso_update_and_get_rows(
+        Ok(update_and_get_rows(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -1312,7 +1312,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        Ok(turso_update_and_get_row(
+        Ok(update_and_get_row(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -1328,7 +1328,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
         Ok(
-            turso_insert_and_get_row(&self.connection, statement.table_name, &statement.values)
+            insert_and_get_row(&self.connection, statement.table_name, &statement.values)
                 .await
                 .map_err(crate::DatabaseError::Turso)?,
         )
@@ -1338,7 +1338,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        Ok(turso_upsert(
+        Ok(upsert(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -1353,7 +1353,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        Ok(turso_upsert_and_get_row(
+        Ok(upsert_and_get_row(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -1370,7 +1370,7 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         let mut all_results = Vec::new();
         for values in &statement.values {
-            let results = turso_upsert(&self.connection, statement.table_name, values, None, None)
+            let results = upsert(&self.connection, statement.table_name, values, None, None)
                 .await
                 .map_err(crate::DatabaseError::Turso)?;
             all_results.extend(results);
@@ -1383,7 +1383,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        Ok(turso_delete(
+        Ok(delete(
             &self.connection,
             statement.table_name,
             statement.filters.as_deref(),
@@ -1397,7 +1397,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
-        let rows = turso_delete(
+        let rows = delete(
             &self.connection,
             statement.table_name,
             statement.filters.as_deref(),
@@ -1413,7 +1413,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        turso_exec_create_table(&self.connection, statement).await
+        exec_create_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1421,7 +1421,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        turso_exec_drop_table(&self.connection, statement).await
+        exec_drop_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1429,7 +1429,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        turso_exec_create_index(&self.connection, statement).await
+        exec_create_index(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1437,7 +1437,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        turso_exec_drop_index(&self.connection, statement).await
+        exec_drop_index(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1445,7 +1445,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        turso_exec_alter_table(&self.connection, statement).await
+        exec_alter_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1590,7 +1590,7 @@ impl crate::Database for TursoDatabase {
 
 #[cfg(feature = "schema")]
 #[allow(clippy::too_many_lines)]
-async fn turso_exec_create_table(
+async fn exec_create_table(
     conn: &turso::Connection,
     statement: &crate::schema::CreateTableStatement<'_>,
 ) -> Result<(), crate::DatabaseError> {
@@ -1809,7 +1809,7 @@ async fn turso_exec_create_table(
 }
 
 #[cfg(feature = "schema")]
-async fn turso_exec_drop_table(
+async fn exec_drop_table(
     conn: &turso::Connection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), crate::DatabaseError> {
@@ -1819,7 +1819,7 @@ async fn turso_exec_drop_table(
         match statement.behavior {
             DropBehavior::Cascade => {
                 // Get drop order (dependents first, target last)
-                let drop_order = turso_find_cascade_dependents(conn, statement.table_name).await?;
+                let drop_order = find_cascade_dependents(conn, statement.table_name).await?;
 
                 // Drop tables in order (Turso doesn't support PRAGMA foreign_keys,
                 // so we rely on the correct drop order to avoid FK violations)
@@ -1839,7 +1839,7 @@ async fn turso_exec_drop_table(
             }
             DropBehavior::Restrict => {
                 // Check if table has dependents
-                let has_deps = turso_has_dependents(conn, statement.table_name).await?;
+                let has_deps = has_dependents(conn, statement.table_name).await?;
 
                 if has_deps {
                     return Err(crate::DatabaseError::InvalidQuery(format!(
@@ -1870,7 +1870,7 @@ async fn turso_exec_drop_table(
 }
 
 #[cfg(feature = "schema")]
-async fn turso_exec_create_index(
+async fn exec_create_index(
     conn: &turso::Connection,
     statement: &crate::schema::CreateIndexStatement<'_>,
 ) -> Result<(), crate::DatabaseError> {
@@ -1901,7 +1901,7 @@ async fn turso_exec_create_index(
 }
 
 #[cfg(feature = "schema")]
-async fn turso_exec_drop_index(
+async fn exec_drop_index(
     conn: &turso::Connection,
     statement: &crate::schema::DropIndexStatement<'_>,
 ) -> Result<(), crate::DatabaseError> {
@@ -2180,7 +2180,7 @@ fn modify_create_table_sql(
 
 #[cfg(feature = "schema")]
 #[allow(clippy::too_many_lines)]
-async fn turso_exec_modify_column_workaround(
+async fn exec_modify_column_workaround(
     conn: &turso::Connection,
     table_name: &str,
     column_name: &str,
@@ -2335,7 +2335,7 @@ async fn turso_exec_modify_column_workaround(
 
 #[cfg(feature = "schema")]
 #[allow(clippy::too_many_lines)]
-async fn turso_exec_table_recreation_workaround(
+async fn exec_table_recreation_workaround(
     conn: &turso::Connection,
     table_name: &str,
     column_name: &str,
@@ -2623,7 +2623,7 @@ async fn turso_exec_table_recreation_workaround(
 
 #[cfg(feature = "schema")]
 #[allow(clippy::too_many_lines)]
-async fn turso_exec_alter_table(
+async fn exec_alter_table(
     conn: &turso::Connection,
     statement: &crate::schema::AlterTableStatement<'_>,
 ) -> Result<(), crate::DatabaseError> {
@@ -2758,7 +2758,7 @@ async fn turso_exec_alter_table(
                 new_default,
             } => {
                 if column_requires_table_recreation(conn, statement.table_name, name).await? {
-                    turso_exec_table_recreation_workaround(
+                    exec_table_recreation_workaround(
                         conn,
                         statement.table_name,
                         name,
@@ -2768,7 +2768,7 @@ async fn turso_exec_alter_table(
                     )
                     .await?;
                 } else {
-                    turso_exec_modify_column_workaround(
+                    exec_modify_column_workaround(
                         conn,
                         statement.table_name,
                         name,
@@ -3056,7 +3056,7 @@ pub(crate) fn strip_identifier_quotes(identifier: &str) -> String {
 ///
 /// * Returns `DatabaseError` if database queries fail or table name validation fails
 #[cfg(all(feature = "schema", feature = "cascade"))]
-async fn turso_find_cascade_dependents(
+async fn find_cascade_dependents(
     conn: &turso::Connection,
     table_name: &str,
 ) -> Result<Vec<String>, crate::DatabaseError> {
@@ -3167,7 +3167,7 @@ async fn turso_find_cascade_dependents(
 ///
 /// * Returns `DatabaseError` if database queries fail or table name validation fails
 #[cfg(all(feature = "schema", feature = "cascade"))]
-async fn turso_has_dependents(
+async fn has_dependents(
     conn: &turso::Connection,
     table_name: &str,
 ) -> Result<bool, crate::DatabaseError> {
@@ -3258,9 +3258,7 @@ async fn turso_has_dependents(
 /// * Returns `DatabaseError` if PRAGMA query fails (always fails on Turso v0.2.2)
 #[cfg(all(feature = "schema", feature = "cascade"))]
 #[allow(dead_code)]
-async fn turso_get_foreign_key_state(
-    conn: &turso::Connection,
-) -> Result<bool, crate::DatabaseError> {
+async fn get_foreign_key_state(conn: &turso::Connection) -> Result<bool, crate::DatabaseError> {
     let mut stmt = conn
         .prepare("PRAGMA foreign_keys")
         .await
@@ -3301,7 +3299,7 @@ async fn turso_get_foreign_key_state(
 /// * Returns `DatabaseError` if PRAGMA execute fails (always fails on Turso v0.2.2)
 #[cfg(all(feature = "schema", feature = "cascade"))]
 #[allow(dead_code)]
-async fn turso_set_foreign_key_state(
+async fn set_foreign_key_state(
     conn: &turso::Connection,
     enabled: bool,
 ) -> Result<(), crate::DatabaseError> {
@@ -5062,7 +5060,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = turso_find_cascade_dependents(&db.connection, "parent")
+        let dependents = find_cascade_dependents(&db.connection, "parent")
             .await
             .expect("Failed to find dependents");
 
@@ -5088,7 +5086,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let has_deps = turso_has_dependents(&db.connection, "parent")
+        let has_deps = has_dependents(&db.connection, "parent")
             .await
             .expect("Failed to check dependents");
 
@@ -5106,7 +5104,7 @@ mod tests {
             .await
             .expect("Failed to create standalone table");
 
-        let has_deps = turso_has_dependents(&db.connection, "standalone")
+        let has_deps = has_dependents(&db.connection, "standalone")
             .await
             .expect("Failed to check dependents");
 
@@ -5136,7 +5134,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = turso_find_cascade_dependents(&db.connection, "grandparent")
+        let dependents = find_cascade_dependents(&db.connection, "grandparent")
             .await
             .expect("Failed to find dependents");
 

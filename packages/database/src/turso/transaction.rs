@@ -123,15 +123,14 @@ impl crate::DatabaseTransaction for TursoTransaction {
         &self,
         table_name: &str,
     ) -> Result<crate::schema::DropPlan, DatabaseError> {
-        let drop_order =
-            { super::turso_find_cascade_dependents(&self.connection, table_name).await? };
+        let drop_order = { super::find_cascade_dependents(&self.connection, table_name).await? };
 
         Ok(crate::schema::DropPlan::Simple(drop_order))
     }
 
     #[cfg(feature = "cascade")]
     async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
-        super::turso_has_dependents(&self.connection, table_name).await
+        super::has_dependents(&self.connection, table_name).await
     }
 
     #[cfg(feature = "cascade")]
@@ -332,7 +331,7 @@ impl crate::Database for TursoTransaction {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        Ok(super::turso_select(
+        Ok(super::select(
             &self.connection,
             query.table_name,
             query.distinct,
@@ -350,7 +349,7 @@ impl crate::Database for TursoTransaction {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
-        Ok(super::turso_find_row(
+        Ok(super::find_row(
             &self.connection,
             query.table_name,
             query.distinct,
@@ -367,7 +366,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        Ok(super::turso_update_and_get_rows(
+        Ok(super::update_and_get_rows(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -382,7 +381,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
-        Ok(super::turso_update_and_get_row(
+        Ok(super::update_and_get_row(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -397,20 +396,18 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<Row, DatabaseError> {
-        Ok(super::turso_insert_and_get_row(
-            &self.connection,
-            statement.table_name,
-            &statement.values,
+        Ok(
+            super::insert_and_get_row(&self.connection, statement.table_name, &statement.values)
+                .await
+                .map_err(DatabaseError::Turso)?,
         )
-        .await
-        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_upsert(
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        Ok(super::turso_upsert(
+        Ok(super::upsert(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -425,7 +422,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Row, DatabaseError> {
-        Ok(super::turso_upsert_and_get_row(
+        Ok(super::upsert_and_get_row(
             &self.connection,
             statement.table_name,
             &statement.values,
@@ -443,7 +440,7 @@ impl crate::Database for TursoTransaction {
         let mut all_results = Vec::new();
         for values in &statement.values {
             let results = {
-                super::turso_upsert(&self.connection, statement.table_name, values, None, None)
+                super::upsert(&self.connection, statement.table_name, values, None, None)
                     .await
                     .map_err(DatabaseError::Turso)?
             };
@@ -457,7 +454,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError> {
-        Ok(super::turso_delete(
+        Ok(super::delete(
             &self.connection,
             statement.table_name,
             statement.filters.as_deref(),
@@ -472,7 +469,7 @@ impl crate::Database for TursoTransaction {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError> {
         let rows = {
-            super::turso_delete(
+            super::delete(
                 &self.connection,
                 statement.table_name,
                 statement.filters.as_deref(),
@@ -489,7 +486,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        super::turso_exec_create_table(&self.connection, statement).await
+        super::exec_create_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -497,7 +494,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        super::turso_exec_drop_table(&self.connection, statement).await
+        super::exec_drop_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -505,7 +502,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        super::turso_exec_create_index(&self.connection, statement).await
+        super::exec_create_index(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -513,7 +510,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        super::turso_exec_drop_index(&self.connection, statement).await
+        super::exec_drop_index(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -521,7 +518,7 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        super::turso_exec_alter_table(&self.connection, statement).await
+        super::exec_alter_table(&self.connection, statement).await
     }
 
     #[cfg(feature = "schema")]
