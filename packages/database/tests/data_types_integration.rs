@@ -41,102 +41,6 @@ mod rusqlite_data_type_tests {
         }
     }
 
-    #[cfg(feature = "turso")]
-    mod turso_data_type_tests {
-        use super::*;
-        use switchy_database::turso::TursoDatabase;
-
-        struct TursoDataTypeTests;
-
-        impl DataTypeTestSuite for TursoDataTypeTests {
-            type DatabaseType = TursoDatabase;
-
-            async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
-                TursoDatabase::new(":memory:").await.ok().map(Arc::new)
-            }
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_integer_types_boundary_values() {
-            let suite = TursoDataTypeTests;
-            suite.test_integer_types_boundary_values().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_int_vs_bigint_type_safety() {
-            let suite = TursoDataTypeTests;
-            suite.test_int_vs_bigint_type_safety().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_string_types_varchar_text_char() {
-            let suite = TursoDataTypeTests;
-            suite.test_string_types_varchar_text_char().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_floating_point_types() {
-            let suite = TursoDataTypeTests;
-            suite.test_floating_point_types().await;
-        }
-
-        #[cfg(feature = "decimal")]
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_decimal_precision() {
-            let suite = TursoDataTypeTests;
-            suite.test_decimal_precision().await;
-        }
-
-        #[cfg(feature = "uuid")]
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_uuid_storage() {
-            let suite = TursoDataTypeTests;
-            suite.test_uuid_storage().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_boolean_type() {
-            let suite = TursoDataTypeTests;
-            suite.test_boolean_type().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_datetime_types() {
-            let suite = TursoDataTypeTests;
-            suite.test_datetime_types().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_null_handling_all_types() {
-            let suite = TursoDataTypeTests;
-            suite.test_null_handling_all_types().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_serial_auto_increment() {
-            let suite = TursoDataTypeTests;
-            suite.test_serial_auto_increment().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_default_values_all_types() {
-            let suite = TursoDataTypeTests;
-            suite.test_default_values_all_types().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_int8_specific_type_and_retrieval() {
-            let suite = TursoDataTypeTests;
-            suite.test_int8_specific_type_and_retrieval().await;
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn test_turso_int16_specific_type_and_retrieval() {
-            let suite = TursoDataTypeTests;
-            suite.test_int16_specific_type_and_retrieval().await;
-        }
-    }
-
     #[test_log::test(switchy_async::test)]
     async fn test_rusqlite_int_vs_bigint_type_safety() {
         let suite = RusqliteDataTypeTests;
@@ -345,6 +249,102 @@ mod sqlite_sqlx_data_type_tests {
     #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlite_sqlx_int16_specific_type_and_retrieval() {
         let suite = SqliteSqlxDataTypeTests;
+        suite.test_int16_specific_type_and_retrieval().await;
+    }
+}
+
+#[cfg(feature = "turso")]
+mod turso_data_type_tests {
+    use super::*;
+    use switchy_database::turso::TursoDatabase;
+
+    struct TursoDataTypeTests;
+
+    impl DataTypeTestSuite for TursoDataTypeTests {
+        type DatabaseType = TursoDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            TursoDatabase::new(":memory:").await.ok().map(Arc::new)
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_integer_types_boundary_values() {
+        let suite = TursoDataTypeTests;
+        suite.test_integer_types_boundary_values().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_int_vs_bigint_type_safety() {
+        let suite = TursoDataTypeTests;
+        suite.test_int_vs_bigint_type_safety().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_string_types_varchar_text_char() {
+        let suite = TursoDataTypeTests;
+        suite.test_string_types_varchar_text_char().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_floating_point_types() {
+        let suite = TursoDataTypeTests;
+        suite.test_floating_point_types().await;
+    }
+
+    #[cfg(feature = "decimal")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_decimal_precision() {
+        let suite = TursoDataTypeTests;
+        suite.test_decimal_precision().await;
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_uuid_storage() {
+        let suite = TursoDataTypeTests;
+        suite.test_uuid_storage().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_boolean_type() {
+        let suite = TursoDataTypeTests;
+        suite.test_boolean_type().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_datetime_types() {
+        let suite = TursoDataTypeTests;
+        suite.test_datetime_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_null_handling_all_types() {
+        let suite = TursoDataTypeTests;
+        suite.test_null_handling_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_serial_auto_increment() {
+        let suite = TursoDataTypeTests;
+        suite.test_serial_auto_increment().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_default_values_all_types() {
+        let suite = TursoDataTypeTests;
+        suite.test_default_values_all_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_int8_specific_type_and_retrieval() {
+        let suite = TursoDataTypeTests;
+        suite.test_int8_specific_type_and_retrieval().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_turso_int16_specific_type_and_retrieval() {
+        let suite = TursoDataTypeTests;
         suite.test_int16_specific_type_and_retrieval().await;
     }
 }

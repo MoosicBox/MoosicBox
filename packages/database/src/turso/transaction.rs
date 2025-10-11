@@ -2,9 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 
@@ -125,9 +123,8 @@ impl crate::DatabaseTransaction for TursoTransaction {
         &self,
         table_name: &str,
     ) -> Result<crate::schema::DropPlan, DatabaseError> {
-        let drop_order = {
-            super::turso_find_cascade_dependents(&self.connection, table_name).await?
-        };
+        let drop_order =
+            { super::turso_find_cascade_dependents(&self.connection, table_name).await? };
 
         Ok(crate::schema::DropPlan::Simple(drop_order))
     }
@@ -400,11 +397,13 @@ impl crate::Database for TursoTransaction {
         &self,
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<Row, DatabaseError> {
-        Ok(
-            super::turso_insert_and_get_row(&self.connection, statement.table_name, &statement.values)
-                .await
-                .map_err(DatabaseError::Turso)?,
+        Ok(super::turso_insert_and_get_row(
+            &self.connection,
+            statement.table_name,
+            &statement.values,
         )
+        .await
+        .map_err(DatabaseError::Turso)?)
     }
 
     async fn exec_upsert(
