@@ -1328,23 +1328,7 @@ mod turso {
     use super::*;
 
     async fn setup_db() -> Arc<Box<dyn Database>> {
-        use std::sync::atomic::{AtomicU64, Ordering};
-        use std::time::{SystemTime, UNIX_EPOCH};
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let thread_id = std::thread::current().id();
-        let temp_file = std::env::temp_dir().join(format!(
-            "test_turso_qb_{}_{}_{:?}_{}.db",
-            std::process::id(),
-            timestamp,
-            thread_id,
-            counter
-        ));
-        let db = switchy_database_connection::init_turso_local(Some(&temp_file))
+        let db = switchy_database_connection::init_turso_local(None)
             .await
             .unwrap();
         let db = Arc::new(db);

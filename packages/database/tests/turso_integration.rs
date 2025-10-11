@@ -226,19 +226,7 @@ mod turso {
     use super::*;
 
     async fn setup_db() -> Arc<Box<dyn Database>> {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let thread_id = std::thread::current().id();
-        let temp_file = std::env::temp_dir().join(format!(
-            "test_turso_db_{}_{}_{:?}.db",
-            std::process::id(),
-            timestamp,
-            thread_id
-        ));
-        let db = switchy_database_connection::init_turso_local(Some(&temp_file))
+        let db = switchy_database_connection::init_turso_local(None)
             .await
             .unwrap();
         let db = Arc::new(db);
