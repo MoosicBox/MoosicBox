@@ -25,7 +25,7 @@
     "license": "MIT",
     "dependencies": {
         "@astrojs/check": "^0.9.4",
-        "@astrojs/node": "^9.4.5",
+        "@astrojs/node": "^9.4.6",
         "@astrojs/solid-js": "^5.1.1",
         "@free-log/node-client": "^0.2.0",
         "@hotwired/turbo": "^8.0.18",
@@ -36,7 +36,7 @@
         "@solid-primitives/utils": "^6.3.2",
         "@tauri-apps/api": "^2.8.0",
         "@tauri-apps/plugin-dialog": "^2.4.0",
-        "astro": "^5.14.3",
+        "astro": "^5.14.4",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "htmx.org": "^2.0.7",

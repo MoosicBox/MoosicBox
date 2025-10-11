@@ -12,8 +12,8 @@ importers:
         specifier: ^0.9.4
         version: 0.9.4(prettier-plugin-astro@0.14.1)(prettier@3.6.2)(typescript@5.9.3)
       '@astrojs/node':
-        specifier: ^9.4.5
-        version: 9.4.5(astro@5.14.3(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1))
+        specifier: ^9.4.6
+        version: 9.4.6(astro@5.14.4(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1))
       '@astrojs/solid-js':
         specifier: ^5.1.1
         version: 5.1.1(@testing-library/jest-dom@5.17.0)(@types/node@24.7.1)(jiti@2.4.2)(solid-js@1.9.9)(yaml@2.8.1)
@@ -45,8 +45,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       astro:
-        specifier: ^5.14.3
-        version: 5.14.3(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1)
+        specifier: ^5.14.4
+        version: 5.14.4(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1)
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -172,10 +172,10 @@ packages:
   '@astrojs/markdown-remark@6.3.8':
     resolution: {integrity: sha512-uFNyFWadnULWK2cOw4n0hLKeu+xaVWeuECdP10cQ3K2fkybtTlhb7J7TcScdjmS8Yps7oje9S/ehYMfZrhrgCg==}
 
-  '@astrojs/node@9.4.5':
-    resolution: {integrity: sha512-rTfrcZsjZKJUhB8AlWJUa8amEy8I3CZePSjYn0D9+YTn27CBB3v5jHDOuUJQVRc8fm8oEi2uprF79agTGexwcA==}
+  '@astrojs/node@9.4.6':
+    resolution: {integrity: sha512-vyl+GaT20CjullFghaO5/g3ygpzfjQdxjRJev8r33Vi831nCe3yyy4G/V1z6wpq4FHDEduMtT2jdXfJVx1th+A==}
     peerDependencies:
-      astro: ^5.7.0
+      astro: ^5.14.3
 
   '@astrojs/prism@3.3.0':
     resolution: {integrity: sha512-q8VwfU/fDZNoDOf+r7jUnMC2//H2l0TuQ6FkGJL8vD8nw/q5KiL3DS1KKBI3QhI9UQhpJ5dc7AtqfbXWuOgLCQ==}
@@ -1451,8 +1451,8 @@ packages:
     resolution: {integrity: sha512-JepyLROIad6f44uyqMF6HKE2QbunNzp3mYKRcPoDGt0QkxXmH222FAFC64WTyQu2Kg8NNEXHTN/sWuUId9sSxw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  astro@5.14.3:
-    resolution: {integrity: sha512-iRvl3eEYYdSYA195eNREjh43hqMMwKY1uoHYiKfLCB9G+bjFtaBtDe8R0ip7AbTD69wyOKgUCOtMad+lkOnT/w==}
+  astro@5.14.4:
+    resolution: {integrity: sha512-yqgMAO2Whi9GmZkByyiPcG7CiiPr0Me0iBSorMa6M0g+wQk/ewnIqUyr7T/uFCPTQndoKwucnYFTrf0yfb0urw==}
     engines: {node: 18.20.8 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -1503,8 +1503,8 @@ packages:
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
-  baseline-browser-mapping@2.8.15:
-    resolution: {integrity: sha512-qsJ8/X+UypqxHXN75M7dF88jNK37dLBRW7LeUzCPz+TNs37G8cfWy9nWzS+LS//g600zrt2le9KuXt0rWfDz5Q==}
+  baseline-browser-mapping@2.8.16:
+    resolution: {integrity: sha512-OMu3BGQ4E7P1ErFsIPpbJh0qvDudM/UuJeHgkAvfWe+0HFJCXh+t/l8L6fVLR55RI/UbKrVLnAXZSVwd9ysWYw==}
     hasBin: true
 
   boxen@8.0.1:
@@ -4160,10 +4160,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.4.5(astro@5.14.3(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1))':
+  '@astrojs/node@9.4.6(astro@5.14.4(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1))':
     dependencies:
       '@astrojs/internal-helpers': 0.7.4
-      astro: 5.14.3(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1)
+      astro: 5.14.4(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1)
       send: 1.2.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -5363,7 +5363,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  astro@5.14.3(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1):
+  astro@5.14.4(@types/node@24.7.1)(jiti@2.4.2)(rollup@4.52.4)(typescript@5.9.3)(yaml@2.8.1):
     dependencies:
       '@astrojs/compiler': 2.13.0
       '@astrojs/internal-helpers': 0.7.4
@@ -5504,7 +5504,7 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.8.15: {}
+  baseline-browser-mapping@2.8.16: {}
 
   boxen@8.0.1:
     dependencies:
@@ -5536,7 +5536,7 @@ snapshots:
 
   browserslist@4.26.3:
     dependencies:
-      baseline-browser-mapping: 2.8.15
+      baseline-browser-mapping: 2.8.16
       caniuse-lite: 1.0.30001749
       electron-to-chromium: 1.5.234
       node-releases: 2.0.23
