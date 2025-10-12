@@ -48,7 +48,7 @@ fn test_decode_silk_vectors() {
 
             eprintln!("Test: {}", vector.name);
             eprintln!(
-                "  Decoded {} samples, expected {} output samples",
+                "  Decoded {} samples/ch, expected {} output samples",
                 decoded_samples,
                 output.len()
             );
@@ -60,29 +60,34 @@ fn test_decode_silk_vectors() {
                 vector.name
             );
 
-            // Account for sample-rate-dependent algorithmic delay in SILK decoder
-            // The delay varies by bandwidth: NB=5 samples, MB=10 samples, WB=13 samples
-            let delay_samples = match vector.sample_rate {
-                8000 => 5,   // NB: 5 samples = 0.625ms
-                12000 => 10, // MB: 10 samples = 0.833ms
-                16000 => 13, // WB: 13 samples = 0.8125ms
-                24000 => 20, // SWB: estimated
-                _ => 5,      // fallback
+            // Our decoder automatically removes SILK algorithmic delay
+            // libopus includes delay in output, so we skip it for comparison
+            let delay_samples_per_channel = decoder.algorithmic_delay_samples();
+            let delay_samples_total = delay_samples_per_channel * usize::from(vector.channels);
+
+            eprintln!(
+                "  Algorithmic delay: {} samples/ch (auto-removed from output)",
+                delay_samples_per_channel
+            );
+
+            // Skip delay in expected (libopus includes it), compare with our delay-free output
+            let expected = if delay_samples_total < vector.expected_pcm.len() {
+                &vector.expected_pcm[delay_samples_total..]
+            } else {
+                &vector.expected_pcm[..]
             };
-            let expected_shifted = &vector.expected_pcm[delay_samples..];
-            let actual_trimmed = &output[..output.len() - delay_samples];
+            // Also trim actual to match expected length (both should have same usable samples)
+            let actual_full = &output[..decoded_samples * usize::from(vector.channels)];
+            let actual = &actual_full[..expected.len().min(actual_full.len())];
 
             eprintln!(
-                "  Expected (shifted)[0..20]: {:?}",
-                &expected_shifted[..20.min(expected_shifted.len())]
+                "  Expected[0..20]: {:?}",
+                &expected[..20.min(expected.len())]
             );
-            eprintln!(
-                "  Actual[0..20]: {:?}",
-                &actual_trimmed[..20.min(actual_trimmed.len())]
-            );
+            eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
 
-            let snr = calculate_snr(expected_shifted, actual_trimmed);
-            eprintln!("  SNR (with delay compensation): {} dB", snr);
+            let snr = calculate_snr(expected, actual);
+            eprintln!("  SNR: {} dB", snr);
 
             assert!(
                 snr > 40.0,

@@ -81,6 +81,9 @@ pub struct Decoder {
     #[allow(dead_code)]
     prev_mode: Option<OpusMode>,
 
+    #[cfg(feature = "silk")]
+    silk_delay_samples: usize,
+
     #[cfg(all(feature = "silk", feature = "resampling"))]
     silk_resampler_state: Option<moosicbox_resampler::Resampler<i16>>,
     #[cfg(all(feature = "silk", feature = "resampling"))]
@@ -129,6 +132,9 @@ impl Decoder {
             )?,
 
             prev_mode: None,
+
+            #[cfg(feature = "silk")]
+            silk_delay_samples: 0,
 
             #[cfg(all(feature = "silk", feature = "resampling"))]
             silk_resampler_state: None,
@@ -345,6 +351,46 @@ impl Decoder {
         };
 
         ((sample_rate * duration_tenths_ms) / 10000) as usize
+    }
+
+    /// Calculates SILK algorithmic delay in samples for a given internal rate.
+    ///
+    /// SILK has inherent algorithmic delay due to LPC analysis and pitch filtering.
+    /// This delay is automatically removed from decoded output.
+    ///
+    /// # Arguments
+    /// * `internal_rate` - SILK internal sample rate (8000, 12000, or 16000 Hz)
+    ///
+    /// # Returns
+    /// Delay in samples at the internal rate
+    #[must_use]
+    #[cfg(feature = "silk")]
+    const fn calculate_silk_delay_samples(internal_rate: u32) -> usize {
+        match internal_rate {
+            8000 => 5,   // NB: 5 samples = 0.625ms
+            12000 => 10, // MB: 10 samples = 0.833ms
+            16000 => 13, // WB: 13 samples = 0.8125ms
+            _ => 0,      // Unknown rate - no delay compensation
+        }
+    }
+
+    /// Returns the current SILK algorithmic delay in samples.
+    ///
+    /// This is the number of initial samples that contain lookahead data
+    /// and are automatically removed from the decoded output.
+    ///
+    /// # Returns
+    /// Delay in samples at the decoder's sample rate (0 if not using SILK)
+    #[must_use]
+    pub const fn algorithmic_delay_samples(&self) -> usize {
+        #[cfg(feature = "silk")]
+        {
+            self.silk_delay_samples
+        }
+        #[cfg(not(feature = "silk"))]
+        {
+            0
+        }
     }
 
     /// Resets the decoder state.
@@ -608,6 +654,9 @@ impl Decoder {
             silk_frame_size_ms,
         )?;
 
+        // Track SILK algorithmic delay for automatic removal
+        self.silk_delay_samples = Self::calculate_silk_delay_samples(internal_rate);
+
         let frame_samples =
             Self::calculate_samples(config.frame_size, internal_rate) / num_silk_frames;
         let num_channels = channels as usize;
@@ -652,7 +701,7 @@ impl Decoder {
             let copy_len = resampled.len().min(output.len());
             output[..copy_len].copy_from_slice(&resampled[..copy_len]);
 
-            return Ok(resampled.len());
+            return Ok(resampled.len() / num_channels);
         }
 
         #[cfg(not(feature = "resampling"))]
