@@ -218,8 +218,11 @@ pub struct SilkDecoder {
     #[allow(dead_code)]
     uncoded_side_channel: bool,
     // TODO(Section 3.7+): Remove dead_code when used in LTP decoding
+    // RFC 6716 Section 4.2.7.6.1 (lines 4130-4147):
+    // Pitch lag is coded relative to "prior frame in the same channel"
+    // Index 0: mid channel, Index 1: side channel
     #[allow(dead_code)]
-    previous_pitch_lag: Option<i16>,
+    previous_pitch_lag: [Option<i16>; 2],
     // TODO(Section 3.7.7): Remove dead_code when used in noise injection
     #[allow(dead_code)]
     lcg_seed: u32,
@@ -270,7 +273,7 @@ impl SilkDecoder {
             previous_lsf_wb: None,
             decoder_reset: true,
             uncoded_side_channel: false,
-            previous_pitch_lag: None,
+            previous_pitch_lag: [None, None],
             lcg_seed: 0,
             ltp_state,
             stereo_state,
@@ -504,11 +507,13 @@ impl SilkDecoder {
         // Step 4: Decode LTP parameters for voiced frames (RFC Table 5 entries 8-12)
         let (pitch_lags, ltp_filters, ltp_scale) = if matches!(frame_type, FrameType::Voiced) {
             // RFC Table 5 Entry 8: Primary Pitch Lag
-            let primary_lag = self.decode_primary_pitch_lag(
-                range_decoder,
-                bandwidth,
-                self.decoder_reset, // use_absolute on first frame
-            )?;
+            // RFC 6716 Section 4.2.7.6.1: Use absolute coding when:
+            // - First SILK frame for this channel in current Opus frame
+            // - Previous frame for this channel was not coded
+            // - Previous frame was coded but not voiced
+            let use_absolute = self.previous_pitch_lag[channel_idx].is_none() || self.decoder_reset;
+            let primary_lag =
+                self.decode_primary_pitch_lag(range_decoder, bandwidth, use_absolute, channel_idx)?;
 
             // RFC Table 5 Entry 9: Subframe Pitch Contour
             let pitch_lags = self.decode_pitch_contour(range_decoder, primary_lag, bandwidth)?;
@@ -1602,7 +1607,7 @@ impl SilkDecoder {
         }
 
         self.previous_gain_indices = [None, None];
-        self.previous_pitch_lag = None;
+        self.previous_pitch_lag = [None, None];
         self.lcg_seed = 0;
         self.uncoded_side_channel = false;
     }
@@ -1953,6 +1958,7 @@ impl SilkDecoder {
         range_decoder: &mut RangeDecoder,
         bandwidth: Bandwidth,
         use_absolute: bool,
+        channel_idx: usize,
     ) -> Result<i16> {
         use super::ltp_constants::{
             LTP_LAG_DELTA_PDF, LTP_LAG_HIGH_PDF, LTP_LAG_LOW_PDF_MB, LTP_LAG_LOW_PDF_NB,
@@ -1975,21 +1981,20 @@ impl SilkDecoder {
 
             let lag = lag_high * lag_scale + lag_low + lag_min;
 
-            self.previous_pitch_lag = Some(lag);
+            self.previous_pitch_lag[channel_idx] = Some(lag);
             Ok(lag)
         } else {
             let delta_lag_index = i16::try_from(range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)?)
                 .expect("ec_dec_icdf returns u8, always fits in i16");
 
             if delta_lag_index == 0 {
-                self.decode_primary_pitch_lag(range_decoder, bandwidth, true)
+                self.decode_primary_pitch_lag(range_decoder, bandwidth, true, channel_idx)
             } else {
-                let previous_lag = self
-                    .previous_pitch_lag
+                let previous_lag = self.previous_pitch_lag[channel_idx]
                     .ok_or_else(|| Error::SilkDecoder("no previous pitch lag".to_string()))?;
                 let lag = previous_lag + (delta_lag_index - 9);
 
-                self.previous_pitch_lag = Some(lag);
+                self.previous_pitch_lag[channel_idx] = Some(lag);
                 Ok(lag)
             }
         }
@@ -4146,11 +4151,11 @@ mod tests {
         let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
 
         let lag = decoder
-            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Narrowband, true)
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Narrowband, true, 0)
             .unwrap();
 
         assert!((16..=144).contains(&lag));
-        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+        assert_eq!(decoder.previous_pitch_lag[0], Some(lag));
     }
 
     #[test]
@@ -4160,11 +4165,11 @@ mod tests {
         let mut decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Mono, 20).unwrap();
 
         let lag = decoder
-            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Mediumband, true)
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Mediumband, true, 0)
             .unwrap();
 
         assert!((24..=216).contains(&lag));
-        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+        assert_eq!(decoder.previous_pitch_lag[0], Some(lag));
     }
 
     #[test]
@@ -4174,11 +4179,11 @@ mod tests {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
         let lag = decoder
-            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, true)
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, true, 0)
             .unwrap();
 
         assert!((32..=288).contains(&lag));
-        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+        assert_eq!(decoder.previous_pitch_lag[0], Some(lag));
     }
 
     #[test]
@@ -4187,13 +4192,13 @@ mod tests {
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        decoder.previous_pitch_lag = Some(100);
+        decoder.previous_pitch_lag[0] = Some(100);
 
         let lag = decoder
-            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false)
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false, 0)
             .unwrap();
 
-        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+        assert_eq!(decoder.previous_pitch_lag[0], Some(lag));
     }
 
     #[test]
@@ -4203,7 +4208,7 @@ mod tests {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
         let result =
-            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false);
+            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false, 0);
 
         assert!(result.is_err());
     }
@@ -4215,7 +4220,7 @@ mod tests {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
         let result =
-            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::SuperWideband, true);
+            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::SuperWideband, true, 0);
 
         assert!(result.is_err());
     }
