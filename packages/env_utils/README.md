@@ -1,14 +1,14 @@
 # MoosicBox Environment Utils
 
-A utility library for parsing and handling environment variables with type-safe conversions and compile-time macros.
+A utility library for parsing and handling environment variables with compile-time macros and const-compatible parsing functions.
 
 ## Features
 
-- **Type-Safe Parsing**: Parse environment variables to specific numeric types (usize, u64, u32, u16, i64, i32, i16, i8, f32)
-- **Compile-Time Macros**: Extract environment variables at compile time with default values
+- **Compile-Time Macros**: Extract environment variables at compile time with default values and type conversions
+- **Type-Safe Parsing**: Support for multiple numeric types (usize, u64, u32, u16, isize, i64, i32, i16, i8)
 - **Const-Compatible Parsing**: Const-friendly integer parsing functions for compile-time evaluation
 - **Optional Values**: Handle missing environment variables gracefully with Option types
-- **Error Handling**: Proper error types for parsing failures and missing variables
+- **Zero Runtime Cost**: Macro-based extraction evaluates at compile time
 
 ## Installation
 
@@ -16,90 +16,86 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_env_utils = "0.1.1"
+moosicbox_env_utils = "0.1.4"
 ```
 
 ## Usage
 
-### Basic Environment Variable Parsing
+### Basic Compile-Time Environment Variable Extraction
 
 ```rust
 use moosicbox_env_utils::{env_usize, default_env_usize, option_env_usize};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse required environment variable
-    let port = env_usize("PORT")?;
-    println!("Server port: {}", port);
+// Extract required environment variable at compile time
+const SERVER_PORT: usize = env_usize!("PORT");
 
-    // Parse with default value
-    let timeout = default_env_usize("TIMEOUT", 30)?;
-    println!("Timeout: {} seconds", timeout);
+// Extract with default value at compile time
+const TIMEOUT: usize = default_env_usize!("TIMEOUT", 30);
 
-    // Parse optional environment variable
-    match option_env_usize("MAX_CONNECTIONS")? {
+// Extract optional environment variable at compile time
+const MAX_CONNECTIONS: Option<usize> = option_env_usize!("MAX_CONNECTIONS");
+
+fn main() {
+    println!("Server port: {}", SERVER_PORT);
+    println!("Timeout: {} seconds", TIMEOUT);
+
+    match MAX_CONNECTIONS {
         Some(max_conn) => println!("Max connections: {}", max_conn),
         None => println!("No connection limit set"),
     }
-
-    Ok(())
 }
 ```
 
-### Compile-Time Environment Variable Macros
+### Different Integer Types
 
 ```rust
-use moosicbox_env_utils::{env_usize, default_env_usize, default_env_u64, default_env_u32};
+use moosicbox_env_utils::{default_env_usize, default_env_u64, default_env_u32, default_env_u16};
 
-// Extract environment variables at compile time
-const SERVER_PORT: usize = env_usize!("PORT");
+// Extract environment variables with different unsigned integer types
 const MAX_BUFFER_SIZE: usize = default_env_usize!("BUFFER_SIZE", 8192);
 const CACHE_TTL: u64 = default_env_u64!("CACHE_TTL", 3600);
 const WORKER_THREADS: u32 = default_env_u32!("WORKERS", 4);
+const PORT: u16 = default_env_u16!("PORT", 8080);
 
 fn main() {
-    println!("Server will run on port: {}", SERVER_PORT);
     println!("Buffer size: {} bytes", MAX_BUFFER_SIZE);
     println!("Cache TTL: {} seconds", CACHE_TTL);
     println!("Worker threads: {}", WORKER_THREADS);
+    println!("Port: {}", PORT);
 }
 ```
 
-### Different Numeric Types
+### Signed Integer Support
 
 ```rust
 use moosicbox_env_utils::{
     option_env_u64, option_env_u32, option_env_u16,
-    option_env_i64, option_env_i32, option_env_i16, option_env_i8,
-    option_env_f32
+    option_env_isize, option_env_i64, option_env_i32, option_env_i16, option_env_i8
 };
 
-async fn configure_application() -> Result<(), Box<dyn std::error::Error>> {
-    // Unsigned integers
-    let memory_limit: Option<u64> = option_env_u64("MEMORY_LIMIT_MB")?;
-    let max_requests: Option<u32> = option_env_u32("MAX_REQUESTS")?;
-    let port: Option<u16> = option_env_u16("PORT")?;
+// Unsigned integers
+const MEMORY_LIMIT: Option<u64> = option_env_u64!("MEMORY_LIMIT_MB");
+const MAX_REQUESTS: Option<u32> = option_env_u32!("MAX_REQUESTS");
+const PORT: Option<u16> = option_env_u16!("PORT");
 
-    // Signed integers
-    let timezone_offset: Option<i64> = option_env_i64("TIMEZONE_OFFSET")?;
-    let priority: Option<i32> = option_env_i32("PROCESS_PRIORITY")?;
-    let thread_priority: Option<i16> = option_env_i16("THREAD_PRIORITY")?;
-    let log_level: Option<i8> = option_env_i8("LOG_LEVEL")?;
+// Signed integers
+const TIMEZONE_OFFSET: Option<i64> = option_env_i64!("TIMEZONE_OFFSET");
+const PRIORITY: Option<i32> = option_env_i32!("PROCESS_PRIORITY");
+const THREAD_PRIORITY: Option<i16> = option_env_i16!("THREAD_PRIORITY");
+const LOG_LEVEL: Option<i8> = option_env_i8!("LOG_LEVEL");
+const CURSOR_OFFSET: Option<isize> = option_env_isize!("CURSOR_OFFSET");
 
-    // Floating point
-    let cpu_threshold: Option<f32> = option_env_f32("CPU_THRESHOLD")?;
-
+fn main() {
     println!("Configuration loaded:");
-    if let Some(mem) = memory_limit {
+    if let Some(mem) = MEMORY_LIMIT {
         println!("  Memory limit: {} MB", mem);
     }
-    if let Some(reqs) = max_requests {
+    if let Some(reqs) = MAX_REQUESTS {
         println!("  Max requests: {}", reqs);
     }
-    if let Some(threshold) = cpu_threshold {
-        println!("  CPU threshold: {:.2}%", threshold * 100.0);
+    if let Some(offset) = TIMEZONE_OFFSET {
+        println!("  Timezone offset: {}", offset);
     }
-
-    Ok(())
 }
 ```
 
@@ -108,12 +104,12 @@ async fn configure_application() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use moosicbox_env_utils::default_env;
 
-fn main() {
-    // Get string environment variable with default
-    let app_name = default_env("APP_NAME", "MoosicBox");
-    let environment = default_env("ENVIRONMENT", "development");
+// Get string environment variable with default at compile time
+const APP_NAME: &str = default_env!("APP_NAME", "MoosicBox");
+const ENVIRONMENT: &str = default_env!("ENVIRONMENT", "development");
 
-    println!("Application: {} ({})", app_name, environment);
+fn main() {
+    println!("Application: {} ({})", APP_NAME, ENVIRONMENT);
 }
 ```
 
@@ -143,20 +139,32 @@ fn main() {
 
 ## API Reference
 
-### Runtime Functions
-
-- `env_usize(name)` - Parse required usize environment variable
-- `default_env_usize(name, default)` - Parse usize with fallback default
-- `option_env_*` functions - Parse optional values for various types
-- `default_env(name, default)` - Get string environment variable with default
-
 ### Compile-Time Macros
 
-- `env_usize!(name)` - Extract required usize at compile time
+**Required Value Extraction:**
+- `env_usize!(name)` - Extract required usize at compile time (panics if not set)
+
+**Default Value Extraction (unsigned):**
 - `default_env_usize!(name, default)` - Extract usize with default at compile time
 - `default_env_u64!(name, default)` - Extract u64 with default at compile time
 - `default_env_u32!(name, default)` - Extract u32 with default at compile time
-- `option_env_*!` macros - Extract optional values at compile time
+- `default_env_u16!(name, default)` - Extract u16 with default at compile time
+
+**Optional Value Extraction (unsigned):**
+- `option_env_usize!(name)` - Extract Option\<usize\> at compile time
+- `option_env_u64!(name)` - Extract Option\<u64\> at compile time
+- `option_env_u32!(name)` - Extract Option\<u32\> at compile time
+- `option_env_u16!(name)` - Extract Option\<u16\> at compile time
+
+**Optional Value Extraction (signed):**
+- `option_env_isize!(name)` - Extract Option\<isize\> at compile time
+- `option_env_i64!(name)` - Extract Option\<i64\> at compile time
+- `option_env_i32!(name)` - Extract Option\<i32\> at compile time
+- `option_env_i16!(name)` - Extract Option\<i16\> at compile time
+- `option_env_i8!(name)` - Extract Option\<i8\> at compile time
+
+**String Values:**
+- `default_env!(name, default)` - Get string environment variable with default at compile time
 
 ### Const Functions
 
@@ -165,16 +173,17 @@ fn main() {
 
 ## Error Handling
 
-The library provides specific error types for different failure scenarios:
+The library uses compile-time macros that panic on errors rather than returning Result types:
 
-- `EnvUsizeError` - Environment variable missing or parsing failed
-- `DefaultEnvUsizeError` - Parsing failed (missing variables return default)
-- `OptionEnvUsizeError` - Parsing failed for numeric types
-- `OptionEnvF32Error` - Parsing failed for floating point
-- `ParseIntError` - Invalid digit encountered during const parsing
+- **`env_usize!`** - Panics if the environment variable is not set at compile time
+- **`option_env_*!` macros** - Panic if the environment variable is set but contains an invalid value
+- **`ParseIntError`** - Error type for const parsing functions (`parse_usize`, `parse_isize`)
+  - `InvalidDigit` - Invalid digit encountered during parsing
+
+Note: Because these are compile-time macros, errors are caught during compilation rather than at runtime.
 
 ## Performance
 
-- Const functions enable compile-time evaluation
-- Macro-based extraction has zero runtime cost
-- Runtime parsing uses standard library implementations for reliability
+- Const functions enable compile-time evaluation for parsing
+- Macro-based extraction has zero runtime cost - all values are resolved at compile time
+- Custom const-compatible parsing implementation avoids standard library dependencies
