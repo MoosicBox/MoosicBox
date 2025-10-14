@@ -18,31 +18,19 @@ This example demonstrates how to organize routes using nested scopes in the Moos
 
 ## Running the Example
 
-### With Actix Web (Production Backend)
 ```bash
 # From repository root
-cargo run --example nested_get --features actix
+cargo run --example nested_get
 
 # From example directory
 cd packages/web_server/examples/nested_get
-cargo run --features actix
+cargo run
 
 # With NixOS
-nix develop .#server --command cargo run --example nested_get --features actix
+nix develop .#server --command cargo run --example nested_get
 ```
 
-### With Simulator (Testing Backend)
-```bash
-# From repository root
-cargo run --example nested_get --features simulator
-
-# From example directory
-cd packages/web_server/examples/nested_get
-cargo run --features simulator
-
-# With NixOS
-nix develop .#server --command cargo run --example nested_get --features simulator
-```
+Note: This example uses the actix backend, which is enabled by default in the moosicbox_web_server dependency.
 
 ## Expected Output
 
@@ -190,9 +178,9 @@ Scope::new("/public")
 **Problem**: Requests to `/example` return 404
 **Solution**: The route is at `/nested/example`, not `/example`
 
-### Feature Flag Issues
+### Build Issues
 **Problem**: Compilation errors about missing traits
-**Solution**: Ensure either `actix` or `simulator` feature is enabled
+**Solution**: The actix feature is enabled by default via workspace dependencies
 
 ### Path Confusion
 **Problem**: Unsure what the final URL will be
