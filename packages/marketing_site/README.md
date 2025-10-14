@@ -7,10 +7,10 @@ A multi-platform marketing website built with the HyperChad framework, supportin
 The MoosicBox Marketing Website showcases the MoosicBox music server with support for:
 
 - **Multi-Platform Rendering**: Web (HTML), Desktop (Egui/FLTK), Serverless (Lambda)
-- **Modern Web Technologies**: Vanilla JS, HTMX-style interactions
+- **Modern Web Technologies**: Vanilla JS for client-side interactions
 - **Responsive Design**: Optimized for all device sizes
-- **Static Site Generation**: Pre-built assets for fast loading
-- **Server-Side Rendering**: Dynamic content generation
+- **Static Route Generation**: Pre-generated routes for improved performance
+- **Server-Side Rendering**: Dynamic content generation via HyperChad framework
 - **Progressive Enhancement**: Works with and without JavaScript
 
 ## Installation
@@ -66,17 +66,20 @@ cargo build --bin moosicbox_marketing_site_lambda_vanilla_js --features "lambda,
 
 ### Environment Variables
 
-| Variable             | Description             | Default        |
-| -------------------- | ----------------------- | -------------- |
-| `BIND_ADDRESS`       | Server bind address     | `0.0.0.0:3000` |
-| `STATIC_ASSETS_PATH` | Path to static assets   | `./assets`     |
-| `TEMPLATE_CACHE`     | Enable template caching | `true`         |
-| `LOG_LEVEL`          | Logging level           | `info`         |
+| Variable         | Description                      | Default   |
+| ---------------- | -------------------------------- | --------- |
+| `WINDOW_WIDTH`   | Initial window width (pixels)    | `1000.0`  |
+| `WINDOW_HEIGHT`  | Initial window height (pixels)   | `600.0`   |
+| `WINDOW_X`       | Initial window X position        | (unset)   |
+| `WINDOW_Y`       | Initial window Y position        | (unset)   |
+| `MAX_THREADS`    | Max blocking threads             | `64`      |
+| `TOKIO_CONSOLE`  | Enable tokio console (1 or true) | (unset)   |
+| `RUST_LOG`       | Logging level                    | (unset)   |
 
 ### Runtime Configuration
 
 ```bash
-# Development mode with hot reloading
+# Development mode with debugging
 RUST_LOG=debug cargo run --features "dev,console-subscriber"
 
 # Production mode
@@ -90,24 +93,35 @@ The marketing site supports various feature combinations:
 ### Rendering Backends
 
 - `html` - HTML web rendering with server-side generation
-- `vanilla-js` - Enhanced with vanilla JavaScript interactions
-- `egui-wgpu` - Native desktop UI with GPU acceleration
-- `egui-glow` - Native desktop UI with OpenGL
-- `fltk` - Native desktop UI with FLTK
+- `vanilla-js` - Enhanced with vanilla JavaScript interactions (includes routing and navigation plugins)
+- `egui-wgpu` - Native desktop UI with GPU acceleration via wgpu
+- `egui-glow` - Native desktop UI with OpenGL via glow
+- `fltk` - Native desktop UI with FLTK toolkit
 
 ### Deployment Targets
 
 - `actix` - Actix Web server for standalone deployment
 - `lambda` - AWS Lambda serverless deployment
 - `static-routes` - Pre-generated static routes
+- `assets` - Enable static asset serving from `public/` directory
+
+### Platform-Specific Features
+
+- `wayland` - Wayland window system support (Linux)
+- `x11` - X11 window system support (Linux)
+- `windows-console` - Show console window on Windows in release builds
 
 ### Development Features
 
-- `dev` - Development mode with hot reloading
+- `dev` - Development mode (enables `assets` and `static-routes`)
 - `debug` - Enhanced debugging output
 - `console-subscriber` - Tokio console integration
-- `profiling-puffin` - Performance profiling
+- `profiling-puffin` - Performance profiling with Puffin
+- `profiling-tracing` - Performance profiling with tracing
+- `profiling-tracy` - Performance profiling with Tracy
 - `unsafe` - Enable performance optimizations
+- `benchmark` - Enable benchmarking features
+- `format` - Enable formatting features
 
 ## Deployment
 
@@ -150,10 +164,10 @@ zip lambda-deployment.zip bootstrap
 
 ### Static Site Generation
 
-Generate static assets for CDN deployment:
+The `static-routes` feature enables pre-generated static routes for improved performance. Build with these features:
 
 ```bash
-cargo run --features "static-routes,assets" -- --generate-static ./output
+cargo build --release --features "static-routes,assets"
 ```
 
 ## Desktop Application
@@ -173,33 +187,28 @@ cargo build --release --features "egui-wgpu" --no-default-features --target x86_
 
 ### Desktop Features
 
-- **Native file dialogs**
-- **System tray integration**
-- **Multi-window support**
-- **Native menu integration**
-- **Hardware acceleration**
+- **Hardware acceleration** (via `egui-wgpu` with GPU acceleration)
+- **Cross-platform support** (Linux with X11/Wayland, macOS, Windows)
+- **Native window integration**
 
 ## Development
 
 ### Local Development
 
 ```bash
-# Start development server with hot reload
+# Start development server with debugging
 cargo run --features "dev,console-subscriber,debug"
 
-# Monitor performance
+# Monitor performance with Puffin profiling
 cargo run --features "profiling-puffin,dev"
+
+# Enable Tokio console
+TOKIO_CONSOLE=1 cargo run --features "console-subscriber"
 ```
 
 ### Asset Management
 
-```bash
-# Rebuild assets
-cargo run --features "assets" -- --rebuild-assets
-
-# Optimize assets
-cargo run --features "assets" -- --optimize-assets
-```
+The `assets` feature enables serving static assets from the `public/` directory. Assets are bundled at build time and served through static routes.
 
 ### Testing Different Backends
 
@@ -220,27 +229,27 @@ cargo test --features "lambda,vanilla-js"
 
 The marketing site uses the HyperChad framework for:
 
-- **Component-based architecture**
-- **State management**
-- **Routing system**
-- **Asset pipeline**
-- **Template engine**
+- **Component-based architecture** - Using HyperChad's template system with the `container!` macro
+- **Routing system** - Static and dynamic route handling via `Router`
+- **Asset pipeline** - Serving static assets from the `public/` directory
+- **Responsive design** - Breakpoint-based responsive triggers for mobile/desktop layouts
+- **Multi-renderer support** - Same component code renders to HTML, Egui, or FLTK
 
 ### Rendering Pipeline
 
-1. **Content Generation**: Dynamic content from templates
-2. **Asset Processing**: CSS, JS, and image optimization
-3. **Route Resolution**: Static and dynamic route handling
-4. **Response Generation**: Platform-specific output
+1. **Route Resolution**: Router matches incoming requests to route handlers
+2. **Component Rendering**: HyperChad templates generate UI component trees
+3. **Renderer Transformation**: Component trees are transformed to target format (HTML/Native UI)
+4. **Response Generation**: Platform-specific output delivered to client
 
 ## Performance
 
 ### Web Performance
 
 - **Server-Side Rendering** for fast initial page loads
-- **Progressive Enhancement** for improved user experience
-- **Asset Optimization** with automatic compression
-- **CDN-Ready** static asset generation
+- **Progressive Enhancement** with optional vanilla-js features
+- **Static Route Generation** reduces runtime overhead
+- **Efficient Asset Serving** from bundled public directory
 
 ### Desktop Performance
 
@@ -250,30 +259,42 @@ The marketing site uses the HyperChad framework for:
 
 ## Content Management
 
-### Page Structure
+### Project Structure
 
 ```
-src/
-├── pages/          # Page components
-├── components/     # Reusable UI components
-├── assets/         # Static assets
-├── styles/         # CSS/styling
-└── templates/      # HTML templates
+packages/marketing_site/
+├── src/
+│   ├── main.rs              # Main desktop/web binary entry point
+│   ├── lib.rs               # Core library with routing and initialization
+│   ├── lambda.rs            # Lambda runtime wrapper
+│   ├── lambda_vanilla_js.rs # Lambda binary entry point
+│   └── download.rs          # Download page route handler
+├── ui/
+│   └── src/
+│       ├── lib.rs           # UI components (header, pages, layouts)
+│       └── download.rs      # Download page UI
+├── public/                  # Static assets (images, favicon)
+└── hyperchad/              # HyperChad framework integration files
 ```
 
 ### Adding New Pages
 
+Edit `src/lib.rs` to add routes to the `ROUTER` static:
+
 ```rust
-// Add to routing configuration
-pub fn routes() -> Vec<Route> {
-    vec![
-        Route::new("/", home_page),
-        Route::new("/features", features_page),
-        Route::new("/download", download_page),
-        // Add new routes here
-    ]
-}
+pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
+    Router::new()
+        .with_static_route(&["/", "/home"], |_| async {
+            moosicbox_marketing_site_ui::home()
+        })
+        .with_static_route(&["/your-new-page"], |_| async {
+            moosicbox_marketing_site_ui::your_new_page()
+        })
+        // Add more routes here
+});
 ```
+
+Then implement the corresponding UI function in `ui/src/lib.rs`.
 
 ## Troubleshooting
 
@@ -290,8 +311,11 @@ pub fn routes() -> Vec<Route> {
 # Enable detailed logging
 RUST_LOG=moosicbox_marketing_site=debug cargo run
 
-# Profile performance
-cargo run --features "profiling-puffin" -- --profile
+# Profile performance with Puffin
+cargo run --features "profiling-puffin"
+
+# Enable Tokio console for async debugging
+TOKIO_CONSOLE=1 cargo run --features "console-subscriber"
 ```
 
 ## See Also
