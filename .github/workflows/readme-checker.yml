@@ -458,61 +458,78 @@ jobs:
 
             - name: Create Pull Request
               if: steps.check_changes.outputs.has_changes == 'true'
-              uses: peter-evans/create-pull-request@v6
-              with:
-                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  branch: ${{ needs.create-branch.outputs.branch-name }}
-                  base: master
-                  title: '📝 Automated README Accuracy Updates (${{ needs.create-branch.outputs.branch-date }})'
-                  body: |
-                      ## 🤖 Automated README Accuracy Review
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  EXISTING_PR=$(gh pr list --head ${{ needs.create-branch.outputs.branch-name }} --json number --jq '.[0].number' || echo "")
 
-                      ${{ needs.create-branch.outputs.is-new == 'false' && '### 🔄 This is a refinement pass on an existing branch' || '' }}
+                  PR_BODY=$(cat <<'EOF'
+                  ## 🤖 Automated README Accuracy Review
 
-                      This PR contains automated updates to ensure all README files accurately reflect the current state of the codebase.
+                  ${{ needs.create-branch.outputs.is-new == 'false' && '### 🔄 This is a refinement pass on an existing branch' || '' }}
 
-                      ### 📋 What was reviewed:
-                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ Root README.md\n- ✅ All package READMEs' }}
+                  This PR contains automated updates to ensure all README files accurately reflect the current state of the codebase.
 
-                      ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
+                  ### 📋 What was reviewed:
+                  ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ Root README.md\n- ✅ All package READMEs' }}
 
-                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
+                  ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
 
-                      ### 🔍 Review focus:
-                      - Verified that claimed features are actually implemented
-                      - Marked future/planned features clearly
-                      - Updated outdated information
-                      - Ensured code examples match actual APIs
-                      - Checked dependency claims against Cargo.toml files
+                  ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
 
-                      ### ⚙️ Process:
-                      - Used parallel job execution (one per package)
-                      - Each package README reviewed independently by Claude
-                      - All changes consolidated on branch: `${{ needs.create-branch.outputs.branch-name }}`
-                      ${{ needs.create-branch.outputs.is-new == 'false' && '- **Refinement mode**: Building on previous updates' || '' }}
+                  ### 🔍 Review focus:
+                  - Verified that claimed features are actually implemented
+                  - Marked future/planned features clearly
+                  - Updated outdated information
+                  - Ensured code examples match actual APIs
+                  - Checked dependency claims against Cargo.toml files
 
-                      ### 📝 Review Guidelines:
-                      1. **Verify Accuracy**: Check that updates correctly reflect the code
-                      2. **Future Features**: Ensure planned features are appropriately marked
-                      3. **Completeness**: Confirm no important features were removed incorrectly
-                      4. **Tone**: Verify documentation maintains appropriate technical tone
+                  ### ⚙️ Process:
+                  - Used parallel job execution (one per package)
+                  - Each package README reviewed independently by Claude
+                  - All changes consolidated on branch: `${{ needs.create-branch.outputs.branch-name }}`
+                  ${{ needs.create-branch.outputs.is-new == 'false' && '- **Refinement mode**: Building on previous updates' || '' }}
 
-                      ### ⚠️ Important Notes:
-                      - This is an automated review - human oversight is essential
-                      - Claude may be overly conservative or miss nuances
-                      - Please review all changes carefully before merging
+                  ### 📝 Review Guidelines:
+                  1. **Verify Accuracy**: Check that updates correctly reflect the code
+                  2. **Future Features**: Ensure planned features are appropriately marked
+                  3. **Completeness**: Confirm no important features were removed incorrectly
+                  4. **Tone**: Verify documentation maintains appropriate technical tone
 
-                      ---
+                  ### ⚠️ Important Notes:
+                  - This is an automated review - human oversight is essential
+                  - Claude may be overly conservative or miss nuances
+                  - Please review all changes carefully before merging
 
-                      **Generated by**: [Claude Code Action](https://github.com/marketplace/actions/claude-code-action-official)
-                      **Branch**: `${{ needs.create-branch.outputs.branch-name }}`
-                      **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-                      ${{ needs.create-branch.outputs.is-new == 'false' && '**Refinement of**: Previous updates on this branch' || '**Initial run**: New branch created' }}
-                  labels: |
-                      documentation
-                      automated
-                      readme-updates
-                  delete-branch: false
+                  ---
+
+                  **Generated by**: [Claude Code Action](https://github.com/marketplace/actions/claude-code-action-official)
+                  **Branch**: `${{ needs.create-branch.outputs.branch-name }}`
+                  **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                  ${{ needs.create-branch.outputs.is-new == 'false' && '**Refinement of**: Previous updates on this branch' || '**Initial run**: New branch created' }}
+                  EOF
+                  )
+
+                  if [ -n "$EXISTING_PR" ]; then
+                    echo "✅ PR #$EXISTING_PR already exists, updating it"
+                    gh pr edit $EXISTING_PR --body "$PR_BODY"
+                    echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+                    echo "pr_url=$(gh pr view $EXISTING_PR --json url --jq '.url')" >> $GITHUB_OUTPUT
+                  else
+                    echo "📝 Creating new PR"
+                    PR_URL=$(gh pr create \
+                      --base master \
+                      --head ${{ needs.create-branch.outputs.branch-name }} \
+                      --title '📝 Automated README Accuracy Updates (${{ needs.create-branch.outputs.branch-date }})' \
+                      --label documentation,automated,readme-updates \
+                      --body "$PR_BODY")
+
+                    echo "✅ Created PR: $PR_URL"
+                    echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+                    PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+                    echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+                  fi
 
             - name: No changes summary
               if: steps.check_changes.outputs.has_changes == 'false'
