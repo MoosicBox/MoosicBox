@@ -1,20 +1,20 @@
 # Mutation Migration Test Example
 
-This example demonstrates how to use `switchy_schema` with the `verify_migrations_with_mutations` test utility to test migrations against various database states and operations.
+This example demonstrates how to use `switchy_schema` with the `verify_migrations_with_mutations` test utility to test migrations with data changes happening between migration steps.
 
 ## What This Example Shows
 
 - Creating migrations that handle complex data scenarios
 - Using `verify_migrations_with_mutations` for comprehensive testing
-- Implementing mutation providers for dynamic test data
-- Testing migrations against multiple database states
+- Inserting data between migrations to simulate real-world scenarios
+- Testing migrations with foreign key relationships and indexes
 
 ## Key Features
 
-- **Mutation Testing**: Tests migrations against various database states and operations
-- **Dynamic Data**: Uses mutation providers to generate different test scenarios
-- **Comprehensive Coverage**: Ensures migrations work under various conditions
-- **Edge Case Testing**: Validates behavior with different data patterns
+- **Mutation Testing**: Tests migrations with data being inserted between migration steps
+- **Interleaved Data Changes**: Simulates data modifications during migration sequences
+- **Foreign Key Testing**: Validates relationships between users, posts, and analytics tables
+- **Index Creation on Populated Tables**: Tests adding indexes after data is already present
 
 ## Running the Example
 
@@ -24,32 +24,30 @@ cargo run --bin mutation_migration_test
 
 This will:
 1. Create an in-memory SQLite database
-2. Run migrations with various mutations applied
-3. Verify that migrations handle all scenarios correctly
+2. Run migrations with data mutations applied between specific migrations
+3. Verify that migrations handle interleaved data changes correctly
 4. Display the results
 
 ## Migration Structure
 
-The example includes:
-- `CreateUsersTable`: Initial table creation
-- `UpdateUserStatuses`: Migration that updates user status values
-- `TestMutationProvider`: Generates various test scenarios including:
-  - Empty database states
-  - Databases with different user configurations
-  - Edge cases with null/default values
+The example includes four migrations:
+- `CreateUsersTable`: Creates users table with status and email fields
+- `CreatePostsTable`: Creates posts table with user_id foreign key reference
+- `CreateAnalyticsTable`: Creates analytics table for tracking user events
+- `AddPerformanceIndexes`: Adds indexes on foreign keys and commonly queried fields
+
+## Data Mutations
+
+Data is inserted between migrations using `Executable` implementations:
+- After users table: Inserts 3 test users (2 active, 1 inactive)
+- After posts table: Inserts 4 test posts linked to users
+- After analytics table: Inserts 5 analytics events tracking user activity
 
 ## Use Cases
 
 This pattern is ideal for:
-- Testing migrations against production-like data scenarios
-- Ensuring migrations work with various data distributions
-- Validating edge cases and error conditions
-- Comprehensive migration testing before deployment
-
-## Mutation Provider
-
-The mutation provider creates different database states to test against:
-- Empty databases
-- Databases with various user counts
-- Different status value distributions
-- Edge cases with special characters and null values
+- Testing migrations with realistic data patterns
+- Ensuring foreign key constraints work correctly
+- Validating that indexes can be created on populated tables
+- Testing rollback behavior with complex data relationships
+- Simulating production scenarios where data exists between migration steps
