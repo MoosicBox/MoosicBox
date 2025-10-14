@@ -4,17 +4,17 @@ This example demonstrates how to use `switchy_schema` with the `verify_migration
 
 ## What This Example Shows
 
-- Creating migrations that modify existing data
+- Creating migrations that work with existing data
 - Using `verify_migrations_with_state` to test data preservation
-- Implementing state setup and validation functions
+- Implementing state setup functions for pre-existing data
 - Working with existing data during schema migrations
 
 ## Key Features
 
 - **State Preservation**: Tests that data survives migration up/down cycles
-- **Data Validation**: Verifies that data transformations work correctly
-- **Real-world Scenarios**: Demonstrates adding columns with default values and updating existing records
-- **Schema Query Builder**: Uses modern query builder syntax for all database operations
+- **Data Integrity**: Verifies that migrations handle pre-existing data correctly
+- **Real-world Scenarios**: Demonstrates adding columns with default values and creating indexes on existing tables
+- **Schema Query Builder**: Uses modern query builder syntax for table creation and data insertion
 
 ## Running the Example
 
@@ -31,15 +31,15 @@ This will:
 ## Migration Structure
 
 The example includes:
-- `CreateUsersTable`: Initial table creation
-- `AddUserStatus`: Migration that adds a status column with default value
-- State setup function that inserts test users
-- State validation function that checks data integrity after migrations
+- `setup_initial_data`: Function that creates the initial users table with 3 test users
+- `AddUsersBioColumn`: Migration that adds a `bio` column with a default empty string value
+- `AddEmailIndex`: Migration that creates an index on the `email` column
+- `verify_migrations_with_state`: Test utility that validates migrations against pre-existing data
 
 ## Use Cases
 
 This pattern is ideal for:
-- Adding columns with default values
-- Migrating data between schema versions
+- Adding columns with default values to existing tables
+- Creating indexes on tables with existing data
 - Ensuring no data loss during migrations
-- Testing complex data transformations
+- Testing migrations in production-like scenarios with pre-existing data
