@@ -31,13 +31,9 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_music_api_helpers = { path = "../music_api/helpers" }
-
-# Enable scan functionality
-moosicbox_music_api_helpers = {
-    path = "../music_api/helpers",
-    features = ["scan"]
-}
 ```
+
+Note: The `scan` feature is enabled by default.
 
 ## Usage
 
@@ -69,10 +65,12 @@ All operations return `Result<T, moosicbox_music_api::Error>` with comprehensive
 
 ## Feature Flags
 
-- **`scan`**: Enable scanning helper utilities
+- **`scan`**: Enable scanning helper utilities (enabled by default)
+- **`fail-on-warnings`**: Treat warnings as errors during compilation
 
 ## Dependencies
 
-- **MoosicBox Music API**: Core music API traits
-- **MoosicBox Scan**: Library scanning functionality
-- **Switchy Database**: Database abstraction
+- **moosicbox_music_api**: Core music API traits
+- **moosicbox_scan**: Library scanning functionality (optional, enabled with `scan` feature)
+- **switchy**: Database abstraction with `database` feature
+- **log**: Logging functionality
