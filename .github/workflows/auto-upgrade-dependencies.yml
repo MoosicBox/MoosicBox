@@ -46,43 +46,6 @@ jobs:
                   name: cargo-upgrade.exe
                   path: ~/.cargo/bin/cargo-upgrade.exe
 
-    build-clippier:
-        name: Build clippier
-        strategy:
-            fail-fast: true
-            matrix:
-                os: ['macos-latest', 'ubuntu-latest', 'windows-latest']
-        runs-on: ${{ matrix.os }}
-        steps:
-            - uses: dtolnay/rust-toolchain@stable
-            - uses: actions/checkout@v4
-            - name: Setup clippier
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  repo: https://github.com/MoosicBox/MoosicBox
-                  command: cargo install --git https://github.com/MoosicBox/MoosicBox clippier --features git-diff
-                  shell: bash
-                  output-path: ~/.cargo/bin/clippier${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-                  artifact-name: clippier-${{ matrix.os }}-binary
-                  cache-key-prefix: clippier
-                  make-executable: true
-                  verify-command: --version
-            - uses: actions/upload-artifact@master
-              if: ${{ matrix.os == 'macos-latest' }}
-              with:
-                  name: clippier-macos
-                  path: ~/.cargo/bin/clippier
-            - uses: actions/upload-artifact@master
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              with:
-                  name: clippier-ubuntu
-                  path: ~/.cargo/bin/clippier
-            - uses: actions/upload-artifact@master
-              if: ${{ matrix.os == 'windows-latest' }}
-              with:
-                  name: clippier.exe
-                  path: ~/.cargo/bin/clippier.exe
-
     build-cargo-machete:
         name: Build cargo-machete
         strategy:
@@ -244,13 +207,13 @@ jobs:
     validate-compatible:
         name: Validate compatible upgrades
         runs-on: ubuntu-latest
-        needs: [upgrade-dependencies, build-clippier]
+        needs: [upgrade-dependencies]
         if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
         outputs:
-            matrix: ${{ steps.build-matrix.outputs.matrix }}
+            matrix: ${{ steps.analyze.outputs.matrix }}
+            has-changes: ${{ steps.analyze.outputs.has-changes }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
@@ -259,65 +222,20 @@ jobs:
                   git fetch origin ${{ needs.upgrade-dependencies.outputs.branch-name }}
                   git checkout ${{ needs.upgrade-dependencies.outputs.branch-name }}
 
-            - uses: dtolnay/rust-toolchain@stable
-
-            - uses: actions/download-artifact@master
+            - name: Analyze changes
+              id: analyze
+              uses: ./.github/actions/clippier
               with:
-                  name: clippier-ubuntu
-                  path: ~/.cargo/bin
-
-            - name: Make clippier executable
-              shell: bash
-              run: chmod +x ~/.cargo/bin/clippier
-
-            - name: Build matrix for changed files
-              id: build-matrix
-              run: |
-                  # Get changed files compared to master
-                  CHANGED_FILES=$(git diff --name-only origin/master | tr '\n' ',' | sed 's/,$//')
-                  echo "Changed files: $CHANGED_FILES"
-
-                  if [ -n "$CHANGED_FILES" ]; then
-                      MATRIX=$(
-                          ~/.cargo/bin/clippier \
-                              features \
-                              . \
-                              --changed-files "$CHANGED_FILES" \
-                              --git-base "origin/master" \
-                              --git-head "HEAD" \
-                              --chunked 15 \
-                              --max-parallel 256 \
-                              -o json \
-                              --spread \
-                              --skip-features fail-on-warnings \
-                              | jq -rc \
-                                  '[
-                                      .[]
-                                      | {
-                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
-                                          "path": (.path),
-                                          "features": (.features),
-                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                          "os": (.os + "-latest"),
-                                          "dependencies": (.dependencies),
-                                          "toolchains": (.toolchains),
-                                          "ciSteps": (.ciSteps),
-                                          "ciToolchains": (.ciToolchains),
-                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                          "nightly": (.nightly)
-                                      }
-                                      | del(.. | nulls)
-                                  ]'
-                      )
-                  else
-                      MATRIX="[]"
-                  fi
-
-                  echo "Matrix:"
-                  echo $MATRIX | jq
-                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
-                  echo $MATRIX >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+                  command: features
+                  workspace-path: .
+                  chunked: 15
+                  max-parallel: 256
+                  spread: true
+                  skip-features: fail-on-warnings
+                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  git-base: origin/master
+                  git-head: HEAD
+                  os-suffix: -latest
 
     test-compatible:
         name: Test compatible upgrades
@@ -479,13 +397,13 @@ jobs:
     validate-incompatible:
         name: Validate incompatible upgrades
         runs-on: ubuntu-latest
-        needs: [upgrade-dependencies, build-clippier]
+        needs: [upgrade-dependencies]
         if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
         outputs:
-            matrix: ${{ steps.build-matrix.outputs.matrix }}
+            matrix: ${{ steps.analyze.outputs.matrix }}
+            has-changes: ${{ steps.analyze.outputs.has-changes }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
@@ -494,65 +412,20 @@ jobs:
                   git fetch origin ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
                   git checkout ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
 
-            - uses: dtolnay/rust-toolchain@stable
-
-            - uses: actions/download-artifact@master
+            - name: Analyze changes
+              id: analyze
+              uses: ./.github/actions/clippier
               with:
-                  name: clippier-ubuntu
-                  path: ~/.cargo/bin
-
-            - name: Make clippier executable
-              shell: bash
-              run: chmod +x ~/.cargo/bin/clippier
-
-            - name: Build matrix for changed files
-              id: build-matrix
-              run: |
-                  # Get changed files compared to master
-                  CHANGED_FILES=$(git diff --name-only origin/master | tr '\n' ',' | sed 's/,$//')
-                  echo "Changed files: $CHANGED_FILES"
-
-                  if [ -n "$CHANGED_FILES" ]; then
-                      MATRIX=$(
-                          ~/.cargo/bin/clippier \
-                              features \
-                              . \
-                              --changed-files "$CHANGED_FILES" \
-                              --git-base "origin/master" \
-                              --git-head "HEAD" \
-                              --chunked 15 \
-                              --max-parallel 256 \
-                              -o json \
-                              --spread \
-                              --skip-features fail-on-warnings \
-                              | jq -rc \
-                                  '[
-                                      .[]
-                                      | {
-                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
-                                          "path": (.path),
-                                          "features": (.features),
-                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                          "os": (.os + "-latest"),
-                                          "dependencies": (.dependencies),
-                                          "toolchains": (.toolchains),
-                                          "ciSteps": (.ciSteps),
-                                          "ciToolchains": (.ciToolchains),
-                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                          "nightly": (.nightly)
-                                      }
-                                      | del(.. | nulls)
-                                  ]'
-                      )
-                  else
-                      MATRIX="[]"
-                  fi
-
-                  echo "Matrix:"
-                  echo $MATRIX | jq
-                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
-                  echo $MATRIX >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+                  command: features
+                  workspace-path: .
+                  chunked: 15
+                  max-parallel: 256
+                  spread: true
+                  skip-features: fail-on-warnings
+                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  git-base: origin/master
+                  git-head: HEAD
+                  os-suffix: -latest
 
     test-incompatible:
         name: Test incompatible upgrades
