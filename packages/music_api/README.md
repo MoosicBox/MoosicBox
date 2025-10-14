@@ -1,15 +1,14 @@
 # MoosicBox Music API
 
-A unified API abstraction layer for music services in the MoosicBox ecosystem. This package provides standardized interfaces and implementations for accessing music metadata, search functionality, and authentication across different music streaming services.
+A unified API abstraction layer for music services in the MoosicBox ecosystem. This package provides the `MusicApi` trait and supporting infrastructure for accessing music metadata, search functionality, and authentication across different music streaming services.
 
 ## Features
 
-- **Unified API Interface**: Common abstractions for music services (Tidal, Qobuz, local library)
-- **Search Functionality**: Standardized search across artists, albums, tracks, and playlists
-- **Authentication Management**: Flexible authentication system supporting multiple auth methods
-- **Pagination Support**: Efficient handling of large result sets with cursor-based pagination
+- **MusicApi Trait**: Common async trait defining operations for music services (artists, albums, tracks)
+- **Authentication Management**: Flexible authentication system with poll and username/password support
+- **Caching Support**: Built-in `CachedMusicApi` wrapper with cascade delete options
 - **Profile Integration**: Multi-profile support for different user configurations
-- **OpenAPI Documentation**: Auto-generated API documentation and client SDKs
+- **Pagination Support**: Efficient handling of large result sets using `moosicbox_paging`
 - **Async/Await Support**: Non-blocking operations with Tokio async runtime
 - **Error Handling**: Comprehensive error types with detailed context
 
@@ -19,227 +18,295 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_music_api = "0.1.1"
+moosicbox_music_api = "0.1.4"
 ```
 
 ## Usage
 
-### Basic API Implementation
+### Implementing the MusicApi Trait
 
 ```rust
-use moosicbox_music_api::{MusicApi, SearchQuery, SearchResults};
+use moosicbox_music_api::{MusicApi, Error};
+use moosicbox_music_models::{Artist, Album, Track, ApiSource, id::Id};
+use moosicbox_paging::{PagingResult, PagingResponse};
 use async_trait::async_trait;
+
+struct MyMusicService {
+    source: ApiSource,
+}
 
 #[async_trait]
 impl MusicApi for MyMusicService {
-    async fn search(&self, query: &SearchQuery) -> Result<SearchResults, ApiError> {
-        // Implement search functionality
-        let results = self.perform_search(query).await?;
-        Ok(SearchResults::from(results))
+    fn source(&self) -> &ApiSource {
+        &self.source
     }
 
-    async fn get_artist(&self, id: &str) -> Result<Artist, ApiError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error> {
         // Fetch artist by ID
-        self.fetch_artist(id).await
+        todo!("Implement artist lookup")
     }
 
-    async fn get_album(&self, id: &str) -> Result<Album, ApiError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error> {
         // Fetch album by ID
-        self.fetch_album(id).await
+        todo!("Implement album lookup")
     }
+
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error> {
+        // Fetch track by ID
+        todo!("Implement track lookup")
+    }
+
+    // ... implement other required trait methods
 }
 ```
 
-### Search Operations
+### Using Search (Optional Feature)
 
 ```rust
-use moosicbox_music_api::{SearchQuery, SearchType, SearchResults};
+use moosicbox_music_api::MusicApi;
 
-// Create search query
-let query = SearchQuery::new("Pink Floyd")
-    .with_types(vec![SearchType::Artist, SearchType::Album])
-    .with_limit(20)
-    .with_offset(0);
+// Check if API supports search
+if api.supports_search() {
+    let results = api.search("Pink Floyd", Some(0), Some(20)).await?;
 
-// Execute search
-let results = music_api.search(&query).await?;
-
-// Process results
-for artist in results.artists {
-    println!("Artist: {} ({})", artist.name, artist.id);
-}
-
-for album in results.albums {
-    println!("Album: {} by {} ({})", album.title, album.artist, album.id);
+    // Process search results
+    for artist in results.artists {
+        println!("Artist: {}", artist.title);
+    }
 }
 ```
 
 ### Authentication
 
 ```rust
-use moosicbox_music_api::auth::{AuthMethod, AuthResult};
+use moosicbox_music_api::auth::{ApiAuth, Auth};
 
-// Username/password authentication
-let auth = AuthMethod::UsernamePassword {
-    username: "user@example.com".to_string(),
-    password: "password".to_string(),
-};
+// Using username/password authentication (requires auth-username-password feature)
+#[cfg(feature = "auth-username-password")]
+{
+    use moosicbox_music_api::auth::username_password::UsernamePasswordAuth;
 
-let result = music_api.authenticate(auth).await?;
-match result {
-    AuthResult::Success(token) => {
-        println!("Authenticated with token: {}", token);
-    }
-    AuthResult::RequiresPolling(poll_info) => {
-        // Handle polling-based auth (e.g., OAuth device flow)
-        let token = music_api.poll_for_token(poll_info).await?;
-    }
-    AuthResult::Failed(error) => {
-        eprintln!("Authentication failed: {}", error);
-    }
+    let username_auth = UsernamePasswordAuth::builder()
+        .with_handler(|username, password| async move {
+            // Implement your authentication logic
+            Ok(true)
+        })
+        .build()?;
+
+    let api_auth = ApiAuth::builder()
+        .with_auth(username_auth)
+        .build();
+
+    let logged_in = api_auth.attempt_login(|auth| async move {
+        // Perform login with the auth
+        Ok(true)
+    }).await?;
+}
+
+// Using poll-based authentication (requires auth-poll feature)
+#[cfg(feature = "auth-poll")]
+{
+    use moosicbox_music_api::auth::poll::PollAuth;
+
+    let poll_auth = PollAuth::new()
+        .with_timeout_secs(120);
+
+    let api_auth = ApiAuth::builder()
+        .with_auth(poll_auth)
+        .build();
 }
 ```
 
-### Pagination
+### Working with Pagination
 
 ```rust
-use moosicbox_music_api::{PagingRequest, PagingResponse};
+use moosicbox_music_api::MusicApi;
+use moosicbox_paging::Page;
 
-let mut page_request = PagingRequest::new().with_limit(50);
-let mut all_tracks = Vec::new();
+// Fetch album tracks with pagination
+let paging_result = music_api
+    .album_tracks(&album_id, Some(0), Some(50), None, None)
+    .await?;
 
-loop {
-    let response: PagingResponse<Track> = music_api
-        .get_album_tracks("album_id", &page_request)
-        .await?;
+// Get the first page of results
+let tracks = paging_result.into_vec();
 
-    all_tracks.extend(response.items);
-
-    if let Some(next_cursor) = response.next_cursor {
-        page_request = page_request.with_cursor(next_cursor);
-    } else {
-        break;
-    }
-}
+// Or fetch more pages using the provided fetch function
+let next_page = (paging_result.fetch.lock().await)(50, 50).await?;
 ```
 
 ## Programming Interface
 
-### Core Traits
+### MusicApi Trait
+
+The core `MusicApi` trait defines the interface all music service implementations must follow:
 
 ```rust
 #[async_trait]
 pub trait MusicApi: Send + Sync {
-    async fn search(&self, query: &SearchQuery) -> Result<SearchResults, ApiError>;
-    async fn get_artist(&self, id: &str) -> Result<Artist, ApiError>;
-    async fn get_album(&self, id: &str) -> Result<Album, ApiError>;
-    async fn get_track(&self, id: &str) -> Result<Track, ApiError>;
-    async fn get_playlist(&self, id: &str) -> Result<Playlist, ApiError>;
-    async fn authenticate(&self, method: AuthMethod) -> Result<AuthResult, ApiError>;
-}
+    fn source(&self) -> &ApiSource;
 
-#[async_trait]
-pub trait SearchableApi: MusicApi {
-    async fn search_artists(&self, query: &str, limit: Option<u32>) -> Result<Vec<Artist>, ApiError>;
-    async fn search_albums(&self, query: &str, limit: Option<u32>) -> Result<Vec<Album>, ApiError>;
-    async fn search_tracks(&self, query: &str, limit: Option<u32>) -> Result<Vec<Track>, ApiError>;
+    // Artist operations
+    async fn artists(&self, offset: Option<u32>, limit: Option<u32>,
+                    order: Option<ArtistOrder>, order_direction: Option<ArtistOrderDirection>)
+                    -> PagingResult<Artist, Error>;
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error>;
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), Error>;
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), Error>;
+
+    // Album operations
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error>;
+    async fn artist_albums(&self, artist_id: &Id, album_type: Option<AlbumType>,
+                          offset: Option<u32>, limit: Option<u32>,
+                          order: Option<AlbumOrder>, order_direction: Option<AlbumOrderDirection>)
+                          -> PagingResult<Album, Error>;
+    async fn add_album(&self, album_id: &Id) -> Result<(), Error>;
+    async fn remove_album(&self, album_id: &Id) -> Result<(), Error>;
+
+    // Track operations
+    async fn tracks(&self, track_ids: Option<&[Id]>, offset: Option<u32>, limit: Option<u32>,
+                   order: Option<TrackOrder>, order_direction: Option<TrackOrderDirection>)
+                   -> PagingResult<Track, Error>;
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error>;
+    async fn album_tracks(&self, album_id: &Id, offset: Option<u32>, limit: Option<u32>,
+                         order: Option<TrackOrder>, order_direction: Option<TrackOrderDirection>)
+                         -> PagingResult<Track, Error>;
+    async fn add_track(&self, track_id: &Id) -> Result<(), Error>;
+    async fn remove_track(&self, track_id: &Id) -> Result<(), Error>;
+
+    // Track source and quality
+    async fn track_source(&self, track: TrackOrId, quality: TrackAudioQuality)
+                         -> Result<Option<TrackSource>, Error>;
+    async fn track_size(&self, track: TrackOrId, source: &TrackSource, quality: PlaybackQuality)
+                       -> Result<Option<u64>, Error>;
+
+    // Optional features
+    fn supports_search(&self) -> bool;
+    fn supports_scan(&self) -> bool;
+    async fn search(&self, query: &str, offset: Option<u32>, limit: Option<u32>)
+                   -> Result<ApiSearchResultsResponse, Error>;
+
+    fn auth(&self) -> Option<&ApiAuth>;
+    fn cached(self) -> impl MusicApi where Self: Sized;
 }
 ```
 
-### Data Models
+### Helper Types
 
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchQuery {
-    pub query: String,
-    pub types: Vec<SearchType>,
-    pub limit: Option<u32>,
-    pub offset: Option<u32>,
+pub enum TrackOrId {
+    Track(Box<Track>),
+    Id(Id),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResults {
-    pub artists: Vec<Artist>,
-    pub albums: Vec<Album>,
-    pub tracks: Vec<Track>,
-    pub playlists: Vec<Playlist>,
-    pub total_count: Option<u64>,
-}
+pub struct MusicApis(Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AuthMethod {
-    UsernamePassword { username: String, password: String },
-    Token(String),
-    OAuth { client_id: String, redirect_uri: String },
+pub struct CachedMusicApi<T: MusicApi> {
+    // Wraps a MusicApi with caching capabilities
 }
 ```
 
 ## Configuration
 
-### Environment Variables
-
-- `MUSIC_API_TIMEOUT`: Request timeout in seconds (default: 30)
-- `MUSIC_API_RETRY_COUNT`: Number of retry attempts (default: 3)
-- `MUSIC_API_CACHE_TTL`: Cache time-to-live in seconds (default: 300)
-
 ### Feature Flags
 
-- `api`: Enable Actix Web API endpoints
-- `auth-poll`: Enable polling-based authentication
-- `auth-username-password`: Enable username/password authentication
-- `models-api-search`: Enable search API models
-- `openapi`: Enable OpenAPI documentation generation
-
-## Web API Endpoints
-
-When the `api` feature is enabled, the following endpoints are available:
-
-```
-GET    /search?q={query}&types={types}&limit={limit}
-GET    /artists/{id}
-GET    /albums/{id}
-GET    /tracks/{id}
-GET    /playlists/{id}
-POST   /auth
-GET    /auth/poll/{poll_id}
-```
+- `default`: Includes `all-auth`, `api`, and `openapi` features
+- `api`: Enable Actix Web integration for profile-based API request extraction
+- `openapi`: Enable OpenAPI documentation generation (delegates to models)
+- `all-auth`: Enables both `auth-poll` and `auth-username-password`
+- `auth-poll`: Enable polling-based authentication support
+- `auth-username-password`: Enable username/password authentication support
+- `models-api-search`: Enable search API models (delegates to `moosicbox_music_api_models`)
+- `models-search`: Enable search models (delegates to `moosicbox_music_api_models`)
+- `fail-on-warnings`: Treat warnings as errors (development feature)
 
 ## Error Handling
 
-```rust
-use moosicbox_music_api::ApiError;
+The package provides a comprehensive `Error` enum for handling various error cases:
 
-match music_api.get_artist("invalid_id").await {
-    Ok(artist) => println!("Found artist: {}", artist.name),
-    Err(ApiError::NotFound) => println!("Artist not found"),
-    Err(ApiError::Unauthorized) => println!("Authentication required"),
-    Err(ApiError::RateLimited) => println!("Rate limit exceeded"),
-    Err(ApiError::ServiceUnavailable) => println!("Service temporarily unavailable"),
+```rust
+use moosicbox_music_api::Error;
+
+match music_api.artist(&artist_id).await {
+    Ok(Some(artist)) => println!("Found artist: {}", artist.title),
+    Ok(None) => println!("Artist not found"),
+    Err(Error::MusicApiNotFound(source)) => {
+        eprintln!("API not found for source: {}", source);
+    }
+    Err(Error::Unauthorized) => {
+        eprintln!("Authentication required");
+    }
+    Err(Error::UnsupportedAction(action)) => {
+        eprintln!("Action not supported: {}", action);
+    }
     Err(e) => eprintln!("Unexpected error: {}", e),
 }
 ```
 
-## Integration Examples
+## Using MusicApis Collection
 
-### With Tidal API
+The `MusicApis` type provides a collection of registered music APIs:
+
+```rust
+use moosicbox_music_api::{MusicApis, MusicApi};
+use moosicbox_music_models::ApiSource;
+
+let mut apis = MusicApis::new();
+
+// Add a music API to the collection
+apis.add_source(Arc::new(Box::new(my_api)));
+
+// Retrieve an API by source
+if let Some(api) = apis.get(&ApiSource::Library) {
+    let artist = api.artist(&artist_id).await?;
+}
+
+// Iterate over all registered APIs
+for api in &apis {
+    println!("API source: {:?}", api.source());
+}
+```
+
+## Profile Integration
+
+The `profiles` module provides multi-profile support with the `MusicApisProfiles` type:
+
+```rust
+use moosicbox_music_api::profiles::PROFILES;
+
+// Add APIs for a profile
+PROFILES.add("my-profile".to_string(), music_apis_map);
+
+// Get APIs for a profile
+if let Some(apis) = PROFILES.get("my-profile") {
+    // Use the APIs
+}
+
+// List all profile names
+let profile_names = PROFILES.names();
+```
+
+When the `api` feature is enabled, `MusicApis` can be extracted from Actix Web requests based on the profile header.
+
+## Caching
+
+The package provides a `CachedMusicApi` wrapper that adds caching to any `MusicApi` implementation:
 
 ```rust
 use moosicbox_music_api::MusicApi;
-use moosicbox_tidal::TidalApi;
 
-let tidal = TidalApi::new("client_id", "client_secret")?;
-let results = tidal.search(&SearchQuery::new("Daft Punk")).await?;
+let cached_api = my_api.cached();
+
+// Or create with cascade delete enabled
+let cached_api = CachedMusicApi::new(my_api)
+    .with_cascade_delete(true);
+
+// Clear cache when needed
+cached_api.clear_cache().await;
 ```
 
-### With Local Library
-
-```rust
-use moosicbox_music_api::MusicApi;
-use moosicbox_library::LocalLibraryApi;
-
-let library = LocalLibraryApi::new("/path/to/music")?;
-let results = library.search(&SearchQuery::new("Beatles")).await?;
-```
+When cascade delete is enabled, removing an artist will also remove all associated albums and tracks from the cache.
 
 ## Testing
 
@@ -250,39 +317,25 @@ cargo test
 # Run with specific features
 cargo test --features "api,auth-poll"
 
-# Run integration tests
-cargo test --test integration
+# Run with all features
+cargo test --all-features
 ```
 
-## Troubleshooting
+## Package Dependencies
 
-### Common Issues
+This package depends on:
 
-**Authentication Failures**
-- Verify credentials are correct
-- Check if service requires specific authentication flow
-- Ensure network connectivity to authentication servers
-
-**Search Returns No Results**
-- Verify search query format
-- Check if service requires authentication for search
-- Try different search terms or types
-
-**Rate Limiting**
-- Implement exponential backoff
-- Cache results to reduce API calls
-- Consider using multiple API keys if supported
-
-**Performance Issues**
-- Enable response caching
-- Use pagination for large result sets
-- Implement connection pooling for HTTP clients
+- `moosicbox_menu_models` - Menu and album version models
+- `moosicbox_music_api_models` - API models for search and other operations
+- `moosicbox_music_models` - Core music domain models (Artist, Album, Track)
+- `moosicbox_paging` - Pagination utilities
+- `moosicbox_profiles` - Profile management
+- `async-trait` - Async trait support
+- `tokio` - Async runtime
+- `thiserror` - Error derivation
 
 ## See Also
 
-- [`moosicbox_tidal`](../tidal/README.md) - Tidal streaming service integration
-- [`moosicbox_qobuz`](../qobuz/README.md) - Qobuz Hi-Res streaming integration
-- [`moosicbox_library`](../library/README.md) - Local music library management
-- [`moosicbox_search`](../search/README.md) - Full-text search functionality
-- [`moosicbox_auth`](../auth/README.md) - Authentication and authorization
+- [`moosicbox_music_models`](../music/models/README.md) - Core music domain models
 - [`moosicbox_paging`](../paging/README.md) - Pagination utilities
+- [`moosicbox_profiles`](../profiles/README.md) - Profile management
