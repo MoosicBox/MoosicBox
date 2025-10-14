@@ -40,7 +40,11 @@ All HyperChad Vanilla JS plugins are included in the hash:
 - **Click Actions (`plugin-actions-click`)**: Click event handling
 - **Click Outside (`plugin-actions-click-outside`)**: Click outside detection
 - **Event Actions (`plugin-actions-event`)**: Custom event actions
+- **Event Key Down (`plugin-actions-event-key-down`)**: Event-based key down handling
+- **Event Key Up (`plugin-actions-event-key-up`)**: Event-based key up handling
 - **Immediate Actions (`plugin-actions-immediate`)**: Immediate execution
+- **Key Down (`plugin-actions-key-down`)**: Key down events
+- **Key Up (`plugin-actions-key-up`)**: Key up events
 - **Mouse Down (`plugin-actions-mouse-down`)**: Mouse down events
 - **Mouse Over (`plugin-actions-mouse-over`)**: Mouse over events
 - **Resize Actions (`plugin-actions-resize`)**: Resize handling
@@ -279,7 +283,11 @@ All HyperChad Vanilla JS plugin features are supported:
 - **`plugin-actions-click`**: Click event actions
 - **`plugin-actions-click-outside`**: Click outside detection
 - **`plugin-actions-event`**: Custom event actions
+- **`plugin-actions-event-key-down`**: Event-based key down actions
+- **`plugin-actions-event-key-up`**: Event-based key up actions
 - **`plugin-actions-immediate`**: Immediate actions
+- **`plugin-actions-key-down`**: Key down actions
+- **`plugin-actions-key-up`**: Key up actions
 - **`plugin-actions-mouse-down`**: Mouse down actions
 - **`plugin-actions-mouse-over`**: Mouse over actions
 - **`plugin-actions-resize`**: Resize actions
