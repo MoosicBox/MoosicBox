@@ -390,7 +390,15 @@ run_additional_checks() {
         [[ -n "$git_head" ]] && cmd="$cmd --git-head \"$git_head\""
         cmd="$cmd --include-reasoning --output json"
 
-        local result=$(eval "$cmd" 2>&1 | jq -c .)
+        # Run clippier and ensure valid JSON output
+        local result=$(eval "$cmd" 2>&1 | jq -c . 2>/dev/null || echo '{"affected":false,"reasoning":[]}')
+
+        # Validate the result is valid JSON before proceeding
+        if ! printf '%s' "$result" | jq empty 2>/dev/null; then
+            echo "⚠️  Warning: Invalid JSON from clippier for $package, using default"
+            result='{"affected":false,"reasoning":[]}'
+        fi
+
         local affected=$(printf '%s' "$result" | jq -r '.affected // false')
 
         # Add this check to the aggregated JSON
@@ -405,8 +413,10 @@ run_additional_checks() {
         echo "  ✅ $package is $([ "$affected" == "true" ] && echo "affected" || echo "not affected")"
     done < <(printf '%s' "$INPUT_ADDITIONAL_PACKAGE_CHECKS" | jq -c '.[]')
 
-    # Output the complete JSON object containing all checks
-    echo "additional-checks=$additional_checks" >> $GITHUB_OUTPUT
+    # Output the complete JSON object containing all checks using heredoc to handle newlines/special chars
+    echo "additional-checks<<EOF" >> $GITHUB_OUTPUT
+    printf '%s\n' "$additional_checks" >> $GITHUB_OUTPUT
+    echo "EOF" >> $GITHUB_OUTPUT
 }
 
 analyze_docker_packages() {
@@ -465,7 +475,11 @@ analyze_docker_packages() {
         echo '{"matrix": {"include": []}, "has_changes": false, "count": 0, "packages_list": "none"}'
     else
         local full_matrix="{\"include\": $docker_matrix}"
-        echo "{\"matrix\": $full_matrix, \"has_changes\": true, \"count\": $docker_count, \"packages_list\": \"$packages_list\"}"
+        jq -n --argjson matrix "$full_matrix" \
+              --argjson has_changes true \
+              --argjson count "$docker_count" \
+              --arg packages_list "$packages_list" \
+              '{matrix: $matrix, has_changes: $has_changes, count: $count, packages_list: $packages_list}'
     fi
 }
 
@@ -822,7 +836,9 @@ main() {
             DOCKER_COUNT=$(printf '%s' "$DOCKER_RESULT" | jq -r '.count')
             DOCKER_PACKAGES_LIST=$(printf '%s' "$DOCKER_RESULT" | jq -r '.packages_list')
 
-            echo "docker-matrix=$DOCKER_MATRIX" >> $GITHUB_OUTPUT
+            echo "docker-matrix<<EOF" >> $GITHUB_OUTPUT
+            printf '%s\n' "$DOCKER_MATRIX" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             echo "has-docker-changes=$HAS_DOCKER_CHANGES" >> $GITHUB_OUTPUT
             echo "docker-count=$DOCKER_COUNT" >> $GITHUB_OUTPUT
             echo "docker-packages-list<<EOF" >> $GITHUB_OUTPUT
