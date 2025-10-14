@@ -20,9 +20,8 @@ The Parsing Utils package provides:
 
 ### Integer Range Parsing
 - **Hyphen-separated Ranges**: Parse "1-10" into expanded sequence
-- **Multiple Ranges**: Handle "1-5,10-15" style ranges
 - **Range Limits**: Prevent ranges larger than 100,000 items
-- **Mixed Format**: Combine sequences and ranges
+- **Comma-separated Integers**: Handle comma-separated integers within range boundaries
 
 ### Error Handling
 - **Parse Errors**: Invalid integer format detection
@@ -73,9 +72,13 @@ assert_eq!(result, vec![1, 2, 3, 4, 5]);
 let result = parse_integer_ranges("1,3,5")?;
 assert_eq!(result, vec![1, 3, 5]);
 
-// Parse complex ranges with sequences
-let result = parse_integer_ranges("1,3-5,8,10-12")?;
-assert_eq!(result, vec![1, 3, 4, 5, 8, 10, 11, 12]);
+// Parse range with comma-separated start values
+let result = parse_integer_ranges("1,2,3-7")?;
+assert_eq!(result, vec![1, 2, 3, 4, 5, 6, 7]);
+
+// Parse range with comma-separated start and end values
+let result = parse_integer_ranges("1,2-5,6")?;
+assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
 ```
 
 ### Error Handling
@@ -108,16 +111,17 @@ match parse_integer_ranges("1-100000000") {
 - Input: `"1-5"`
 - Output: `[1, 2, 3, 4, 5]`
 
-### Complex Ranges
-- Input: `"1,3-6,8,10-12"`
+### Ranges with Commas
+- Input: `"1,2,3-7,8"`
 - Processing:
-  1. Split by commas: `["1", "3-6", "8", "10-12"]`
-  2. Process each part:
-     - `"1"` → `[1]`
-     - `"3-6"` → `[3, 4, 5, 6]`
-     - `"8"` → `[8]`
-     - `"10-12"` → `[10, 11, 12]`
-  3. Combine: `[1, 3, 4, 5, 6, 8, 10, 11, 12]`
+  1. Split by hyphens: `["1,2,3", "7,8"]`
+  2. Parse start sequence: `"1,2,3"` → `[1, 2, 3]`
+  3. Parse end sequence: `"7,8"` → `[7, 8]`
+  4. Take last from start (`3`) and first from end (`7`)
+  5. Expand range from `4` to `6`: `[4, 5, 6]`
+  6. Combine: `[1, 2, 3, 4, 5, 6, 7, 8]`
+
+**Note**: The function splits on hyphens first, treating them as range delimiters. Commas are parsed within the start and end portions of a range.
 
 ### Range Validation
 - Maximum range size: 100,000 items
@@ -150,9 +154,9 @@ use parsing_utils::integer_range::parse_integer_ranges;
 let result = parse_integer_ranges("1,abc,3");
 // Error: ParseId("abc")
 
-// UnmatchedRange error
-let result = parse_integer_ranges("1-2-3-4-5");
-// Error: UnmatchedRange("1-2-3-4-5")
+// UnmatchedRange error (odd number of range parts > 1)
+let result = parse_integer_ranges("1-2-3");
+// Error: UnmatchedRange("1-2-3")
 
 // RangeTooLarge error
 let result = parse_integer_ranges("1-200000");
