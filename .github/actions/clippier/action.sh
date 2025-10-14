@@ -363,6 +363,9 @@ transform_output() {
 
 run_additional_checks() {
     if [[ -z "$INPUT_ADDITIONAL_PACKAGE_CHECKS" || "$INPUT_ADDITIONAL_PACKAGE_CHECKS" == "null" ]]; then
+        echo "additional-checks<<EOF" >> $GITHUB_OUTPUT
+        echo "{}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
         return
     fi
 
@@ -753,6 +756,17 @@ main() {
         echo "⏭️ Skipping - no changes detected and not in force-full-matrix mode"
         echo "matrix=[]" >> $GITHUB_OUTPUT
         echo "has-changes=false" >> $GITHUB_OUTPUT
+        echo "additional-checks<<EOF" >> $GITHUB_OUTPUT
+        echo "{}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        echo "docker-matrix<<EOF" >> $GITHUB_OUTPUT
+        echo '{"include":[]}' >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        echo "has-docker-changes=false" >> $GITHUB_OUTPUT
+        echo "docker-count=0" >> $GITHUB_OUTPUT
+        echo "docker-packages-list<<EOF" >> $GITHUB_OUTPUT
+        echo "none" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
         return
     fi
 
