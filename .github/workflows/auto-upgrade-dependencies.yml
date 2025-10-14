@@ -233,8 +233,8 @@ jobs:
                   spread: true
                   skip-features: fail-on-warnings
                   transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
-                  git-base: origin/master
-                  git-head: HEAD
+                  git-strategy: branch-comparison
+                  git-compare-branch: master
                   os-suffix: -latest
 
     test-compatible:
@@ -412,8 +412,8 @@ jobs:
                   spread: true
                   skip-features: fail-on-warnings
                   transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
-                  git-base: origin/master
-                  git-head: HEAD
+                  git-strategy: branch-comparison
+                  git-compare-branch: master
                   os-suffix: -latest
 
     test-incompatible:
