@@ -6,11 +6,11 @@ Simulation utilities for testing MoosicBox server components and network interac
 
 The MoosicBox Server Simulator package provides:
 
-- **Action Queue System**: Centralized action management for simulations
-- **Host Bouncing**: Server restart and failover simulation
-- **Connection Utilities**: Robust TCP connection establishment
-- **Client/Host Modules**: Simulation actor implementations
-- **HTTP Testing**: HTTP-based simulation support
+- **Action Queue System**: Centralized action management for simulation steps
+- **Host Bouncing**: Server restart and failover simulation via `queue_bounce` and `handle_actions`
+- **Connection Utilities**: Robust TCP connection establishment with retry logic
+- **Simulation Actors**: Pre-built client actors (health checker, fault injector) and host implementations (MoosicBox server)
+- **HTTP Utilities**: HTTP request generation, response parsing, and header validation
 
 ## Features
 
@@ -25,9 +25,9 @@ The MoosicBox Server Simulator package provides:
 - **Error Recovery**: Handle connection refused and reset scenarios
 
 ### Simulation Integration
-- **Simvar Integration**: Built on MoosicBox simulation framework
-- **TCP Streams**: Network connection simulation
-- **Multi-Attempt Logic**: Robust connection establishment
+- **Simvar Integration**: Built on the simvar deterministic simulation framework
+- **TCP Streams**: Simulated network connection support
+- **Multi-Attempt Logic**: Robust connection establishment with configurable retries
 
 ## Installation
 
@@ -83,13 +83,19 @@ fn on_step(sim: &mut impl Sim) {
 ## Modules
 
 ### client
-Client-side simulation utilities and implementations.
+Client-side simulation actors and utilities:
+- **health_checker**: Health check client with interaction plans
+- **fault_injector**: Fault injection client for testing resilience
 
 ### host
-Host/server-side simulation utilities and implementations.
+Host/server-side simulation implementations:
+- **moosicbox_server**: MoosicBox server host actor with TCP proxying
 
 ### http
-HTTP-specific simulation testing utilities.
+HTTP request and response utilities:
+- HTTP request generation
+- HTTP response parsing
+- Header validation helpers
 
 ## Error Handling
 
@@ -106,14 +112,33 @@ HTTP-specific simulation testing utilities.
 
 ## Dependencies
 
-- **Simvar**: MoosicBox simulation framework
-- **Tokio**: Async runtime and networking
-- **Standard Library**: Core functionality
+### Core Dependencies
+- **simvar**: Deterministic simulation framework with async, TCP, HTTP, and network support
+- **tokio**: Async runtime and networking
+- **actix-web**: Web server framework (used by moosicbox_server host)
+- **openport**: Port allocation utilities
+
+### MoosicBox Dependencies
+- **moosicbox_assert**: Assertion utilities
+- **moosicbox_config**: Configuration management
+- **moosicbox_env_utils**: Environment variable utilities
+- **moosicbox_logging**: Logging utilities
+- **moosicbox_server**: MoosicBox server implementation
+
+### Switchy Dependencies
+- **switchy_async**: Async runtime abstraction
+- **switchy_env**: Environment variable abstraction
+- **switchy_telemetry**: Telemetry support
+
+### Other Dependencies
+- **log**: Logging facade
+- **net2**: Network utilities for TCP configuration
+- **serde_json**: JSON serialization
+- **strum**: Enum utilities
 
 ## Integration
 
-This package is designed for:
-- **Load Testing**: Server performance under load
-- **Failover Testing**: High availability scenario testing
-- **Network Simulation**: Connection failure and recovery
-- **Integration Testing**: Multi-component system testing
+This package enables:
+- **Failover Testing**: Simulating server restarts and testing high availability scenarios
+- **Network Simulation**: Testing connection failure and recovery behaviors
+- **Integration Testing**: Running multi-component system simulations with deterministic network and timing
