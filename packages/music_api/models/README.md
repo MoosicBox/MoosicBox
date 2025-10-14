@@ -35,7 +35,7 @@ The MoosicBox Music API Models package provides:
 - **ImageCoverSize**: Cover art size specifications
 
 ### Search Integration
-- **Search Models**: Search request and response types (with `search` feature)
+- **Search Models**: Search request and response types (with `api-search` feature)
 - **Query Processing**: Search query parsing and handling
 
 ## Installation
@@ -46,10 +46,10 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_music_api_models = { path = "../music_api/models" }
 
-# Enable search functionality
+# Enable API search functionality
 moosicbox_music_api_models = {
     path = "../music_api/models",
-    features = ["search"]
+    features = ["api-search"]
 }
 ```
 
@@ -138,13 +138,23 @@ let size = ImageCoverSize::Large; // Max, Large, Medium, Small, Thumbnail
 
 ## Feature Flags
 
-- **`search`**: Enable search-related models and types
+- **`api`**: Enable API-related functionality (default)
+- **`api-search`**: Enable API search models and types (default)
+- **`db`**: Enable database integration (default)
+- **`openapi`**: Enable OpenAPI schema generation (default)
+- **`search`**: Enable core search functionality with Tantivy integration
+- **`fail-on-warnings`**: Treat warnings as errors during compilation
 
 ## Dependencies
 
+### Core Dependencies
 - **MoosicBox Music Models**: Core music data types
-- **MoosicBox JSON Utils**: JSON parsing utilities
+- **MoosicBox JSON Utils**: JSON parsing utilities (with `serde_json` feature)
 - **MoosicBox Paging**: Pagination support
+- **Switchy Database**: Database type integration
 - **Serde**: Serialization and deserialization
 - **Strum**: Enum string conversion
-- **Switchy Database**: Database type integration
+
+### Optional Dependencies
+- **Tantivy**: Full-text search engine (with `search` feature)
+- **utoipa**: OpenAPI schema generation (with `openapi` feature)
