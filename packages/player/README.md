@@ -1,433 +1,488 @@
 # MoosicBox Player
 
-A high-performance audio playback engine with support for multiple audio formats, gapless playback, and multi-zone audio distribution.
+A high-performance audio playback engine with support for multiple audio formats and session-based playback management.
 
 ## Overview
 
 The MoosicBox Player is the core audio playback component that provides:
 
-- **Multi-Format Playback**: Support for FLAC, AAC, MP3, Opus, and more
-- **Gapless Playback**: Seamless transitions between tracks
-- **Multi-Zone Audio**: Distribute audio to multiple output devices
-- **Session Management**: Handle multiple concurrent playback sessions
-- **Quality Control**: Dynamic quality adjustment and sample rate conversion
-- **Remote Playback**: Control playback across network-connected devices
-- **Audio Processing**: Real-time audio effects and processing
+- **Multi-Format Playback**: Support for FLAC, AAC, MP3, and Opus
+- **Session Management**: Handle concurrent playback sessions with state tracking
+- **Quality Control**: Dynamic format conversion and sample rate resampling
+- **Local & Remote Playback**: Play files directly or stream from remote sources
+- **HTTP API Integration**: Control playback via REST endpoints
 
 ## Features
 
 ### Audio Format Support
-- **FLAC** - Lossless high-quality audio
-- **AAC/M4A** - Efficient lossy compression
-- **MP3** - Universal compatibility
-- **Opus** - Modern low-latency codec
-- **WAV** - Uncompressed audio
-- **OGG** - Open-source audio format
+
+The player supports the following audio formats (when corresponding feature flags are enabled):
+
+- **FLAC** - Lossless high-quality audio (`decoder-flac`, `encoder-flac`)
+- **AAC/M4A** - Efficient lossy compression (`decoder-aac`, `encoder-aac`)
+- **MP3** - Universal compatibility (`decoder-mp3`, `encoder-mp3`)
+- **Opus** - Modern low-latency codec (`decoder-opus`, `encoder-opus`)
 
 ### Playback Features
-- **Gapless Playback** - No silence between tracks
-- **Crossfade** - Smooth transitions with overlap
-- **Seek Support** - Precise position control
-- **Volume Control** - Per-session and global volume
-- **Replay Gain** - Automatic volume normalization
-- **Audio Visualization** - Real-time spectrum analysis
 
-### Multi-Zone Audio
-- **Zone Management** - Create and manage audio zones
-- **Synchronized Playback** - Play same audio across multiple zones
-- **Individual Control** - Independent playback control per zone
-- **Group Operations** - Control multiple zones together
+- **Gapless Playback** - Seamless transitions between tracks
+- **Seek Support** - Precise position control within tracks
+- **Volume Control** - Per-session volume management
+- **Pause/Resume** - Full playback state control
+- **Queue Management** - Play albums, tracks, or playlists
+- **Progress Tracking** - Real-time playback position updates
 
 ### Session Management
+
 - **Multiple Sessions** - Support concurrent playback sessions
-- **Session Persistence** - Maintain state across restarts
-- **Remote Sessions** - Control sessions across network
-- **Playback Queue** - Manage upcoming tracks
+- **Session State** - Track playing status, position, volume, and quality
+- **Playback Targets** - Direct playback to specific audio zones
+- **Event System** - Broadcast playback state changes to listeners
+
+## Core Types
+
+### PlaybackHandler
+
+The main interface for controlling playback:
+
+```rust
+use moosicbox_player::{PlaybackHandler, Player};
+
+// Create a player implementation (e.g., LocalPlayer)
+let handler = PlaybackHandler::new(player);
+
+// Control playback
+handler.play_track(session_id, profile, track, seek, volume, quality, playback_target, retry_options).await?;
+handler.pause(retry_options).await?;
+handler.resume(retry_options).await?;
+handler.seek(position, retry_options).await?;
+handler.next_track(seek, retry_options).await?;
+handler.previous_track(seek, retry_options).await?;
+handler.stop(retry_options).await?;
+```
+
+### Player Trait
+
+Implement this trait to create custom player backends:
+
+```rust
+#[async_trait]
+pub trait Player: std::fmt::Debug + Send {
+    async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
+    async fn trigger_stop(&self) -> Result<(), PlayerError>;
+    async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
+    async fn trigger_pause(&self) -> Result<(), PlayerError>;
+    async fn trigger_resume(&self) -> Result<(), PlayerError>;
+    fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
+    fn get_source(&self) -> &PlayerSource;
+}
+```
+
+### Playback
+
+The state object for active playback:
+
+```rust
+pub struct Playback {
+    pub id: u64,
+    pub session_id: u64,
+    pub profile: String,
+    pub tracks: Vec<Track>,
+    pub playing: bool,
+    pub position: u16,
+    pub quality: PlaybackQuality,
+    pub progress: f64,
+    pub volume: Arc<AtomicF64>,
+    pub playback_target: Option<PlaybackTarget>,
+    pub abort: CancellationToken,
+}
+```
 
 ## Usage
 
-### Basic Playback
+### Local Player
+
+The `LocalPlayer` (available with the `local` feature) plays audio directly using the audio output backend:
 
 ```rust
-use moosicbox_player::{Player, PlayerConfig};
-use moosicbox_music_models::TrackApiSource;
+use moosicbox_player::{PlayerSource, PlaybackHandler};
+use moosicbox_player::local::LocalPlayer;
+use moosicbox_audio_output::default_output_factory;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create player with default configuration
-    let config = PlayerConfig::default();
-    let player = Player::new(config).await?;
+    // Create a local player
+    let local_player = LocalPlayer::new(
+        PlayerSource::Local,
+        None, // playback type (defaults to Default)
+    ).await?;
+
+    // Attach an audio output
+    let local_player = local_player.with_output(
+        default_output_factory().await
+            .ok_or("Missing default audio output")?
+    );
+
+    // Create a playback handler
+    let playback = local_player.playback.clone();
+    let output = local_player.output.clone();
+    let mut handler = PlaybackHandler::new(local_player)
+        .with_playback(playback)
+        .with_output(output);
 
     // Play a track
-    let track_id = 123;
-    player.play_track(track_id, TrackApiSource::Local).await?;
-
-    // Control playback
-    player.pause().await?;
-    player.resume().await?;
-    player.seek(30.0).await?; // Seek to 30 seconds
-    player.set_volume(0.8).await?; // Set volume to 80%
-
-    Ok(())
-}
-```
-
-### Multi-Zone Audio Setup
-
-```rust
-use moosicbox_player::{Player, AudioZone};
-
-async fn setup_multi_zone() -> Result<(), Box<dyn std::error::Error>> {
-    let player = Player::new(PlayerConfig::default()).await?;
-
-    // Create audio zones
-    let living_room = AudioZone::new("Living Room").await?;
-    let kitchen = AudioZone::new("Kitchen").await?;
-    let bedroom = AudioZone::new("Bedroom").await?;
-
-    // Add zones to player
-    player.add_zone(living_room).await?;
-    player.add_zone(kitchen).await?;
-    player.add_zone(bedroom).await?;
-
-    // Play synchronized across multiple zones
-    let zones = vec!["Living Room", "Kitchen"];
-    player.play_to_zones(track_id, &zones).await?;
+    handler.play_track(
+        session_id,
+        profile,
+        track,
+        None, // seek
+        Some(0.8), // volume
+        PlaybackQuality::default(),
+        None, // playback_target
+        None, // retry_options
+    ).await?;
 
     Ok(())
 }
 ```
 
-### Session Management
+### Playing Tracks
 
 ```rust
-use moosicbox_player::{Player, PlaybackSession};
+use moosicbox_player::{PlaybackHandler, PlaybackQuality};
+use moosicbox_music_models::{Track, AudioFormat};
 
-async fn manage_sessions() -> Result<(), Box<dyn std::error::Error>> {
-    let player = Player::new(PlayerConfig::default()).await?;
-
-    // Create a new playback session
-    let session = player.create_session("user-123").await?;
-
-    // Add tracks to session queue
-    let track_ids = vec![123, 124, 125];
-    session.add_to_queue(&track_ids).await?;
-
-    // Start playback
-    session.play().await?;
-
-    // Control session playback
-    session.next_track().await?;
-    session.previous_track().await?;
-    session.set_repeat_mode(RepeatMode::All).await?;
-    session.set_shuffle(true).await?;
+async fn play_example(
+    handler: &mut PlaybackHandler,
+    track: Track,
+    session_id: u64,
+    profile: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Play a single track
+    handler.play_track(
+        session_id,
+        profile.clone(),
+        track,
+        None,
+        Some(1.0),
+        PlaybackQuality { format: AudioFormat::Source },
+        None,
+        None,
+    ).await?;
 
     Ok(())
 }
 ```
 
-### Advanced Audio Configuration
+### Playing Albums
 
 ```rust
-use moosicbox_player::{PlayerConfig, AudioOutputConfig, AudioProcessing};
+use moosicbox_music_api::MusicApi;
+use moosicbox_music_models::id::Id;
 
-fn create_advanced_player() -> Result<Player, Box<dyn std::error::Error>> {
-    let audio_config = AudioOutputConfig {
-        sample_rate: 48000,
-        bit_depth: 24,
-        channels: 2,
-        buffer_size: 4096,
-        latency: AudioLatency::Low,
-    };
-
-    let processing = AudioProcessing {
-        enable_replay_gain: true,
-        enable_crossfade: true,
-        crossfade_duration: Duration::from_secs(3),
-        enable_gapless: true,
-        enable_resampling: true,
-    };
-
-    let config = PlayerConfig {
-        audio_output: audio_config,
-        audio_processing: processing,
-        max_concurrent_streams: 4,
-        buffer_ahead_seconds: 30.0,
-        ..Default::default()
-    };
-
-    Player::new(config)
-}
-```
-
-### Remote Playback Control
-
-```rust
-use moosicbox_player::{Player, RemotePlayer};
-
-async fn control_remote_player() -> Result<(), Box<dyn std::error::Error>> {
-    // Connect to remote player
-    let remote_player = RemotePlayer::connect("http://192.168.1.100:8001").await?;
-
-    // Control remote playback
-    remote_player.play_track(track_id, TrackApiSource::Local).await?;
-    remote_player.set_volume(0.7).await?;
-    remote_player.seek(45.0).await?;
-
-    // Get playback status
-    let status = remote_player.get_status().await?;
-    println!("Playing: {}", status.current_track.title);
-    println!("Position: {:.2}s", status.position_seconds);
+async fn play_album_example(
+    handler: &mut PlaybackHandler,
+    api: &dyn MusicApi,
+    album_id: &Id,
+    session_id: u64,
+    profile: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Play an entire album
+    handler.play_album(
+        api,
+        session_id,
+        profile,
+        album_id,
+        None, // position
+        None, // seek
+        Some(1.0), // volume
+        PlaybackQuality::default(),
+        None, // playback_target
+        None, // retry_options
+    ).await?;
 
     Ok(())
 }
+```
+
+### Controlling Playback
+
+```rust
+use moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS;
+
+async fn control_playback(
+    handler: &mut PlaybackHandler,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Pause playback
+    handler.pause(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    // Resume playback
+    handler.resume(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    // Seek to 30 seconds
+    handler.seek(30.0, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    // Skip to next track
+    handler.next_track(None, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    // Go to previous track
+    handler.previous_track(None, Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    // Stop playback
+    handler.stop(Some(DEFAULT_PLAYBACK_RETRY_OPTIONS)).await?;
+
+    Ok(())
+}
+```
+
+### Updating Playback State
+
+```rust
+async fn update_playback(
+    handler: &mut PlaybackHandler,
+    session_id: u64,
+    profile: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    handler.update_playback(
+        true,              // modify_playback
+        None,              // play
+        None,              // stop
+        Some(true),        // playing
+        Some(2),           // position (track index)
+        Some(15.0),        // seek
+        Some(0.7),         // volume
+        None,              // tracks
+        None,              // quality
+        Some(session_id),
+        Some(profile),
+        None,              // playback_target
+        true,              // trigger_event
+        None,              // retry_options
+    ).await?;
+
+    Ok(())
+}
+```
+
+### Event Handling
+
+Listen for playback state changes:
+
+```rust
+use moosicbox_player::{on_playback_event, Playback};
+use moosicbox_session::models::UpdateSession;
+
+fn my_event_handler(update: &UpdateSession, playback: &Playback) {
+    if let Some(playing) = update.playing {
+        println!("Playback state changed: {}", playing);
+    }
+    if let Some(position) = update.position {
+        println!("Track position changed: {}", position);
+    }
+    if let Some(seek) = update.seek {
+        println!("Seek position: {:.2}s", seek);
+    }
+    if let Some(volume) = update.volume {
+        println!("Volume changed: {:.2}", volume);
+    }
+}
+
+// Register event listener
+on_playback_event(my_event_handler);
+```
+
+## HTTP API Integration
+
+When used with the MoosicBox Server, the player provides REST endpoints for playback control.
+
+### Play Track
+
+```bash
+POST /player/play/track?sessionId=1&trackId=123&volume=0.8
+```
+
+### Play Album
+
+```bash
+POST /player/play/album?sessionId=1&albumId=456&position=0
+```
+
+### Play Multiple Tracks
+
+```bash
+POST /player/play/tracks?sessionId=1&trackIds=123,124,125&position=0
+```
+
+### Pause/Resume
+
+```bash
+POST /player/pause
+POST /player/resume
+```
+
+### Seek
+
+```bash
+POST /player/seek?seek=45.5
+```
+
+### Next/Previous Track
+
+```bash
+POST /player/next-track
+POST /player/previous-track
+```
+
+### Stop
+
+```bash
+POST /player/stop
+```
+
+### Get Status
+
+```bash
+GET /player/status
+```
+
+### Update Playback
+
+```bash
+POST /player/update-playback?playing=true&position=2&volume=0.7
 ```
 
 ## Configuration
 
-### Player Configuration
+### Feature Flags
+
+The player supports various feature flags for customization:
+
+**Audio Output Backends:**
+- `cpal` - Cross-platform audio output (default)
+- `jack` - JACK audio server support
+- `asio` - ASIO low-latency support (Windows)
+- `oboe-shared-stdcxx` - Oboe audio output (Android)
+
+**Audio Decoders:**
+- `decoder-aac` - AAC audio decoding
+- `decoder-flac` - FLAC audio decoding
+- `decoder-mp3` - MP3 audio decoding
+- `decoder-opus` - Opus audio decoding
+- `all-decoders` - Enable all decoders
+
+**Audio Encoders:**
+- `encoder-aac` - AAC audio encoding
+- `encoder-flac` - FLAC audio encoding
+- `encoder-mp3` - MP3 audio encoding
+- `encoder-opus` - Opus audio encoding
+- `all-encoders` - Enable all encoders
+
+**Other Features:**
+- `api` - Enable HTTP API endpoints
+- `openapi` - Generate OpenAPI documentation
+- `local` - Enable local player implementation
+- `profiling` - Enable performance profiling
+
+### PlayerSource
+
+Configure where audio is sourced from:
 
 ```rust
-use moosicbox_player::PlayerConfig;
+use moosicbox_player::PlayerSource;
 
-let config = PlayerConfig {
-    // Audio output settings
-    sample_rate: 44100,
-    bit_depth: 16,
-    channels: 2,
-    buffer_size: 2048,
+// Play local files
+let source = PlayerSource::Local;
 
-    // Playback settings
-    enable_gapless: true,
-    enable_crossfade: true,
-    crossfade_duration_ms: 3000,
-
-    // Quality settings
-    max_quality: AudioQuality::Lossless,
-    prefer_lossless: true,
-
-    // Performance settings
-    max_concurrent_streams: 2,
-    buffer_ahead_seconds: 15.0,
-    preload_next_track: true,
-
-    // Network settings
-    connection_timeout_ms: 5000,
-    read_timeout_ms: 10000,
+// Stream from remote server
+let source = PlayerSource::Remote {
+    host: "http://localhost:8001".to_string(),
+    query: None,
+    headers: None,
 };
 ```
 
-### Audio Output Backends
+### PlaybackQuality
 
-The player supports multiple audio output backends:
+Specify output audio format:
 
 ```rust
-// CPAL (Cross-platform)
-let config = PlayerConfig {
-    audio_backend: AudioBackend::Cpal,
-    ..Default::default()
+use moosicbox_music_models::{PlaybackQuality, AudioFormat};
+
+let quality = PlaybackQuality {
+    format: AudioFormat::Source,  // Use source format
 };
 
-// PulseAudio (Linux)
-let config = PlayerConfig {
-    audio_backend: AudioBackend::PulseAudio,
-    ..Default::default()
-};
-
-// JACK (Professional audio)
-let config = PlayerConfig {
-    audio_backend: AudioBackend::Jack,
-    ..Default::default()
-};
-
-// ASIO (Windows, low-latency)
-let config = PlayerConfig {
-    audio_backend: AudioBackend::Asio,
-    ..Default::default()
+let quality = PlaybackQuality {
+    format: AudioFormat::Flac,    // Convert to FLAC
 };
 ```
 
-## API Integration
+### PlaybackRetryOptions
 
-### RESTful API
-
-The player can be controlled via HTTP API when used with MoosicBox Server:
-
-```bash
-# Start playback
-curl -X POST "http://localhost:8001/player/play" \
-  -H "Content-Type: application/json" \
-  -d '{"track_id": 123, "source": "LOCAL"}'
-
-# Control playback
-curl -X POST "http://localhost:8001/player/pause"
-curl -X POST "http://localhost:8001/player/resume"
-curl -X POST "http://localhost:8001/player/next"
-curl -X POST "http://localhost:8001/player/previous"
-
-# Set volume (0.0 to 1.0)
-curl -X POST "http://localhost:8001/player/volume" \
-  -H "Content-Type: application/json" \
-  -d '{"volume": 0.8}'
-
-# Seek to position (seconds)
-curl -X POST "http://localhost:8001/player/seek" \
-  -H "Content-Type: application/json" \
-  -d '{"position": 45.5}'
-
-# Get playback status
-curl "http://localhost:8001/player/status"
-```
-
-### WebSocket Events
-
-Real-time playback events via WebSocket:
-
-```javascript
-const ws = new WebSocket('ws://localhost:8001/ws');
-
-ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-
-    switch (message.type) {
-        case 'PLAYBACK_STATE_CHANGED':
-            console.log('Playback state:', message.state);
-            break;
-        case 'TRACK_CHANGED':
-            console.log('Now playing:', message.track);
-            break;
-        case 'POSITION_CHANGED':
-            console.log('Position:', message.position);
-            break;
-        case 'VOLUME_CHANGED':
-            console.log('Volume:', message.volume);
-            break;
-    }
-};
-```
-
-## Audio Processing
-
-### Crossfade Implementation
+Configure retry behavior for operations:
 
 ```rust
-use moosicbox_player::audio::CrossfadeConfig;
+use moosicbox_player::PlaybackRetryOptions;
+use std::time::Duration;
 
-let crossfade = CrossfadeConfig {
-    duration: Duration::from_secs(4),
-    curve: CrossfadeCurve::EqualPower,
-    only_between_tracks: false,
-    skip_short_tracks: true,
-    min_track_length: Duration::from_secs(10),
+let retry_options = PlaybackRetryOptions {
+    max_attempts: 10,
+    retry_delay: Duration::from_millis(500),
 };
-
-player.set_crossfade_config(crossfade).await?;
-```
-
-### Replay Gain Support
-
-```rust
-use moosicbox_player::audio::ReplayGainConfig;
-
-let replay_gain = ReplayGainConfig {
-    enabled: true,
-    mode: ReplayGainMode::Track, // or Album
-    preamp_db: 0.0,
-    prevent_clipping: true,
-    fallback_gain_db: -6.0,
-};
-
-player.set_replay_gain_config(replay_gain).await?;
-```
-
-### Audio Visualization
-
-```rust
-use moosicbox_player::audio::VisualizationConfig;
-
-let visualization = VisualizationConfig {
-    enabled: true,
-    fft_size: 2048,
-    update_rate_hz: 30,
-    frequency_bands: 128,
-};
-
-player.set_visualization_config(visualization).await?;
-
-// Get spectrum data
-let spectrum = player.get_spectrum_data().await?;
-for (frequency, amplitude) in spectrum {
-    println!("{}Hz: {:.2}dB", frequency, amplitude);
-}
 ```
 
 ## Error Handling
 
 ```rust
-use moosicbox_player::error::PlayerError;
+use moosicbox_player::PlayerError;
 
-match player.play_track(track_id, source).await {
+match handler.play_track(/* ... */).await {
     Ok(()) => println!("Playback started"),
     Err(PlayerError::TrackNotFound(id)) => {
         eprintln!("Track {} not found", id);
     },
     Err(PlayerError::UnsupportedFormat(format)) => {
-        eprintln!("Unsupported audio format: {}", format);
+        eprintln!("Unsupported audio format: {:?}", format);
     },
-    Err(PlayerError::AudioOutputError(msg)) => {
-        eprintln!("Audio output error: {}", msg);
+    Err(PlayerError::NoPlayersPlaying) => {
+        eprintln!("No active playback session");
     },
-    Err(PlayerError::NetworkError(e)) => {
-        eprintln!("Network error: {}", e);
+    Err(PlayerError::PositionOutOfBounds(pos)) => {
+        eprintln!("Position {} is out of bounds", pos);
     },
     Err(e) => {
-        eprintln!("Other error: {}", e);
+        eprintln!("Playback error: {:?}", e);
     }
 }
 ```
 
-## Performance Optimization
+## Architecture
 
-### Memory Usage
-- **Streaming Playback**: Minimal memory footprint for large files
-- **Smart Buffering**: Adaptive buffer sizes based on available memory
-- **Garbage Collection**: Automatic cleanup of unused resources
+The player is built on several key components:
 
-### CPU Usage
-- **Hardware Acceleration**: Use GPU for audio processing when available
-- **Efficient Decoding**: Optimized decoders for each format
-- **Thread Pool**: Dedicated threads for audio processing
+- **PlaybackHandler** - High-level playback control interface
+- **Player trait** - Pluggable player backend system
+- **LocalPlayer** - Direct audio output implementation
+- **Symphonia integration** - Audio decoding via symphonia
+- **Signal chain** - Audio processing pipeline for format conversion
+- **Audio output** - Hardware audio output via `moosicbox_audio_output`
 
-### Network Optimization
-- **Adaptive Bitrate**: Automatically adjust quality based on bandwidth
-- **Prefetching**: Download upcoming tracks in background
-- **Connection Pooling**: Reuse network connections for efficiency
+## Dependencies
 
-## Troubleshooting
+Key dependencies from Cargo.toml:
 
-### Common Issues
-
-1. **No audio output**: Check audio device selection and permissions
-2. **Crackling/Distortion**: Adjust buffer size and sample rate
-3. **High latency**: Use ASIO (Windows) or JACK for low-latency
-4. **Gaps between tracks**: Ensure gapless playback is enabled
-
-### Debug Logging
-
-```bash
-# Enable detailed audio logging
-RUST_LOG=moosicbox_player=debug cargo run
-
-# Audio output debugging
-RUST_LOG=moosicbox_audio_output=debug cargo run
-
-# Network debugging for remote tracks
-RUST_LOG=moosicbox_http=debug cargo run
-```
+- `moosicbox_audio_decoder` - Audio format decoding
+- `moosicbox_audio_output` - Audio output backends
+- `moosicbox_music_api` - Music metadata and track fetching
+- `moosicbox_music_models` - Track and album data models
+- `moosicbox_session` - Session and playlist management
+- `moosicbox_resampler` - Sample rate conversion
+- `symphonia` - Audio codec support
+- `actix-web` - HTTP API endpoints (with `api` feature)
 
 ## See Also
 
 - [MoosicBox Audio Output](../audio_output/README.md) - Audio output backends
 - [MoosicBox Audio Decoder](../audio_decoder/README.md) - Audio format decoding
-- [MoosicBox Files](../files/README.md) - File streaming and format conversion
-- [MoosicBox Server](../server/README.md) - HTTP API server
+- [MoosicBox Session](../session/README.md) - Session management
+- [MoosicBox Music API](../music_api/README.md) - Music metadata API
