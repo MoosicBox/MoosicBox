@@ -24,8 +24,8 @@ The MoosicBox Simulation Testing Harness provides:
 ### Testing Framework
 - **Host Simulation**: Server-side simulation with async action support
 - **Client Simulation**: Client-side simulation and interaction testing
-- **Network Bouncing**: Host restart and failover simulation
 - **Result Aggregation**: Simulation result collection and analysis
+- **Network Bouncing**: Planned: Host restart and failover simulation
 
 ### User Interface
 - **TUI Mode**: Optional terminal-based monitoring interface
@@ -45,10 +45,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_simvar_harness = { path = "../simvar/harness" }
+simvar_harness = { path = "../simvar/harness" }
 
 # Optional: Enable TUI interface
-moosicbox_simvar_harness = {
+simvar_harness = {
     path = "../simvar/harness",
     features = ["tui"]
 }
@@ -59,13 +59,15 @@ moosicbox_simvar_harness = {
 ### Basic Simulation
 
 ```rust
-use moosicbox_simvar_harness::{run_simulation, SimBootstrap, Sim, SimConfig};
+use simvar_harness::{run_simulation, SimBootstrap, Sim, SimConfig};
+use std::time::Duration;
 
 struct MySimulation;
 
 impl SimBootstrap for MySimulation {
-    fn build_sim(&self, config: SimConfig) -> SimConfig {
-        config.with_duration_ms(10000) // 10 second simulation
+    fn build_sim(&self, mut config: SimConfig) -> SimConfig {
+        config.duration(Duration::from_secs(10)); // 10 second simulation
+        config
     }
 
     fn on_start(&self, sim: &mut impl Sim) {
@@ -88,9 +90,9 @@ let results = run_simulation(MySimulation)?;
 // Analyze results
 for result in results {
     if result.is_success() {
-        println!("Run {} succeeded", result.run_number);
+        println!("Run {} succeeded", result.props().run_number);
     } else {
-        println!("Run {} failed: {:?}", result.run_number, result.error);
+        println!("Run {} failed", result.props().run_number);
     }
 }
 ```
@@ -98,7 +100,8 @@ for result in results {
 ### Advanced Configuration
 
 ```rust
-use moosicbox_simvar_harness::{SimBootstrap, SimConfig};
+use simvar_harness::{SimBootstrap, SimConfig, Sim};
+use std::time::Duration;
 
 struct AdvancedSimulation;
 
@@ -110,11 +113,9 @@ impl SimBootstrap for AdvancedSimulation {
         ]
     }
 
-    fn build_sim(&self, config: SimConfig) -> SimConfig {
+    fn build_sim(&self, mut config: SimConfig) -> SimConfig {
+        config.duration(Duration::from_secs(30));
         config
-            .with_duration_ms(30000)
-            .with_seed(12345)
-            .with_description("Load testing simulation")
     }
 
     fn on_start(&self, sim: &mut impl Sim) {
@@ -169,17 +170,19 @@ sim.client("load_client", async {
 
     Ok(())
 });
-
-// Bounce host (restart simulation)
-sim.bounce("api_server");
 ```
+
+**Note:** The `bounce` method is currently a placeholder and does not restart hosts. Full host bouncing functionality is planned for a future release.
 
 ## Environment Configuration
 
 ### Runtime Variables
 - `SIMULATOR_RUNS`: Number of simulation runs (default: 1)
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
+- `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
+- `SIMULATOR_SEED`: Fixed seed for deterministic runs
 - `NO_TUI`: Disable TUI interface when available
+- `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 
 ### Example Configuration
 ```bash
@@ -195,12 +198,32 @@ cargo test simulation_test
 
 ## Features
 
+The package supports the following features:
+
+### Default Features
+- **pretty_env_logger**: Environment-based logging configuration
+- **tui**: Terminal user interface for simulation monitoring
+
 ### TUI Interface
-When built with the `tui` feature, provides:
+When built with the `tui` feature (enabled by default), provides:
 - Real-time simulation progress
 - Run status and results
 - Error display and debugging
 - Interactive simulation monitoring
+
+Disable with `NO_TUI` environment variable or by excluding default features.
+
+### Optional Features
+- **async**: Async simulation support (via switchy)
+- **database**: Database connection simulation (via switchy)
+- **fs**: File system simulation (via switchy)
+- **http**: HTTP simulation (via switchy)
+- **mdns**: mDNS simulation (via switchy)
+- **tcp**: TCP network simulation (enabled by default via switchy)
+- **telemetry**: Telemetry support (via switchy)
+- **time**: Time manipulation for simulation (enabled by default via switchy)
+- **upnp**: UPnP simulation (via switchy)
+- **web-server**: Web server simulation support
 
 ### Logging Integration
 - Environment-based log level configuration
@@ -217,10 +240,11 @@ Comprehensive error types:
 
 ## Dependencies
 
-- **Switchy**: Async runtime and utilities
-- **Color Backtrace**: Enhanced error reporting
-- **TUI**: Optional terminal interface (with `tui` feature)
-- **Logging**: Environment logger integration
+- **switchy**: Async runtime and simulation utilities
+- **simvar_utils**: Simulation utilities and helpers
+- **color-backtrace**: Enhanced error reporting
+- **ratatui**: Optional terminal interface (with `tui` feature)
+- **pretty_env_logger**: Optional environment logger integration (default feature)
 
 ## Integration
 
