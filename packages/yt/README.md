@@ -1,18 +1,20 @@
 # MoosicBox YouTube Music
 
-YouTube Music API integration providing streaming access and library management for YouTube Music content within the MoosicBox ecosystem.
+YouTube Music API integration framework providing streaming access and library management for YouTube Music content within the MoosicBox ecosystem.
+
+**Note**: This package provides a framework for YouTube Music integration. The actual API endpoints are currently stubbed and require implementation to connect to YouTube Music services.
 
 ## Features
 
-- **YouTube Music API**: Complete integration with YouTube Music streaming service
-- **Authentication**: OAuth2 device flow authentication for user accounts
+- **YouTube Music API Framework**: Structure for integrating with YouTube Music streaming service
+- **Authentication Framework**: Device flow authentication structure for user accounts
 - **Library Access**: Manage favorite artists, albums, and tracks
 - **Search Functionality**: Search across YouTube Music's catalog
-- **Audio Streaming**: High-quality audio streaming with multiple quality options
-- **Playlist Management**: Access and manage YouTube Music playlists
-- **Database Integration**: Optional local caching and configuration storage
-- **Artist/Album Browsing**: Browse artist catalogs and album collections
+- **Audio Streaming**: High-quality audio streaming with multiple quality options (High, Lossless, HiResLossless)
+- **Database Integration**: Local caching and configuration storage with the `db` feature
+- **Artist/Album Browsing**: Browse artist catalogs and album collections by type (LP, EPs/Singles, Compilations)
 - **Track Information**: Detailed track metadata and playback information
+- **MusicApi Trait**: Implements the generic `MusicApi` trait for compatibility with MoosicBox ecosystem
 
 ## Installation
 
@@ -20,10 +22,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_yt = "0.1.1"
+moosicbox_yt = "0.1.4"
 
 # Enable features as needed
-moosicbox_yt = { version = "0.1.1", features = ["db", "api"] }
+moosicbox_yt = { version = "0.1.4", features = ["db", "api", "openapi"] }
 ```
 
 ## Usage
@@ -31,7 +33,8 @@ moosicbox_yt = { version = "0.1.1", features = ["db", "api"] }
 ### Setting Up the API
 
 ```rust
-use moosicbox_yt::{YtMusicApi, YtMusicApiBuilder};
+use moosicbox_yt::YtMusicApi;
+#[cfg(feature = "db")]
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
@@ -39,7 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "db")]
     let db = LibraryDatabase::new().await?;
 
-    let yt_api = YtMusicApiBuilder::new()
+    #[cfg(feature = "db")]
+    let yt_api = YtMusicApi::builder()
         .with_db(db)
         .build()
         .await?;
@@ -51,8 +55,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Authentication Flow
 
+**Note**: The authentication endpoints are currently framework stubs. To use authentication, you need to implement the actual YouTube Music OAuth2 flow.
+
 ```rust
 use moosicbox_yt::{device_authorization, device_authorization_token};
+#[cfg(feature = "db")]
+use switchy_database::profiles::LibraryDatabase;
 
 async fn authenticate_user() -> Result<(), Box<dyn std::error::Error>> {
     let client_id = "your-client-id".to_string();
@@ -61,8 +69,8 @@ async fn authenticate_user() -> Result<(), Box<dyn std::error::Error>> {
     // Start device authorization
     let auth_response = device_authorization(client_id.clone(), true).await?;
 
-    println!("Visit: {}", auth_response["verification_url"]);
-    println!("Enter code: {}", auth_response["user_code"]);
+    println!("Visit: {}", auth_response["url"]);
+    println!("Device code: {}", auth_response["device_code"]);
 
     // Wait for user to authorize, then get token
     let device_code = auth_response["device_code"].as_str().unwrap().to_string();
@@ -180,25 +188,24 @@ async fn search_content() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Search results for '{}':", query);
 
-    if let Some(artists) = &results.artists {
-        println!("  Artists:");
-        for artist in artists {
-            println!("    {} ({})", artist.title, artist.id);
-        }
+    // Search returns YtSearchResults with complex nested structure
+    // You can convert it to formatted results for easier access
+    use moosicbox_yt::models::YtSearchResultsFormatted;
+    let formatted: YtSearchResultsFormatted = results.into();
+
+    println!("  Artists:");
+    for artist in formatted.artists {
+        println!("    {} ({})", artist.name, artist.id);
     }
 
-    if let Some(albums) = &results.albums {
-        println!("  Albums:");
-        for album in albums {
-            println!("    {} - {}", album.artist, album.title);
-        }
+    println!("  Albums:");
+    for album in formatted.albums {
+        println!("    {} - {}", album.artist, album.title);
     }
 
-    if let Some(tracks) = &results.tracks {
-        println!("  Tracks:");
-        for track in tracks {
-            println!("    {} - {}", track.artist, track.title);
-        }
+    println!("  Tracks:");
+    for track in formatted.tracks {
+        println!("    {} - {}", track.artist, track.title);
     }
 
     Ok(())
@@ -366,23 +373,42 @@ The library provides comprehensive error handling through the `Error` enum:
 
 ## Features
 
-- `db` - Enable database integration for token storage and caching
-- `api` - Enable API endpoint functionality
+- `db` - Enable database integration for token storage and caching (required for most operations)
+- `api` - Enable API endpoint functionality with actix-web
+- `openapi` - Enable OpenAPI/utoipa schema generation for API documentation
+- `scan` - Enable library scanning functionality
 
 ## Authentication
 
-The package supports OAuth2 device flow authentication:
+The package provides a framework for OAuth2 device flow authentication:
 
-1. Call `device_authorization()` to get verification URL and user code
-2. User visits URL and enters code
-3. Call `device_authorization_token()` to complete flow
-4. Tokens are automatically managed (with `db` feature enabled)
+1. Call `device_authorization()` to initiate the flow (returns URL and device code)
+2. User visits URL to authorize the application
+3. Call `device_authorization_token()` to complete flow and retrieve tokens
+4. Tokens are automatically stored and managed (requires `db` feature)
+
+**Note**: The actual OAuth2 endpoints are currently stubbed. Implementation requires connecting to YouTube Music's authentication service.
 
 ## Dependencies
 
-- `moosicbox_music_api` - Generic music API trait
+Core dependencies:
+- `moosicbox_music_api` - Generic music API trait implementation
 - `moosicbox_music_models` - Common music data models
-- `switchy_database` - Database integration (optional)
+- `switchy_database` - Database integration (required for most features)
 - `switchy_http` - HTTP client functionality
-- `serde_json` - JSON serialization
+- `serde_json` - JSON serialization and deserialization
 - `tokio` - Async runtime support
+- `async-trait` - Async trait support for MusicApi implementation
+
+Optional dependencies:
+- `actix-web` - Web server framework (with `api` feature)
+- `utoipa` - OpenAPI documentation generation (with `openapi` feature)
+
+## Implementation Status
+
+This package provides a comprehensive framework for YouTube Music integration. However, please note:
+
+- API endpoints are currently stubbed with placeholder URLs
+- Actual YouTube Music API integration requires implementation
+- The structure and types are complete and ready for integration
+- Database models and authentication flow are fully implemented
