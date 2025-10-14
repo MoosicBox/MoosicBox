@@ -1,17 +1,24 @@
 # MoosicBox Files
 
-A file handling and streaming utility library providing functions for downloading, saving, and managing files with support for progress monitoring and cover art extraction.
+A comprehensive file handling and streaming utility library for the MoosicBox ecosystem. Provides functions for downloading, saving, and managing files with support for progress monitoring, cover art extraction, audio track streaming, and HTTP API endpoints for serving media content.
 
 ## Features
 
+Core features (always available):
 - **File Download**: Download files from remote URLs with HTTP client support
 - **Stream Saving**: Save byte streams to files with progress monitoring
 - **Progress Tracking**: Monitor download progress and speed during file operations
 - **Cover Art Handling**: Extract and save album cover art from audio tags
 - **Content Length Detection**: Get remote file sizes via HTTP HEAD requests
 - **Filename Sanitization**: Clean filenames for filesystem compatibility
-- **Range Support**: Handle partial content downloads with byte ranges
 - **Error Handling**: Detailed error types for different failure scenarios
+
+With optional features enabled:
+- **Track Management**: Handle audio track files, metadata, and streaming (requires `files` feature)
+- **Album/Artist Artwork**: Manage album and artist cover images (requires `files` feature)
+- **HTTP Range Support**: Parse and handle HTTP byte range requests (requires `range` feature)
+- **REST API Endpoints**: Actix-web endpoints for serving files, tracks, and artwork (requires `api` feature)
+- **Audio Codec Support**: Decode/encode various audio formats including AAC, FLAC, MP3, and Opus (requires decoder/encoder features)
 
 ## Installation
 
@@ -19,10 +26,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_files = "0.1.1"
+moosicbox_files = "0.1.4"
 
 # Enable additional features
-moosicbox_files = { version = "0.1.1", features = ["files", "range", "api"] }
+moosicbox_files = { version = "0.1.4", features = ["files", "range", "api"] }
 ```
 
 ## Usage
@@ -216,9 +223,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## API Features
+## API Reference
 
-### Core Functions
+### Core Functions (always available)
 
 - `save_bytes_to_file()` - Save byte array to file with optional offset
 - `save_bytes_stream_to_file()` - Save async byte stream to file
@@ -227,14 +234,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `get_content_length()` - Get remote file size via HTTP HEAD
 - `sanitize_filename()` - Clean filename for filesystem use
 
-### Progress Monitoring
+### Progress Monitoring (always available)
 
 - `save_bytes_stream_to_file_with_progress_listener()` - Save with progress callbacks
 - `save_bytes_stream_to_file_with_speed_listener()` - Save with speed monitoring
 
-### Cover Art Support
+### Cover Art Support (always available)
 
 - `search_for_cover()` - Find existing cover or extract from audio tags
+
+### Additional Modules (feature-gated)
+
+With the `files` feature enabled:
+- `files::track` - Track file management and streaming
+- `files::album` - Album cover art handling
+- `files::artist` - Artist artwork handling
+- `files::track_pool` - Track pooling and caching
+
+With the `api` feature enabled:
+- `api` - Actix-web endpoints for file serving, track streaming, and artwork delivery
+
+With the `range` feature enabled:
+- `range` - HTTP byte range parsing utilities
 
 ## Error Handling
 
@@ -245,15 +266,39 @@ The library provides specific error types for different operations:
 - `FetchAndSaveBytesFromRemoteUrlError` - Network or file errors during downloads
 - `FetchCoverError` - Errors when handling cover art operations
 
-## Features
+## Cargo Features
 
-- `files` - Enable file download and cover art functionality
+The package provides several optional features:
+
+- `files` - Enable file download and cover art functionality (includes track management, album/artist handling)
 - `range` - Enable HTTP range request support
-- `api` - Enable API integration features
+- `api` - Enable Actix-web API endpoints for file serving (implies `files` and `range`)
+- `openapi` - Enable OpenAPI/utoipa documentation support
+- `image` - Enable image processing with `moosicbox_image`
+- `libvips` - Enable libvips backend for image processing
+- `profiling` - Enable profiling support
+
+Audio format features (decoder/encoder support):
+- `all-decoders` / `all-encoders` - Enable all supported codecs
+- `decoder-aac`, `decoder-flac`, `decoder-mp3`, `decoder-opus` - Individual decoder features
+- `encoder-aac`, `encoder-flac`, `encoder-mp3`, `encoder-opus` - Individual encoder features
 
 ## Dependencies
 
-- `switchy_http` - HTTP client functionality
-- `moosicbox_audiotags` - Audio tag parsing for cover art
-- `moosicbox_stream_utils` - Stream monitoring utilities
+Core dependencies:
+- `switchy_http` - HTTP client functionality with streaming support
+- `switchy_fs` - Cross-platform async filesystem operations
+- `switchy_time` - Cross-platform time utilities
+- `moosicbox_audiotags` - Audio tag parsing for cover art extraction
+- `moosicbox_stream_utils` - Stream monitoring and utilities
+- `moosicbox_config` - Configuration management
 - `tokio` - Async runtime support
+- `bytes` - Efficient byte buffer management
+- `futures` - Asynchronous stream processing
+
+Optional dependencies (enabled by features):
+- `actix-web` / `actix-files` - Web server framework (with `api` feature)
+- `moosicbox_music_api` / `moosicbox_music_models` - Music API integration (with `files` feature)
+- `moosicbox_audio_decoder` / `moosicbox_audio_output` - Audio processing (with decoder/encoder features)
+- `moosicbox_image` - Image processing (with `image` feature)
+- `utoipa` - OpenAPI documentation (with `openapi` feature)
