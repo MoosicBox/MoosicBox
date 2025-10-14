@@ -34,10 +34,10 @@ The HyperChad Transformer package provides:
 
 ### Element Types
 - **Semantic HTML**: div, main, header, footer, section, aside
-- **Forms**: input, button, form elements with validation
+- **Forms**: input, button, form elements
 - **Media**: images with responsive loading and sizing
 - **Navigation**: anchors with target and href support
-- **Typography**: headings (h1-h6), paragraphs, spans
+- **Typography**: headings (h1-h6), spans
 - **Lists**: ordered and unordered lists with items
 - **Tables**: complete table structure (table, thead, tbody, tr, td, th)
 - **Canvas**: Optional canvas element support
@@ -95,10 +95,12 @@ let container = Container::default();
 let html = container.to_string();
 
 // Pretty printed HTML
-let pretty_html = container.display_to_string_default_pretty(true, true)?;
+let pretty_html = container.display_to_string_default_pretty(true, true)
+    .expect("Failed to generate HTML");
 
 // With debug attributes
-let debug_html = container.display_to_string_default(true, true)?;
+let debug_html = container.display_to_string_default(true, true)
+    .expect("Failed to generate HTML");
 ```
 
 ### Layout Calculations
@@ -206,8 +208,8 @@ if let Some(old_element) = root.replace_str_id_with_elements(
 ### Responsive Design
 
 ```rust
-use hyperchad_transformer::{Container, ConfigOverride, OverrideCondition, OverrideItem};
-use hyperchad_transformer_models::LayoutDirection;
+use hyperchad_transformer::{Container, ConfigOverride, OverrideCondition, OverrideItem, Number};
+use hyperchad_transformer::models::LayoutDirection;
 
 let mut container = Container::default();
 
@@ -235,8 +237,10 @@ use hyperchad_transformer::layout::Calc;
     struct MyCalculator;
 
     impl Calc for MyCalculator {
-        fn calc(&self, container: &mut Container) {
+        fn calc(&self, container: &mut Container) -> bool {
             // Perform layout calculations
+            // Return true if layout was modified, false otherwise
+            true
         }
     }
 
