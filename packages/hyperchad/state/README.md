@@ -9,7 +9,7 @@ A state management package for the HyperChad framework, providing in-memory cach
 ## What it provides
 
 - **StateStore** - Main interface for get/set/remove operations
-- **In-memory caching** - Fast access using `HashMap` with `RwLock`
+- **In-memory caching** - Fast access using `BTreeMap` with `RwLock`
 - **SQLite persistence** - Store state in SQLite database
 - **Generic type support** - Works with any `Serialize` + `DeserializeOwned` types
 - **Async operations** - All operations are async
@@ -88,8 +88,10 @@ pub enum Error {
 - `switchy` - Database abstraction (optional, for SQLite)
 - `serde` - Serialization framework
 - `serde_json` - JSON serialization
-- `tokio` - Async runtime
+- `async-trait` - Async trait support
 - `thiserror` - Error handling
+- `log` - Logging
+- `moosicbox_assert` - Assertion utilities
 
 ## Related
 
