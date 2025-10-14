@@ -60,9 +60,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     writer.write_all(b"Hello, world!")?;
     writer.close();
 
-    // Read from the streams
-    let data1: Vec<_> = stream1.collect().await;
-    let data2: Vec<_> = stream2.collect().await;
+    // Read from the streams (ByteStream yields Result<Bytes, std::io::Error>)
+    let data1: Vec<_> = stream1.collect::<Vec<_>>().await;
+    let data2: Vec<_> = stream2.collect::<Vec<_>>().await;
 
     println!("Stream 1 received {} chunks", data1.len());
     println!("Stream 2 received {} chunks", data2.len());
@@ -100,7 +100,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #[cfg(feature = "stalled-monitor")]
-use moosicbox_stream_utils::{ByteWriter, stalled_monitor::StalledReadMonitor};
+use moosicbox_stream_utils::ByteWriter;
+use std::time::Duration;
+use futures::StreamExt;
 
 #[cfg(feature = "stalled-monitor")]
 #[tokio::main]
@@ -108,11 +110,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let writer = ByteWriter::default();
     let stream = writer.stream();
 
-    // Add stalled read monitoring
-    let monitored_stream = stream.stalled_monitor();
+    // Add stalled read monitoring with timeout and optional throttle
+    let monitored_stream = stream
+        .stalled_monitor()
+        .with_timeout(Duration::from_secs(5))
+        .with_throttle(Duration::from_millis(100));
 
-    // Use the monitored stream
-    // (monitoring behavior depends on the stalled_monitor implementation)
+    // Use the monitored stream - will error with TimedOut if no data received within timeout
+    while let Some(result) = monitored_stream.next().await {
+        match result {
+            Ok(bytes_result) => {
+                // Handle the bytes (note: ByteStream yields Result<Bytes, std::io::Error>)
+                let bytes = bytes_result?;
+                println!("Received {} bytes", bytes.len());
+            }
+            Err(e) => {
+                eprintln!("Stalled or timed out: {}", e);
+                break;
+            }
+        }
+    }
 
     Ok(())
 }
