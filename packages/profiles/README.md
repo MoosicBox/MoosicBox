@@ -8,6 +8,7 @@ A simple profile name management system for the MoosicBox ecosystem, providing b
 - **Profile Validation**: Verify profile names exist before processing requests
 - **Thread-Safe Operations**: Safe concurrent access to profile data
 - **API Integration**: Extract profile names from HTTP headers and query parameters
+- **Event System**: Subscribe to profile addition and removal events (requires `events` feature)
 
 ## Installation
 
@@ -15,8 +16,14 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_profiles = "0.1.1"
+moosicbox_profiles = "0.1.4"
 ```
+
+### Features
+
+- `api` (default): Enables Actix Web request extractors for profile name handling
+- `events` (default): Enables event subscription system for profile updates
+- `fail-on-warnings`: Treats warnings as errors during compilation
 
 ## Usage
 
@@ -37,6 +44,10 @@ fn main() {
     // Get all profile names
     let all_profiles = PROFILES.names();
     println!("All profiles: {:?}", all_profiles);
+
+    // Add and fetch a profile in one operation
+    let profile = PROFILES.add_fetch("user456");
+    println!("Added profile: {}", profile);
 
     // Remove a profile
     PROFILES.remove("user123");
@@ -63,6 +74,28 @@ async fn handler_unverified(profile: ProfileNameUnverified) -> Result<HttpRespon
 }
 ```
 
+### Event Subscription (with `events` feature)
+
+```rust
+use moosicbox_profiles::events::{on_profiles_updated_event, trigger_profiles_updated_event};
+
+#[tokio::main]
+async fn main() {
+    // Subscribe to profile update events
+    on_profiles_updated_event(|added, removed| async move {
+        println!("Profiles added: {:?}", added);
+        println!("Profiles removed: {:?}", removed);
+        Ok(())
+    }).await;
+
+    // Trigger an event manually
+    trigger_profiles_updated_event(
+        vec!["new_profile".to_string()],
+        vec!["old_profile".to_string()]
+    ).await.unwrap();
+}
+```
+
 ## API Features
 
 The package provides request extractors for Actix Web:
@@ -84,4 +117,6 @@ Profile names are extracted in this order of precedence:
 
 ## Thread Safety
 
-All operations are thread-safe using `RwLock` for concurrent access to the profile storage.
+All operations are thread-safe:
+- Profile storage uses `std::sync::RwLock` for concurrent access
+- Event listeners (with `events` feature) use `tokio::sync::RwLock` for async-safe access
