@@ -145,7 +145,6 @@ jobs:
                   packages: ${{ github.event.inputs.packages }}
                   skip-on-no-changes: 'false'
                   force-full-matrix-condition: 'true'
-                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
                   os-suffix: '-latest'
                   os: 'ubuntu'
 
