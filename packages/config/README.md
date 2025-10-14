@@ -23,12 +23,12 @@ The MoosicBox Config package provides:
 
 ### Available Operations
 - **Directory Creation**: Automatically create config and cache directories
-- **Profile Management**: Create, read, update, delete user profiles
+- **Profile Management**: Create, read, upsert, and delete user profiles
 - **Server Identity**: Manage unique server identity for distributed setups
 - **Path Resolution**: Resolve paths for different configuration contexts
 
 ### Optional Features
-- **API Module**: REST API endpoints (requires `api` feature)
+- **API Module**: REST API endpoints for profile management (requires `api` feature)
 - **Database Module**: Profile and identity storage (requires `db` feature)
 
 ## Installation
@@ -45,18 +45,14 @@ cargo build --release --package moosicbox_config
 
 ```toml
 [dependencies]
+# Default features include api, db, and openapi
 moosicbox_config = { path = "../config" }
 
-# Optional: Enable database functionality
+# Or with specific features only
 moosicbox_config = {
     path = "../config",
-    features = ["db"]
-}
-
-# Optional: Enable API endpoints
-moosicbox_config = {
-    path = "../config",
-    features = ["api"]
+    default-features = false,
+    features = ["db"]  # Choose specific features: api, db, openapi, test
 }
 ```
 
@@ -119,7 +115,7 @@ use switchy_database::config::ConfigDatabase;
 async fn manage_profiles(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Create or get existing profile
     let profile = upsert_profile(db, "my_profile").await?;
-    println!("Profile: {} (ID: {})", profile.name, profile.id);
+    println!("Profile: {}", profile.name);
 
     // Get all profiles
     let profiles = get_profiles(db).await?;
@@ -178,6 +174,7 @@ pub fn make_cache_dir_path() -> Option<PathBuf>;
 
 ```rust
 // Profile management
+pub async fn create_profile(db: &ConfigDatabase, name: &str) -> Result<models::Profile, DatabaseFetchError>;
 pub async fn upsert_profile(db: &ConfigDatabase, name: &str) -> Result<models::Profile, DatabaseFetchError>;
 pub async fn delete_profile(db: &ConfigDatabase, name: &str) -> Result<Vec<models::Profile>, DatabaseFetchError>;
 pub async fn get_profiles(db: &ConfigDatabase) -> Result<Vec<models::Profile>, DatabaseFetchError>;
@@ -202,8 +199,9 @@ pub enum AppType {
 
 ## Feature Flags
 
-- **`api`**: Enable REST API endpoints for configuration management
+- **`api`**: Enable REST API endpoints for profile management
 - **`db`**: Enable database functionality for profiles and server identity
+- **`openapi`**: Enable OpenAPI/utoipa schema generation
 - **`test`**: Enable test utilities for temporary directories
 
 ## Default Behavior
@@ -215,7 +213,7 @@ pub enum AppType {
 
 ## Dependencies
 
-- **Database**: Optional PostgreSQL integration for profiles (with `db` feature)
+- **Database**: Optional database integration via `switchy_database` for profiles (with `db` feature)
 - **Home Directory**: Uses `home` crate for default root directory resolution
 - **Path Management**: Cross-platform path handling
 
