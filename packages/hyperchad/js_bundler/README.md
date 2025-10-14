@@ -14,15 +14,15 @@ The HyperChad JavaScript Bundler package provides:
 ## Features
 
 ### Bundler Support
-- **ESBuild**: Fast JavaScript bundler and minifier
-- **SWC**: Rust-based JavaScript/TypeScript compiler
-- **Pluggable**: Choose bundler based on requirements
+- **ESBuild**: Fast JavaScript bundler and minifier via external esbuild binary
+- **SWC**: Rust-based JavaScript/TypeScript compiler with full bundling implementation
+- **Pluggable**: Choose bundler based on requirements via feature flags
 - **Performance**: High-performance bundling options
 
 ### Node.js Integration
-- **Runtime**: Node.js runtime utilities
-- **Process Management**: Node process handling
-- **Environment**: Node environment configuration
+- **Command Execution**: Node.js and npm package manager command execution
+- **Multi-toolchain Support**: Supports npm, pnpm, and bun (feature-gated)
+- **Process Management**: Automatic binary selection and process handling
 
 ## Installation
 
@@ -32,10 +32,10 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_js_bundler = { path = "../hyperchad/js_bundler" }
 
-# Enable specific bundlers
+# Enable specific bundlers (default enables both esbuild and swc)
 hyperchad_js_bundler = {
     path = "../hyperchad/js_bundler",
-    features = ["esbuild"]
+    features = ["esbuild"]  # Requires node feature
 }
 
 hyperchad_js_bundler = {
@@ -43,77 +43,143 @@ hyperchad_js_bundler = {
     features = ["swc"]
 }
 
-# Enable Node.js integration
+# Enable specific package managers
 hyperchad_js_bundler = {
     path = "../hyperchad/js_bundler",
-    features = ["node"]
+    features = ["npm"]  # or "pnpm", "bun"
 }
 ```
 
+**Note:** The default features include `all-web-toolchains`, `esbuild`, and `swc`.
+
 ## Usage
+
+### Unified Bundler API
+
+The package provides a unified `bundle` function that dispatches to the appropriate bundler:
+
+```rust
+use hyperchad_js_bundler::bundle;
+use std::path::Path;
+
+// Bundle JavaScript/TypeScript file
+// Uses SWC if available, falls back to ESBuild
+bundle(
+    Path::new("src/index.js"),
+    Path::new("dist/bundle.js")
+);
+```
 
 ### ESBuild Integration (with `esbuild` feature)
 
+ESBuild bundles by executing the external esbuild binary via npm:
+
 ```rust
 use hyperchad_js_bundler::esbuild;
+use std::path::Path;
 
-// ESBuild bundling operations
-// (Implementation depends on enabled features)
+// Bundle with ESBuild (runs npm install and esbuild binary)
+esbuild::bundle(
+    Path::new("src/index.js"),
+    Path::new("dist/bundle.js")
+);
 ```
 
 ### SWC Integration (with `swc` feature)
 
+SWC provides full Rust-based bundling with minification support:
+
 ```rust
 use hyperchad_js_bundler::swc;
+use std::path::Path;
 
-// SWC compilation operations
-// (Implementation depends on enabled features)
+// Bundle with SWC (minify: true)
+swc::bundle(
+    Path::new("src/index.ts"),
+    Path::new("dist/bundle.js"),
+    true  // minify
+);
 ```
+
+The SWC bundler supports:
+- TypeScript and JavaScript files
+- Minification and code optimization
+- Tree shaking and dead code elimination
+- Module resolution via Node.js resolver
+- Import meta URL handling
 
 ### Node.js Integration (with `node` feature)
 
-```rust
-use hyperchad_js_bundler::node;
-
-// Node.js runtime operations
-// (Implementation depends on enabled features)
-```
-
-### General Bundler Usage
+Execute npm/pnpm/bun commands:
 
 ```rust
-use hyperchad_js_bundler::*;
+use hyperchad_js_bundler::node::{run_npm_command, run_command};
+use std::path::Path;
 
-// Use bundler functionality
-// (Available functions depend on enabled features)
+// Run npm command (tries pnpm, bun, npm in order based on enabled features)
+run_npm_command(
+    &["install"],
+    Path::new(".")
+);
+
+// Run custom commands with binary fallback
+run_command(
+    ["pnpm", "bun", "npm"].iter().map(|s| s.to_string()),
+    &["run", "build"],
+    Path::new(".")
+);
 ```
 
 ## Feature Flags
 
-- **`esbuild`**: Enable ESBuild bundler support
+### Bundlers
+- **`esbuild`**: Enable ESBuild bundler support (requires `node` feature)
 - **`swc`**: Enable SWC compiler support
-- **`node`**: Enable Node.js runtime integration
+
+### Package Managers
+- **`node`**: Base feature for Node.js command execution
+- **`npm`**: Enable npm package manager support (enables `node`)
+- **`pnpm`**: Enable pnpm package manager support (enables `node`)
+- **`bun`**: Enable bun package manager support (enables `node`)
+- **`all-web-toolchains`**: Enable all package managers (npm, pnpm, bun)
+
+### Other
+- **`fail-on-warnings`**: Treat warnings as errors
+- **`default`**: Includes `all-web-toolchains`, `esbuild`, and `swc`
 
 ## Bundler Comparison
 
 ### ESBuild
-- **Speed**: Extremely fast bundling
-- **JavaScript/TypeScript**: Full support
-- **Minification**: Built-in minification
-- **Tree Shaking**: Advanced dead code elimination
+- **Implementation**: Executes external esbuild binary via npm
+- **Speed**: Extremely fast bundling and minification
+- **Dependencies**: Requires npm/pnpm/bun installation
+- **Features**: Automatic minification and bundling via command-line flags
 
 ### SWC
-- **Rust-based**: Written in Rust for performance
-- **TypeScript**: Native TypeScript support
-- **Transforms**: Advanced code transformations
-- **Plugins**: Extensible plugin system
+- **Implementation**: Fully integrated Rust-based bundler
+- **Speed**: Fast Rust-native bundling
+- **TypeScript**: Native TypeScript stripping and compilation
+- **Features**:
+  - Configurable minification with compress and mangle options
+  - Module resolution via Node.js resolver with caching
+  - Dead code elimination (DCE)
+  - ES module output
+  - Import meta property handling
 
 ## Dependencies
 
-Dependencies vary based on enabled features:
-- **ESBuild**: ESBuild JavaScript bundler
-- **SWC**: SWC Rust compiler
-- **Node**: Node.js runtime libraries
+Core dependencies (always included):
+- **log**: Logging facade
+- **switchy_env**: Environment variable utilities
+
+Feature-gated dependencies:
+- **SWC feature**: Includes swc_bundler, swc_common, swc_ecma_* crates, and anyhow
+- **ESBuild feature**: No Rust dependencies (uses external binary)
+- **Node feature**: No additional dependencies (command execution only)
+
+External requirements:
+- **ESBuild**: Requires npm/pnpm/bun and esbuild package installation
+- **SWC**: No external requirements (fully Rust-based)
 
 ## Integration
 
@@ -123,6 +189,18 @@ This package is designed for:
 - **Production Builds**: Optimized production bundling
 - **HyperChad Apps**: JavaScript bundling for HyperChad applications
 
+## Module Structure
+
+The package consists of the following modules:
+
+- **`bundler.rs`**: Unified bundler interface that dispatches to SWC or ESBuild
+- **`esbuild.rs`**: ESBuild integration via external binary execution
+- **`swc.rs`**: Full SWC bundler implementation with custom loader and hooks
+- **`node.rs`**: Command execution utilities for npm/pnpm/bun
+- **`lib.rs`**: Feature-gated module exports
+
 ## Note
 
 This package provides a modular approach to JavaScript bundling. Enable only the features you need to minimize dependencies and build times. The actual bundling implementations are feature-gated and will only be available when the corresponding features are enabled.
+
+The unified `bundle()` function prioritizes SWC over ESBuild when both features are enabled, as SWC provides a fully integrated Rust-based solution without external binary dependencies.
