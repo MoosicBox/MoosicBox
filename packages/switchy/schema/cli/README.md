@@ -30,6 +30,11 @@ switchy-migrate status --database-url sqlite:./database.db
 
 Shows which migrations have been applied and which are pending.
 
+```bash
+# Show detailed status including failed and in-progress migrations
+switchy-migrate status --database-url sqlite:./database.db --show-failed
+```
+
 ### Run pending migrations
 
 ```bash
@@ -37,6 +42,11 @@ switchy-migrate migrate --database-url sqlite:./database.db
 ```
 
 Applies all pending migrations to the database.
+
+```bash
+# Require checksum validation before running migrations
+switchy-migrate migrate --database-url sqlite:./database.db --require-checksum-validation
+```
 
 ### Rollback migrations
 
@@ -50,6 +60,29 @@ switchy-migrate rollback --database-url sqlite:./database.db --steps 3
 # Rollback to a specific migration (exclusive)
 switchy-migrate rollback --database-url sqlite:./database.db --to 2025-01-01-120000_initial_schema
 ```
+
+### Retry a failed migration
+
+```bash
+switchy-migrate retry --database-url sqlite:./database.db 2025-09-01-151110_create_users_table
+```
+
+Retries a migration that previously failed.
+
+### Validate migration checksums
+
+```bash
+# Validate checksums of applied migrations
+switchy-migrate validate --database-url sqlite:./database.db
+
+# Exit with error if mismatches found (for CI/CD)
+switchy-migrate validate --database-url sqlite:./database.db --strict
+
+# Show detailed checksum values
+switchy-migrate validate --database-url sqlite:./database.db --verbose
+```
+
+Validates that migration files haven't been modified after being applied to the database.
 
 ### Mark migrations as completed (dangerous operations)
 
@@ -96,7 +129,7 @@ switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
 - 💡 Use for: Corrupted tracking table, schema incompatibility
 - ⚠️ **PERMANENT DATA LOSS** - Cannot be undone
 
-All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation. The `--drop` flag requires triple confirmation.
+All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation. The `--drop` flag requires double confirmation with critical warnings.
 
 ## Supported Databases
 
@@ -108,6 +141,7 @@ All commands require interactive confirmation unless `--force` is used. Dangerou
 - `SWITCHY_DATABASE_URL` - Database connection URL
 - `SWITCHY_MIGRATIONS_DIR` - Directory containing migrations (default: `./migrations`)
 - `SWITCHY_MIGRATION_TABLE` - Migration tracking table name (default: `__switchy_migrations`)
+- `MIGRATION_REQUIRE_CHECKSUM_VALIDATION` - Require checksum validation before running migrations (set to `true` or `1` to enable)
 
 ## Migration File Structure
 
@@ -227,7 +261,7 @@ switchy-migrate mark-all-completed --drop --force --database-url sqlite:./app.db
   - Default scope (pending only): Single confirmation
   - Dangerous scopes (include-failed/in-progress): Double confirmation
   - All scope: Double confirmation with extreme warnings
-  - **Drop flag: Triple confirmation with CRITICAL warnings**
+  - **Drop flag: Double confirmation with CRITICAL warnings**
 - Danger-level-aware warnings adapt to selected scope
 - Database connections are validated before operations
 - Migration ordering is deterministic (alphabetical by ID)
