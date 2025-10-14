@@ -1,4 +1,4 @@
-# MoosicBox Random
+# Switchy Random
 
 A basic random number generation library providing a unified interface for random number generation with optional seeding and distribution utilities.
 
@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_random = "0.1.1"
+switchy_random = "0.1.4"
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ moosicbox_random = "0.1.1"
 ### Basic Random Generation
 
 ```rust
-use moosicbox_random::{Rng, GenericRng};
+use switchy_random::{Rng, GenericRng};
 
 fn main() {
     // Create a new random number generator
@@ -50,7 +50,7 @@ fn main() {
 ### Seeded Random Generation
 
 ```rust
-use moosicbox_random::Rng;
+use switchy_random::Rng;
 
 fn main() {
     // Create generator with specific seed for reproducible results
@@ -71,8 +71,7 @@ fn main() {
 ### Distribution Sampling
 
 ```rust
-use moosicbox_random::Rng;
-use rand::distributions::{Normal, Uniform};
+use switchy_random::Rng;
 
 fn main() {
     let rng = Rng::new();
@@ -102,7 +101,7 @@ fn main() {
 ### Non-Uniform Distributions
 
 ```rust
-use moosicbox_random::{Rng, non_uniform_distribute_f64, non_uniform_distribute_i32};
+use switchy_random::{Rng, non_uniform_distribute_f64, non_uniform_distribute_i32};
 
 fn main() {
     let rng = Rng::new();
@@ -124,22 +123,13 @@ fn main() {
 ### Custom Range Generation with Distribution
 
 ```rust
-use moosicbox_random::{Rng, F64Convertible};
-
-impl F64Convertible for f32 {
-    fn from_f64(f: f64) -> Self {
-        f as f32
-    }
-
-    fn into_f64(self) -> f64 {
-        self as f64
-    }
-}
+use switchy_random::Rng;
 
 fn main() {
     let rng = Rng::new();
 
     // Generate with custom distribution applied
+    // F64Convertible is already implemented for f32, f64, and integer types
     let value: f32 = rng.gen_range_dist(0.0..1.0, 2.0);
     let int_value: i32 = rng.gen_range_disti(1..100, 2);
 
@@ -161,15 +151,19 @@ The `RngWrapper` provides thread-safe access to random number generators using `
 
 ### Optional Features
 
-- `rand`: Enables integration with the `rand` crate ecosystem
-- `simulator`: Enables simulation-specific random number generation
+Both features are enabled by default:
+
+- `rand`: Provides the standard `RandRng` implementation using `rand::rngs::SmallRng`
+- `simulator`: Provides `SimulatorRng` with deterministic seeding via `SIMULATOR_SEED` environment variable
 
 ## Error Handling
 
 The library provides basic error handling for random number generation failures:
 
-- `fill_bytes`: Will panic if the underlying RNG fails
-- `try_fill_bytes`: Returns `Result<(), rand::Error>` for graceful error handling
+- `fill`: Will panic if the underlying RNG fails to fill
+- `try_fill`: Returns `Result<(), rand::Error>` for graceful error handling
+- `fill_bytes`: Part of the `GenericRng` trait, delegates to underlying RNG
+- `try_fill_bytes`: Returns `Result<(), rand::Error>` from the underlying RNG
 
 ## Performance
 
