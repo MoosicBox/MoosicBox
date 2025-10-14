@@ -1,26 +1,27 @@
 # MoosicBox Logging
 
-Basic logging utilities with feature-gated modules for MoosicBox applications.
+Logging utilities with feature-gated modules for MoosicBox applications.
 
 ## Overview
 
 The MoosicBox Logging package provides:
 
-- **Feature-Gated Modules**: Optional logging implementations
-- **Free Log Integration**: Optional free_log module (requires `free_log` feature)
-- **Logging Macros**: Optional logging macro utilities (requires `macros` feature)
-- **Minimal Core**: Lightweight base with optional extensions
+- **Free Log Integration**: Initialize and configure free_log_client for structured logging
+- **Logging Macros**: Conditional logging macros (e.g., `debug_or_trace!`)
+- **API Support**: Optional API feature for free_log_client
+- **Feature-Gated Modules**: Enable only the logging components you need
 
 ## Current Implementation
 
 ### Core Components
-- **Feature-Gated Architecture**: Modular logging components behind feature flags
-- **Free Log Module**: Integration with free_log system (optional)
-- **Macro Module**: Logging macro utilities (optional)
+- **Free Log Module**: Provides `init()` function to configure free_log_client with file writing and custom layers
+- **Macro Module**: Provides `debug_or_trace!` macro for conditional logging based on log level
+- **Re-exports**: Exposes `free_log_client` and `log` crates for convenience
 
 ### Available Features
-- **`free_log`**: Enables free_log integration module
-- **`macros`**: Enables logging macro utilities
+- **`api`**: Enables API features in free_log_client (enabled by default)
+- **`free_log`**: Enables free_log integration module with init function (enabled by default)
+- **`macros`**: Enables logging macro utilities (enabled by default)
 
 ## Installation
 
@@ -28,103 +29,139 @@ The MoosicBox Logging package provides:
 
 ```toml
 [dependencies]
+# With default features (api, free_log, macros)
 moosicbox_logging = { path = "../logging" }
 
-# Enable specific features
+# Disable default features and enable specific ones
 moosicbox_logging = {
     path = "../logging",
-    features = ["free_log", "macros"]
+    default-features = false,
+    features = ["free_log"]
 }
 ```
 
 ## Usage
 
-### With Free Log Feature
+### Initializing Free Log
 
 ```rust
-#[cfg(feature = "free_log")]
-use moosicbox_logging::*; // Free log functionality
+use moosicbox_logging::{init, InitError};
 
-#[cfg(feature = "free_log")]
-async fn setup_logging() -> Result<(), Box<dyn std::error::Error>> {
-    // Use free_log integration
-    // (implementation details depend on the free_log module)
+fn setup_logging() -> Result<(), InitError> {
+    // Initialize with a log file
+    let _layer = init(Some("app.log"), None)?;
+
+    // Or initialize without a file
+    let _layer = init(None, None)?;
+
+    // Or initialize with custom layers
+    use moosicbox_logging::free_log_client::DynLayer;
+    let custom_layers: Vec<DynLayer> = vec![/* your layers */];
+    let _layer = init(Some("app.log"), Some(custom_layers))?;
+
     Ok(())
 }
 ```
 
-### With Macros Feature
+The `init` function:
+- Configures environment-based log filtering (`MOOSICBOX_LOG` or `RUST_LOG` environment variables)
+- Sets default log level to `trace` in debug builds, `info` in release builds
+- Optionally writes logs to a file in the config directory's `logs` subdirectory
+- Supports custom tracing layers
+
+### Using Logging Macros
 
 ```rust
-#[cfg(feature = "macros")]
-use moosicbox_logging::*; // Logging macros
+use moosicbox_logging::{log, debug_or_trace};
 
-#[cfg(feature = "macros")]
-fn use_logging_macros() {
-    // Use logging macro utilities
-    // (implementation details depend on the macros module)
-}
-```
+fn example() {
+    // Standard log macros (re-exported from `log` crate)
+    log::info!("Application started");
+    log::debug!("Debug information");
 
-### Basic Usage
-
-```rust
-// Basic usage without features
-// (minimal functionality available)
-
-#[cfg(all(feature = "free_log", feature = "macros"))]
-async fn full_logging_setup() -> Result<(), Box<dyn std::error::Error>> {
-    // Both free_log and macros available
-    // Use complete logging functionality
-    Ok(())
+    // Conditional macro: logs at trace level if enabled, otherwise debug
+    debug_or_trace!(
+        ("Short debug message"),
+        ("Detailed trace message with extra context")
+    );
 }
 ```
 
 ## Implementation Notes
 
-- The package provides minimal core functionality without features
-- Logging capabilities are contained within feature-gated modules
-- Free log integration requires the `free_log` feature
-- Logging macros require the `macros` feature
-- Features can be used independently or together
+- All features (`api`, `free_log`, `macros`) are enabled by default
+- Without any features enabled, the package provides no functionality (empty lib)
+- The `free_log` feature requires `moosicbox_config` and `moosicbox_env_utils` dependencies
+- The `api` feature enables API functionality in the underlying `free_log_client`
+- Log files are written to `{config_dir}/logs/{filename}` when a filename is provided
+- Features can be selectively disabled if not needed
 
 ## Features
 
-- **Default**: Minimal core (no logging functionality)
-- **`free_log`**: Enables free_log integration module
-- **`macros`**: Enables logging macro utilities
+- **Default**: Includes `api`, `free_log`, and `macros` features
+- **`api`**: Enables API support in free_log_client
+- **`free_log`**: Enables free_log integration module with `init()` function
+- **`macros`**: Enables logging macro utilities (`debug_or_trace!` macro)
 
-## Development Status
+## API Reference
 
-This package currently provides:
+### Free Log Module (feature = "free_log")
 
-1. **Modular Architecture**: Feature-gated logging components
-2. **Free Log Integration**: Optional integration with free_log system
-3. **Macro Support**: Optional logging macro utilities
-4. **Minimal Overhead**: Include only needed logging features
-
-The actual logging implementations are contained within the feature-gated modules. Enable the appropriate features to access logging functionality.
-
-## Usage Patterns
-
+#### `init` Function
 ```rust
-// Feature-gated imports
-#[cfg(feature = "free_log")]
-use moosicbox_logging::*; // Free log functions
-
-#[cfg(feature = "macros")]
-use moosicbox_logging::*; // Logging macros
-
-// Conditional compilation based on features
-#[cfg(feature = "free_log")]
-fn setup_free_log() {
-    // Free log setup
-}
-
-#[cfg(feature = "macros")]
-fn use_macros() {
-    // Use logging macros
-}
+pub fn init(
+    filename: Option<&str>,
+    layers: Option<Vec<DynLayer>>,
+) -> Result<FreeLogLayer, InitError>
 ```
 
-This design allows consumers to include only the logging components they need, keeping the package lightweight while providing extensible logging capabilities.
+Initializes the logging system with optional file output and custom layers.
+
+**Parameters:**
+- `filename`: Optional log file name (written to `{config_dir}/logs/{filename}`)
+- `layers`: Optional vector of custom tracing layers
+
+**Returns:** `Result<FreeLogLayer, InitError>`
+
+**Errors:**
+- `InitError::Logs`: Failed to initialize logs
+- `InitError::BuildLogsConfig`: Failed to build logs config
+- `InitError::BuildFileWriterConfig`: Failed to build file writer config
+
+#### Re-exports
+- `pub use free_log_client;` - Exposes the entire free_log_client crate
+
+### Macros Module (feature = "macros")
+
+#### `debug_or_trace!` Macro
+```rust
+debug_or_trace!(
+    ($debug_message),
+    ($trace_message)
+)
+```
+
+Conditionally logs at trace level if enabled, otherwise logs at debug level.
+
+#### Re-exports
+- `pub use log;` - Exposes the standard `log` crate
+
+## Dependencies
+
+### Core Dependencies (always included)
+- `free_log_client`: Free log client for structured logging
+- `log`: Standard Rust logging facade
+- `thiserror`: Error handling
+
+### Feature-Specific Dependencies
+- `moosicbox_config` (when `free_log` is enabled): Config directory utilities
+- `moosicbox_env_utils` (when `free_log` is enabled): Environment variable helpers
+
+## Package Structure
+
+```
+src/
+├── lib.rs           # Feature-gated module exports
+├── free_log.rs      # Free log initialization (feature = "free_log")
+└── macros.rs        # Logging macros (feature = "macros")
+```
