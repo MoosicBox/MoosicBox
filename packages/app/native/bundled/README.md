@@ -21,16 +21,15 @@ The MoosicBox Native App Bundled Service provides:
 - **Error Handling**: Comprehensive error management
 
 ### Embedded Server
-- **Basic Server**: MoosicBox server running on localhost:8016
+- **Basic Server**: MoosicBox server running on 0.0.0.0:8016
 - **App Configuration**: Configured for native app usage
 - **Auto-Start**: Automatic server startup with application
 - **Background Operation**: Non-blocking server execution
 
 ### Event Integration
 - **Tauri Events**: Native Tauri application event handling
-- **Window Events**: Window lifecycle management
-- **Exit Handling**: Clean application exit processing
-- **Ready State**: Application ready state management
+- **Exit Handling**: Clean application exit processing (ExitRequested triggers server shutdown)
+- **Event Forwarding**: Receives lifecycle events (Exit, WindowEvent, Ready, Resumed, MainEventsCleared)
 
 ### Coordination
 - **Startup Sync**: Wait for server startup completion
@@ -52,7 +51,7 @@ moosicbox_app_native_bundled = { path = "../app/native/bundled" }
 
 ```rust
 use moosicbox_app_native_bundled::{service, Command, Context};
-use tokio::runtime::Handle;
+use moosicbox_async_service::runtime::Handle;
 
 // Create service context
 let handle = Handle::current();
@@ -82,7 +81,7 @@ service.send(Command::RunEvent { event }).await?;
 
 ```rust
 // Wait for server startup
-let (sender, receiver) = tokio::sync::oneshot::channel();
+let (sender, receiver) = switchy_async::sync::oneshot::channel();
 service.send(Command::WaitForStartup { sender }).await?;
 
 // Wait for startup completion
@@ -94,7 +93,7 @@ println!("Server is ready!");
 
 ```rust
 // Wait for clean shutdown
-let (sender, receiver) = tokio::sync::oneshot::channel();
+let (sender, receiver) = switchy_async::sync::oneshot::channel();
 service.send(Command::WaitForShutdown { sender }).await?;
 
 // Wait for shutdown completion
@@ -132,15 +131,15 @@ All commands are processed asynchronously through the service framework with:
 
 ### Supported Tauri Events
 - **Exit**: Application exit events
-- **ExitRequested**: User-initiated exit requests
+- **ExitRequested**: User-initiated exit requests (triggers server shutdown)
 - **WindowEvent**: Window-specific events
 - **Ready**: Application ready state
 - **Resumed**: Application resume events
+- **MainEventsCleared**: Main event loop cleared
 
 ### Event Processing
-- Automatic server shutdown on exit requests
-- Window event forwarding
-- State management during lifecycle events
+- Automatic server shutdown on exit requests (ExitRequested event)
+- Other events are received but not actively processed
 
 ## Error Handling
 
@@ -155,9 +154,12 @@ Comprehensive error management for:
 - **MoosicBox Async Service**: Service framework foundation
 - **MoosicBox Server**: Embedded server functionality
 - **MoosicBox Config**: Application type configuration
-- **MoosicBox Task**: Task spawning and management
+- **MoosicBox Assert**: Assertion utilities
 - **Tauri**: Native application framework
-- **Tokio**: Async runtime and synchronization
+- **switchy_async**: Async runtime abstraction and synchronization
+- **log**: Logging facade
+- **strum/strum_macros**: String enum conversions
+- **thiserror**: Error type derivation
 
 ## Integration
 
