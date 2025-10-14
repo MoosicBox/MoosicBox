@@ -1,0 +1,524 @@
+name: README Accuracy Checker
+
+on:
+    schedule:
+        - cron: '0 8 * * 1'
+    workflow_dispatch:
+        inputs:
+            existing_branch:
+                description: 'Use existing branch (leave empty to create new)'
+                required: false
+                type: string
+                default: ''
+
+            packages:
+                description: 'Comma-separated packages (leave empty for all)'
+                required: false
+                type: string
+                default: ''
+
+            prompt_override:
+                description: 'Additional guidance or custom prompt'
+                required: false
+                type: string
+                default: ''
+
+            model:
+                description: 'Claude model to use (leave empty for latest default)'
+                required: false
+                type: choice
+                options:
+                    - ''
+                    - 'claude-sonnet-4-5-20250929'
+                    - 'claude-opus-4-1-20250805'
+                    - 'claude-opus-4-20250514'
+                    - 'claude-sonnet-4-20250514'
+                    - 'claude-3-7-sonnet-20250219'
+                    - 'claude-3-5-haiku-20241022'
+                    - 'claude-3-haiku-20240307'
+                default: ''
+
+            max_tokens:
+                description: 'Maximum tokens per request (leave empty for default)'
+                required: false
+                type: string
+                default: ''
+
+            max_turns:
+                description: 'Maximum conversation turns (leave empty for default)'
+                required: false
+                type: string
+                default: ''
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    create-branch:
+        name: Create or use existing branch
+        runs-on: ubuntu-latest
+        outputs:
+            branch-name: ${{ steps.branch.outputs.name }}
+            branch-date: ${{ steps.branch.outputs.date }}
+            is-new: ${{ steps.branch.outputs.is_new }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Determine branch to use
+              id: branch
+              run: |
+                  if [ -n "${{ inputs.existing_branch }}" ]; then
+                    BRANCH_NAME="${{ inputs.existing_branch }}"
+
+                    if ! git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+                      echo "❌ Error: Branch '$BRANCH_NAME' does not exist"
+                      exit 1
+                    fi
+
+                    echo "Using existing branch: $BRANCH_NAME"
+                    echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+                    echo "is_new=false" >> $GITHUB_OUTPUT
+
+                    if [[ "$BRANCH_NAME" =~ readme-updates-([0-9]{14}) ]]; then
+                      echo "date=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+                    else
+                      echo "date=existing" >> $GITHUB_OUTPUT
+                    fi
+                  else
+                    BRANCH_DATE=$(date +%Y%m%d%H%M%S)
+                    BRANCH_NAME="readme-updates-${BRANCH_DATE}-${{ github.run_id }}"
+
+                    RETRY_SUFFIX=""
+                    if [ "${{ github.run_attempt }}" -gt 1 ]; then
+                      RETRY_SUFFIX="-${{ github.run_attempt }}"
+                    fi
+
+                    FULL_BRANCH="${BRANCH_NAME}${RETRY_SUFFIX}"
+
+                    echo "Creating new branch: $FULL_BRANCH"
+                    echo "name=$FULL_BRANCH" >> $GITHUB_OUTPUT
+                    echo "date=$BRANCH_DATE" >> $GITHUB_OUTPUT
+                    echo "is_new=true" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Configure Git
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Create new branch
+              if: steps.branch.outputs.is_new == 'true'
+              run: |
+                  git checkout -b ${{ steps.branch.outputs.name }}
+                  git push origin ${{ steps.branch.outputs.name }}
+
+            - name: Checkout existing branch
+              if: steps.branch.outputs.is_new == 'false'
+              run: |
+                  git fetch origin ${{ steps.branch.outputs.name }}
+                  git checkout ${{ steps.branch.outputs.name }}
+                  echo "✅ Checked out existing branch: ${{ steps.branch.outputs.name }}"
+
+    determine-packages:
+        name: Determine packages to update
+        runs-on: ubuntu-latest
+        needs: [create-branch]
+        outputs:
+            matrix: ${{ steps.analyze.outputs.matrix }}
+            has-packages: ${{ steps.analyze.outputs.has-changes }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Generate package matrix
+              id: analyze
+              uses: ./.github/actions/clippier
+              with:
+                  command: features
+                  workspace-path: .
+                  packages: ${{ github.event.inputs.packages }}
+                  skip-on-no-changes: 'false'
+                  force-full-matrix-condition: 'true'
+                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  os-suffix: '-latest'
+                  max-parallel: 20
+                  matrix-properties: 'name,path'
+
+    update-readmes:
+        name: Update ${{ matrix.package.name }}
+        runs-on: ubuntu-latest
+        needs: [create-branch, determine-packages]
+        if: needs.determine-packages.outputs.has-packages == 'true'
+        strategy:
+            fail-fast: false
+            max-parallel: 20
+            matrix:
+                package: ${{ fromJson(needs.determine-packages.outputs.matrix) }}
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.create-branch.outputs.branch-name }}
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Check if README exists
+              id: check_readme
+              run: |
+                  if [ -f "${{ matrix.package.path }}/README.md" ]; then
+                    echo "exists=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "exists=false" >> $GITHUB_OUTPUT
+                    echo "No README found for ${{ matrix.package.name }}, skipping"
+                  fi
+
+            - name: Update README with Claude
+              if: steps.check_readme.outputs.exists == 'true'
+              uses: anthropics/claude-code-action@v1
+              with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+                  prompt: |
+                      ${{
+                        inputs.existing_branch != '' && inputs.prompt_override != ''
+                          ? format('# Additional README Refinement for {0}
+
+                            This is a refinement pass on an existing README update branch.
+
+                            ## Previous Context
+                            The README at `{1}/README.md` has already been reviewed and potentially updated.
+
+                            ## Additional Guidance
+                            {2}
+
+                            ## Requirements
+                            - Review the current state of the README
+                            - Apply the additional guidance above
+                            - Only make changes that align with the new guidance
+                            - Preserve previous improvements unless they conflict with new guidance
+
+                            Focus on incremental improvements based on the additional guidance.
+                            ', matrix.package.name, matrix.package.path, inputs.prompt_override)
+
+                          : inputs.prompt_override != ''
+                            ? inputs.prompt_override
+
+                            : vars.README_UPDATE_PROMPT != ''
+                              ? vars.README_UPDATE_PROMPT
+
+                              : format('# README Accuracy Review for {0}
+
+                            Review and update the README.md file at `{1}/README.md` to ensure it accurately represents the current state of this package.
+
+                            ## Requirements
+
+                            1. **Verify Implementation**
+                               - Check that described features exist in the code at `{1}/`
+                               - Compare API examples with actual function signatures in `{1}/src/`
+                               - Verify dependencies match `{1}/Cargo.toml`
+
+                            2. **Feature Classification**
+                               - ✅ Implemented: Use present tense ("provides", "supports", "includes")
+                               - 🔮 Planned/Future: Mark clearly as "Planned:", "Coming soon:", or use future tense
+
+                            3. **Code Alignment**
+                               - Ensure module descriptions match actual file structure
+                               - Update outdated architectural information
+                               - Fix incorrect usage examples
+
+                            4. **Accuracy Focus**
+                               - Be conservative: only claim features that provably exist
+                               - Reference actual code when validating claims
+                               - Preserve valid future-looking statements but mark them clearly
+
+                            ## Scope
+
+                            Only modify `{1}/README.md`. Do not change any code files.
+
+                            ## Output
+
+                            Make the necessary updates to ensure the README accurately reflects reality. If no changes are needed, do not modify the file.
+                            ', matrix.package.name, matrix.package.path)
+                      }}
+
+                  claude_args: |
+                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
+                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
+                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
+
+            - name: Commit changes with resilient push
+              if: steps.check_readme.outputs.exists == 'true'
+              run: |
+                  if [ -n "$(git status --porcelain)" ]; then
+                    git add ${{ matrix.package.path }}/README.md
+                    git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
+
+                    MAX_RETRIES=5
+                    RETRY_COUNT=0
+                    PUSH_SUCCESS=false
+
+                    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = "false" ]; do
+                      echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+
+                      if git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}; then
+                        if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
+                          echo "✅ Successfully pushed changes"
+                          PUSH_SUCCESS=true
+                        else
+                          echo "⚠️ Push failed, will retry..."
+                          RETRY_COUNT=$((RETRY_COUNT + 1))
+                          sleep $((RETRY_COUNT * 2))
+                        fi
+                      else
+                        echo "⚠️ Rebase failed, resolving and retrying..."
+                        git rebase --abort || true
+                        git fetch origin ${{ needs.create-branch.outputs.branch-name }}
+                        RETRY_COUNT=$((RETRY_COUNT + 1))
+                        sleep $((RETRY_COUNT * 2))
+                      fi
+                    done
+
+                    if [ "$PUSH_SUCCESS" = "false" ]; then
+                      echo "❌ Failed to push after $MAX_RETRIES attempts"
+                      exit 1
+                    fi
+                  else
+                    echo "No changes detected for ${{ matrix.package.name }}"
+                  fi
+
+    update-root-readme:
+        name: Update root README
+        runs-on: ubuntu-latest
+        needs: [create-branch]
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.create-branch.outputs.branch-name }}
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Update root README with Claude
+              uses: anthropics/claude-code-action@v1
+              with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+                  prompt: |
+                      ${{
+                        inputs.existing_branch != '' && inputs.prompt_override != ''
+                          ? format('# Additional Root README Refinement
+
+                            This is a refinement pass on an existing README update branch.
+
+                            ## Previous Context
+                            The root README.md has already been reviewed and potentially updated.
+
+                            ## Additional Guidance
+                            {0}
+
+                            ## Requirements
+                            - Review the current state of the README
+                            - Apply the additional guidance above
+                            - Only make changes that align with the new guidance
+                            - Preserve previous improvements unless they conflict with new guidance
+
+                            Focus on incremental improvements based on the additional guidance.
+                            ', inputs.prompt_override)
+
+                          : inputs.prompt_override != ''
+                            ? inputs.prompt_override
+
+                            : vars.ROOT_README_UPDATE_PROMPT != ''
+                              ? vars.ROOT_README_UPDATE_PROMPT
+
+                              : '# Root README Accuracy Review
+
+                            Review and update the root README.md file to ensure it accurately represents the current state of the MoosicBox project.
+
+                            ## Requirements
+
+                            1. **Feature Status**
+                               - Verify that listed features are actually implemented
+                               - Mark future/planned features clearly with indicators like "Planned:", "Coming soon:", or future tense
+                               - Ensure feature descriptions match current capabilities
+
+                            2. **Getting Started Accuracy**
+                               - Verify installation instructions work
+                               - Check that command examples are current
+                               - Ensure prerequisites are up-to-date
+
+                            3. **Architecture & Technology**
+                               - Confirm listed technologies are in use
+                               - Update platform support based on current state
+                               - Verify database support claims
+
+                            4. **Package List**
+                               - Ensure the package list in the expandable section is current
+                               - Check package descriptions match their actual purpose
+
+                            ## Guidelines
+
+                            - Be conservative: only claim what demonstrably exists
+                            - Preserve the project status warning (development notice)
+                            - Maintain marketing tone while ensuring technical accuracy
+                            - Keep future-looking statements but mark them clearly
+
+                            ## Output
+
+                            Update README.md to accurately reflect the current state of the project.
+                            '
+                      }}
+
+                  claude_args: |
+                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
+                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
+                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
+
+            - name: Commit changes with resilient push
+              run: |
+                  if [ -n "$(git status --porcelain)" ]; then
+                    git add README.md
+                    git commit -m "docs(root): update README for accuracy"
+
+                    MAX_RETRIES=5
+                    RETRY_COUNT=0
+                    PUSH_SUCCESS=false
+
+                    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = "false" ]; do
+                      echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+
+                      if git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}; then
+                        if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
+                          echo "✅ Successfully pushed changes"
+                          PUSH_SUCCESS=true
+                        else
+                          echo "⚠️ Push failed, will retry..."
+                          RETRY_COUNT=$((RETRY_COUNT + 1))
+                          sleep $((RETRY_COUNT * 2))
+                        fi
+                      else
+                        echo "⚠️ Rebase failed, resolving and retrying..."
+                        git rebase --abort || true
+                        git fetch origin ${{ needs.create-branch.outputs.branch-name }}
+                        RETRY_COUNT=$((RETRY_COUNT + 1))
+                        sleep $((RETRY_COUNT * 2))
+                      fi
+                    done
+
+                    if [ "$PUSH_SUCCESS" = "false" ]; then
+                      echo "❌ Failed to push after $MAX_RETRIES attempts"
+                      exit 1
+                    fi
+                  else
+                    echo "No changes detected for root README"
+                  fi
+
+    create-pr:
+        name: Create Pull Request
+        runs-on: ubuntu-latest
+        needs: [create-branch, update-readmes, update-root-readme]
+        if: always() && needs.create-branch.result == 'success'
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.create-branch.outputs.branch-name }}
+                  fetch-depth: 0
+
+            - name: Check for changes
+              id: check_changes
+              run: |
+                  CHANGES=$(git diff origin/master --name-only | grep README.md || true)
+                  if [ -n "$CHANGES" ]; then
+                    echo "has_changes=true" >> $GITHUB_OUTPUT
+                    echo "Found changes in:"
+                    echo "$CHANGES"
+                  else
+                    echo "has_changes=false" >> $GITHUB_OUTPUT
+                    echo "No README changes detected"
+                  fi
+
+            - name: Create Pull Request
+              if: steps.check_changes.outputs.has_changes == 'true'
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  branch: ${{ needs.create-branch.outputs.branch-name }}
+                  base: master
+                  title: '📝 Automated README Accuracy Updates (${{ needs.create-branch.outputs.branch-date }})'
+                  body: |
+                      ## 🤖 Automated README Accuracy Review
+
+                      ${{ needs.create-branch.outputs.is-new == 'false' && '### 🔄 This is a refinement pass on an existing branch' || '' }}
+
+                      This PR contains automated updates to ensure all README files accurately reflect the current state of the codebase.
+
+                      ### 📋 What was reviewed:
+                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ Root README.md\n- ✅ All package READMEs' }}
+
+                      ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
+
+                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
+
+                      ### 🔍 Review focus:
+                      - Verified that claimed features are actually implemented
+                      - Marked future/planned features clearly
+                      - Updated outdated information
+                      - Ensured code examples match actual APIs
+                      - Checked dependency claims against Cargo.toml files
+
+                      ### ⚙️ Process:
+                      - Used parallel job execution (one per package)
+                      - Each package README reviewed independently by Claude
+                      - All changes consolidated on branch: `${{ needs.create-branch.outputs.branch-name }}`
+                      ${{ needs.create-branch.outputs.is-new == 'false' && '- **Refinement mode**: Building on previous updates' || '' }}
+
+                      ### 📝 Review Guidelines:
+                      1. **Verify Accuracy**: Check that updates correctly reflect the code
+                      2. **Future Features**: Ensure planned features are appropriately marked
+                      3. **Completeness**: Confirm no important features were removed incorrectly
+                      4. **Tone**: Verify documentation maintains appropriate technical tone
+
+                      ### ⚠️ Important Notes:
+                      - This is an automated review - human oversight is essential
+                      - Claude may be overly conservative or miss nuances
+                      - Please review all changes carefully before merging
+
+                      ---
+
+                      **Generated by**: [Claude Code Action](https://github.com/marketplace/actions/claude-code-action-official)
+                      **Branch**: `${{ needs.create-branch.outputs.branch-name }}`
+                      **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                      ${{ needs.create-branch.outputs.is-new == 'false' && '**Refinement of**: Previous updates on this branch' || '**Initial run**: New branch created' }}
+                  labels: |
+                      documentation
+                      automated
+                      readme-updates
+                  delete-branch: false
+
+            - name: No changes summary
+              if: steps.check_changes.outputs.has_changes == 'false'
+              run: |
+                  echo "✅ No README updates needed - all documentation appears accurate"
