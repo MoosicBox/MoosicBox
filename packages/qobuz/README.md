@@ -4,61 +4,52 @@ High-resolution music streaming integration with Qobuz's lossless and Hi-Res aud
 
 ## Overview
 
-The MoosicBox Qobuz package provides:
+The MoosicBox Qobuz package provides integration with Qobuz for streaming high-quality music. It implements the `MusicApi` trait to enable Qobuz as a music source within the MoosicBox ecosystem.
 
-- **Qobuz Hi-Res Support**: Lossless FLAC streaming up to 24-bit/192kHz
-- **Complete Catalog Access**: Browse, search, and stream Qobuz's high-quality music library
-- **Editorial Content**: Access to Qobuz's curated playlists and magazine content
-- **User Library Management**: Sync favorites, purchases, and playlists
-- **Seamless Integration**: Direct integration with MoosicBox audio pipeline
-- **Multiple Quality Tiers**: Support for MP3, CD, and Hi-Res quality levels
+**Key Features:**
+- Authentication via username/password
+- Access to Qobuz catalog (artists, albums, tracks)
+- Favorite management (add/remove artists, albums, tracks)
+- Search functionality
+- High-resolution audio streaming (FLAC up to 24-bit/192kHz)
+- Multiple quality tiers (MP3 320, CD Quality, Hi-Res 24/96, Hi-Res 24/192)
 
-## Features
+## Implementation Details
 
-### Audio Quality
-- **MP3 320**: High-quality lossy streaming (320 kbps)
-- **CD Quality**: Lossless FLAC (16-bit/44.1kHz)
-- **Hi-Res 24/96**: Studio master quality (24-bit/96kHz)
-- **Hi-Res 24/192**: Ultra high-resolution (24-bit/192kHz)
-- **Adaptive Streaming**: Automatic quality selection based on connection
+This package provides:
+- `QobuzMusicApi`: Main API implementation conforming to `MusicApi` trait
+- Models for Qobuz entities (`QobuzArtist`, `QobuzAlbum`, `QobuzTrack`)
+- Authentication handling with automatic token refresh
+- API endpoints for HTTP integration (when `api` feature is enabled)
+- Database persistence for credentials and app configuration (when `db` feature is enabled)
 
-### Content Access
-- **Complete Catalog**: Access to Qobuz's extensive high-quality music library
-- **Editorial Content**: Qobuz Magazine articles and reviews
-- **Curated Playlists**: Expert-curated playlists by genre and mood
-- **New Releases**: Latest albums in high-resolution
-- **Exclusive Content**: Qobuz-exclusive releases and remasters
+## Feature Flags
 
-### User Features
-- **Personal Library**: Sync purchased albums and favorites
-- **Playlist Management**: Create and manage playlists
-- **Purchase History**: Access to purchased high-resolution albums
-- **Cross-Device Sync**: Sync library across multiple devices
-- **Offline Caching**: Cache tracks for offline playback
+Available features in `Cargo.toml`:
+
+- `api` - Enable Actix-web API endpoints (default)
+- `db` - Enable database persistence for credentials (default)
+- `openapi` - Enable OpenAPI schema generation (default)
+- `scan` - Enable library scanning support (default)
+- `fail-on-warnings` - Treat warnings as errors in dependencies
 
 ## Usage
 
 ### Basic Setup
 
 ```rust
-use moosicbox_qobuz::{QobuzClient, QobuzConfig, QobuzQuality};
+use moosicbox_qobuz::QobuzMusicApi;
+use switchy::database::profiles::LibraryDatabase;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure Qobuz client
-    let config = QobuzConfig {
-        app_id: "your_app_id".to_string(),
-        app_secret: "your_app_secret".to_string(),
-        quality: QobuzQuality::HiRes24, // Hi-Res quality
-        country: "US".to_string(),
-        cache_dir: Some("./qobuz_cache".into()),
-    };
+    let db = LibraryDatabase::new(/* ... */);
 
-    // Create Qobuz client
-    let mut client = QobuzClient::new(config).await?;
-
-    // Login with credentials
-    client.login("username", "password").await?;
+    // Build the Qobuz API
+    let qobuz = QobuzMusicApi::builder()
+        .with_db(db)
+        .build()
+        .await?;
 
     Ok(())
 }
@@ -66,59 +57,123 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Authentication
 
+The API uses username/password authentication with automatic credential persistence (when `db` feature is enabled):
+
 ```rust
-use moosicbox_qobuz::{QobuzClient, QobuzAuth};
+use moosicbox_qobuz::user_login;
+use switchy::database::profiles::LibraryDatabase;
 
-async fn authenticate_qobuz() -> Result<QobuzClient, Box<dyn std::error::Error>> {
-    let mut client = QobuzClient::new(config).await?;
+async fn login(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    let result = user_login(
+        db,
+        "username",
+        "password",
+        None,        // optional app_id
+        Some(true),  // persist credentials
+    )
+    .await?;
 
-    // Username/Password authentication
-    client.login("username", "password").await?;
-
-    // Check authentication status
-    let user_info = client.get_user_info().await?;
-    println!("Logged in as: {} ({})", user_info.display_name, user_info.email);
-    println!("Subscription: {:?}", user_info.subscription);
-    println!("Hi-Res available: {}", user_info.hires_available);
-
-    Ok(client)
+    println!("Login successful: {}", result);
+    Ok(())
 }
 ```
 
-### Search and Browse
+### Using the MusicApi Interface
+
+The `QobuzMusicApi` implements the `MusicApi` trait, providing a consistent interface:
 
 ```rust
-use moosicbox_qobuz::{QobuzClient, QobuzSearchType};
+use moosicbox_music_api::MusicApi;
+use moosicbox_music_models::id::Id;
 
-async fn search_music(client: &QobuzClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Search for albums
-    let album_results = client.search("Kind of Blue", QobuzSearchType::Albums, 20).await?;
+async fn get_artist(api: &QobuzMusicApi, artist_id: u64) -> Result<(), Box<dyn std::error::Error>> {
+    let artist = api.artist(&Id::from(artist_id)).await?;
 
-    for album in album_results.albums {
-        println!("Album: {} - {} ({})", album.title, album.artist.name, album.release_date);
-        println!("  Quality: {} ({}kHz/{}bit)",
-                 album.maximum_bit_depth, album.maximum_sampling_rate, album.maximum_bit_depth);
-        println!("  Tracks: {}", album.tracks_count);
-        println!("  Price: ${}", album.price.display_value);
+    if let Some(artist) = artist {
+        println!("Artist: {}", artist.title);
     }
 
-    // Search for tracks
-    let track_results = client.search("So What", QobuzSearchType::Tracks, 50).await?;
+    Ok(())
+}
 
-    for track in track_results.tracks {
-        println!("Track: {} - {} ({})", track.title, track.performer.name, track.album.title);
-        println!("  Quality: {}kHz/{}bit", track.maximum_sampling_rate, track.maximum_bit_depth);
-        println!("  Duration: {}:{:02}", track.duration / 60, track.duration % 60);
+async fn get_albums(api: &QobuzMusicApi) -> Result<(), Box<dyn std::error::Error>> {
+    use moosicbox_music_api::models::AlbumsRequest;
+
+    let request = AlbumsRequest {
+        page: Some(moosicbox_paging::PageRequest { offset: 0, limit: 50 }),
+        ..Default::default()
+    };
+
+    let albums = api.albums(&request).await?;
+
+    for album in albums.iter() {
+        println!("Album: {} - {}", album.title, album.artist);
     }
 
-    // Search for artists
-    let artist_results = client.search("Miles Davis", QobuzSearchType::Artists, 10).await?;
+    Ok(())
+}
+```
 
-    for artist in artist_results.artists {
-        println!("Artist: {}", artist.name);
-        println!("  Albums: {}", artist.albums_count);
-        println!("  Image: {}", artist.image.medium);
-    }
+### Direct Function Usage
+
+Core functions are also available for direct use:
+
+```rust
+use moosicbox_qobuz::{artist, album, track, search};
+use moosicbox_music_models::id::Id;
+
+async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    // Get artist
+    let artist = artist(db, &Id::from(12345), None, None).await?;
+    println!("Artist: {}", artist.name);
+
+    // Get album
+    let album = album(db, &"album_id".into(), None, None).await?;
+    println!("Album: {}", album.title);
+
+    // Get track
+    let track = track(db, &Id::from(67890), None, None).await?;
+    println!("Track: {}", track.title);
+
+    // Search
+    let results = search(db, "Miles Davis", Some(0), Some(10), None, None).await?;
+    println!("Found {} artists", results.artists.items.len());
+    println!("Found {} albums", results.albums.items.len());
+    println!("Found {} tracks", results.tracks.items.len());
+
+    Ok(())
+}
+```
+
+### Favorites Management
+
+```rust
+use moosicbox_qobuz::{
+    favorite_artists, favorite_albums, favorite_tracks,
+    add_favorite_artist, remove_favorite_artist,
+    add_favorite_album, remove_favorite_album,
+    add_favorite_track, remove_favorite_track,
+};
+
+async fn manage_favorites(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    // Get favorite artists
+    let artists = favorite_artists(db, Some(0), Some(50), None, None).await?;
+
+    // Get favorite albums
+    let albums = favorite_albums(db, Some(0), Some(50), None, None, None).await?;
+
+    // Get favorite tracks
+    let tracks = favorite_tracks(db, Some(0), Some(50), None, None).await?;
+
+    // Add to favorites
+    add_favorite_artist(db, &Id::from(12345), None, None).await?;
+    add_favorite_album(db, &"album_id".into(), None, None).await?;
+    add_favorite_track(db, &Id::from(67890), None, None).await?;
+
+    // Remove from favorites
+    remove_favorite_artist(db, &Id::from(12345), None, None).await?;
+    remove_favorite_album(db, &"album_id".into(), None, None).await?;
+    remove_favorite_track(db, &Id::from(67890), None, None).await?;
 
     Ok(())
 }
@@ -127,404 +182,195 @@ async fn search_music(client: &QobuzClient) -> Result<(), Box<dyn std::error::Er
 ### Track Streaming
 
 ```rust
-use moosicbox_qobuz::{QobuzClient, QobuzTrack};
-use moosicbox_audio_output::AudioOutput;
+use moosicbox_qobuz::{track_file_url, QobuzAudioQuality};
 
-async fn stream_track(
-    client: &QobuzClient,
-    track_id: u32,
-    audio_output: &mut AudioOutput
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Get track info
-    let track = client.get_track(track_id).await?;
-    println!("Streaming: {} - {} ({})",
-             track.title, track.performer.name, track.album.title);
-    println!("Quality: {}kHz/{}bit",
-             track.maximum_sampling_rate, track.maximum_bit_depth);
+async fn get_stream_url(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    let url = track_file_url(
+        db,
+        &Id::from(12345),
+        QobuzAudioQuality::FlacHiRes,  // 24-bit/96kHz
+        None,  // access_token
+        None,  // app_id
+        None,  // app_secret
+    )
+    .await?;
 
-    // Get streaming URL
-    let stream_url = client.get_stream_url(track_id, QobuzQuality::HiRes24).await?;
-
-    // Stream audio data
-    let mut audio_stream = client.stream_track(stream_url).await?;
-
-    // Read and play audio chunks
-    let mut buffer = vec![0u8; 8192];
-    while let Ok(bytes_read) = audio_stream.read(&mut buffer).await {
-        if bytes_read == 0 {
-            break;
-        }
-
-        // Convert to audio samples and play
-        let samples = convert_to_samples(&buffer[..bytes_read]);
-        audio_output.write_samples(&samples).await?;
-    }
-
+    println!("Stream URL: {}", url);
     Ok(())
 }
 ```
-
-### Album and Artist Information
-
-```rust
-use moosicbox_qobuz::QobuzClient;
-
-async fn get_album_info(client: &QobuzClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get album information
-    let album_id = "0060253764544";
-    let album = client.get_album(album_id).await?;
-
-    println!("Album: {} - {}", album.title, album.artist.name);
-    println!("Released: {}", album.release_date_original);
-    println!("Quality: {}kHz/{}bit", album.maximum_sampling_rate, album.maximum_bit_depth);
-    println!("Duration: {} minutes", album.duration / 60);
-    println!("Genre: {}", album.genre.name);
-    println!("Label: {}", album.label.name);
-
-    // Get album tracks
-    for (i, track) in album.tracks.items.iter().enumerate() {
-        println!("{}. {} - {} ({}:{:02})",
-                 track.track_number, track.title, track.performer.name,
-                 track.duration / 60, track.duration % 60);
-    }
-
-    Ok(())
-}
-
-async fn get_artist_info(client: &QobuzClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get artist information
-    let artist_id = 23242;
-    let artist = client.get_artist(artist_id).await?;
-
-    println!("Artist: {}", artist.name);
-    println!("Albums: {}", artist.albums_count);
-    println!("Biography: {}", artist.biography.summary);
-
-    // Get artist albums
-    let albums = client.get_artist_albums(artist_id, None).await?;
-
-    for album in albums.albums.items {
-        println!("  Album: {} ({})", album.title, album.release_date_original);
-        println!("    Quality: {}kHz/{}bit",
-                 album.maximum_sampling_rate, album.maximum_bit_depth);
-    }
-
-    Ok(())
-}
-```
-
-### User Library and Favorites
-
-```rust
-use moosicbox_qobuz::{QobuzClient, QobuzFavoriteType};
-
-async fn manage_user_library(client: &QobuzClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get user favorites
-    let favorite_albums = client.get_user_favorites(QobuzFavoriteType::Albums).await?;
-    println!("Favorite albums: {}", favorite_albums.albums.items.len());
-
-    let favorite_tracks = client.get_user_favorites(QobuzFavoriteType::Tracks).await?;
-    println!("Favorite tracks: {}", favorite_tracks.tracks.items.len());
-
-    let favorite_artists = client.get_user_favorites(QobuzFavoriteType::Artists).await?;
-    println!("Favorite artists: {}", favorite_artists.artists.items.len());
-
-    // Get purchased albums
-    let purchases = client.get_user_purchases().await?;
-    println!("Purchased albums: {}", purchases.albums.items.len());
-
-    for album in purchases.albums.items {
-        println!("  Purchased: {} - {} ({}kHz/{}bit)",
-                 album.title, album.artist.name,
-                 album.maximum_sampling_rate, album.maximum_bit_depth);
-    }
-
-    // Add album to favorites
-    let album_id = "0060253764544";
-    client.add_album_to_favorites(album_id).await?;
-
-    // Remove from favorites
-    client.remove_album_from_favorites(album_id).await?;
-
-    Ok(())
-}
-```
-
-### Playlist Management
-
-```rust
-use moosicbox_qobuz::{QobuzClient, QobuzPlaylist, QobuzPlaylistRequest};
-
-async fn manage_playlists(client: &QobuzClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get user playlists
-    let playlists = client.get_user_playlists().await?;
-
-    for playlist in playlists.playlists.items {
-        println!("Playlist: {} ({} tracks)", playlist.name, playlist.tracks_count);
-        println!("  Duration: {} minutes", playlist.duration / 60);
-        println!("  Public: {}", playlist.is_public);
-    }
-
-    // Create new playlist
-    let new_playlist = QobuzPlaylistRequest {
-        name: "My Hi-Res Collection".to_string(),
-        description: Some("High-resolution favorites".to_string()),
-        is_public: false,
-        is_collaborative: false,
-    };
-
-    let playlist = client.create_playlist(new_playlist).await?;
-    println!("Created playlist: {}", playlist.name);
-
-    // Add tracks to playlist
-    let track_ids = vec![12345678, 87654321];
-    client.add_tracks_to_playlist(playlist.id, track_ids).await?;
-
-    // Get playlist tracks
-    let tracks = client.get_playlist_tracks(playlist.id).await?;
-
-    for track in tracks.tracks.items {
-        println!("  Track: {} - {} ({}kHz/{}bit)",
-                 track.title, track.performer.name,
-                 track.maximum_sampling_rate, track.maximum_bit_depth);
-    }
-
-    Ok(())
-}
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `QOBUZ_APP_ID` | Qobuz API application ID | Required |
-| `QOBUZ_APP_SECRET` | Qobuz API application secret | Required |
-| `QOBUZ_QUALITY` | Default audio quality | `HiRes24` |
-| `QOBUZ_COUNTRY` | Country code for content | `US` |
-| `QOBUZ_CACHE_DIR` | Directory for caching | `./cache/qobuz` |
-| `QOBUZ_MAX_CONCURRENT_STREAMS` | Max concurrent streams | `3` |
 
 ### Quality Settings
 
 ```rust
-use moosicbox_qobuz::QobuzQuality;
+use moosicbox_qobuz::QobuzAudioQuality;
 
-// Audio quality options
-let quality = QobuzQuality::Mp3;      // 320 kbps MP3
-let quality = QobuzQuality::Cd;       // 16-bit/44.1kHz FLAC
-let quality = QobuzQuality::HiRes24;  // 24-bit/96kHz FLAC
-let quality = QobuzQuality::HiRes192; // 24-bit/192kHz FLAC (when available)
+// Available quality levels
+let quality = QobuzAudioQuality::Low;            // MP3 320kbps
+let quality = QobuzAudioQuality::FlacLossless;   // FLAC 16-bit/44.1kHz
+let quality = QobuzAudioQuality::FlacHiRes;      // FLAC 24-bit/96kHz
+let quality = QobuzAudioQuality::FlacHighestRes; // FLAC 24-bit/192kHz
 ```
 
-### Advanced Configuration
+## API Endpoints
+
+When the `api` feature is enabled, the following HTTP endpoints are available:
+
+- `POST /auth/login` - Authenticate with username/password
+- `GET /artists` - Get artist by ID
+- `GET /favorites/artists` - Get favorite artists
+- `GET /albums` - Get album by ID
+- `GET /favorites/albums` - Get favorite albums
+- `GET /artists/albums` - Get albums for an artist
+- `GET /albums/tracks` - Get tracks for an album
+- `GET /tracks` - Get track by ID
+- `GET /favorites/tracks` - Get favorite tracks
+- `GET /track/url` - Get streaming URL for a track
+- `GET /search` - Search for artists, albums, and tracks
+
+### Binding API Endpoints
 
 ```rust
-use moosicbox_qobuz::{QobuzConfig, QobuzCacheConfig};
+use actix_web::{App, HttpServer};
+use moosicbox_qobuz::api::bind_services;
 
-let config = QobuzConfig {
-    app_id: "your_app_id".to_string(),
-    app_secret: "your_app_secret".to_string(),
-    quality: QobuzQuality::HiRes24,
-    country: "US".to_string(),
-    cache_dir: Some("./qobuz_cache".into()),
-    cache_config: QobuzCacheConfig {
-        max_size_gb: 15.0,             // Maximum cache size
-        max_track_cache_hours: 48,     // Cache tracks for 48 hours
-        enable_metadata_cache: true,   // Cache track metadata
-        enable_artwork_cache: true,    // Cache album artwork
-        cleanup_interval_hours: 8,     // Clean up cache every 8 hours
-        prefer_hires_cache: true,      // Prioritize Hi-Res tracks in cache
-    },
-    max_concurrent_streams: 3,         // Limit concurrent streams
-    request_timeout_seconds: 45,       // Request timeout
-    enable_editorial_content: true,    // Enable magazine content
-    ..Default::default()
-};
-```
-
-## Feature Flags
-
-- `qobuz` - Enable Qobuz streaming integration
-- `qobuz-hires` - Enable Hi-Res quality streaming
-- `qobuz-cache` - Enable local caching of tracks and metadata
-- `qobuz-playlist` - Enable playlist management features
-- `qobuz-editorial` - Enable access to Qobuz magazine content
-- `qobuz-purchases` - Enable access to purchased content
-
-## Integration with MoosicBox
-
-### Server Integration
-
-```toml
-[dependencies]
-moosicbox-qobuz = { path = "../qobuz", features = ["qobuz-hires", "qobuz-cache"] }
-```
-
-```rust
-use moosicbox_qobuz::QobuzClient;
-use moosicbox_server::music_api::MusicApi;
-
-// Register Qobuz as a music source
-async fn setup_qobuz_integration() -> Result<(), Box<dyn std::error::Error>> {
-    let qobuz_client = QobuzClient::new(config).await?;
-
-    // Register with MoosicBox server
-    let music_api = MusicApi::new();
-    music_api.register_source("qobuz", Box::new(qobuz_client)).await?;
-
-    Ok(())
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new().service(
+            bind_services(actix_web::web::scope("/qobuz"))
+        )
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
 ```
 
-### Player Integration
+## Models
+
+### QobuzArtist
 
 ```rust
-use moosicbox_qobuz::QobuzClient;
-use moosicbox_player::Player;
+pub struct QobuzArtist {
+    pub id: u64,
+    pub image: Option<QobuzImage>,
+    pub name: String,
+}
+```
 
-async fn setup_qobuz_player() -> Result<(), Box<dyn std::error::Error>> {
-    let qobuz_client = QobuzClient::new(config).await?;
-    let mut player = Player::new().await?;
+### QobuzAlbum
 
-    // Add Qobuz as a source
-    player.add_source("qobuz", Box::new(qobuz_client)).await?;
+```rust
+pub struct QobuzAlbum {
+    pub id: String,
+    pub artist: String,
+    pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
+    pub maximum_bit_depth: u16,
+    pub image: Option<QobuzImage>,
+    pub title: String,
+    pub version: Option<String>,
+    pub duration: u32,
+    pub tracks_count: u32,
+    pub maximum_sampling_rate: f32,
+    // ... additional fields
+}
+```
 
-    // Play a Qobuz track
-    player.play_track("qobuz:track:12345678").await?;
+### QobuzTrack
 
-    Ok(())
+```rust
+pub struct QobuzTrack {
+    pub id: u64,
+    pub track_number: u32,
+    pub artist: String,
+    pub artist_id: u64,
+    pub album: String,
+    pub album_id: String,
+    pub album_type: QobuzAlbumReleaseType,
+    pub title: String,
+    pub duration: u32,
+    // ... additional fields
+}
+```
+
+## Album Types
+
+```rust
+pub enum QobuzAlbumReleaseType {
+    Album,
+    Live,
+    Compilation,
+    Ep,
+    Single,
+    EpSingle,
+    Other,
+    Download,
 }
 ```
 
 ## Error Handling
 
-```rust
-use moosicbox_qobuz::error::QobuzError;
-
-match client.get_track(track_id).await {
-    Ok(track) => println!("Track: {}", track.title),
-    Err(QobuzError::AuthenticationFailed) => {
-        eprintln!("Qobuz authentication failed - check credentials");
-    },
-    Err(QobuzError::TrackNotFound(id)) => {
-        eprintln!("Track not found: {}", id);
-    },
-    Err(QobuzError::QualityNotAvailable { requested, available }) => {
-        eprintln!("Quality {:?} not available, using {:?}", requested, available);
-    },
-    Err(QobuzError::SubscriptionRequired { required_tier }) => {
-        eprintln!("Subscription required: {:?}", required_tier);
-    },
-    Err(QobuzError::RegionRestricted { country }) => {
-        eprintln!("Content not available in region: {}", country);
-    },
-    Err(QobuzError::RateLimited { retry_after }) => {
-        eprintln!("Rate limited, retry after {} seconds", retry_after);
-    },
-    Err(e) => {
-        eprintln!("Qobuz error: {}", e);
-    }
-}
-```
-
-## Rate Limiting and Best Practices
-
-### API Rate Limits
-- **Search**: 60 requests per minute
-- **Track Info**: 120 requests per minute
-- **Streaming**: 3 concurrent streams per account
-- **User Library**: 30 requests per minute
-
-### Best Practices
+The package uses a custom `Error` type:
 
 ```rust
-use moosicbox_qobuz::{QobuzClient, QobuzRateLimiter};
-
-// Use built-in rate limiting
-let config = QobuzConfig {
-    rate_limiter: QobuzRateLimiter::new(60, 60), // 60 requests per minute
-    ..Default::default()
-};
-
-// Batch requests when possible
-let track_ids = vec![1, 2, 3, 4, 5];
-let tracks = client.get_tracks_batch(track_ids).await?;
-
-// Use caching to reduce API calls
-let cached_track = client.get_track_cached(track_id).await?;
-
-// Respect subscription tiers
-match client.get_max_quality().await? {
-    QobuzQuality::Mp3 => println!("MP3 subscription"),
-    QobuzQuality::Cd => println!("CD quality subscription"),
-    QobuzQuality::HiRes24 => println!("Hi-Res subscription"),
-    QobuzQuality::HiRes192 => println!("Studio subscription"),
+pub enum Error {
+    NoUserIdAvailable,
+    NoAccessTokenAvailable,
+    Unauthorized,
+    HttpRequestFailed(u16, String),
+    NoAppId,
+    NoAppSecretAvailable,
+    // ... other variants
 }
 ```
 
-## Troubleshooting
+## Integration with MoosicBox
 
-### Common Issues
-
-1. **Authentication failures**: Verify app credentials and user subscription
-2. **Quality not available**: Check subscription tier and track availability
-3. **Regional restrictions**: Some content may not be available in all regions
-4. **Rate limiting**: Implement proper rate limiting and retry logic
-
-### Debug Information
-
-```bash
-# Enable Qobuz debugging
-RUST_LOG=moosicbox_qobuz=debug cargo run
-
-# Test Qobuz connection
-cargo run --bin qobuz-test -- --test-connection
-
-# Check subscription status
-cargo run --bin qobuz-test -- --check-subscription
-```
-
-### Quality and Subscription Issues
+The Qobuz package integrates seamlessly with the MoosicBox music API system:
 
 ```rust
-// Check subscription capabilities
-match client.get_subscription_info().await {
-    Ok(info) => {
-        println!("Subscription: {:?}", info.offer);
-        println!("Max quality: {:?}", info.max_quality);
-        println!("Hi-Res purchases: {}", info.can_purchase_hires);
-        println!("Streaming limit: {}", info.streaming_limit);
-    },
-    Err(e) => eprintln!("Failed to get subscription info: {}", e),
-}
+use moosicbox_music_api::MusicApi;
+use moosicbox_qobuz::QobuzMusicApi;
 
-// Get available qualities for a track
-let qualities = client.get_available_qualities(track_id).await?;
-for quality in qualities {
-    println!("Available: {:?} ({}kHz/{}bit)",
-             quality.format, quality.sampling_rate, quality.bit_depth);
+async fn register_qobuz() -> Result<(), Box<dyn std::error::Error>> {
+    let db = LibraryDatabase::new(/* ... */);
+
+    let qobuz = QobuzMusicApi::builder()
+        .with_db(db)
+        .build()
+        .await?;
+
+    // Use as a MusicApi implementation
+    let artists = qobuz.artists(None, None, None, None).await?;
+
+    Ok(())
 }
 ```
 
-## Premium Features
+## Dependencies
 
-### Hi-Res Audio
-- **Studio Masters**: Original studio master recordings
-- **Multiple Resolutions**: 24-bit/96kHz and 24-bit/192kHz options
-- **Lossless Streaming**: FLAC format for pristine quality
-- **Download Purchase**: Buy and own Hi-Res tracks
+Key dependencies (from `Cargo.toml`):
 
-### Editorial Content
-- **Qobuz Magazine**: Access to music journalism and reviews
-- **Expert Curation**: Playlists curated by music experts
-- **Artist Interviews**: Exclusive interviews and features
-- **Album Reviews**: Professional album reviews and ratings
+- `moosicbox_music_api` - Music API trait definitions
+- `moosicbox_music_models` - Common music models
+- `moosicbox_paging` - Pagination support
+- `actix-web` - Web framework (optional, with `api` feature)
+- `serde` / `serde_json` - Serialization
+- `tokio` - Async runtime
+- `switchy` - HTTP client and database abstractions
+
+## Notes
+
+- App ID and app secret are automatically fetched from Qobuz's web interface if not provided
+- Credentials are automatically refreshed on 401 responses when username is available
+- The `db` feature enables persistence of authentication tokens and app configuration
+- Search results combine artists, albums, and tracks into a unified response
+- All API functions require a `LibraryDatabase` reference when the `db` feature is enabled
 
 ## See Also
 
-- [MoosicBox Player](../player/README.md) - Audio playback engine
-- [MoosicBox Server](../server/README.md) - Main server with Qobuz integration
-- [MoosicBox Tidal](../tidal/README.md) - Alternative high-quality streaming service
-- [MoosicBox Audio Output](../audio_output/README.md) - Audio output handling
+- [MoosicBox Music API](../music_api/README.md) - Core music API trait definitions
+- [MoosicBox Server](../server/README.md) - Main server application
+- [MoosicBox Tidal](../tidal/README.md) - Alternative streaming service integration
