@@ -1,25 +1,19 @@
 # MoosicBox Bloaty
 
-**Note: This package is currently a placeholder with minimal implementation.**
+A binary size analysis tool for Rust workspace packages that helps track and compare the size impact of features.
 
 ## Overview
 
-The MoosicBox Bloaty package is intended for binary size analysis but currently contains only boilerplate code.
+The MoosicBox Bloaty package provides binary size analysis for Rust packages in a workspace. It measures the size impact of individual features by building packages with different feature combinations and comparing the resulting binary and library sizes.
 
-## Current Status
+## Features
 
-- **Library**: Contains only Rust linting configuration (4 lines)
-- **Implementation**: No actual functionality implemented yet
-- **Features**: Planned but not yet developed
-
-## Planned Features
-
-The package is intended to eventually provide:
-
-- Binary size analysis for Rust binaries
-- Size optimization recommendations
-- Build comparison reports
-- CI integration for size regression detection
+- **Feature size analysis**: Measures the size impact of each feature on both rlib and binary targets
+- **Multiple output formats**: Supports text, JSON, and JSONL report formats
+- **Package filtering**: Select specific packages using patterns or explicit lists
+- **Feature filtering**: Skip features using patterns or explicit lists
+- **Workspace integration**: Analyzes all workspace members automatically
+- **External tool integration**: Supports cargo-bloat, cargo-llvm-lines, and cargo-size
 
 ## Installation
 
@@ -30,26 +24,187 @@ The package is intended to eventually provide:
 git clone https://github.com/MoosicBox/MoosicBox.git
 cd MoosicBox
 
-# Note: Currently no functionality to build
-cargo build --package moosicbox_bloaty
+# Build the tool
+cargo build --package bloaty --release
+
+# The binary will be at target/release/bloaty
 ```
 
 ## Usage
 
-**Currently no usage available** - the package is a placeholder.
+### Basic Usage
 
-## Development Status
+Analyze all workspace packages:
 
-This package is in early planning stages. Check back later for implementation updates, or contribute to help implement the planned binary analysis features.
+```bash
+bloaty
+```
+
+### Package Selection
+
+Analyze specific packages:
+
+```bash
+# Single package
+bloaty --package moosicbox_core
+
+# Multiple packages
+bloaty --package moosicbox_core --package moosicbox_server
+
+# Using patterns
+bloaty --package-pattern "moosicbox_.*"
+```
+
+### Feature Filtering
+
+Skip specific features:
+
+```bash
+# Skip specific features
+bloaty --skip-features fail-on-warnings --skip-features openssl
+
+# Skip features matching a pattern
+bloaty --skip-feature-pattern ".*-static$"
+```
+
+### External Tools
+
+Run external analysis tools (requires installation):
+
+```bash
+# Run cargo-bloat
+bloaty --tool bloat
+
+# Run multiple tools
+bloaty --tool bloat --tool llvm-lines
+```
+
+### Output Formats
+
+Control report output:
+
+```bash
+# Generate all formats (default)
+bloaty --output-format all
+
+# Only text report
+bloaty --output-format text
+
+# JSON and JSONL reports
+bloaty --output-format json --output-format jsonl
+
+# Custom report filename
+bloaty --report-file my_analysis
+```
+
+This generates files like:
+- `my_analysis.txt` (text report)
+- `my_analysis.json` (complete JSON report)
+- `my_analysis.jsonl` (streaming JSONL format)
+
+### Skip Packages
+
+Exclude packages from analysis:
+
+```bash
+# Skip specific packages
+bloaty --skip-packages moosicbox_test --skip-packages moosicbox_dev
+
+# Skip packages matching pattern
+bloaty --skip-package-pattern ".*_test$"
+```
+
+## Report Format
+
+### Text Report
+
+The text report shows base sizes and feature impact:
+
+```
+Package: moosicbox_core
+===================
+
+Target: moosicbox_core
+-------------------
+Base size: 1.2 MB
+Feature: async          | Size: 1.3 MB | Diff: +100 KB
+Feature: db             | Size: 1.5 MB | Diff: +300 KB
+```
+
+### JSON Report
+
+The JSON report provides structured data:
+
+```json
+{
+  "timestamp": 1234567890,
+  "packages": [
+    {
+      "name": "moosicbox_core",
+      "targets": [
+        {
+          "name": "moosicbox_core",
+          "base_size": 1258291,
+          "features": [
+            {
+              "name": "async",
+              "size": 1360384,
+              "diff": 102093,
+              "diff_formatted": "+102 KB"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### JSONL Report
+
+The JSONL report provides streaming event data for real-time processing:
+
+```jsonl
+{"type":"package_start","name":"moosicbox_core","timestamp":1234567890}
+{"type":"target_start","package":"moosicbox_core","target":"moosicbox_core","timestamp":1234567890}
+{"type":"base_size","package":"moosicbox_core","target":"moosicbox_core","size":1258291,"timestamp":1234567890}
+{"type":"feature","package":"moosicbox_core","target":"moosicbox_core","feature":"async","size":1360384,"diff":102093,"timestamp":1234567890}
+{"type":"target_end","package":"moosicbox_core","target":"moosicbox_core","timestamp":1234567890}
+{"type":"package_end","name":"moosicbox_core","timestamp":1234567890}
+```
+
+## Dependencies
+
+Core dependencies (automatically managed by Cargo):
+
+- `anyhow` - Error handling
+- `bytesize` - Human-readable size formatting
+- `cargo_metadata` - Workspace metadata access
+- `clap` - Command-line argument parsing
+- `glob` - File pattern matching
+- `regex` - Pattern matching for filters
+- `serde_json` - JSON output formatting
+
+Optional external tools:
+- `cargo-bloat` - For detailed binary bloat analysis
+- `cargo-llvm-lines` - For LLVM IR line count analysis
+- `cargo-size` - For size profiling
+
+## How It Works
+
+1. **Package Discovery**: Uses `cargo_metadata` to find workspace members
+2. **Feature Extraction**: Identifies available features from each package's `Cargo.toml`
+3. **Baseline Build**: Builds each target with no features enabled and measures size
+4. **Feature Analysis**: Builds each target with individual features and compares sizes
+5. **Binary Analysis**: For binary targets, measures both library and executable sizes
+6. **Report Generation**: Outputs results in requested formats
 
 ## Contributing
 
-If you're interested in implementing binary size analysis tools for MoosicBox:
+Contributions are welcome! Areas for improvement:
 
-1. Review existing Rust binary analysis tools (cargo-bloat, twiggy, etc.)
-2. Design an API that fits MoosicBox's needs
-3. Implement the core functionality
-4. Add integration with the MoosicBox build system
-5. Create proper documentation and examples
-
-Contact the maintainers if you'd like to contribute to this package.
+1. Add support for feature combinations (currently only analyzes individual features)
+2. Implement historical size tracking and regression detection
+3. Add visualization of size trends over time
+4. Optimize build performance with better caching
+5. Add more detailed breakdown of size contributors
