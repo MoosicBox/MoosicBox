@@ -9,8 +9,8 @@ use clap::{Parser, Subcommand};
 use clippier::{
     OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
-    handle_generate_dockerfile_command, handle_validate_feature_propagation_command,
-    handle_workspace_deps_command, print_human_output,
+    handle_generate_dockerfile_command, handle_packages_command,
+    handle_validate_feature_propagation_command, handle_workspace_deps_command, print_human_output,
 };
 
 #[derive(Parser)]
@@ -228,6 +228,42 @@ enum Commands {
         #[arg(long, default_value_t = true)]
         fail_on_error: bool,
     },
+    Packages {
+        #[arg(index = 1)]
+        file: String,
+
+        #[arg(long)]
+        os: Option<String>,
+
+        /// List of specific packages to process (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// List of changed files (paths relative to workspace root) - only include affected packages
+        #[arg(long, value_delimiter = ',')]
+        changed_files: Option<Vec<String>>,
+
+        /// Git base commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Git head commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
+        /// Include reasoning for why each package is affected in the JSON output
+        #[arg(long)]
+        include_reasoning: bool,
+
+        /// Maximum number of packages in matrix
+        #[arg(long)]
+        max_parallel: Option<u16>,
+
+        #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
+        output: OutputType,
+    },
 }
 
 #[allow(clippy::too_many_lines)]
@@ -388,6 +424,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             return Ok(()); // Early return since we handle output ourselves
         }
+        Commands::Packages {
+            file,
+            os,
+            packages,
+            changed_files,
+            #[cfg(feature = "git-diff")]
+            git_base,
+            #[cfg(feature = "git-diff")]
+            git_head,
+            include_reasoning,
+            max_parallel,
+            output,
+        } => handle_packages_command(
+            &file,
+            os.as_deref(),
+            packages.as_deref(),
+            changed_files.as_deref(),
+            #[cfg(feature = "git-diff")]
+            git_base.as_deref(),
+            #[cfg(feature = "git-diff")]
+            git_head.as_deref(),
+            include_reasoning,
+            max_parallel,
+            output,
+        )?,
     };
 
     if !result.is_empty() {

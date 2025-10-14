@@ -1,0 +1,13 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: parsed
+---
+- name: api
+  os: ubuntu-latest
+  path: packages/api
+- name: cli
+  os: ubuntu-latest
+  path: packages/cli
+- name: core
+  os: ubuntu-latest
+  path: packages/core

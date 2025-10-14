@@ -2,7 +2,8 @@ use std::fs;
 
 use clippier::{
     OutputType, handle_ci_steps_command, handle_dependencies_command, handle_environment_command,
-    handle_features_command, handle_workspace_deps_command, process_workspace_configs,
+    handle_features_command, handle_packages_command, handle_workspace_deps_command,
+    process_workspace_configs,
 };
 use clippier_test_utilities::test_resources::{create_simple_workspace, load_test_workspace};
 use tempfile::TempDir;
@@ -1199,4 +1200,456 @@ os = "macos"
         serde_json::to_value(macos).unwrap()["gitSubmodules"].as_bool(),
         Some(false)
     );
+}
+
+#[test]
+fn test_handle_packages_command_basic() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    assert!(parsed.is_array());
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty(), "Should have packages");
+
+    for package in packages {
+        assert!(package.get("name").is_some());
+        assert!(package.get("path").is_some());
+        assert!(package.get("os").is_some());
+        assert_eq!(package["os"].as_str().unwrap(), "ubuntu-latest");
+    }
+
+    insta::assert_yaml_snapshot!("packages_command_basic", parsed);
+}
+
+#[test]
+fn test_handle_packages_command_json_output() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+    assert!(parsed.is_array());
+
+    insta::assert_yaml_snapshot!("packages_command_json_output", parsed);
+}
+
+#[test]
+fn test_handle_packages_command_raw_output() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Raw,
+    );
+
+    assert!(result.is_ok());
+    let packages_raw = result.unwrap();
+
+    assert!(!packages_raw.is_empty());
+    let lines: Vec<&str> = packages_raw.lines().collect();
+    assert!(!lines.is_empty(), "Should have package names");
+
+    for line in &lines {
+        assert!(!line.is_empty(), "Each line should be a package name");
+    }
+
+    insta::assert_snapshot!("packages_command_raw_output", packages_raw);
+}
+
+#[test]
+fn test_handle_packages_command_with_specific_packages() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        Some(&["api".to_string(), "web".to_string()]),
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty());
+
+    for package in packages {
+        let name = package["name"].as_str().unwrap();
+        assert!(
+            name == "api" || name == "web",
+            "Should only contain api and web packages"
+        );
+    }
+
+    insta::assert_yaml_snapshot!("packages_command_specific_packages", parsed);
+}
+
+#[test]
+fn test_handle_packages_command_with_max_parallel() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        Some(3),
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert_eq!(packages.len(), 3, "Should truncate to max_parallel limit");
+
+    insta::assert_yaml_snapshot!("packages_command_max_parallel", parsed);
+}
+
+#[test]
+fn test_handle_packages_command_no_os_filter() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        None,
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty());
+
+    for package in packages {
+        assert_eq!(
+            package["os"].as_str().unwrap(),
+            "ubuntu-latest",
+            "Should default to ubuntu"
+        );
+    }
+}
+
+#[test]
+fn test_handle_packages_command_nonexistent_package() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        Some(&["nonexistent_package".to_string()]),
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert_eq!(
+        packages.len(),
+        0,
+        "Should return empty array for nonexistent package"
+    );
+}
+
+#[test]
+fn test_handle_packages_command_empty_workspace() {
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_cargo = r#"
+[workspace]
+members = []
+"#;
+    std::fs::write(temp_dir.path().join("Cargo.toml"), workspace_cargo).unwrap();
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert_eq!(
+        packages.len(),
+        0,
+        "Empty workspace should return empty array"
+    );
+}
+
+#[test]
+#[cfg(feature = "git-diff")]
+fn test_handle_packages_command_with_changed_files() {
+    use std::collections::HashSet;
+
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let changed_files = vec![
+        "packages/api/src/lib.rs".to_string(),
+        "packages/core/src/lib.rs".to_string(),
+    ];
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        Some(&changed_files),
+        None,
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty(), "Should detect affected packages");
+
+    let package_names: HashSet<String> = packages
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(package_names.contains("api"), "Should include api package");
+    assert!(
+        package_names.contains("core"),
+        "Should include core package"
+    );
+}
+
+#[test]
+#[cfg(feature = "git-diff")]
+fn test_handle_packages_command_changed_files_with_dependencies() {
+    use std::collections::HashSet;
+
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let changed_files = vec!["packages/models/src/lib.rs".to_string()];
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        Some(&changed_files),
+        None,
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty());
+
+    let package_names: HashSet<String> = packages
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(
+        package_names.contains("models"),
+        "Should include models itself"
+    );
+}
+
+#[test]
+#[cfg(feature = "git-diff")]
+fn test_handle_packages_command_with_include_reasoning() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let changed_files = vec!["packages/api/src/lib.rs".to_string()];
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        Some(&changed_files),
+        None,
+        None,
+        true,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty());
+}
+
+#[test]
+fn test_handle_packages_command_mixed_valid_invalid() {
+    use std::collections::HashSet;
+
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        Some(&[
+            "api".to_string(),
+            "nonexistent".to_string(),
+            "web".to_string(),
+        ]),
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert!(!packages.is_empty());
+
+    let package_names: HashSet<String> = packages
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(package_names.contains("api"));
+    assert!(package_names.contains("web"));
+    assert!(!package_names.contains("nonexistent"));
+}
+
+#[test]
+fn test_handle_packages_command_all_packages() {
+    use std::collections::HashSet;
+
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    let result = handle_packages_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        #[cfg(feature = "git-diff")]
+        None,
+        false,
+        None,
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let packages_json = result.unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&packages_json).unwrap();
+
+    let packages = parsed.as_array().unwrap();
+    assert_eq!(
+        packages.len(),
+        6,
+        "Complex workspace should have 6 packages"
+    );
+
+    let package_names: HashSet<String> = packages
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(package_names.contains("api"));
+    assert!(package_names.contains("web"));
+    assert!(package_names.contains("cli"));
+    assert!(package_names.contains("core"));
+    assert!(package_names.contains("models"));
+    assert!(package_names.contains("shared-utils"));
 }

@@ -3668,6 +3668,217 @@ pub fn handle_validate_feature_propagation_command(
     Ok(validator.validate()?)
 }
 
+/// # Errors
+///
+/// * If the workspace path is invalid or cannot be read
+/// * If the workspace Cargo.toml file cannot be read or parsed
+/// * If any package Cargo.toml file cannot be read or parsed
+/// * If package analysis fails when determining affected packages
+/// * If JSON serialization fails
+/// * If the git-diff feature is required but not enabled
+/// * If git diff analysis fails when `git_base` and `git_head` are provided
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub fn handle_packages_command(
+    file: &str,
+    os: Option<&str>,
+    packages: Option<&[String]>,
+    changed_files: Option<&[String]>,
+    #[cfg(feature = "git-diff")] git_base: Option<&str>,
+    #[cfg(feature = "git-diff")] git_head: Option<&str>,
+    include_reasoning: bool,
+    max_parallel: Option<u16>,
+    output: OutputType,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use std::str::FromStr;
+
+    let path = std::path::PathBuf::from_str(file)?;
+
+    let workspace_cargo_path = path.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+    let workspace_members = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+        .unwrap_or_default();
+
+    let mut package_name_to_path = BTreeMap::new();
+
+    for member_path in &workspace_members {
+        let full_path = path.join(member_path);
+        let cargo_path = full_path.join("Cargo.toml");
+
+        if cargo_path.exists() {
+            let source = std::fs::read_to_string(&cargo_path)?;
+            let value: Value = toml::from_str(&source)?;
+
+            if let Some(package_name) = value
+                .get("package")
+                .and_then(|x| x.get("name"))
+                .and_then(|x| x.as_str())
+            {
+                package_name_to_path.insert(package_name.to_string(), (*member_path).to_string());
+            }
+        }
+    }
+
+    let selected_packages: Vec<String> = if let Some(pkg_list) = packages
+        && !pkg_list.is_empty()
+    {
+        pkg_list.to_vec()
+    } else {
+        package_name_to_path.keys().cloned().collect()
+    };
+
+    // Determine if we should use filtering logic based on changed files or git diff
+    let use_filtering = changed_files.is_some() || {
+        #[cfg(feature = "git-diff")]
+        {
+            git_base.is_some() && git_head.is_some()
+        }
+        #[cfg(not(feature = "git-diff"))]
+        {
+            false
+        }
+    };
+
+    let affected_packages: Vec<String> = if use_filtering {
+        #[cfg(feature = "git-diff")]
+        use crate::git_diff::{
+            build_external_dependency_map, extract_changed_dependencies_from_git,
+            find_packages_affected_by_external_deps_with_mapping, get_changed_files_from_git,
+        };
+
+        // Collect all changed files (from manual specification and/or git)
+        let mut all_changed_files = Vec::new();
+
+        // Add manually specified changed files
+        if let Some(files) = changed_files {
+            all_changed_files.extend(files.to_vec());
+        }
+
+        // Add changed files from git if git parameters are provided
+        #[cfg(feature = "git-diff")]
+        if let (Some(base), Some(head)) = (git_base, git_head) {
+            let git_changed_files = get_changed_files_from_git(&path, base, head)?;
+            log::debug!("Git changed files: {git_changed_files:?}");
+            all_changed_files.extend(git_changed_files);
+        }
+
+        // Remove duplicates and sort
+        all_changed_files.sort();
+        all_changed_files.dedup();
+
+        // Analyze external dependency changes when git parameters are provided
+        #[allow(unused_mut)]
+        let mut external_affected_packages = Vec::<String>::new();
+
+        #[cfg(feature = "git-diff")]
+        if let (Some(base), Some(head)) = (git_base, git_head) {
+            log::debug!("Analyzing external dependency changes from Cargo.lock");
+
+            // Extract changed external dependencies from Cargo.lock
+            if let Ok(changed_external_deps) =
+                extract_changed_dependencies_from_git(&path, base, head, &all_changed_files)
+            {
+                log::debug!("Changed external dependencies: {changed_external_deps:?}");
+
+                if !changed_external_deps.is_empty() {
+                    // Convert workspace members to Vec<String> for build_external_dependency_map
+                    let workspace_members_owned: Vec<String> =
+                        workspace_members.iter().map(|s| (*s).to_string()).collect();
+
+                    // Build external dependency map
+                    if let Ok(external_dep_map) =
+                        build_external_dependency_map(&path, &workspace_members_owned)
+                    {
+                        // Find packages affected by external dependency changes
+                        let external_affected_mapping =
+                            find_packages_affected_by_external_deps_with_mapping(
+                                &external_dep_map,
+                                &changed_external_deps,
+                            );
+                        external_affected_packages =
+                            external_affected_mapping.keys().cloned().collect();
+                        log::debug!(
+                            "Packages affected by external dependency changes: {external_affected_packages:?}"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Find packages affected by file changes
+        let mut file_affected_packages = if all_changed_files.is_empty() {
+            Vec::new()
+        } else {
+            #[cfg(feature = "git-diff")]
+            {
+                if include_reasoning {
+                    let with_reasoning =
+                        find_affected_packages_with_reasoning(&path, &all_changed_files)?;
+                    with_reasoning.iter().map(|pkg| pkg.name.clone()).collect()
+                } else {
+                    find_affected_packages(&path, &all_changed_files)?
+                }
+            }
+            #[cfg(not(feature = "git-diff"))]
+            {
+                return Err("Git diff analysis requires the git-diff feature".into());
+            }
+        };
+
+        // Combine both sources of affected packages
+        file_affected_packages.extend(external_affected_packages);
+        file_affected_packages.sort();
+        file_affected_packages.dedup();
+
+        file_affected_packages
+    } else {
+        selected_packages.clone()
+    };
+
+    let mut package_list = Vec::new();
+
+    for package_name in selected_packages {
+        if affected_packages.contains(&package_name)
+            && let Some(package_path) = package_name_to_path.get(&package_name)
+        {
+            let mut entry = serde_json::Map::new();
+            entry.insert(
+                "name".to_string(),
+                serde_json::Value::String(package_name.clone()),
+            );
+            entry.insert(
+                "path".to_string(),
+                serde_json::Value::String(package_path.clone()),
+            );
+
+            let os_value = format!("{}{}", os.unwrap_or("ubuntu"), "-latest");
+            entry.insert("os".to_string(), serde_json::Value::String(os_value));
+
+            package_list.push(entry);
+        }
+    }
+
+    if let Some(limit) = max_parallel {
+        package_list.truncate(limit as usize);
+    }
+
+    let result = match output {
+        OutputType::Json => serde_json::to_string(&package_list)?,
+        OutputType::Raw => package_list
+            .iter()
+            .filter_map(|p| p.get("name").and_then(|n| n.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    };
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3732,5 +3943,134 @@ skip-features = ["simd"]
         // Should contain other features
         assert!(feature_names.contains(&"feature1".to_string()));
         assert!(feature_names.contains(&"feature2".to_string()));
+    }
+
+    #[test]
+    fn test_changed_files_deduplication() {
+        let mut files = vec![
+            "packages/api/src/lib.rs".to_string(),
+            "packages/core/src/lib.rs".to_string(),
+            "packages/api/src/lib.rs".to_string(),
+            "packages/models/Cargo.toml".to_string(),
+        ];
+
+        files.sort();
+        files.dedup();
+
+        assert_eq!(files.len(), 3);
+        assert_eq!(
+            files,
+            vec![
+                "packages/api/src/lib.rs",
+                "packages/core/src/lib.rs",
+                "packages/models/Cargo.toml",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_package_list_merging() {
+        let mut file_affected = vec!["api".to_string(), "core".to_string()];
+        let external_affected = vec!["models".to_string(), "api".to_string()];
+
+        file_affected.extend(external_affected);
+        file_affected.sort();
+        file_affected.dedup();
+
+        assert_eq!(file_affected.len(), 3);
+        assert_eq!(file_affected, vec!["api", "core", "models"]);
+    }
+
+    #[test]
+    fn test_package_filtering_intersection() {
+        use std::collections::HashSet;
+
+        let selected: HashSet<String> = ["api", "web", "cli", "core"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+
+        let affected: HashSet<String> = ["api", "core", "models"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+
+        let mut result: Vec<String> = selected
+            .iter()
+            .filter(|pkg| affected.contains(*pkg))
+            .cloned()
+            .collect();
+        result.sort();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&"api".to_string()));
+        assert!(result.contains(&"core".to_string()));
+        assert!(!result.contains(&"web".to_string()));
+        assert!(!result.contains(&"models".to_string()));
+    }
+
+    #[test]
+    fn test_empty_changed_files_deduplication() {
+        let mut files: Vec<String> = vec![];
+        files.sort();
+        files.dedup();
+        assert_eq!(files.len(), 0);
+    }
+
+    #[test]
+    fn test_all_duplicate_files() {
+        let mut files = vec![
+            "packages/api/src/lib.rs".to_string(),
+            "packages/api/src/lib.rs".to_string(),
+            "packages/api/src/lib.rs".to_string(),
+        ];
+
+        files.sort();
+        files.dedup();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0], "packages/api/src/lib.rs");
+    }
+
+    #[test]
+    fn test_package_filtering_no_overlap() {
+        use std::collections::HashSet;
+
+        let selected: HashSet<String> = ["api", "web"].iter().map(|s| (*s).to_string()).collect();
+
+        let affected: HashSet<String> = ["models", "core"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+
+        let count = selected
+            .iter()
+            .filter(|pkg| affected.contains(*pkg))
+            .count();
+
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_package_filtering_all_selected_affected() {
+        use std::collections::HashSet;
+
+        let selected: HashSet<String> = ["api", "web"].iter().map(|s| (*s).to_string()).collect();
+
+        let affected: HashSet<String> = ["api", "web", "core", "models"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+
+        let mut result: Vec<String> = selected
+            .iter()
+            .filter(|pkg| affected.contains(*pkg))
+            .cloned()
+            .collect();
+        result.sort();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&"api".to_string()));
+        assert!(result.contains(&"web".to_string()));
     }
 }

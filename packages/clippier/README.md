@@ -144,6 +144,76 @@ clippier features Cargo.toml \
   --output json
 ```
 
+### Packages Command
+
+Generate a list of workspace packages (useful for CI matrix generation with one job per package):
+
+```bash
+# List all packages in workspace
+clippier packages . --output json
+
+# List packages for specific OS
+clippier packages . --os ubuntu --output json
+
+# Filter to specific packages
+clippier packages . --packages "server,auth,database" --output json
+
+# Limit number of packages (useful for parallel job limits)
+clippier packages . --max-parallel 10 --output json
+```
+
+#### With Change Detection (Requires git-diff feature)
+
+List only packages affected by file changes:
+```bash
+# Using manual changed files
+clippier packages . \
+  --changed-files "src/lib.rs,packages/server/src/main.rs" \
+  --output json
+
+# Using git diff
+clippier packages . \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --output json
+
+# Combined: manual files + git diff + external dependency tracking
+clippier packages . \
+  --changed-files "Cargo.lock" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --output json
+```
+
+The packages command provides:
+- **Package enumeration**: List all workspace packages with metadata
+- **Change-based filtering**: Only include packages affected by specific changes
+- **Git integration**: Automatically detect changed files from git commits
+- **External dependency tracking**: Detect packages affected by Cargo.lock changes
+- **CI matrix optimization**: Generate one job per package instead of per feature
+
+**Output format:**
+```json
+[
+  {
+    "name": "server",
+    "path": "packages/server",
+    "os": "ubuntu-latest"
+  },
+  {
+    "name": "auth",
+    "path": "packages/auth",
+    "os": "ubuntu-latest"
+  }
+]
+```
+
+**Use cases:**
+- **CI/CD**: Generate job matrices for parallel package testing
+- **Change analysis**: Identify which packages need rebuilding
+- **Monorepo management**: List subsets of packages for targeted operations
+- **Documentation**: Generate package inventories for workspace documentation
+
 ### Workspace Dependencies
 
 Find all workspace dependencies for a package:
@@ -367,6 +437,19 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--changed-files` | Filter by changed files | - |
 | `--git-base` | Git base commit for external dep analysis | - |
 | `--git-head` | Git head commit for external dep analysis | - |
+
+### Packages Command Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--os` | Target operating system | `ubuntu` |
+| `--packages` | Comma-separated list of packages to include | All packages |
+| `--changed-files` | Filter by changed files | - |
+| `--git-base` | Git base commit for change detection | - |
+| `--git-head` | Git head commit for change detection | - |
+| `--include-reasoning` | Include reasoning for affected packages | false |
+| `--max-parallel` | Maximum number of packages to return | - |
+| `--output` | Output format: `json`, `raw` | `json` |
 
 ### Workspace Dependencies Options
 
@@ -1076,7 +1159,32 @@ echo "🎯 Feature validation completed successfully!"
 
 ## Quick Reference
 
-### Common Package Selection Patterns
+### Packages Command Patterns
+
+```bash
+# List all workspace packages
+clippier packages . --output json
+
+# List packages for specific OS
+clippier packages . --os ubuntu --output json
+
+# Filter to specific packages
+clippier packages . --packages server,auth
+
+# Only packages affected by changes
+clippier packages . --changed-files "src/lib.rs,Cargo.toml"
+
+# Only packages affected by git changes
+clippier packages . --git-base origin/main --git-head HEAD
+
+# Combined with max parallel limit
+clippier packages . --max-parallel 20 --output json
+
+# Raw output (package names only)
+clippier packages . --output raw
+```
+
+### Common Package Selection Patterns (Features Command)
 
 ```bash
 # Single package
