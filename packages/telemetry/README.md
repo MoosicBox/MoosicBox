@@ -1,4 +1,4 @@
-# Telemetry
+# Switchy Telemetry
 
 OpenTelemetry integration for distributed tracing and metrics collection.
 
@@ -26,7 +26,6 @@ The Telemetry package provides:
 - **Request Metrics**: HTTP request/response monitoring
 - **Actix Web Middleware**: Drop-in middleware for request tracing
 - **Custom Handlers**: Pluggable metrics collection handlers
-- **Prometheus Integration**: Optional Prometheus metrics export
 
 ### Simulator Support
 - **Testing Mode**: Simulate telemetry without external dependencies
@@ -39,10 +38,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-telemetry = { path = "../telemetry" }
+switchy_telemetry = { path = "../telemetry" }
 
 # With specific features
-telemetry = {
+switchy_telemetry = {
     path = "../telemetry",
     features = ["actix", "simulator"]
 }
@@ -53,7 +52,7 @@ telemetry = {
 ### Initialize Tracing
 
 ```rust
-use telemetry::init_tracer;
+use switchy_telemetry::init_tracer;
 use moosicbox_logging::free_log_client::DynLayer;
 
 // Initialize OpenTelemetry tracing
@@ -81,12 +80,12 @@ export OTEL_ENDPOINT=http://jaeger:4317
 
 ```rust
 use actix_web::{web, App, HttpServer};
-use telemetry::{RequestTracing, get_http_metrics_handler, metrics};
+use switchy_telemetry::{RequestTracing, get_http_metrics_handler, metrics};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize telemetry
-    let tracer_layer = telemetry::init_tracer("web-service")?;
+    let tracer_layer = switchy_telemetry::init_tracer("web-service")?;
 
     // Create metrics handler
     let metrics_handler = get_http_metrics_handler();
@@ -115,7 +114,7 @@ async fn my_handler() -> &'static str {
 ### Custom HTTP Metrics Handler
 
 ```rust
-use telemetry::HttpMetricsHandler;
+use switchy_telemetry::HttpMetricsHandler;
 use actix_web::{HttpRequest, HttpResponse};
 use actix_web_opentelemetry::RequestMetrics;
 use futures_util::future::LocalBoxFuture;
@@ -151,7 +150,7 @@ async fn collect_custom_metrics() -> String {
 ### Resource Attribution
 
 ```rust
-use telemetry::get_resource_attr;
+use switchy_telemetry::get_resource_attr;
 use opentelemetry::KeyValue;
 
 // Create resource attributes for service identification
@@ -193,7 +192,7 @@ async fn query_user_data(user_id: u64) -> Result<UserData, DatabaseError> {
 ```rust
 // Enable simulator mode for testing
 #[cfg(feature = "simulator")]
-use telemetry::init_tracer;
+use switchy_telemetry::init_tracer;
 
 // In tests or development
 let tracer_layer = init_tracer("test-service")?;
@@ -221,7 +220,7 @@ let tracer_layer = init_tracer("test-service")?;
 The package provides a `/metrics` endpoint when using Actix Web:
 
 ```rust
-use telemetry::metrics;
+use switchy_telemetry::metrics;
 
 // Add to your Actix Web app
 .service(metrics)
@@ -232,7 +231,7 @@ Access metrics at: `http://localhost:8080/metrics`
 ## Error Handling
 
 ```rust
-use telemetry::init_tracer;
+use switchy_telemetry::init_tracer;
 use opentelemetry_otlp::ExporterBuildError;
 
 match init_tracer("my-service") {
@@ -261,8 +260,7 @@ match init_tracer("my-service") {
 - **Jaeger**: Compatible with Jaeger OTLP receiver
 - **Zipkin**: Compatible with Zipkin OTLP receiver
 - **OpenTelemetry Collector**: Direct OTLP export
-- **Prometheus**: Metrics export (via custom handlers)
-- **Grafana**: Visualization of traces and metrics
+- **Grafana**: Visualization of traces (via Tempo or other OTLP-compatible backends)
 
 ## Use Cases
 
