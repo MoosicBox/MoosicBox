@@ -68,7 +68,7 @@ impl RangeDecoder {
             let sym = (self.leftover_bit << 7) | u32::from(byte >> 1);
             self.leftover_bit = u32::from(byte & 1);
 
-            self.value = ((self.value << 8) + (255 - sym)) & 0x7FFF_FFFF;
+            self.value = (self.value << 8) + (255 - sym);
             self.total_bits += 8;
         }
 
@@ -190,6 +190,8 @@ impl RangeDecoder {
         let d = self.value;
         let r = s >> ftb;
 
+        let debug = icdf.len() == 8 && icdf[0] == 224; // Detect GAIN_PDF_LSB
+
         // Start ret at -1 (will be pre-incremented to 0 on first iteration)
         // Using wrapping arithmetic for the pre-increment pattern
         let mut ret: usize = usize::MAX; // -1 in two's complement
@@ -202,14 +204,41 @@ impl RangeDecoder {
             ret = ret.wrapping_add(1); // Pre-increment (++ret)
             s = r * u32::from(icdf[ret]);
 
+            if debug && ret <= 4 {
+                log::trace!(
+                    "[EC_DEC_ICDF LSB] ret={}, icdf[{}]={}, r={}, s={}, d={}, d>=s: {}",
+                    ret,
+                    ret,
+                    icdf[ret],
+                    r,
+                    s,
+                    d,
+                    d >= s
+                );
+            }
+
             if d >= s {
                 break;
             }
         }
 
         // Update decoder state
-        self.value = d - s;
-        self.range = t - s;
+        let new_val = d - s;
+        let new_range = t - s;
+
+        if debug {
+            log::trace!(
+                "[EC_DEC_ICDF LSB RESULT] ret={}, old_range={}, old_val={}, new_range={}, new_val={}",
+                ret,
+                self.range,
+                self.value,
+                new_range,
+                new_val
+            );
+        }
+
+        self.value = new_val;
+        self.range = new_range;
 
         self.normalize()?;
 
@@ -329,6 +358,21 @@ impl RangeDecoder {
     pub const fn ec_tell(&self) -> u32 {
         let lg = ilog(self.range);
         self.total_bits.saturating_sub(lg)
+    }
+
+    #[must_use]
+    pub const fn get_range(&self) -> u32 {
+        self.range
+    }
+
+    #[must_use]
+    pub const fn get_value(&self) -> u32 {
+        self.value
+    }
+
+    #[must_use]
+    pub const fn get_position(&self) -> usize {
+        self.position
     }
 
     #[must_use]
