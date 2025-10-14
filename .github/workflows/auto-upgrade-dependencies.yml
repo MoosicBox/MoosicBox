@@ -257,33 +257,22 @@ jobs:
                   git fetch origin ${{ needs.upgrade-dependencies.outputs.branch-name }}
                   git checkout ${{ needs.upgrade-dependencies.outputs.branch-name }}
 
-            - uses: dtolnay/rust-toolchain@stable
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
               with:
-                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
-                  components: rustfmt, clippy
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: '3.x'
-
-            - name: Setup CI
-              if: ${{ matrix.package.ciSteps }}
-              run: ${{ matrix.package.ciSteps }}
-
-            - name: Install dependencies
-              if: ${{ matrix.package.dependencies }}
-              run: ${{ matrix.package.dependencies }}
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: 'true'
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
                               --all-targets \
                               --no-default-features \
@@ -301,10 +290,10 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -319,7 +308,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
+                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
@@ -357,7 +346,7 @@ jobs:
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               shell: bash
               run: |
-                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
     commit-compatible:
         name: Commit compatible upgrades
@@ -448,32 +437,21 @@ jobs:
                   git fetch origin ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
                   git checkout ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
 
-            - uses: dtolnay/rust-toolchain@stable
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
               with:
-                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
-                  components: rustfmt, clippy
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: '3.x'
-
-            - name: Setup CI
-              if: ${{ matrix.package.ciSteps }}
-              run: ${{ matrix.package.ciSteps }}
-
-            - name: Install dependencies
-              if: ${{ matrix.package.dependencies }}
-              run: ${{ matrix.package.dependencies }}
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: 'true'
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy --all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy --all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               --all-targets \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -489,9 +467,9 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
@@ -504,7 +482,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
+                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
 
             - uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
@@ -542,7 +520,7 @@ jobs:
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               shell: bash
               run: |
-                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
     commit-incompatible:
         name: Commit incompatible upgrades

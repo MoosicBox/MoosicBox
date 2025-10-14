@@ -122,7 +122,6 @@ jobs:
                       ${{ github.event_name == 'workflow_dispatch' && !github.event.inputs.packages && 'Manual workflow dispatch - all packages included' || '' }}
                       ${{ github.event_name == 'schedule' && 'Scheduled workflow run - all packages included' || '' }}
                   inject-reasoning-condition: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
-
                   # Force full matrix for manual/scheduled runs
                   force-full-matrix-condition: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
 
@@ -153,7 +152,6 @@ jobs:
                           "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}
                       }
                   docker-name-prefix: 'moosicbox_'
-
                   generate-summary: true
                   summary-title: '🧠 Smart CI Analysis Summary'
                   summary-event-name: ${{ github.event_name }}
@@ -251,37 +249,13 @@ jobs:
               with:
                   tool-cache: true
 
-            - uses: dtolnay/rust-toolchain@stable
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
               with:
-                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
-                  components: rustfmt, clippy, llvm-tools-preview
-
-            - name: Setup CI
-              if: ${{ matrix.package.ciSteps }}
-              run: ${{ matrix.package.ciSteps }}
-
-            - uses: pnpm/action-setup@v3
-              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
-              name: Install pnpm
-              with:
-                  version: latest
-                  run_install: false
-
-            - uses: actions/setup-node@v4
-              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
-              name: Install node
-              with:
-                  node-version: latest
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: '3.x'
-
-            - name: Install dependencies
-              if: ${{ matrix.package.dependencies }}
-              shell: bash
-              run: ${{ matrix.package.dependencies }}
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: 'true'
+                  rust-components: 'rustfmt, clippy, llvm-tools-preview'
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
@@ -290,11 +264,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
                               --all-targets \
                               --no-default-features \
@@ -319,11 +293,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report \
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -378,7 +352,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
+                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - name: Download cargo-machete
               uses: actions/download-artifact@master
@@ -420,19 +394,19 @@ jobs:
               if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               if: ${{ matrix.package.os == 'ubuntu-latest' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               if: ${{ matrix.package.os == 'windows-latest' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
+                  ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
 
     build-docker-images:
         runs-on: ubuntu-latest
