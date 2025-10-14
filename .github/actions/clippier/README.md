@@ -110,30 +110,79 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 
 The action automatically detects git ranges and handles complex scenarios:
 
-| Input                | Description                                       | Default                    |
-| -------------------- | ------------------------------------------------- | -------------------------- |
-| `git-strategy`       | Strategy: `auto`, `workflow-history`, or `manual` | `auto`                     |
-| `git-base`           | Git base commit (only for manual strategy)        | -                          |
-| `git-head`           | Git head commit (only for manual strategy)        | -                          |
-| `git-workflow-name`  | Workflow name for API lookups                     | Current workflow           |
-| `git-default-branch` | Default branch name                               | `master`                   |
-| `github-token`       | GitHub token for API access                       | `${{ github.token }}`      |
-| `github-repository`  | Repository for API lookups                        | `${{ github.repository }}` |
-| `github-ref-name`    | Current ref name                                  | `${{ github.ref_name }}`   |
+| Input                | Description                                                         | Default                    |
+| -------------------- | ------------------------------------------------------------------- | -------------------------- |
+| `git-strategy`       | Strategy: `auto`, `workflow-history`, `branch-comparison`, `manual` | `auto`                     |
+| `git-base`           | Git base commit (only for manual strategy)                          | -                          |
+| `git-head`           | Git head commit (only for manual strategy)                          | -                          |
+| `git-compare-branch` | Branch to compare against (for branch-comparison strategy)          | `master`                   |
+| `git-workflow-name`  | Workflow name for API lookups                                       | Current workflow           |
+| `git-default-branch` | Default branch name                                                 | `master`                   |
+| `github-token`       | GitHub token for API access                                         | `${{ github.token }}`      |
+| `github-repository`  | Repository for API lookups                                          | `${{ github.repository }}` |
+| `github-ref-name`    | Current ref name                                                    | `${{ github.ref_name }}`   |
 
 **Strategies:**
 
 - **`auto`** - Detects based on event type (PR, push, workflow_dispatch, etc.)
 - **`workflow-history`** - Uses GitHub API to find valid commits after force pushes
+- **`branch-comparison`** - Compare current branch against a target branch (see below)
 - **`manual`** - Uses provided `git-base` and `git-head`
 
-**Example:**
+#### Branch Comparison Strategy
+
+Perfect for feature branch workflows where you want to see "what changed since master":
 
 ```yaml
 - uses: ./.github/actions/clippier
   with:
       command: features
-      git-strategy: workflow-history # Handles force pushes automatically
+      git-strategy: branch-comparison
+      git-compare-branch: master # or 'main', 'develop', etc.
+```
+
+**How it works:**
+
+1. Finds common ancestor (merge-base) between HEAD and target branch
+2. Compares HEAD against that ancestor
+3. Shows all changes introduced in the current branch
+
+**Use cases:**
+
+- Feature branch testing before merge
+- Manual workflow dispatches on feature branches
+- "What will change when I merge this?"
+- Scheduled branch checks
+
+**Example - Feature Branch Testing:**
+
+```yaml
+name: Test Feature Branch
+on: workflow_dispatch
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # Need full history for merge-base
+
+            - name: Analyze changes vs master
+              uses: ./.github/actions/clippier
+              with:
+                  command: features
+                  git-strategy: branch-comparison
+                  git-compare-branch: master
+```
+
+**Other Examples:**
+
+```yaml
+# Workflow History (handles force pushes)
+- uses: ./.github/actions/clippier
+  with:
+      git-strategy: workflow-history
       changed-files: ${{ steps.files.outputs.all }}
 ```
 

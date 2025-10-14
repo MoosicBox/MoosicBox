@@ -23,6 +23,41 @@ detect_git_range() {
         return
     fi
 
+    if [[ "$strategy" == "branch-comparison" ]]; then
+        local compare_branch="${INPUT_GIT_COMPARE_BRANCH:-${INPUT_GIT_DEFAULT_BRANCH}}"
+        local target="origin/$compare_branch"
+
+        echo "🔀 Branch comparison mode: comparing HEAD against $target"
+
+        # Ensure target branch exists
+        if ! git rev-parse --verify "$target" >/dev/null 2>&1; then
+            echo "⚠️  Target branch $target not found locally, fetching..."
+            if git fetch origin "$compare_branch" 2>/dev/null; then
+                echo "✅ Fetched $compare_branch from origin"
+            else
+                echo "❌ Failed to fetch $compare_branch, falling back to HEAD~1"
+                GIT_BASE="HEAD~1"
+                GIT_HEAD="HEAD"
+                return
+            fi
+        fi
+
+        # Find merge-base (common ancestor)
+        local merge_base=$(git merge-base HEAD "$target" 2>/dev/null)
+
+        if [[ -z "$merge_base" ]]; then
+            echo "⚠️  No common ancestor found, using target branch directly"
+            GIT_BASE="$target"
+        else
+            echo "✅ Found common ancestor: $merge_base"
+            GIT_BASE="$merge_base"
+        fi
+
+        GIT_HEAD="HEAD"
+        echo "Comparing: $GIT_BASE -> $GIT_HEAD"
+        return
+    fi
+
     local event_name="${GITHUB_EVENT_NAME:-$INPUT_SUMMARY_EVENT_NAME}"
 
     echo "🔍 Auto-detecting git range for event: $event_name"

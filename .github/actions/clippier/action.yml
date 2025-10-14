@@ -67,7 +67,7 @@ inputs:
         required: false
 
     git-strategy:
-        description: 'Git comparison strategy: auto (detect event type), workflow-history (use GitHub API), or manual (use provided base/head)'
+        description: 'Git comparison strategy: auto (detect event type), workflow-history (use GitHub API), branch-comparison (compare against branch), or manual (use provided base/head)'
         required: false
         default: 'auto'
 
@@ -78,6 +78,11 @@ inputs:
     git-head:
         description: 'Git head commit (only used when git-strategy is manual)'
         required: false
+
+    git-compare-branch:
+        description: 'Branch to compare against (for branch-comparison strategy)'
+        required: false
+        default: 'master'
 
     git-workflow-name:
         description: 'Workflow name for API lookups (defaults to current workflow)'
@@ -379,6 +384,7 @@ runs:
               INPUT_GIT_STRATEGY: ${{ inputs.git-strategy }}
               INPUT_GIT_BASE: ${{ inputs.git-base }}
               INPUT_GIT_HEAD: ${{ inputs.git-head }}
+              INPUT_GIT_COMPARE_BRANCH: ${{ inputs.git-compare-branch }}
               INPUT_GIT_WORKFLOW_NAME: ${{ inputs.git-workflow-name }}
               INPUT_GIT_DEFAULT_BRANCH: ${{ inputs.git-default-branch }}
               INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
