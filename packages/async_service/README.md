@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_async_service = "0.1.1"
+moosicbox_async_service = "0.1.4"
 ```
 
 ## Usage
@@ -41,15 +41,16 @@ pub struct MyContext {
     pub status: String,
 }
 
-// Use the async_service_body macro to generate the service
-async_service_body!(MyCommand, MyContext, true); // true = sequential processing
+// Use the async_service_sequential macro to generate the service with sequential processing
+// This also generates the Error enum for you
+async_service_sequential!(MyCommand, MyContext);
 
 // Implement the Processor trait
 impl Processor for Service {
-    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Error = Error;
 
     async fn process_command(
-        ctx: Arc<tokio::sync::RwLock<MyContext>>,
+        ctx: Arc<sync::RwLock<MyContext>>,
         command: MyCommand,
     ) -> Result<(), Self::Error> {
         match command {
@@ -76,7 +77,7 @@ impl Processor for Service {
     }
 
     async fn on_shutdown(
-        ctx: Arc<tokio::sync::RwLock<MyContext>>,
+        ctx: Arc<sync::RwLock<MyContext>>,
     ) -> Result<(), Self::Error> {
         println!("Service shutting down");
         Ok(())
@@ -87,7 +88,7 @@ impl Processor for Service {
 ### Running the Service
 
 ```rust
-#[tokio::main]
+#[switchy_async::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create service context
     let context = MyContext {
@@ -128,10 +129,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 // Sequential processing (commands processed one at a time)
-async_service_body!(MyCommand, MyContext, true);
+async_service_sequential!(MyCommand, MyContext);
 
 // Concurrent processing (commands processed in parallel)
-async_service_body!(MyCommand, MyContext, false);
+async_service!(MyCommand, MyContext);
+
+// You can also use the lower-level async_service_body! macro directly
+// if you need to define your own Error type:
+async_service_body!(MyCommand, MyContext, true);  // sequential
+async_service_body!(MyCommand, MyContext, false); // concurrent
 ```
 
 ### Error Handling
@@ -156,9 +162,11 @@ A cloneable handle for sending commands to the service from other tasks.
 
 ### Commander Trait
 Provides methods for sending commands:
-- `send_command()`: Send without waiting
+- `send_command()`: Send without waiting (non-async)
 - `send_command_async()`: Send asynchronously without waiting
 - `send_command_and_wait_async()`: Send and wait for completion
+- `send_command_and_wait_async_on()`: Send and wait for completion on a specific runtime handle
+- `shutdown()`: Shutdown the service
 
 ### Processor Trait
 Define how your service processes commands and handles lifecycle events.
@@ -166,9 +174,10 @@ Define how your service processes commands and handles lifecycle events.
 ## Dependencies
 
 The library re-exports commonly used async utilities:
-- `tokio`: Async runtime and utilities
+- `switchy_async`: Cross-runtime async compatibility layer (supports both tokio and async-std)
 - `async_trait`: Async trait support
-- `flume`: Fast async channels
+- `flume`: Fast MPMC channels
 - `futures`: Additional async utilities
+- `thiserror`: Error derivation macros
 
 This framework provides a foundation for building robust async services in the MoosicBox ecosystem.
