@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_remote_library = "0.1.1"
+moosicbox_remote_library = "0.1.4"
 ```
 
 ## Usage
@@ -76,7 +76,7 @@ async fn browse_remote_library() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     for album in albums_page.items() {
-        println!("Album: {} ({})", album.title, album.date_released);
+        println!("Album: {}", album.title);
     }
 
     Ok(())
@@ -92,7 +92,7 @@ async fn get_tracks_and_albums() -> Result<(), Box<dyn std::error::Error>> {
     // Get specific album
     let album_id = Id::Number(456);
     if let Some(album) = remote_api.album(&album_id).await? {
-        println!("Album: {} by {}", album.title, album.artist);
+        println!("Album: {}", album.title);
 
         // Get tracks in album
         let tracks_page = remote_api.album_tracks(
@@ -105,7 +105,7 @@ async fn get_tracks_and_albums() -> Result<(), Box<dyn std::error::Error>> {
 
         for track in tracks_page.items() {
             println!("Track {}: {}",
-                     track.number.unwrap_or(0),
+                     track.number,
                      track.title);
         }
     }
@@ -113,10 +113,9 @@ async fn get_tracks_and_albums() -> Result<(), Box<dyn std::error::Error>> {
     // Get specific track
     let track_id = Id::Number(789);
     if let Some(track) = remote_api.track(&track_id).await? {
-        println!("Track: {} - {} ({}s)",
+        println!("Track: {} - {}",
                  track.artist,
-                 track.title,
-                 track.duration);
+                 track.title);
     }
 
     Ok(())
@@ -143,7 +142,7 @@ async fn search_remote_library() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Albums found: {}", search_results.albums.len());
     for album in search_results.albums {
-        println!("💿 {} - {}", album.artist, album.title);
+        println!("💿 {}", album.title);
     }
 
     println!("Tracks found: {}", search_results.tracks.len());
@@ -170,7 +169,7 @@ async fn get_album_versions() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     for version in versions_page.items() {
-        println!("Album version: {} ({})", version.title, version.format);
+        println!("Album version: {}", version.title);
     }
 
     Ok(())
@@ -204,9 +203,10 @@ The library implements the standard `MusicApi` trait, providing:
 
 ## Dependencies
 
+- `moosicbox_menu_models`: Menu model types with API support
 - `moosicbox_music_api`: Music API trait definitions
 - `moosicbox_music_models`: Data models for music entities
-- `switchy_http`: HTTP client for API requests
 - `moosicbox_paging`: Pagination utilities
+- `switchy_http`: HTTP client for API requests
 
 This library enables MoosicBox applications to seamlessly access remote music libraries as if they were local, providing a unified interface for distributed music systems.
