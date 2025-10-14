@@ -74,7 +74,7 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 
 # Use the outputs
 - name: Deploy app
-  if: steps.matrix.outputs.app-affected == 'true'
+  if: ${{ fromJson(steps.matrix.outputs.additional-checks).app.affected }}
   run: ./deploy-app.sh
 ```
 
@@ -206,10 +206,35 @@ additional-package-checks: |
     ]
 ```
 
-Creates outputs:
+**Accessing Results:**
 
-- `tauri-affected` (boolean)
-- `tauri-reasoning` (JSON)
+All check results are returned in a single `additional-checks` JSON output:
+
+```yaml
+# Access check results using fromJson()
+- if: ${{ fromJson(steps.analyze.outputs.additional-checks).tauri.affected }}
+  run: echo "Tauri is affected!"
+
+- if: ${{ fromJson(steps.analyze.outputs.additional-checks).server.affected }}
+  run: echo "Server is affected!"
+```
+
+The `additional-checks` output structure:
+
+```json
+{
+  "tauri": {
+    "affected": true,
+    "reasoning": [...]
+  },
+  "server": {
+    "affected": false,
+    "reasoning": [...]
+  }
+}
+```
+
+Each check result contains the full output from the `affected-packages` command, keyed by the `output-key` specified in the configuration.
 
 ### Conditional Matrix Generation
 
@@ -304,12 +329,27 @@ Creates outputs:
 | `has-docker-changes`   | Whether any Docker packages are affected                       |
 | `docker-count`         | Number of Docker images to build                               |
 | `docker-packages-list` | Formatted list of Docker packages                              |
+| `additional-checks`    | JSON object with all additional package check results          |
 
-**Dynamic Outputs:**
-Additional package checks create dynamic outputs based on their `output-key`:
+**Additional Checks Output:**
 
-- `{output-key}-affected` - Boolean indicating if package is affected
-- `{output-key}-reasoning` - JSON reasoning data
+Results from `additional-package-checks` are returned as a JSON object keyed by `output-key`:
+
+```json
+{
+  "tauri": {"affected": true, "reasoning": [...]},
+  "server": {"affected": false, "reasoning": [...]}
+}
+```
+
+**Access via:** `fromJson(steps.analyze.outputs.additional-checks).{key}.affected`
+
+**Example:**
+
+```yaml
+- if: ${{ fromJson(needs.analyze.outputs.additional-checks).tauri.affected }}
+  run: echo "Tauri package is affected"
+```
 
 ## Complete Examples
 
@@ -344,7 +384,8 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             matrix: ${{ steps.analyze.outputs.matrix }}
-            app-affected: ${{ steps.analyze.outputs.app-affected }}
+            app-affected: ${{ fromJson(steps.analyze.outputs.additional-checks).app.affected || false }}
+            additional-checks: ${{ steps.analyze.outputs.additional-checks }}
             docker-matrix: ${{ steps.analyze.outputs.docker-matrix }}
             git-base: ${{ steps.analyze.outputs.git-base }}
             git-head: ${{ steps.analyze.outputs.git-head }}
@@ -428,7 +469,7 @@ jobs:
 
     deploy-app:
         needs: analyze
-        if: needs.analyze.outputs.app-affected == 'true'
+        if: ${{ needs.analyze.outputs.app-affected == true }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -478,6 +519,52 @@ jobs:
 ```
 
 **Result:** ~200 lines → ~8 lines
+
+## Breaking Changes & Migration
+
+### v2.0: Additional Package Checks Output Format
+
+**Breaking Change:** Additional package checks now return results in a single JSON output instead of individual dynamic outputs.
+
+**Before (v1.x):**
+
+```yaml
+- uses: ./.github/actions/clippier
+  with:
+      additional-package-checks: |
+          [{"package": "my_app", "output-key": "app"}]
+
+# Old access pattern (no longer works)
+- if: steps.analyze.outputs.app-affected == 'true'
+  run: ./deploy.sh
+```
+
+**After (v2.0):**
+
+```yaml
+- uses: ./.github/actions/clippier
+  with:
+      additional-package-checks: |
+          [{"package": "my_app", "output-key": "app"}]
+
+# New access pattern (required)
+- if: ${{ fromJson(steps.analyze.outputs.additional-checks).app.affected }}
+  run: ./deploy.sh
+```
+
+**Why?** GitHub Actions composite actions cannot have dynamic outputs. The new format:
+
+- ✅ Works for unlimited additional checks
+- ✅ No action.yml changes needed for new checks
+- ✅ Structured, type-safe access to results
+- ✅ Each check includes full reasoning data
+
+**Migration Steps:**
+
+1. Replace `steps.X.outputs.{key}-affected` with `fromJson(steps.X.outputs.additional-checks).{key}.affected`
+2. Replace `steps.X.outputs.{key}-reasoning` with `fromJson(steps.X.outputs.additional-checks).{key}`
+3. Change boolean comparisons from `== 'true'` to `== true`
+4. Expose `additional-checks` output in job outputs if needed by downstream jobs
 
 ## Clippier Build Configuration
 
