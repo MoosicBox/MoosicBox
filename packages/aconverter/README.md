@@ -34,28 +34,32 @@ The following system dependencies may be required depending on the formats you w
 
 Convert a single audio file:
 ```bash
-aconverter input.flac output.mp3
+aconverter input.flac --output output.mp3
 ```
 
 ### Specify Output Format
 
 Explicitly specify the output format:
 ```bash
-aconverter input.mp3 output.flac --encoding FLAC
+aconverter input.mp3 --output output.flac --encoding FLAC
 ```
 
 ### Quality Settings
 
+**Note**: Quality parameter is parsed but not currently implemented in the encoding process.
+
 Set encoding quality (0-100, default 80):
 ```bash
-aconverter input.wav output.mp3 --quality 95
+aconverter input.wav --output output.mp3 --quality 95
 ```
 
 ### Image Dimensions
 
+**Note**: Width and height parameters are parsed but not currently used in the conversion process.
+
 For formats that support embedded images, specify image dimensions:
 ```bash
-aconverter input.flac output.m4a --width 1024 --height 1024
+aconverter input.flac --output output.m4a --width 1024 --height 1024
 ```
 
 ### Complete Example
@@ -63,7 +67,7 @@ aconverter input.flac output.m4a --width 1024 --height 1024
 ```bash
 aconverter \
   /path/to/input.flac \
-  /path/to/output.mp3 \
+  --output /path/to/output.mp3 \
   --encoding MP3 \
   --quality 90 \
   --width 800 \
@@ -76,9 +80,9 @@ aconverter \
 |--------|-------|-------------|---------|
 | `--encoding` | `-e` | Output format (AAC, FLAC, MP3, OPUS) | Auto-detect from extension |
 | `--output` | `-o` | Output file path | Required |
-| `--quality` | `-q` | Encoding quality (0-100) | 80 |
-| `--width` | | Image width for embedded artwork | - |
-| `--height` | | Image height for embedded artwork | - |
+| `--quality` | `-q` | Encoding quality (0-100) (currently not implemented) | 80 |
+| `--width` | | Image width for embedded artwork (currently not implemented) | - |
+| `--height` | | Image height for embedded artwork (currently not implemented) | - |
 
 ## Supported Formats
 
@@ -106,16 +110,18 @@ The converter automatically preserves the following metadata tags:
 - **Album Artist** - Album artist
 - **Track Number** - Track position
 - **Date/Year** - Release date
-- **Genre** - Music genre
-- **Embedded Artwork** - Album cover images
+
+**Note**: Genre and embedded artwork preservation are not currently implemented.
 
 ## Quality Guidelines
+
+**Note**: The quality parameter is currently not implemented in the encoding process. The information below describes planned functionality.
 
 ### Lossless Formats
 - **FLAC**: Perfect quality preservation, larger file size
 - Use for archival purposes or when quality is paramount
 
-### Lossy Formats
+### Lossy Formats (Planned)
 - **AAC**: Excellent quality at lower bitrates, good for streaming
   - Quality 80-90: Good for general listening
   - Quality 90-100: High quality for critical listening
@@ -128,27 +134,27 @@ The converter automatically preserves the following metadata tags:
 
 ## Examples
 
-### Convert FLAC to high-quality MP3
+### Convert FLAC to MP3
 ```bash
-aconverter album.flac album.mp3 --quality 92
+aconverter album.flac --output album.mp3
 ```
 
 ### Convert MP3 to lossless FLAC
 ```bash
-aconverter song.mp3 song.flac
+aconverter song.mp3 --output song.flac
 ```
 
 ### Batch convert with shell script
 ```bash
 #!/bin/bash
 for file in *.flac; do
-  aconverter "$file" "${file%.flac}.mp3" --quality 85
+  aconverter "$file" --output "${file%.flac}.mp3"
 done
 ```
 
-### Convert with custom artwork size
+### Convert with format specification
 ```bash
-aconverter input.flac output.m4a --width 1200 --height 1200 --quality 85
+aconverter input.flac --output output.m4a --encoding AAC
 ```
 
 ## Error Handling
@@ -162,7 +168,7 @@ Common errors and solutions:
 
 ## Performance
 
-- **Multi-threading**: The converter uses multiple threads for encoding
+- **Async I/O**: The converter uses asynchronous I/O for efficient processing
 - **Memory usage**: Optimized for large files with streaming processing
 - **Disk space**: Ensure sufficient space for output files (lossless formats are larger)
 
