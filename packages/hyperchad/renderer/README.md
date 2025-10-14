@@ -24,8 +24,8 @@ The HyperChad Renderer package provides:
 ### Content System
 - **View**: Full page view with immediate and future content
 - **PartialView**: Targeted partial content updates
-- **Content Enum**: Unified content representation
-- **JSON Support**: Optional JSON content handling
+- **Content Enum**: Unified content representation (View, PartialView, Raw)
+- **JSON Support**: Optional JSON content handling (with `json` feature)
 
 ### Event Handling
 - **RendererEvent**: Event types for renderer communication
@@ -45,12 +45,14 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+# With default features (assets, canvas, html, viewport, viewport-immediate, viewport-retained)
 hyperchad_renderer = { path = "../hyperchad/renderer" }
 
-# Enable additional features
+# With custom features
 hyperchad_renderer = {
     path = "../hyperchad/renderer",
-    features = ["json", "canvas", "assets", "viewport"]
+    default-features = false,
+    features = ["json", "html", "canvas"]
 }
 ```
 
@@ -122,7 +124,7 @@ let partial_content = Content::partial_view(
     Container::default()
 );
 
-// From string (with HTML parsing)
+// From string (as raw HTML)
 let string_content: Content = "<div>Hello World</div>".try_into()?;
 
 // From container
@@ -134,10 +136,10 @@ let container_content = Content::from(Container::default());
 ```rust
 use hyperchad_renderer::{HtmlTagRenderer, Color};
 use hyperchad_transformer::{Container, ResponsiveTrigger};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 struct MyHtmlRenderer {
-    responsive_triggers: HashMap<String, ResponsiveTrigger>,
+    responsive_triggers: BTreeMap<String, ResponsiveTrigger>,
 }
 
 impl HtmlTagRenderer for MyHtmlRenderer {
@@ -155,9 +157,18 @@ impl HtmlTagRenderer for MyHtmlRenderer {
         Ok(())
     }
 
+    fn reactive_conditions_to_css(
+        &self,
+        f: &mut dyn std::io::Write,
+        container: &Container,
+    ) -> Result<(), std::io::Error> {
+        // Generate CSS media queries for responsive triggers
+        Ok(())
+    }
+
     fn root_html(
         &self,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
@@ -188,7 +199,7 @@ impl HtmlTagRenderer for MyHtmlRenderer {
 
     fn partial_html(
         &self,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
@@ -243,14 +254,13 @@ impl Renderer for MyRenderer {
 
 ```rust
 #[cfg(feature = "assets")]
-use hyperchad_renderer::assets::StaticAssetRoute;
+use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 
 #[cfg(feature = "assets")]
 {
     let asset_route = StaticAssetRoute {
         route: "/static/style.css".to_string(),
-        content_type: "text/css".to_string(),
-        content: "body { margin: 0; }".to_string(),
+        target: AssetPathTarget::File("path/to/style.css".into()),
     };
 }
 ```
@@ -269,6 +279,7 @@ use hyperchad_renderer::assets::StaticAssetRoute;
 ### Content Enum
 - **View**: Full page content
 - **PartialView**: Partial content update
+- **Raw**: Raw data with content type
 - **Json**: JSON response (with `json` feature)
 
 ## Traits
@@ -287,17 +298,37 @@ HTML-specific rendering with CSS generation and document structure.
 
 ## Feature Flags
 
-- **`json`**: Enable JSON content support
-- **`canvas`**: Enable canvas rendering capabilities
-- **`assets`**: Enable static asset management
-- **`viewport`**: Enable viewport utilities
+### Default Features
+- **`assets`**: Static asset management
+- **`canvas`**: Canvas rendering capabilities
+- **`html`**: HTML rendering support
+- **`viewport`**: Viewport utilities
+- **`viewport-immediate`**: Immediate mode viewport rendering
+- **`viewport-retained`**: Retained mode viewport rendering
+
+### Optional Features
+- **`json`**: JSON content support
+- **`logic`**: Logic components support
+- **`serde`**: Serialization/deserialization support
+- **`profiling-puffin`**: Puffin profiler integration
+- **`profiling-tracing`**: Tracing profiler integration
+- **`profiling-tracy`**: Tracy profiler integration
+- **`benchmark`**: Benchmarking utilities
+- **`fail-on-warnings`**: Treat warnings as errors
 
 ## Dependencies
 
-- **HyperChad Transformer**: UI transformation and container system
-- **HyperChad Color**: Color handling and conversion
-- **Async Trait**: Async trait support
-- **Switchy Async**: Runtime abstraction
+Core dependencies:
+- **hyperchad_transformer**: UI transformation and container system (with `html` feature)
+- **hyperchad_color**: Color handling and conversion
+- **switchy_async**: Async runtime abstraction (with `rt-multi-thread` and `tokio` features)
+- **async-trait**: Async trait support
+- **bytes**: Byte buffer utilities
+- **log**: Logging support
+
+Optional dependencies:
+- **serde**: Serialization framework (with `serde` feature)
+- **serde_json**: JSON serialization (with `json` feature)
 
 ## Integration
 
