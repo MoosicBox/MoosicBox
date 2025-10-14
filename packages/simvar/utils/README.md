@@ -54,7 +54,7 @@ println!("Worker thread ID: {}", thread_id);
 use moosicbox_simvar_utils::{
     cancel_simulation, cancel_global_simulation,
     is_simulator_cancelled, is_global_simulator_cancelled,
-    reset_simulator_cancellation_token
+    reset_simulator_cancellation_token, reset_global_simulator_cancellation_token
 };
 
 // Check cancellation status
@@ -69,8 +69,11 @@ cancel_simulation();
 // Cancel global simulation
 cancel_global_simulation();
 
-// Reset cancellation token for new simulation
+// Reset local cancellation token for new simulation
 reset_simulator_cancellation_token();
+
+// Reset global cancellation token for new simulation
+reset_global_simulator_cancellation_token();
 ```
 
 ### Running Futures with Cancellation
