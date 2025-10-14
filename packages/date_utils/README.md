@@ -27,12 +27,13 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 moosicbox_date_utils = { path = "../date_utils" }
+```
 
-# Enable chrono integration
-moosicbox_date_utils = {
-    path = "../date_utils",
-    features = ["chrono"]
-}
+The `chrono` feature is enabled by default. To use without chrono:
+
+```toml
+[dependencies]
+moosicbox_date_utils = { path = "../date_utils", default-features = false }
 ```
 
 ## Usage
