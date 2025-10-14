@@ -298,6 +298,10 @@ outputs:
         description: 'Formatted list of Docker packages for summary'
         value: ${{ steps.run-action.outputs.docker-packages-list }}
 
+    additional-checks:
+        description: 'Results from additional-package-checks as JSON object keyed by output-key (e.g., {"tauri": {"affected": true, "reasoning": [...]}})'
+        value: ${{ steps.run-action.outputs.additional-checks }}
+
 runs:
     using: 'composite'
     steps:

@@ -75,9 +75,10 @@ jobs:
         outputs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
-            has-tauri-changes: ${{ steps.analyze.outputs.tauri-affected }}
+            has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks).tauri.affected || false }}
             reasoning: ${{ steps.analyze.outputs.reasoning }}
-            tauri-reasoning: ${{ steps.analyze.outputs.tauri-reasoning }}
+            tauri-reasoning: ${{ toJson(fromJson(steps.analyze.outputs.additional-checks).tauri) }}
+            additional-checks: ${{ steps.analyze.outputs.additional-checks }}
             randomization-seed: ${{ steps.seed.outputs.value }}
             docker-matrix: ${{ steps.analyze.outputs.docker-matrix }}
             has-docker-changes: ${{ steps.analyze.outputs.has-docker-changes }}
@@ -492,7 +493,7 @@ jobs:
                   fi
 
     create-tauri-app-release:
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == 'true' }}
+        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == true }}
 
         runs-on: ubuntu-latest
 

@@ -336,7 +336,10 @@ run_additional_checks() {
 
     mkdir -p /tmp/clippier_checks
 
-    printf '%s' "$INPUT_ADDITIONAL_PACKAGE_CHECKS" | jq -c '.[]' | while IFS= read -r check; do
+    # Initialize empty JSON object to collect all check results
+    local additional_checks="{}"
+
+    while IFS= read -r check; do
         local package=$(printf '%s' "$check" | jq -r '.package')
         local output_key=$(printf '%s' "$check" | jq -r '."output-key" // .package')
 
@@ -352,16 +355,20 @@ run_additional_checks() {
         local result=$(eval "$cmd" 2>&1 | jq -c .)
         local affected=$(printf '%s' "$result" | jq -r '.affected // false')
 
-        echo "${output_key}-affected=$affected" >> $GITHUB_OUTPUT
-        echo "${output_key}-reasoning<<EOF" >> $GITHUB_OUTPUT
-        printf '%s\n' "$result" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        # Add this check to the aggregated JSON
+        additional_checks=$(printf '%s' "$additional_checks" | jq -c \
+            --arg key "$output_key" \
+            --argjson result "$result" \
+            '. + {($key): $result}')
 
         printf '%s' "$check" > "/tmp/clippier_checks/check_${output_key}.json"
         printf '%s' "$result" > "/tmp/clippier_checks/result_${output_key}.json"
 
         echo "  ✅ $package is $([ "$affected" == "true" ] && echo "affected" || echo "not affected")"
-    done
+    done < <(printf '%s' "$INPUT_ADDITIONAL_PACKAGE_CHECKS" | jq -c '.[]')
+
+    # Output the complete JSON object containing all checks
+    echo "additional-checks=$additional_checks" >> $GITHUB_OUTPUT
 }
 
 analyze_docker_packages() {
