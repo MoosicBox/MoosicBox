@@ -4,7 +4,13 @@ Client-side utilities and integration for MoosicBox Tauri applications.
 
 ## Overview
 
-The MoosicBox Tauri Client package provides:
+The MoosicBox Tauri Client package currently provides minimal initialization functionality. This package serves as a foundation for future client-side integration features.
+
+### Current Features
+
+- **Initialization**: Basic package initialization via `init()` function
+
+### Planned Features
 
 - **Client Integration**: Tauri-specific client functionality
 - **API Communication**: Client-server communication utilities
@@ -17,10 +23,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_app_tauri_client = { path = "../app/tauri/client" }
+moosicbox_app_client = { path = "../app/tauri/client" }
 ```
 
 ## Dependencies
 
-- **Tauri**: Desktop application framework
-- **MoosicBox Core**: Core MoosicBox functionality
+- `moosicbox_assert`: Assertion utilities
+- `log`: Logging framework
