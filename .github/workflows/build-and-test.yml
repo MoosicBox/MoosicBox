@@ -73,16 +73,16 @@ jobs:
         name: Determine affected packages
         runs-on: ubuntu-latest
         outputs:
-            matrix: ${{ steps.analyze-changes.outputs.matrix }}
-            has-changes: ${{ steps.analyze-changes.outputs.has-changes }}
-            has-tauri-changes: ${{ steps.analyze-changes.outputs.has-tauri-changes }}
-            reasoning: ${{ steps.analyze-changes.outputs.reasoning }}
-            tauri-reasoning: ${{ steps.analyze-changes.outputs.tauri-reasoning }}
-            randomization-seed: ${{ steps.analyze-changes.outputs.randomization-seed }}
-            docker-matrix: ${{ steps.analyze-docker-changes.outputs.docker-matrix }}
-            has-docker-changes: ${{ steps.analyze-docker-changes.outputs.has-docker-changes }}
-            docker-count: ${{ steps.analyze-docker-changes.outputs.docker-count }}
-            docker-packages-list: ${{ steps.analyze-docker-changes.outputs.docker-packages-list }}
+            matrix: ${{ steps.analyze.outputs.matrix }}
+            has-changes: ${{ steps.analyze.outputs.has-changes }}
+            has-tauri-changes: ${{ steps.analyze.outputs.tauri-affected }}
+            reasoning: ${{ steps.analyze.outputs.reasoning }}
+            tauri-reasoning: ${{ steps.analyze.outputs.tauri-reasoning }}
+            randomization-seed: ${{ steps.seed.outputs.value }}
+            docker-matrix: ${{ steps.analyze.outputs.docker-matrix }}
+            has-docker-changes: ${{ steps.analyze.outputs.has-docker-changes }}
+            docker-count: ${{ steps.analyze.outputs.docker-count }}
+            docker-packages-list: ${{ steps.analyze.outputs.docker-packages-list }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -90,690 +90,78 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Setup clippier
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  directory: ./packages/clippier
-                  command: cargo build --package clippier --features git-diff --release
-                  output-path: ./target/release/clippier
-                  artifact-name: clippier-binary
-                  cache-key-prefix: moosicbox-clippier
-                  make-executable: true
-                  verify-command: --version
-
-            - name: Analyze changes and generate matrix
-              id: analyze-changes
+            - name: Generate or use provided seed
+              id: seed
               run: |
-                  echo "🔍 Determining git comparison range and analyzing changes..."
-
-                  # Handle seed for deterministic randomization
                   if [[ -n "${{ github.event.inputs.seed }}" ]]; then
-                      RANDOMIZATION_SEED="${{ github.event.inputs.seed }}"
-                      echo "🎲 Using provided seed: $RANDOMIZATION_SEED"
+                      echo "value=${{ github.event.inputs.seed }}" >> $GITHUB_OUTPUT
                   else
-                      RANDOMIZATION_SEED=$(date +%s)$(echo $RANDOM)
-                      echo "🎲 Generated random seed: $RANDOMIZATION_SEED"
-                  fi
-                  echo "randomization-seed=$RANDOMIZATION_SEED" >> $GITHUB_OUTPUT
-
-                  # Determine git comparison range using robust fallback logic
-                  if [ "${{ github.event_name }}" == "pull_request" ]; then
-                      echo "Pull request: comparing ${{ github.event.pull_request.base.sha }} to ${{ github.event.pull_request.head.sha }}"
-                      BASE_SHA="${{ github.event.pull_request.base.sha }}"
-                      HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-                  elif [ "${{ github.event_name }}" == "push" ]; then
-                      BEFORE_SHA="${{ github.event.before }}"
-                      AFTER_SHA="${{ github.event.after }}"
-                      FORCED="${{ github.event.forced }}"
-
-                      echo "Push event: before=$BEFORE_SHA after=$AFTER_SHA forced=$FORCED"
-
-                      if [ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]; then
-                          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
-                          echo "New branch detected, comparing against origin/$DEFAULT_BRANCH"
-                          if ! git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA >/dev/null 2>&1; then
-                              echo "Error: Could not compare against origin/$DEFAULT_BRANCH...$AFTER_SHA"
-                              echo "This likely means the git history is incomplete or the branch doesn't exist"
-                              exit 1
-                          fi
-                          BASE_SHA="origin/$DEFAULT_BRANCH"
-                          HEAD_SHA="$AFTER_SHA"
-                      elif [ "$FORCED" == "true" ] || ! git diff --name-only $BEFORE_SHA..$AFTER_SHA >/dev/null 2>&1; then
-                          if [ "$FORCED" == "true" ]; then
-                              echo "Force push detected - before commit $BEFORE_SHA is no longer valid"
-                          else
-                              echo "Before commit $BEFORE_SHA is not available - likely due to force push"
-                          fi
-
-                          echo "Searching through recent successful workflow runs..."
-                          FOUND_VALID_COMMIT=false
-                          WORKFLOW_RUNS=$(curl -s \
-                              -H "Authorization: Bearer ${{ github.token }}" \
-                              -H "Accept: application/vnd.github.v3+json" \
-                              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-test.yml/runs?branch=${{ github.ref_name }}&per_page=10")
-
-                          for i in $(seq 0 9); do
-                              RUN_SHA=$(echo "$WORKFLOW_RUNS" | jq -r ".workflow_runs[$i].head_sha // empty")
-                              if [ -z "$RUN_SHA" ] || [ "$RUN_SHA" == "null" ] || [ "$RUN_SHA" == "empty" ]; then
-                                  echo "No more workflow runs to check (checked $((i)) runs)"
-                                  break
-                              fi
-
-                              if [ "$RUN_SHA" == "$AFTER_SHA" ]; then
-                                  echo "Skipping current commit $RUN_SHA"
-                                  continue
-                              fi
-
-                              echo "Checking if commit $RUN_SHA is available in git history..."
-                              if git cat-file -e $RUN_SHA 2>/dev/null; then
-                                  echo "Found valid commit from workflow run: $RUN_SHA"
-                                  BASE_SHA="$RUN_SHA"
-                                  HEAD_SHA="$AFTER_SHA"
-                                  FOUND_VALID_COMMIT=true
-                                  break
-                              else
-                                  echo "Commit $RUN_SHA not available in git history, trying next..."
-                              fi
-                          done
-
-                          if [ "$FOUND_VALID_COMMIT" != "true" ]; then
-                              echo "Could not find any valid commits from recent workflow runs, using branch comparison fallback"
-                              DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
-                              if [ "${{ github.ref_name }}" == "$DEFAULT_BRANCH" ]; then
-                                  echo "Force push on default branch - assuming all packages affected"
-                                  BASE_SHA="HEAD~1"
-                                  HEAD_SHA="$AFTER_SHA"
-                              else
-                                  echo "Comparing against origin/$DEFAULT_BRANCH"
-                                  BASE_SHA="origin/$DEFAULT_BRANCH"
-                                  HEAD_SHA="$AFTER_SHA"
-                              fi
-                          fi
-                      else
-                          echo "Comparing commit range: $BEFORE_SHA..$AFTER_SHA"
-                          BASE_SHA="$BEFORE_SHA"
-                          HEAD_SHA="$AFTER_SHA"
-                      fi
-                  else
-                      echo "Workflow dispatch or schedule: comparing against HEAD~1"
-                      BASE_SHA="HEAD~1"
-                      HEAD_SHA="HEAD"
+                      echo "value=$(date +%s)$RANDOM" >> $GITHUB_OUTPUT
                   fi
 
-                  echo "Final comparison range: $BASE_SHA -> $HEAD_SHA"
+            - name: Analyze changes and generate comprehensive matrix
+              id: analyze
+              uses: ./.github/actions/clippier
+              with:
+                  command: features
+                  workspace-path: .
 
-                  # Get changed files, filtering out ignored patterns (same as tj-actions/changed-files)
-                  CHANGED_FILES_RAW=$(git diff --name-only $BASE_SHA $HEAD_SHA || echo "")
+                  # Basic configuration
+                  packages: ${{ github.event.inputs.packages }}
+                  chunked: 15
+                  max-parallel: 256
+                  spread: true
+                  randomize: true
+                  seed: ${{ steps.seed.outputs.value }}
+                  skip-features: fail-on-warnings
+                  include-reasoning: true
+                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  git-strategy: workflow-history
+                  inject-reasoning: |
+                      ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.packages && format('Manual workflow dispatch - selected packages: {0}', github.event.inputs.packages) || '' }}
+                      ${{ github.event_name == 'workflow_dispatch' && !github.event.inputs.packages && 'Manual workflow dispatch - all packages included' || '' }}
+                      ${{ github.event_name == 'schedule' && 'Scheduled workflow run - all packages included' || '' }}
+                  inject-reasoning-condition: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
 
-                  # Filter out ignored files
-                  CHANGED_FILES=""
-                  if [ -n "$CHANGED_FILES_RAW" ]; then
-                      CHANGED_FILES=$(echo "$CHANGED_FILES_RAW" | grep -v -E '^\.github/' | grep -v -E '\.(md|txt)$' | grep -v -E '^Dockerfile' | grep -v -E '^\.dockerignore$' | tr '\n' ',' | sed 's/,$//')
-                  fi
+                  # Force full matrix for manual/scheduled runs
+                  force-full-matrix-condition: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
 
-                  echo "📝 Changed files (after filtering): $CHANGED_FILES"
-
-                  # Generate build matrix
-                  echo ""
-                  echo "🔧 Generating build matrix..."
-
-                  # Determine if we should build anything based on event type and changes
-                  SHOULD_BUILD=false
-                  SELECTED_PACKAGES="${{ github.event.inputs.packages }}"
-
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      if [[ -n "$SELECTED_PACKAGES" ]]; then
-                          echo "🎯 Workflow dispatch with specific packages: $SELECTED_PACKAGES"
-                          # Pass through the packages directly to clippier
-                          CLIPPIER_CMD="./target/release/clippier features . --packages $SELECTED_PACKAGES --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
-                          ANALYSIS_TYPE="selected"
-                          SHOULD_BUILD=true
-                      else
-                          echo "🚀 Workflow dispatch detected - building all packages"
-                          CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
-                          ANALYSIS_TYPE="full"
-                          SHOULD_BUILD=true
-                      fi
-                  elif [[ "${{ github.event_name }}" == "schedule" ]]; then
-                      echo "⏰ Scheduled run - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
-                      ANALYSIS_TYPE="full"
-                      SHOULD_BUILD=true
-                  elif [[ -n "$CHANGED_FILES" ]]; then
-                      echo "🔍 Using smart dependency analysis for Cargo.lock/Cargo.toml changes"
-                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
-                      ANALYSIS_TYPE="smart"
-                      SHOULD_BUILD=true
-                  else
-                      echo "❌ No changes detected and not a scheduled/manual run - skipping builds"
-                      ANALYSIS_TYPE="none"
-                      SHOULD_BUILD=false
-                  fi
-
-                  if [[ "$SHOULD_BUILD" == "true" ]]; then
-                      # Add --include-reasoning to get detailed reasoning for why packages are affected
-                      CLIPPIER_CMD_WITH_REASONING="${CLIPPIER_CMD} --include-reasoning"
-                      echo "Running: $CLIPPIER_CMD_WITH_REASONING"
-
-                      # Get the full output with reasoning
-                      FULL_OUTPUT=$(eval "$CLIPPIER_CMD_WITH_REASONING")
-
-                      # Log the formatted JSON output for debugging
-                      echo "📋 Full clippier output with reasoning:"
-                      echo "$FULL_OUTPUT" | jq .
-
-                      # For manual/scheduled runs, enhance the reasoning with manual context
-                      if [[ "$ANALYSIS_TYPE" == "full" || "$ANALYSIS_TYPE" == "selected" ]]; then
-                          MANUAL_REASON=""
-                          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                              if [[ -n "$SELECTED_PACKAGES" ]]; then
-                                  MANUAL_REASON="Manual workflow dispatch - selected packages: $SELECTED_PACKAGES"
-                              else
-                                  MANUAL_REASON="Manual workflow dispatch - all packages included"
-                              fi
-                          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
-                              MANUAL_REASON="Scheduled workflow run - all packages included"
-                          fi
-
-                          # Add manual reasoning to each package in the output
-                          if [[ -n "$MANUAL_REASON" ]]; then
-                              echo "🔄 Adding manual reasoning to all packages: $MANUAL_REASON"
-                              FULL_OUTPUT=$(echo "$FULL_OUTPUT" | jq --arg reason "$MANUAL_REASON" 'map(. + {reasoning: [($reason)]})')
-                          fi
-                      fi
-
-                      # Extract matrix (same as before, but preserve reasoning for later)
-                      MATRIX=$(
-                          echo "$FULL_OUTPUT" \
-                              | jq -rc \
-                                  '[
-                                      .[]
-                                      | {
-                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
-                                          "path": (.path),
-                                          "features": (.features),
-                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                          "os": (.os + "-latest"),
-                                          "dependencies": (.dependencies),
-                                          "toolchains": (.toolchains),
-                                          "ciSteps": (.ciSteps),
-                                          "ciToolchains": (.ciToolchains),
-                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                          "nightly": (.nightly),
-                                          "gitSubmodules": (.gitSubmodules)
-                                      }
-                                      | del(.. | nulls)
-                                  ]'
-                      )
-
-                      # Store the reasoning for the CI summary
-                      REASONING_OUTPUT=$(echo "$FULL_OUTPUT" | jq -c .)
-                      echo 'reasoning<<EOF' >> $GITHUB_OUTPUT
-                      echo "$REASONING_OUTPUT" >> $GITHUB_OUTPUT
-                      echo 'EOF' >> $GITHUB_OUTPUT
-
-                      echo "Matrix length: $(echo "$MATRIX" | jq length)"
-
-                      # Show what the analysis found
-                      if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
-                          echo "🎯 Smart dependency analysis results:"
-                          echo "$MATRIX" | jq -r '[.[].name] | unique []' | sed 's/^/  - /'
-                          JOBS_COUNT=$(echo "$MATRIX" | jq length)
-                          PACKAGES_LENGTH=$(echo "$MATRIX" | jq '[.[].name] | unique | length')
-                          JOB_PLURAL=$([[ "$JOBS_COUNT" -eq 1 ]] && echo "job" || echo "jobs")
-                          PACKAGE_PLURAL=$([[ "$PACKAGES_LENGTH" -eq 1 ]] && echo "package" || echo "packages")
-                          echo "📊 Building $JOBS_COUNT $JOB_PLURAL for $PACKAGES_LENGTH affected $PACKAGE_PLURAL (instead of full workspace)"
-                      fi
-
-                      # Check if matrix is empty (shouldn't happen for workflow_dispatch/schedule, but could for smart/file analysis)
-                      if [[ "$(echo "$MATRIX" | jq length)" -eq 0 ]]; then
-                          echo "has-changes=false" >> $GITHUB_OUTPUT
-                          echo "matrix=[]" >> $GITHUB_OUTPUT
-                          echo "reasoning=" >> $GITHUB_OUTPUT
-                          echo "⚠️ No packages affected by changes"
-                      else
-                          echo "has-changes=true" >> $GITHUB_OUTPUT
-                          echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
-                          echo "✅ Found affected packages"
-                      fi
-                  else
-                      # No changes detected and not a manual/scheduled run
-                      echo "has-changes=false" >> $GITHUB_OUTPUT
-                      echo "matrix=[]" >> $GITHUB_OUTPUT
-                      echo "reasoning=" >> $GITHUB_OUTPUT
-                      echo "⚠️ No changes detected - builds will be skipped"
-                  fi
-
-                  # Check Tauri-related changes
-                  echo ""
-                  echo "🎯 Checking Tauri-related changes..."
-
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
-                      # For manual or scheduled runs, check if Tauri should be affected
-                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
-                          # Check if app package is in the selected packages list (with full name)
-                          if echo "$SELECTED_PACKAGES" | grep -qE "(^|,)moosicbox_app(,|$)"; then
-                              echo "Manual run with moosicbox_app package selected - Tauri is affected"
-                              echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                              echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual workflow dispatch with moosicbox_app package selected"]}' >> $GITHUB_OUTPUT
-                              echo "✅ Tauri-related changes detected for selected moosicbox_app package"
-                          else
-                              echo "Manual run without moosicbox_app package selected - Tauri is not affected"
-                              echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
-                              echo 'tauri-reasoning={"affected": false, "reasoning": ["Manual workflow dispatch without moosicbox_app package selected"]}' >> $GITHUB_OUTPUT
-                              echo "❌ Tauri-related changes not detected - moosicbox_app package not selected"
-                          fi
-                      else
-                          # For full manual or scheduled runs, assume Tauri is affected
-                          echo "Manual or scheduled run - assuming Tauri is affected"
-                          echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                          echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual or scheduled workflow run - all packages assumed affected"]}' >> $GITHUB_OUTPUT
-                          echo "✅ Tauri-related changes assumed for manual/scheduled run"
-                      fi
-                  elif [[ "$SHOULD_BUILD" == "true" && -n "$CHANGED_FILES" ]]; then
-                      # First check if app-website files changed (these don't affect Rust packages but do affect Tauri)
-                      WEBSITE_AFFECTED=false
-                      if echo "$CHANGED_FILES" | grep -q "app-website/"; then
-                          echo "App website files changed - Tauri release needed"
-                          WEBSITE_AFFECTED=true
-                      fi
-
-                      # Use clippier to check if the moosicbox_app package is affected by the changes
-                      echo "Checking if moosicbox_app package is affected by changes..."
-
-                      if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
-                          echo "🔍 Using smart dependency analysis for Tauri check"
-                          TAURI_CHECK_RESULT=$(./target/release/clippier affected-packages . --changed-files "$CHANGED_FILES" --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json --include-reasoning)
-                      else
-                          echo "📝 Using file-based analysis for Tauri check"
-                          TAURI_CHECK_RESULT=$(./target/release/clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json --include-reasoning)
-                      fi
-
-                      echo "📋 Tauri check result with reasoning:"
-                      echo "$TAURI_CHECK_RESULT" | jq .
-
-                      TAURI_AFFECTED=$(echo "$TAURI_CHECK_RESULT" | jq -r '.affected')
-
-                      # Store the Tauri reasoning for the CI summary
-                      echo 'tauri-reasoning<<EOF' >> $GITHUB_OUTPUT
-                      echo "$TAURI_CHECK_RESULT" >> $GITHUB_OUTPUT
-                      echo 'EOF' >> $GITHUB_OUTPUT
-
-                      if [[ "$TAURI_AFFECTED" == "true" ]]; then
-                          echo "✅ moosicbox_app package is affected by changes"
-                          # Show which packages were affected that led to this determination
-                          AFFECTED_PACKAGES=$(echo "$TAURI_CHECK_RESULT" | jq -r '.all_affected[]')
-                          echo "All affected packages:"
-                          echo "$AFFECTED_PACKAGES" | sed 's/^/  - /'
-                      else
-                          echo "❌ moosicbox_app package is not affected by changes"
-                          TAURI_AFFECTED=false
-                      fi
-
-                      # Final determination
-                      if [[ "$WEBSITE_AFFECTED" == "true" || "$TAURI_AFFECTED" == "true" ]]; then
-                          echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                          echo "✅ Tauri-related changes detected - Tauri release will be triggered"
-                      else
-                          echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
-                          echo "❌ No Tauri-related changes detected - Tauri release will be skipped"
-                      fi
-                  else
-                      # No changes detected and not a manual/scheduled run
-                      echo "No changes detected - Tauri release will be skipped"
-                      echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
-                      echo "tauri-reasoning=" >> $GITHUB_OUTPUT
-                      echo "❌ No Tauri-related changes detected"
-                  fi
-
-            - name: Analyze Docker changes
-              id: analyze-docker-changes
-              run: |
-                  echo "🐳 Analyzing Docker package requirements..."
-
-                  # Define the packages that have Docker images (mapping from package name to docker info)
-                  DOCKER_PACKAGES='{"moosicbox_server": {"name": "server", "dockerfile": "packages/server/Server.Dockerfile"}, "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"}, "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}}'
-
-                  # Function to create Docker matrix entry with environment variables
-                  create_docker_entry() {
-                      local pkg_name="$1"
-                      local affected_matrix="$2"
-
-                      DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg_name\" // empty")
-                      if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                          # Get environment variables and gitSubmodules for this package from the matrix
-                          PACKAGE_ENV=$(echo "$affected_matrix" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
-                          PACKAGE_GIT_SUBMODULES=$(echo "$affected_matrix" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .gitSubmodules // empty' | head -1)
-
-                          # Create the Docker matrix entry with environment variables and gitSubmodules
-                          DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" --arg submodules "$PACKAGE_GIT_SUBMODULES" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end) + (if $submodules != "" and $submodules != "empty" then {gitSubmodules: ($submodules | test("true"))} else {} end)')
-
-                          MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
-                      fi
-                  }
-
-                  # Function to finalize Docker matrix and outputs
-                  finalize_docker_matrix() {
-                      local affected_packages="$1"
-                      local packages_list="$2"
-
-                      DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
-
-                      if [ "$DOCKER_COUNT" -eq 0 ]; then
-                          echo "✨ No Docker packages are affected by the changes"
-                          DOCKER_MATRIX='{"include": []}'
-                          echo "has-docker-changes=false" >> $GITHUB_OUTPUT
-                          DOCKER_PACKAGES_LIST="none"
-                      else
-                          DOCKER_MATRIX="{\"include\": $MATRIX_PROJECTS}"
-                          echo "has-docker-changes=true" >> $GITHUB_OUTPUT
-                          DOCKER_PACKAGES_LIST="$packages_list"
-                          echo "🐳 Docker packages to build: $affected_packages"
-                          echo "📈 Docker matrix size: $DOCKER_COUNT packages"
-                      fi
-                  }
-
-                  # Get affected packages from the main analysis for environment variables
-                  AFFECTED_MATRIX='${{ steps.analyze-changes.outputs.matrix }}'
-                  MATRIX_PROJECTS="[]"
-
-                  # Determine which packages to build based on event type
-                  SELECTED_PACKAGES="${{ github.event.inputs.packages }}"
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
-                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
-                          echo "🎯 Manual run with specific packages: will build Docker images for selected packages if available"
-                      else
-                          echo "🎯 Manual/scheduled run: will build all Docker packages"
-                      fi
-
-                      # Build Docker packages based on selection
-                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
-                          # Only build Docker packages that are in the selected list
-                          IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_PACKAGES"
-                          for selected_pkg in "${SELECTED_ARRAY[@]}"; do
-                              # Trim whitespace and add moosicbox_ prefix if not present
-                              selected_pkg=$(echo "$selected_pkg" | xargs)
-                              if [[ ! "$selected_pkg" =~ ^moosicbox_ ]]; then
-                                  selected_pkg="moosicbox_$selected_pkg"
-                              fi
-                              # Check if this selected package has a Docker image
-                              DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$selected_pkg\" // empty")
-                              if [[ -n "$DOCKER_INFO" && "$DOCKER_INFO" != "null" && "$DOCKER_INFO" != "empty" ]]; then
-                                  create_docker_entry "$selected_pkg" "$AFFECTED_MATRIX"
-                              fi
-                          done
-                      else
-                          # Build all Docker packages
-                          for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
-                              create_docker_entry "$pkg_name" "$AFFECTED_MATRIX"
-                          done
-                      fi
-
-                      # Create list with manual reasoning
-                      if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                          if [[ -n "$SELECTED_PACKAGES" ]]; then
-                              MANUAL_REASON="Manual workflow dispatch - selected packages: $SELECTED_PACKAGES"
-                          else
-                              MANUAL_REASON="Manual workflow dispatch - all Docker packages included"
-                          fi
-                      else
-                          MANUAL_REASON="Scheduled workflow run - all Docker packages included"
-                      fi
-
-                      DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r --arg reason "$MANUAL_REASON" '[.[] as $docker | "- <details>\n  <summary>" + $docker.name + "</summary>\n  \n  **Why this package is affected:**\n  - " + $reason + "\n  </details>"] | join("\n")')
-
-                      finalize_docker_matrix "all (manual/scheduled)" "$DOCKER_PACKAGES_LIST"
-
-                  elif [[ "${{ steps.analyze-changes.outputs.has-changes }}" == "true" ]]; then
-                      # Extract unique package names from the affected matrix
-                      AFFECTED_PACKAGE_NAMES=$(echo "$AFFECTED_MATRIX" | jq -r '[.[].name] | unique | .[]' | sed 's/^/moosicbox_/')
-
-                      echo "📦 Checking affected packages for Docker images: $AFFECTED_PACKAGE_NAMES"
-
-                      # Build the matrix with packages that both have Docker images and are affected
-                      AFFECTED_DOCKER_PACKAGES=""
-                      DOCKER_PACKAGES_LIST=""
-                      REASONING_DATA='${{ steps.analyze-changes.outputs.reasoning }}'
-
-                      for pkg in $AFFECTED_PACKAGE_NAMES; do
-                          DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg\" // empty")
-                          if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                              create_docker_entry "$pkg" "$AFFECTED_MATRIX"
-                              DOCKER_NAME=$(echo "$DOCKER_INFO" | jq -r '.name')
-
-                              # Get reasoning and job details for this package
-                              if [[ -n "$REASONING_DATA" && "$REASONING_DATA" != "null" && "$REASONING_DATA" != "" ]]; then
-                                  PACKAGE_REASONING=$(echo "$REASONING_DATA" | jq -r --arg pkg "$pkg" '[.[] | select(.name == $pkg) | .reasoning // []] | flatten | unique | map("  - " + .) | join("\n")')
-
-                                  if [[ -n "$PACKAGE_REASONING" && "$PACKAGE_REASONING" != "" ]]; then
-                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Why this package is affected:**\n$PACKAGE_REASONING\n  </details>"
-                                  else
-                                      DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
-                                  fi
-                              else
-                                  DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
-                              fi
-
-                              if [ -z "$AFFECTED_DOCKER_PACKAGES" ]; then
-                                  AFFECTED_DOCKER_PACKAGES="$pkg"
-                                  DOCKER_PACKAGES_LIST="$DOCKER_ENTRY_TEXT"
-                              else
-                                  AFFECTED_DOCKER_PACKAGES="$AFFECTED_DOCKER_PACKAGES, $pkg"
-                                  DOCKER_PACKAGES_LIST="$DOCKER_PACKAGES_LIST"$'\n'"$DOCKER_ENTRY_TEXT"
-                              fi
-                          fi
-                      done
-
-                      finalize_docker_matrix "${AFFECTED_DOCKER_PACKAGES:-none}" "$DOCKER_PACKAGES_LIST"
-                  else
-                      echo "⏭️ No package changes detected - Docker builds will be skipped"
-                      DOCKER_MATRIX='{"include": []}'
-                      echo "has-docker-changes=false" >> $GITHUB_OUTPUT
-                      DOCKER_COUNT=0
-                      DOCKER_PACKAGES_LIST="none"
-                  fi
-
-                  # Ensure the JSON is properly formatted and compact
-                  DOCKER_MATRIX=$(echo "$DOCKER_MATRIX" | jq -c .)
-
-                  # Set outputs for reuse by other jobs
-                  echo "docker-matrix=$DOCKER_MATRIX" >> $GITHUB_OUTPUT
-                  echo "docker-count=$DOCKER_COUNT" >> $GITHUB_OUTPUT
-                  echo "docker-packages-list<<EOF" >> $GITHUB_OUTPUT
-                  echo "$DOCKER_PACKAGES_LIST" >> $GITHUB_OUTPUT
-                  echo "EOF" >> $GITHUB_OUTPUT
-
-    smart-ci-summary:
-        runs-on: ubuntu-latest
-        if: always()
-        needs: [determine-affected-packages]
-        steps:
-            - name: Smart CI Summary
-              run: |
-                  echo "## 🧠 Smart CI Analysis Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  HAS_CHANGES="${{ needs.determine-affected-packages.outputs.has-changes }}"
-                  HAS_TAURI_CHANGES="${{ needs.determine-affected-packages.outputs.has-tauri-changes }}"
-                  EVENT_NAME="${{ github.event_name }}"
-                  RANDOMIZATION_SEED="${{ needs.determine-affected-packages.outputs.randomization-seed }}"
-
-                  # Show event type
-                  case "$EVENT_NAME" in
-                      "workflow_dispatch")
-                          echo "🚀 **Trigger**: Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
-                          ;;
-                      "schedule")
-                          echo "⏰ **Trigger**: Scheduled run" >> $GITHUB_STEP_SUMMARY
-                          ;;
-                      "push")
-                          echo "📤 **Trigger**: Push to ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-                          ;;
-                      "pull_request")
-                          echo "🔀 **Trigger**: Pull request" >> $GITHUB_STEP_SUMMARY
-                          ;;
-                  esac
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  # Show randomization seed for reproducibility
-                  if [[ -n "$RANDOMIZATION_SEED" && "$RANDOMIZATION_SEED" != "null" ]]; then
-                      if [[ -n "${{ github.event.inputs.seed }}" ]]; then
-                          echo "🎲 **Randomization Seed**: $RANDOMIZATION_SEED (provided via workflow input)" >> $GITHUB_STEP_SUMMARY
-                      else
-                          echo "🎲 **Randomization Seed**: $RANDOMIZATION_SEED (auto-generated)" >> $GITHUB_STEP_SUMMARY
-                      fi
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "> To reproduce this exact matrix, run the workflow with seed: \`$RANDOMIZATION_SEED\`" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-                  # Main build matrix summary
-                  if [[ "$HAS_CHANGES" == "true" ]]; then
-                      MATRIX_LENGTH=$(echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq 'length')
-                      PACKAGES_LENGTH=$(echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq '[.[].name] | unique | length')
-                      JOB_PLURAL=$([[ "$MATRIX_LENGTH" -eq 1 ]] && echo "job" || echo "jobs")
-                      PACKAGE_PLURAL=$([[ "$PACKAGES_LENGTH" -eq 1 ]] && echo "package" || echo "packages")
-                      echo "📊 **Build Matrix**: $MATRIX_LENGTH $JOB_PLURAL for $PACKAGES_LENGTH $PACKAGE_PLURAL will be built/tested" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "<details><summary>Affected packages</summary>" >> $GITHUB_STEP_SUMMARY
-
-                      # Combine matrix and reasoning data to show reasoning under each package
-                      REASONING_DATA='${{ needs.determine-affected-packages.outputs.reasoning }}'
-                      echo "🔍 DEBUG: Reasoning data length: ${#REASONING_DATA}"
-                      echo "🔍 DEBUG: First 200 chars of reasoning data: ${REASONING_DATA:0:200}"
-
-                      # Debug matrix structure
-                      echo "🔍 DEBUG: Matrix structure:"
-                      echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -c '.[0:3]'
-
-                      if [[ "$REASONING_DATA" != "" && "$REASONING_DATA" != "null" ]]; then
-                                                    # Generate packages list with inline reasoning and job details
-                          echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r --argjson reasoning "$REASONING_DATA" '
-                              # Group packages and collect all job details
-                              group_by(.name) |
-                              map({
-                                  name: .[0].name,
-                                  job_count: length,
-                                  jobs: .
-                              }) |
-                              # Add reasoning by matching package names
-                              map(
-                                  . as $pkg |
-                                  $pkg + {
-                                      reasoning: (
-                                          $reasoning |
-                                          map(select(
-                                              .name == ("moosicbox_" + $pkg.name) or
-                                              .name == ("switchy_" + $pkg.name) or
-                                              .name == ("hyperchad_" + $pkg.name) or
-                                              .name == $pkg.name
-                                          )) |
-                                          map(.reasoning // []) |
-                                          flatten |
-                                          unique
-                                      )
+                  # Tauri summary & status
+                  additional-package-checks: |
+                      [
+                          {
+                              "package": "moosicbox_app",
+                              "output-key": "tauri",
+                              "summary-section": {
+                                  "title": "📱 Tauri Release Summary",
+                                  "show-reasoning": true,
+                                  "show-all-affected": true,
+                                  "status-labels": {
+                                      "affected": "Will be triggered",
+                                      "not-affected": "Will be skipped"
                                   }
-                              ) |
-                              # Generate the markdown output with job details
-                              map(
-                                  if (.reasoning | length) > 0 then
-                                      "<details>\n  <summary>" + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")</summary>\n  \n" +
-                                      "  **Why this package is affected:**\n" +
-                                      (.reasoning | map("  - " + .) | join("\n")) +
-                                      "\n  \n  **Jobs to run:**\n" +
-                                      (.jobs | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) +
-                                      "\n  </details>"
-                                  else
-                                      .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
-                                  end
-                              ) |
-                              join("\n")
-                          ' >> $GITHUB_STEP_SUMMARY
-                      else
-                          # Fallback to simple list without reasoning
-                          echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
-                      fi
-                  else
-                      if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
-                          echo "⚠️ **No Packages**: Matrix generation may have failed for manual/scheduled run" >> $GITHUB_STEP_SUMMARY
-                      else
-                          echo "🎉 **No Changes**: No packages affected - builds will be skipped!" >> $GITHUB_STEP_SUMMARY
-                      fi
-                  fi
+                              }
+                          }
+                      ]
 
-                  # Docker build summary (using outputs from determine-affected-packages job)
-                  echo "</details>" >> $GITHUB_STEP_SUMMARY
-                  echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+                  # Docker analysis
+                  enable-docker-analysis: true
+                  docker-packages: |
+                      {
+                          "moosicbox_server": {"name": "server", "dockerfile": "packages/server/Server.Dockerfile"},
+                          "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"},
+                          "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}
+                      }
+                  docker-name-prefix: 'moosicbox_'
 
-                  HAS_DOCKER_CHANGES="${{ needs.determine-affected-packages.outputs.has-docker-changes }}"
-                  DOCKER_COUNT="${{ needs.determine-affected-packages.outputs.docker-count }}"
-
-                  if [[ "$HAS_DOCKER_CHANGES" == "true" && "$DOCKER_COUNT" -gt 0 ]]; then
-                      DOCKER_PLURAL=$([[ "$DOCKER_COUNT" -eq 1 ]] && echo "image" || echo "images")
-                      echo "🐳 **Docker Images**: $DOCKER_COUNT Docker $DOCKER_PLURAL will be built" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "**Docker images to build:**" >> $GITHUB_STEP_SUMMARY
-                      echo -e '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
-                  else
-                      if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
-                          if [[ "$HAS_CHANGES" == "true" ]]; then
-                              echo "🐳 **Docker Images**: All Docker images will be built (manual/scheduled run)" >> $GITHUB_STEP_SUMMARY
-                          else
-                              echo "⚠️ **Docker Images**: Manual/scheduled run but no packages detected - Docker builds may be skipped" >> $GITHUB_STEP_SUMMARY
-                          fi
-                      else
-                          echo "✨ **Docker Images**: No Docker-enabled packages affected - Docker builds will be skipped!" >> $GITHUB_STEP_SUMMARY
-                      fi
-                  fi
-
-                  # Tauri release summary (separate section)
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "## 📱 Tauri Release Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  # Add Tauri reasoning details in collapsible section
-                  TAURI_REASONING='${{ needs.determine-affected-packages.outputs.tauri-reasoning }}'
-
-                  if [[ "$HAS_TAURI_CHANGES" == "true" ]]; then
-                      TAURI_STATUS="Will be triggered"
-                  else
-                      TAURI_STATUS="Will be skipped"
-                  fi
-
-                  if [[ "$TAURI_REASONING" != "" && "$TAURI_REASONING" != "null" ]]; then
-                      echo "- <details>" >> $GITHUB_STEP_SUMMARY
-                      echo "  <summary>Tauri Release: $TAURI_STATUS</summary>" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-
-                      # Extract and display the reasoning
-                      TAURI_AFFECTED=$(echo "$TAURI_REASONING" | jq -r '.affected')
-                      echo "  **Result**: moosicbox_app package is $([[ \"$TAURI_AFFECTED\" == \"true\" ]] && echo \"affected\" || echo \"not affected\")" >> $GITHUB_STEP_SUMMARY
-
-                      # Show reasoning if available
-                      REASONING_LIST=$(echo "$TAURI_REASONING" | jq -r '.reasoning[]? // empty')
-                      if [[ -n "$REASONING_LIST" ]]; then
-                          echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "  **Why this package is affected:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$REASONING_LIST" | sed 's/^/    ○ /' >> $GITHUB_STEP_SUMMARY
-                      fi
-
-                      # Show all affected packages if available (only if not empty)
-                      ALL_AFFECTED_JSON=$(echo "$TAURI_REASONING" | jq -r '.all_affected // empty')
-                      if [[ -n "$ALL_AFFECTED_JSON" && "$ALL_AFFECTED_JSON" != "empty" && "$ALL_AFFECTED_JSON" != "null" && "$ALL_AFFECTED_JSON" != "[]" ]]; then
-                          # Check if the array actually has content
-                          AFFECTED_COUNT=$(echo "$ALL_AFFECTED_JSON" | jq 'length')
-                          if [[ "$AFFECTED_COUNT" -gt 0 ]]; then
-                              echo "" >> $GITHUB_STEP_SUMMARY
-                              echo "  **All affected packages in dependency chain:**" >> $GITHUB_STEP_SUMMARY
-                              echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "    • " + .name + (if .reasoning and (.reasoning | length) > 0 then "\n" + (.reasoning | map("      ○ " + .) | join("\n")) else "" end)' >> $GITHUB_STEP_SUMMARY
-                          fi
-                      fi
-
-                      echo "  </details>" >> $GITHUB_STEP_SUMMARY
-                  else
-                      echo "**Tauri Release**: $TAURI_STATUS" >> $GITHUB_STEP_SUMMARY
-                  fi
+                  generate-summary: true
+                  summary-title: '🧠 Smart CI Analysis Summary'
+                  summary-event-name: ${{ github.event_name }}
+                  summary-ref-name: ${{ github.ref_name }}
+                  summary-trigger-input: ${{ github.event.inputs.packages }}
+                  summary-show-trigger: true
+                  summary-show-jobs-details: true
+                  summary-include-seed: true
 
     build-cargo-machete:
         name: Build cargo-machete
@@ -992,19 +380,22 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
-            - uses: actions/download-artifact@master
+            - name: Download cargo-machete
+              uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - name: Download cargo-machete
+              uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin
 
-            - uses: actions/download-artifact@master
+            - name: Download cargo-machete
+              uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'windows-latest' }}
               with:
                   name: cargo-machete.exe

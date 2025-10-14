@@ -54,37 +54,10 @@ jobs:
             - name: Build matrix JSON
               if: ${{ matrix.os == 'ubuntu-latest' }}
               id: build-matrix-step
-              run: |
-                  MATRIX=$(
-                      cargo run -p clippier \
-                          features \
-                          . \
-                          -o json \
-                          | jq -rc \
-                              '[
-                                  .[]
-                                  | {
-                                      "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
-                                      "path": (.path),
-                                      "features": (.features),
-                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                      "os": (.os + "-latest"),
-                                      "dependencies": (.dependencies),
-                                      "toolchains": (.toolchains),
-                                      "ciSteps": (.ciSteps),
-                                      "ciToolchains": (.ciToolchains),
-                                      "env": (if .env != null then .env | gsub("\n";" ") else null end)
-                                  }
-                                  | del(.. | nulls)
-                              ]'
-                  )
-                  echo "Using matrix (raw):"
-                  echo $MATRIX
-                  echo "Using matrix:"
-                  echo $MATRIX | jq
-                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
-                  echo $MATRIX >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+              uses: ./.github/actions/clippier
+              with:
+                  command: features
+                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
 
     bloaty:
         runs-on: ${{ matrix.package.os }}
