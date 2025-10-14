@@ -7,8 +7,8 @@ Basic WebSocket tunnel communication library for the MoosicBox ecosystem, provid
 - **WebSocket Communication**: Basic WebSocket-based messaging
 - **Message Types**: Support for text, binary, ping/pong, and frame messages
 - **Error Handling**: Basic error types for tunnel operations
-- **Music API Integration**: Integration with MoosicBox music API for audio streaming
-- **Request Processing**: Handle tunnel-based HTTP-like requests
+- **Tunnel Request Processing**: Internal handling of tunnel-based HTTP-like requests
+- **Audio Streaming Support**: Backend support for streaming audio through tunnels
 
 ## Installation
 
@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_tunnel_sender = "0.1.1"
+moosicbox_tunnel_sender = "0.1.4"
 ```
 
 ## Usage
@@ -33,6 +33,8 @@ let binary_msg = TunnelMessage::Binary(Bytes::from(b"data".to_vec()));
 let ping_msg = TunnelMessage::Ping(vec![1, 2, 3]);
 let pong_msg = TunnelMessage::Pong(vec![4, 5, 6]);
 let close_msg = TunnelMessage::Close;
+// Frame messages are also supported for low-level WebSocket operations
+// let frame_msg = TunnelMessage::Frame(frame);
 ```
 
 ### Error Handling
@@ -57,21 +59,9 @@ match send_result {
 }
 ```
 
-### Query Types
+### Sender Operations
 
-```rust
-use moosicbox_tunnel_sender::GetTrackQuery;
-use moosicbox_music_models::{AudioFormat, ApiSource};
-use moosicbox_music_api::models::TrackAudioQuality;
-
-// Example track query structure
-let query = GetTrackQuery {
-    track_id: 12345,
-    format: Some(AudioFormat::Flac),
-    quality: Some(TrackAudioQuality::High),
-    source: Some(ApiSource::Library),
-};
-```
+The library provides `TunnelSender` for establishing and managing tunnel connections, handling message routing, and processing tunnel requests. These are internal types used by the MoosicBox server infrastructure for WebSocket-based tunneling.
 
 ## Error Types
 
