@@ -40,10 +40,10 @@ sudo apt install build-essential libssl-dev pkg-config postgresql-dev
 # Clone and build
 git clone https://github.com/MoosicBox/MoosicBox.git
 cd MoosicBox
-cargo build --release --bin tunnel_server
+cargo build --release --bin moosicbox_tunnel_server
 
 # Install binary
-sudo cp target/release/tunnel_server /usr/local/bin/
+sudo cp target/release/moosicbox_tunnel_server /usr/local/bin/
 ```
 
 ### Database Setup
@@ -65,16 +65,16 @@ sudo -u postgres createuser moosicbox
 
 ```bash
 # Start tunnel server on default port 8000
-tunnel_server
+moosicbox_tunnel_server
 
 # Start on custom port
-tunnel_server 8443
+moosicbox_tunnel_server 8443
 
 # With environment variables
 export PORT=8443
 export BIND_ADDR=0.0.0.0
 export DATABASE_URL=postgresql://user:pass@localhost/moosicbox_tunnel
-tunnel_server
+moosicbox_tunnel_server
 ```
 
 ### Environment Variables
@@ -140,20 +140,20 @@ export TOKIO_CONSOLE=1  # For tokio console debugging
 
 ```bash
 # Build with all features
-cargo build --release --bin tunnel_server
+cargo build --release --bin moosicbox_tunnel_server
 
 # Build with specific features
-cargo build --release --bin tunnel_server --features postgres-raw
+cargo build --release --bin moosicbox_tunnel_server --features postgres-raw
 ```
 
 ### Running in Development
 
 ```bash
 # Run with debug logging
-RUST_LOG=debug cargo run --bin tunnel_server
+RUST_LOG=debug cargo run --bin moosicbox_tunnel_server
 
 # Run with tokio console
-TOKIO_CONSOLE=1 cargo run --bin tunnel_server
+TOKIO_CONSOLE=1 cargo run --bin moosicbox_tunnel_server
 ```
 
 ## Implementation Notes
