@@ -149,7 +149,7 @@ println!("All headers allowed: {}", cors.allowed_headers.is_all());
 ### AllOrSome<T>
 - **All**: Allow everything (equivalent to `*`)
 - **Some(T)**: Allow only specific values
-- **Default**: `All` for maximum permissiveness
+- **Type Default**: `AllOrSome<T>` type defaults to `All`, but the `Cors` struct explicitly uses `Some(vec![])` for security
 
 ## Security Considerations
 
