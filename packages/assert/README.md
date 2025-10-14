@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_assert = "0.1.1"
+moosicbox_assert = "0.1.4"
 ```
 
 ## Usage
@@ -181,6 +181,17 @@ Calls `unimplemented!()` when condition fails, or exits with assertion if `ENABL
 
 ### `die!([message])`
 Unconditionally exits with colored output when assertions are enabled.
+
+## Additional Macros
+
+The library also provides additional utility macros for specialized use cases:
+
+- `die_or_warn!(message)`: Exits with colored output if `ENABLE_ASSERT=1`, otherwise logs a warning
+- `die_or_err!(error, message)`: Exits if `ENABLE_ASSERT=1`, otherwise returns the error
+- `die_or_error!(message)`: Exits if `ENABLE_ASSERT=1`, otherwise logs an error
+- `die_or_propagate!(result [, message])`: Exits if `ENABLE_ASSERT=1` and result is error, otherwise propagates error with `?`
+- `die_or_panic!(message)`: Exits if `ENABLE_ASSERT=1`, otherwise panics
+- `die_or_unimplemented!(message)`: Exits if `ENABLE_ASSERT=1`, otherwise calls `unimplemented!()`
 
 ## Environment Variables
 
