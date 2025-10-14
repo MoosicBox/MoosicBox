@@ -7,12 +7,13 @@ Template system and DSL for building HyperChad UI components with macros and uti
 The HyperChad Template package provides:
 
 - **Container Macro**: `container!` macro for declarative UI construction
-- **Template DSL**: Domain-specific language for UI component definition
-- **Rendering System**: Convert templates to HTML strings and containers
-- **Extension Traits**: Utility methods for container collections
-- **Calculation Functions**: CSS calc() function support with units
-- **Color Functions**: RGB/RGBA color creation utilities
-- **No-std Support**: Core functionality works without standard library
+- **Template DSL**: Domain-specific language for UI component definition with CSS-like syntax
+- **Rendering System**: Convert containers to HTML strings
+- **Extension Traits**: Utility methods for container collections (`ContainerVecMethods`, `ContainerVecExt`)
+- **Calculation Functions**: CSS `calc()`, `min()`, `max()`, `clamp()` with viewport units
+- **Color Functions**: `rgb()` and `rgba()` with multiple alpha formats, hex colors, named colors
+- **Action System**: `fx` DSL for interactive behaviors
+- **No-std Support**: Core functionality works without standard library (uses `alloc`)
 
 ## Features
 
@@ -36,15 +37,18 @@ The HyperChad Template package provides:
 
 ### Calculation System
 - **CSS calc()**: Support for CSS calculation expressions
-- **Unit Functions**: vw, vh, dvw, dvh viewport units
+- **CSS Math Functions**: `min()`, `max()`, `clamp()` for responsive sizing
+- **Unit Functions**: `vw()`, `vh()`, `dvw()`, `dvh()` viewport units, `percent()` for percentages
 - **Math Operations**: Add, subtract, multiply, divide operations
 - **Responsive Units**: Percentage and viewport-relative units
+- **Raw Percent Values**: Direct percentage notation (e.g., `100%`, `50%`)
 
 ### Color System
-- **RGB Functions**: rgb() and rgba() color creation
-- **Alpha Support**: Transparency and alpha channel handling
-- **Type Conversion**: Flexible color value conversion
-- **Format Support**: Multiple input formats (float, int, percentage)
+- **RGB Functions**: `rgb()` color creation (3 or 4 arguments)
+- **RGBA Functions**: `rgba()` as alias for 4-argument `rgb()`
+- **Alpha Support**: Float (0.0-1.0), integer (0-255), or percentage ("50%")
+- **Hex Colors**: Support for 3, 6, and 8-digit hex colors (#fff, #ffffff, #ffffffff)
+- **Named Colors**: Built-in color constants (red, blue, white, etc.)
 
 ## Installation
 
@@ -147,13 +151,13 @@ let template = container! {
 ### Calculation Functions
 
 ```rust
-use hyperchad_template::{container, calc::*};
+use hyperchad_template::container;
 
 let template = container! {
     div
-        width=calc!(100% - 20px)
-        height=calc!(min(500px, 80vh))
-        margin=calc!(10px + 5%)
+        width=calc(100% - 20)
+        height=min(500, 80vh)
+        margin=calc(10 + 5%)
     {
         "Calculated dimensions"
     }
@@ -163,7 +167,7 @@ let template = container! {
 ### Unit Functions
 
 ```rust
-use hyperchad_template::{container, unit_functions::*};
+use hyperchad_template::container;
 
 let template = container! {
     div
@@ -179,13 +183,13 @@ let template = container! {
 ### Color Functions
 
 ```rust
-use hyperchad_template::{container, color_functions::*};
+use hyperchad_template::container;
 
 let template = container! {
     div
-        background=rgb(255, 0, 0)           // Red
-        color=rgba(0, 0, 255, 0.8)         // Blue with transparency
-        border-color=rgb_alpha(0, 255, 0, 128) // Green with alpha
+        background=rgb(255, 0, 0)        // Red (3-arg RGB)
+        color=rgb(0, 0, 255, 0.8)       // Blue with transparency (4-arg RGB)
+        border-color=rgba(0, 255, 0, 128) // Green with alpha (rgba alias)
     {
         "Colorful content"
     }
@@ -230,12 +234,11 @@ let template = container! {
 ### Action Integration
 
 ```rust
-use hyperchad_template::{container, IntoActionEffect};
-use hyperchad_actions::ActionType;
+use hyperchad_template::container;
 
 let template = container! {
     button
-        onclick=ActionType::hide_str_id("modal").throttle(500)
+        fx-click=fx { hide("modal") }
     {
         "Close Modal"
     }
@@ -283,6 +286,7 @@ let border = ("red", 2).into_border(); // (Color, Number)
 ### Action Effect Conversion
 ```rust
 use hyperchad_template::IntoActionEffect;
+use hyperchad_template::actions::ActionType;
 
 let effect = ActionType::show_str_id("element").into_action_effect();
 ```
@@ -301,18 +305,22 @@ use alloc::string::String;
 
 ## Feature Flags
 
-The package supports various feature flags through its dependencies:
-- Layout calculation features
-- HTML generation features
-- Formatting and syntax highlighting
+The package supports the following feature flags:
+
+- **`default`**: Enables the `logic` feature
+- **`logic`**: Enables logic features in actions and transformer (conditional rendering, responsive values)
+- **`fail-on-warnings`**: Enables strict compilation mode across all dependencies
 
 ## Dependencies
 
-- **HyperChad Template Macros**: `container!` macro implementation
-- **HyperChad Transformer**: Core container and element types
-- **HyperChad Actions**: Interactive action system
-- **HyperChad Color**: Color handling and conversion
-- **Alloc**: For no-std collections support
+- **hyperchad_template_macros**: `container!` macro implementation
+- **hyperchad_transformer**: Core container and element types
+- **hyperchad_actions**: Interactive action system
+- **hyperchad_color**: Color handling and conversion
+- **hyperchad_template_actions_dsl**: Actions DSL for `fx` syntax
+- **hyperchad_transformer_models**: Model types re-exported from transformer
+- **itoa**: Fast integer to string conversion
+- **ryu**: Fast float to string conversion
 
 ## Integration
 
