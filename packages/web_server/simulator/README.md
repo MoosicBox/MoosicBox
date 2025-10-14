@@ -1,30 +1,67 @@
 # MoosicBox Web Server Simulator
 
-Simulation backend for moosicbox_web_server that provides in-memory HTTP request/response handling for deterministic testing.
+In-memory HTTP request/response simulation for deterministic testing. This package provides the core simulation types and server implementation used by the moosicbox_web_server testing framework.
 
 ## Features
 
 * **In-Memory HTTP**: No actual network operations
 * **Deterministic Behavior**: Predictable responses for testing
-* **Route Matching**: Full route and scope support
-* **Request/Response Mocking**: Complete HTTP simulation
-* **Integration Ready**: Drop-in replacement for actix backend
+* **Request/Response Types**: Complete HTTP request/response simulation with headers, bodies, and status codes
+* **Route Handlers**: Dynamic route registration with async handler support
+* **Mock Responses**: Pre-configured responses for specific request patterns
+* **Request Logging**: Track all handled requests for test verification
+
+## Core Types
+
+* `SimulationWebServer`: Main server implementation with route and mock management
+* `SimulatedRequest`: Represents an HTTP request with method, path, headers, and body
+* `SimulatedResponse`: Represents an HTTP response with status code, headers, and body
+* `RouteHandler`: Async handler function for processing requests
+* `Error`: Error types for route matching and handler execution
 
 ## Usage
 
 ```rust
-use moosicbox_web_server::{WebServerBuilder, Scope, HttpResponse};
+use web_server_simulator::{
+    SimulationWebServer, SimulatedRequest, SimulatedResponse, RouteHandler,
+    handlers,
+};
+use switchy_http_models::Method as HttpMethod;
 
-// Create server with dynamic routes
-let server = WebServerBuilder::new()
-    .with_scope(Scope::new("/api")
-        .get("/health", |_req| {
-            Box::pin(async move {
-                Ok(HttpResponse::ok().with_body("OK"))
-            })
-        }))
-    .build();
+// Create server
+let server = SimulationWebServer::new();
+
+// Add a route handler
+let handler = handlers::text_response(
+    HttpMethod::Get,
+    "/health",
+    "OK"
+);
+server.add_route(handler).await;
+
+// Or add a mock response
+server.add_mock_response(
+    "GET /status",
+    SimulatedResponse::ok().with_text_body("running")
+).await;
 
 // Start server
-server.start().await;
+server.start().await.unwrap();
+
+// Handle requests
+let request = SimulatedRequest::new(HttpMethod::Get, "/health");
+let response = server.handle_request(request).await.unwrap();
 ```
+
+## Helper Functions
+
+The `handlers` module provides convenience functions for common response patterns:
+
+* `json_response()`: Create JSON response handlers
+* `text_response()`: Create plain text response handlers
+* `html_response()`: Create HTML response handlers
+* `health_check()`: Create health check endpoints
+
+## Integration
+
+This package is typically used through the `moosicbox_web_server` crate's simulator backend feature, which provides higher-level integration with `WebServerBuilder`, `Scope`, and routing APIs.
