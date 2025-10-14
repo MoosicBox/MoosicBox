@@ -26,7 +26,7 @@ cargo run -p basic_handler_standalone_example --features actix --no-default-feat
 The example sets up several routes:
 - `/basic-info` - Extracts and displays request information
 - `/double` - Demonstrates using two `RequestData` extractors
-- `/error` - Shows basic error handling
+- `/error` - Demonstrates basic handler with tips about RequestData usage
 
 ## Expected Output
 
