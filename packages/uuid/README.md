@@ -1,12 +1,19 @@
 # switchy_uuid
 
-Deterministic UUID generation for testing and simulation.
+Switchable UUID generation supporting both production and simulation modes.
+
+## Overview
+
+This package provides UUID v4 generation with configurable behavior:
+- **Production mode**: Cryptographically secure random UUIDs via the standard `uuid` crate
+- **Simulation mode**: Deterministic, seeded UUIDs for reproducible testing
 
 ## Features
 
-- **Production**: Uses cryptographically secure random UUIDs
-- **Simulation**: Uses seeded deterministic UUIDs for reproducible testing
-- **Environment Control**: Set `SIMULATOR_UUID_SEED` to control deterministic generation
+- Switchable UUID generation based on feature flags
+- Environment-controlled seeding for deterministic UUIDs
+- Compatible with standard `uuid::Uuid` type
+- Zero-cost abstraction when using only one mode
 
 ## Usage
 
@@ -20,8 +27,18 @@ let id = new_v4();
 let token = new_v4_string();
 ```
 
-## Features
+### Simulation Mode
 
-- `uuid` (default): Enable real UUID generation
-- `simulator` (default): Enable deterministic UUID generation
-- `fail-on-warnings`: Treat warnings as errors
+When the `simulator` feature is enabled (default), UUIDs are generated deterministically using a seeded random number generator. Control the seed via:
+
+```bash
+SIMULATOR_UUID_SEED=12345  # Default seed if not specified
+```
+
+## Feature Flags
+
+- `uuid` (default): Enable standard UUID generation using `uuid::Uuid::new_v4()`
+- `simulator` (default): Enable deterministic UUID generation with seeded RNG
+- `fail-on-warnings`: Treat compiler warnings as errors
+
+**Note**: When both `uuid` and `simulator` are enabled, `simulator` takes precedence.
