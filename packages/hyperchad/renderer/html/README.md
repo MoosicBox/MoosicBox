@@ -64,20 +64,24 @@ hyperchad_renderer_html = {
 
 ## Usage
 
-### Basic HTML Rendering
+### Basic HTML Rendering with Router
 
 ```rust
-use hyperchad_renderer_html::{HtmlRenderer, DefaultHtmlTagRenderer};
-use hyperchad_template::container;
-use hyperchad_renderer::{View, Renderer};
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_actix};
+use hyperchad_router::Router;
+use hyperchad_renderer::Renderer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create HTML tag renderer
     let tag_renderer = DefaultHtmlTagRenderer::default();
 
-    // Create HTML renderer
-    let mut renderer = HtmlRenderer::new(tag_renderer)
+    // Create router and define routes
+    let router = Router::default();
+    // ... configure your routes
+
+    // Create HTML renderer with Actix integration
+    let mut renderer = router_to_actix(tag_renderer, router)
         .with_title(Some("My App".to_string()))
         .with_description(Some("A HyperChad application".to_string()));
 
@@ -93,209 +97,92 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("width=device-width, initial-scale=1"), // viewport
     ).await?;
 
-    // Create HyperChad view
-    let view = container! {
-        div
-            class="container"
-            style="max-width: 800px; margin: 0 auto; padding: 20px;"
-        {
-            h1
-                style="color: #333; text-align: center;"
-            {
-                "Welcome to HyperChad!"
-            }
-
-            p
-                style="font-size: 16px; line-height: 1.6;"
-            {
-                "This is a server-rendered HyperChad application."
-            }
-        }
-    };
-
-    // Render to HTML
-    renderer.render(View::from(view)).await?;
-
     Ok(())
+}
+```
+
+### Direct HTML Generation
+
+```rust
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, html::container_element_to_html_response};
+use hyperchad_router::Container;
+use std::collections::BTreeMap;
+
+fn generate_html(container: &Container) -> Result<String, std::io::Error> {
+    let tag_renderer = DefaultHtmlTagRenderer::default();
+    let headers = BTreeMap::new();
+
+    container_element_to_html_response(
+        &headers,
+        container,
+        Some("width=device-width, initial-scale=1"),
+        None,
+        Some("My Page"),
+        Some("Page description"),
+        &tag_renderer,
+    )
 }
 ```
 
 ### Actix Web Integration
 
 ```rust
-use actix_web::{web, App, HttpServer, HttpResponse, Result};
-use hyperchad_renderer_html::actix::{ActixApp, ActixResponseProcessor};
-use hyperchad_renderer_html::DefaultHtmlTagRenderer;
-use hyperchad_router::{Router, RouteRequest};
-use hyperchad_template::container;
-use std::collections::HashMap;
-
-struct MyResponseProcessor;
-
-#[async_trait::async_trait]
-impl ActixResponseProcessor<RouteRequest> for MyResponseProcessor {
-    fn prepare_request(
-        &self,
-        req: actix_web::HttpRequest,
-        body: Option<std::sync::Arc<bytes::Bytes>>,
-    ) -> Result<RouteRequest, actix_web::Error> {
-        // Convert Actix request to RouteRequest
-        let path = req.path().to_string();
-        let query = req.query_string().to_string();
-        let method = req.method().to_string();
-
-        Ok(RouteRequest {
-            path,
-            query: if query.is_empty() { None } else { Some(query) },
-            method,
-            headers: HashMap::new(),
-            body: body.map(|b| b.to_vec()),
-        })
-    }
-
-    async fn to_response(&self, data: RouteRequest) -> Result<HttpResponse, actix_web::Error> {
-        // Route to appropriate handler
-        match data.path.as_str() {
-            "/" => Ok(HttpResponse::Ok().content_type("text/html").body(
-                render_home_page().await
-            )),
-            "/about" => Ok(HttpResponse::Ok().content_type("text/html").body(
-                render_about_page().await
-            )),
-            _ => Ok(HttpResponse::NotFound().body("Page not found")),
-        }
-    }
-
-    async fn to_body(
-        &self,
-        content: hyperchad_renderer::Content,
-        _data: RouteRequest,
-    ) -> Result<String, actix_web::Error> {
-        Ok(content.to_string())
-    }
-}
-
-async fn render_home_page() -> String {
-    let view = container! {
-        div class="page" {
-            h1 { "Home Page" }
-            p { "Welcome to our website!" }
-            a href="/about" { "About Us" }
-        }
-    };
-
-    // Render with tag renderer
-    let tag_renderer = DefaultHtmlTagRenderer::default();
-    tag_renderer.root_html(
-        &HashMap::new(),
-        &view,
-        view.to_string(),
-        Some("width=device-width, initial-scale=1"),
-        None,
-        Some("Home"),
-        Some("Welcome to our website"),
-    )
-}
+use actix_web::{web, App, HttpServer};
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_actix};
+use hyperchad_router::Router;
+use hyperchad_renderer::{Handle, ToRenderRunner};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let processor = MyResponseProcessor;
-    let (tx, rx) = flume::unbounded();
-    let app = ActixApp::new(processor, rx);
+    // Create HTML tag renderer
+    let tag_renderer = DefaultHtmlTagRenderer::default();
+
+    // Create and configure your router with routes
+    let router = Router::default();
+    // ... configure routes
+
+    // Create HTML renderer with Actix integration
+    let renderer = router_to_actix(tag_renderer, router)
+        .with_title(Some("My App".to_string()))
+        .with_viewport(Some("width=device-width, initial-scale=1".to_string()));
+
+    // Convert to runner and start server
+    let runner = renderer.to_runner(Handle::current())?;
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(app.clone()))
-            .default_service(web::route().to(handle_request))
+            // ... configure your Actix app
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
-}
-
-async fn handle_request(
-    req: actix_web::HttpRequest,
-    body: web::Bytes,
-    data: web::Data<ActixApp<RouteRequest, MyResponseProcessor>>,
-) -> Result<HttpResponse> {
-    let body = if body.is_empty() {
-        None
-    } else {
-        Some(std::sync::Arc::new(body))
-    };
-
-    let route_request = data.processor.prepare_request(req, body)?;
-    data.processor.to_response(route_request).await
 }
 ```
 
 ### Lambda Integration
 
 ```rust
-use hyperchad_renderer_html::lambda::{LambdaApp, LambdaResponseProcessor, Content};
-use lambda_http::{Request, Error as LambdaError};
-use hyperchad_template::container;
-
-struct MyLambdaProcessor;
-
-#[async_trait::async_trait]
-impl LambdaResponseProcessor<String> for MyLambdaProcessor {
-    fn prepare_request(
-        &self,
-        req: Request,
-        _body: Option<std::sync::Arc<bytes::Bytes>>,
-    ) -> Result<String, lambda_runtime::Error> {
-        Ok(req.uri().path().to_string())
-    }
-
-    fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
-        Some(vec![
-            ("Content-Type".to_string(), "text/html".to_string()),
-            ("Cache-Control".to_string(), "public, max-age=3600".to_string()),
-        ])
-    }
-
-    async fn to_response(
-        &self,
-        path: String,
-    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
-        let html = match path.as_str() {
-            "/" => render_home_page(),
-            "/about" => render_about_page(),
-            _ => return Ok(None), // 404
-        };
-
-        Ok(Some((Content::Html(html), None)))
-    }
-
-    async fn to_body(
-        &self,
-        content: hyperchad_renderer::Content,
-        _data: String,
-    ) -> Result<Content, lambda_runtime::Error> {
-        Ok(Content::Html(content.to_string()))
-    }
-}
-
-fn render_home_page() -> String {
-    let view = container! {
-        div class="container" {
-            h1 { "Serverless Home" }
-            p { "This page is rendered by AWS Lambda!" }
-        }
-    };
-
-    format!("<!DOCTYPE html><html><head><title>Home</title></head><body>{}</body></html>",
-            view.to_string())
-}
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_lambda};
+use hyperchad_router::Router;
+use hyperchad_renderer::{Handle, ToRenderRunner};
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_runtime::Error> {
-    let processor = MyLambdaProcessor;
-    let app = LambdaApp::new(processor);
+    // Create HTML tag renderer
+    let tag_renderer = DefaultHtmlTagRenderer::default();
 
-    let runner = app.to_runner(hyperchad_renderer::Handle::current())?;
-    runner.run().map_err(|e| lambda_runtime::Error::from(e.to_string()))?;
+    // Create and configure your router with routes
+    let router = Router::default();
+    // ... configure routes
+
+    // Create HTML renderer with Lambda integration
+    let renderer = router_to_lambda(tag_renderer, router)
+        .with_title(Some("My Serverless App".to_string()))
+        .with_viewport(Some("width=device-width, initial-scale=1".to_string()));
+
+    // Convert to runner and start Lambda handler
+    let runner = renderer.to_runner(Handle::current())?;
+    runner.run().map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
     Ok(())
 }
@@ -307,53 +194,28 @@ async fn main() -> Result<(), lambda_runtime::Error> {
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
 use hyperchad_transformer::{ResponsiveTrigger, Number};
 
-let mut tag_renderer = DefaultHtmlTagRenderer::default()
+// Create tag renderer with responsive breakpoints
+let tag_renderer = DefaultHtmlTagRenderer::default()
     .with_responsive_trigger("mobile", ResponsiveTrigger::MaxWidth(Number::Real(768.0)))
     .with_responsive_trigger("tablet", ResponsiveTrigger::MaxWidth(Number::Real(1024.0)));
 
-let responsive_view = container! {
-    div
-        class="responsive-container"
-        width="100%"
-        direction="row"
-        responsive_target="mobile" => {
-            direction: "column",
-            padding: "10px"
-        }
-        responsive_target="tablet" => {
-            padding: "20px"
-        }
-    {
-        div
-            width="50%"
-            responsive_target="mobile" => {
-                width: "100%"
-            }
-        {
-            h2 { "Main Content" }
-            p { "This content adapts to screen size." }
-        }
-
-        div
-            width="50%"
-            responsive_target="mobile" => {
-                width: "100%"
-            }
-        {
-            h3 { "Sidebar" }
-            p { "This sidebar becomes full-width on mobile." }
-        }
-    }
-};
+// The tag renderer will generate appropriate CSS media queries
+// for responsive overrides defined in your HyperChad components
 ```
 
 ### Static Asset Serving
 
 ```rust
-use hyperchad_renderer::{assets::{StaticAssetRoute, AssetPathTarget}};
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_actix};
+use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
+use hyperchad_router::Router;
 use std::path::PathBuf;
 
-let renderer = HtmlRenderer::new(tag_renderer)
+let tag_renderer = DefaultHtmlTagRenderer::default();
+let router = Router::default();
+
+// Configure static asset routes
+let renderer = router_to_actix(tag_renderer, router)
     .with_static_asset_routes(vec![
         StaticAssetRoute {
             route: "/css/style.css".to_string(),
@@ -368,99 +230,94 @@ let renderer = HtmlRenderer::new(tag_renderer)
             target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
         },
     ]);
-
-// In your HTML template
-let view = container! {
-    html {
-        head {
-            link rel="stylesheet" href="/css/style.css" {}
-            script src="/js/app.js" {}
-        }
-        body {
-            img src="/images/logo.png" alt="Logo" {}
-        }
-    }
-};
 ```
 
-### Partial Updates (HTMX)
+### Partial Updates
+
+The HTML renderer supports partial page updates through the `PartialView` type. When a route returns a `PartialView`, the renderer:
+- Generates only the updated HTML content
+- Sets the `v-fragment` header with the target element selector
+- Works seamlessly with HTMX and similar frameworks
 
 ```rust
-use hyperchad_renderer::PartialView;
+use hyperchad_renderer::{PartialView, Content};
+use hyperchad_router::Container;
 
-// Handle HTMX partial update
-let partial_update = PartialView {
-    target: "content".to_string(),
-    content: container! {
-        div {
-            h2 { "Updated Content" }
-            p { "This content was loaded via HTMX." }
-        }
-    },
-    swap: hyperchad_transformer_models::SwapTarget::InnerHtml,
-};
+// In your route handler, return a PartialView
+async fn update_handler() -> Content {
+    let updated_content = Container::default(); // your updated content
 
-renderer.render_partial(partial_update).await?;
-
-// The HTML template with HTMX
-let htmx_view = container! {
-    div {
-        button
-            hx-get="/api/update"
-            hx-target="#content"
-            hx-swap="innerHTML"
-        {
-            "Load Content"
-        }
-
-        div id="content" {
-            "Initial content"
-        }
-    }
-};
+    Content::PartialView(PartialView {
+        target: "content".to_string(),
+        container: updated_content,
+    })
+}
 ```
 
 ## Feature Flags
 
-- **`actix`**: Enable Actix Web integration
+- **`actix`**: Enable Actix Web integration (implies `extend`)
 - **`lambda`**: Enable AWS Lambda integration
+- **`web-server`**: Enable generic web server integration (implies `extend`)
+- **`web-server-actix`**: Enable Actix-based web server (implies `web-server`)
+- **`web-server-simulator`**: Enable simulator-based web server (implies `web-server`)
 - **`assets`**: Enable static asset serving
 - **`extend`**: Enable renderer extension system
+- **`json`**: Enable JSON content support
+- **`actions`**: Enable action handling (requires `actix`)
+- **`sse`**: Enable Server-Sent Events support (requires `actix`)
+- **`debug`**: Enable debug features
+- **`fail-on-warnings`**: Treat compiler warnings as errors
 
 ## HTML Output Features
 
 ### CSS Generation
-- **Inline Styles**: Component styles as inline CSS
-- **CSS Classes**: Automatic CSS class generation
-- **Media Queries**: Responsive breakpoint CSS
-- **CSS Variables**: Support for CSS custom properties
+- **Inline Styles**: Component styles rendered as inline CSS attributes
+- **CSS Classes**: Automatic CSS class application from HyperChad components
+- **Media Queries**: Responsive breakpoint CSS via `@media` queries
+- **Flexbox & Grid**: CSS flexbox and grid layout generation
 
 ### SEO Optimization
-- **Semantic HTML**: Proper HTML5 semantic elements
+- **Semantic HTML**: Proper HTML5 semantic elements (div, aside, main, header, footer, section, etc.)
 - **Meta Tags**: Title, description, and viewport meta tags
-- **Structured Data**: Support for structured data markup
-- **Accessibility**: ARIA attributes and semantic structure
+- **Server-side Rendering**: Full HTML documents for search engine crawlers
+- **Accessibility**: Proper HTML structure and attributes
 
-## Dependencies
+## Core Dependencies
 
-- **Maud**: HTML template engine for safe HTML generation
-- **HyperChad Core**: Template, transformer, and router systems
-- **Actix Web**: Web framework integration (optional)
-- **Lambda HTTP**: AWS Lambda integration (optional)
-- **Flume**: Async channel communication
+- **hyperchad_renderer**: Core renderer traits and types
+- **hyperchad_router**: Routing and navigation system
+- **hyperchad_transformer**: Element transformation and styling
+- **Maud**: Type-safe HTML template generation
+- **html-escape**: Safe HTML escaping
+- **uaparser**: User agent parsing for client detection
+- **flume**: Async channel communication
+- **switchy**: HTTP models and utilities
+- **hyperchad_renderer_html_actix**: Actix Web integration (optional)
+- **hyperchad_renderer_html_lambda**: AWS Lambda integration (optional)
+- **hyperchad_renderer_html_web_server**: Generic web server integration (optional)
 
 ## Integration
 
 This renderer is designed for:
-- **Web Applications**: Server-side rendered web apps
-- **Static Sites**: Static site generation
-- **Serverless**: AWS Lambda and other serverless platforms
-- **Microservices**: API-driven web services
+- **Web Applications**: Server-side rendered web apps with Actix Web
+- **Serverless**: AWS Lambda deployments
+- **Microservices**: Lightweight HTML rendering services
 - **SEO-critical Sites**: Applications requiring search engine optimization
+
+## Architecture
+
+The package provides:
+1. **`DefaultHtmlTagRenderer`**: Core HTML tag rendering implementation
+2. **`HtmlRenderer<T>`**: Generic renderer wrapper for different app types
+3. **`router_to_actix()`**: Helper to create Actix Web-integrated renderers
+4. **`router_to_lambda()`**: Helper to create Lambda-integrated renderers
+5. **`router_to_web_server()`**: Helper to create generic web server renderers (optional)
+6. **Extension System**: Via `ExtendHtmlRenderer` trait for custom rendering logic
 
 ## Performance Considerations
 
-- **Server-side Rendering**: HTML generation happens on the server
-- **Caching**: Generated HTML can be cached for performance
-- **Streaming**: Supports streaming HTML responses
-- **Minimal JavaScript**: Reduced client-side JavaScript requirements
+- **Server-side Rendering**: HTML generation happens on the server, reducing client-side work
+- **Type-safe HTML**: Maud provides compile-time HTML validation
+- **Efficient Rendering**: Direct byte-level HTML writing for performance
+- **Partial Updates**: Support for efficient partial page updates
