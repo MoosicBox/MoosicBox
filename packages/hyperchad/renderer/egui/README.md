@@ -32,7 +32,7 @@ The HyperChad Egui Renderer provides:
 - **Action System**: Comprehensive action framework with effects
 - **State Management**: Component state and data binding
 - **Navigation**: Route handling and page navigation
-- **Canvas Support**: Optional canvas rendering for graphics
+- **Canvas Support**: Canvas rendering for graphics (available in v1 renderer)
 
 ### Performance Features
 - **Efficient Rendering**: Immediate mode rendering with minimal overhead
@@ -67,11 +67,33 @@ hyperchad_renderer_egui = {
 ### Basic Desktop Application
 
 ```rust
-use hyperchad_renderer_egui::{EguiRenderer, layout::EguiCalc};
+use hyperchad_renderer_egui::EguiRenderer;
+use hyperchad_renderer::{ToRenderRunner, Handle};
 use hyperchad_router::Router;
 use hyperchad_actions::logic::Value;
 use flume::unbounded;
 use std::sync::Arc;
+
+// You need to implement a custom calculator that implements both
+// hyperchad_transformer::layout::Calc and hyperchad_renderer_egui::layout::EguiCalc
+// See packages/hyperchad/app/src/renderer.rs for a complete example
+
+#[derive(Clone)]
+struct MyCalculator;
+
+impl hyperchad_transformer::layout::Calc for MyCalculator {
+    fn calc(&self, container: &mut hyperchad_transformer::Container) -> bool {
+        // Your layout calculation logic
+        true
+    }
+}
+
+impl hyperchad_renderer_egui::layout::EguiCalc for MyCalculator {
+    fn with_context(self, context: eframe::egui::Context) -> Self {
+        // Initialize with egui context
+        self
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -86,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_info = Arc::new(hyperchad_router::ClientInfo::default());
 
     // Create layout calculator
-    let calculator = EguiCalc::default();
+    let calculator = MyCalculator;
 
     // Create renderer
     let mut renderer = EguiRenderer::new(
@@ -110,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     // Create and run the application
-    let runner = renderer.to_runner(hyperchad_renderer::Handle::current())?;
+    let runner = renderer.to_runner(Handle::current())?;
     runner.run()?;
 
     Ok(())
@@ -283,33 +305,16 @@ renderer.render(View::from(image_view)).await?;
 
 ### Custom Layout Calculator
 
-```rust
-use hyperchad_renderer_egui::layout::{EguiCalc, EguiCalcDefaults};
-use hyperchad_transformer::layout::calc::{Calculator, CalculatorDefaults};
+For a complete working example of implementing a custom layout calculator with font metrics
+and default sizing, see `packages/hyperchad/app/src/renderer.rs` which demonstrates:
 
-// Create custom calculator with different defaults
-let calculator = Calculator::new(
-    EguiCalc::default(),
-    CalculatorDefaults {
-        font_size: 18.0,
-        font_margin_top: 2.0,
-        font_margin_bottom: 2.0,
-        h1_font_size: 36.0,
-        h1_font_margin_top: 24.0,
-        h1_font_margin_bottom: 24.0,
-        // ... other heading sizes
-        ..Default::default()
-    },
-);
+- Creating a calculator that implements both `Calc` and `EguiCalc` traits
+- Using `Calculator` with `CalculatorDefaults` for font sizes and margins
+- Integrating `EguiFontMetrics` for accurate text measurement
+- Setting up H1-H6 heading sizes and margins
 
-let renderer = EguiRenderer::new(
-    router,
-    action_tx,
-    resize_tx,
-    client_info,
-    calculator,
-);
-```
+The calculator is initialized with the egui context via the `with_context` method
+when the renderer starts.
 
 ### Event Handling
 
@@ -352,11 +357,12 @@ tokio::spawn(async move {
 
 ```rust
 use hyperchad_renderer::PartialView;
+use hyperchad_template::container;
 
 // Update specific parts of the UI
 let partial_update = PartialView {
     target: "message".to_string(),
-    content: container! {
+    container: container! {
         div
             background="green"
             color="white"
@@ -365,7 +371,6 @@ let partial_update = PartialView {
             "Updated message!"
         }
     },
-    swap: hyperchad_transformer_models::SwapTarget::InnerHtml,
 };
 
 renderer.render_partial(partial_update).await?;
@@ -373,17 +378,21 @@ renderer.render_partial(partial_update).await?;
 
 ### Canvas Rendering
 
+**Note**: Canvas rendering is implemented in the v1 renderer only. The v2 renderer has canvas
+rendering stubbed but not yet implemented.
+
 ```rust
 use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction};
+use hyperchad_renderer::Color;
 
 let canvas_update = CanvasUpdate {
     id: "my-canvas".to_string(),
     actions: vec![
         CanvasAction::Clear,
-        CanvasAction::SetFillStyle("#ff0000".to_string()),
-        CanvasAction::FillRect { x: 10.0, y: 10.0, width: 100.0, height: 50.0 },
-        CanvasAction::SetStrokeStyle("#000000".to_string()),
-        CanvasAction::StrokeRect { x: 10.0, y: 10.0, width: 100.0, height: 50.0 },
+        CanvasAction::StrokeColor(Color::new(255, 0, 0, 255)),
+        CanvasAction::StrokeSize(2.0),
+        CanvasAction::Line((10.0, 10.0), (110.0, 10.0)),
+        CanvasAction::FillRect((10.0, 20.0), (110.0, 70.0)),
     ],
 };
 
@@ -392,11 +401,17 @@ renderer.render_canvas(canvas_update).await?;
 
 ## Feature Flags
 
-- **`wgpu`**: Enable WGPU backend for GPU acceleration
+- **`wgpu`**: Enable WGPU backend for GPU acceleration (enabled by default)
+- **`glow`**: Enable OpenGL backend
+- **`wayland`**: Enable Wayland support on Linux
+- **`x11`**: Enable X11 support on Linux
 - **`profiling`**: Enable performance profiling support
 - **`profiling-puffin`**: Enable puffin profiler integration
 - **`profiling-tracing`**: Enable tracing profiler integration
-- **`debug`**: Enable debug rendering features
+- **`profiling-tracy`**: Enable Tracy profiler integration
+- **`debug`**: Enable debug rendering features (enabled by default)
+- **`v1`**: Use v1 renderer implementation (enabled by default)
+- **`v2`**: Use v2 renderer implementation (enabled by default)
 
 ## Performance Considerations
 
