@@ -7,18 +7,21 @@ A command-line image processing tool for resizing, converting, and optimizing im
 The Image Helper (`image_helper`) is a utility for image processing operations including:
 
 - **Image Resizing**: Resize images while maintaining aspect ratio
-- **Format Conversion**: Convert between multiple image formats
+- **Format Conversion**: Convert between JPEG and WebP formats
 - **Quality Control**: Configurable compression quality settings
 - **Smart Resizing**: Automatic aspect ratio calculation
-- **Batch Processing**: Process multiple images efficiently
-- **libvips Integration**: High-performance image processing (when available)
+- **libvips Integration**: High-performance image processing (non-Windows platforms only)
 
 ## Installation
 
 ### From Source
 
 ```bash
+# Linux/macOS (with libvips support)
 cargo install --path packages/image --features "build-binary,image,libvips"
+
+# Windows (libvips not available)
+cargo install --path packages/image --features "build-binary,image"
 ```
 
 ### Dependencies
@@ -36,33 +39,33 @@ System dependencies for optimal performance:
 
 Resize an image to specific dimensions:
 ```bash
-image_helper input.jpg output.jpg --width 800 --height 600
+image_helper input.jpg --output output.jpg --width 800 --height 600
 ```
 
 ### Maintain Aspect Ratio
 
 Resize by width only (height calculated automatically):
 ```bash
-image_helper input.png output.png --width 1024
+image_helper input.png --output output.png --width 1024
 ```
 
 Resize by height only (width calculated automatically):
 ```bash
-image_helper large.jpg thumbnail.jpg --height 200
+image_helper large.jpg --output thumbnail.jpg --height 200
 ```
 
 ### Format Conversion
 
 Convert between formats:
 ```bash
-image_helper photo.png photo.jpg --encoding JPEG --quality 85
+image_helper photo.png --output photo.jpg --encoding JPEG --quality 85
 ```
 
 ### Quality Control
 
 Set compression quality (0-100):
 ```bash
-image_helper input.jpg output.jpg --width 800 --quality 95
+image_helper input.jpg --output output.jpg --width 800 --quality 95
 ```
 
 ### Complete Example
@@ -70,7 +73,7 @@ image_helper input.jpg output.jpg --width 800 --quality 95
 ```bash
 image_helper \
   /path/to/input.png \
-  /path/to/output.webp \
+  --output /path/to/output.webp \
   --width 1200 \
   --height 800 \
   --encoding WEBP \
@@ -83,13 +86,14 @@ image_helper \
 |--------|-------|-------------|---------|
 | `--width` | `-w` | Target width in pixels | Auto-calculated |
 | `--height` | `-h` | Target height in pixels | Auto-calculated |
-| `--encoding` | `-e` | Output format (JPEG, PNG, WEBP) | Auto-detect from extension |
+| `--encoding` | `-e` | Output format (JPEG, WEBP) | Auto-detect from extension |
 | `--output` | `-o` | Output file path | Required |
 | `--quality` | `-q` | Compression quality (0-100) | 80 |
 
 ## Supported Formats
 
 ### Input Formats
+The tool supports various input formats through the `image` crate, including:
 - **JPEG** (.jpg, .jpeg)
 - **PNG** (.png)
 - **WebP** (.webp)
@@ -100,7 +104,6 @@ image_helper \
 
 ### Output Formats
 - **JPEG** (.jpg, .jpeg) - Good compression, lossy
-- **PNG** (.png) - Lossless, supports transparency
 - **WebP** (.webp) - Modern format, excellent compression
 
 ## Aspect Ratio Handling
@@ -110,25 +113,25 @@ The tool intelligently handles aspect ratios:
 ### Both Dimensions Specified
 ```bash
 # Resize to exact dimensions (may distort image)
-image_helper input.jpg output.jpg --width 800 --height 600
+image_helper input.jpg --output output.jpg --width 800 --height 600
 ```
 
 ### Width Only
 ```bash
 # Height calculated to maintain aspect ratio
-image_helper input.jpg output.jpg --width 800
+image_helper input.jpg --output output.jpg --width 800
 ```
 
 ### Height Only
 ```bash
 # Width calculated to maintain aspect ratio
-image_helper input.jpg output.jpg --height 600
+image_helper input.jpg --output output.jpg --height 600
 ```
 
 ### Neither Dimension
 ```bash
 # Original dimensions preserved, format/quality change only
-image_helper input.png output.jpg --encoding JPEG --quality 85
+image_helper input.png output.jpg --output output.jpg --encoding JPEG --quality 85
 ```
 
 ## Quality Guidelines
@@ -144,61 +147,58 @@ image_helper input.png output.jpg --encoding JPEG --quality 85
 - **70-85**: High quality with good compression
 - **85-100**: Maximum quality
 
-### PNG
-- PNG is lossless, quality setting affects compression level
-- Higher quality = better compression but slower processing
-
 ## Examples
 
 ### Create web thumbnails
 ```bash
 # Create small thumbnail
-image_helper photo.jpg thumb.jpg --width 150 --quality 75
+image_helper photo.jpg --output thumb.jpg --width 150 --quality 75
 
 # Create medium preview
-image_helper photo.jpg preview.jpg --width 400 --quality 80
+image_helper photo.jpg --output preview.jpg --width 400 --quality 80
 ```
 
 ### Convert to modern formats
 ```bash
 # Convert PNG to WebP for better compression
-image_helper large.png optimized.webp --quality 85
+image_helper large.png --output optimized.webp --quality 85
 
 # Convert old JPEG to high-quality WebP
-image_helper old-photo.jpg new-photo.webp --quality 90
+image_helper old-photo.jpg --output new-photo.webp --quality 90
 ```
 
 ### Batch processing script
 ```bash
 #!/bin/bash
+# The CLI processes one image at a time, but can be used in scripts
 mkdir -p thumbnails
 for img in *.jpg; do
-  image_helper "$img" "thumbnails/${img%.jpg}_thumb.jpg" --width 200 --quality 80
+  image_helper "$img" --output "thumbnails/${img%.jpg}_thumb.jpg" --width 200 --quality 80
 done
 ```
 
 ### Album artwork optimization
 ```bash
 # Standard album cover size
-image_helper cover.png cover.jpg --width 1000 --height 1000 --quality 90
+image_helper cover.png --output cover.jpg --width 1000 --height 1000 --quality 90
 
 # High-res album cover
-image_helper cover.png cover_hd.jpg --width 1400 --height 1400 --quality 95
+image_helper cover.png --output cover_hd.jpg --width 1400 --height 1400 --quality 95
 ```
 
 ## Performance
 
 ### libvips vs Image Crate
-- **libvips**: Faster processing, better memory usage, more formats
-- **image crate**: Pure Rust, easier deployment, fewer dependencies
+- **libvips**: Faster processing, better memory usage (Linux/macOS only)
+- **image crate**: Pure Rust, easier deployment, fewer dependencies, cross-platform
 
 ### Memory Usage
-- Optimized for large images with streaming processing
-- Automatically handles memory management for batch operations
+- Optimized for large images
+- libvips provides better memory management for very large files
 
 ### Processing Speed
-- Multi-threaded processing where supported
 - Efficient algorithms for common operations like resizing
+- libvips offers superior performance for high-volume processing
 
 ## Error Handling
 
