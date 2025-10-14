@@ -20,11 +20,11 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_web_server = "0.1.1"
+moosicbox_web_server = "0.1.4"
 
 # Enable features as needed
 moosicbox_web_server = {
-    version = "0.1.1",
+    version = "0.1.4",
     features = ["actix", "cors", "compress", "openapi"]
 }
 ```
@@ -34,63 +34,53 @@ moosicbox_web_server = {
 ### Basic Server Setup
 
 ```rust
-use moosicbox_web_server::{WebServerBuilder, Scope, Route, Method, HttpRequest, HttpResponse};
-use std::future::Future;
-use std::pin::Pin;
+use moosicbox_web_server::{WebServerBuilder, Scope, HttpResponse};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let server = WebServerBuilder::new()
         .with_addr("127.0.0.1")
         .with_port(8080)
         .with_scope(
-            Scope::new("/api")
-                .with_route(Route {
-                    path: "/health",
-                    method: Method::Get,
-                    handler: &|_req| Box::pin(async {
-                        Ok(HttpResponse::ok().with_body("OK"))
-                    }),
+            Scope::new("/api").get("/health", |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok().with_body("OK"))
                 })
-        );
+            })
+        )
+        .build();
 
-    println!("Server configured for 127.0.0.1:8080");
+    server.start().await;
 }
 ```
 
 ### Creating Routes and Scopes
 
 ```rust
-use moosicbox_web_server::{Scope, Route, Method, HttpRequest, HttpResponse, Error};
+use moosicbox_web_server::{Scope, HttpResponse, Error};
+use switchy_http_models::StatusCode;
 
 fn create_api_routes() -> Scope {
     Scope::new("/api/v1")
-        .with_routes([
-            Route {
-                path: "/users",
-                method: Method::Get,
-                handler: &|req| Box::pin(async move {
-                    // Handle GET /api/v1/users
-                    Ok(HttpResponse::ok().with_body(r#"{"users": []}"#))
-                }),
-            },
-            Route {
-                path: "/users",
-                method: Method::Post,
-                handler: &|req| Box::pin(async move {
-                    // Handle POST /api/v1/users
-                    Ok(HttpResponse::from_status_code(201).with_body(r#"{"created": true}"#))
-                }),
-            },
-        ])
+        .get("/users", |_req| {
+            Box::pin(async move {
+                // Handle GET /api/v1/users
+                Ok(HttpResponse::ok().with_body(r#"{"users": []}"#))
+            })
+        })
+        .post("/users", |_req| {
+            Box::pin(async move {
+                // Handle POST /api/v1/users
+                Ok(HttpResponse::from_status_code(StatusCode::Created)
+                    .with_body(r#"{"created": true}"#))
+            })
+        })
         .with_scope(
-            Scope::new("/admin")
-                .with_route(Route {
-                    path: "/stats",
-                    method: Method::Get,
-                    handler: &|req| Box::pin(async move {
-                        Ok(HttpResponse::ok().with_body(r#"{"stats": {}}"#))
-                    }),
+            Scope::new("/admin").get("/stats", |_req| {
+                Box::pin(async move {
+                    Ok(HttpResponse::ok().with_body(r#"{"stats": {}}"#))
                 })
+            })
         )
 }
 ```
@@ -146,12 +136,15 @@ fn response_examples() -> Vec<HttpResponse> {
 
         // Custom status codes
         HttpResponse::from_status_code(StatusCode::Created),
-        HttpResponse::new(404),
+        HttpResponse::new(StatusCode::NotFound),
 
         // With body content
         HttpResponse::ok().with_body("Hello, World!"),
         HttpResponse::ok().with_body(b"Binary data".to_vec()),
-        HttpResponse::ok().with_body(serde_json::json!({"key": "value"})),
+
+        // Convenience methods with automatic Content-Type headers
+        HttpResponse::text("Plain text response"),
+        HttpResponse::html("<h1>HTML response</h1>"),
 
         // With location header
         HttpResponse::temporary_redirect().with_location("https://example.com"),
@@ -161,6 +154,20 @@ fn response_examples() -> Vec<HttpResponse> {
             .with_body(r#"{"status": "accepted"}"#)
             .with_location("/status/123"),
     ]
+}
+
+// JSON responses (require 'serde' feature)
+#[cfg(feature = "serde")]
+fn json_response_examples() -> Result<Vec<HttpResponse>, moosicbox_web_server::Error> {
+    use serde_json::json;
+
+    Ok(vec![
+        // Using json() method with automatic Content-Type header
+        HttpResponse::json(&json!({"key": "value"}))?,
+
+        // Using with_body() for manual JSON
+        HttpResponse::ok().with_body(json!({"manual": true})),
+    ])
 }
 ```
 
@@ -243,22 +250,40 @@ fn another_condition() -> bool { false }
 
 ```rust
 #[cfg(feature = "openapi")]
-use moosicbox_web_server::utoipa;
+use moosicbox_web_server::{utoipa, openapi};
+use utoipa::openapi::OpenApi;
 
 #[cfg(feature = "openapi")]
-mod openapi_example {
-    use super::*;
-
-    #[utoipa::path(
-        get,
-        path = "/api/users",
-        responses(
-            (status = 200, description = "List of users")
+fn setup_openapi() -> OpenApi {
+    // Build OpenAPI specification
+    OpenApi::builder()
+        .tags(Some([utoipa::openapi::Tag::builder()
+            .name("API")
+            .build()]))
+        .paths(
+            utoipa::openapi::Paths::builder()
+                // Add your paths here
+                .build(),
         )
-    )]
-    async fn get_users() -> Result<HttpResponse, Error> {
-        Ok(HttpResponse::ok().with_body(r#"{"users": []}"#))
-    }
+        .components(Some(utoipa::openapi::Components::builder().build()))
+        .build()
+}
+
+#[cfg(feature = "openapi")]
+fn create_server_with_openapi() {
+    // Set the OpenAPI spec
+    *openapi::OPENAPI.write().unwrap() = Some(setup_openapi());
+
+    let server = moosicbox_web_server::WebServerBuilder::new()
+        // Add OpenAPI UI routes
+        .with_scope(openapi::bind_services(Scope::new("/openapi")))
+        // Add your API routes
+        .with_scope(Scope::new("/api").get("/users", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok().with_body(r#"{"users": []}"#))
+            })
+        }))
+        .build();
 }
 ```
 
@@ -276,30 +301,82 @@ mod openapi_example {
 ### Request Methods
 
 - `path()` - Get request path
+- `path_params()` - Get all path parameters as a map
+- `path_param(name)` - Get a specific path parameter by name
 - `query_string()` - Get raw query string
 - `parse_query<T>()` - Parse query string into typed struct
 - `header(name)` - Get header value by name
+- `method()` - Get HTTP method
+- `body()` - Get request body (for simulator backend)
+- `cookie(name)` - Get cookie value by name
+- `cookies()` - Get all cookies as a map
+- `remote_addr()` - Get remote client address
+- `context()` - Get request context (advanced use)
 
 ### Response Methods
 
-- `ok()`, `not_found()`, `temporary_redirect()` - Common status codes
+- `ok()`, `not_found()`, `temporary_redirect()`, `permanent_redirect()` - Common status codes
 - `from_status_code()`, `new()` - Custom status codes
 - `with_body()` - Set response body
 - `with_location()` - Set location header
+- `with_header()` - Add a single header
+- `with_headers()` - Add multiple headers
+- `with_content_type()` - Set Content-Type header
+- `json()` - Create JSON response with automatic Content-Type (requires `serde` feature)
+- `html()` - Create HTML response with automatic Content-Type
+- `text()` - Create plain text response with automatic Content-Type
 
 ### Builder Methods
 
+**WebServerBuilder Methods:**
 - `with_addr()`, `with_port()` - Server address configuration
 - `with_scope()` - Add route scope
 - `with_cors()` - Configure CORS (requires `cors` feature)
 - `with_compress()` - Enable compression (requires `compress` feature)
+- `build()` - Build the web server
+
+**Scope Methods:**
+- `new(path)` - Create a new scope with a base path
+- `with_route()` - Add a single route
+- `with_routes()` - Add multiple routes
+- `with_scope()` - Add a nested scope
+- `with_scopes()` - Add multiple nested scopes
+- `route(method, path, handler)` - Add a route with a specific HTTP method
+- `get(path, handler)` - Add a GET route
+- `post(path, handler)` - Add a POST route
+- `put(path, handler)` - Add a PUT route
+- `delete(path, handler)` - Add a DELETE route
+- `patch(path, handler)` - Add a PATCH route
+- `head(path, handler)` - Add a HEAD route
+
+**Route Methods:**
+- `new(method, path, handler)` - Create a new route
+- `with_handler(method, path, handler)` - Create route with handler that supports extractors
+- `get(path, handler)` - Create a GET route
+- `post(path, handler)` - Create a POST route
+- `put(path, handler)` - Create a PUT route
+- `delete(path, handler)` - Create a DELETE route
+- `patch(path, handler)` - Create a PATCH route
+- `head(path, handler)` - Create a HEAD route
 
 ## Features
 
-- `actix` - Enable Actix Web backend support
-- `cors` - Enable CORS middleware support
-- `compress` - Enable response compression
+Default features: `actix`, `compress`, `cors`, `htmx`, `openapi-all`, `serde`, `tls`
+
+Available features:
+- `actix` - Enable Actix Web backend support (enabled by default)
+- `simulator` - Enable test simulator backend (for testing without Actix)
+- `serde` - Enable JSON serialization/deserialization support (enabled by default)
+- `cors` - Enable CORS middleware support (enabled by default)
+- `compress` - Enable response compression (enabled by default)
+- `htmx` - Enable HTMX integration support (enabled by default)
+- `tls` - Enable TLS/SSL support (OpenSSL) (enabled by default)
 - `openapi` - Enable OpenAPI documentation generation
+- `openapi-all` - Enable all OpenAPI UI variants (enabled by default)
+- `openapi-rapidoc` - Enable RapiDoc OpenAPI UI
+- `openapi-redoc` - Enable ReDoc OpenAPI UI
+- `openapi-scalar` - Enable Scalar OpenAPI UI
+- `openapi-swagger-ui` - Enable SwaggerUI OpenAPI UI
 
 ## Error Types
 
@@ -388,6 +465,14 @@ Each example is a complete Cargo project with its own dependencies and comprehen
 - **Run**: `cargo run --example nested_get --features actix`
 - **Shows**: Route organization and scope nesting
 
+**From Request Test** (`from_request_test/`)
+- **Purpose**: Testing FromRequest trait implementations
+- **Shows**: Custom extractors and request data extraction
+
+**Handler Macro Test** (`handler_macro_test/`)
+- **Purpose**: Testing handler macros and code generation
+- **Shows**: Advanced handler patterns and macro usage
+
 **OpenAPI Integration** (`openapi/`)
 - **Purpose**: OpenAPI documentation generation
 - **Run**: `cargo run --example openapi --features "actix,openapi-all"`
@@ -474,8 +559,18 @@ Scope::new("/api").with_route(Route {
 
 ## Dependencies
 
+Core dependencies:
 - `switchy_http_models` - HTTP types and status codes
-- `serde_querystring` - Query string parsing
+- `serde-querystring` - Query string parsing
 - `moosicbox_web_server_core` - Core server functionality
-- `moosicbox_web_server_cors` - CORS middleware (optional)
-- `utoipa` - OpenAPI support (optional)
+- `bytes` - Efficient byte buffer handling
+- `futures` - Async runtime utilities
+
+Optional dependencies (feature-gated):
+- `moosicbox_web_server_cors` - CORS middleware (with `cors` feature)
+- `actix-web` - Actix Web server backend (with `actix` feature)
+- `actix-cors` - Actix CORS support (with `cors` feature)
+- `actix-htmx` - HTMX integration (with `htmx` feature)
+- `serde_json` - JSON serialization (with `serde` feature)
+- `utoipa` - OpenAPI specification support (with `openapi` feature)
+- `utoipa-swagger-ui`, `utoipa-rapidoc`, `utoipa-redoc`, `utoipa-scalar` - OpenAPI UI variants (with respective `openapi-*` features)
