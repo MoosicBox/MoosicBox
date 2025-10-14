@@ -135,6 +135,14 @@ use switchy::random;
 
 ## Feature Flags
 
+### Top-Level Features
+
+- **`all`** (default): Enable all features
+- **`simulator`**: Enable simulator mode across all modules
+- **`fail-on-warnings`**: Treat warnings as errors
+
+### Base Module Features
+
 - **`async`**: Enable async runtime utilities
 - **`async-macros`**: Enable async macro utilities
 - **`database`**: Enable database abstraction layer
@@ -148,6 +156,52 @@ use switchy::random;
 - **`upnp`**: Enable UPnP device discovery
 - **`http`**: Enable HTTP client/server
 - **`http-models`**: Enable HTTP model types
+
+### Convenience "All" Features
+
+Each module has an `all-*` feature that enables all sub-features for that module:
+
+- **`all-async`**: All async features
+- **`all-async-macros`**: All async macro features
+- **`all-database`**: All database features
+- **`all-database-connection`**: All database connection features
+- **`all-fs`**: All filesystem features
+- **`all-http`**: All HTTP features
+- **`all-http-models`**: All HTTP model features
+- **`all-mdns`**: All mDNS features
+- **`all-random`**: All random features
+- **`all-tcp`**: All TCP features
+- **`all-telemetry`**: All telemetry features
+- **`all-time`**: All time features
+- **`all-upnp`**: All UPnP features
+
+### Sub-Features
+
+Each module has additional sub-features for fine-grained control:
+
+**Async**: `async-fs`, `async-io`, `async-net`, `async-rt-multi-thread`, `async-sync`, `async-time`, `async-tokio`, `async-util`
+
+**Database**: `database-api`, `database-mysql`, `database-mysql-sqlx`, `database-postgres`, `database-postgres-raw`, `database-postgres-sqlx`, `database-schema`, `database-simulator`, `database-sqlite`, `database-sqlite-rusqlite`, `database-sqlite-sqlx`, `database-sqlx`, `database-tls`, `database-turso`
+
+**Database Connection**: `database-connection-creds`, `database-connection-mysql`, `database-connection-mysql-sqlx`, `database-connection-postgres`, `database-connection-postgres-native-tls`, `database-connection-postgres-openssl`, `database-connection-postgres-raw`, `database-connection-postgres-sqlx`, `database-connection-simulator`, `database-connection-sqlite`, `database-connection-sqlite-rusqlite`, `database-connection-sqlite-sqlx`, `database-connection-sqlx`, `database-connection-tls`, `database-connection-turso`
+
+**Filesystem**: `fs-async`, `fs-simulator`, `fs-simulator-real-fs`, `fs-std`, `fs-sync`, `fs-tokio`
+
+**HTTP**: `http-json`, `http-reqwest`, `http-serde`, `http-simulator`, `http-stream`
+
+**HTTP Models**: `http-models-actix`, `http-models-reqwest`, `http-models-serde`
+
+**mDNS**: `mdns-scanner`, `mdns-simulator`
+
+**Random**: `random-rand`, `random-simulator`
+
+**TCP**: `tcp-simulator`, `tcp-tokio`
+
+**Telemetry**: `telemetry-actix`, `telemetry-simulator`
+
+**Time**: `time-simulator`, `time-std`
+
+**UPnP**: `upnp-api`, `upnp-listener`, `upnp-openapi`, `upnp-player`, `upnp-simulator`
 
 ## Dependencies
 
