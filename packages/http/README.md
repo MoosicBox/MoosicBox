@@ -1,4 +1,4 @@
-# MoosicBox HTTP
+# Switchy HTTP
 
 A generic HTTP client abstraction library providing unified interfaces for HTTP operations with pluggable backend implementations.
 
@@ -10,7 +10,7 @@ A generic HTTP client abstraction library providing unified interfaces for HTTP 
 - **Response Handling**: Unified response interface for status, headers, text, bytes, and streaming
 - **JSON Support**: Built-in JSON serialization/deserialization support
 - **Streaming Support**: Byte stream responses for large data handling
-- **Method Support**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS methods
+- **Method Support**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, CONNECT, TRACE methods
 - **Error Handling**: Unified error types across different backends
 
 ## Installation
@@ -19,12 +19,12 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_http = "0.1.1"
+switchy_http = "0.1.4"
 
-# Choose your backend
-moosicbox_http = { version = "0.1.1", features = ["reqwest"] }
+# Choose your backend (default includes all features)
+switchy_http = { version = "0.1.4", features = ["reqwest"] }
 # or
-moosicbox_http = { version = "0.1.1", features = ["simulator"] }
+switchy_http = { version = "0.1.4", features = ["simulator"] }
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ moosicbox_http = { version = "0.1.1", features = ["simulator"] }
 ### Basic HTTP Requests
 
 ```rust
-use moosicbox_http::{Client, Error};
+use switchy_http::{Client, Error};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Error> {
 ### POST with JSON Body
 
 ```rust
-use moosicbox_http::Client;
+use switchy_http::Client;
 use serde_json::json;
 
 async fn create_user() -> Result<(), Box<dyn std::error::Error>> {
@@ -87,7 +87,7 @@ async fn create_user() -> Result<(), Box<dyn std::error::Error>> {
 ### Handling Different Response Types
 
 ```rust
-use moosicbox_http::Client;
+use switchy_http::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -137,7 +137,7 @@ async fn fetch_user_data() -> Result<(), Box<dyn std::error::Error>> {
 ### Streaming Large Responses
 
 ```rust
-use moosicbox_http::Client;
+use switchy_http::Client;
 use futures::StreamExt;
 
 async fn download_large_file() -> Result<(), Box<dyn std::error::Error>> {
@@ -167,7 +167,7 @@ async fn download_large_file() -> Result<(), Box<dyn std::error::Error>> {
 ### Custom Headers and Query Parameters
 
 ```rust
-use moosicbox_http::{Client, Header};
+use switchy_http::{Client, Header};
 
 async fn api_request_with_auth() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
@@ -190,7 +190,7 @@ async fn api_request_with_auth() -> Result<(), Box<dyn std::error::Error>> {
 ### Error Handling
 
 ```rust
-use moosicbox_http::{Client, Error};
+use switchy_http::{Client, Error};
 
 async fn handle_errors() {
     let client = Client::new();
