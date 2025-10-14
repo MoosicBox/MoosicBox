@@ -48,10 +48,11 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_app = { path = "../hyperchad/app" }
 
-# Enable additional features
+# Or customize features (logic and assets are enabled by default)
 hyperchad_app = {
     path = "../hyperchad/app",
-    features = ["logic", "assets"]
+    default-features = false,
+    features = ["egui", "logic"]
 }
 ```
 
@@ -102,12 +103,14 @@ let app = AppBuilder::new()
 
 ### Action Handling
 
+Note: Action handling requires the `logic` feature (enabled by default).
+
 ```rust
 use hyperchad_actions::logic::Value;
 
 let app = AppBuilder::new()
     .with_router(router)
-    .with_action_handler(|action, value| {
+    .with_action_handler(|action: &str, value: Option<&Value>| {
         match action {
             "custom-action" => {
                 println!("Custom action triggered with value: {:?}", value);
@@ -125,20 +128,25 @@ let app = AppBuilder::new()
 
 ### Static Asset Routes
 
+Note: Static asset routes require the `assets` feature (enabled by default).
+
 ```rust
-use hyperchad_renderer::assets::StaticAssetRoute;
+use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
+use bytes::Bytes;
 
 let app = AppBuilder::new()
     .with_router(router)
     .with_static_asset_route(StaticAssetRoute {
         route: "/static/css/style.css".to_string(),
-        content_type: "text/css".to_string(),
-        content: include_str!("../assets/style.css").to_string(),
+        target: AssetPathTarget::FileContents(
+            Bytes::from(include_str!("../assets/style.css"))
+        ),
     })
     .with_static_asset_route(StaticAssetRoute {
         route: "/static/js/app.js".to_string(),
-        content_type: "application/javascript".to_string(),
-        content: include_str!("../assets/app.js").to_string(),
+        target: AssetPathTarget::FileContents(
+            Bytes::from(include_str!("../assets/app.js"))
+        ),
     })
     .build(renderer)?;
 ```
@@ -242,17 +250,57 @@ pub trait Cleaner {
 
 ## Feature Flags
 
-- **`logic`**: Enable action logic and conditional handling
-- **`assets`**: Enable static asset management
+### Default Features
+The following features are enabled by default:
+- **`actix`**: Actix web server support
+- **`assets`**: Static asset management
+- **`egui-wgpu`**: Egui renderer with WGPU backend
+- **`fltk`**: FLTK renderer support
+- **`format`**: Code formatting support
+- **`html`**: HTML rendering support
+- **`json`**: JSON content support
+- **`lambda`**: AWS Lambda support
+- **`logic`**: Action logic and conditional handling
+- **`static-routes`**: Static route generation
+- **`vanilla-js`**: Vanilla JavaScript renderer
+
+### Additional Features
+- **`egui`**, **`egui-glow`**, **`egui-v1`**, **`egui-v2`**: Egui renderer variants
+- **`actions`**, **`sse`**: Server-sent events and action support
+- **`web-server`**, **`web-server-actix`**, **`web-server-simulator`**: Web server variants
+- **`wayland`**, **`x11`**: Linux display server support
+- **`debug`**: Debug mode
+- **`profiling-puffin`**, **`profiling-tracing`**, **`profiling-tracy`**: Profiling backends
+- **`syntax-highlighting`**: Code syntax highlighting
+- **`unsafe`**: Unsafe optimizations
+- **`benchmark`**: Benchmarking support
+- **`all-plugins`**: Enable all vanilla-js plugins
+- **`plugin-*`**: Individual vanilla-js plugins (actions, canvas, form, idiomorph, nav, routing, sse, tauri-event, uuid, etc.)
 
 ## Dependencies
 
-- **HyperChad Router**: Application routing system
-- **HyperChad Renderer**: Rendering abstraction layer
-- **HyperChad Actions**: Interactive action system
-- **Clap**: Command-line argument parsing
-- **Async Trait**: Async trait support
-- **Switchy**: Async runtime abstraction
+### Core Dependencies
+- **hyperchad_router**: Application routing system
+- **hyperchad_renderer**: Rendering abstraction layer
+- **hyperchad_actions**: Interactive action system
+- **switchy**: Async runtime abstraction with Tokio support
+- **switchy_env**: Environment variable utilities
+- **moosicbox_env_utils**: MoosicBox environment utilities
+- **moosicbox_assert**: Assertion utilities
+
+### Optional Renderer Dependencies
+- **hyperchad_renderer_egui**: Egui rendering backend (optional)
+- **hyperchad_renderer_fltk**: FLTK rendering backend (optional)
+- **hyperchad_renderer_html**: HTML rendering backend (optional)
+- **hyperchad_renderer_vanilla_js**: Vanilla JS rendering backend (optional)
+
+### Utility Dependencies
+- **async-trait**: Async trait support
+- **clap**: Command-line argument parsing
+- **flume**: Multi-producer multi-consumer channels
+- **log**: Logging facade
+- **serde_json**: JSON serialization
+- **thiserror**: Error derive macros
 
 ## Integration
 
