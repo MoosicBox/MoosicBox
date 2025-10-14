@@ -6,19 +6,36 @@ Data models for music library scanning and indexing operations.
 
 The MoosicBox Scan Models package provides:
 
-- **Scan Configuration**: Library scan setup and parameters
-- **Progress Tracking**: Scan progress and status models
-- **File Discovery**: Scanned file and metadata structures
 - **API Integration**: REST-compatible scan data models
+
+## Features
+
+Currently implemented:
+
+- `ApiScanPath`: Model for representing scan paths in API requests
 
 ## Installation
 
 Add this to your Cargo.toml:
 
+```toml
 [dependencies]
 moosicbox_scan_models = { path = "../scan/models" }
+```
+
+Enable optional features:
+
+```toml
+[dependencies]
+moosicbox_scan_models = { path = "../scan/models", features = ["openapi"] }
+```
+
+Available features:
+- `api`: API models (enabled by default)
+- `openapi`: OpenAPI schema support via utoipa (enabled by default)
 
 ## Dependencies
 
 - **Serde**: Serialization and deserialization
-- **MoosicBox Core Models**: Core music and file types
+- **utoipa**: OpenAPI schema generation (optional, enabled with `openapi` feature)
+- **log**: Logging functionality
