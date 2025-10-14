@@ -4,7 +4,7 @@ author: 'MoosicBox'
 
 inputs:
     command:
-        description: 'Clippier command to run (features, affected-packages, workspace-deps, validate-feature-propagation)'
+        description: 'Clippier command to run (features, affected-packages, workspace-deps, validate-feature-propagation, setup)'
         required: true
 
     workspace-path:
@@ -234,6 +234,25 @@ inputs:
         required: false
         default: 'false'
 
+    package-json:
+        description: 'JSON object containing matrix.package properties (for setup command)'
+        required: false
+
+    skip-checkout:
+        description: 'Skip repository checkout step (for setup command when already checked out)'
+        required: false
+        default: 'false'
+
+    checkout-fetch-depth:
+        description: 'Git fetch depth for checkout (for setup command)'
+        required: false
+        default: '0'
+
+    rust-components:
+        description: 'Rust components to install (for setup command)'
+        required: false
+        default: 'rustfmt, clippy'
+
 outputs:
     matrix:
         description: 'Generated matrix JSON for GitHub Actions'
@@ -282,14 +301,47 @@ outputs:
 runs:
     using: 'composite'
     steps:
+        - name: Checkout repository
+          if: inputs.command == 'setup' && inputs.skip-checkout != 'true'
+          uses: actions/checkout@v4
+          with:
+              fetch-depth: ${{ inputs.checkout-fetch-depth }}
+              submodules: ${{ fromJson(inputs.package-json).gitSubmodules || false }}
+
+        - name: Setup Rust toolchain
+          if: inputs.command == 'setup'
+          uses: dtolnay/rust-toolchain@stable
+          with:
+              toolchain: ${{ fromJson(inputs.package-json).nightly && 'nightly' || 'stable' }}
+              components: ${{ inputs.rust-components }}
+
+        - name: Setup pnpm
+          if: inputs.command == 'setup' && (contains(fromJson(inputs.package-json).toolchains || '[]', 'node') || contains(fromJson(inputs.package-json).ciToolchains || '[]', 'node'))
+          uses: pnpm/action-setup@v3
+          with:
+              version: 9
+
+        - name: Setup Node.js
+          if: inputs.command == 'setup' && (contains(fromJson(inputs.package-json).toolchains || '[]', 'node') || contains(fromJson(inputs.package-json).ciToolchains || '[]', 'node'))
+          uses: actions/setup-node@v4
+          with:
+              node-version: latest
+
+        - name: Setup cmake
+          if: inputs.command == 'setup'
+          uses: jwlawson/actions-setup-cmake@v2
+          with:
+              cmake-version: '3.x'
+
         - name: Cache clippier binary
-          if: inputs.skip-cache != 'true'
+          if: inputs.skip-cache != 'true' && inputs.command != 'setup'
           uses: actions/cache@v4
           with:
               path: ./target/release/clippier
               key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ hashFiles('packages/clippier/**') }}
 
         - name: Build clippier
+          if: inputs.command != 'setup'
           shell: bash
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
@@ -352,6 +404,10 @@ runs:
               INPUT_ENABLE_DOCKER_ANALYSIS: ${{ inputs.enable-docker-analysis }}
               INPUT_DOCKER_PACKAGES: ${{ inputs.docker-packages }}
               INPUT_DOCKER_NAME_PREFIX: ${{ inputs.docker-name-prefix }}
+              INPUT_PACKAGE_JSON: ${{ inputs.package-json }}
+              INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
+              INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
+              INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

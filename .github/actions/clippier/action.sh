@@ -5,9 +5,12 @@ CLIPPIER_BIN="./target/release/clippier"
 GIT_BASE=""
 GIT_HEAD=""
 
-if [[ ! -f "$CLIPPIER_BIN" ]]; then
-    echo "Error: clippier binary not found at $CLIPPIER_BIN"
-    exit 1
+# Skip clippier binary check for setup command (doesn't need clippier)
+if [[ "$INPUT_COMMAND" != "setup" ]]; then
+    if [[ ! -f "$CLIPPIER_BIN" ]]; then
+        echo "Error: clippier binary not found at $CLIPPIER_BIN"
+        exit 1
+    fi
 fi
 
 detect_git_range() {
@@ -607,8 +610,76 @@ generate_docker_summary() {
     fi
 }
 
+setup_ci_environment() {
+    echo "🔧 Setting up CI environment"
+
+    if [[ -z "$INPUT_PACKAGE_JSON" ]]; then
+        echo "❌ ERROR: package-json input is required for setup command"
+        exit 1
+    fi
+
+    local package_json="$INPUT_PACKAGE_JSON"
+
+    local name=$(echo "$package_json" | jq -r '.name // ""')
+    local path=$(echo "$package_json" | jq -r '.path // "."')
+    local os=$(echo "$package_json" | jq -r '.os // "ubuntu-latest"')
+    local git_submodules=$(echo "$package_json" | jq -r '.gitSubmodules // false')
+    local toolchains=$(echo "$package_json" | jq -r '.toolchains // [] | @json')
+    local ci_toolchains=$(echo "$package_json" | jq -r '.ciToolchains // [] | @json')
+    local ci_steps=$(echo "$package_json" | jq -r '.ciSteps // ""')
+    local dependencies=$(echo "$package_json" | jq -r '.dependencies // ""')
+    local env_vars=$(echo "$package_json" | jq -r '.env // ""')
+
+    echo "📦 Package: $name"
+    echo "📂 Path: $path"
+    echo "🖥️  OS: $os"
+
+    local needs_free_disk_space=false
+
+    if echo "$toolchains" | jq -e 'contains(["free_disk_space"])' >/dev/null 2>&1 || \
+       echo "$ci_toolchains" | jq -e 'contains(["free_disk_space"])' >/dev/null 2>&1; then
+        needs_free_disk_space=true
+    fi
+
+    if [[ "$needs_free_disk_space" == "true" && "$os" == "ubuntu-latest" ]]; then
+        echo "⚠️  Note: free_disk_space toolchain detected. Please add jlumbroso/free-disk-space@main action before clippier setup in your workflow"
+    fi
+
+    if [[ "$INPUT_SKIP_CHECKOUT" == "true" && "$git_submodules" == "true" ]]; then
+        echo "🔀 Initializing git submodules (checkout was skipped)"
+        git submodule update --init --recursive
+    fi
+
+    if [[ -n "$env_vars" ]]; then
+        echo "🌍 Exporting environment variables to GITHUB_ENV"
+        echo "$env_vars" | tr ' ' '\n' | while IFS='=' read -r key value; do
+            if [[ -n "$key" && -n "$value" ]]; then
+                echo "  $key=$value"
+                echo "$key=$value" >> "$GITHUB_ENV"
+            fi
+        done
+    fi
+
+    if [[ -n "$ci_steps" ]]; then
+        echo "⚙️  Running CI setup steps"
+        eval "$ci_steps"
+    fi
+
+    if [[ -n "$dependencies" ]]; then
+        echo "📥 Installing dependencies"
+        eval "$dependencies"
+    fi
+
+    echo "✅ CI environment setup completed"
+}
+
 main() {
     echo "🚀 Running clippier action for command: $INPUT_COMMAND"
+
+    if [[ "$INPUT_COMMAND" == "setup" ]]; then
+        setup_ci_environment
+        return
+    fi
 
     detect_git_range
 
