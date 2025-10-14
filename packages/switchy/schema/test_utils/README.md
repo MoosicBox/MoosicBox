@@ -4,19 +4,21 @@ Test utilities for `switchy_schema` that provide comprehensive migration testing
 
 ## Overview
 
-This package provides three main testing utilities for validating database migrations:
+This package provides testing utilities for validating database migrations:
 
 - `verify_migrations_full_cycle` - Basic up/down migration testing
-- `verify_migrations_with_state` - Migration testing with data preservation
-- `verify_migrations_with_mutations` - Comprehensive testing with various database states
+- `verify_migrations_with_state` - Migration testing with pre-seeded state
+- `verify_migrations_with_mutations` - Testing with data mutations between migration steps
+- `MigrationTestBuilder` - Builder pattern for complex migration scenarios with breakpoints (requires `sqlite` feature)
 
 ## Features
 
-- **Multiple Database Support**: SQLite, PostgreSQL, MySQL support via feature flags
+- **Database Support**: SQLite support via feature flags (additional databases planned)
 - **Comprehensive Testing**: Full migration lifecycle validation
 - **State Preservation**: Verify data integrity during migrations
 - **Mutation Testing**: Test against various database states and scenarios
 - **Async Support**: Full async/await support for modern Rust applications
+- **Snapshot Testing**: Schema snapshot comparison (optional `snapshots` feature)
 
 ## Usage
 
@@ -34,8 +36,9 @@ use switchy_schema_test_utils::verify_migrations_full_cycle;
 
 #[tokio::test]
 async fn test_migrations() {
+    let db = /* your database connection */;
     let migrations = vec![/* your migrations */];
-    verify_migrations_full_cycle(&migrations).await.unwrap();
+    verify_migrations_full_cycle(db, migrations).await.unwrap();
 }
 ```
 
@@ -48,9 +51,13 @@ use switchy_schema_test_utils::verify_migrations_with_state;
 async fn test_migrations_with_data() {
     let migrations = vec![/* your migrations */];
     verify_migrations_with_state(
-        &migrations,
-        setup_state,
-        validate_state,
+        db,
+        migrations,
+        |db| Box::pin(async move {
+            // Setup initial state before migrations
+            db.exec_raw("INSERT INTO existing_table (id) VALUES (1)").await?;
+            Ok(())
+        })
     ).await.unwrap();
 }
 ```
@@ -59,23 +66,61 @@ async fn test_migrations_with_data() {
 
 ```rust
 use switchy_schema_test_utils::verify_migrations_with_mutations;
+use switchy_schema_test_utils::mutations::MutationBuilder;
 
 #[tokio::test]
 async fn test_migrations_comprehensive() {
+    let db = /* your database connection */;
     let migrations = vec![/* your migrations */];
-    let mutation_provider = MyMutationProvider::new();
+    let mutations = MutationBuilder::new()
+        .add_mutation("001_create_users", "INSERT INTO users (name) VALUES ('test')")
+        .build();
     verify_migrations_with_mutations(
-        &migrations,
-        &mutation_provider,
+        db,
+        migrations,
+        mutations,
     ).await.unwrap();
 }
 ```
 
-## Features
+### Advanced: Migration Test Builder (requires `sqlite` feature)
 
-- `sqlite` - Enable SQLite support (default)
-- `postgres` - Enable PostgreSQL support
-- `mysql` - Enable MySQL support
+```rust
+use switchy_schema_test_utils::MigrationTestBuilder;
+
+#[tokio::test]
+async fn test_data_migration() {
+    let db = /* your database connection */;
+    let migrations = vec![/* your migrations */];
+
+    MigrationTestBuilder::new(migrations)
+        .with_data_before("002_migrate_data", |db| {
+            Box::pin(async move {
+                // Insert test data before the migration runs
+                db.exec_raw("INSERT INTO old_table (value) VALUES ('test')").await?;
+                Ok(())
+            })
+        })
+        .with_data_after("002_migrate_data", |db| {
+            Box::pin(async move {
+                // Verify migration transformed data correctly
+                db.exec_raw("SELECT * FROM new_table WHERE value = 'test'").await?;
+                Ok(())
+            })
+        })
+        .run(db)
+        .await
+        .unwrap();
+}
+```
+
+## Cargo Features
+
+- `sqlite` - Enable SQLite support (included in default features)
+- `snapshots` - Enable schema snapshot testing capabilities
+- `decimal` - Enable decimal type support (included in default features)
+- `uuid` - Enable UUID type support (included in default features)
+- `fail-on-warnings` - Treat warnings as errors during compilation
 
 ## Examples
 
