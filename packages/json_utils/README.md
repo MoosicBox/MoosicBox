@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_json_utils = "0.1.1"
+moosicbox_json_utils = "0.1.4"
 ```
 
 ## Usage
@@ -26,24 +26,29 @@ moosicbox_json_utils = "0.1.1"
 ### Basic Type Conversion
 
 ```rust
-use moosicbox_json_utils::{ToValueType, ParseError};
-use serde_json::Value;
+use moosicbox_json_utils::serde_json::ToValueType;
+use moosicbox_json_utils::ParseError;
 
 fn main() -> Result<(), ParseError> {
-    // Convert JSON value to specific type
-    let json_value = serde_json::json!("42");
-    let number: i32 = json_value.to_value_type()?;
+    // Convert JSON number to i32
+    let json_value = serde_json::json!(42);
+    let number: i32 = (&json_value).to_value_type()?;
     assert_eq!(number, 42);
 
-    // Convert JSON string to boolean
-    let json_bool = serde_json::json!("true");
-    let boolean: bool = json_bool.to_value_type()?;
+    // Convert JSON boolean
+    let json_bool = serde_json::json!(true);
+    let boolean: bool = (&json_bool).to_value_type()?;
     assert_eq!(boolean, true);
 
     // Convert JSON array to vector
     let json_array = serde_json::json!([1, 2, 3, 4, 5]);
-    let numbers: Vec<i32> = json_array.to_value_type()?;
+    let numbers: Vec<i32> = (&json_array).to_value_type()?;
     assert_eq!(numbers, vec![1, 2, 3, 4, 5]);
+
+    // Convert JSON string
+    let json_string = serde_json::json!("hello");
+    let text: String = (&json_string).to_value_type()?;
+    assert_eq!(text, "hello");
 
     Ok(())
 }
@@ -107,13 +112,6 @@ pub trait MissingValue<Type> {
     }
 }
 
-pub trait JsonValidator {
-    fn validate(&self, value: &serde_json::Value) -> Result<(), ParseError>;
-}
-
-pub trait JsonSanitizer {
-    fn sanitize(&self, value: serde_json::Value) -> serde_json::Value;
-}
 ```
 
 ### Error Types
@@ -137,16 +135,19 @@ pub enum ParseError {
 ```rust
 #[cfg(feature = "database")]
 pub mod database {
-    use switchy_database::{DatabaseValue, DatabaseError};
+    use switchy_database::DatabaseValue;
 
-    pub trait DatabaseJsonExt {
-        fn from_json(value: &serde_json::Value) -> Result<DatabaseValue, DatabaseError>;
-        fn to_json(&self) -> Result<serde_json::Value, DatabaseError>;
-    }
+    // DatabaseValue implements ToValueType for various types
+    impl ToValueType<String> for &DatabaseValue { /* ... */ }
+    impl ToValueType<bool> for &DatabaseValue { /* ... */ }
+    impl ToValueType<u64> for &DatabaseValue { /* ... */ }
+    // ... and many other numeric types
 
-    impl DatabaseJsonExt for DatabaseValue {
-        fn from_json(value: &serde_json::Value) -> Result<DatabaseValue, DatabaseError>;
-        fn to_json(&self) -> Result<serde_json::Value, DatabaseError>;
+    // Provides a ToValue trait for Row types
+    pub trait ToValue<Type> {
+        fn to_value<T>(self, index: &str) -> Result<T, ParseError>
+        where
+            Type: ToValueType<T>;
     }
 }
 ```
@@ -156,16 +157,20 @@ pub mod database {
 ```rust
 #[cfg(feature = "tantivy")]
 pub mod tantivy {
-    use tantivy::{Document, schema::Field};
+    use tantivy::schema::OwnedValue;
 
-    pub trait TantivyJsonExt {
-        fn add_json_object(&mut self, field: Field, value: serde_json::Value);
-        fn get_json_object(&self, field: Field) -> Option<&serde_json::Value>;
-    }
+    // OwnedValue implements ToValueType for various types
+    impl ToValueType<String> for &OwnedValue { /* ... */ }
+    impl ToValueType<bool> for &OwnedValue { /* ... */ }
+    impl ToValueType<u64> for &OwnedValue { /* ... */ }
+    // ... and many other numeric types
 
-    impl TantivyJsonExt for Document {
-        fn add_json_object(&mut self, field: Field, value: serde_json::Value);
-        fn get_json_object(&self, field: Field) -> Option<&serde_json::Value>;
+    // Provides a ToValue trait for NamedFieldDocument
+    pub trait ToValue<Type> {
+        fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
+        where
+            Type: 'a,
+            &'a Type: ToValueType<T>;
     }
 }
 ```
@@ -175,16 +180,19 @@ pub mod tantivy {
 ```rust
 #[cfg(feature = "rusqlite")]
 pub mod rusqlite {
-    use rusqlite::{types::Value, Result};
+    use rusqlite::types::Value;
 
-    pub trait SqliteJsonExt {
-        fn from_json_value(value: &serde_json::Value) -> Value;
-        fn to_json_value(&self) -> Result<serde_json::Value>;
-    }
+    // Value implements ToValueType for various types
+    impl ToValueType<String> for &Value { /* ... */ }
+    impl ToValueType<bool> for &Value { /* ... */ }
+    impl ToValueType<u64> for &Value { /* ... */ }
+    // ... and many other numeric types
 
-    impl SqliteJsonExt for Value {
-        fn from_json_value(value: &serde_json::Value) -> Value;
-        fn to_json_value(&self) -> Result<serde_json::Value>;
+    // Provides a ToValue trait for rusqlite Row types
+    pub trait ToValue<Type> {
+        fn to_value<T>(self, index: &str) -> Result<T, ParseError>
+        where
+            Type: ToValueType<T>;
     }
 }
 ```
@@ -193,28 +201,21 @@ pub mod rusqlite {
 
 ### Feature Flags
 
-- `database`: Enable database integration utilities
-- `rusqlite`: Enable SQLite-specific JSON functions
-- `tantivy`: Enable Tantivy search engine integration
-- `serde_json`: Enable enhanced serde_json functionality
-
-### Environment Variables
-
-- `JSON_UTILS_VALIDATION_STRICT`: Enable strict JSON validation (default: false)
-- `JSON_UTILS_SANITIZE_INPUT`: Automatically sanitize JSON input (default: true)
-- `JSON_UTILS_MAX_DEPTH`: Maximum JSON nesting depth (default: 64)
+- `database`: Enable database integration utilities (requires `switchy_database`)
+- `rusqlite`: Enable SQLite-specific value conversion functions
+- `tantivy`: Enable Tantivy search engine value conversion
+- `serde_json`: Enable serde_json value conversion utilities
+- `decimal`: Enable decimal type support (requires `database` feature)
+- `uuid`: Enable UUID type support (requires `database` feature)
 
 ## Integration Examples
 
 ### Music Library JSON Processing
 
 ```rust
-use moosicbox_json_utils::{ToValueType, database::DatabaseJsonExt};
-use switchy_database::Database;
+use moosicbox_json_utils::serde_json::{ToValueType, ToValue};
 
-async fn process_music_library() -> Result<(), Box<dyn std::error::Error>> {
-    let db = get_database_connection().await?;
-
+fn process_album_metadata() -> Result<(), Box<dyn std::error::Error>> {
     // Process album metadata
     let album_json = serde_json::json!({
         "title": "The Dark Side of the Moon",
@@ -236,78 +237,53 @@ async fn process_music_library() -> Result<(), Box<dyn std::error::Error>> {
         "total_duration": 2532
     });
 
-    // Store in database
-    let db_value = DatabaseValue::from_json(&album_json)?;
-    db.execute(
-        "INSERT INTO albums (metadata) VALUES (?)",
-        &[db_value],
-    ).await?;
+    // Extract values using ToValue trait
+    let title: String = album_json.to_value("title")?;
+    let artist: String = album_json.to_value("artist")?;
+    let release_year: u32 = album_json.to_value("release_year")?;
+    let tracks: Vec<&serde_json::Value> = album_json.to_value("tracks")?;
+    let genres: Vec<String> = album_json.to_value("genres")?;
 
-    // Query and process results
-    let rows = db.query(
-        "SELECT metadata FROM albums WHERE json_extract(metadata, '$.release_year') > 1970",
-        &[],
-    ).await?;
+    println!("Album: {} by {} ({})", title, artist, release_year);
+    println!("Tracks: {}", tracks.len());
+    println!("Genres: {:?}", genres);
 
-    for row in rows {
-        let metadata_value = &row[0];
-        let album_metadata: serde_json::Value = metadata_value.to_json()?;
+    // Process individual tracks
+    for track in tracks {
+        let track_title: String = track.to_value("title")?;
+        let duration: u32 = track.to_value("duration")?;
+        let track_number: u8 = track.to_value("track_number")?;
 
-        let title: String = album_metadata["title"].to_value_type()?;
-        let artist: String = album_metadata["artist"].to_value_type()?;
-        let tracks: Vec<serde_json::Value> = album_metadata["tracks"].to_value_type()?;
-
-        println!("Album: {} by {}", title, artist);
-        println!("Tracks: {}", tracks.len());
+        println!("  {}. {} ({}s)", track_number, track_title, duration);
     }
 
     Ok(())
 }
 ```
 
-### Search Index JSON Processing
+### Database Value Conversion
 
 ```rust
-use moosicbox_json_utils::tantivy::TantivyJsonExt;
-use tantivy::{Index, IndexWriter};
+use moosicbox_json_utils::database::{ToValue, ToValueType};
+use switchy_database::{Database, DatabaseValue, Row};
 
-fn build_music_search_index() -> Result<(), Box<dyn std::error::Error>> {
-    // Create schema
-    let mut schema_builder = tantivy::schema::Schema::builder();
-    let metadata_field = schema_builder.add_json_field("metadata", tantivy::schema::STORED);
-    let schema = schema_builder.build();
+async fn query_albums(db: &dyn Database) -> Result<(), Box<dyn std::error::Error>> {
+    // Query album data from database
+    let rows = db.query("SELECT title, artist, year FROM albums", &[]).await?;
 
-    let index = Index::create_in_ram(schema.clone());
-    let mut index_writer = index.writer(50_000_000)?;
+    for row in rows {
+        // Extract values from database row using ToValue trait
+        let title: String = row.to_value("title")?;
+        let artist: String = row.to_value("artist")?;
+        let year: Option<u32> = row.to_value("year")?; // Optional values supported
 
-    // Index music metadata
-    let music_items = load_music_metadata()?;
-
-    for item in music_items {
-        let mut doc = tantivy::Document::new();
-        doc.add_json_object(metadata_field, item);
-        index_writer.add_document(doc)?;
+        println!("Album: {} by {}", title, artist);
+        if let Some(y) = year {
+            println!("  Released: {}", y);
+        }
     }
 
-    index_writer.commit()?;
-
     Ok(())
-}
-
-fn load_music_metadata() -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    // Load music metadata from various sources
-    Ok(vec![
-        serde_json::json!({
-            "type": "track",
-            "title": "Bohemian Rhapsody",
-            "artist": "Queen"
-        }),
-        serde_json::json!({
-            "type": "album",
-            "title": "Abbey Road",
-            "artist": "The Beatles"
-        }),
-    ])
 }
 ```
 
@@ -335,17 +311,17 @@ match json_value.to_value_type::<String>() {
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (with default features)
 cargo test
 
-# Test with database features
-cargo test --features database
+# Test with specific feature combinations
+cargo test --no-default-features --features serde_json
+cargo test --no-default-features --features database
+cargo test --no-default-features --features rusqlite
+cargo test --no-default-features --features tantivy
 
-# Test with Tantivy features
-cargo test --features tantivy
-
-# Test SQLite integration
-cargo test --features rusqlite
+# Test with all features
+cargo test --all-features
 ```
 
 ## See Also
