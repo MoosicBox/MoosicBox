@@ -22,6 +22,8 @@ cargo run -p query_extractor_standalone_example
 cargo run -p query_extractor_standalone_example --features actix --no-default-features
 ```
 
+**Note:** The Actix backend demonstrates route registration but does not start an HTTP server in this example. For actual HTTP server usage with Actix, you would need to integrate with `actix-web`'s server builder.
+
 ## Routes
 
 - `GET /simple` - Requires name (string) and age (number) parameters
@@ -41,7 +43,9 @@ cargo run -p query_extractor_standalone_example --features actix --no-default-fe
 - `offset`: number (optional)
 - `sort`: string (optional)
 
-## Example Requests (if using Actix)
+## Example Requests (if integrated with an HTTP server)
+
+**Note:** This example demonstrates query extraction but does not include a running HTTP server. The requests below show how these handlers would be used if integrated into an actual Actix Web or similar HTTP server.
 
 ### Simple Query Handler
 ```bash
@@ -65,7 +69,7 @@ curl "http://localhost:8080/optional?search=example&limit=5"
 curl "http://localhost:8080/combined?name=Bob&age=25"
 ```
 
-### Error Handler (shows raw query string)
+### Error Handler (displays raw query string)
 ```bash
 curl "http://localhost:8080/error?any=parameters&you=want"
 ```
