@@ -1,56 +1,51 @@
 # API Testing Simulation Example
 
-This example demonstrates comprehensive API testing using simvar and moosicbox_web_server to validate REST endpoint behavior.
+This example demonstrates API testing using simvar and moosicbox_web_server to validate REST endpoint behavior.
 
 ## Overview
 
-The simulation creates a complete API testing environment with:
-- **REST API Server**: Full CRUD operations for user management
-- **Test Scenarios**: Happy path, error handling, edge cases, and concurrency testing
-- **Comprehensive Validation**: HTTP status codes, response formats, and error conditions
+The simulation creates an API testing environment with:
+- **REST API Server**: Simplified CRUD endpoints for user management
+- **Test Scenarios**: Happy path, error handling, and edge case testing
+- **HTTP Validation**: Status code verification and response timing
 - **Detailed Reporting**: Test results with timing and error analysis
 
 ## Test Scenarios
 
 ### Happy Path Testing
 Tests successful operations under normal conditions:
-- Create new users with valid data
+- Create new users (simplified implementation with hardcoded data)
 - Retrieve users by ID
 - List all users
-- Update user information
-- Delete users
+
+**Note**: Update and delete operations are implemented as placeholder endpoints that return success messages without performing actual operations.
 
 ### Error Handling Testing
-Validates proper error responses:
+Validates error response status codes:
 - Request non-existent resources (404 errors)
-- Send invalid request data (400 errors)
-- Test malformed JSON payloads
-- Verify error message formats
+- Send requests with invalid JSON structure (expects 400 errors)
+
+**Note**: The current implementation does not parse or validate request body data for POST requests.
 
 ### Edge Case Testing
-Tests boundary conditions and unusual inputs:
-- Very long field values
-- Empty or null fields
-- Special characters in data
-- Large payload sizes
-- Unicode handling
+Tests boundary conditions:
+- Very long field values (1000+ character strings)
+- Accepts either successful creation or validation error responses
 
 ### Concurrency Testing
-Validates behavior under concurrent access:
-- Multiple simultaneous user creation
-- Concurrent read/write operations
-- Race condition detection
-- Data consistency verification
+**Planned**: Concurrency testing is currently a placeholder and not fully implemented in this example.
 
 ## API Endpoints
 
-The server implements a complete REST API:
+The server implements these REST endpoints:
 
-- `POST /api/v1/users` - Create a new user
+- `POST /api/v1/users` - Create a new user (simplified: uses hardcoded data, does not parse request body)
 - `GET /api/v1/users` - List all users
-- `GET /api/v1/users/{id}` - Get user by ID
-- `PUT /api/v1/users/{id}` - Update user
-- `DELETE /api/v1/users/{id}` - Delete user
+- `GET /api/v1/users/{id}` - Get user by ID (simplified: returns first user, does not extract path parameter)
+- `PUT /api/v1/users/{id}` - Update user (placeholder: returns success message without updating)
+- `DELETE /api/v1/users/{id}` - Delete user (placeholder: returns success message without deleting)
+
+**Implementation Note**: This is a simplified demonstration. Path parameter extraction, request body parsing, and actual update/delete operations are marked as "in a real implementation" in the code (see `src/main.rs:252-327`).
 
 ## Data Models
 
@@ -72,13 +67,7 @@ The server implements a complete REST API:
 }
 ```
 
-### Update User Request
-```json
-{
-  "name": "Updated Name",
-  "email": "updated@example.com"
-}
-```
+**Note**: The current implementation does not parse this request body. The POST endpoint creates users with hardcoded values (see `src/main.rs:268-277`).
 
 ## Running the Example
 
@@ -121,26 +110,27 @@ The simulation provides:
 Example output:
 ```
 === API TESTING RESULTS ===
-Tests: 12 (Passed: 10, Failed: 2)
+Tests: 7 (Passed: 5, Failed: 2)
 
 Test Details:
   [PASS] HappyPath - create_user (45ms)
   [PASS] HappyPath - get_user_by_id (23ms)
   [PASS] HappyPath - list_users (18ms)
   [PASS] ErrorHandling - get_non_existent_user (15ms)
-  [FAIL] ErrorHandling - create_user_invalid_data (12ms) - Error: Expected 400, got: 500
+  [FAIL] ErrorHandling - create_user_invalid_data (12ms) - Error: Expected 400, got: 201
   [PASS] EdgeCases - create_user_long_name (67ms)
-  [PASS] Concurrency - concurrent_create_user_0 (34ms)
   ...
 ```
 
+**Note**: The test count reflects the actual implemented tests. Concurrency tests are currently simplified and do not perform actual API requests (see `src/main.rs:350-354`).
+
 ## Key Features
 
-### Comprehensive Test Coverage
-- Multiple test scenarios covering different aspects
+### Test Coverage
+- Multiple test scenarios: happy path, error handling, edge cases
 - Both positive and negative test cases
 - Boundary condition testing
-- Concurrent operation validation
+- **Planned**: Full concurrent operation validation
 
 ### Detailed Result Tracking
 - Individual test pass/fail status
@@ -148,39 +138,45 @@ Test Details:
 - Error message capture
 - Categorized test reporting
 
-### Realistic API Implementation
-- Full CRUD operations
-- Proper HTTP status codes
-- JSON request/response handling
+### Simplified API Implementation
+- Basic CRUD endpoint structure
+- HTTP status code responses
+- JSON response handling
 - In-memory data persistence
+- **Limitation**: Simplified implementations for demonstration (hardcoded data, placeholder operations)
 
 ### Deterministic Testing
 - Controlled simulation environment
 - Reproducible test results
-- Configurable test duration
-- Ordered test execution
+- Configurable test duration (20 seconds by default)
+- Ordered test execution (random order disabled)
 
 ## Use Cases
 
-This example is ideal for:
-- **API Contract Testing**: Verify endpoint behavior matches specifications
-- **Regression Testing**: Ensure API changes don't break existing functionality
-- **Integration Testing**: Test API interactions with clients
-- **Performance Testing**: Measure API response times
-- **Error Handling Validation**: Ensure proper error responses
-- **Concurrency Testing**: Verify thread-safe operations
+This example demonstrates:
+- **Simulation Testing**: Using simvar to test HTTP APIs in a controlled environment
+- **Basic API Testing Patterns**: Structure for organizing and executing API tests
+- **Response Validation**: Checking HTTP status codes and response timing
+- **Test Result Tracking**: Collecting and reporting test outcomes
 
-## Advanced Scenarios
+**Potential Extensions** (not currently implemented):
+- Full API contract testing with request/response validation
+- Regression testing with complete CRUD implementations
+- Performance testing under load
+- Comprehensive concurrency testing
 
-Extend this example to test:
-- Authentication and authorization
-- Rate limiting and throttling
-- Database transaction handling
-- Caching behavior
-- API versioning
-- Content negotiation
-- File upload/download
-- WebSocket connections
+## Potential Extensions
+
+This example could be extended to test:
+- **Request Body Parsing**: Parse and validate JSON request bodies
+- **Path Parameter Extraction**: Extract and use URL path parameters
+- **Complete CRUD Operations**: Implement actual update and delete functionality
+- **Concurrency Testing**: Full implementation of concurrent API request scenarios
+- **Authentication and Authorization**: Add authentication testing
+- **Rate Limiting**: Test API rate limiting behavior
+- **Database Integration**: Replace in-memory storage with actual database operations
+- **Caching**: Test caching behavior
+- **API Versioning**: Test multiple API versions
 
 ## Test Result Interpretation
 
@@ -195,15 +191,16 @@ Extend this example to test:
 - **&gt;5% errors**: Indicates significant problems requiring investigation
 
 ### Test Categories
-- **Happy Path**: Should have 100% pass rate
-- **Error Handling**: Should properly return expected error codes
-- **Edge Cases**: May have mixed results depending on validation rules
-- **Concurrency**: Should maintain data consistency
+- **Happy Path**: Tests basic successful operations (create, get, list)
+- **Error Handling**: Verifies expected error status codes (note: some may fail due to simplified implementation)
+- **Edge Cases**: Tests boundary conditions (accepts either success or validation errors)
+- **Concurrency**: Currently simplified and not performing full tests
 
 ## Integration with CI/CD
 
-This simulation can be integrated into continuous integration pipelines:
-- Run as part of automated testing
-- Generate test reports in standard formats
-- Set pass/fail thresholds for deployment gates
-- Monitor API performance over time
+This simulation can be used in continuous integration pipelines:
+- Run as part of automated testing (exit code reflects test results)
+- Parse output for test result summaries
+- Use as a template for building more comprehensive API test suites
+
+**Planned**: Generate test reports in standard formats (JUnit, TAP, etc.)
