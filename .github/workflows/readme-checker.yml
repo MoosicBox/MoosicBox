@@ -189,6 +189,7 @@ jobs:
               if: steps.check_readme.outputs.exists == 'true'
               uses: anthropics/claude-code-action@v1
               with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
                   prompt: |
@@ -318,6 +319,7 @@ jobs:
             - name: Update root README with Claude
               uses: anthropics/claude-code-action@v1
               with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
                   prompt: |
