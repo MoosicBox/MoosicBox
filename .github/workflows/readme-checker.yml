@@ -141,15 +141,13 @@ jobs:
               id: analyze
               uses: ./.github/actions/clippier
               with:
-                  command: features
-                  workspace-path: .
+                  command: packages
                   packages: ${{ github.event.inputs.packages }}
                   skip-on-no-changes: 'false'
                   force-full-matrix-condition: 'true'
                   transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
                   os-suffix: '-latest'
-                  max-parallel: 20
-                  matrix-properties: 'name,path'
+                  os: 'ubuntu'
 
     update-readmes:
         name: Update ${{ matrix.package.name }}
