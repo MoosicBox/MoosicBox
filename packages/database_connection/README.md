@@ -18,6 +18,7 @@ The Database Connection package provides:
 ### Database Backends
 - **PostgreSQL**: Raw tokio-postgres and SQLx implementations
 - **SQLite**: Rusqlite and SQLx implementations
+- **Turso**: Turso database support (libSQL-compatible)
 - **Simulator**: Mock database for testing and development
 
 ### PostgreSQL Options
@@ -32,34 +33,44 @@ The Database Connection package provides:
 - **In-memory**: Support for in-memory databases
 - **File-based**: Persistent SQLite database files
 
+### Turso Options
+- **Local Files**: Local Turso/libSQL database files
+- **In-memory**: In-memory Turso databases
+
 ## Installation
 
 Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-database_connection = { path = "../database_connection" }
+switchy_database_connection = { path = "../database_connection" }
 
 # PostgreSQL with native TLS
-database_connection = {
+switchy_database_connection = {
     path = "../database_connection",
     features = ["postgres-raw", "postgres-native-tls"]
 }
 
 # SQLite with rusqlite
-database_connection = {
+switchy_database_connection = {
     path = "../database_connection",
     features = ["sqlite", "sqlite-rusqlite"]
 }
 
 # Multiple backends
-database_connection = {
+switchy_database_connection = {
     path = "../database_connection",
     features = [
         "postgres-sqlx",
         "sqlite-sqlx",
         "sqlite"
     ]
+}
+
+# Turso database
+switchy_database_connection = {
+    path = "../database_connection",
+    features = ["turso"]
 }
 ```
 
@@ -143,10 +154,11 @@ export DB_USER="user"
 export DB_PASSWORD="password"
 
 # Option 3: AWS SSM Parameters (requires 'creds' feature)
-export SSM_DB_HOST_PARAM_NAME="myapp_db_host"
-export SSM_DB_NAME_PARAM_NAME="myapp_db_name"
-export SSM_DB_USER_PARAM_NAME="myapp_db_user"
-export SSM_DB_PASSWORD_PARAM_NAME="myapp_db_password"
+# Optional - defaults shown below
+export SSM_DB_HOST_PARAM_NAME="moosicbox_db_hostname"    # default
+export SSM_DB_NAME_PARAM_NAME="moosicbox_db_name"        # default
+export SSM_DB_USER_PARAM_NAME="moosicbox_db_user"        # default
+export SSM_DB_PASSWORD_PARAM_NAME="moosicbox_db_password" # default
 ```
 
 ### AWS Credentials (Optional)
@@ -155,7 +167,7 @@ To use AWS SSM parameter store for credentials, enable the `creds` feature:
 
 ```toml
 [dependencies]
-database_connection = {
+switchy_database_connection = {
     path = "../database_connection",
     features = ["postgres", "creds"]
 }
@@ -263,6 +275,21 @@ let db = init_sqlite_sqlx(Some(db_path)).await?;
 let db = init_sqlite_sqlx(None).await?;
 ```
 
+### Turso Database
+
+```rust
+// Feature: turso
+use database_connection::init_turso_local;
+use std::path::Path;
+
+// File-based Turso database
+let db_path = Path::new("./app.db");
+let db = init_turso_local(Some(db_path)).await?;
+
+// In-memory Turso database
+let db = init_turso_local(None).await?;
+```
+
 ### Non-SQLite Initialization
 
 ```rust
@@ -308,11 +335,25 @@ match init(None, None).await {
     Err(InitDbError::CredentialsRequired) => {
         eprintln!("Database credentials are required");
     }
+    #[cfg(feature = "sqlite-rusqlite")]
     Err(InitDbError::InitSqlite(e)) => {
         eprintln!("SQLite initialization error: {}", e);
     }
+    #[cfg(feature = "postgres")]
     Err(InitDbError::InitPostgres(e)) => {
         eprintln!("PostgreSQL initialization error: {}", e);
+    }
+    #[cfg(feature = "postgres")]
+    Err(InitDbError::InitDatabase(e)) => {
+        eprintln!("Database initialization error: {}", e);
+    }
+    #[cfg(feature = "sqlite-sqlx")]
+    Err(InitDbError::InitSqliteSqlxDatabase(e)) => {
+        eprintln!("SQLite SQLx initialization error: {}", e);
+    }
+    #[cfg(feature = "turso")]
+    Err(InitDbError::InitTurso(e)) => {
+        eprintln!("Turso initialization error: {}", e);
     }
     Err(InitDbError::Database(e)) => {
         eprintln!("Database error: {}", e);
@@ -333,26 +374,33 @@ match init(None, None).await {
 - **`sqlite-rusqlite`**: Rusqlite implementation
 - **`sqlite-sqlx`**: SQLx SQLite implementation
 
+### Turso Features
+- **`turso`**: Turso/libSQL database support
+
 ### Other Features
 - **`simulator`**: Mock database for testing
 - **`creds`**: AWS SSM credential management (optional)
+- **`tls`**: TLS support via rustls
 
 ## Connection Strings
 
 ### Supported URL Formats
+
+The `Credentials::from_url()` function supports the following URL formats:
 
 ```bash
 # PostgreSQL
 postgres://user:password@host:port/database
 postgresql://user:password@host:port/database
 
-# MySQL
+# MySQL (URL parsing only - no MySQL implementation currently)
 mysql://user:password@host:port/database
 
 # Examples
 DATABASE_URL="postgres://myuser:mypass@localhost:5432/mydb"
-DATABASE_URL="mysql://root:secret@127.0.0.1:3306/app_db"
 ```
+
+**Note**: While the URL parser supports MySQL connection strings, there is currently no MySQL database implementation in this package.
 
 ### Individual Environment Variables
 
@@ -366,13 +414,17 @@ DB_PASSWORD="password"
 
 ## Dependencies
 
-- **Switchy Database**: Generic database trait abstraction
+- **switchy_database**: Generic database trait abstraction
+- **switchy_env**: Environment variable utilities
 - **Tokio Postgres**: PostgreSQL async driver (optional)
+- **deadpool-postgres**: Connection pooling for PostgreSQL (optional)
 - **SQLx**: Multi-database async driver (optional)
 - **Rusqlite**: SQLite synchronous driver (optional)
 - **Native TLS**: TLS implementation (optional)
 - **OpenSSL**: Alternative TLS implementation (optional)
+- **AWS SDK**: For SSM parameter store credential management (optional)
 - **Thiserror**: Error handling
+- **Tokio**: Async runtime support (optional)
 
 ## Use Cases
 
