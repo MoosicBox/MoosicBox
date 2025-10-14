@@ -208,10 +208,15 @@ pub enum ParseHexError {
 
 ## Dependencies
 
-- **Color Hex**: Core hex parsing functionality
-- **ThisError**: Error handling and display
-- **Serde**: Optional serialization support
-- **egui**: Optional egui integration
+### Core Dependencies
+- **color-hex**: Core hex parsing functionality
+- **thiserror**: Error handling and display
+- **moosicbox_assert**: Assertion utilities
+
+### Optional Dependencies
+- **serde**: Serialization/deserialization support (feature: `serde`)
+- **egui**: egui Color32 conversion support (feature: `egui`)
+- **quickcheck**: Arbitrary data generation for testing (feature: `arb`)
 
 ## Integration
 
