@@ -257,10 +257,23 @@ jobs:
                       ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
                       ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
 
+            - name: Upload Claude output for review
+              if: always() && steps.check_readme.outputs.exists == 'true'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: claude-output-${{ matrix.package.name }}
+                  path: output.txt
+                  if-no-files-found: ignore
+                  retention-days: 7
+
             - name: Commit changes with resilient push
               if: steps.check_readme.outputs.exists == 'true'
               run: |
-                  if [ -n "$(git status --porcelain)" ]; then
+                  # Check if README.md specifically was modified (staged or unstaged)
+                  if git diff --name-only | grep -q "${{ matrix.package.path }}/README.md" || \
+                     git diff --cached --name-only | grep -q "${{ matrix.package.path }}/README.md"; then
+
+                    echo "📝 README changes detected, committing..."
                     git add ${{ matrix.package.path }}/README.md
                     git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
 
@@ -294,7 +307,9 @@ jobs:
                       exit 1
                     fi
                   else
-                    echo "No changes detected for ${{ matrix.package.name }}"
+                    echo "ℹ️ No changes to README.md, skipping commit"
+                    echo "📋 Git status shows:"
+                    git status --short
                   fi
 
     update-root-readme:
@@ -390,9 +405,22 @@ jobs:
                       ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
                       ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
 
+            - name: Upload Claude output for review
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: claude-output-root-readme
+                  path: output.txt
+                  if-no-files-found: ignore
+                  retention-days: 7
+
             - name: Commit changes with resilient push
               run: |
-                  if [ -n "$(git status --porcelain)" ]; then
+                  # Check if README.md specifically was modified (staged or unstaged)
+                  if git diff --name-only | grep -q "^README.md$" || \
+                     git diff --cached --name-only | grep -q "^README.md$"; then
+
+                    echo "📝 Root README changes detected, committing..."
                     git add README.md
                     git commit -m "docs(root): update README for accuracy"
 
@@ -426,7 +454,9 @@ jobs:
                       exit 1
                     fi
                   else
-                    echo "No changes detected for root README"
+                    echo "ℹ️ No changes to root README.md, skipping commit"
+                    echo "📋 Git status shows:"
+                    git status --short
                   fi
 
     create-pr:
