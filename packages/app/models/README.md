@@ -25,7 +25,7 @@ The MoosicBox App Models package provides:
 - **supports_scan**: Whether the service supports library scanning
 - **scan_enabled**: Whether scanning is currently enabled
 - **run_scan_endpoint**: Optional API endpoint for triggering scans
-- **auth_method**: Optional authentication method configuration
+- **auth_method**: Optional authentication method configuration (requires `music-api-api` feature)
 
 ### DownloadSettings
 - **download_locations**: List of available download locations with IDs
@@ -42,9 +42,10 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_app_models = { path = "../app/models" }
 
-# Optional: Enable music API authentication integration
+# Or disable default features and enable only specific features
 moosicbox_app_models = {
     path = "../app/models",
+    default-features = false,
     features = ["music-api-api"]
 }
 ```
@@ -67,6 +68,9 @@ let connection = Connection {
 ```rust
 use moosicbox_app_models::MusicApiSettings;
 
+#[cfg(feature = "music-api-api")]
+use moosicbox_app_models::AuthMethod;
+
 let tidal_settings = MusicApiSettings {
     id: "tidal".to_string(),
     name: "Tidal".to_string(),
@@ -74,7 +78,11 @@ let tidal_settings = MusicApiSettings {
     supports_scan: false,
     scan_enabled: false,
     run_scan_endpoint: None,
-    auth_method: Some(auth_method),
+    #[cfg(feature = "music-api-api")]
+    auth_method: Some(AuthMethod::UsernamePassword {
+        username: "user".to_string(),
+        password: "pass".to_string(),
+    }),
 };
 ```
 
@@ -94,9 +102,16 @@ let download_settings = DownloadSettings {
 
 ## Feature Flags
 
-- **`music-api-api`**: Enable integration with MoosicBox music API authentication
+### Default Features
+- **`music-api-api`**: Integration with MoosicBox music API authentication (includes `AuthMethod`)
+- **`auth-poll`**: Support for poll-based authentication flows
+- **`auth-username-password`**: Support for username/password authentication
+
+### Additional Features
+- **`fail-on-warnings`**: Treat compiler warnings as errors
 
 ## Dependencies
 
-- **Serde**: Serialization and deserialization
-- **MoosicBox Music API API**: Optional authentication integration
+- **serde**: Serialization and deserialization
+- **log**: Logging functionality
+- **moosicbox_music_api_api**: Music API authentication integration (optional, enabled by default)
