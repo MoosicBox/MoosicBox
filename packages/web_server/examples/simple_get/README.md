@@ -18,35 +18,20 @@ This example demonstrates how to create a basic web server with a single GET end
 
 ## Running the Example
 
-### With Actix Web (Production Backend)
 ```bash
-# From repository root
-cargo run --example simple_get --features actix
-
 # From example directory
 cd packages/web_server/examples/simple_get
-cargo run --features actix
+cargo run
 
 # With NixOS
-nix develop .#server --command cargo run --example simple_get --features actix
+nix develop .#server --command cargo run
 ```
 
-### With Simulator (Testing Backend)
-```bash
-# From repository root
-cargo run --example simple_get --features simulator
-
-# From example directory
-cd packages/web_server/examples/simple_get
-cargo run --features simulator
-
-# With NixOS
-nix develop .#server --command cargo run --example simple_get --features simulator
-```
+**Note**: This example uses the Actix web backend, which is configured in the package's Cargo.toml dependencies.
 
 ## Expected Output
 
-When you run the example, the server will start and listen on the default port. You can then make requests to test the endpoint.
+When you run the example, the server will start and listen on port 8080 (the default). You can then make requests to test the endpoint.
 
 ## Testing the Server
 
@@ -124,9 +109,9 @@ let cors = moosicbox_web_server::cors::Cors::default()
 - **Query String**: `req.query_string()` returns raw query parameters
 - **Header Access**: `req.header("name")` for specific headers
 
-## Differences from basic_handler
+## Differences from basic_handler_standalone
 
-| Aspect | simple_get | basic_handler |
+| Aspect | simple_get | basic_handler_standalone |
 |--------|------------|---------------|
 | **Route Registration** | Uses `Scope::get()` shortcut | Uses `Route` struct with handler |
 | **Request Type** | Uses `HttpRequest` directly | Uses `RequestData` for Send-safety |
@@ -148,10 +133,6 @@ This example could be updated to use:
 
 ## Troubleshooting
 
-### Feature Flag Issues
-**Problem**: "trait bound not satisfied" errors
-**Solution**: Ensure either `actix` or `simulator` feature is enabled
-
 ### Port Conflicts
 **Problem**: "address already in use"
 **Solution**: Kill existing process or change port:
@@ -165,9 +146,9 @@ lsof -ti:8080 | xargs kill
 
 ## Related Examples
 
-- **basic_handler**: Shows RequestData usage and handler registration
+- **basic_handler_standalone**: Shows RequestData usage and handler registration
 - **nested_get**: Demonstrates nested scopes and route organization
-- **query_extractor**: Shows typed query parameter parsing
+- **query_extractor_standalone**: Shows typed query parameter parsing
 - **openapi**: Adds API documentation to similar endpoints
 
 This example provides a foundation for understanding the MoosicBox web server's routing system and demonstrates how to create simple HTTP endpoints with CORS support.
