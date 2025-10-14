@@ -24,16 +24,16 @@ The HyperChad HTML Lambda Renderer provides:
 
 ### Response Features
 - **HTML Responses**: Server-rendered HTML pages
-- **JSON Responses**: API responses in JSON format
-- **Compression**: Automatic gzip compression
+- **JSON Responses**: API responses in JSON format (with `json` feature)
+- **Raw Responses**: Binary content with custom content-type
+- **Compression**: Automatic gzip compression for all responses
 - **Headers**: Custom header support
-- **Status Codes**: Full HTTP status code support
 
 ### Performance Optimizations
 - **Cold Start**: Minimal initialization overhead
 - **Memory Efficiency**: Low memory footprint
-- **Response Streaming**: Efficient response generation
-- **Compression**: Reduced response sizes
+- **Compression**: Automatic gzip compression for reduced response sizes
+- **Streaming Response API**: Uses Lambda's streaming response API
 
 ## Installation
 
@@ -62,9 +62,8 @@ hyperchad_renderer_html_lambda = {
 
 ```rust
 use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
-use lambda_http::{Request, Error as LambdaError};
-use lambda_runtime::{self, Error};
-use hyperchad_template::container;
+use lambda_http::Request;
+use lambda_runtime::Error;
 use bytes::Bytes;
 use std::sync::Arc;
 
@@ -95,9 +94,10 @@ impl LambdaResponseProcessor<String> for MyLambdaProcessor {
         match path.as_str() {
             "/" => Ok(Some((Content::Html(render_home_page()), None))),
             "/about" => Ok(Some((Content::Html(render_about_page()), None))),
+            #[cfg(feature = "json")]
             "/api/health" => Ok(Some((
-                Content::Json(serde_json::json!({"status": "ok", "timestamp": chrono::Utc::now()})),
-                Some(vec![("Content-Type".to_string(), "application/json".to_string())])
+                Content::Json(serde_json::json!({"status": "ok"})),
+                None
             ))),
             _ => Ok(None), // 404
         }
@@ -113,72 +113,17 @@ impl LambdaResponseProcessor<String> for MyLambdaProcessor {
 }
 
 fn render_home_page() -> String {
-    let view = container! {
-        html {
-            head {
-                title { "HyperChad Lambda" }
-                meta name="viewport" content="width=device-width, initial-scale=1";
-            }
-            body {
-                div class="container" {
-                    h1 { "Welcome to HyperChad on Lambda!" }
-                    p { "This page is rendered by AWS Lambda." }
-
-                    nav {
-                        a href="/about" { "About" }
-                        " | "
-                        a href="/api/health" { "Health Check" }
-                    }
-
-                    div class="info" {
-                        h2 { "Serverless Benefits" }
-                        ul {
-                            li { "Automatic scaling" }
-                            li { "Pay per request" }
-                            li { "Zero server management" }
-                            li { "Global deployment" }
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    view.to_string()
+    // Returns HTML string
+    String::from("<html><body><h1>Welcome to HyperChad on Lambda!</h1></body></html>")
 }
 
 fn render_about_page() -> String {
-    let view = container! {
-        html {
-            head {
-                title { "About - HyperChad Lambda" }
-                meta name="viewport" content="width=device-width, initial-scale=1";
-            }
-            body {
-                div class="container" {
-                    h1 { "About HyperChad Lambda" }
-                    p {
-                        "HyperChad Lambda renderer enables serverless deployment "
-                        "of HyperChad applications on AWS Lambda."
-                    }
-
-                    a href="/" { "← Back to Home" }
-                }
-            }
-        }
-    };
-
-    view.to_string()
+    // Returns HTML string
+    String::from("<html><body><h1>About HyperChad Lambda</h1></body></html>")
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .without_time()
-        .init();
-
     let processor = MyLambdaProcessor;
     let app = LambdaApp::new(processor);
 
@@ -191,256 +136,203 @@ async fn main() -> Result<(), Error> {
 
 ### API Gateway Integration
 
+This example requires the `json` feature to be enabled.
+
 ```rust
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "json")]
+mod api_example {
+    use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+    use lambda_http::Request;
+    use lambda_runtime::Error;
+    use bytes::Bytes;
+    use std::sync::Arc;
+    use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
-struct CreateUserRequest {
-    name: String,
-    email: String,
-}
-
-#[derive(Serialize)]
-struct CreateUserResponse {
-    id: u64,
-    name: String,
-    email: String,
-    created_at: String,
-}
-
-struct ApiProcessor;
-
-#[async_trait::async_trait]
-impl LambdaResponseProcessor<(String, String, Option<String>)> for ApiProcessor {
-    fn prepare_request(
-        &self,
-        req: Request,
-        body: Option<Arc<Bytes>>,
-    ) -> Result<(String, String, Option<String>), lambda_runtime::Error> {
-        let path = req.uri().path().to_string();
-        let method = req.method().to_string();
-        let body_str = body.and_then(|b| String::from_utf8(b.to_vec()).ok());
-
-        Ok((method, path, body_str))
+    #[derive(Deserialize)]
+    struct CreateUserRequest {
+        name: String,
+        email: String,
     }
 
-    fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
-        match content {
-            hyperchad_renderer::Content::Html(_) => Some(vec![
-                ("Content-Type".to_string(), "text/html".to_string()),
-            ]),
-            hyperchad_renderer::Content::Json(_) => Some(vec![
-                ("Content-Type".to_string(), "application/json".to_string()),
-            ]),
+    #[derive(Serialize)]
+    struct CreateUserResponse {
+        id: u64,
+        name: String,
+        email: String,
+    }
+
+    struct ApiProcessor;
+
+    #[async_trait::async_trait]
+    impl LambdaResponseProcessor<(String, String, Option<String>)> for ApiProcessor {
+        fn prepare_request(
+            &self,
+            req: Request,
+            body: Option<Arc<Bytes>>,
+        ) -> Result<(String, String, Option<String>), lambda_runtime::Error> {
+            let path = req.uri().path().to_string();
+            let method = req.method().to_string();
+            let body_str = body.and_then(|b| String::from_utf8(b.to_vec()).ok());
+
+            Ok((method, path, body_str))
         }
-    }
 
-    async fn to_response(
-        &self,
-        (method, path, body): (String, String, Option<String>),
-    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
-        match (method.as_str(), path.as_str()) {
-            ("GET", "/") => Ok(Some((Content::Html(render_api_docs()), None))),
-
-            ("GET", "/api/users") => {
-                let users = vec![
-                    serde_json::json!({"id": 1, "name": "Alice", "email": "alice@example.com"}),
-                    serde_json::json!({"id": 2, "name": "Bob", "email": "bob@example.com"}),
-                ];
-                Ok(Some((Content::Json(serde_json::json!({"users": users})), None)))
-            }
-
-            ("POST", "/api/users") => {
-                if let Some(body) = body {
-                    let request: CreateUserRequest = serde_json::from_str(&body)
-                        .map_err(|e| lambda_runtime::Error::from(e.to_string()))?;
-
-                    let response = CreateUserResponse {
-                        id: 123,
-                        name: request.name,
-                        email: request.email,
-                        created_at: chrono::Utc::now().to_rfc3339(),
-                    };
-
-                    Ok(Some((Content::Json(serde_json::to_value(response).unwrap()), None)))
-                } else {
-                    Ok(Some((
-                        Content::Json(serde_json::json!({"error": "Missing request body"})),
-                        Some(vec![("Status".to_string(), "400".to_string())])
-                    )))
-                }
-            }
-
-            _ => Ok(None), // 404
+        fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
+            None // Content-Type is set automatically based on Content variant
         }
-    }
 
-    async fn to_body(
-        &self,
-        content: hyperchad_renderer::Content,
-        _data: (String, String, Option<String>),
-    ) -> Result<Content, lambda_runtime::Error> {
-        match content {
-            hyperchad_renderer::Content::Html(html) => Ok(Content::Html(html)),
-            hyperchad_renderer::Content::Json(json) => Ok(Content::Json(json)),
-        }
-    }
-}
+        async fn to_response(
+            &self,
+            (method, path, body): (String, String, Option<String>),
+        ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
+            match (method.as_str(), path.as_str()) {
+                ("GET", "/") => Ok(Some((Content::Html(render_api_docs()), None))),
 
-fn render_api_docs() -> String {
-    let view = container! {
-        html {
-            head {
-                title { "API Documentation" }
-                style {
-                    "
-                    body { font-family: Arial, sans-serif; margin: 40px; }
-                    .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-                    .method { color: white; padding: 3px 8px; border-radius: 3px; font-weight: bold; }
-                    .get { background: #4CAF50; }
-                    .post { background: #2196F3; }
-                    "
-                }
-            }
-            body {
-                h1 { "API Documentation" }
-
-                div class="endpoint" {
-                    span class="method get" { "GET" }
-                    " "
-                    code { "/api/users" }
-                    p { "Get all users" }
+                ("GET", "/api/users") => {
+                    let users = vec![
+                        serde_json::json!({"id": 1, "name": "Alice", "email": "alice@example.com"}),
+                        serde_json::json!({"id": 2, "name": "Bob", "email": "bob@example.com"}),
+                    ];
+                    Ok(Some((Content::Json(serde_json::json!({"users": users})), None)))
                 }
 
-                div class="endpoint" {
-                    span class="method post" { "POST" }
-                    " "
-                    code { "/api/users" }
-                    p { "Create a new user" }
-                    pre {
-                        r#"{"name": "John Doe", "email": "john@example.com"}"#
+                ("POST", "/api/users") => {
+                    if let Some(body) = body {
+                        let request: CreateUserRequest = serde_json::from_str(&body)
+                            .map_err(|e| lambda_runtime::Error::from(e.to_string()))?;
+
+                        let response = CreateUserResponse {
+                            id: 123,
+                            name: request.name,
+                            email: request.email,
+                        };
+
+                        Ok(Some((Content::Json(serde_json::to_value(response).unwrap()), None)))
+                    } else {
+                        Ok(Some((
+                            Content::Json(serde_json::json!({"error": "Missing request body"})),
+                            None
+                        )))
                     }
                 }
+
+                _ => Ok(None), // 404
             }
         }
-    };
 
-    view.to_string()
+        async fn to_body(
+            &self,
+            content: hyperchad_renderer::Content,
+            _data: (String, String, Option<String>),
+        ) -> Result<Content, lambda_runtime::Error> {
+            Ok(Content::Html(content.to_string()))
+        }
+    }
+
+    fn render_api_docs() -> String {
+        String::from("<html><body><h1>API Documentation</h1></body></html>")
+    }
 }
 ```
 
 ### Static Asset Serving
 
+This example requires the `assets` feature to be enabled.
+
 ```rust
-use hyperchad_renderer::{assets::{StaticAssetRoute, AssetPathTarget}};
-use std::path::PathBuf;
+#[cfg(feature = "assets")]
+mod asset_example {
+    use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+    use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
+    use lambda_http::Request;
+    use lambda_runtime::Error;
+    use bytes::Bytes;
+    use std::sync::Arc;
 
-struct AssetProcessor {
-    static_routes: Vec<StaticAssetRoute>,
-}
+    struct AssetProcessor;
 
-impl AssetProcessor {
-    fn new() -> Self {
-        Self {
-            static_routes: vec![
-                StaticAssetRoute {
-                    route: "/css/style.css".to_string(),
-                    target: AssetPathTarget::FileContents(include_bytes!("../assets/style.css").to_vec()),
-                },
-                StaticAssetRoute {
-                    route: "/js/app.js".to_string(),
-                    target: AssetPathTarget::FileContents(include_bytes!("../assets/app.js").to_vec()),
-                },
-            ],
+    #[async_trait::async_trait]
+    impl LambdaResponseProcessor<String> for AssetProcessor {
+        fn prepare_request(
+            &self,
+            req: Request,
+            _body: Option<Arc<Bytes>>,
+        ) -> Result<String, lambda_runtime::Error> {
+            Ok(req.uri().path().to_string())
         }
-    }
-}
 
-#[async_trait::async_trait]
-impl LambdaResponseProcessor<String> for AssetProcessor {
-    fn prepare_request(
-        &self,
-        req: Request,
-        _body: Option<Arc<Bytes>>,
-    ) -> Result<String, lambda_runtime::Error> {
-        Ok(req.uri().path().to_string())
-    }
+        fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
+            None
+        }
 
-    fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
-        None
-    }
-
-    async fn to_response(
-        &self,
-        path: String,
-    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
-        // Check static assets first
-        for route in &self.static_routes {
-            if route.route == path {
-                match &route.target {
-                    AssetPathTarget::FileContents(contents) => {
-                        let content_type = match path.as_str() {
-                            p if p.ends_with(".css") => "text/css",
-                            p if p.ends_with(".js") => "application/javascript",
-                            p if p.ends_with(".png") => "image/png",
-                            p if p.ends_with(".jpg") | p.ends_with(".jpeg") => "image/jpeg",
-                            _ => "application/octet-stream",
-                        };
-
-                        return Ok(Some((
-                            Content::Html(String::from_utf8_lossy(contents).to_string()),
-                            Some(vec![
-                                ("Content-Type".to_string(), content_type.to_string()),
-                                ("Cache-Control".to_string(), "public, max-age=86400".to_string()),
-                            ])
-                        )));
-                    }
-                    _ => {}
+        async fn to_response(
+            &self,
+            path: String,
+        ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
+            match path.as_str() {
+                "/css/style.css" => {
+                    let css_content = include_bytes!("../assets/style.css");
+                    Ok(Some((
+                        Content::Raw {
+                            data: Bytes::from_static(css_content),
+                            content_type: "text/css".to_string(),
+                        },
+                        Some(vec![("Cache-Control".to_string(), "public, max-age=86400".to_string())])
+                    )))
                 }
+                "/" => Ok(Some((Content::Html(render_home_with_assets()), None))),
+                _ => Ok(None),
             }
         }
 
-        // Regular page routing
-        match path.as_str() {
-            "/" => Ok(Some((Content::Html(render_home_with_assets()), None))),
-            _ => Ok(None),
+        async fn to_body(
+            &self,
+            content: hyperchad_renderer::Content,
+            _data: String,
+        ) -> Result<Content, lambda_runtime::Error> {
+            Ok(Content::Html(content.to_string()))
         }
     }
 
-    async fn to_body(
-        &self,
-        content: hyperchad_renderer::Content,
-        _data: String,
-    ) -> Result<Content, lambda_runtime::Error> {
-        Ok(Content::Html(content.to_string()))
+    fn render_home_with_assets() -> String {
+        String::from(r#"<html>
+            <head>
+                <title>HyperChad with Assets</title>
+                <link rel="stylesheet" href="/css/style.css">
+            </head>
+            <body>
+                <div class="container">
+                    <h1>HyperChad with Static Assets</h1>
+                    <p>This page includes CSS assets.</p>
+                </div>
+            </body>
+        </html>"#)
     }
-}
 
-fn render_home_with_assets() -> String {
-    let view = container! {
-        html {
-            head {
-                title { "HyperChad with Assets" }
-                link rel="stylesheet" href="/css/style.css";
-            }
-            body {
-                div class="container" {
-                    h1 { "HyperChad with Static Assets" }
-                    p { "This page includes CSS and JavaScript assets." }
-                }
-                script src="/js/app.js" {}
-            }
-        }
-    };
-
-    view.to_string()
+    // Example of using the static_asset_routes field in LambdaApp
+    fn create_app_with_routes() -> LambdaApp<String, AssetProcessor> {
+        let mut app = LambdaApp::new(AssetProcessor);
+        app.static_asset_routes = vec![
+            StaticAssetRoute {
+                route: "/css/style.css".to_string(),
+                target: AssetPathTarget::FileContents(
+                    Bytes::from_static(include_bytes!("../assets/style.css"))
+                ),
+            },
+        ];
+        app
+    }
 }
 ```
 
 ### Environment-based Configuration
 
 ```rust
-use std::env;
+use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+use lambda_http::Request;
+use lambda_runtime::Error;
+use bytes::Bytes;
+use std::{env, sync::Arc};
 
 struct ConfigurableProcessor {
     environment: String,
@@ -453,6 +345,19 @@ impl ConfigurableProcessor {
             environment: env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string()),
             debug: env::var("DEBUG").is_ok(),
         }
+    }
+
+    fn render_home(&self) -> String {
+        format!(
+            r#"<html>
+                <head><title>HyperChad - {}</title></head>
+                <body>
+                    <h1>HyperChad Lambda</h1>
+                    <p>Environment: {}</p>
+                </body>
+            </html>"#,
+            self.environment, self.environment
+        )
     }
 }
 
@@ -468,7 +373,6 @@ impl LambdaResponseProcessor<String> for ConfigurableProcessor {
 
     fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
         let mut headers = vec![
-            ("Content-Type".to_string(), "text/html".to_string()),
             ("X-Environment".to_string(), self.environment.clone()),
         ];
 
@@ -485,7 +389,6 @@ impl LambdaResponseProcessor<String> for ConfigurableProcessor {
     ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
         match path.as_str() {
             "/" => Ok(Some((Content::Html(self.render_home()), None))),
-            "/debug" if self.debug => Ok(Some((Content::Html(self.render_debug()), None))),
             _ => Ok(None),
         }
     }
@@ -496,59 +399,6 @@ impl LambdaResponseProcessor<String> for ConfigurableProcessor {
         _data: String,
     ) -> Result<Content, lambda_runtime::Error> {
         Ok(Content::Html(content.to_string()))
-    }
-}
-
-impl ConfigurableProcessor {
-    fn render_home(&self) -> String {
-        let view = container! {
-            html {
-                head {
-                    title { format!("HyperChad - {}", self.environment) }
-                }
-                body {
-                    div class="container" {
-                        h1 { "HyperChad Lambda" }
-                        p { format!("Environment: {}", self.environment) }
-
-                        @if self.debug {
-                            div class="debug-info" {
-                                h2 { "Debug Mode Enabled" }
-                                a href="/debug" { "View Debug Info" }
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        view.to_string()
-    }
-
-    fn render_debug(&self) -> String {
-        let view = container! {
-            html {
-                head {
-                    title { "Debug Information" }
-                }
-                body {
-                    div class="container" {
-                        h1 { "Debug Information" }
-
-                        h2 { "Environment Variables" }
-                        ul {
-                            @for (key, value) in env::vars() {
-                                li { format!("{}: {}", key, value) }
-                            }
-                        }
-
-                        a href="/" { "← Back to Home" }
-                    }
-                }
-            }
-        };
-
-        view.to_string()
     }
 }
 ```
@@ -605,37 +455,37 @@ sam deploy --guided
 
 ## Feature Flags
 
-- **`json`**: Enable JSON response support
-- **`assets`**: Enable static asset serving
+- **`json`**: Enable JSON response support (enabled by default)
+- **`assets`**: Enable static asset serving support (enabled by default)
+- **`debug`**: Enable debug mode features (enabled by default)
 
 ## Performance Optimizations
 
 ### Cold Start Reduction
 - **Minimal Dependencies**: Only essential dependencies included
-- **Lazy Initialization**: Defer expensive initialization
-- **Binary Size**: Optimized binary size for faster cold starts
+- **Binary Size**: Optimized for fast cold starts
 
 ### Memory Efficiency
-- **Streaming**: Stream large responses
-- **Compression**: Automatic gzip compression
-- **Memory Pool**: Efficient memory allocation
+- **Compression**: Automatic gzip compression for all responses
+- **Binary Responses**: Efficient binary body handling
 
 ## Dependencies
 
-- **Lambda HTTP**: AWS Lambda HTTP event handling
-- **Lambda Runtime**: AWS Lambda runtime integration
-- **HyperChad HTML Renderer**: Core HTML rendering functionality
-- **Flate2**: Gzip compression support
-- **Serde JSON**: JSON serialization (optional)
+- **lambda_http**: AWS Lambda HTTP event handling
+- **lambda_runtime**: AWS Lambda runtime integration
+- **hyperchad_renderer**: Core HTML rendering functionality
+- **flate2**: Gzip compression support
+- **bytes**: Efficient byte buffer handling
+- **async-trait**: Async trait support
+- **serde_json**: JSON serialization (optional, enabled by default)
 
 ## Integration
 
 This renderer is designed for:
 - **Serverless Web Apps**: Full serverless web applications
-- **API Services**: REST and GraphQL APIs
-- **Static Sites**: Server-rendered static sites
-- **Microservices**: Event-driven microservices
-- **Edge Computing**: CloudFront Lambda@Edge functions
+- **API Services**: REST and JSON APIs
+- **Server-Rendered Pages**: Dynamic HTML page generation
+- **Microservices**: Event-driven microservices architecture
 
 ## Limitations
 
