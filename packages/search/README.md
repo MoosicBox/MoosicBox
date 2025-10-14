@@ -1,18 +1,17 @@
 # MoosicBox Search
 
-A high-performance full-text search engine for the MoosicBox music ecosystem. Built on Tantivy, this package provides fast, indexed search across music libraries with support for complex queries, faceted search, and real-time indexing.
+A full-text search implementation for the MoosicBox music ecosystem. Built on Tantivy, this package provides indexed search across artists, albums, and tracks in your music library.
 
 ## Features
 
 - **Full-Text Search**: Fast text search across artists, albums, tracks, and metadata
 - **Tantivy Integration**: Built on Rust's high-performance search library
-- **Real-Time Indexing**: Automatic index updates as music library changes
-- **Faceted Search**: Filter results by genre, year, artist, album, and more
+- **Real-Time Indexing**: Add, update, and delete documents from the index
 - **Fuzzy Matching**: Find results even with typos or partial matches
-- **Ranking & Scoring**: Relevance-based result ordering with customizable scoring
-- **Multi-Field Search**: Search across multiple metadata fields simultaneously
+- **Ranking & Scoring**: Relevance-based result ordering with custom boost logic
+- **Multi-Field Search**: Search across artist, album, and track fields simultaneously
 - **Async Operations**: Non-blocking search operations with Tokio
-- **API Integration**: RESTful API endpoints for web applications
+- **API Integration**: RESTful API endpoints for web applications (with `api` feature)
 - **Index Management**: Efficient index building, updating, and optimization
 
 ## Installation
@@ -21,7 +20,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_search = "0.1.1"
+moosicbox_search = "0.1.4"
 ```
 
 ## Usage
@@ -29,315 +28,191 @@ moosicbox_search = "0.1.1"
 ### Basic Search
 
 ```rust
-use moosicbox_search::{SearchEngine, SearchQuery, SearchResults};
+use moosicbox_search::{global_search, search_global_search_index};
 
-// Initialize search engine
-let search_engine = SearchEngine::new("/path/to/index")?;
-
-// Perform simple text search
-let query = SearchQuery::new("Pink Floyd");
-let results = search_engine.search(&query).await?;
+// High-level search (returns structured results)
+let results = global_search("Pink Floyd", Some(0), Some(10))?;
 
 // Process results
-for hit in results.hits {
-    println!("Found: {} - {} (score: {})",
-             hit.artist, hit.title, hit.score);
+for result in results.results {
+    println!("Found: {:?}", result);
 }
+
+// Lower-level search (returns raw Tantivy documents)
+let documents = search_global_search_index("Pink Floyd", 0, 10)?;
 ```
 
-### Advanced Search Queries
+### Populating the Index
 
 ```rust
-use moosicbox_search::{SearchQuery, SearchFilter, SortBy};
+use moosicbox_search::{populate_global_search_index, DataValue};
 
-// Complex search with filters and sorting
-let query = SearchQuery::new("rock")
-    .with_filter(SearchFilter::Genre("progressive rock".to_string()))
-    .with_filter(SearchFilter::YearRange(1970, 1980))
-    .with_sort(SortBy::Relevance)
-    .with_limit(50)
-    .with_offset(0);
+// Create data entries for indexing
+let data = vec![
+    vec![
+        ("document_type", DataValue::String("tracks".into())),
+        ("artist_title", DataValue::String("Queen".into())),
+        ("artist_id", DataValue::String("123".into())),
+        ("album_title", DataValue::String("A Night at the Opera".into())),
+        ("album_id", DataValue::String("456".into())),
+        ("track_title", DataValue::String("Bohemian Rhapsody".into())),
+        ("track_id", DataValue::String("789".into())),
+        ("cover", DataValue::String("cover.jpg".into())),
+        ("blur", DataValue::Bool(false)),
+    ],
+];
 
-let results = search_engine.search(&query).await?;
+// Populate index (delete=true clears existing data first)
+populate_global_search_index(&data, true).await?;
 ```
 
-### Faceted Search
+### Deleting from Index
 
 ```rust
-use moosicbox_search::{FacetQuery, FacetResults};
+use moosicbox_search::{delete_from_global_search_index, DataValue};
 
-// Get facet counts for filtering
-let facet_query = FacetQuery::new()
-    .with_field("genre")
-    .with_field("year")
-    .with_field("artist");
+// Delete by track ID
+let delete_terms = vec![
+    ("track_id_string", DataValue::String("789".into()))
+];
 
-let facets = search_engine.get_facets(&facet_query).await?;
-
-// Display facet options
-for (genre, count) in facets.genres {
-    println!("{}: {} tracks", genre, count);
-}
+delete_from_global_search_index(&delete_terms)?;
 ```
 
-### Real-Time Indexing
+### Reindexing
 
 ```rust
-use moosicbox_search::{IndexWriter, Document};
+use moosicbox_search::reindex_global_search_index;
 
-// Add new documents to index
-let mut writer = search_engine.get_writer()?;
-
-let doc = Document::new()
-    .with_field("title", "Bohemian Rhapsody")
-    .with_field("artist", "Queen")
-    .with_field("album", "A Night at the Opera")
-    .with_field("year", 1975)
-    .with_field("genre", "rock");
-
-writer.add_document(doc)?;
-writer.commit()?;
+// Rebuild the entire index with fresh data
+let fresh_data = vec![/* ... */];
+reindex_global_search_index(&fresh_data).await?;
 ```
 
-### Search with Highlighting
+### Working with Database Models (requires `db` feature)
 
 ```rust
-use moosicbox_search::{SearchQuery, HighlightOptions};
+use moosicbox_search::data::{AsDataValues, AsDeleteTerm, recreate_global_search_index};
+use moosicbox_music_models::{Artist, Album, Track};
 
-let query = SearchQuery::new("bohemian")
-    .with_highlight(HighlightOptions::new()
-        .with_pre_tag("<mark>")
-        .with_post_tag("</mark>")
-        .with_max_fragments(3));
+// Convert database models to search data
+let artist = Artist { /* ... */ };
+let data_values = artist.as_data_values();
 
-let results = search_engine.search(&query).await?;
+// Get delete term for a model
+let delete_term = artist.as_delete_term();
 
-for hit in results.hits {
-    if let Some(highlights) = hit.highlights {
-        println!("Title: {}", highlights.title.unwrap_or_default());
-    }
-}
+// Recreate index from scratch
+recreate_global_search_index().await?;
 ```
 
 ## Programming Interface
 
-### Core Types
+### Core Functions
 
 ```rust
-pub struct SearchEngine {
-    index: Index,
-    reader: IndexReader,
-    schema: Schema,
-}
+// Search the global index
+pub fn search_global_search_index(
+    search: &str,
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<NamedFieldDocument>, SearchIndexError>
 
-impl SearchEngine {
-    pub fn new<P: AsRef<Path>>(index_path: P) -> Result<Self, SearchError>;
-    pub async fn search(&self, query: &SearchQuery) -> Result<SearchResults, SearchError>;
-    pub async fn get_facets(&self, query: &FacetQuery) -> Result<FacetResults, SearchError>;
-    pub fn get_writer(&self) -> Result<IndexWriter, SearchError>;
-    pub async fn rebuild_index(&self) -> Result<(), SearchError>;
-}
+// High-level search with structured results
+pub fn global_search(
+    query: &str,
+    offset: Option<u32>,
+    limit: Option<u32>,
+) -> Result<ApiSearchResultsResponse, SearchIndexError>
 
-#[derive(Debug, Clone)]
-pub struct SearchQuery {
-    pub text: String,
-    pub filters: Vec<SearchFilter>,
-    pub sort: Option<SortBy>,
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
-    pub highlight: Option<HighlightOptions>,
-}
+// Populate the index with data
+pub async fn populate_global_search_index(
+    data: &[Vec<(&str, DataValue)>],
+    delete: bool,
+) -> Result<(), PopulateIndexError>
 
-#[derive(Debug, Clone)]
-pub struct SearchResults {
-    pub hits: Vec<SearchHit>,
-    pub total_count: usize,
-    pub query_time_ms: u64,
-    pub facets: Option<FacetResults>,
-}
+// Delete documents from the index
+pub fn delete_from_global_search_index(
+    data: &[(&str, DataValue)],
+) -> Result<(), DeleteFromIndexError>
+
+// Rebuild the entire index
+pub async fn reindex_global_search_index(
+    data: &[Vec<(&str, DataValue)>],
+) -> Result<(), ReindexError>
 ```
 
-### Search Filters
+### Data Types
 
 ```rust
 #[derive(Debug, Clone)]
-pub enum SearchFilter {
-    Artist(String),
-    Album(String),
-    Genre(String),
-    Year(i32),
-    YearRange(i32, i32),
-    Duration(std::time::Duration),
-    DurationRange(std::time::Duration, std::time::Duration),
-    HasLyrics(bool),
-    Rating(f32),
-    RatingRange(f32, f32),
-}
-
-#[derive(Debug, Clone)]
-pub enum SortBy {
-    Relevance,
-    Title,
-    Artist,
-    Album,
-    Year,
-    Duration,
-    Rating,
-    DateAdded,
+pub enum DataValue {
+    String(String),
+    Bool(bool),
+    Number(u64),
 }
 ```
 
-### Document Management
+### Error Types
 
 ```rust
-#[derive(Debug, Clone)]
-pub struct Document {
-    fields: HashMap<String, FieldValue>,
-}
-
-impl Document {
-    pub fn new() -> Self;
-    pub fn with_field<T: Into<FieldValue>>(mut self, name: &str, value: T) -> Self;
-    pub fn get_field(&self, name: &str) -> Option<&FieldValue>;
-}
-
-#[derive(Debug, Clone)]
-pub enum FieldValue {
-    Text(String),
-    Integer(i64),
-    Float(f64),
-    Date(DateTime<Utc>),
-    Boolean(bool),
-}
+pub enum SearchIndexError { /* ... */ }
+pub enum PopulateIndexError { /* ... */ }
+pub enum DeleteFromIndexError { /* ... */ }
+pub enum ReindexError { /* ... */ }
 ```
 
-## Configuration
+## Index Schema
 
-### Environment Variables
+The global search index includes the following fields:
 
-- `SEARCH_INDEX_PATH`: Path to search index directory (default: `./search_index`)
-- `SEARCH_INDEX_MEMORY_MB`: Memory budget for indexing in MB (default: 128)
-- `SEARCH_WRITER_THREADS`: Number of indexing threads (default: 4)
-- `SEARCH_COMMIT_INTERVAL_SEC`: Auto-commit interval in seconds (default: 30)
+- `document_type` - Type of document: "artists", "albums", or "tracks"
+- `artist_title`, `artist_id` - Artist information
+- `album_title`, `album_id` - Album information
+- `track_title`, `track_id` - Track information
+- `cover` - Cover art path
+- `blur` - Whether cover art should be blurred
+- `date_released`, `date_added` - Date fields
+- `version_formats`, `version_bit_depths`, `version_sample_rates`, `version_channels`, `version_sources` - Audio format metadata
 
-### Index Schema Configuration
-
-```rust
-use moosicbox_search::{SchemaBuilder, FieldType};
-
-let schema = SchemaBuilder::new()
-    .add_text_field("title", FieldType::Text { stored: true, indexed: true })
-    .add_text_field("artist", FieldType::Text { stored: true, indexed: true })
-    .add_text_field("album", FieldType::Text { stored: true, indexed: true })
-    .add_facet_field("genre", FieldType::Facet)
-    .add_integer_field("year", FieldType::Integer { stored: true, indexed: true })
-    .add_float_field("duration", FieldType::Float { stored: true, indexed: true })
-    .build()?;
-```
+Each field has variants for different search types (e.g., `artist_title_search` for tokenized search, `artist_title_string` for exact matching).
 
 ## Web API Endpoints
 
 When the `api` feature is enabled:
 
 ```
-GET    /search?q={query}&limit={limit}&offset={offset}
-GET    /search/facets?fields={fields}
-POST   /search/advanced
-GET    /search/suggest?q={query}
-POST   /index/rebuild
-GET    /index/stats
+GET /global-search?query={query}&offset={offset}&limit={limit}
+GET /raw-global-search?query={query}&offset={offset}&limit={limit}
 ```
 
 ### API Usage Examples
 
 ```bash
-# Simple search
-curl "http://localhost:8000/search?q=pink%20floyd&limit=10"
+# Structured search results
+curl "http://localhost:8000/global-search?query=pink%20floyd&limit=10"
 
-# Advanced search with filters
-curl -X POST http://localhost:8000/search/advanced \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "rock",
-    "filters": [
-      {"Genre": "progressive rock"},
-      {"YearRange": [1970, 1980]}
-    ],
-    "sort": "Relevance",
-    "limit": 20
-  }'
-
-# Get search facets
-curl "http://localhost:8000/search/facets?fields=genre,artist,year"
+# Raw Tantivy document results
+curl "http://localhost:8000/raw-global-search?query=rock&offset=0&limit=20"
 ```
 
-## Performance Optimization
+## Search Algorithm
 
-### Index Tuning
+The search implementation uses multiple query strategies with different boost factors:
 
-```rust
-use moosicbox_search::{IndexSettings, CompressionType};
+1. **Exact match**: Highest boost for exact phrase matches
+2. **Prefix match**: Medium boost for prefix matching with fuzzy search
+3. **Fuzzy match**: Base boost for fuzzy matching with typo tolerance
 
-let settings = IndexSettings::new()
-    .with_memory_budget_mb(256)
-    .with_compression(CompressionType::Lz4)
-    .with_merge_policy_max_segments(10)
-    .with_commit_interval_sec(60);
+Search queries are sanitized to remove special characters and searches are performed across multiple field combinations optimized for artists, albums, and tracks.
 
-let search_engine = SearchEngine::with_settings("/path/to/index", settings)?;
-```
+## Features
 
-### Query Optimization
-
-```rust
-// Use specific field searches for better performance
-let query = SearchQuery::new("")
-    .with_field_query("artist", "Pink Floyd")  // Faster than full-text
-    .with_field_query("album", "Dark Side");
-
-// Limit result size for pagination
-let query = SearchQuery::new("rock")
-    .with_limit(20)  // Don't fetch more than needed
-    .with_offset(0);
-
-// Use filters instead of text search when possible
-let query = SearchQuery::new("")
-    .with_filter(SearchFilter::Genre("rock".to_string()))  // Faster
-    .with_filter(SearchFilter::YearRange(1970, 1980));
-```
-
-## Index Management
-
-### Building Initial Index
-
-```rust
-use moosicbox_search::{IndexBuilder, ProgressCallback};
-
-let builder = IndexBuilder::new("/path/to/index");
-
-// Build from music library
-let progress = |indexed: usize, total: usize| {
-    println!("Indexed {} of {} tracks", indexed, total);
-};
-
-builder.build_from_library("/path/to/music", Some(progress)).await?;
-```
-
-### Index Maintenance
-
-```rust
-// Optimize index (merge segments)
-search_engine.optimize().await?;
-
-// Get index statistics
-let stats = search_engine.get_stats().await?;
-println!("Index size: {} MB", stats.size_mb);
-println!("Document count: {}", stats.document_count);
-println!("Segments: {}", stats.segment_count);
-
-// Rebuild index from scratch
-search_engine.rebuild_index().await?;
-```
+- `default`: Enables `api`, `db`, and `openapi` features
+- `api`: Enables Actix-web REST API endpoints
+- `db`: Enables database integration and model conversion traits
+- `openapi`: Enables OpenAPI documentation support
+- `simulator`: Enables filesystem simulation for testing
 
 ## Testing
 
@@ -347,68 +222,39 @@ cargo test
 
 # Run with specific features
 cargo test --features "api,db"
-
-# Run performance benchmarks
-cargo bench
-
-# Test with sample data
-cargo test --test integration -- --ignored
 ```
 
 ## Error Handling
 
 ```rust
-use moosicbox_search::SearchError;
+use moosicbox_search::{global_search, SearchIndexError};
 
-match search_engine.search(&query).await {
+match global_search("query", Some(0), Some(10)) {
     Ok(results) => {
-        println!("Found {} results", results.total_count);
+        println!("Found {} results", results.results.len());
     }
-    Err(SearchError::IndexNotFound) => {
-        eprintln!("Search index not found. Run index rebuild.");
+    Err(SearchIndexError::GetGlobalSearchIndex(e)) => {
+        eprintln!("Index error: {}", e);
     }
-    Err(SearchError::QueryParseError(msg)) => {
-        eprintln!("Invalid query: {}", msg);
-    }
-    Err(SearchError::IndexCorrupted) => {
-        eprintln!("Index corrupted. Rebuilding required.");
-        search_engine.rebuild_index().await?;
+    Err(SearchIndexError::QueryParser(e)) => {
+        eprintln!("Invalid query: {}", e);
     }
     Err(e) => eprintln!("Search error: {}", e),
 }
 ```
 
-## Troubleshooting
+## Implementation Notes
 
-### Common Issues
-
-**Index Not Found**
-- Ensure index directory exists and is readable
-- Run initial index build if this is first use
-- Check file permissions on index directory
-
-**Poor Search Performance**
-- Increase memory budget for indexing
-- Optimize index to reduce segment count
-- Use more specific search queries
-- Consider index warming strategies
-
-**Out of Memory During Indexing**
-- Reduce memory budget in settings
-- Process library in smaller batches
-- Increase system swap space
-- Use streaming indexing for large libraries
-
-**Index Corruption**
-- Enable regular index backups
-- Use atomic commits
-- Check disk space and file system health
-- Rebuild index from source data
+- The search index is stored at `{config_dir}/search_indices/global_search_index` by default
+- In test mode, uses an in-memory index
+- Index writer uses a 50MB memory budget by default
+- Search operations use query sanitization to handle special characters
+- The implementation includes custom boost logic to prioritize exact matches and specific document types
 
 ## See Also
 
-- [`moosicbox_music_api`](../music_api/README.md) - Music API abstractions
+- [`moosicbox_music_api_models`](../music_api_models/README.md) - Search API models
+- [`moosicbox_music_models`](../music_models/README.md) - Music data models
 - [`moosicbox_library`](../library/README.md) - Music library management
 - [`moosicbox_scan`](../scan/README.md) - Library scanning and indexing
 - [`moosicbox_database`](../database/README.md) - Database operations
-- [`moosicbox_config`](../config/README.md) - Configuration management
