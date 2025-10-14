@@ -248,7 +248,6 @@ clippier generate-dockerfile /path/to/workspace target-package \
   --output ./Dockerfile \
   --base-image rust:1-bookworm \
   --final-image debian:bookworm-slim \
-  --port 8080 \
   --build-args "--release" \
   --generate-dockerignore true
 ```
@@ -316,11 +315,11 @@ clippier validate-feature-propagation . --features "fail-on-warnings"
 clippier validate-feature-propagation . --workspace-only
 ```
 
-**CI/CD Integration with GitHub Actions format:**
+**CI/CD Integration:**
 ```bash
 clippier validate-feature-propagation . \
   --features "fail-on-warnings" \
-  --output github-actions
+  --output json
 ```
 
 **Get detailed JSON report:**
@@ -380,7 +379,6 @@ Generate production-ready Dockerfiles with comprehensive dependency analysis:
 clippier generate-dockerfile . server \
   --features "production,postgres" \
   --output docker/Dockerfile.server \
-  --port 8080 \
   --build-args "--release --locked"
 ```
 
@@ -465,9 +463,12 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 |--------|-------------|---------|
 | `--base-image` | Docker builder image | `rust:1-bookworm` |
 | `--final-image` | Docker runtime image | `debian:bookworm-slim` |
-| `--port` | Port to expose | - |
 | `--build-args` | Cargo build arguments | - |
 | `--generate-dockerignore` | Generate .dockerignore | true |
+| `--env` | Runtime environment variables | - |
+| `--build-env` | Build-time environment variables | - |
+| `--arg` | Arguments to pass to binary | - |
+| `--bin` | Specify binary name | Auto-detect |
 
 ### Affected Packages Options
 
@@ -485,8 +486,9 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 |--------|-------------|---------|
 | `--features` | Comma-separated list of features to validate | Auto-detect |
 | `--workspace-only` | Only validate workspace packages | true |
-| `--output` | Output format: `json`, `raw`, `github-actions` | `raw` |
+| `--output` | Output format: `json`, `raw` | `raw` |
 | `--path` | Workspace root path | Current directory |
+| `--fail-on-error` | Exit with error code if validation fails | true |
 
 ## Configuration
 
@@ -613,7 +615,6 @@ Generate production-ready Dockerfiles with comprehensive dependency analysis:
 clippier generate-dockerfile . server \
   --features "production,postgres" \
   --output docker/Dockerfile.server \
-  --port 8080 \
   --build-args "--release --locked"
 ```
 
@@ -861,8 +862,7 @@ jobs:
        - name: Validate feature propagation
          run: |
            ./target/release/clippier validate-feature-propagation . \
-             --features "fail-on-warnings" \
-             --output github-actions
+             --features "fail-on-warnings"
 
        - name: Analyze changes and generate matrix
         id: analysis
@@ -918,7 +918,6 @@ for package in "${PACKAGES[@]}"; do
   # Generate Dockerfile
   ./clippier generate-dockerfile . "moosicbox_$package" \
     --output "docker/Dockerfile.$package" \
-    --port 8080 \
     --generate-dockerignore
 
   echo "Generated docker/Dockerfile.$package"
@@ -986,7 +985,7 @@ echo "🔧 Validating feature propagation..."
 
 # First, validate that fail-on-warnings is properly propagated
 echo "  Checking fail-on-warnings propagation..."
-if ! ./clippier validate-feature-propagation . --features "fail-on-warnings" --output github-actions; then
+if ! ./clippier validate-feature-propagation . --features "fail-on-warnings"; then
     echo "❌ fail-on-warnings validation failed"
     exit 1
 fi
@@ -1015,7 +1014,7 @@ echo "🎯 Feature validation completed successfully!"
 1. **Run in CI/CD pipelines**: Catch propagation issues early before they cause build failures
    ```bash
    # In your CI pipeline
-   clippier validate-feature-propagation . --features "fail-on-warnings" --output github-actions
+   clippier validate-feature-propagation . --features "fail-on-warnings"
    ```
 
 2. **Use auto-detection mode**: Finds all features that might need propagation across your workspace
@@ -1110,9 +1109,9 @@ echo "🎯 Feature validation completed successfully!"
 - Ensure the dependency is marked as `optional = true` in Cargo.toml
 - Verify the optional dependency actually has the feature you're propagating
 
-**GitHub Actions integration issues:**
-- Use `--output github-actions` for proper CI integration
-- Check that the action has sufficient permissions to comment on PRs
+**CI/CD integration issues:**
+- Use `--output json` for programmatic output parsing
+- Use `--fail-on-error` to control exit codes in CI pipelines
 - Verify the clippier binary is built and available in the workflow
 
 **Performance issues with large workspaces:**
