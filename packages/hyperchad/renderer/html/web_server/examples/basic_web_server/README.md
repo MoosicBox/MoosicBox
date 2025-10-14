@@ -7,9 +7,8 @@ This example demonstrates a complete web application built with the HyperChad fr
 * **Server-side rendering** with type-safe HTML generation using the `container!` macro
 * **Component-based architecture** with reusable page functions
 * **Built-in routing** for multiple pages and API endpoints
-* **Static asset serving** for CSS and JavaScript files
 * **JSON API endpoints** for dynamic functionality
-* **Modern responsive design** with proper HTML structure
+* **Modern HTML structure** with semantic elements
 
 ## Project Structure
 
@@ -119,9 +118,9 @@ let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
 ## Technology Stack
 
 * **HyperChad** - Web framework with type-safe HTML generation
-* **Tokio** - Async runtime for high-performance I/O
+* **Switchy** - Async runtime abstraction for high-performance I/O
 * **Serde JSON** - JSON serialization for API responses
-* **moosicbox_web_server** - Underlying HTTP server integration
+* **Actix Web** - Underlying HTTP server (via hyperchad's web server integration)
 
 ## Supported Elements
 
