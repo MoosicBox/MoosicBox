@@ -482,7 +482,9 @@ impl SilkDecoder {
                     let n0 = i32::from(prev_lsf[k]);
                     let n2 = i32::from(nlsf_q15[k]);
                     let w = lsf_interp_weight as i32;
-                    nlsf_interpolated_q15[k] = (n0 + ((w * (n2 - n0)) >> 2)) as i16;
+                    let product = w * (n2 - n0);
+                    let rounded = ((product >> 1) + 1) >> 1;
+                    nlsf_interpolated_q15[k] = (n0 + rounded) as i16;
                 }
 
                 // Convert both interpolated and current LSF to LPC with stability limiting

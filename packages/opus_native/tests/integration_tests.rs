@@ -95,11 +95,15 @@ fn test_decode_silk_vectors() {
             eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
 
             let snr = calculate_snr(expected, actual);
-            eprintln!("  SNR: {} dB", snr);
+            if snr.is_infinite() {
+                eprintln!("  SNR: ∞ dB (bit-exact)");
+            } else {
+                eprintln!("  SNR: {} dB", snr);
+            }
 
             assert!(
-                snr > 40.0,
-                "SNR too low for {}: {} dB (expected > 40 dB)",
+                snr.is_infinite(),
+                "Decoding not bit-exact for {}: {} dB SNR (expected infinite/bit-exact)",
                 vector.name,
                 snr
             );
