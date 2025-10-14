@@ -101,7 +101,7 @@ let players = app_state.get_players(session_id, Some(&playback_target)).await;
 ```rust
 // Add event listeners during state creation
 let app_state = AppState::new()
-    .with_on_after_handle_playbook_update_listener(|session| async move {
+    .with_on_after_handle_playback_update_listener(|session| async move {
         println!("Session updated: {:?}", session);
     })
     .with_on_current_sessions_updated_listener(|sessions| async move {
@@ -153,7 +153,23 @@ app_state.close_ws().await?;
 
 ## Feature Flags
 
-- **`upnp`**: Enable UPnP/DLNA network device support
+### Network Features
+- **`upnp`**: Enable UPnP/DLNA network device support (enabled by default)
+
+### Music Source Features
+- **`all-sources`**: Enable all music source integrations (enabled by default)
+- **`qobuz`**: Enable Qobuz music source
+- **`tidal`**: Enable Tidal music source
+- **`yt`**: Enable YouTube music source
+
+### Audio Format Features
+- **`aac`**: Enable AAC audio format support
+- **`flac`**: Enable FLAC audio format support
+- **`mp3`**: Enable MP3 audio format support
+- **`opus`**: Enable Opus audio format support
+
+### Development Features
+- **`fail-on-warnings`**: Treat warnings as errors during compilation
 
 ## Error Handling
 
