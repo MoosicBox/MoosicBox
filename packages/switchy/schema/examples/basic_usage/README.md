@@ -14,15 +14,14 @@ This example demonstrates the core functionality of `switchy_schema` using type-
 - **Migration Status**: Check which migrations are applied/pending
 - **Forward Migration**: Run all pending migrations
 - **Schema Verification**: Insert and query test data to verify schema
-- **Rollback Support**: Clean down() methods for all migrations (commented example)
+- **Rollback Support**: Clean `down()` methods for all migrations (commented example)
 
 ## Key Features Demonstrated
 
 1. **Zero Raw SQL**: All operations use type-safe builders
-2. **Transaction Support**: All migrations run within database transactions
-3. **Cross-Database Compatibility**: Same code works on SQLite, PostgreSQL, MySQL
-4. **Migration Tracking**: Automatic tracking in custom table (`__example_migrations`)
-5. **Error Handling**: Proper error propagation with `MigrationError`
+2. **Migration Tracking**: Automatic tracking in custom table (`__example_migrations`)
+3. **Error Handling**: Proper error propagation with `MigrationError`
+4. **Database Abstraction**: Uses `switchy_database` for database-agnostic operations (demonstrated with SQLite)
 
 ## Running the Example
 
