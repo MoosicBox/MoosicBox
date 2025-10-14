@@ -17,13 +17,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_session = "0.1.1"
+moosicbox_session = "0.1.4"
 
 # Enable API endpoints
-moosicbox_session = { version = "0.1.1", features = ["api"] }
+moosicbox_session = { version = "0.1.4", features = ["api"] }
 
 # Enable event system
-moosicbox_session = { version = "0.1.1", features = ["events"] }
+moosicbox_session = { version = "0.1.4", features = ["events"] }
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ moosicbox_session = { version = "0.1.1", features = ["events"] }
 
 ```rust
 use moosicbox_session::{create_session, get_session, update_session, delete_session};
-use moosicbox_session::models::{CreateSession, UpdateSession, PlaybackTarget};
+use moosicbox_session::models::{CreateSession, CreateSessionPlaylist, UpdateSession, PlaybackTarget};
 use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
@@ -41,9 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a new session
     let create_session = CreateSession {
-        session_playlist_id: Some(12345),
-        play: Some(true),
-        name: Some("My Music Session".to_string()),
+        name: "My Music Session".to_string(),
+        audio_zone_id: Some(1),
+        playlist: CreateSessionPlaylist {
+            tracks: vec![101, 102, 103],  // Track IDs
+        },
     };
 
     let session = create_session(&db, &create_session).await?;
@@ -52,17 +54,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Update session
     let update_session = UpdateSession {
         session_id: session.id,
+        profile: "default".to_string(),
+        playback_target: PlaybackTarget::AudioZone { audio_zone_id: 1 },
         play: Some(false),
         stop: Some(true),
         name: Some("Paused Session".to_string()),
         active: Some(false),
         playing: Some(false),
-        position: Some(30.5),  // 30.5 seconds
+        position: Some(30),    // 30 seconds
         seek: None,
         volume: Some(0.8),     // 80% volume
-        playlist_id: None,
+        playlist: None,
         quality: None,
-        playback_target: Some(PlaybackTarget::AudioZone),
     };
 
     update_session(&db, &update_session).await?;
@@ -117,14 +120,16 @@ async fn manage_playlist(db: &LibraryDatabase, session_id: u64) -> Result<(), Bo
     // Get session playlist
     if let Some(playlist) = get_session_playlist(db, session_id).await? {
         println!("Session playlist: {}", playlist.id);
+        println!("Playlist has {} tracks", playlist.tracks.len());
 
-        // Get tracks in the playlist
-        let tracks = get_session_playlist_tracks(db, playlist.id).await?;
-        println!("Playlist has {} tracks", tracks.len());
-
-        for track in tracks {
-            println!("Track: {} - {}", track.title, track.artist.unwrap_or_default());
+        // Display tracks from the playlist
+        for track in &playlist.tracks {
+            println!("Track: {}", track.title);
         }
+
+        // Or get tracks separately by playlist ID
+        let tracks = get_session_playlist_tracks(db, playlist.id).await?;
+        println!("Retrieved {} tracks", tracks.len());
     }
 
     Ok(())
@@ -146,7 +151,7 @@ async fn manage_audio_zone(db: &LibraryDatabase, session_id: u64) -> Result<(), 
     // Set new audio zone
     let set_zone = SetSessionAudioZone {
         session_id,
-        audio_zone_id: Some(456),
+        audio_zone_id: 456,
     };
 
     set_session_audio_zone(db, &set_zone).await?;
@@ -197,9 +202,19 @@ The library uses `DatabaseFetchError` for database operations and `CreatePlayers
 
 ## Dependencies
 
+Core dependencies:
 - `moosicbox_session_models`: Session data models and types
 - `moosicbox_audio_zone`: Audio zone integration
 - `moosicbox_music_models`: Music API track models
+- `moosicbox_library`: Library integration for track retrieval
+- `moosicbox_json_utils`: JSON parsing and database utilities
 - `switchy_database`: Database abstraction layer
+- `switchy_async`: Async runtime utilities
+
+Optional dependencies:
+- `actix-web`: Web framework for API endpoints (feature: `api`)
+- `moosicbox_paging`: Pagination support (feature: `api`)
+- `utoipa`: OpenAPI documentation (feature: `openapi`)
+- `tokio`: Event system runtime (feature: `events`)
 
 This library provides the foundation for managing user sessions and playback state in the MoosicBox ecosystem.
