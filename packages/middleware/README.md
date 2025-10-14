@@ -5,8 +5,8 @@ Basic HTTP middleware collection for the MoosicBox web server ecosystem, providi
 ## Features
 
 - **API Logger**: Request/response logging middleware with timing and status tracking
-- **Service Info**: Middleware for adding service information to responses
-- **Tunnel Info**: Optional middleware for tunnel-based requests
+- **Service Info**: Request extractor for service metadata (port information)
+- **Tunnel Info**: Request extractor for tunnel host configuration (enabled by default)
 
 ## Installation
 
@@ -14,10 +14,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_middleware = "0.1.1"
+moosicbox_middleware = "0.1.4"
 
-# Enable tunnel middleware
-moosicbox_middleware = { version = "0.1.1", features = ["tunnel"] }
+# Disable tunnel middleware (enabled by default)
+moosicbox_middleware = { version = "0.1.4", default-features = false }
 ```
 
 ## Usage
@@ -47,22 +47,25 @@ async fn hello_handler() -> HttpResponse {
 
 The API logger middleware provides:
 - Request method, path, and query string logging
-- Relevant headers logging (Range, Content-Range, Accept-Ranges, Content-Length)
+- Request headers logging (Range)
+- Response headers logging (Content-Range, Accept-Ranges, Content-Length)
 - Response status and timing information
 - Success/failure status tracking
 - Error details for failed requests
 
-### Service Info Middleware
+### Service Info Extractor
 
 ```rust
-use moosicbox_middleware::service_info::ServiceInfo;
-use actix_web::{web, App, HttpServer};
+use moosicbox_middleware::service_info::{ServiceInfo, init};
+use actix_web::{web, App, HttpServer, HttpResponse};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Initialize service info globally
+    init(ServiceInfo { port: 8080 }).expect("Failed to initialize service info");
+
     HttpServer::new(|| {
         App::new()
-            .wrap(ServiceInfo::new("My Music Service", "1.0.0"))
             .route("/api/status", web::get().to(status_handler))
     })
     .bind("127.0.0.1:8080")?
@@ -70,24 +73,29 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn status_handler() -> HttpResponse {
-    HttpResponse::Ok().json("Service is running")
+async fn status_handler(service_info: ServiceInfo) -> HttpResponse {
+    HttpResponse::Ok().json(format!("Service running on port {}", service_info.port))
 }
 ```
 
-### Tunnel Info Middleware (Optional)
+### Tunnel Info (Default Feature)
 
-When the `tunnel` feature is enabled:
+The `tunnel` feature is enabled by default:
 
 ```rust
-use moosicbox_middleware::tunnel_info::TunnelInfo;
-use actix_web::{web, App, HttpServer};
+use moosicbox_middleware::tunnel_info::{TunnelInfo, init};
+use actix_web::{web, App, HttpServer, HttpResponse};
+use std::sync::Arc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Initialize tunnel info globally
+    init(TunnelInfo {
+        host: Arc::new(Some("tunnel.example.com".to_string()))
+    }).expect("Failed to initialize tunnel info");
+
     HttpServer::new(|| {
         App::new()
-            .wrap(TunnelInfo::new())
             .route("/tunnel/api", web::get().to(tunnel_handler))
     })
     .bind("127.0.0.1:8080")?
@@ -95,8 +103,11 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn tunnel_handler() -> HttpResponse {
-    HttpResponse::Ok().json("Tunnel endpoint")
+async fn tunnel_handler(tunnel_info: TunnelInfo) -> HttpResponse {
+    match tunnel_info.host.as_ref() {
+        Some(host) => HttpResponse::Ok().json(format!("Tunnel host: {}", host)),
+        None => HttpResponse::Ok().json("No tunnel host configured"),
+    }
 }
 ```
 
@@ -118,35 +129,39 @@ TRACE GET /api/tracks?limit=10 headers=[("range", "bytes=0-1023")] resp_headers=
 
 ### ServiceInfo
 
-The `ServiceInfo` middleware adds service metadata to responses for identification and monitoring purposes.
+The `ServiceInfo` extractor provides access to service metadata (e.g., port number) via Actix Web's request extraction mechanism. Initialize once at startup, then extract in handlers.
 
 ### TunnelInfo
 
-The `TunnelInfo` middleware handles tunnel-specific request processing when tunnel features are enabled.
+The `TunnelInfo` extractor provides access to tunnel host configuration via Actix Web's request extraction mechanism. Enabled by default via the `tunnel` feature. Initialize once at startup, then extract in handlers.
 
 ## Core Components
 
 ```rust
-// API Logger
+// API Logger (middleware)
 pub struct ApiLogger;
 pub struct ApiLoggerMiddleware<S>;
 
-// Service Info
-pub struct ServiceInfo;
-pub struct ServiceInfoMiddleware<S>;
+// Service Info (request extractor)
+pub struct ServiceInfo {
+    pub port: u16,
+}
 
-// Tunnel Info (feature-gated)
+// Tunnel Info (request extractor, feature-gated)
 #[cfg(feature = "tunnel")]
-pub struct TunnelInfo;
-#[cfg(feature = "tunnel")]
-pub struct TunnelInfoMiddleware<S>;
+pub struct TunnelInfo {
+    pub host: Arc<Option<String>>,
+}
 ```
 
 ## Dependencies
 
-- `actix_web`: Web framework for middleware integration
-- `futures-util`: For async middleware implementation
-- `log`: For logging functionality
-- `tracing`: For structured logging support
+- `actix-web`: Web framework for middleware integration
+- `futures`: Future combinators
+- `futures-util`: Async middleware implementation utilities
+- `log`: Logging facade
+- `tracing`: Structured logging support
+- `moosicbox_assert`: Assertion utilities
+- `switchy_time`: Time measurement utilities
 
-This middleware collection provides essential request logging and service identification capabilities for MoosicBox web services.
+This package provides request logging middleware and service information extractors for MoosicBox web services.
