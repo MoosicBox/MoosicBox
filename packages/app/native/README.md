@@ -12,7 +12,7 @@ The MoosicBox Native App is a desktop client that provides:
 - **Multi-Source Support**: Local library, Tidal, Qobuz, YouTube Music
 - **High-Quality Audio**: Support for FLAC, AAC, MP3, Opus formats
 - **Modern Interface**: Responsive design with native look and feel
-- **Offline Capability**: Download and cache music for offline playback
+- **Download Support**: Download music for offline playback
 
 ## Installation
 
@@ -69,37 +69,38 @@ cargo run --bin moosicbox_app_native --features "default"
 
 ### Connection Configuration
 
-#### Connect to Local Server
-```bash
-# Default: connects to localhost:8001
-moosicbox_app_native
-
-# Custom server address
-MOOSICBOX_SERVER_URL=http://192.168.1.100:8001 moosicbox_app_native
-```
-
-#### Connect to Remote Server
-```bash
-# Through tunnel server
-MOOSICBOX_SERVER_URL=https://your-tunnel.moosicbox.com moosicbox_app_native
-```
+Server connections are configured through the in-app settings interface:
+- Navigate to Settings → Connections
+- Add a new connection with your server URL
+- Select the connection to use
 
 ### UI Backend Selection
 
-#### Egui (Default - GPU Accelerated)
+The default build includes multiple UI backends. You can enable specific backends with cargo features:
+
+#### Egui (GPU Accelerated - Default)
 ```bash
 cargo run --features "egui-wgpu"
 ```
 
+Additional Egui variants:
+- `egui-glow` - OpenGL backend
+- `egui-v1` - Egui v1.x
+- `egui-v2` - Egui v2.x
+
 #### FLTK (Lightweight)
 ```bash
-cargo run --features "fltk" --no-default-features
+cargo run --features "fltk"
 ```
 
-#### Web Interface
+#### Web Interface (HTML + JavaScript)
 ```bash
-cargo run --features "html,vanilla-js" --no-default-features
+cargo run --features "html,vanilla-js"
 ```
+
+The web interface supports additional deployment options:
+- `actix` - Deploy with Actix web server
+- `lambda` - Deploy as AWS Lambda function
 
 ## Configuration
 
@@ -107,36 +108,15 @@ cargo run --features "html,vanilla-js" --no-default-features
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MOOSICBOX_SERVER_URL` | MoosicBox server URL | `http://localhost:8001` |
-| `MOOSICBOX_AUTH_TOKEN` | Authentication token | - |
-| `MOOSICBOX_DOWNLOAD_DIR` | Download directory | `~/Music/MoosicBox` |
-| `MOOSICBOX_CACHE_DIR` | Cache directory | Platform-specific |
-| `AUDIO_BUFFER_SIZE` | Audio buffer size | `4096` |
+| `WINDOW_WIDTH` | Initial window width | `1000.0` |
+| `WINDOW_HEIGHT` | Initial window height | `600.0` |
+| `WINDOW_X` | Initial window X position | - |
+| `WINDOW_Y` | Initial window Y position | - |
+| `MAX_THREADS` | Maximum blocking threads | `64` |
+| `TOKIO_CONSOLE` | Enable tokio console (requires `console-subscriber` feature) | - |
+| `RUST_LOG` | Logging configuration | - |
 
-### Configuration File
-
-Create `~/.config/moosicbox/config.toml`:
-
-```toml
-[server]
-url = "http://localhost:8001"
-auth_token = "your_token_here"
-
-[audio]
-buffer_size = 4096
-sample_rate = 44100
-bit_depth = 16
-
-[downloads]
-directory = "~/Music/MoosicBox"
-auto_download_favorites = true
-quality = "lossless"
-
-[ui]
-theme = "dark"
-show_visualizer = true
-window_size = [1200, 800]
-```
+Note: Server connection settings are configured through the in-app settings interface rather than environment variables.
 
 ## Features
 
@@ -153,18 +133,25 @@ window_size = [1200, 800]
 - **YouTube Music** - Google's music service
 
 ### Playback Features
-- **Gapless Playback** - Seamless album listening
-- **Crossfade** - Smooth transitions between tracks
-- **Replay Gain** - Volume normalization
-- **Equalizer** - Audio enhancement
-- **Audio Visualization** - Real-time audio analysis
+- **Audio Visualization** - Real-time waveform display
+- **Volume Control** - Adjust playback volume
+- **Seek Control** - Navigate within tracks
+- **Queue Management** - Control playback order
+
+#### Planned Features
+- Gapless playback
+- Crossfade transitions
+- Replay Gain normalization
+- Equalizer controls
+- Lyrics display
 
 ### Interface Features
 - **Library Browser** - Navigate your music collection
-- **Search** - Find music across all sources
-- **Playlists** - Create and manage playlists
-- **Queue Management** - Control playback queue
-- **Now Playing** - Current track information with lyrics
+- **Albums View** - Browse and filter albums by source
+- **Artist View** - View artist details and albums
+- **Audio Zones** - Manage playback zones
+- **Playback Sessions** - View and control active sessions
+- **Settings** - Configure connections, downloads, and music API sources
 - **Download Manager** - Offline music management
 
 ## Building
@@ -215,19 +202,20 @@ cargo build --release --features "bundled,all-sources,all-decoders"
 ```
 
 ### Bundled Mode Features
-- **Standalone Operation** - No separate server required
-- **Auto-Configuration** - Automatic setup and database initialization
-- **Portable** - Single executable with all dependencies
-- **Performance** - Direct in-process communication
+- **Standalone Operation** - Embedded server runs in the same process
+- **Auto-Configuration** - Automatic server startup and initialization
+- **Performance** - Direct in-process communication with the server
 
 ## Development
 
 ### Local Development
 
 ```bash
-# Start with hot reloading and debug features
+# Start with debug features
 cargo run --features "dev,console-subscriber,debug"
 ```
+
+Note: The `dev` feature enables asset serving and static route handling for development.
 
 ### Testing Different Backends
 
@@ -247,6 +235,9 @@ cargo test --features "html,vanilla-js"
 ```bash
 # Profile with puffin
 cargo run --features "profiling-puffin,egui-wgpu"
+
+# Profile with tracing
+cargo run --features "profiling-tracing,egui-wgpu"
 
 # Profile with Tracy
 cargo run --features "profiling-tracy,egui-wgpu"
@@ -298,29 +289,17 @@ cargo rpm build --release
 
 ### Main Interface Components
 
-1. **Navigation Panel** - Library, playlists, sources
-2. **Content View** - Albums, artists, tracks listing
-3. **Player Controls** - Play, pause, skip, seek
-4. **Queue Panel** - Current and upcoming tracks
-5. **Now Playing** - Track info, artwork, lyrics
+The user interface is built using the HyperChad framework and includes:
 
-### Keyboard Shortcuts
+1. **Home View** - Main dashboard with library access
+2. **Albums View** - Browse and filter albums by source
+3. **Artists View** - View artist details and albums
+4. **Player Controls** - Play, pause, skip, seek, volume control
+5. **Audio Visualization** - Real-time waveform display
+6. **Settings** - Configure connections, downloads, music API sources, and scan settings
+7. **Audio Zones & Sessions** - Manage playback zones and sessions
 
-| Shortcut | Action |
-|----------|--------|
-| `Space` | Play/Pause |
-| `Left/Right` | Seek backward/forward |
-| `Up/Down` | Volume up/down |
-| `Ctrl+F` | Search |
-| `Ctrl+L` | Focus library |
-| `Ctrl+Q` | Quit application |
-
-### Themes
-
-- **Dark Theme** - Easy on the eyes
-- **Light Theme** - Classic appearance
-- **Auto Theme** - Follow system preference
-- **Custom Themes** - User-configurable colors
+The interface and keyboard shortcuts are determined by the UI backend being used (Egui, FLTK, or Web).
 
 ## Troubleshooting
 
@@ -354,9 +333,18 @@ cargo run --features "egui-glow" --no-default-features
 cargo run --features "fltk" --no-default-features
 ```
 
+## Architecture
+
+The MoosicBox Native App is structured as follows:
+
+- **Main Application** (`moosicbox_app_native`) - Application entry point and routing
+- **UI Components** (`moosicbox_app_native_ui`) - HyperChad-based UI components
+- **Bundled Server** (`moosicbox_app_native_bundled`) - Optional embedded server mode
+- **App State** (`moosicbox_app_state`) - Application state management
+- **Player** (`moosicbox_player`) - Audio playback functionality
+- **Music API** (`moosicbox_music_api`) - Multi-source music integration
+
 ## See Also
 
-- [MoosicBox Server](../server/README.md) - Backend music server
-- [HyperChad Framework](../hyperchad/README.md) - UI framework
-- [MoosicBox Tunnel Server](../tunnel_server/README.md) - Remote access solution
-- [Tauri App](../app/tauri/README.md) - Alternative Tauri-based client
+- [MoosicBox App Native UI](ui/README.md) - UI component library
+- [MoosicBox App Native Bundled](bundled/README.md) - Bundled server mode
