@@ -24,9 +24,9 @@ cargo run --bin borrowed_migrations_example
 
 This will:
 1. Create migrations with borrowed data
-2. Apply them to an in-memory SQLite database
+2. Generate migrations from configuration at runtime
 3. Demonstrate lifetime management
-4. Display the migration results
+4. Display migration metadata and structure
 
 ## Migration Structure
 
