@@ -15,30 +15,25 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_channel_utils = "0.1.1"
+moosicbox_channel_utils = "0.1.4"
 
-# Enable futures-channel support
-moosicbox_channel_utils = { version = "0.1.1", features = ["futures-channel"] }
+# Enable futures-channel support (enabled by default)
+moosicbox_channel_utils = { version = "0.1.4", features = ["futures-channel"] }
 ```
 
 ## Usage
 
 ### Basic Channel Sender Trait
 
+The `MoosicBoxSender` trait provides a consistent interface for channel senders. The `PrioritizedSender` implements this trait:
+
 ```rust
 use moosicbox_channel_utils::MoosicBoxSender;
-use futures_channel::mpsc::{UnboundedSender, TrySendError};
+use moosicbox_channel_utils::futures_channel::unbounded;
 
-// The trait provides a simple send interface
-impl<T> MoosicBoxSender<T, TrySendError<T>> for UnboundedSender<T> {
-    fn send(&self, msg: T) -> Result<(), TrySendError<T>> {
-        self.unbounded_send(msg)
-    }
-}
-
-// Usage
-let (tx, mut rx) = futures_channel::mpsc::unbounded();
-tx.send("Hello".to_string())?;
+// PrioritizedSender implements MoosicBoxSender
+let (tx, mut rx) = unbounded::<String>();
+tx.send("Hello".to_string())?;  // Uses the MoosicBoxSender trait
 ```
 
 ### Prioritized Channels
@@ -110,15 +105,7 @@ async fn priority_task_queue() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Internal Buffering
 
-The prioritized sender maintains an internal buffer to sort messages by priority before sending them through the underlying channel. Messages are flushed from the buffer in priority order when the receiver processes items.
-
-```rust
-use moosicbox_channel_utils::MoosicBoxSender;
-
-// The sender trait provides a consistent interface
-let (tx, _rx) = unbounded::<i32>();
-tx.send(42)?;  // Uses the MoosicBoxSender trait
-```
+The prioritized sender maintains an internal buffer to sort messages by priority before sending them through the underlying channel. Messages are flushed from the buffer in priority order when the receiver processes items. This buffering mechanism ensures that higher-priority messages can "jump ahead" in the queue when they arrive.
 
 ## Core Types
 
@@ -131,13 +118,8 @@ An unbounded sender that buffers and sorts messages by priority before sending.
 ### PrioritizedReceiver<T>
 A receiver that works with PrioritizedSender to process messages in priority order.
 
-## Features
+## Cargo Features
 
-- **futures-channel**: Enables prioritized channel utilities for futures-channel mpsc
-
-## Dependencies
-
-- `futures-channel`: For mpsc channel support
-- `futures-core`: For Stream trait implementation
+- **futures-channel** (default): Enables prioritized channel utilities for futures-channel mpsc
 
 This library provides basic channel utilities focused on priority-based message ordering for async applications in the MoosicBox ecosystem.
