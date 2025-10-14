@@ -1,614 +1,253 @@
 # MoosicBox Scan
 
-Intelligent music library scanning system for discovering, analyzing, and indexing audio files across multiple sources.
+Music library scanning system for discovering, analyzing, and indexing audio files from local storage and music API sources.
 
 ## Overview
 
-The MoosicBox Scan package provides:
-
-- **Multi-Format Support**: Scan MP3, FLAC, AAC, Opus, OGG, and more
-- **Metadata Extraction**: Rich ID3, Vorbis, and other metadata parsing
-- **Audio Analysis**: Automatic BPM detection, key detection, and audio fingerprinting
-- **Smart Scanning**: Incremental scans and change detection
-- **Performance Optimized**: Parallel scanning with configurable concurrency
-- **Duplicate Detection**: Find and manage duplicate tracks across sources
+The MoosicBox Scan package provides music library scanning capabilities for the MoosicBox server. It supports scanning both local audio files and remote music APIs (Tidal, Qobuz, etc.) to build and maintain the music library database.
 
 ## Features
 
-### File Discovery
-- **Recursive Scanning**: Deep directory tree traversal
-- **File Type Detection**: Automatic audio format identification
-- **Path Filtering**: Include/exclude patterns for selective scanning
-- **Symlink Handling**: Configurable symlink following behavior
-- **Hidden File Support**: Option to scan hidden files and directories
+### Core Scanning
+- **Local File Scanning**: Recursive directory scanning for audio files
+- **Music API Scanning**: Integration with external music services (via `moosicbox_music_api`)
+- **Multi-Format Support**: MP3, FLAC, AAC, and Opus audio files
+- **Metadata Extraction**: Basic metadata from ID3, Vorbis, and MP4 tags
+- **Cover Art Handling**: Album and artist cover image extraction and caching
+- **Progress Tracking**: Scan progress events and listener system
 
-### Metadata Extraction
-- **ID3 Tags**: Full support for ID3v1, ID3v2.3, and ID3v2.4
-- **Vorbis Comments**: Support for FLAC, OGG, and Opus files
-- **MP4 Tags**: iTunes-compatible metadata for AAC/M4A files
-- **Custom Fields**: Extract custom metadata fields
-- **Encoding Detection**: Automatic character encoding detection
+### Supported Operations
+- Enable/disable scan origins (Local, Tidal, Qobuz, etc.)
+- Manage local scan paths (add, remove, list)
+- Run scans on-demand via API
+- Track scan progress through event listeners
 
-### Audio Analysis
-- **Duration Calculation**: Precise track duration detection
-- **Bitrate Analysis**: Audio quality assessment
-- **Sample Rate Detection**: Audio format specifications
-- **BPM Detection**: Automatic tempo analysis
-- **Key Detection**: Musical key identification
-- **Audio Fingerprinting**: Unique track identification
+## Architecture
+
+The package is organized into several modules:
+
+- **`lib.rs`**: Core scanner implementation and origin management
+- **`local.rs`**: Local filesystem scanning (requires `local` feature)
+- **`music_api.rs`**: Remote music API scanning
+- **`api.rs`**: REST API endpoints for scan operations (requires `api` feature)
+- **`event.rs`**: Progress event system for scan tracking
+- **`output.rs`**: Scan result processing and database updates
+- **`db/`**: Database operations for scan locations and origins
 
 ## Usage
 
 ### Basic Scanning
 
 ```rust
-use moosicbox_scan::{Scanner, ScanConfig, ScanOptions};
+use moosicbox_scan::{Scanner, ScanOrigin, event::ScanTask};
+use moosicbox_music_api::MusicApis;
+use switchy_database::profiles::LibraryDatabase;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure scanner
-    let config = ScanConfig {
-        paths: vec!["/home/user/Music".into()],
-        recursive: true,
-        follow_symlinks: false,
-        include_hidden: false,
-        max_depth: None,
-        parallel_jobs: 4,
-    };
+    let db = LibraryDatabase::new(/* ... */);
+    let music_apis = MusicApis::default();
 
-    // Create scanner
-    let scanner = Scanner::new(config).await?;
+    // Create scanner for local files
+    let scanner = Scanner::from_origin(&db, ScanOrigin::Local).await?;
 
-    // Perform scan
-    let scan_result = scanner.scan().await?;
-
-    println!("Scan completed:");
-    println!("  Files found: {}", scan_result.files_scanned);
-    println!("  Tracks added: {}", scan_result.tracks_added);
-    println!("  Errors: {}", scan_result.errors.len());
+    // Run scan
+    scanner.scan(music_apis, &db).await?;
 
     Ok(())
 }
 ```
 
-### Advanced Scanning Options
+### Managing Scan Paths (Local)
 
 ```rust
-use moosicbox_scan::{Scanner, ScanOptions, FileFilter, MetadataOptions};
+use moosicbox_scan::{add_scan_path, get_scan_paths, remove_scan_path};
 
-async fn advanced_scan() -> Result<(), Box<dyn std::error::Error>> {
-    let scan_options = ScanOptions {
-        // File filtering
-        file_filter: FileFilter {
-            include_extensions: vec!["mp3", "flac", "m4a", "ogg", "opus"],
-            exclude_patterns: vec!["**/.*", "**/*temp*"],
-            min_file_size: Some(1024), // 1KB minimum
-            max_file_size: Some(500 * 1024 * 1024), // 500MB maximum
-        },
+async fn manage_paths(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    // Add a path to scan
+    add_scan_path(db, "/home/user/Music").await?;
 
-        // Metadata extraction
-        metadata_options: MetadataOptions {
-            extract_artwork: true,
-            extract_lyrics: false,
-            calculate_replay_gain: true,
-            detect_bpm: true,
-            detect_key: false,
-            generate_fingerprint: true,
-            encoding_detection: true,
-        },
+    // Get all configured paths
+    let paths = get_scan_paths(db).await?;
+    println!("Scan paths: {:?}", paths);
 
-        // Performance tuning
-        parallel_jobs: 8,
-        chunk_size: 100,
-        memory_limit_mb: 512,
-
-        // Incremental scanning
-        incremental: true,
-        compare_modified_time: true,
-        compare_file_size: true,
-        force_rescan: false,
-    };
-
-    let scanner = Scanner::with_options(config, scan_options).await?;
-    let result = scanner.scan().await?;
-
-    // Process results
-    for track in result.tracks {
-        println!("Found: {} - {} ({}:{:02})",
-                 track.artist, track.title,
-                 track.duration / 60, track.duration % 60);
-
-        if let Some(bpm) = track.bpm {
-            println!("  BPM: {}", bpm);
-        }
-
-        if let Some(fingerprint) = track.fingerprint {
-            println!("  Fingerprint: {}", fingerprint);
-        }
-    }
+    // Remove a path
+    remove_scan_path(db, "/home/user/Music").await?;
 
     Ok(())
 }
 ```
 
-### Incremental Scanning
+### Managing Scan Origins
 
 ```rust
-use moosicbox_scan::{Scanner, IncrementalScanOptions};
+use moosicbox_scan::{enable_scan_origin, disable_scan_origin, get_scan_origins, ScanOrigin};
 
-async fn incremental_scan() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ScanConfig::default();
-    let scanner = Scanner::new(config).await?;
+async fn manage_origins(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+    // Enable a music API origin
+    enable_scan_origin(db, &ScanOrigin::Tidal).await?;
 
-    // Perform initial full scan
-    let initial_result = scanner.scan().await?;
-    println!("Initial scan: {} tracks", initial_result.tracks_added);
+    // Get all enabled origins
+    let origins = get_scan_origins(db).await?;
 
-    // Save scan state
-    scanner.save_scan_state("./scan_state.json").await?;
-
-    // Later, perform incremental scan
-    let incremental_options = IncrementalScanOptions {
-        state_file: "./scan_state.json".into(),
-        check_modifications: true,
-        check_deletions: true,
-        update_existing: true,
-    };
-
-    let incremental_result = scanner.scan_incremental(incremental_options).await?;
-
-    println!("Incremental scan:");
-    println!("  New tracks: {}", incremental_result.tracks_added);
-    println!("  Updated tracks: {}", incremental_result.tracks_updated);
-    println!("  Removed tracks: {}", incremental_result.tracks_removed);
+    // Disable an origin
+    disable_scan_origin(db, &ScanOrigin::Tidal).await?;
 
     Ok(())
 }
 ```
 
-### Real-Time Monitoring
+### Running Scans
 
 ```rust
-use moosicbox_scan::{Scanner, WatcherConfig, FileEvent};
-use tokio::sync::mpsc;
+use moosicbox_scan::{run_scan, ScanOrigin};
 
-async fn setup_file_watching() -> Result<(), Box<dyn std::error::Error>> {
-    let watcher_config = WatcherConfig {
-        paths: vec!["/home/user/Music".into()],
-        recursive: true,
-        debounce_ms: 1000, // Wait 1 second for file operations to complete
-        batch_size: 10,    // Process up to 10 events at once
-    };
+async fn scan_library(
+    db: &LibraryDatabase,
+    music_apis: MusicApis,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Scan specific origins
+    run_scan(
+        Some(vec![ScanOrigin::Local, ScanOrigin::Tidal]),
+        db,
+        music_apis,
+    ).await?;
 
-    let (tx, mut rx) = mpsc::channel(100);
-    let scanner = Scanner::new(ScanConfig::default()).await?;
+    // Scan all enabled origins
+    run_scan(None, db, music_apis).await?;
 
-    // Start file watcher
-    let _watcher = scanner.start_watcher(watcher_config, tx).await?;
+    Ok(())
+}
+```
 
-    // Process file events
-    while let Some(events) = rx.recv().await {
-        for event in events {
+### Progress Tracking
+
+```rust
+use moosicbox_scan::event::{add_progress_listener, ProgressEvent};
+
+async fn track_progress() {
+    add_progress_listener(Box::new(|event| {
+        Box::pin(async move {
             match event {
-                FileEvent::Created(path) => {
-                    println!("New file: {:?}", path);
-                    let result = scanner.scan_file(&path).await?;
-                    if let Some(track) = result.track {
-                        println!("Added track: {} - {}", track.artist, track.title);
-                    }
-                },
-                FileEvent::Modified(path) => {
-                    println!("Modified file: {:?}", path);
-                    scanner.rescan_file(&path).await?;
-                },
-                FileEvent::Deleted(path) => {
-                    println!("Deleted file: {:?}", path);
-                    scanner.remove_file(&path).await?;
-                },
+                ProgressEvent::ScanCountUpdated { scanned, total, .. } => {
+                    println!("Total files to scan: {}", total);
+                }
+                ProgressEvent::ItemScanned { scanned, total, .. } => {
+                    println!("Progress: {}/{}", scanned, total);
+                }
+                ProgressEvent::ScanFinished { scanned, total, .. } => {
+                    println!("Scan complete: {} items scanned", scanned);
+                }
+                _ => {}
             }
-        }
-    }
-
-    Ok(())
+        })
+    }))
+    .await;
 }
 ```
 
-### Metadata Extraction
+### Cancellation
 
 ```rust
-use moosicbox_scan::{MetadataExtractor, AudioMetadata, ImageData};
+use moosicbox_scan::cancel;
 
-async fn extract_metadata(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let extractor = MetadataExtractor::new();
-
-    // Extract basic metadata
-    let metadata = extractor.extract_metadata(file_path).await?;
-
-    println!("Metadata for: {}", file_path);
-    println!("  Title: {}", metadata.title.unwrap_or_default());
-    println!("  Artist: {}", metadata.artist.unwrap_or_default());
-    println!("  Album: {}", metadata.album.unwrap_or_default());
-    println!("  Year: {}", metadata.year.unwrap_or_default());
-    println!("  Genre: {}", metadata.genre.unwrap_or_default());
-    println!("  Duration: {}s", metadata.duration);
-    println!("  Bitrate: {}kbps", metadata.bitrate);
-    println!("  Sample Rate: {}Hz", metadata.sample_rate);
-
-    // Extract artwork
-    if let Some(artwork) = extractor.extract_artwork(file_path).await? {
-        println!("  Artwork: {}x{} pixels ({})",
-                 artwork.width, artwork.height, artwork.format);
-
-        // Save artwork to file
-        std::fs::write("artwork.jpg", artwork.data)?;
-    }
-
-    // Extract lyrics
-    if let Some(lyrics) = extractor.extract_lyrics(file_path).await? {
-        println!("  Lyrics: {} characters", lyrics.text.len());
-        if lyrics.is_synchronized {
-            println!("  Synchronized lyrics with {} timestamps", lyrics.timestamps.len());
-        }
-    }
-
-    // Calculate audio fingerprint
-    let fingerprint = extractor.calculate_fingerprint(file_path).await?;
-    println!("  Fingerprint: {}", fingerprint);
-
-    Ok(())
+async fn cancel_scan() {
+    // Cancel any running scans
+    cancel();
 }
 ```
 
-### Duplicate Detection
+## REST API Endpoints
 
-```rust
-use moosicbox_scan::{DuplicateDetector, DuplicateOptions, DuplicateSet};
+When the `api` feature is enabled, the following endpoints are available:
 
-async fn find_duplicates() -> Result<(), Box<dyn std::error::Error>> {
-    let duplicate_options = DuplicateOptions {
-        match_by_fingerprint: true,
-        match_by_metadata: true,
-        match_by_filename: false,
-        fingerprint_threshold: 0.95,
-        metadata_similarity_threshold: 0.9,
-        group_by_album: true,
-    };
-
-    let detector = DuplicateDetector::new(duplicate_options);
-    let duplicates = detector.find_duplicates("/home/user/Music").await?;
-
-    for duplicate_set in duplicates {
-        println!("Duplicate set (confidence: {:.2}):", duplicate_set.confidence);
-
-        for track in duplicate_set.tracks {
-            println!("  {} - {} ({}kbps, {})",
-                     track.artist, track.title, track.bitrate, track.file_path);
-        }
-
-        // Suggest which file to keep
-        let best_quality = duplicate_set.suggest_best_quality();
-        println!("  Suggested to keep: {}", best_quality.file_path);
-
-        println!();
-    }
-
-    Ok(())
-}
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SCAN_PARALLEL_JOBS` | Number of parallel scan jobs | `4` |
-| `SCAN_CHUNK_SIZE` | Files to process per chunk | `100` |
-| `SCAN_MEMORY_LIMIT` | Memory limit in MB | `512` |
-| `SCAN_ENABLE_BPM` | Enable BPM detection | `false` |
-| `SCAN_ENABLE_KEY` | Enable key detection | `false` |
-| `SCAN_ENABLE_FINGERPRINT` | Enable audio fingerprinting | `true` |
-| `SCAN_CACHE_DIR` | Cache directory | `./cache/scan` |
-
-### File Type Support
-
-```rust
-use moosicbox_scan::{AudioFormat, SupportedFormats};
-
-// Check supported formats
-let formats = SupportedFormats::new();
-
-println!("Supported formats:");
-for format in formats.iter() {
-    println!("  {}: {} ({})", format.extension, format.name,
-             if format.lossless { "lossless" } else { "lossy" });
-}
-
-// Configure format-specific options
-let format_config = AudioFormatConfig {
-    mp3: Mp3Config {
-        strict_parsing: false,
-        encoding_detection: true,
-        id3v1_fallback: true,
-    },
-    flac: FlacConfig {
-        verify_checksum: true,
-        extract_cuesheet: true,
-    },
-    m4a: M4aConfig {
-        extract_chapters: false,
-    },
-};
-```
-
-### Performance Tuning
-
-```rust
-use moosicbox_scan::{ScanPerformanceConfig, MemoryConfig};
-
-let performance_config = ScanPerformanceConfig {
-    // Concurrency settings
-    parallel_jobs: 8,           // Number of parallel workers
-    chunk_size: 50,             // Files per processing chunk
-    queue_size: 1000,           // Internal queue size
-
-    // Memory management
-    memory_config: MemoryConfig {
-        max_memory_mb: 1024,     // Maximum memory usage
-        cache_size_mb: 256,      // Metadata cache size
-        image_cache_mb: 128,     // Artwork cache size
-        cleanup_threshold: 0.8,  // Cleanup when 80% full
-    },
-
-    // I/O optimization
-    read_buffer_size: 64 * 1024, // 64KB read buffer
-    prefetch_count: 10,          // Files to prefetch
-    use_memory_mapping: true,    // Use mmap for large files
-
-    // Analysis settings
-    skip_analysis_for_large_files: true,
-    large_file_threshold_mb: 100,
-    timeout_seconds: 30,         // Per-file timeout
-};
-```
+- `POST /run-scan?origins=Local,Tidal` - Run a scan synchronously
+- `POST /start-scan?origins=Local` - Start a scan asynchronously
+- `GET /scan-origins` - Get enabled scan origins
+- `POST /scan-origins?origin=Tidal` - Enable a scan origin
+- `DELETE /scan-origins?origin=Tidal` - Disable a scan origin
+- `GET /scan-paths` - Get local scan paths (requires `local` feature)
+- `POST /scan-paths?path=/music` - Add a local scan path (requires `local` feature)
+- `DELETE /scan-paths?path=/music` - Remove a local scan path (requires `local` feature)
+- `POST /run-scan-path?path=/music` - Scan a specific path (requires `local` feature)
 
 ## Feature Flags
 
-- `scan` - Core scanning functionality
-- `scan-metadata` - Metadata extraction capabilities
-- `scan-artwork` - Album artwork extraction
-- `scan-lyrics` - Lyrics extraction
-- `scan-bpm` - BPM detection
-- `scan-key` - Musical key detection
-- `scan-fingerprint` - Audio fingerprinting
-- `scan-watch` - Real-time file watching
-- `scan-parallel` - Parallel processing support
+- `default`: `["all-formats", "api", "local", "openapi"]`
+- `api`: Enables REST API endpoints
+- `local`: Enables local filesystem scanning
+- `openapi`: Enables OpenAPI documentation
+- `all-formats`: Enables all audio format support
+- `all-os-formats`: `["aac", "flac", "opus"]`
+- `aac`: AAC/M4A format support
+- `flac`: FLAC format support
+- `mp3`: MP3 format support
+- `opus`: Opus format support
+- `fail-on-warnings`: Treat warnings as errors
 
-## Integration with MoosicBox
+## Dependencies
 
-### Library Integration
+Key dependencies from `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox-scan = { path = "../scan", features = ["scan-metadata", "scan-fingerprint"] }
+moosicbox_audiotags = { workspace = true, optional = true }  # Metadata extraction
+moosicbox_lofty = { workspace = true, optional = true }      # Audio properties
+mp3-duration = { workspace = true, optional = true }         # MP3 duration calculation
+moosicbox_files = { workspace = true }                       # File utilities
+moosicbox_library = { workspace = true }                     # Database models
+moosicbox_music_api = { workspace = true }                   # Music API integration
+moosicbox_search = { workspace = true }                      # Search index updates
 ```
 
-```rust
-use moosicbox_scan::Scanner;
-use moosicbox_library::LibraryManager;
+## Implementation Details
 
-async fn setup_library_scanning() -> Result<(), Box<dyn std::error::Error>> {
-    let scanner = Scanner::new(config).await?;
-    let library = LibraryManager::new(library_config).await?;
+### Local Scanning
 
-    // Connect scanner to library
-    library.set_scanner(scanner).await?;
+The local scanner (`local.rs`):
 
-    // Perform initial scan
-    library.scan_and_import("/home/user/Music").await?;
+1. Recursively walks directory trees
+2. Identifies audio files by extension (`.flac`, `.m4a`, `.mp3`, `.opus`)
+3. Extracts metadata using `moosicbox_audiotags` and `moosicbox_lofty`
+4. Searches for cover art in album directories or embedded in files
+5. Updates the library database with discovered tracks
 
-    Ok(())
-}
-```
+### Music API Scanning
 
-### Server Integration
+The music API scanner (`music_api.rs`):
 
-```rust
-use moosicbox_scan::Scanner;
-use moosicbox_server::Server;
+1. Fetches albums from configured music services
+2. Retrieves tracks for each album
+3. Downloads and caches cover artwork
+4. Creates database entries for artists, albums, and tracks
+5. Stores API source mappings for external content
 
-async fn setup_server_scanning() -> Result<(), Box<dyn std::error::Error>> {
-    let scanner = Scanner::new(config).await?;
-    let mut server = Server::new().await?;
+### Database Integration
 
-    // Add scanning endpoints
-    server.add_scan_routes(scanner).await?;
+Scan results are processed through `ScanOutput` which:
 
-    Ok(())
-}
-```
-
-## Performance Optimization
-
-### Scanning Strategies
-
-```rust
-// Fast scan (metadata only)
-let fast_options = ScanOptions {
-    metadata_options: MetadataOptions {
-        extract_artwork: false,
-        extract_lyrics: false,
-        calculate_replay_gain: false,
-        detect_bpm: false,
-        detect_key: false,
-        generate_fingerprint: false,
-    },
-    parallel_jobs: 16,
-    ..Default::default()
-};
-
-// Deep scan (full analysis)
-let deep_options = ScanOptions {
-    metadata_options: MetadataOptions {
-        extract_artwork: true,
-        extract_lyrics: true,
-        calculate_replay_gain: true,
-        detect_bpm: true,
-        detect_key: true,
-        generate_fingerprint: true,
-    },
-    parallel_jobs: 4,
-    ..Default::default()
-};
-
-// Balanced scan
-let balanced_options = ScanOptions {
-    metadata_options: MetadataOptions {
-        extract_artwork: true,
-        extract_lyrics: false,
-        calculate_replay_gain: false,
-        detect_bpm: true,
-        detect_key: false,
-        generate_fingerprint: true,
-    },
-    parallel_jobs: 8,
-    ..Default::default()
-};
-```
-
-### Memory Management
-
-```rust
-use moosicbox_scan::{MemoryMonitor, CacheManager};
-
-// Monitor memory usage during scanning
-let memory_monitor = MemoryMonitor::new();
-let scanner = Scanner::with_memory_monitor(config, memory_monitor).await?;
-
-// Configure intelligent caching
-let cache_manager = CacheManager::new(CacheConfig {
-    max_entries: 10000,
-    max_memory_mb: 256,
-    ttl_seconds: 3600,
-    eviction_policy: EvictionPolicy::LeastRecentlyUsed,
-});
-
-scanner.set_cache_manager(cache_manager);
-```
+- Deduplicates artists and albums
+- Handles cover art caching
+- Batch inserts/updates library database
+- Rebuilds global search index
 
 ## Error Handling
 
 ```rust
-use moosicbox_scan::error::ScanError;
+use moosicbox_scan::ScanError;
 
-match scanner.scan_file(&file_path).await {
-    Ok(result) => println!("Scanned: {}", result.track.title),
-    Err(ScanError::FileNotFound(path)) => {
-        eprintln!("File not found: {}", path);
-    },
-    Err(ScanError::UnsupportedFormat { file, format }) => {
-        eprintln!("Unsupported format {} for file: {}", format, file);
-    },
-    Err(ScanError::MetadataExtractionFailed { file, error }) => {
-        eprintln!("Failed to extract metadata from {}: {}", file, error);
-    },
-    Err(ScanError::CorruptedFile(file)) => {
-        eprintln!("Corrupted file: {}", file);
-    },
-    Err(ScanError::PermissionDenied(path)) => {
-        eprintln!("Permission denied: {}", path);
-    },
-    Err(ScanError::TimeoutExceeded { file, timeout }) => {
-        eprintln!("Timeout scanning {} after {}s", file, timeout);
-    },
-    Err(e) => {
-        eprintln!("Scan error: {}", e);
-    }
-}
-```
-
-## Monitoring and Progress
-
-```rust
-use moosicbox_scan::{ScanProgress, ProgressCallback};
-
-async fn scan_with_progress() -> Result<(), Box<dyn std::error::Error>> {
-    let progress_callback = |progress: ScanProgress| {
-        println!("Progress: {:.1}% ({}/{})",
-                 progress.percentage(),
-                 progress.completed,
-                 progress.total);
-
-        if let Some(current_file) = progress.current_file {
-            println!("  Scanning: {}", current_file);
-        }
-
-        if progress.errors > 0 {
-            println!("  Errors: {}", progress.errors);
-        }
-    };
-
-    let scanner = Scanner::new(config).await?;
-    let result = scanner.scan_with_progress(progress_callback).await?;
-
-    println!("Scan completed: {} tracks processed", result.tracks_added);
-
-    Ok(())
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Slow scanning**: Reduce parallel jobs, increase chunk size, disable deep analysis
-2. **High memory usage**: Reduce cache sizes, enable memory limits
-3. **Permission errors**: Check file/directory permissions
-4. **Metadata corruption**: Enable strict parsing, verify file integrity
-
-### Debug Information
-
-```bash
-# Enable scan debugging
-RUST_LOG=moosicbox_scan=debug cargo run
-
-# Scan with verbose output
-cargo run --bin scan -- --verbose /path/to/music
-
-# Test specific file
-cargo run --bin scan -- --test-file /path/to/audio.mp3
-
-# Performance profiling
-cargo run --release --bin scan -- --profile /path/to/music
-```
-
-### Performance Analysis
-
-```rust
-use moosicbox_scan::{ScanStats, PerformanceProfiler};
-
-// Enable performance profiling
-let profiler = PerformanceProfiler::new();
-let scanner = Scanner::with_profiler(config, profiler).await?;
-
-let result = scanner.scan().await?;
-
-// Get performance statistics
-let stats = scanner.get_performance_stats();
-println!("Performance Statistics:");
-println!("  Total time: {:.2}s", stats.total_duration.as_secs_f64());
-println!("  Files/second: {:.1}", stats.files_per_second);
-println!("  Memory peak: {} MB", stats.peak_memory_mb);
-println!("  CPU utilization: {:.1}%", stats.avg_cpu_percent);
-
-// Per-format breakdown
-for (format, format_stats) in stats.per_format {
-    println!("  {}: {:.2}s avg", format, format_stats.avg_duration.as_secs_f64());
+match scanner.scan(music_apis, &db).await {
+    Ok(()) => println!("Scan completed successfully"),
+    Err(ScanError::DatabaseFetch(e)) => eprintln!("Database error: {}", e),
+    Err(ScanError::Local(e)) => eprintln!("Local scan error: {}", e),
+    Err(ScanError::MusicApi(e)) => eprintln!("Music API error: {}", e),
+    Err(e) => eprintln!("Scan error: {}", e),
 }
 ```
 
 ## See Also
 
-- [MoosicBox Library](../library/README.md) - Library management that uses scan results
-- [MoosicBox Server](../server/README.md) - Server with scanning API endpoints
-- [MoosicBox Files](../files/README.md) - File handling and streaming
+- [moosicbox_scan_models](../scan_models/README.md) - Data models for scan operations
+- [moosicbox_library](../library/README.md) - Library database management
+- [moosicbox_music_api](../music_api/README.md) - Music API integrations
+- [moosicbox_files](../files/README.md) - File handling utilities
