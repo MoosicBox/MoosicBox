@@ -26,54 +26,56 @@ This example provides comprehensive validation of the dual-mode FromRequest trai
 
 ### Synchronous Extraction Tests
 ```bash
-# From repository root
-cargo run --bin test_sync_extraction --example from_request_test --features actix
-
 # From example directory
 cd packages/web_server/examples/from_request_test
-cargo run --bin test_sync_extraction --features actix
+cargo run --bin test_sync_extraction
+
+# From repository root
+cargo run --package from_request_test --bin test_sync_extraction
 
 # With NixOS
-nix develop .#server --command cargo run --bin test_sync_extraction --example from_request_test --features actix
+nix develop .#server --command cargo run --package from_request_test --bin test_sync_extraction
 ```
 
 ### Asynchronous Extraction Tests
 ```bash
-# From repository root
-cargo run --bin test_async_extraction --example from_request_test --features actix
-
 # From example directory
 cd packages/web_server/examples/from_request_test
-cargo run --bin test_async_extraction --features actix
+cargo run --bin test_async_extraction
+
+# From repository root
+cargo run --package from_request_test --bin test_async_extraction
 
 # With NixOS
-nix develop .#server --command cargo run --bin test_async_extraction --example from_request_test --features actix
+nix develop .#server --command cargo run --package from_request_test --bin test_async_extraction
 ```
 
 ### Build All Tests
 ```bash
 # Test compilation of both binaries
-cargo build --bins --example from_request_test --features actix
+cargo build --bins
 
 # Build specific test
-cargo build --bin test_sync_extraction --example from_request_test --features actix
+cargo build --bin test_sync_extraction
 ```
 
 ## Test Coverage
 
 ### Synchronous Extraction Tests
-- **RequestData Extraction**: Validates all RequestData fields (method, path, query, headers, etc.)
-- **String Extraction**: Tests query string parameter extraction
-- **u32 Extraction**: Tests numeric parsing with valid/invalid inputs
-- **bool Extraction**: Tests boolean variants (true/1/yes/on vs false/0/no/off)
-- **Error Cases**: Validates proper error handling for invalid inputs
+(Implemented in `src/test_sync_extraction.rs`)
+- **RequestData Extraction**: Validates all RequestData fields (method, path, query, headers, user_agent, content_type, remote_addr)
+- **String Extraction**: Tests query string extraction
+- **u32 Extraction**: Tests numeric parsing with valid inputs and error handling for invalid inputs
+- **bool Extraction**: Tests boolean variants (true/1/yes/on vs false/0/no/off/anything_else)
+- **Error Cases**: Validates proper error handling with "Failed to parse" error messages
 
 ### Asynchronous Extraction Tests
-- **RequestData Async**: Tests async extraction of RequestData
-- **i32 Async Extraction**: Tests negative number parsing asynchronously
-- **Future Types**: Validates Future associated types work correctly
-- **Consistency Check**: Compares sync vs async results for identical behavior
-- **Async Error Handling**: Tests error propagation through async extraction
+(Implemented in `src/test_async_extraction.rs`)
+- **RequestData Async**: Tests async extraction of RequestData with POST method
+- **i32 Async Extraction**: Tests negative number parsing asynchronously with error handling
+- **Future Types**: Validates Future resolution for String and RequestData types
+- **Consistency Check**: Compares sync vs async results for identical behavior with same query strings
+- **Async Error Handling**: Tests error propagation through async extraction with "Failed to parse" errors
 
 ## Expected Test Results
 
@@ -86,30 +88,69 @@ cargo build --bin test_sync_extraction --example from_request_test --features ac
 
 ### Test Output Example
 ```
-=== Sync Extraction Tests ===
-✓ RequestData extraction successful
-✓ String extraction: "test_value"
-✓ u32 extraction: 42
-✓ bool extraction: true
-✓ Error handling: Invalid u32 rejected
+🧪 Testing synchronous extraction with FromRequest trait...
 
-=== Async Extraction Tests ===
-✓ RequestData async extraction successful
-✓ i32 async extraction: -123
-✓ Sync/async consistency verified
-✓ Async error handling working
+Testing RequestData sync extraction...
+✅ RequestData extracted successfully
+  Method: Get
+  Path: /test/path
+  Query: name=john&age=30&active=true
+  Headers count: 3
+✅ All RequestData fields extracted correctly
+
+Testing String extraction...
+✅ String extracted: 'hello world'
+
+Testing u32 extraction...
+✅ u32 extracted: 42
+✅ u32 extraction properly failed for invalid input: Failed to parse...
+
+Testing bool extraction...
+✅ bool('true') = true
+✅ bool('1') = true
+[... additional bool test cases ...]
+
+🎉 All synchronous FromRequest tests passed!
+
+---
+
+🧪 Testing asynchronous extraction with FromRequest trait...
+
+Testing RequestData async extraction...
+✅ RequestData extracted asynchronously
+  Method: Post
+  Path: /api/users
+  Query: filter=active&limit=10
+  Headers count: 3
+✅ All RequestData fields extracted correctly via async
+
+Testing async vs sync extraction consistency...
+✅ Sync result: 'consistency_test=123'
+✅ Async result: 'consistency_test=123'
+✅ Sync and async extraction produce identical results
+
+Testing i32 async extraction...
+✅ i32 extracted asynchronously: -42
+✅ i32 async extraction properly failed for invalid input: Failed to parse...
+
+Testing Future types are properly implemented...
+✅ Future<String> resolved correctly: 'future_test'
+✅ Future<RequestData> resolved correctly
+  Method: Post
+
+🎉 All asynchronous FromRequest tests passed!
 ```
 
 ## Code Structure
 
-### Mock Request Creation
+### Test Request Creation
 ```rust
-fn create_mock_request() -> HttpRequest {
+fn create_test_request() -> HttpRequest {
     // Creates HttpRequest with test data:
-    // - Method: GET
-    // - Path: /test
-    // - Query: param=value&number=42
-    // - Headers: User-Agent, Content-Type
+    // - Method: Varies by test (GET/POST)
+    // - Path: Varies by test
+    // - Query: Varies by test
+    // - Headers: user-agent, content-type, etc.
 }
 ```
 
@@ -155,13 +196,9 @@ assert!(result.unwrap_err().to_string().contains("invalid"));
 
 ## Troubleshooting
 
-### Feature Flag Issues
+### Dependency Issues
 **Problem**: FromRequest trait not available
-**Solution**: Ensure correct feature flags are enabled:
-```bash
---features actix        # for Actix backend
---features simulator    # for Simulator backend
-```
+**Solution**: The package uses the `simulator` feature by default (configured in Cargo.toml). No additional feature flags are needed for basic usage.
 
 ### Test Failures
 **Problem**: Extraction tests failing
@@ -197,10 +234,11 @@ The example can be extended for:
 ## Related Examples
 
 - **handler_macro_test**: Tests handler macro system
-- **query_extractor**: Demonstrates Query<T> extractor usage
-- **json_extractor**: Shows JSON body extraction
-- **combined_extractors**: Multiple parameter extraction patterns
+- **query_extractor_standalone**: Demonstrates Query<T> extractor usage
+- **json_extractor_standalone**: Shows JSON body extraction
+- **combined_extractors_standalone**: Multiple parameter extraction patterns
 - **basic_handler**: RequestData usage in handlers
+- **basic_handler_standalone**: Standalone basic handler example
 
 ## Implementation Notes
 
