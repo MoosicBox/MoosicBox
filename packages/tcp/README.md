@@ -1,4 +1,4 @@
-# TCP
+# Switchy TCP
 
 Generic TCP networking abstraction with Tokio and simulator support.
 
@@ -38,12 +38,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tcp = { path = "../tcp" }
+switchy_tcp = { path = "../tcp" }
 
-# With specific features
-tcp = {
+# With specific features (both enabled by default)
+switchy_tcp = {
     path = "../tcp",
-    features = ["tokio", "simulator"]
+    default-features = false,
+    features = ["tokio"]  # or ["simulator"]
 }
 ```
 
@@ -53,7 +54,7 @@ tcp = {
 
 ```rust
 #[cfg(feature = "tokio")]
-use tcp::{TcpListener, TcpStream};
+use switchy_tcp::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
@@ -98,7 +99,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
 ```rust
 #[cfg(feature = "tokio")]
-use tcp::TcpStream;
+use switchy_tcp::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
@@ -126,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #[cfg(feature = "tokio")]
-use tcp::TcpStream;
+use switchy_tcp::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn handle_bidirectional_stream(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
@@ -171,14 +172,14 @@ async fn handle_bidirectional_stream(stream: TcpStream) -> Result<(), Box<dyn st
 ### Generic TCP Usage
 
 ```rust
-use tcp::{GenericTcpListener, GenericTcpStream};
+use switchy_tcp::{GenericTcpListener, GenericTcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-async fn generic_server<S, R, W, L>(listener: L) -> Result<(), tcp::Error>
+async fn generic_server<S, R, W, L>(listener: L) -> Result<(), switchy_tcp::Error>
 where
     S: GenericTcpStream<R, W>,
-    R: tcp::GenericTcpStreamReadHalf,
-    W: tcp::GenericTcpStreamWriteHalf,
+    R: switchy_tcp::GenericTcpStreamReadHalf,
+    W: switchy_tcp::GenericTcpStreamWriteHalf,
     L: GenericTcpListener<S>,
 {
     loop {
@@ -199,7 +200,7 @@ where
 
 ```rust
 #[cfg(feature = "simulator")]
-use tcp::simulator::{TcpListener, TcpStream};
+use switchy_tcp::simulator::{TcpListener, TcpStream};
 
 #[tokio::test]
 async fn test_tcp_communication() {
@@ -221,8 +222,9 @@ async fn test_tcp_communication() {
 ### GenericTcpListener
 
 ```rust
-use tcp::{GenericTcpListener, Error};
+use switchy_tcp::{GenericTcpListener, Error};
 use std::net::SocketAddr;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait GenericTcpListener<T>: Send + Sync {
@@ -233,7 +235,7 @@ pub trait GenericTcpListener<T>: Send + Sync {
 ### GenericTcpStream
 
 ```rust
-use tcp::{GenericTcpStream, GenericTcpStreamReadHalf, GenericTcpStreamWriteHalf};
+use switchy_tcp::{GenericTcpStream, GenericTcpStreamReadHalf, GenericTcpStreamWriteHalf};
 use tokio::io::{AsyncRead, AsyncWrite};
 use std::net::SocketAddr;
 
@@ -249,7 +251,7 @@ pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWrite
 ## Error Handling
 
 ```rust
-use tcp::{Error, TcpStream};
+use switchy_tcp::{Error, TcpStream};
 
 async fn handle_tcp_errors() {
     match TcpStream::connect("invalid-address").await {
@@ -275,33 +277,49 @@ async fn handle_tcp_errors() {
 
 ## Feature Flags
 
-- **`tokio`**: Enable Tokio-based TCP implementation
-- **`simulator`**: Enable simulator/mock TCP implementation
+- **`tokio`**: Enable Tokio-based TCP implementation (enabled by default)
+- **`simulator`**: Enable simulator/mock TCP implementation (enabled by default)
+
+**Note**: Both features are enabled by default. When both are enabled, the simulator type aliases (`TcpListener`, `TcpStream`, etc.) are used. To use Tokio types exclusively, disable default features and enable only `tokio`.
 
 ## Type Aliases
 
 When features are enabled, convenient type aliases are available:
 
 ```rust
-// With tokio feature
-pub type TcpListener = TokioTcpListener;
-pub type TcpStream = TokioTcpStream;
-pub type TcpStreamReadHalf = TokioTcpStreamReadHalf;
-pub type TcpStreamWriteHalf = TokioTcpStreamWriteHalf;
-
-// With simulator feature
+// With simulator feature (takes priority when both are enabled)
 pub type TcpListener = SimulatorTcpListener;
 pub type TcpStream = SimulatorTcpStream;
 pub type TcpStreamReadHalf = SimulatorTcpStreamReadHalf;
 pub type TcpStreamWriteHalf = SimulatorTcpStreamWriteHalf;
+
+// With tokio feature only (when simulator is disabled)
+pub type TcpListener = TokioTcpListener;
+pub type TcpStream = TokioTcpStream;
+pub type TcpStreamReadHalf = TokioTcpStreamReadHalf;
+pub type TcpStreamWriteHalf = TokioTcpStreamWriteHalf;
+```
+
+To access specific implementations when both features are enabled:
+```rust
+use switchy_tcp::tokio::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
+use switchy_tcp::simulator::{TcpListener as SimTcpListener, TcpStream as SimTcpStream};
 ```
 
 ## Dependencies
 
-- **Tokio**: Async runtime and I/O (optional)
-- **Async-trait**: Async trait support
-- **Thiserror**: Error handling
-- **Paste**: Macro utilities
+Core dependencies:
+- **switchy_async**: Async runtime abstraction with I/O, macros, sync, time, and util support
+- **tokio**: Networking primitives (required, with `net` feature)
+- **async-trait**: Async trait support
+- **thiserror**: Error handling
+- **paste**: Macro utilities
+- **log**: Logging
+
+Simulator-specific dependencies (when `simulator` feature is enabled):
+- **bytes**: Byte buffer management
+- **flume**: MPSC channel implementation
+- **scoped-tls**: Thread-local storage for simulator context
 
 ## Use Cases
 
