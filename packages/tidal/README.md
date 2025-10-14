@@ -1,424 +1,302 @@
 # MoosicBox Tidal Integration
 
-High-quality music streaming integration with Tidal's lossless audio service.
+Integration with Tidal's music streaming service for MoosicBox.
 
 ## Overview
 
-The MoosicBox Tidal package provides:
+The MoosicBox Tidal package provides integration with Tidal's streaming API through the `MusicApi` trait, enabling:
 
-- **Tidal HiFi Support**: Lossless FLAC streaming up to 24-bit/96kHz
-- **Tidal Masters**: Support for MQA (Master Quality Authenticated) tracks
-- **Complete Catalog Access**: Browse, search, and stream Tidal's music library
-- **Playlist Management**: Create, modify, and sync Tidal playlists
-- **User Library**: Access personal favorites, albums, and followed artists
-- **Real-Time Streaming**: Direct integration with MoosicBox audio pipeline
+- **OAuth2 Device Flow Authentication**: Secure authentication using Tidal's device authorization flow
+- **Music Catalog Access**: Browse and search Tidal's music library
+- **Favorites Management**: Access and manage user favorites (artists, albums, tracks)
+- **FLAC Streaming**: High-quality lossless audio streaming support
+- **Search**: Search across artists, albums, and tracks
 
 ## Features
 
-### Audio Quality
-- **Tidal HiFi**: CD-quality lossless FLAC (16-bit/44.1kHz)
-- **Tidal HiFi Plus**: Hi-Res lossless up to 24-bit/96kHz
-- **Tidal Masters**: MQA tracks with enhanced audio quality
-- **Adaptive Streaming**: Automatic quality adjustment based on connection
+### Authentication
+- OAuth2 device authorization flow
+- Token refresh handling
+- Optional database credential persistence
 
 ### Content Access
-- **Full Catalog**: Access to Tidal's complete music library
-- **Curated Playlists**: Tidal's editorial and algorithmic playlists
-- **Artist Radio**: Discover similar artists and tracks
-- **New Releases**: Latest albums and singles
-- **Exclusive Content**: Tidal-exclusive releases and content
+- Access favorite artists, albums, and tracks
+- Browse artist albums (with filtering by album type)
+- Retrieve album tracks
+- Search across the Tidal catalog
 
-### User Features
-- **Personal Library**: Sync favorites, albums, and playlists
-- **Offline Caching**: Cache tracks for offline playback
-- **Cross-Device Sync**: Sync listening across multiple devices
-- **Listening History**: Track and resume playback history
+### Audio Streaming
+- Track streaming URL retrieval
+- Support for multiple quality levels (High, Lossless, HiResLossless)
+- Track playback metadata
+
+## Architecture
+
+The package is organized into:
+- `lib.rs` - Core API implementation and MusicApi trait integration (packages/tidal/src/lib.rs)
+- `models.rs` - Data models for Tidal entities (packages/tidal/src/models.rs)
+- `api.rs` - HTTP API endpoints for server integration (packages/tidal/src/api.rs)
+- `db/` - Database persistence for configuration (packages/tidal/src/db/)
 
 ## Usage
 
-### Basic Setup
-
-```rust
-use moosicbox_tidal::{TidalClient, TidalConfig, TidalQuality};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure Tidal client
-    let config = TidalConfig {
-        client_id: "your_client_id".to_string(),
-        client_secret: "your_client_secret".to_string(),
-        quality: TidalQuality::HiFi, // Lossless quality
-        country_code: "US".to_string(),
-        cache_dir: Some("./tidal_cache".into()),
-    };
-
-    // Create Tidal client
-    let mut client = TidalClient::new(config).await?;
-
-    // Login with credentials
-    client.login("username", "password").await?;
-
-    Ok(())
-}
-```
-
 ### Authentication
 
+The package uses Tidal's OAuth2 device authorization flow:
+
 ```rust
-use moosicbox_tidal::{TidalClient, TidalAuth};
+use moosicbox_tidal::{device_authorization, device_authorization_token};
 
-async fn authenticate_tidal() -> Result<TidalClient, Box<dyn std::error::Error>> {
-    let mut client = TidalClient::new(config).await?;
+// Step 1: Start device authorization
+let auth_result = device_authorization("your_client_id".to_string(), true).await?;
+// This opens the authorization URL in the browser
 
-    // Option 1: Username/Password authentication
-    client.login("username", "password").await?;
-
-    // Option 2: OAuth2 authentication
-    let auth_url = client.get_auth_url().await?;
-    println!("Please visit: {}", auth_url);
-
-    // User authorizes and provides code
-    let auth_code = "user_provided_code";
-    client.authenticate_with_code(auth_code).await?;
-
-    // Option 3: Token-based authentication
-    let access_token = "existing_access_token";
-    client.authenticate_with_token(access_token).await?;
-
-    Ok(client)
-}
+// Step 2: Complete authorization with device code
+#[cfg(feature = "db")]
+let token_result = device_authorization_token(
+    &db,
+    "your_client_id".to_string(),
+    "your_client_secret".to_string(),
+    device_code,
+    Some(true), // persist to database
+).await?;
 ```
 
-### Search and Browse
+### Using the MusicApi Trait
 
 ```rust
-use moosicbox_tidal::{TidalClient, TidalSearchType, TidalSearchResults};
+use moosicbox_tidal::TidalMusicApi;
+use moosicbox_music_api::MusicApi;
 
-async fn search_music(client: &TidalClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Search for tracks
-    let track_results = client.search("The Dark Side of the Moon", TidalSearchType::Tracks, 50).await?;
+// Create the Tidal API instance
+#[cfg(feature = "db")]
+let tidal_api = TidalMusicApi::builder()
+    .with_db(db)
+    .build()
+    .await?;
 
-    for track in track_results.tracks {
-        println!("Track: {} - {} ({})", track.title, track.artist.name, track.album.title);
-        println!("  Quality: {:?}", track.audio_quality);
-        println!("  Duration: {}s", track.duration);
-    }
+// Get favorite artists
+let artists = tidal_api.artists(Some(0), Some(20), None, None).await?;
 
-    // Search for albums
-    let album_results = client.search("Pink Floyd", TidalSearchType::Albums, 20).await?;
+// Get favorite albums
+let albums_request = AlbumsRequest {
+    page: Some(PagingRequest { offset: 0, limit: 20 }),
+    sort: None,
+};
+let albums = tidal_api.albums(&albums_request).await?;
 
-    for album in album_results.albums {
-        println!("Album: {} - {} ({})", album.title, album.artist.name, album.release_date);
-        println!("  Tracks: {}", album.number_of_tracks);
-        println!("  Quality: {:?}", album.audio_quality);
-    }
-
-    // Search for artists
-    let artist_results = client.search("Pink Floyd", TidalSearchType::Artists, 10).await?;
-
-    for artist in artist_results.artists {
-        println!("Artist: {}", artist.name);
-        println!("  Followers: {}", artist.popularity);
-    }
-
-    Ok(())
-}
+// Search
+let results = tidal_api.search("Pink Floyd", Some(0), Some(10)).await?;
 ```
 
-### Track Streaming
+### Direct API Functions
 
 ```rust
-use moosicbox_tidal::{TidalClient, TidalTrack};
-use moosicbox_audio_output::AudioOutput;
+use moosicbox_tidal::{favorite_albums, album_tracks, track_file_url, TidalAudioQuality};
 
-async fn stream_track(
-    client: &TidalClient,
-    track_id: u64,
-    audio_output: &mut AudioOutput
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Get track info
-    let track = client.get_track(track_id).await?;
-    println!("Streaming: {} - {}", track.title, track.artist.name);
+// Get favorite albums
+#[cfg(feature = "db")]
+let albums = favorite_albums(
+    &db,
+    Some(0),    // offset
+    Some(20),   // limit
+    None,       // order
+    None,       // order_direction
+    None,       // country_code
+    None,       // locale
+    None,       // device_type
+    None,       // access_token
+    None,       // user_id
+).await?;
 
-    // Get streaming URL
-    let stream_url = client.get_stream_url(track_id, TidalQuality::HiFi).await?;
+// Get tracks for an album
+#[cfg(feature = "db")]
+let tracks = album_tracks(
+    &db,
+    &album_id,
+    Some(0),
+    Some(100),
+    None,
+    None,
+    None,
+    None,
+).await?;
 
-    // Stream audio data
-    let mut audio_stream = client.stream_track(stream_url).await?;
-
-    // Read and play audio chunks
-    let mut buffer = vec![0u8; 8192];
-    while let Ok(bytes_read) = audio_stream.read(&mut buffer).await {
-        if bytes_read == 0 {
-            break;
-        }
-
-        // Convert to audio samples and play
-        let samples = convert_to_samples(&buffer[..bytes_read]);
-        audio_output.write_samples(&samples).await?;
-    }
-
-    Ok(())
-}
+// Get streaming URL
+#[cfg(feature = "db")]
+let urls = track_file_url(
+    &db,
+    TidalAudioQuality::Lossless,
+    &track_id,
+    None,
+).await?;
 ```
 
-### Playlist Management
+### Managing Favorites
 
 ```rust
-use moosicbox_tidal::{TidalClient, TidalPlaylist, TidalPlaylistRequest};
+use moosicbox_tidal::{add_favorite_artist, remove_favorite_track};
 
-async fn manage_playlists(client: &TidalClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get user playlists
-    let playlists = client.get_user_playlists().await?;
+// Add an artist to favorites
+#[cfg(feature = "db")]
+add_favorite_artist(
+    &db,
+    &artist_id,
+    None, // country_code
+    None, // locale
+    None, // device_type
+    None, // access_token
+    None, // user_id
+).await?;
 
-    for playlist in playlists {
-        println!("Playlist: {} ({} tracks)", playlist.title, playlist.number_of_tracks);
-    }
-
-    // Create new playlist
-    let new_playlist = TidalPlaylistRequest {
-        title: "My MoosicBox Playlist".to_string(),
-        description: Some("Created via MoosicBox".to_string()),
-        public: false,
-    };
-
-    let playlist = client.create_playlist(new_playlist).await?;
-    println!("Created playlist: {}", playlist.title);
-
-    // Add tracks to playlist
-    let track_ids = vec![12345678, 87654321];
-    client.add_tracks_to_playlist(playlist.uuid, track_ids).await?;
-
-    // Get playlist tracks
-    let tracks = client.get_playlist_tracks(playlist.uuid).await?;
-
-    for track in tracks {
-        println!("  Track: {} - {}", track.title, track.artist.name);
-    }
-
-    Ok(())
-}
-```
-
-### User Library
-
-```rust
-use moosicbox_tidal::{TidalClient, TidalLibraryType};
-
-async fn access_user_library(client: &TidalClient) -> Result<(), Box<dyn std::error::Error>> {
-    // Get favorite tracks
-    let favorite_tracks = client.get_user_favorites(TidalLibraryType::Tracks).await?;
-    println!("Favorite tracks: {}", favorite_tracks.len());
-
-    // Get favorite albums
-    let favorite_albums = client.get_user_favorites(TidalLibraryType::Albums).await?;
-    println!("Favorite albums: {}", favorite_albums.len());
-
-    // Get followed artists
-    let followed_artists = client.get_user_favorites(TidalLibraryType::Artists).await?;
-    println!("Followed artists: {}", followed_artists.len());
-
-    // Add track to favorites
-    let track_id = 12345678;
-    client.add_to_favorites(track_id, TidalLibraryType::Tracks).await?;
-
-    // Remove from favorites
-    client.remove_from_favorites(track_id, TidalLibraryType::Tracks).await?;
-
-    Ok(())
-}
+// Remove a track from favorites
+#[cfg(feature = "db")]
+remove_favorite_track(
+    &db,
+    &track_id,
+    None,
+    None,
+    None,
+    None,
+    None,
+).await?;
 ```
 
 ## Configuration
 
-### Environment Variables
+### Feature Flags
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TIDAL_CLIENT_ID` | Tidal API client ID | Required |
-| `TIDAL_CLIENT_SECRET` | Tidal API client secret | Required |
-| `TIDAL_QUALITY` | Default audio quality | `HiFi` |
-| `TIDAL_COUNTRY_CODE` | Country code for content | `US` |
-| `TIDAL_CACHE_DIR` | Directory for caching | `./cache/tidal` |
-| `TIDAL_MAX_CONCURRENT_STREAMS` | Max concurrent streams | `5` |
+- `default` - Enables `api`, `db`, `openapi`, and `scan` features
+- `api` - Enable HTTP API endpoints (requires actix-web)
+- `db` - Enable database persistence for credentials and scanning
+- `openapi` - Enable OpenAPI/Swagger documentation (requires utoipa)
+- `scan` - Enable library scanning functionality
+- `fail-on-warnings` - Treat warnings as errors during compilation
 
-### Quality Settings
+### Audio Quality
 
-```rust
-use moosicbox_tidal::TidalQuality;
-
-// Audio quality options
-let quality = TidalQuality::Low;       // 96 kbps AAC
-let quality = TidalQuality::High;      // 320 kbps AAC
-let quality = TidalQuality::HiFi;      // 1411 kbps FLAC (CD quality)
-let quality = TidalQuality::Master;    // MQA (up to 24-bit/96kHz)
-```
-
-### Caching Configuration
+The package supports three quality levels through `TidalAudioQuality`:
 
 ```rust
-use moosicbox_tidal::{TidalConfig, TidalCacheConfig};
+use moosicbox_tidal::TidalAudioQuality;
 
-let config = TidalConfig {
-    cache_dir: Some("./tidal_cache".into()),
-    cache_config: TidalCacheConfig {
-        max_size_gb: 10.0,           // Maximum cache size
-        max_track_cache_hours: 24,   // Cache tracks for 24 hours
-        enable_metadata_cache: true,  // Cache track metadata
-        enable_artwork_cache: true,   // Cache album artwork
-        cleanup_interval_hours: 6,    // Clean up cache every 6 hours
-    },
-    ..Default::default()
-};
+let quality = TidalAudioQuality::High;         // 320 kbps AAC
+let quality = TidalAudioQuality::Lossless;     // 1411 kbps FLAC (CD quality)
+let quality = TidalAudioQuality::HiResLossless; // Hi-Res FLAC
 ```
 
-## Feature Flags
-
-- `tidal` - Enable Tidal streaming integration
-- `tidal-hifi` - Enable HiFi quality streaming
-- `tidal-master` - Enable MQA Master quality streaming
-- `tidal-cache` - Enable local caching of tracks and metadata
-- `tidal-playlist` - Enable playlist management features
-- `tidal-oauth` - Enable OAuth2 authentication flow
+Note: Available quality levels depend on the user's Tidal subscription tier.
 
 ## Integration with MoosicBox
 
 ### Server Integration
 
-```toml
-[dependencies]
-moosicbox-tidal = { path = "../tidal", features = ["tidal-hifi", "tidal-cache"] }
-```
+The package provides actix-web endpoints through the `api` feature:
 
 ```rust
-use moosicbox_tidal::TidalClient;
-use moosicbox_server::music_api::MusicApi;
+#[cfg(feature = "api")]
+use moosicbox_tidal::api::bind_services;
 
-// Register Tidal as a music source
-async fn setup_tidal_integration() -> Result<(), Box<dyn std::error::Error>> {
-    let tidal_client = TidalClient::new(config).await?;
-
-    // Register with MoosicBox server
-    let music_api = MusicApi::new();
-    music_api.register_source("tidal", Box::new(tidal_client)).await?;
-
-    Ok(())
-}
+let scope = actix_web::web::scope("/tidal");
+let scope = bind_services(scope);
 ```
 
 ### Player Integration
 
+The `TidalMusicApi` implements the `MusicApi` trait, allowing it to be used as a music source:
+
 ```rust
-use moosicbox_tidal::TidalClient;
-use moosicbox_player::Player;
+use moosicbox_music_api::MusicApi;
+use moosicbox_tidal::TidalMusicApi;
 
-async fn setup_tidal_player() -> Result<(), Box<dyn std::error::Error>> {
-    let tidal_client = TidalClient::new(config).await?;
-    let mut player = Player::new().await?;
+#[cfg(feature = "db")]
+let tidal = TidalMusicApi::builder()
+    .with_db(db)
+    .build()
+    .await?;
 
-    // Add Tidal as a source
-    player.add_source("tidal", Box::new(tidal_client)).await?;
-
-    // Play a Tidal track
-    player.play_track("tidal:track:12345678").await?;
-
-    Ok(())
-}
+// Use with any system that accepts MusicApi
+let track_source = tidal.track_source(track, quality).await?;
 ```
+
+## Data Models
+
+The package defines several key models (packages/tidal/src/models.rs):
+
+- `TidalArtist` - Artist information with picture URL
+- `TidalAlbum` - Album details including metadata tags
+- `TidalTrack` - Track information with quality indicators
+- `TidalSearchResults` - Search results across multiple entity types
+
+All models support conversion to/from MoosicBox's common `Artist`, `Album`, and `Track` types.
+
+## API Endpoints
+
+When the `api` feature is enabled, the following endpoints are available:
+
+- `POST /auth/device-authorization` - Start OAuth flow
+- `POST /auth/device-authorization/token` - Complete OAuth flow
+- `GET /track/url` - Get track streaming URL
+- `GET /track/playback-info` - Get track playback metadata
+- `GET /favorites/artists` - List favorite artists
+- `POST /favorites/artists` - Add artist to favorites
+- `DELETE /favorites/artists` - Remove artist from favorites
+- `GET /favorites/albums` - List favorite albums
+- `POST /favorites/albums` - Add album to favorites
+- `DELETE /favorites/albums` - Remove album from favorites
+- `GET /favorites/tracks` - List favorite tracks
+- `POST /favorites/tracks` - Add track to favorites
+- `DELETE /favorites/tracks` - Remove track from favorites
+- `GET /artists/albums` - Get albums by artist
+- `GET /albums/tracks` - Get tracks by album
+- `GET /albums` - Get album by ID
+- `GET /artists` - Get artist by ID
+- `GET /tracks` - Get track by ID
+- `GET /search` - Search Tidal catalog
+
+## Dependencies
+
+Core dependencies from Cargo.toml (packages/tidal/Cargo.toml):
+
+- `moosicbox_music_api` - Music API trait definitions
+- `moosicbox_music_models` - Common music data models
+- `switchy` - HTTP client and database abstractions
+- `serde` / `serde_json` - Serialization
+- `tokio` - Async runtime
+- `actix-web` - Web framework (optional, with `api` feature)
+- `utoipa` - OpenAPI documentation (optional, with `openapi` feature)
 
 ## Error Handling
 
-```rust
-use moosicbox_tidal::error::TidalError;
+The package defines an `Error` enum with variants for:
 
-match client.get_track(track_id).await {
-    Ok(track) => println!("Track: {}", track.title),
-    Err(TidalError::AuthenticationFailed) => {
-        eprintln!("Tidal authentication failed - check credentials");
-    },
-    Err(TidalError::TrackNotFound(id)) => {
-        eprintln!("Track not found: {}", id);
-    },
-    Err(TidalError::QualityNotAvailable { requested, available }) => {
-        eprintln!("Quality {:?} not available, using {:?}", requested, available);
-    },
-    Err(TidalError::RateLimited { retry_after }) => {
-        eprintln!("Rate limited, retry after {} seconds", retry_after);
-    },
-    Err(TidalError::NetworkError(e)) => {
-        eprintln!("Network error: {}", e);
-    },
-    Err(e) => {
-        eprintln!("Tidal error: {}", e);
+```rust
+use moosicbox_tidal::Error;
+
+match result {
+    Err(Error::Unauthorized) => {
+        // Re-authenticate
     }
+    Err(Error::HttpRequestFailed(status, message)) => {
+        // Handle HTTP errors
+    }
+    Err(Error::NoAccessTokenAvailable) => {
+        // Need to authenticate
+    }
+    _ => {}
 }
 ```
 
-## Rate Limiting and Best Practices
+## Notes
 
-### API Rate Limits
-- **Search**: 100 requests per minute
-- **Track Info**: 200 requests per minute
-- **Streaming**: 10 concurrent streams per account
-- **Playlist Operations**: 50 requests per minute
-
-### Best Practices
-
-```rust
-use moosicbox_tidal::{TidalClient, TidalRateLimiter};
-
-// Use built-in rate limiting
-let config = TidalConfig {
-    rate_limiter: TidalRateLimiter::new(100, 60), // 100 requests per 60 seconds
-    ..Default::default()
-};
-
-// Batch requests when possible
-let track_ids = vec![1, 2, 3, 4, 5];
-let tracks = client.get_tracks_batch(track_ids).await?;
-
-// Use caching to reduce API calls
-let cached_track = client.get_track_cached(track_id).await?;
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Authentication failures**: Verify credentials and subscription status
-2. **Quality not available**: Check subscription tier and track availability
-3. **Regional restrictions**: Some content may not be available in all regions
-4. **Rate limiting**: Implement proper rate limiting and retry logic
-
-### Debug Information
-
-```bash
-# Enable Tidal debugging
-RUST_LOG=moosicbox_tidal=debug cargo run
-
-# Test Tidal connection
-cargo run --bin tidal-test -- --test-connection
-
-# Check subscription status
-cargo run --bin tidal-test -- --check-subscription
-```
-
-### Authentication Issues
-
-```rust
-// Check subscription status
-match client.get_subscription_info().await {
-    Ok(info) => {
-        println!("Subscription: {:?}", info.subscription_type);
-        println!("Valid until: {:?}", info.valid_until);
-        println!("HiFi available: {}", info.hifi_available);
-    },
-    Err(e) => eprintln!("Failed to get subscription info: {}", e),
-}
-```
+- The package requires a valid Tidal client ID and secret for authentication
+- Database persistence requires the `db` feature to be enabled
+- Streaming quality depends on the user's Tidal subscription level
+- All API functions that interact with Tidal require authentication (except device_authorization)
+- The package handles automatic token refresh when credentials are persisted to the database
 
 ## See Also
 
 - [MoosicBox Player](../player/README.md) - Audio playback engine
-- [MoosicBox Server](../server/README.md) - Main server with Tidal integration
-- [MoosicBox Qobuz](../qobuz/README.md) - Alternative high-quality streaming service
+- [MoosicBox Server](../server/README.md) - Main server application
+- [MoosicBox Qobuz](../qobuz/README.md) - Alternative streaming service integration
