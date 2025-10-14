@@ -1,28 +1,26 @@
 # Opus Test Vectors
 
-This directory contains test vectors for validating the moosicbox_opus_native decoder against RFC 6716 compliance.
+This package provides test vectors for validating the moosicbox_opus_native decoder against RFC 6716 compliance.
 
 ## Status
 
-**✅ Complete:** Test vector infrastructure (loader, SNR calculation, test harness)  
-**🔴 Blocked:** Actual test vector generation requires raw Opus packets
+**✅ Complete:** Test vector infrastructure and automatic generation using libopus
+**✅ Working:** Test vectors are generated automatically during build via `build.rs`
 
 ## Directory Structure
 
+Test vectors are generated at build time in `$OUT_DIR/generated/`:
+
 ```
-test-vectors/
+$OUT_DIR/generated/
 ├── silk/
-│   ├── nb/    # Narrowband (8 kHz)
-│   ├── mb/    # Mediumband (12 kHz)
-│   ├── wb/    # Wideband (16 kHz)
-│   └── swb/   # Super-wideband (24 kHz)
+│   ├── nb/    # Narrowband (8 kHz) - 8 test cases
+│   ├── mb/    # Mediumband (12 kHz) - 4 test cases
+│   ├── wb/    # Wideband (16 kHz) - 4 test cases
+│   └── swb/   # Super-wideband (24 kHz) - 2 test cases
 ├── celt/
-│   ├── nb/    # Narrowband (8 kHz)
-│   ├── wb/    # Wideband (16 kHz)
-│   ├── swb/   # Super-wideband (24 kHz)
-│   └── fb/    # Fullband (48 kHz)
-├── integration/  # Hybrid mode, transitions
-└── edge-cases/   # Malformed packets, boundaries
+│   └── fb/    # Fullband (48 kHz) - 1 test case
+└── integration/  # Hybrid mode - 1 test case
 ```
 
 ## Test Vector Format
@@ -44,98 +42,63 @@ Each test vector consists of three files in a subdirectory:
 }
 ```
 
-## Current Issue: Raw Packet Generation
+## Test Vector Generation
 
-### Problem
+Test vectors are automatically generated during the build process via `build.rs` using the `moosicbox_opus_native_libopus` encoder and decoder. This ensures:
 
-The `opusenc`/`opusdec` tools (from `opus-tools` package) work with **OggOpus container format**, not raw Opus packets. Our decoder expects raw packets as specified in RFC 6716.
+- **Raw Opus packets**: Generated directly from libopus encoder (no container format)
+- **Reference PCM output**: Decoded using libopus decoder for bit-exact comparison
+- **Reproducible**: Same test vectors generated on every build
+- **Comprehensive coverage**: Various signal types (silence, sine waves, impulses, white noise, mixed signals) across multiple bandwidths and channel configurations
 
-**What we have:**
-- `opusenc` creates `.opus` files (Ogg container with headers/metadata)
-- `opusdec` decodes `.opus` files to PCM
+### Signal Types Generated
 
-**What we need:**
-- Raw Opus packet bytes (just the codec bitstream, no container)
-- Corresponding reference PCM output from libopus
-
-### Attempted Solutions
-
-1. **✅ Test Infrastructure:** Complete - loader, SNR, test harness all working
-2. **❌ OggOpus extraction:** `.opus` files include Ogg headers, not just packets
-3. **❌ Synthetic packets:** Hand-crafted packets fail due to complex internal state requirements
-4. **🔄 In Progress:** Investigating libopus `opus_demo` tool
-
-### Recommended Solution: opus_demo
-
-The `opus_demo` tool from libopus source provides exactly what we need:
-- Encodes raw PCM → raw Opus packets (no container)
-- Decodes raw Opus packets → raw PCM
-- Perfect for generating test vectors
-
-**How to build opus_demo:**
-
-```bash
-# Clone libopus
-git clone https://gitlab.xiph.org/xiph/opus.git
-cd opus
-
-# Build
-./autogen.sh
-./configure
-make
-
-# opus_demo will be in the root directory
-./opus_demo -h
-```
-
-**Generate test vectors with opus_demo:**
-
-```bash
-# Create silent audio
-dd if=/dev/zero bs=2 count=160 of=silence_8khz_20ms.pcm
-
-# Encode (creates raw packet)
-./opus_demo -e voip 8000 1 12000 20 silence_8khz_20ms.pcm test.opus
-
-# Decode (reference output)
-./opus_demo -d 8000 1 test.opus reference.pcm
-
-# test.opus is now a raw Opus packet (no container!)
-```
-
-## Alternative: Pre-generated Test Vectors
-
-libopus includes test vectors in its repository:
-- https://gitlab.xiph.org/xiph/opus/-/tree/master/tests
-
-These could be downloaded and used directly.
+The `build.rs` script generates test vectors with the following signal types:
+- **Impulse**: Sharp impulses for testing transient response
+- **Sine waves**: Various frequencies appropriate for each bandwidth
+- **White noise**: Random noise for testing statistical behavior
+- **Silence**: Zero samples for boundary testing
+- **Mixed signals**: Combination of sine and noise
+- **Quiet sine**: Low-amplitude sine waves
 
 ## Running Tests
 
-Once valid test vectors are available:
-
 ```bash
-# Run integration tests
-cargo test -p moosicbox_opus_native --test integration_tests
+# Run all integration tests (requires SILK feature)
+cargo test -p moosicbox_opus_native --features silk --test integration_tests
 
-# Tests will:
-# 1. Load test vectors from this directory
-# 2. Decode packets with our decoder
-# 3. Compare output to expected PCM using SNR
-# 4. Assert SNR > 40 dB (SILK/CELT) or bit-exact (range decoder)
+# The tests will:
+# 1. Load test vectors from $OUT_DIR/generated
+# 2. Decode packets with moosicbox_opus_native decoder
+# 3. Compare output to expected PCM (from libopus)
+# 4. Assert bit-exact match (SNR = ∞)
 ```
 
-## Infrastructure Components
+**Note**: Test vectors are generated automatically during the build, so they're always available when tests run.
 
-- **Loader:** `tests/test_vectors/mod.rs` - Loads test vectors, calculates SNR
-- **Tests:** `tests/integration_tests.rs` - Runs decoder against all vectors
-- **Generation:** `scripts/generate_vectors.sh` - Creates vectors (needs opus_demo)
-- **Synthetic:** `scripts/create_synthetic_vectors.py` - Minimal packets for testing infrastructure
+## Package Components
 
-## Next Steps
+- **`src/lib.rs`**: Test vector loader and SNR calculation utilities
+  - `TestVector::load()` - Load a single test vector from a directory
+  - `TestVector::load_all()` - Load all test vectors from a directory
+  - `calculate_snr()` - Calculate signal-to-noise ratio between reference and decoded PCM
+  - `test_vectors_dir()` - Get path to generated test vectors
+  - `vectors_available()` - Check if test vectors have been generated
 
-1. Build `opus_demo` from libopus source
-2. Update `scripts/generate_vectors.sh` to use `opus_demo` instead of `opusenc`
-3. Generate comprehensive test vector set
-4. Verify all tests pass with SNR > 40 dB
-5. Check in test vectors to git for reproducible testing
+- **`build.rs`**: Automatic test vector generation at build time
+  - Uses `moosicbox_opus_native_libopus` encoder to create raw Opus packets
+  - Uses `moosicbox_opus_native_libopus` decoder to create reference PCM output
+  - Generates SILK vectors for NB/MB/WB/SWB bandwidths
+  - Generates CELT fullband vector
+  - Generates integration (hybrid mode) vector
+
+- **`../tests/integration_tests.rs`**: Integration tests using generated vectors
+  - `test_decode_silk_vectors` - Tests SILK decoder with all generated vectors
+  - `test_sine_stereo_bit_exact` - Focused test for stereo SILK decoding
+  - `test_decode_silk_vectors_skip_delay` - Tests with algorithmic delay compensation
+
+## Dependencies
+
+From `Cargo.toml`:
+- **`moosicbox_opus_native_libopus`** (workspace dependency): libopus FFI bindings for generating reference test vectors
+- **`serde_json`** (workspace dependency): Parsing `meta.json` metadata files
