@@ -23,18 +23,21 @@ This package acts as a convenient way to:
 
 ## Included Components
 
+This package re-exports the following MoosicBox components as optional dependencies. Enable the ones you need via feature flags.
+
 ### Core Components
-- **moosicbox_server** - Main music server functionality
 - **moosicbox_player** - Audio playback engine
 - **moosicbox_library** - Music library management
+- **moosicbox_library_models** - Library data models
 - **moosicbox_audio_zone** - Multi-zone audio control
+- **moosicbox_audio_zone_models** - Audio zone data models
 - **moosicbox_session** - Session and state management
+- **moosicbox_session_models** - Session data models
 
-### API Components
+### API & Routing
 - **moosicbox_music_api** - Music streaming API
-- **moosicbox_music_api_api** - RESTful API endpoints
-- **moosicbox_music_api_models** - Data models for API
-- **moosicbox_music_api_helpers** - API utility functions
+- **moosicbox_auth** - Authentication functionality
+- **moosicbox_profiles** - User profile management
 
 ### Audio Processing
 - **moosicbox_audio_decoder** - Audio format decoding
@@ -46,6 +49,7 @@ This package acts as a convenient way to:
 - **moosicbox_qobuz** - Qobuz streaming integration (optional)
 - **moosicbox_tidal** - Tidal streaming integration (optional)
 - **moosicbox_yt** - YouTube Music integration (optional)
+- **moosicbox_remote_library** - Remote library access
 
 ### Utilities
 - **moosicbox_files** - File handling and streaming
@@ -53,6 +57,8 @@ This package acts as a convenient way to:
 - **moosicbox_downloader** - Download management
 - **moosicbox_search** - Search functionality
 - **moosicbox_scan** - Library scanning and indexing
+- **moosicbox_paging** - Pagination utilities
+- **moosicbox_menu** - Menu functionality
 
 ### Infrastructure
 - **moosicbox_config** - Configuration management
@@ -60,6 +66,12 @@ This package acts as a convenient way to:
 - **moosicbox_assert** - Assertion utilities
 - **moosicbox_env_utils** - Environment utilities
 - **moosicbox_json_utils** - JSON processing utilities
+- **moosicbox_async_service** - Async service utilities
+- **moosicbox_channel_utils** - Channel utilities
+- **moosicbox_stream_utils** - Stream utilities
+- **moosicbox_schema** - Database schema management
+- **moosicbox_arb** - ARB file support
+- **moosicbox_load_balancer** - Load balancing functionality
 
 ### Networking
 - **moosicbox_tunnel** - Tunnel client functionality
@@ -80,144 +92,108 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox = { version = "0.1.0", features = ["all-sources", "all-formats"] }
+moosicbox = { version = "0.1.0", features = ["all-sources"] }
 ```
 
 ### Basic Example
 
+This package re-exports underlying components, allowing you to access their APIs:
+
 ```rust
-use moosicbox::prelude::*;
+// Import specific components you need
+use moosicbox::logging;
+use moosicbox::player;
+use moosicbox::library;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    moosicbox_logging::init(None, None)?;
+    logging::init(None, None)?;
 
-    // Create a new music library
-    let library = Library::new("./music")?;
-
-    // Scan for music files
-    library.scan()?;
-
-    // Create a player
-    let player = Player::new()?;
-
-    // Play a track
-    let tracks = library.search("your favorite song")?;
-    if let Some(track) = tracks.first() {
-        player.play(track)?;
-    }
+    // Use the individual component APIs
+    // See each component's documentation for specific usage examples
 
     Ok(())
 }
 ```
+
+**Note**: This package serves as a re-export umbrella. For detailed usage examples and API documentation, refer to the individual component packages.
 
 ## Feature Flags
 
-### Audio Sources
+This package provides feature flags that enable specific components and pass through to their dependencies.
+
+### Streaming Sources
 - `qobuz` - Enable Qobuz streaming support
 - `tidal` - Enable Tidal streaming support
 - `yt` - Enable YouTube Music support
-- `all-sources` - Enable all streaming sources
+- `all-sources` - Enable all streaming sources (qobuz, tidal, yt)
 
-### Audio Formats
-- `format-aac` - AAC/M4A format support
-- `format-flac` - FLAC format support
-- `format-mp3` - MP3 format support
-- `format-opus` - Opus format support
-- `all-formats` - Enable all audio formats
+### Component Enablement
+Individual components can be enabled with their respective feature flags:
+- `admin-htmx`, `app-models`, `app-native-ui`, `arb`, `assert`, `async-service`
+- `audio-decoder`, `audio-encoder`, `audio-output`, `audio-zone`, `audio-zone-models`
+- `auth`, `channel-utils`, `config`, `downloader`, `env-utils`, `files`
+- `image`, `json-utils`, `library`, `library-models`, `load-balancer`, `logging`
+- `menu`, `middleware`, `music-api`, `paging`, `player`, `profiles`
+- `remote-library`, `resampler`, `scan`, `schema`, `search`
+- `session`, `session-models`, `stream-utils`, `tunnel`, `tunnel-sender`, `ws`
 
-### Combined Features
-- `default` - Recommended default feature set
-- `all-sources` - All streaming service integrations
+### Meta Features
+- `default` - Enables all components with their default features (`all-default`)
+- `all` - Enable all components (without sub-features)
+- `all-default` - Enable all components with their default sub-features
 - `fail-on-warnings` - Treat warnings as errors (development)
 
-## Integration Examples
+### Tunnel Encoding
+- `tunnel-base64` - Enable base64 encoding for tunnel
+- `tunnel-sender-base64` - Enable base64 encoding for tunnel sender
 
-### Building a Simple Music Server
+## Integration
 
-```rust
-use moosicbox::prelude::*;
+This package is designed to be used as a dependency aggregator. Instead of adding multiple individual MoosicBox crates to your `Cargo.toml`, you can add this single package with the features you need.
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the server with default configuration
-    let server = MoosicBoxServer::builder()
-        .with_library_path("./music")
-        .with_port(8001)
-        .with_features(&["qobuz", "tidal"])
-        .build()?;
+### Example: Enabling Multiple Components
 
-    // Start the server
-    server.run().await?;
-
-    Ok(())
+```toml
+[dependencies]
+moosicbox = {
+    version = "0.1.0",
+    features = [
+        "player",
+        "library",
+        "audio-decoder",
+        "qobuz",
+        "tidal"
+    ]
 }
 ```
 
-### Creating a Custom Player
+Then in your Rust code:
 
 ```rust
-use moosicbox::prelude::*;
+// Access re-exported components
+use moosicbox::player;
+use moosicbox::library;
+use moosicbox::qobuz;
 
-fn create_custom_player() -> Result<(), Box<dyn std::error::Error>> {
-    let audio_output = AudioOutput::new(AudioOutputConfig {
-        sample_rate: 44100,
-        channels: 2,
-        buffer_size: 4096,
-    })?;
-
-    let player = Player::builder()
-        .with_audio_output(audio_output)
-        .with_gapless_playback(true)
-        .with_crossfade_duration(Duration::from_secs(3))
-        .build()?;
-
-    // Use the player...
-
-    Ok(())
-}
-```
-
-### Multi-Zone Audio Setup
-
-```rust
-use moosicbox::prelude::*;
-
-fn setup_audio_zones() -> Result<(), Box<dyn std::error::Error>> {
-    let zone_manager = AudioZoneManager::new();
-
-    // Create zones for different rooms
-    let living_room = zone_manager.create_zone("Living Room")?;
-    let kitchen = zone_manager.create_zone("Kitchen")?;
-    let bedroom = zone_manager.create_zone("Bedroom")?;
-
-    // Add players to zones
-    living_room.add_player("living_room_speaker_1")?;
-    living_room.add_player("living_room_speaker_2")?;
-    kitchen.add_player("kitchen_speaker")?;
-    bedroom.add_player("bedroom_speaker")?;
-
-    // Play synchronized music across zones
-    let track = /* get track from library */;
-    zone_manager.play_synchronized(&track, &[&living_room, &kitchen])?;
-
-    Ok(())
-}
+// Use their respective APIs as documented in each component
 ```
 
 ## Architecture
 
-The `moosicbox` package follows a modular architecture where each component can be used independently:
+The `moosicbox` package is a pure re-export crate with no additional logic. It follows a modular architecture where each component can be used independently:
 
 ```
-moosicbox
-├── Core Server (moosicbox_server)
-├── Audio Engine (moosicbox_player, moosicbox_audio_*)
-├── Library Management (moosicbox_library, moosicbox_scan)
-├── Streaming Sources (moosicbox_qobuz, moosicbox_tidal, moosicbox_yt)
-├── API Layer (moosicbox_music_api_*)
-├── Utilities (moosicbox_files, moosicbox_image, etc.)
-└── Infrastructure (moosicbox_config, moosicbox_logging, etc.)
+moosicbox (re-export umbrella)
+├── Audio Engine (player, audio_decoder, audio_encoder, audio_output, resampler)
+├── Library Management (library, library_models, scan)
+├── Session & Zones (session, session_models, audio_zone, audio_zone_models)
+├── Streaming Sources (qobuz, tidal, yt, remote_library)
+├── API Layer (music_api, auth, profiles)
+├── Utilities (files, image, downloader, search, paging, menu)
+├── Infrastructure (config, logging, schema, async_service, stream_utils)
+├── Networking (tunnel, tunnel_sender, ws, middleware)
+└── UI (app_models, app_native_ui, admin_htmx)
 ```
 
 ## Development
@@ -236,15 +212,16 @@ cargo build --package moosicbox --features "all-sources"
 cargo test --package moosicbox
 ```
 
-### Contributing
+### Adding Components
 
-When adding new components to the MoosicBox ecosystem:
+When adding new components to this re-export package:
 
-1. Add the component to the `Cargo.toml` dependencies
-2. Re-export public APIs in `src/lib.rs`
-3. Update feature flags if needed
-4. Add integration tests
-5. Update documentation
+1. Add the component to `Cargo.toml` dependencies as optional
+2. Add a feature flag for the component
+3. Re-export it in `src/lib.rs` with `#[cfg(feature = "...")]`
+4. Add the component to the `all` and `all-default` feature lists
+5. Add a `fail-on-warnings` pass-through if applicable
+6. Update this README's component list
 
 ## Compatibility
 
@@ -254,7 +231,5 @@ When adding new components to the MoosicBox ecosystem:
 
 ## See Also
 
-- [MoosicBox Server](../server/README.md) - Standalone server binary
-- [MoosicBox Native App](../app/native/README.md) - Desktop client application
-- [MoosicBox Tunnel Server](../tunnel_server/README.md) - Remote access proxy
 - [Project Documentation](../../README.md) - Main project documentation
+- Individual component READMEs in `packages/` directory for specific API documentation
