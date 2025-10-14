@@ -254,6 +254,7 @@ jobs:
                       }}
 
                   claude_args: |
+                      --allowedTools Edit,Read,Write
                       ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
                       ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
                       ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
@@ -386,6 +387,7 @@ jobs:
                       }}
 
                   claude_args: |
+                      --allowedTools Edit,Read,Write
                       ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
                       ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
                       ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
