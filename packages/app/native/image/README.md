@@ -7,7 +7,7 @@ Embedded image asset management for MoosicBox native applications.
 The MoosicBox Native App Image package provides:
 
 - **Asset Embedding**: Compile-time image asset embedding
-- **Efficient Access**: Fast asset retrieval with zero-copy when possible
+- **Efficient Access**: Fast asset retrieval and conversion to Arc<Bytes>
 - **Memory Management**: Arc<Bytes> for shared asset access
 - **Rust Embed Integration**: Static asset bundling at build time
 
@@ -15,7 +15,7 @@ The MoosicBox Native App Image package provides:
 
 ### Asset Management
 - **Compile-Time Embedding**: Assets embedded during compilation
-- **Zero-Copy Access**: Efficient asset data access when possible
+- **Convenient Conversion**: Helper function to convert embedded assets to Arc<Bytes>
 - **Shared References**: Arc<Bytes> for memory-efficient sharing
 - **Path Prefixing**: Organized asset path structure
 
