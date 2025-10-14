@@ -1,10 +1,10 @@
 # Async Simulated Example
 
-A demonstration of concurrent task spawning and execution using the Switchy async runtime with simulation capabilities.
+A demonstration of concurrent task spawning and execution using the switchy async runtime with simulation capabilities.
 
 ## Overview
 
-This example showcases how to spawn multiple concurrent tasks using the Switchy async runtime. It demonstrates task spawning, nested futures, random delays, and concurrent execution patterns with deterministic simulation support.
+This example showcases how to spawn multiple concurrent tasks using the switchy async runtime. It demonstrates task spawning, nested futures, random delays, and concurrent execution patterns with deterministic simulation support.
 
 ## What it demonstrates
 
@@ -138,8 +138,9 @@ When built with the `simulator` feature:
 
 ## Dependencies
 
-- `switchy_async` - Async runtime with task spawning
-- `switchy_random` - Random number generation with simulation support
+- `switchy_async` - Async runtime with task spawning (features: "time", "tokio")
+- `switchy_random` - Random number generation with simulation support (features: "simulator")
+- `switchy_time` - Time utilities with simulation support (features: "simulator")
 - `pretty_env_logger` - Logging setup
 
 ## Comparison with other examples
