@@ -1,149 +1,86 @@
-# MoosicBox Database
+# Switchy Database
 
-Database abstraction layer with support for multiple database backends, migrations, and connection pooling.
+Database abstraction layer with support for multiple database backends, schema management, and transactions.
 
 ## Overview
 
-The MoosicBox Database package provides:
+The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite, PostgreSQL, MySQL, and in-memory databases
-- **Connection Pooling**: Efficient connection management with automatic scaling
-- **Schema Migrations**: Version-controlled database schema evolution
-- **Query Builder**: Type-safe query construction and execution
-- **Transaction Management**: ACID transaction support with rollback capabilities
-- **Performance Monitoring**: Query performance metrics and slow query logging
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), and Turso
+- **Schema Management**: Create/alter tables, indexes with portable definitions
+- **Schema Introspection**: Query existing database structure programmatically
+- **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
+- **Query Builder**: Type-safe query construction for common operations
 
 ## Features
 
 ### Database Backends
-- **SQLite**: File-based database for development and single-user deployments
-- **PostgreSQL**: Production-ready with advanced features and JSON support
-- **MySQL**: Widely supported relational database with clustering support
-- **In-Memory**: Fast testing database that doesn't persist data
 
-### Advanced Features
-- **Connection Pooling**: Automatic connection lifecycle management
-- **Read Replicas**: Load balancing across multiple database instances
-- **Schema Migrations**: Incremental database schema updates
-- **Query Optimization**: Automatic query analysis and optimization suggestions
-- **Backup & Restore**: Automated database backup and recovery tools
+- **SQLite (rusqlite)**: File-based database using rusqlite driver with `?` placeholders
+- **SQLite (sqlx)**: File-based database using sqlx driver with `$N` placeholders
+- **PostgreSQL (raw)**: Production PostgreSQL using tokio-postgres and deadpool-postgres
+- **PostgreSQL (sqlx)**: Production PostgreSQL using sqlx with connection pooling
+- **MySQL (sqlx)**: MySQL database using sqlx driver
+- **Turso**: Turso (libSQL) cloud database support
+- **Simulator**: Testing database (delegates to underlying backend)
+
+### Schema Features
+
+- **Schema Creation**: Create tables, indexes, and alter existing schema
+- **Schema Introspection**: Check table/column existence, get table metadata
+- **Type Portability**: Common data type abstraction across backends
+- **Foreign Keys**: Define and introspect foreign key relationships
+- **Auto-increment**: Backend-specific auto-increment handling
+
+### Transaction Features
+
+- **ACID Transactions**: Full transaction support across all backends
+- **Savepoints**: Nested transaction-like behavior with rollback points
+- **Connection Pooling**: Efficient connection management (backend-dependent)
 
 ## Usage
 
-### Basic Database Setup
+### Basic Query Operations
 
 ```rust
-use moosicbox_database::{Database, DatabaseConfig, DatabaseType};
+use switchy_database::{Database, DatabaseError};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure database
-    let config = DatabaseConfig {
-        database_type: DatabaseType::PostgreSQL,
-        connection_string: "postgresql://user:pass@localhost/moosicbox".to_string(),
-        max_connections: 20,
-        min_connections: 5,
-        connection_timeout_seconds: 30,
-        idle_timeout_seconds: 600,
-        max_lifetime_seconds: 1800,
-    };
-
-    // Initialize database
-    let db = Database::new(config).await?;
-
-    // Run migrations
-    db.migrate().await?;
-
-    println!("Database initialized successfully");
-
-    Ok(())
-}
-```
-
-### Connection Management
-
-```rust
-use moosicbox_database::{Database, ConnectionPool, PoolConfig};
-
-async fn setup_connection_pool() -> Result<(), Box<dyn std::error::Error>> {
-    let pool_config = PoolConfig {
-        max_connections: 20,
-        min_connections: 5,
-        acquire_timeout_seconds: 10,
-        idle_timeout_seconds: 600,
-        max_lifetime_seconds: 1800,
-        test_before_acquire: true,
-        test_query: Some("SELECT 1".to_string()),
-    };
-
-    let db = Database::with_pool_config(connection_string, pool_config).await?;
-
-    // Get connection from pool
-    let mut conn = db.acquire().await?;
-
-    // Use connection
-    let result = conn.execute("SELECT COUNT(*) FROM tracks").await?;
-    println!("Total tracks: {}", result.rows_affected());
-
-    // Connection automatically returned to pool when dropped
-    Ok(())
-}
-```
-
-### Query Execution
-
-```rust
-use moosicbox_database::{Database, QueryBuilder, Row};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-struct Track {
-    id: i64,
-    title: String,
-    artist: String,
-    album: String,
-    duration: i32,
-    file_path: String,
-}
-
-async fn query_examples(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    // Simple query
-    let tracks: Vec<Track> = db
-        .query_as("SELECT * FROM tracks WHERE artist = ?")
-        .bind("The Beatles")
-        .fetch_all()
-        .await?;
-
-    // Query builder
-    let tracks: Vec<Track> = QueryBuilder::new()
-        .select("*")
-        .from("tracks")
+async fn query_examples(db: &dyn Database) -> Result<(), DatabaseError> {
+    // SELECT query
+    let rows = db.select("tracks")
+        .columns(&["id", "title", "artist"])
         .where_eq("artist", "The Beatles")
-        .where_gt("duration", 180)
-        .order_by("title")
-        .limit(10)
-        .fetch_all::<Track>(db)
+        .execute(db)
         .await?;
 
-    // Raw SQL with parameters
-    let track_count: i64 = db
-        .query_scalar("SELECT COUNT(*) FROM tracks WHERE album = ?")
-        .bind("Abbey Road")
-        .fetch_one()
+    // Get first row
+    let row = db.select("tracks")
+        .where_eq("id", 42)
+        .execute_first(db)
         .await?;
 
-    // Insert data
-    let track_id: i64 = db
-        .query_scalar("INSERT INTO tracks (title, artist, album, duration, file_path) VALUES (?, ?, ?, ?, ?) RETURNING id")
-        .bind("Come Together")
-        .bind("The Beatles")
-        .bind("Abbey Road")
-        .bind(259)
-        .bind("/music/beatles/come_together.mp3")
-        .fetch_one()
+    // INSERT
+    let new_row = db.insert("tracks")
+        .value("title", "Come Together")
+        .value("artist", "The Beatles")
+        .value("duration", 259)
+        .execute(db)
         .await?;
 
-    println!("Inserted track with ID: {}", track_id);
+    println!("Inserted track with ID: {:?}", new_row.id());
+
+    // UPDATE
+    db.update("tracks")
+        .set("artist", "The Beatles (Remastered)")
+        .where_eq("id", 42)
+        .execute(db)
+        .await?;
+
+    // DELETE
+    db.delete("tracks")
+        .where_eq("id", 42)
+        .execute(db)
+        .await?;
 
     Ok(())
 }
@@ -152,58 +89,48 @@ async fn query_examples(db: &Database) -> Result<(), Box<dyn std::error::Error>>
 ### Transactions
 
 ```rust
-use moosicbox_database::{Database, Transaction};
+use switchy_database::{Database, DatabaseError};
 
-async fn transaction_example(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
+async fn transaction_example(db: &dyn Database) -> Result<(), DatabaseError> {
     // Begin transaction
-    let mut tx = db.begin().await?;
+    let tx = db.begin_transaction().await?;
 
     // Execute operations within transaction
-    let user_id: i64 = tx
-        .query_scalar("INSERT INTO users (username, email) VALUES (?, ?) RETURNING id")
-        .bind("music_lover")
-        .bind("user@example.com")
-        .fetch_one()
+    let user_row = tx.insert("users")
+        .value("username", "music_lover")
+        .value("email", "user@example.com")
+        .execute(&*tx)
         .await?;
 
-    let playlist_id: i64 = tx
-        .query_scalar("INSERT INTO playlists (user_id, name) VALUES (?, ?) RETURNING id")
-        .bind(user_id)
-        .bind("My Favorites")
-        .fetch_one()
-        .await?;
+    let user_id = user_row.id().and_then(|v| v.as_i64()).unwrap();
 
-    // Add tracks to playlist
-    for track_id in &[1, 2, 3, 4, 5] {
-        tx.execute("INSERT INTO playlist_tracks (playlist_id, track_id) VALUES (?, ?)")
-            .bind(playlist_id)
-            .bind(track_id)
-            .fetch_optional()
-            .await?;
-    }
+    let playlist_row = tx.insert("playlists")
+        .value("user_id", user_id)
+        .value("name", "My Favorites")
+        .execute(&*tx)
+        .await?;
 
     // Commit transaction
     tx.commit().await?;
 
-    println!("Created user {} with playlist {}", user_id, playlist_id);
+    println!("Created user {} with playlist", user_id);
 
     Ok(())
 }
 
-async fn transaction_with_rollback(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    let mut tx = db.begin().await?;
+async fn transaction_with_rollback(db: &dyn Database) -> Result<(), DatabaseError> {
+    let tx = db.begin_transaction().await?;
 
     // This will succeed
-    tx.execute("INSERT INTO artists (name) VALUES (?)")
-        .bind("New Artist")
-        .fetch_optional()
+    tx.insert("artists")
+        .value("name", "New Artist")
+        .execute(&*tx)
         .await?;
 
     // This might fail (e.g., duplicate key)
-    let result = tx
-        .execute("INSERT INTO artists (name) VALUES (?)")
-        .bind("New Artist") // Same name, might violate unique constraint
-        .fetch_optional()
+    let result = tx.insert("artists")
+        .value("name", "New Artist") // Same name, might violate unique constraint
+        .execute(&*tx)
         .await;
 
     match result {
@@ -226,11 +153,16 @@ async fn transaction_with_rollback(db: &Database) -> Result<(), Box<dyn std::err
 Savepoints allow partial rollback within a transaction, enabling complex error recovery:
 
 ```rust
-async fn batch_import_with_recovery(db: &Database) -> Result<(), DatabaseError> {
+use switchy_database::{Database, DatabaseError};
+
+async fn batch_import_with_recovery(
+    db: &dyn Database,
+    batches: Vec<Vec<String>>
+) -> Result<(), DatabaseError> {
     let tx = db.begin_transaction().await?;
 
     // Process records in batches with savepoints
-    for (batch_num, batch) in records.chunks(100).enumerate() {
+    for (batch_num, batch) in batches.iter().enumerate() {
         let sp = tx.savepoint(&format!("batch_{}", batch_num)).await?;
 
         match process_batch(&*tx, batch).await {
@@ -250,6 +182,13 @@ async fn batch_import_with_recovery(db: &Database) -> Result<(), DatabaseError> 
     tx.commit().await?;
     Ok(())
 }
+
+async fn process_batch(tx: &dyn Database, batch: &[String]) -> Result<(), DatabaseError> {
+    for item in batch {
+        tx.insert("items").value("name", item).execute(tx).await?;
+    }
+    Ok(())
+}
 ```
 
 #### Backend Support
@@ -267,502 +206,212 @@ async fn batch_import_with_recovery(db: &Database) -> Result<(), DatabaseError> 
 - **Complex Business Logic**: Multi-step operations with conditional rollback
 - **Error Recovery**: Continue transaction after handling specific errors
 
-### Schema Migrations
+### Schema Management
 
 ```rust
-use moosicbox_database::{Migration, MigrationManager, Schema};
+use switchy_database::{Database, DatabaseError};
+use switchy_database::schema::{create_table, Column, DataType};
+use switchy_database::DatabaseValue;
 
-async fn setup_migrations(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    let migration_manager = MigrationManager::new(db);
+async fn create_schema(db: &dyn Database) -> Result<(), DatabaseError> {
+    // Check if table exists first
+    if !db.table_exists("users").await? {
+        // Create table
+        create_table("users")
+            .column(Column {
+                name: "id".to_string(),
+                nullable: false,
+                auto_increment: true,
+                data_type: DataType::BigInt,
+                default: None,
+            })
+            .column(Column {
+                name: "username".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::VarChar(50),
+                default: None,
+            })
+            .column(Column {
+                name: "email".to_string(),
+                nullable: true,
+                auto_increment: false,
+                data_type: DataType::VarChar(255),
+                default: None,
+            })
+            .column(Column {
+                name: "created_at".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::DateTime,
+                default: Some(DatabaseValue::Now),
+            })
+            .primary_key("id")
+            .execute(db)
+            .await?;
+    }
 
-    // Define migrations
-    let migration_001 = Migration::new("001_initial_schema")
-        .up(r#"
-            CREATE TABLE artists (
-                id BIGSERIAL PRIMARY KEY,
-                name VARCHAR NOT NULL UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE albums (
-                id BIGSERIAL PRIMARY KEY,
-                title VARCHAR NOT NULL,
-                artist_id BIGINT REFERENCES artists(id),
-                release_date DATE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE tracks (
-                id BIGSERIAL PRIMARY KEY,
-                title VARCHAR NOT NULL,
-                artist_id BIGINT REFERENCES artists(id),
-                album_id BIGINT REFERENCES albums(id),
-                track_number INTEGER,
-                duration INTEGER,
-                file_path VARCHAR NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE INDEX idx_tracks_artist ON tracks(artist_id);
-            CREATE INDEX idx_tracks_album ON tracks(album_id);
-            CREATE INDEX idx_tracks_title ON tracks(title);
-        "#)
-        .down(r#"
-            DROP TABLE tracks;
-            DROP TABLE albums;
-            DROP TABLE artists;
-        "#);
-
-    let migration_002 = Migration::new("002_add_playlists")
-        .up(r#"
-            CREATE TABLE playlists (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                name VARCHAR NOT NULL,
-                description TEXT,
-                is_public BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE playlist_tracks (
-                id BIGSERIAL PRIMARY KEY,
-                playlist_id BIGINT REFERENCES playlists(id) ON DELETE CASCADE,
-                track_id BIGINT REFERENCES tracks(id) ON DELETE CASCADE,
-                position INTEGER NOT NULL,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(playlist_id, position)
-            );
-
-            CREATE INDEX idx_playlists_user ON playlists(user_id);
-            CREATE INDEX idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
-        "#)
-        .down(r#"
-            DROP TABLE playlist_tracks;
-            DROP TABLE playlists;
-        "#);
-
-    // Register and run migrations
-    migration_manager.register(migration_001);
-    migration_manager.register(migration_002);
-
-    // Apply all pending migrations
-    migration_manager.migrate_up().await?;
-
-    println!("All migrations applied successfully");
+    // Create index
+    db.create_index("idx_users_email")
+        .table("users")
+        .columns(&["email"])
+        .unique(true)
+        .execute(db)
+        .await?;
 
     Ok(())
 }
 ```
 
-### Advanced Querying
+### Schema Introspection
 
 ```rust
-use moosicbox_database::{QueryBuilder, JoinType, Condition, OrderDirection};
+use switchy_database::{Database, DatabaseError};
 
-async fn advanced_queries(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    // Complex join query
-    let results = QueryBuilder::new()
-        .select("t.title, a.name as artist, al.title as album")
-        .from("tracks t")
-        .join(JoinType::Inner, "artists a", "t.artist_id = a.id")
-        .join(JoinType::Left, "albums al", "t.album_id = al.id")
-        .where_condition(
-            Condition::and(vec![
-                Condition::eq("a.name", "The Beatles"),
-                Condition::gt("t.duration", 180),
-            ])
-        )
-        .order_by_direction("t.title", OrderDirection::Asc)
-        .limit(20)
-        .fetch_all::<Row>(db)
-        .await?;
+async fn inspect_schema(db: &dyn Database) -> Result<(), DatabaseError> {
+    // List all tables
+    let tables = db.list_tables().await?;
+    println!("Tables: {:?}", tables);
 
-    // Subquery
-    let popular_tracks = QueryBuilder::new()
-        .select("*")
-        .from("tracks")
-        .where_in(
-            "id",
-            QueryBuilder::new()
-                .select("track_id")
-                .from("play_counts")
-                .where_gt("count", 100)
-        )
-        .fetch_all::<Track>(db)
-        .await?;
+    // Check if a table exists
+    if db.table_exists("users").await? {
+        println!("Users table exists");
+    }
 
-    // Aggregate query
-    let artist_stats = QueryBuilder::new()
-        .select("a.name, COUNT(t.id) as track_count, AVG(t.duration) as avg_duration")
-        .from("artists a")
-        .join(JoinType::Left, "tracks t", "a.id = t.artist_id")
-        .group_by("a.id, a.name")
-        .having_gt("COUNT(t.id)", 0)
-        .order_by_direction("track_count", OrderDirection::Desc)
-        .fetch_all::<Row>(db)
-        .await?;
+    // Check if a column exists
+    if db.column_exists("users", "email").await? {
+        println!("Email column exists");
+    }
 
-    println!("Found {} popular tracks", popular_tracks.len());
+    // Get complete table information
+    if let Some(table_info) = db.get_table_info("users").await? {
+        println!("Table: {}", table_info.name);
+
+        // Inspect columns
+        for (col_name, col_info) in &table_info.columns {
+            println!("  Column: {} {:?} {}",
+                col_name,
+                col_info.data_type,
+                if col_info.nullable { "NULL" } else { "NOT NULL" }
+            );
+
+            if col_info.is_primary_key {
+                println!("    (Primary Key)");
+            }
+        }
+
+        // Inspect indexes
+        for (idx_name, idx_info) in &table_info.indexes {
+            println!("  Index: {} on {:?} {}",
+                idx_name,
+                idx_info.columns,
+                if idx_info.unique { "(UNIQUE)" } else { "" }
+            );
+        }
+
+        // Inspect foreign keys
+        for (fk_name, fk_info) in &table_info.foreign_keys {
+            println!("  FK: {}.{} -> {}.{}",
+                table_info.name, fk_info.column,
+                fk_info.referenced_table, fk_info.referenced_column
+            );
+        }
+    }
+
+    // Get just the columns
+    let columns = db.get_table_columns("users").await?;
+    for column in columns {
+        println!("Column: {} ({})", column.name,
+                 if column.nullable { "NULL" } else { "NOT NULL" });
+    }
 
     Ok(())
 }
 ```
 
-### Database Models
+### Raw SQL Queries
 
 ```rust
-use moosicbox_database::{Model, Repository, DatabaseError};
-use async_trait::async_trait;
+use switchy_database::{Database, DatabaseError, DatabaseValue};
 
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct Artist {
-    pub id: i64,
-    pub name: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
+    // Raw query without parameters (string interpolation - use carefully!)
+    let rows = db.query_raw("SELECT * FROM tracks WHERE artist = 'The Beatles'").await?;
+
+    // Raw query with parameters (safe from SQL injection)
+    // Note: Parameter syntax varies by backend:
+    // - rusqlite: ? placeholders
+    // - sqlx-sqlite: $1, $2 placeholders
+    // - PostgreSQL (raw/sqlx): $1, $2 placeholders
+    // - MySQL (sqlx): ? placeholders
+    let params = vec![DatabaseValue::String("The Beatles".to_string())];
+    let rows = db.query_raw_params("SELECT * FROM tracks WHERE artist = ?", &params).await?;
+
+    // Raw execution (no results)
+    db.exec_raw("CREATE INDEX idx_tracks_artist ON tracks(artist)").await?;
+
+    // Raw execution with parameters
+    let params = vec![
+        DatabaseValue::String("Come Together".to_string()),
+        DatabaseValue::String("The Beatles".to_string()),
+    ];
+    db.exec_raw_params("INSERT INTO tracks (title, artist) VALUES (?, ?)", &params).await?;
+
+    Ok(())
 }
-
-#[derive(Debug)]
-pub struct CreateArtist {
-    pub name: String,
-}
-
-#[derive(Debug)]
-pub struct UpdateArtist {
-    pub name: Option<String>,
-}
-
-// Repository pattern implementation
-pub struct ArtistRepository {
-    db: Database,
-}
-
-impl ArtistRepository {
-    pub fn new(db: Database) -> Self {
-        Self { db }
-    }
-
-    pub async fn create(&self, create_artist: CreateArtist) -> Result<Artist, DatabaseError> {
-        let artist = self.db
-            .query_as("INSERT INTO artists (name) VALUES (?) RETURNING *")
-            .bind(&create_artist.name)
-            .fetch_one::<Artist>()
-            .await?;
-
-        Ok(artist)
-    }
-
-    pub async fn find_by_id(&self, id: i64) -> Result<Option<Artist>, DatabaseError> {
-        let artist = self.db
-            .query_as("SELECT * FROM artists WHERE id = ?")
-            .bind(id)
-            .fetch_optional::<Artist>()
-            .await?;
-
-        Ok(artist)
-    }
-
-    pub async fn find_by_name(&self, name: &str) -> Result<Option<Artist>, DatabaseError> {
-        let artist = self.db
-            .query_as("SELECT * FROM artists WHERE name = ?")
-            .bind(name)
-            .fetch_optional::<Artist>()
-            .await?;
-
-        Ok(artist)
-    }
-
-    pub async fn list(&self, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<Artist>, DatabaseError> {
-        let mut query = QueryBuilder::new()
-            .select("*")
-            .from("artists")
-            .order_by("name");
-
-        if let Some(limit) = limit {
-            query = query.limit(limit);
-        }
-
-        if let Some(offset) = offset {
-            query = query.offset(offset);
-        }
-
-        let artists = query.fetch_all::<Artist>(&self.db).await?;
-        Ok(artists)
-    }
-
-    pub async fn update(&self, id: i64, update_artist: UpdateArtist) -> Result<Option<Artist>, DatabaseError> {
-        if update_artist.name.is_none() {
-            return self.find_by_id(id).await;
-        }
-
-        let artist = self.db
-            .query_as("UPDATE artists SET name = COALESCE(?, name) WHERE id = ? RETURNING *")
-            .bind(&update_artist.name)
-            .bind(id)
-            .fetch_optional::<Artist>()
-            .await?;
-
-        Ok(artist)
-    }
-
-    pub async fn delete(&self, id: i64) -> Result<bool, DatabaseError> {
-        let result = self.db
-            .execute("DELETE FROM artists WHERE id = ?")
-            .bind(id)
-            .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
-    pub async fn count(&self) -> Result<i64, DatabaseError> {
-        let count = self.db
-            .query_scalar("SELECT COUNT(*) FROM artists")
-            .fetch_one::<i64>()
-            .await?;
-
-        Ok(count)
-    }
-}
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | Database connection string | Required |
-| `DATABASE_MAX_CONNECTIONS` | Maximum connections in pool | `20` |
-| `DATABASE_MIN_CONNECTIONS` | Minimum connections in pool | `5` |
-| `DATABASE_CONNECTION_TIMEOUT` | Connection timeout in seconds | `30` |
-| `DATABASE_IDLE_TIMEOUT` | Idle connection timeout | `600` |
-| `DATABASE_MAX_LIFETIME` | Maximum connection lifetime | `1800` |
-| `DATABASE_ENABLE_LOGGING` | Enable query logging | `false` |
-| `DATABASE_LOG_SLOW_QUERIES` | Log slow queries above threshold | `true` |
-
-### Database-Specific Configuration
-
-```rust
-use moosicbox_database::{DatabaseConfig, PostgreSQLConfig, SQLiteConfig, MySQLConfig};
-
-// PostgreSQL configuration
-let postgres_config = DatabaseConfig::PostgreSQL(PostgreSQLConfig {
-    host: "localhost".to_string(),
-    port: 5432,
-    database: "moosicbox".to_string(),
-    username: "postgres".to_string(),
-    password: Some("password".to_string()),
-    ssl_mode: SSLMode::Prefer,
-    application_name: Some("MoosicBox".to_string()),
-    connection_pool: PoolConfig {
-        max_connections: 20,
-        min_connections: 5,
-        acquire_timeout_seconds: 10,
-        idle_timeout_seconds: 600,
-        max_lifetime_seconds: 1800,
-        test_before_acquire: true,
-        test_query: Some("SELECT 1".to_string()),
-    },
-});
-
-// SQLite configuration
-let sqlite_config = DatabaseConfig::SQLite(SQLiteConfig {
-    database_path: "./music.db".to_string(),
-    create_if_missing: true,
-    journal_mode: JournalMode::WAL,
-    synchronous: SynchronousMode::Normal,
-    foreign_keys: true,
-    busy_timeout_ms: 30000,
-    cache_size: 64000, // 64MB cache
-    temp_store: TempStore::Memory,
-});
-
-// MySQL configuration
-let mysql_config = DatabaseConfig::MySQL(MySQLConfig {
-    host: "localhost".to_string(),
-    port: 3306,
-    database: "moosicbox".to_string(),
-    username: "root".to_string(),
-    password: Some("password".to_string()),
-    charset: "utf8mb4".to_string(),
-    collation: "utf8mb4_unicode_ci".to_string(),
-    timezone: "+00:00".to_string(),
-    connection_pool: PoolConfig::default(),
-});
 ```
 
 ## Feature Flags
 
-- `database` - Core database functionality
-- `database-sqlite` - SQLite backend support
-- `database-postgres` - PostgreSQL backend support
-- `database-mysql` - MySQL backend support
-- `database-migrations` - Schema migration support
-- `database-pool` - Connection pooling
-- `database-json` - JSON column type support
-- `database-uuid` - UUID type support
-- `database-chrono` - Date/time type support
+The following feature flags are available in `Cargo.toml`:
 
-## Integration with MoosicBox
+### Backend Features
+- `sqlite-rusqlite` - SQLite backend using rusqlite driver
+- `sqlite-sqlx` - SQLite backend using sqlx driver
+- `postgres-raw` - PostgreSQL backend using tokio-postgres
+- `postgres-sqlx` - PostgreSQL backend using sqlx
+- `mysql` / `mysql-sqlx` - MySQL backend using sqlx
+- `turso` - Turso (libSQL) cloud database support
 
-### Server Integration
+### Additional Features
+- `schema` - Schema management and introspection (enabled by default)
+- `cascade` - CASCADE deletion support for schema operations
+- `auto-reverse` - Auto-reverse migration support
+- `simulator` - Database simulator for testing
+- `decimal` - Decimal type support (rust_decimal)
+- `uuid` - UUID type support
+- `api` - Actix-web integration for web APIs
 
-```toml
-[dependencies]
-moosicbox-database = { path = "../database", features = ["database-postgres", "database-migrations"] }
-```
-
-```rust
-use moosicbox_database::{Database, DatabaseConfig};
-use moosicbox_server::Server;
-
-async fn setup_server_with_database() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize database
-    let db_config = DatabaseConfig::from_env()?;
-    let db = Database::new(db_config).await?;
-
-    // Run migrations
-    db.migrate().await?;
-
-    // Create server with database
-    let server = Server::new()
-        .with_database(db.clone())
-        .build()
-        .await?;
-
-    // Start server
-    server.start().await?;
-
-    Ok(())
-}
-```
-
-### Repository Pattern
-
-```rust
-use moosicbox_database::{Database, Repository};
-
-pub struct MusicRepository {
-    artists: ArtistRepository,
-    albums: AlbumRepository,
-    tracks: TrackRepository,
-    playlists: PlaylistRepository,
-}
-
-impl MusicRepository {
-    pub fn new(db: Database) -> Self {
-        Self {
-            artists: ArtistRepository::new(db.clone()),
-            albums: AlbumRepository::new(db.clone()),
-            tracks: TrackRepository::new(db.clone()),
-            playlists: PlaylistRepository::new(db),
-        }
-    }
-
-    pub fn artists(&self) -> &ArtistRepository {
-        &self.artists
-    }
-
-    pub fn albums(&self) -> &AlbumRepository {
-        &self.albums
-    }
-
-    pub fn tracks(&self) -> &TrackRepository {
-        &self.tracks
-    }
-
-    pub fn playlists(&self) -> &PlaylistRepository {
-        &self.playlists
-    }
-}
-```
-
-## Performance Optimization
-
-### Query Optimization
-
-```rust
-use moosicbox_database::{QueryAnalyzer, QueryPlan, IndexSuggestion};
-
-async fn optimize_queries(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    let analyzer = QueryAnalyzer::new(db);
-
-    // Analyze slow queries
-    let slow_queries = analyzer.get_slow_queries(
-        chrono::Duration::seconds(1), // Queries slower than 1 second
-        100, // Limit to 100 results
-    ).await?;
-
-    for query in slow_queries {
-        println!("Slow query: {} ({}ms)", query.sql, query.duration_ms);
-
-        // Get query plan
-        if let Ok(plan) = analyzer.explain_query(&query.sql).await {
-            println!("Query plan: {:?}", plan);
-        }
-
-        // Get index suggestions
-        if let Ok(suggestions) = analyzer.suggest_indexes(&query.sql).await {
-            for suggestion in suggestions {
-                println!("Index suggestion: CREATE INDEX {} ON {} ({})",
-                         suggestion.name, suggestion.table, suggestion.columns.join(", "));
-            }
-        }
-    }
-
-    Ok(())
-}
-```
-
-### Connection Pool Monitoring
-
-```rust
-use moosicbox_database::{PoolMetrics, ConnectionPool};
-
-async fn monitor_connection_pool(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
-    let metrics = db.pool_metrics().await?;
-
-    println!("Connection Pool Metrics:");
-    println!("  Active connections: {}", metrics.active_connections);
-    println!("  Idle connections: {}", metrics.idle_connections);
-    println!("  Total connections: {}", metrics.total_connections);
-    println!("  Pending acquisitions: {}", metrics.pending_acquisitions);
-    println!("  Average acquire time: {}ms", metrics.avg_acquire_time_ms);
-
-    // Alert if pool is under pressure
-    if metrics.pending_acquisitions > 5 {
-        println!("WARNING: High connection pool pressure detected");
-    }
-
-    if metrics.avg_acquire_time_ms > 100 {
-        println!("WARNING: Slow connection acquisition times");
-    }
-
-    Ok(())
-}
-```
+### Placeholder Features
+- `all-placeholders` - Support for all placeholder styles
+- `placeholder-question-mark` - `?` placeholder support
+- `placeholder-dollar-number` - `$1, $2` placeholder support
+- `placeholder-at-number` - `@1, @2` placeholder support
+- `placeholder-colon-number` - `:1, :2` placeholder support
+- `placeholder-named-colon` - `:name` placeholder support
 
 ## Error Handling
 
 ```rust
-use moosicbox_database::error::DatabaseError;
+use switchy_database::DatabaseError;
 
-match db.query_as::<Track>("SELECT * FROM tracks WHERE id = ?").bind(track_id).fetch_one().await {
-    Ok(track) => println!("Found track: {}", track.title),
-    Err(DatabaseError::NotFound) => {
-        println!("Track not found");
+match db.select("tracks").where_eq("id", track_id).execute_first(db).await {
+    Ok(Some(row)) => println!("Found track: {:?}", row),
+    Ok(None) => println!("Track not found"),
+    Err(DatabaseError::NoRow) => {
+        println!("No row returned");
     },
-    Err(DatabaseError::ConnectionError(e)) => {
-        eprintln!("Database connection error: {}", e);
+    Err(DatabaseError::InvalidSchema(msg)) => {
+        eprintln!("Schema error: {}", msg);
     },
-    Err(DatabaseError::QueryError { query, error }) => {
-        eprintln!("Query failed: {} - {}", query, error);
+    Err(DatabaseError::AlreadyInTransaction) => {
+        eprintln!("Already in a transaction");
     },
-    Err(DatabaseError::MigrationError { migration, error }) => {
-        eprintln!("Migration {} failed: {}", migration, error);
+    Err(DatabaseError::TransactionCommitted) => {
+        eprintln!("Transaction already committed");
     },
-    Err(DatabaseError::PoolError(e)) => {
-        eprintln!("Connection pool error: {}", e);
+    Err(DatabaseError::TransactionRolledBack) => {
+        eprintln!("Transaction already rolled back");
     },
     Err(e) => {
         eprintln!("Database error: {}", e);
@@ -770,46 +419,125 @@ match db.query_as::<Track>("SELECT * FROM tracks WHERE id = ?").bind(track_id).f
 }
 ```
 
-## Testing
+### Backend-Specific Errors
 
-### In-Memory Database for Tests
+Each backend has its own error variant:
+- `DatabaseError::Rusqlite(rusqlite::RusqliteDatabaseError)` - rusqlite backend errors
+- `DatabaseError::SqliteSqlx(sqlx::sqlite::SqlxDatabaseError)` - sqlx SQLite errors
+- `DatabaseError::Postgres(postgres::postgres::PostgresDatabaseError)` - raw PostgreSQL errors
+- `DatabaseError::PostgresSqlx(sqlx::postgres::SqlxDatabaseError)` - sqlx PostgreSQL errors
+- `DatabaseError::MysqlSqlx(sqlx::mysql::SqlxDatabaseError)` - sqlx MySQL errors
+- `DatabaseError::Turso(turso::TursoDatabaseError)` - Turso errors
 
-```rust
-use moosicbox_database::{Database, DatabaseConfig, DatabaseType};
+## Data Types
 
-#[tokio::test]
-async fn test_artist_repository() -> Result<(), Box<dyn std::error::Error>> {
-    // Use in-memory database for testing
-    let config = DatabaseConfig {
-        database_type: DatabaseType::InMemory,
-        connection_string: ":memory:".to_string(),
-        ..Default::default()
-    };
+The `DatabaseValue` enum supports the following types:
 
-    let db = Database::new(config).await?;
-    db.migrate().await?;
+- **Strings**: `String`, `StringOpt`
+- **Booleans**: `Bool`, `BoolOpt`
+- **Integers**: `Int8`, `Int16`, `Int32`, `Int64` (and unsigned variants)
+- **Floating Point**: `Real32`, `Real64`
+- **Decimal**: `Decimal` (with `decimal` feature)
+- **UUID**: `Uuid` (with `uuid` feature)
+- **DateTime**: `DateTime`, `Now`, `NowPlus`
+- **Null**: `Null`
 
-    let repo = ArtistRepository::new(db);
+The `schema::DataType` enum provides database-agnostic type definitions:
 
-    // Test create artist
-    let create_artist = CreateArtist {
-        name: "Test Artist".to_string(),
-    };
+- `Text` - Variable-length text
+- `VarChar(n)` - Fixed-length string
+- `Bool` - Boolean
+- `Int` - 32-bit integer
+- `SmallInt` - 16-bit integer
+- `BigInt` - 64-bit integer
+- `Real` - 32-bit floating point
+- `Double` - 64-bit floating point
+- `DateTime` - Date and time
+- `Decimal(precision, scale)` - Fixed-precision decimal
 
-    let artist = repo.create(create_artist).await?;
-    assert_eq!(artist.name, "Test Artist");
+## Architecture
 
-    // Test find by ID
-    let found_artist = repo.find_by_id(artist.id).await?;
-    assert!(found_artist.is_some());
-    assert_eq!(found_artist.unwrap().name, "Test Artist");
+### Database Trait
 
-    Ok(())
-}
-```
+The core `Database` trait provides:
+- Query builder methods (`select`, `insert`, `update`, `delete`, `upsert`)
+- Schema methods (`create_table`, `drop_table`, `create_index`, `alter_table`) - requires `schema` feature
+- Execution methods (`query`, `query_first`, `exec_update`, `exec_insert`, etc.)
+- Raw SQL methods (`query_raw`, `query_raw_params`, `exec_raw`, `exec_raw_params`)
+- Introspection methods (`table_exists`, `column_exists`, `get_table_info`, `list_tables`) - requires `schema` feature
+- Transaction method (`begin_transaction`)
+
+### DatabaseTransaction Trait
+
+The `DatabaseTransaction` trait extends `Database` with:
+- `commit()` - Commit the transaction
+- `rollback()` - Rollback the transaction
+- `savepoint(name)` - Create a savepoint within the transaction
+- CASCADE operations (with `cascade` feature)
+
+### Savepoint Trait
+
+The `Savepoint` trait provides:
+- `release()` - Commit the savepoint
+- `rollback_to()` - Rollback to the savepoint
+- `name()` - Get the savepoint name
+
+## Backend Implementation Details
+
+### SQLite
+
+Two SQLite implementations are available:
+
+1. **rusqlite** (`sqlite-rusqlite` feature):
+   - Uses `?` placeholders
+   - Blocking operations wrapped in async
+   - Connection pooling for concurrent transactions
+
+2. **sqlx** (`sqlite-sqlx` feature):
+   - Uses `$1, $2` placeholders (via transformation)
+   - Native async support
+   - Built-in connection pooling
+
+### PostgreSQL
+
+Two PostgreSQL implementations are available:
+
+1. **Raw** (`postgres-raw` feature):
+   - Uses tokio-postgres and deadpool-postgres
+   - Uses `$1, $2` placeholders
+   - Custom connection pool management
+
+2. **sqlx** (`postgres-sqlx` feature):
+   - Uses sqlx driver
+   - Uses `$1, $2` placeholders
+   - Built-in connection pooling
+
+### MySQL
+
+One MySQL implementation using sqlx:
+
+- **sqlx** (`mysql-sqlx` feature):
+  - Uses `?` placeholders (via transformation)
+  - Built-in connection pooling
+  - Full transaction support
+
+### Turso
+
+Turso (libSQL) cloud database support:
+
+- Uses `?` placeholders
+- Cloud-native database
+- Compatible with SQLite API
+
+## Limitations
+
+- **No ORM**: This is a query builder, not a full ORM with automatic relationship mapping
+- **No Migration System**: No built-in migration versioning or rollback system
+- **Manual Schema Management**: Schema changes must be managed manually
+- **No Query Optimization**: No automatic query analysis or optimization
+- **Backend-Specific Placeholder Syntax**: Different backends require different placeholder styles (though some auto-transformation is provided)
 
 ## See Also
 
-- [MoosicBox Config](../config/README.md) - Database configuration management
+- [MoosicBox Config](../config/README.md) - Configuration management
 - [MoosicBox Server](../server/README.md) - Server with database integration
-- [MoosicBox Logging](../logging/README.md) - Database query logging
