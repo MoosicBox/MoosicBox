@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CLIPPIER_BIN="./target/release/clippier"
+CLIPPIER_BIN="${GITHUB_WORKSPACE}/target/release/clippier"
 GIT_BASE=""
 GIT_HEAD=""
 

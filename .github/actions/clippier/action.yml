@@ -364,7 +364,8 @@ runs:
         - name: Run clippier action
           id: run-action
           shell: bash
-          run: ${{ github.action_path }}/action.sh
+          working-directory: ${{ github.action_path }}
+          run: ./action.sh
           env:
               INPUT_COMMAND: ${{ inputs.command }}
               INPUT_WORKSPACE_PATH: ${{ inputs.workspace-path }}
