@@ -7,7 +7,6 @@ This example demonstrates how to use simvar with moosicbox_web_server to create 
 The simulation creates:
 - **Web Server Host**: Serves HTTP requests on multiple endpoints
 - **Multiple Client Actors**: Make periodic requests to test the server
-- **Metrics Collection**: Tracks request/response patterns
 
 ## Features Demonstrated
 
@@ -49,10 +48,10 @@ The simulation can be configured by modifying the `BasicWebServerBootstrap`:
 ## Expected Output
 
 The simulation will show:
-- Server startup logs
-- Client request logs
 - Success/failure statistics
 - Final simulation results
+
+For detailed server startup and client request logs, run with `RUST_LOG=debug` or `RUST_LOG=info`.
 
 ## Key Concepts
 
