@@ -15,29 +15,43 @@ The HyperChad FLTK Renderer provides:
 - **Event System**: Comprehensive event handling and action system
 - **Viewport Management**: Scrolling and viewport-aware rendering
 
+## Supported Elements
+
+### Fully Supported
+- **Containers**: `div`, `aside`, `header`, `footer`, `main`, `section`, `form`, `span`
+- **Lists**: `ul` (unordered list), `ol` (ordered list), `li` (list item)
+- **Tables**: `table`, `thead`, `th`, `tbody`, `tr`, `td`
+- **Text**: `h1`, `h2`, `h3`, `h4`, `h5`, `h6` (headings), raw text
+- **Images**: `img` (with async loading, HTTP support, and local file support)
+- **Links**: `a` (anchor with navigation support)
+- **Buttons**: `button` (rendered as clickable containers)
+
+### Not Rendered
+- **Form Inputs**: `input` (text, password, checkbox, radio, etc.)
+- **Canvas**: `canvas` (element exists but no rendering implementation)
+
 ## Features
 
 ### Native GUI Capabilities
-- **FLTK Widgets**: Complete mapping of HyperChad elements to FLTK widgets
+- **FLTK Widgets**: Rendering of HyperChad elements using FLTK widgets
 - **Native Styling**: Platform-native appearance and behavior
-- **Window Management**: Multi-window support with proper window lifecycle
-- **Menu Systems**: Native menu bars and context menus
-- **Dialog Boxes**: File dialogs, message boxes, and custom dialogs
+- **Window Management**: Single-window support with resize handling
+- **Planned**: Menu systems, dialog boxes, and multi-window support
 
 ### Layout and Styling
 - **Flexbox Layout**: Complete CSS flexbox implementation
-- **Positioning**: Absolute, relative, and fixed positioning
+- **Positioning**: Support for layout positioning
 - **Spacing**: Margins, padding, and gap support
 - **Sizing**: Width, height, min/max constraints
 - **Typography**: Font families, sizes, and text styling
 - **Colors**: Background colors, text colors, and theming
 
 ### Interactive Elements
-- **Form Controls**: Text inputs, buttons, checkboxes, radio buttons
-- **Selection Widgets**: Dropdowns, list boxes, and choice widgets
-- **Container Widgets**: Groups, tabs, and scrollable areas
-- **Custom Widgets**: Support for custom widget implementations
-- **Event Handling**: Mouse, keyboard, and focus events
+- **Containers**: Divs, sections, headers, footers, and other semantic elements
+- **Clickable Elements**: Buttons (rendered as containers) and anchors with navigation
+- **Scrollable Areas**: Horizontal and vertical scrolling with overflow support
+- **Event Handling**: Click events and navigation
+- **Planned**: Form inputs (text, checkbox, radio), selection widgets (dropdowns, list boxes)
 
 ### Image and Media
 - **Image Loading**: Async HTTP image loading with caching
@@ -178,16 +192,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Form Application
+### Interactive Button Application
 
 ```rust
 use hyperchad_template::container;
 use hyperchad_actions::ActionType;
 
-let form_view = container! {
+let button_view = container! {
     div
         width=400
-        height=300
+        height=200
         direction="column"
         padding=20
         gap=15
@@ -197,90 +211,62 @@ let form_view = container! {
             text-align="center"
             margin-bottom=20
         {
-            "User Registration"
-        }
-
-        div
-            direction="column"
-            gap=10
-        {
-            div
-                direction="row"
-                align-items="center"
-                gap=10
-            {
-                span
-                    width=80
-                    text-align="right"
-                {
-                    "Username:"
-                }
-
-                input
-                    type="text"
-                    name="username"
-                    width=200
-                    height=25
-                    onchange=set_data_attr("username", event_value())
-                {}
-            }
-
-            div
-                direction="row"
-                align-items="center"
-                gap=10
-            {
-                span
-                    width=80
-                    text-align="right"
-                {
-                    "Password:"
-                }
-
-                input
-                    type="password"
-                    name="password"
-                    width=200
-                    height=25
-                    onchange=set_data_attr("password", event_value())
-                {}
-            }
-
-            div
-                direction="row"
-                align-items="center"
-                gap=10
-            {
-                input
-                    type="checkbox"
-                    name="agree"
-                    onchange=set_data_attr("agreed", event_value())
-                {}
-
-                span { "I agree to the terms and conditions" }
-            }
+            "Interactive Buttons"
         }
 
         div
             direction="row"
             justify-content="center"
-            margin-top=20
+            gap=10
         {
             button
-                width=100
-                height=35
+                width=120
+                height=40
                 background="blue"
                 color="white"
-                onclick=request_action("submit_form", data_attrs())
+                padding=10
+                onclick=request_action("button_clicked", "action1")
             {
-                "Register"
+                "Action 1"
             }
+
+            button
+                width=120
+                height=40
+                background="green"
+                color="white"
+                padding=10
+                onclick=request_action("button_clicked", "action2")
+            {
+                "Action 2"
+            }
+
+            button
+                width=120
+                height=40
+                background="red"
+                color="white"
+                padding=10
+                onclick=request_action("button_clicked", "action3")
+            {
+                "Action 3"
+            }
+        }
+
+        div
+            str_id="status"
+            padding=10
+            text-align="center"
+        {
+            "Click a button above"
         }
     }
 };
 
-renderer.render(View::from(form_view)).await?;
+renderer.render(View::from(button_view)).await?;
 ```
+
+**Note**: Form inputs (text, password, checkbox) are not yet implemented. The `input` element exists but is not currently rendered by the FLTK renderer.
 
 ### Image Gallery
 
@@ -397,23 +383,14 @@ renderer.render(View::from(scrollable_view)).await?;
 ```rust
 use hyperchad_actions::logic::Value;
 
-// Handle action events
+// Handle action events from button clicks and other interactions
 tokio::spawn(async move {
     while let Ok((action_name, value)) = action_rx.recv_async().await {
         match action_name.as_str() {
-            "submit_form" => {
-                if let Some(Value::Object(data)) = value {
-                    println!("Form data: {:?}", data);
-
-                    // Show success message
-                    // You could update the UI here
-                }
-            }
-            "file_open" => {
-                // Handle file operations
-                use fltk::dialog;
-                if let Some(filename) = dialog::file_chooser("Open File", "*.txt", ".", false) {
-                    println!("Selected file: {}", filename);
+            "button_clicked" => {
+                if let Some(Value::String(button_id)) = value {
+                    println!("Button clicked: {}", button_id);
+                    // Update UI or perform action based on button_id
                 }
             }
             "app_exit" => {
@@ -427,86 +404,66 @@ tokio::spawn(async move {
 });
 ```
 
-### Multi-Window Application
+### Navigation Between Views
 
 ```rust
 use hyperchad_template::container;
 
-// Main window
-let main_view = container! {
+// Main menu view
+let menu_view = container! {
     div
         width=600
         height=400
         direction="column"
         padding=20
-    {
-        h1 { "Main Window" }
-
-        div
-            direction="row"
-            gap=10
-        {
-            button
-                onclick=request_action("open_settings", null)
-            {
-                "Open Settings"
-            }
-
-            button
-                onclick=request_action("open_about", null)
-            {
-                "About"
-            }
-        }
-    }
-};
-
-// Settings window (created when needed)
-let settings_view = container! {
-    div
-        width=400
-        height=300
-        direction="column"
-        padding=20
         gap=15
     {
-        h2 { "Settings" }
-
-        div
-            direction="row"
-            align-items="center"
-            gap=10
+        h1
+            text-align="center"
         {
-            span { "Theme:" }
-
-            select
-                name="theme"
-                onchange=set_data_attr("theme", event_value())
-            {
-                option value="light" { "Light" }
-                option value="dark" { "Dark" }
-            }
+            "Main Menu"
         }
 
         div
-            direction="row"
-            justify-content="space-between"
-            margin-top=20
+            direction="column"
+            gap=10
+            align-items="center"
         {
-            button
-                onclick=request_action("save_settings", data_attrs())
+            a
+                href="/gallery"
+                width=200
+                height=50
+                background="blue"
+                color="white"
+                padding=10
+                text-align="center"
             {
-                "Save"
+                div { "View Gallery" }
             }
 
-            button
-                onclick=request_action("close_settings", null)
+            a
+                href="/about"
+                width=200
+                height=50
+                background="green"
+                color="white"
+                padding=10
+                text-align="center"
             {
-                "Cancel"
+                div { "About" }
             }
         }
     }
 };
+
+// Render and handle navigation
+renderer.render(View::from(menu_view)).await?;
+
+// Wait for navigation event
+if let Some(href) = renderer.wait_for_navigation().await {
+    println!("Navigating to: {}", href);
+    // Render the new view based on href
+}
 ```
 
 ## Layout System
@@ -548,7 +505,9 @@ let settings_view = container! {
 
 ## Feature Flags
 
-- **`debug`**: Enable debug rendering and logging
+- **`debug`**: Enable debug rendering and logging (default: enabled)
+- **`format`**: Enable formatter support for templates (default: enabled)
+- **`unsafe`**: Enable unsafe optimizations (default: enabled)
 
 ## Performance Characteristics
 
@@ -566,11 +525,20 @@ let settings_view = container! {
 
 ## Dependencies
 
-- **FLTK**: Fast Light Toolkit GUI library
-- **HyperChad Core**: Template, transformer, and action systems
-- **Image**: Image processing and format support
-- **HTTP Client**: For remote image loading
-- **Tokio**: Async runtime for image loading
+### Core Dependencies
+- **fltk**: Fast Light Toolkit GUI library (with ninja build support)
+- **hyperchad_renderer**: Core renderer traits and utilities (with canvas and viewport-retained features)
+- **hyperchad_transformer**: Template transformation and layout engine (with html and layout features)
+- **hyperchad_actions**: Action system and logic (with logic feature)
+- **moosicbox_app_native_image**: Native image asset handling
+
+### Runtime Dependencies
+- **image**: Image processing and format support
+- **tokio**: Async runtime for image loading (with sync feature)
+- **switchy_http**: HTTP client for remote image loading (reqwest backend)
+- **switchy_async**: Async task utilities (tokio backend)
+- **flume**: Multi-producer, multi-consumer channels
+- **bytes**: Byte buffer utilities
 
 ## Integration
 
@@ -583,8 +551,16 @@ This renderer is designed for:
 
 ## Limitations
 
-- **Modern UI**: Limited support for modern UI patterns
-- **Theming**: Basic theming capabilities compared to web
-- **Animations**: Limited animation support
-- **Complex Layouts**: Some complex CSS layouts not supported
+### Not Yet Implemented
+- **Form Inputs**: Text inputs, checkboxes, radio buttons are not rendered
+- **Selection Widgets**: Dropdowns and list boxes are not available
+- **Multi-Window Support**: Currently limited to single window applications
+- **Native Menus**: Menu bars and context menus not implemented
+- **Dialog Boxes**: File choosers and message boxes not integrated
+
+### Design Constraints
+- **Theming**: Basic theming capabilities compared to web renderers
+- **Animations**: No animation support
+- **Advanced CSS**: Some advanced CSS features not supported
 - **Web Technologies**: No HTML/CSS/JavaScript integration
+- **Buttons**: Rendered as containers rather than native FLTK buttons
