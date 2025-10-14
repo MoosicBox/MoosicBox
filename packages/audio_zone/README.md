@@ -16,9 +16,10 @@ The MoosicBox Audio Zone package provides:
 
 ### Core Functionality
 - **Zone CRUD**: Basic create, read, update, delete operations for audio zones
-- **Database Integration**: PostgreSQL backend for zone data storage
+- **Database Integration**: Database abstraction layer for zone data storage
 - **Zone Queries**: Fetch zones with optional session information
 - **Profile Integration**: Support for profile-specific zone configurations
+- **Player Management**: Associate multiple players with audio zones
 
 ### Available Operations
 - **Get Zones**: Retrieve all configured audio zones
@@ -29,8 +30,9 @@ The MoosicBox Audio Zone package provides:
 - **Zones with Sessions**: Get zones with associated session data
 
 ### Optional Features
-- **API Module**: REST API endpoints (requires `api` feature)
-- **Events Module**: Zone update events (requires `events` feature)
+- **API Module**: REST API endpoints for zone management (enabled by default, requires `api` feature)
+- **Events Module**: Zone update events via subscription system (enabled by default, requires `events` feature)
+- **OpenAPI**: OpenAPI documentation support (enabled by default, requires `openapi` feature)
 
 ## Installation
 
@@ -165,12 +167,13 @@ The package uses models from `moosicbox_audio_zone_models`:
 
 ## Feature Flags
 
-- **`api`**: Enable REST API endpoints for zone management
-- **`events`**: Enable event system for zone configuration changes
+- **`api`**: Enable REST API endpoints for zone management (enabled by default)
+- **`events`**: Enable event system for zone configuration changes (enabled by default)
+- **`openapi`**: Enable OpenAPI documentation support (enabled by default)
 
 ## Dependencies
 
-- **Database**: Requires PostgreSQL database for zone storage
+- **Database**: Uses `switchy_database` for database abstraction (supports multiple backends)
 - **Models**: Uses `moosicbox_audio_zone_models` for data structures
 - **Profiles**: Integration with MoosicBox profile system
 
@@ -183,8 +186,30 @@ All operations return `Result` types with appropriate error handling:
 
 ## Web API Endpoints
 
-When the `api` feature is enabled, REST endpoints are available for zone management through the web interface.
+When the `api` feature is enabled (default), REST endpoints are available for zone management through the web interface:
+
+- **GET** `/`: Get all audio zones (with pagination)
+- **GET** `/with-session`: Get zones with associated sessions
+- **POST** `/`: Create a new audio zone
+- **PATCH** `/`: Update an existing audio zone
+- **DELETE** `/`: Delete an audio zone by ID
 
 ## Events
 
-When the `events` feature is enabled, zone configuration changes trigger events that can be consumed by other parts of the MoosicBox system.
+When the `events` feature is enabled (default), zone configuration changes trigger events that can be consumed by other parts of the MoosicBox system.
+
+### Available Events
+- **`audio_zones_updated_event`**: Triggered when zones are created, updated, or deleted
+
+### Event Usage
+
+```rust
+use moosicbox_audio_zone::events::on_audio_zones_updated_event;
+
+async fn setup_event_listeners() {
+    on_audio_zones_updated_event(|| async {
+        println!("Audio zones were updated!");
+        Ok(())
+    }).await;
+}
+```
