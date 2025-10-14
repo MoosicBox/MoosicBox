@@ -4,7 +4,7 @@ author: 'MoosicBox'
 
 inputs:
     command:
-        description: 'Clippier command to run (features, affected-packages, workspace-deps, validate-feature-propagation, setup)'
+        description: 'Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup)'
         required: true
 
     workspace-path:

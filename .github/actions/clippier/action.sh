@@ -273,6 +273,20 @@ build_clippier_command() {
         [[ -n "$GIT_HEAD" ]] && cmd="$cmd --git-head \"$GIT_HEAD\""
         [[ "$INPUT_INCLUDE_REASONING" == "true" ]] && cmd="$cmd --include-reasoning"
         cmd="$cmd --output json"
+    elif [[ "$INPUT_COMMAND" == "packages" ]]; then
+        cmd="$cmd $INPUT_WORKSPACE_PATH"
+        [[ -n "$INPUT_OS" ]] && cmd="$cmd --os $INPUT_OS"
+        [[ -n "$INPUT_PACKAGES" ]] && cmd="$cmd --packages $INPUT_PACKAGES"
+        [[ -n "$INPUT_MAX_PARALLEL" ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
+
+        if ! should_force_full_matrix; then
+            [[ -n "$INPUT_CHANGED_FILES" ]] && cmd="$cmd --changed-files \"$INPUT_CHANGED_FILES\""
+            [[ -n "$GIT_BASE" ]] && cmd="$cmd --git-base \"$GIT_BASE\""
+            [[ -n "$GIT_HEAD" ]] && cmd="$cmd --git-head \"$GIT_HEAD\""
+        fi
+
+        [[ "$INPUT_INCLUDE_REASONING" == "true" ]] && cmd="$cmd --include-reasoning"
+        cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "workspace-deps" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"
         [[ -n "$INPUT_PACKAGE" ]] && cmd="$cmd $INPUT_PACKAGE"
@@ -325,7 +339,7 @@ inject_custom_reasoning() {
 transform_output() {
     local raw_output="$1"
 
-    if [[ "$INPUT_COMMAND" != "features" ]]; then
+    if [[ "$INPUT_COMMAND" != "features" && "$INPUT_COMMAND" != "packages" ]]; then
         echo "$raw_output"
         return
     fi
@@ -808,7 +822,7 @@ main() {
         fi
     fi
 
-    if [[ "$INPUT_COMMAND" == "features" ]]; then
+    if [[ "$INPUT_COMMAND" == "features" || "$INPUT_COMMAND" == "packages" ]]; then
         TRANSFORMED_OUTPUT=$(transform_output "$RAW_OUTPUT")
 
         # Debug: Log transformed matrix output
