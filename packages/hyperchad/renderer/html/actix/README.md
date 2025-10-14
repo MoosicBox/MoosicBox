@@ -18,11 +18,11 @@ The HyperChad HTML Actix Renderer provides:
 ## Features
 
 ### Web Server Capabilities
-- **HTTP/HTTPS**: Full HTTP protocol support with TLS
+- **HTTP**: Full HTTP protocol support
 - **Routing**: Flexible URL routing and path matching
 - **Middleware**: Request/response middleware pipeline
 - **CORS**: Configurable cross-origin resource sharing
-- **Compression**: Gzip compression for responses
+- **Compression**: Gzip, Deflate, and Zlib compression for responses
 - **Static Files**: Efficient static file serving
 
 ### HyperChad Integration
@@ -34,9 +34,7 @@ The HyperChad HTML Actix Renderer provides:
 
 ### Performance Features
 - **Async Processing**: Fully asynchronous request handling
-- **Connection Pooling**: Efficient connection management
-- **Response Caching**: Configurable response caching
-- **Streaming**: Streaming responses for large content
+- **Streaming**: Streaming responses for large content and SSE
 
 ## Installation
 
@@ -102,8 +100,10 @@ impl ActixResponseProcessor<RouteRequest> for MyProcessor {
         &self,
         content: hyperchad_renderer::Content,
         _data: RouteRequest,
-    ) -> Result<String, actix_web::Error> {
-        Ok(content.to_string())
+    ) -> Result<(bytes::Bytes, String), actix_web::Error> {
+        let body = content.to_string();
+        let content_type = "text/html".to_string();
+        Ok((bytes::Bytes::from(body), content_type))
     }
 }
 
@@ -200,24 +200,24 @@ tokio::spawn(async move {
 ### Static Asset Serving
 
 ```rust
-use hyperchad_renderer::{assets::{StaticAssetRoute, AssetPathTarget}};
+use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 use std::path::PathBuf;
 
-let app = ActixApp::new(processor, rx)
-    .with_static_asset_routes(vec![
-        StaticAssetRoute {
-            route: "/css/style.css".to_string(),
-            target: AssetPathTarget::File(PathBuf::from("assets/style.css")),
-        },
-        StaticAssetRoute {
-            route: "/js/app.js".to_string(),
-            target: AssetPathTarget::File(PathBuf::from("assets/app.js")),
-        },
-        StaticAssetRoute {
-            route: "/images/".to_string(),
-            target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
-        },
-    ]);
+let mut app = ActixApp::new(processor, rx);
+app.static_asset_routes = vec![
+    StaticAssetRoute {
+        route: "/css/style.css".to_string(),
+        target: AssetPathTarget::File(PathBuf::from("assets/style.css")),
+    },
+    StaticAssetRoute {
+        route: "/js/app.js".to_string(),
+        target: AssetPathTarget::File(PathBuf::from("assets/app.js")),
+    },
+    StaticAssetRoute {
+        route: "/images/".to_string(),
+        target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
+    },
+];
 ```
 
 ### HTMX Integration
@@ -408,9 +408,10 @@ App::new()
 
 ## Feature Flags
 
-- **`actions`**: Enable server-side action processing
-- **`sse`**: Enable Server-Sent Events support
-- **`assets`**: Enable static asset serving
+- **`actions`**: Enable server-side action processing (default)
+- **`sse`**: Enable Server-Sent Events support (default)
+- **`assets`**: Enable static asset serving (default)
+- **`debug`**: Enable debug logging (default)
 
 ## Configuration
 
@@ -424,11 +425,13 @@ The renderer includes comprehensive CORS configuration:
 - **Credentials**: Supports credentials for authenticated requests
 
 ### Compression
-Automatic response compression is enabled by default:
+Automatic response compression is enabled by default via Actix Web middleware:
 
 - **Gzip**: Standard gzip compression
 - **Deflate**: Deflate compression support
-- **Brotli**: Brotli compression (if available)
+- **Zlib**: Zlib compression support
+
+Note: SSE streams support Gzip, Deflate, and Zlib encoding.
 
 ## Dependencies
 
@@ -450,7 +453,5 @@ This renderer is designed for:
 ## Performance Considerations
 
 - **Async Processing**: All operations are fully asynchronous
-- **Connection Pooling**: Efficient database and HTTP connection management
-- **Caching**: Response caching for improved performance
-- **Streaming**: Large response streaming support
+- **Streaming**: Server-Sent Events and large response streaming support
 - **Compression**: Automatic response compression reduces bandwidth
