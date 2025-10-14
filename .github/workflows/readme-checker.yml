@@ -194,65 +194,63 @@ jobs:
 
                   prompt: |
                       ${{
-                        inputs.existing_branch != '' && inputs.prompt_override != ''
-                          ? format('# Additional README Refinement for {0}
+                        (inputs.existing_branch != '' && inputs.prompt_override != '' &&
+                          format('# Additional README Refinement for {0}
 
-                            This is a refinement pass on an existing README update branch.
+                      This is a refinement pass on an existing README update branch.
 
-                            ## Previous Context
-                            The README at `{1}/README.md` has already been reviewed and potentially updated.
+                      ## Previous Context
+                      The README at `{1}/README.md` has already been reviewed and potentially updated.
 
-                            ## Additional Guidance
-                            {2}
+                      ## Additional Guidance
+                      {2}
 
-                            ## Requirements
-                            - Review the current state of the README
-                            - Apply the additional guidance above
-                            - Only make changes that align with the new guidance
-                            - Preserve previous improvements unless they conflict with new guidance
+                      ## Requirements
+                      - Review the current state of the README
+                      - Apply the additional guidance above
+                      - Only make changes that align with the new guidance
+                      - Preserve previous improvements unless they conflict with new guidance
 
-                            Focus on incremental improvements based on the additional guidance.
-                            ', matrix.package.name, matrix.package.path, inputs.prompt_override)
+                      Focus on incremental improvements based on the additional guidance.',
+                          matrix.package.name, matrix.package.path, inputs.prompt_override))
+                        ||
+                        (inputs.prompt_override != '' && inputs.prompt_override)
+                        ||
+                        (vars.README_UPDATE_PROMPT != '' && vars.README_UPDATE_PROMPT)
+                        ||
+                        format('# README Accuracy Review for {0}
 
-                          : inputs.prompt_override != ''
-                            ? inputs.prompt_override
+                      Review and update the README.md file at `{1}/README.md` to ensure it accurately represents the current state of this package.
 
-                            : vars.README_UPDATE_PROMPT != ''
-                              ? vars.README_UPDATE_PROMPT
+                      ## Requirements
 
-                              : format('# README Accuracy Review for {0}
+                      1. **Verify Implementation**
+                         - Check that described features exist in the code at `{1}/`
+                         - Compare API examples with actual function signatures in `{1}/src/`
+                         - Verify dependencies match `{1}/Cargo.toml`
 
-                            Review and update the README.md file at `{1}/README.md` to ensure it accurately represents the current state of this package.
+                      2. **Feature Classification**
+                         - ✅ Implemented: Use present tense ("provides", "supports", "includes")
+                         - 🔮 Planned/Future: Mark clearly as "Planned:", "Coming soon:", or use future tense
 
-                            ## Requirements
+                      3. **Code Alignment**
+                         - Ensure module descriptions match actual file structure
+                         - Update outdated architectural information
+                         - Fix incorrect usage examples
 
-                            1. **Verify Implementation**
-                               - Check that described features exist in the code at `{1}/`
-                               - Compare API examples with actual function signatures in `{1}/src/`
-                               - Verify dependencies match `{1}/Cargo.toml`
+                      4. **Accuracy Focus**
+                         - Be conservative: only claim features that provably exist
+                         - Reference actual code when validating claims
+                         - Preserve valid future-looking statements but mark them clearly
 
-                            2. **Feature Classification**
-                               - ✅ Implemented: Use present tense ("provides", "supports", "includes")
-                               - 🔮 Planned/Future: Mark clearly as "Planned:", "Coming soon:", or use future tense
+                      ## Scope
 
-                            3. **Code Alignment**
-                               - Ensure module descriptions match actual file structure
-                               - Update outdated architectural information
-                               - Fix incorrect usage examples
+                      Only modify `{1}/README.md`. Do not change any code files.
 
-                            4. **Accuracy Focus**
-                               - Be conservative: only claim features that provably exist
-                               - Reference actual code when validating claims
-                               - Preserve valid future-looking statements but mark them clearly
+                      ## Output
 
-                            ## Scope
-
-                            Only modify `{1}/README.md`. Do not change any code files.
-
-                            ## Output
-
-                            Make the necessary updates to ensure the README accurately reflects reality. If no changes are needed, do not modify the file.
-                            ', matrix.package.name, matrix.package.path)
+                      Make the necessary updates to ensure the README accurately reflects reality. If no changes are needed, do not modify the file.',
+                          matrix.package.name, matrix.package.path)
                       }}
 
                   claude_args: |
@@ -326,68 +324,65 @@ jobs:
 
                   prompt: |
                       ${{
-                        inputs.existing_branch != '' && inputs.prompt_override != ''
-                          ? format('# Additional Root README Refinement
+                        (inputs.existing_branch != '' && inputs.prompt_override != '' &&
+                          format('# Additional Root README Refinement
 
-                            This is a refinement pass on an existing README update branch.
+                      This is a refinement pass on an existing README update branch.
 
-                            ## Previous Context
-                            The root README.md has already been reviewed and potentially updated.
+                      ## Previous Context
+                      The root README.md has already been reviewed and potentially updated.
 
-                            ## Additional Guidance
-                            {0}
+                      ## Additional Guidance
+                      {0}
 
-                            ## Requirements
-                            - Review the current state of the README
-                            - Apply the additional guidance above
-                            - Only make changes that align with the new guidance
-                            - Preserve previous improvements unless they conflict with new guidance
+                      ## Requirements
+                      - Review the current state of the README
+                      - Apply the additional guidance above
+                      - Only make changes that align with the new guidance
+                      - Preserve previous improvements unless they conflict with new guidance
 
-                            Focus on incremental improvements based on the additional guidance.
-                            ', inputs.prompt_override)
+                      Focus on incremental improvements based on the additional guidance.',
+                          inputs.prompt_override))
+                        ||
+                        (inputs.prompt_override != '' && inputs.prompt_override)
+                        ||
+                        (vars.ROOT_README_UPDATE_PROMPT != '' && vars.ROOT_README_UPDATE_PROMPT)
+                        ||
+                        '# Root README Accuracy Review
 
-                          : inputs.prompt_override != ''
-                            ? inputs.prompt_override
+                      Review and update the root README.md file to ensure it accurately represents the current state of the MoosicBox project.
 
-                            : vars.ROOT_README_UPDATE_PROMPT != ''
-                              ? vars.ROOT_README_UPDATE_PROMPT
+                      ## Requirements
 
-                              : '# Root README Accuracy Review
+                      1. **Feature Status**
+                         - Verify that listed features are actually implemented
+                         - Mark future/planned features clearly with indicators like "Planned:", "Coming soon:", or future tense
+                         - Ensure feature descriptions match current capabilities
 
-                            Review and update the root README.md file to ensure it accurately represents the current state of the MoosicBox project.
+                      2. **Getting Started Accuracy**
+                         - Verify installation instructions work
+                         - Check that command examples are current
+                         - Ensure prerequisites are up-to-date
 
-                            ## Requirements
+                      3. **Architecture & Technology**
+                         - Confirm listed technologies are in use
+                         - Update platform support based on current state
+                         - Verify database support claims
 
-                            1. **Feature Status**
-                               - Verify that listed features are actually implemented
-                               - Mark future/planned features clearly with indicators like "Planned:", "Coming soon:", or future tense
-                               - Ensure feature descriptions match current capabilities
+                      4. **Package List**
+                         - Ensure the package list in the expandable section is current
+                         - Check package descriptions match their actual purpose
 
-                            2. **Getting Started Accuracy**
-                               - Verify installation instructions work
-                               - Check that command examples are current
-                               - Ensure prerequisites are up-to-date
+                      ## Guidelines
 
-                            3. **Architecture & Technology**
-                               - Confirm listed technologies are in use
-                               - Update platform support based on current state
-                               - Verify database support claims
+                      - Be conservative: only claim what demonstrably exists
+                      - Preserve the project status warning (development notice)
+                      - Maintain marketing tone while ensuring technical accuracy
+                      - Keep future-looking statements but mark them clearly
 
-                            4. **Package List**
-                               - Ensure the package list in the expandable section is current
-                               - Check package descriptions match their actual purpose
+                      ## Output
 
-                            ## Guidelines
-
-                            - Be conservative: only claim what demonstrably exists
-                            - Preserve the project status warning (development notice)
-                            - Maintain marketing tone while ensuring technical accuracy
-                            - Keep future-looking statements but mark them clearly
-
-                            ## Output
-
-                            Update README.md to accurately reflect the current state of the project.
-                            '
+                      Update README.md to accurately reflect the current state of the project.'
                       }}
 
                   claude_args: |
