@@ -1,70 +1,63 @@
 # MoosicBox Audio Output
 
-A cross-platform audio output abstraction layer supporting multiple audio backends for high-quality audio playback.
+A cross-platform audio output abstraction layer for high-quality audio playback.
 
 ## Overview
 
 The MoosicBox Audio Output package provides:
 
 - **Cross-Platform Support**: Works on Windows, macOS, and Linux
-- **Multiple Audio Backends**: CPAL, PulseAudio, JACK, ASIO support
-- **Low-Latency Playback**: Optimized for real-time audio applications
-- **Format Flexibility**: Support for various sample rates, bit depths, and channel configurations
-- **Device Management**: Enumerate and select audio output devices
-- **Real-Time Processing**: Minimal latency audio pipeline
+- **CPAL-Based Audio Output**: Uses CPAL (Cross-Platform Audio Library) for audio playback
+- **Professional Audio Backend Support**: Optional JACK and ASIO support via CPAL
+- **Audio Format Encoding**: Built-in support for encoding to AAC, FLAC, MP3, and Opus
+- **Device Management**: Scan and select audio output devices
+- **Command-Based Control**: Pause, resume, seek, and volume control via `AudioHandle`
+- **Progress Tracking**: Real-time playback position tracking with callbacks
 
 ## Supported Audio Backends
 
+All audio backends are provided through CPAL (Cross-Platform Audio Library):
+
 ### CPAL (Cross-Platform Audio Library)
-- **Platforms**: Windows, macOS, Linux
+- **Platforms**: Windows (WASAPI, DirectSound), macOS (Core Audio), Linux (ALSA)
 - **Use Case**: General-purpose audio output with good cross-platform compatibility
-- **Latency**: Medium (suitable for most applications)
-
-### PulseAudio
-- **Platforms**: Linux (primary), some Unix-like systems
-- **Use Case**: Desktop Linux audio with system integration
-- **Features**: Volume control, device switching, network audio
-
-### PulseAudio Simple
-- **Platforms**: Linux
-- **Use Case**: Simplified PulseAudio interface for basic playback
-- **Benefits**: Lower overhead, easier integration
+- **Default Backend**: Enabled by default
 
 ### JACK (JACK Audio Connection Kit)
 - **Platforms**: Linux, macOS, Windows
 - **Use Case**: Professional audio, low-latency applications
 - **Features**: Real-time audio routing, minimal latency
+- **Enabled via**: `jack` feature flag
 
 ### ASIO (Audio Stream Input/Output)
 - **Platforms**: Windows
 - **Use Case**: Professional audio interfaces, ultra-low latency
 - **Requirements**: ASIO-compatible audio hardware
+- **Enabled via**: `asio` feature flag
 
 ## Usage
 
 ### Basic Audio Output
 
 ```rust
-use moosicbox_audio_output::{AudioOutput, AudioOutputConfig, AudioBackend};
+use moosicbox_audio_output::{scan_outputs, default_output};
+use moosicbox_audio_output::AudioWrite;
+use symphonia::core::audio::AudioBuffer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create audio output configuration
-    let config = AudioOutputConfig {
-        backend: AudioBackend::Cpal,
-        sample_rate: 44100,
-        channels: 2,
-        bit_depth: 16,
-        buffer_size: 1024,
-        device_name: None, // Use default device
-    };
+    // Scan available audio outputs
+    scan_outputs().await?;
 
-    // Initialize audio output
-    let mut audio_output = AudioOutput::new(config).await?;
+    // Get the default audio output
+    let mut audio_output = default_output().await?;
 
-    // Play audio samples
-    let samples = vec![0.0f32; 1024]; // Silent audio
-    audio_output.write_samples(&samples).await?;
+    // Write audio samples (expects AudioBuffer<f32> from Symphonia)
+    // The AudioBuffer would typically come from an audio decoder
+    // audio_output.write(audio_buffer)?;
+
+    // Flush when done
+    audio_output.flush()?;
 
     Ok(())
 }
@@ -73,81 +66,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Device Enumeration
 
 ```rust
-use moosicbox_audio_output::{AudioOutput, list_audio_devices};
+use moosicbox_audio_output::{scan_outputs, output_factories};
 
 async fn list_available_devices() -> Result<(), Box<dyn std::error::Error>> {
-    // List all available audio devices
-    let devices = list_audio_devices(AudioBackend::Cpal).await?;
+    // Scan available audio outputs
+    scan_outputs().await?;
 
-    for device in devices {
-        println!("Device: {} ({})", device.name, device.id);
-        println!("  Channels: {}", device.max_channels);
-        println!("  Sample rates: {:?}", device.supported_sample_rates);
-        println!("  Default: {}", device.is_default);
+    // List all available audio output factories
+    let factories = output_factories().await;
+
+    for factory in factories {
+        println!("Device: {} ({})", factory.name, factory.id);
+        println!("  Sample rate: {} Hz", factory.spec.rate);
+        println!("  Channels: {}", factory.spec.channels.count());
     }
 
     Ok(())
 }
 ```
 
-### Advanced Configuration
+### Volume and Playback Control
 
 ```rust
-use moosicbox_audio_output::{AudioOutputConfig, AudioBackend, AudioLatency};
+use moosicbox_audio_output::{default_output, AudioWrite};
 
-fn create_low_latency_config() -> AudioOutputConfig {
-    AudioOutputConfig {
-        backend: AudioBackend::Jack, // Use JACK for low latency
-        sample_rate: 48000,
-        channels: 2,
-        bit_depth: 24,
-        buffer_size: 64, // Small buffer for low latency
-        device_name: Some("JACK Audio".to_string()),
-        latency: AudioLatency::Minimal,
-        exclusive_mode: true, // Request exclusive access
-    }
-}
+async fn playback_control_example() -> Result<(), Box<dyn std::error::Error>> {
+    let mut audio_output = default_output().await?;
 
-fn create_high_quality_config() -> AudioOutputConfig {
-    AudioOutputConfig {
-        backend: AudioBackend::Asio, // Use ASIO for best quality
-        sample_rate: 192000, // High sample rate
-        channels: 8, // Surround sound
-        bit_depth: 32,
-        buffer_size: 2048, // Larger buffer for stability
-        device_name: Some("RME Audio Interface".to_string()),
-        latency: AudioLatency::Quality,
-        exclusive_mode: true,
-    }
+    // Get the audio handle for command-based control
+    let handle = audio_output.handle();
+
+    // Set volume (0.0 to 1.0)
+    handle.set_volume(0.8).await?;
+
+    // Pause playback
+    handle.pause().await?;
+
+    // Resume playback
+    handle.resume().await?;
+
+    // Seek to position (in seconds)
+    handle.seek(30.0).await?;
+
+    // Reset the audio output
+    handle.reset().await?;
+
+    Ok(())
 }
 ```
 
-### Real-Time Audio Processing
+### Progress Tracking
 
 ```rust
-use moosicbox_audio_output::{AudioOutput, AudioProcessor};
+use moosicbox_audio_output::{default_output, AudioWrite};
 
-struct CustomAudioProcessor {
-    // Your audio processing state
-}
+async fn progress_tracking_example() -> Result<(), Box<dyn std::error::Error>> {
+    let mut audio_output = default_output().await?;
 
-impl AudioProcessor for CustomAudioProcessor {
-    fn process_samples(&mut self, input: &[f32], output: &mut [f32]) {
-        // Apply audio effects, volume control, etc.
-        for (i, sample) in input.iter().enumerate() {
-            output[i] = sample * 0.8; // Simple volume reduction
-        }
+    // Set a progress callback that gets called with playback position (in seconds)
+    audio_output.set_progress_callback(Some(Box::new(|position| {
+        println!("Current playback position: {:.2}s", position);
+    })));
+
+    // Get current playback position
+    if let Some(position) = audio_output.get_playback_position() {
+        println!("Position: {:.2}s", position);
     }
-}
 
-async fn setup_real_time_processing() -> Result<(), Box<dyn std::error::Error>> {
-    let config = AudioOutputConfig::default();
-    let mut audio_output = AudioOutput::new(config).await?;
-
-    let processor = CustomAudioProcessor {};
-    audio_output.set_processor(Box::new(processor))?;
-
-    // Audio will now be processed in real-time
     Ok(())
 }
 ```
@@ -155,130 +140,113 @@ async fn setup_real_time_processing() -> Result<(), Box<dyn std::error::Error>> 
 ## Feature Flags
 
 ### Audio Backends
-- `cpal` - Enable CPAL backend (cross-platform)
-- `jack` - Enable JACK backend (professional audio)
-- `asio` - Enable ASIO backend (Windows professional)
+- `cpal` - Enable CPAL backend (cross-platform, enabled by default)
+- `jack` - Enable JACK backend via CPAL (professional audio)
+- `asio` - Enable ASIO backend via CPAL (Windows professional audio)
+- `oboe-shared-stdcxx` - Enable Oboe backend via CPAL (Android)
 
-### Audio Formats
-- `aac` - Support for AAC audio format
-- `flac` - Support for FLAC audio format
-- `mp3` - Support for MP3 audio format
-- `opus` - Support for Opus audio format
+### Audio Encoding Formats
+- `aac` - Support for encoding to AAC format
+- `flac` - Support for encoding to FLAC format
+- `mp3` - Support for encoding to MP3 format
+- `opus` - Support for encoding to Opus format
 
-### Convenience Features
-- `all-backends` - Enable all available audio backends
-- `default-backend` - Enable the recommended backend for the platform
+### API Features
+- `api` - Enable API models for integration (enabled by default)
+- `openapi` - Enable OpenAPI/utoipa support (enabled by default)
 
-## Configuration
+### Default Features
+The `default` feature enables: `api`, `default-windows`, and `openapi`.
 
-### Audio Quality Settings
+The `default-windows` feature enables: `aac`, `cpal`, `flac`, `mp3`, `oboe-shared-stdcxx`, and `opus`.
+
+## Architecture
+
+The audio output package uses a layered architecture:
+
+1. **AudioOutput**: Main wrapper that handles resampling and delegates to `AudioWrite`
+2. **AudioWrite**: Core trait for writing audio buffers to output devices
+3. **AudioOutputFactory**: Factory pattern for creating audio outputs with specific configurations
+4. **CpalAudioOutput**: CPAL-based implementation of `AudioWrite`
+5. **AudioHandle**: Command-based interface for controlling playback (pause, resume, volume, seek)
+6. **ProgressTracker**: Tracks and reports playback progress with callbacks
+
+### Audio Specifications
+
+The package uses Symphonia's `SignalSpec` for audio specifications:
 
 ```rust
-// CD Quality
-let cd_quality = AudioOutputConfig {
-    sample_rate: 44100,
-    bit_depth: 16,
-    channels: 2,
-    ..Default::default()
-};
+use symphonia::core::audio::SignalSpec;
 
-// Hi-Res Audio
-let hires_quality = AudioOutputConfig {
-    sample_rate: 96000,
-    bit_depth: 24,
-    channels: 2,
-    ..Default::default()
-};
-
-// Studio Quality
-let studio_quality = AudioOutputConfig {
-    sample_rate: 192000,
-    bit_depth: 32,
-    channels: 2,
-    ..Default::default()
+// The SignalSpec defines the audio format
+let spec = SignalSpec {
+    rate: 44100,  // Sample rate in Hz
+    channels: symphonia::core::audio::Layout::Stereo.into_channels(),
 };
 ```
 
-### Latency Optimization
-
-```rust
-// Low latency for real-time applications
-let low_latency = AudioOutputConfig {
-    buffer_size: 64,   // Very small buffer
-    latency: AudioLatency::Minimal,
-    backend: AudioBackend::Jack,
-    ..Default::default()
-};
-
-// Balanced latency and stability
-let balanced = AudioOutputConfig {
-    buffer_size: 512,  // Medium buffer
-    latency: AudioLatency::Balanced,
-    backend: AudioBackend::Cpal,
-    ..Default::default()
-};
-
-// High stability for background playback
-let stable = AudioOutputConfig {
-    buffer_size: 4096, // Large buffer
-    latency: AudioLatency::Quality,
-    backend: AudioBackend::PulseAudio,
-    ..Default::default()
-};
-```
+Audio quality is determined by the source material and the audio device's capabilities. The package automatically handles:
+- Sample rate conversion (resampling)
+- Channel configuration
+- Buffer management (30-second ring buffer with 10-second initial buffering)
 
 ## Platform-Specific Notes
 
 ### Linux
-- **PulseAudio**: Most common on desktop Linux distributions
-- **JACK**: Preferred for professional audio work
-- **ALSA**: Lower-level access (via CPAL)
+- **ALSA**: Default backend via CPAL (direct hardware access)
+- **JACK**: Optional professional audio backend (enable with `jack` feature)
 
 ```bash
-# Install PulseAudio development headers
-sudo apt-get install libpulse-dev
-
-# Install JACK development headers
+# JACK is optional - install only if you need professional audio features
 sudo apt-get install libjack-jackd2-dev
 ```
 
 ### macOS
 - **Core Audio**: Native macOS audio (via CPAL)
-- **JACK**: Available but requires separate installation
+- **JACK**: Optional professional audio backend (enable with `jack` feature)
 
 ```bash
-# Install JACK (optional)
+# JACK is optional - install only if you need professional audio features
 brew install jack
 ```
 
 ### Windows
-- **WASAPI**: Modern Windows audio API (via CPAL)
-- **DirectSound**: Legacy Windows audio (via CPAL)
-- **ASIO**: Professional audio interfaces
+- **WASAPI**: Modern Windows audio API (default via CPAL)
+- **DirectSound**: Legacy Windows audio (fallback via CPAL)
+- **ASIO**: Optional professional audio backend (enable with `asio` feature)
 
-For ASIO support, you need:
+For ASIO support:
 - ASIO-compatible audio hardware
 - ASIO drivers from hardware manufacturer
+- Enable the `asio` feature flag in Cargo.toml
 
 ## Error Handling
 
 ```rust
-use moosicbox_audio_output::error::AudioOutputError;
+use moosicbox_audio_output::AudioOutputError;
 
-match audio_output.write_samples(&samples).await {
-    Ok(()) => println!("Audio written successfully"),
-    Err(AudioOutputError::DeviceNotFound(device)) => {
-        eprintln!("Audio device not found: {}", device);
+match audio_output.write(audio_buffer) {
+    Ok(bytes_written) => println!("Audio written successfully: {} bytes", bytes_written),
+    Err(AudioOutputError::NoOutputs) => {
+        eprintln!("No audio outputs available");
     },
-    Err(AudioOutputError::UnsupportedFormat { sample_rate, channels, bit_depth }) => {
-        eprintln!("Unsupported format: {}Hz, {} channels, {} bits",
-                  sample_rate, channels, bit_depth);
+    Err(AudioOutputError::UnsupportedOutputConfiguration) => {
+        eprintln!("Unsupported output configuration");
     },
-    Err(AudioOutputError::BufferUnderrun) => {
-        eprintln!("Audio buffer underrun - increase buffer size");
+    Err(AudioOutputError::UnsupportedChannels(channels)) => {
+        eprintln!("Unsupported channel count: {}", channels);
     },
-    Err(AudioOutputError::DeviceBusy) => {
-        eprintln!("Audio device is busy - try exclusive_mode: false");
+    Err(AudioOutputError::OpenStream) => {
+        eprintln!("Failed to open audio stream");
+    },
+    Err(AudioOutputError::PlayStream) => {
+        eprintln!("Failed to play audio stream");
+    },
+    Err(AudioOutputError::StreamClosed) => {
+        eprintln!("Audio stream was closed");
+    },
+    Err(AudioOutputError::StreamEnd) => {
+        eprintln!("Audio stream ended");
     },
     Err(e) => {
         eprintln!("Audio output error: {}", e);
@@ -286,98 +254,101 @@ match audio_output.write_samples(&samples).await {
 }
 ```
 
-## Performance Optimization
+## Implementation Details
 
-### Buffer Size Guidelines
-- **64-128 samples**: Ultra-low latency (professional use)
-- **256-512 samples**: Low latency (real-time applications)
-- **1024-2048 samples**: Balanced (most applications)
-- **4096+ samples**: High stability (background playback)
+### Buffer Management
 
-### Sample Rate Considerations
-- **44100 Hz**: CD quality, widely supported
-- **48000 Hz**: Professional standard, good compatibility
-- **96000 Hz**: Hi-res audio, higher CPU usage
-- **192000 Hz**: Studio quality, significant CPU usage
+The CPAL implementation uses a ring buffer architecture:
+- **Ring buffer size**: 30 seconds of audio
+- **Initial buffering**: 10 seconds before playback starts
+- **Purpose**: Prevents audio underruns and ensures smooth playback
 
-### Memory Usage
-- Buffer size directly affects memory usage
-- Higher sample rates increase memory requirements
-- Multiple channels multiply memory usage
+This approach ensures that:
+- Short audio clips (< 10 seconds) start immediately on flush
+- Long audio content has ample buffering to prevent crackling
+- Volume changes are applied immediately in the CPAL callback
+
+### Sample Rate Handling
+
+The package automatically handles sample rate conversion:
+- Uses the `moosicbox_resampler` crate for high-quality resampling
+- Converts input audio to match the output device's sample rate
+- Maintains audio quality during conversion
+
+### Progress Tracking
+
+Progress tracking uses a dedicated `ProgressTracker`:
+- Tracks consumed samples from the CPAL audio callback
+- Calculates playback position based on actual output sample rate
+- Triggers callbacks when position changes by ≥0.1 seconds
+- Thread-safe via atomic operations
 
 ## Integration with MoosicBox
 
-### Player Integration
+The audio output package integrates with other MoosicBox components:
 
-```rust
-use moosicbox_audio_output::AudioOutput;
-use moosicbox_player::Player;
+- **moosicbox_audio_decoder**: Provides decoded audio buffers via the `AudioDecode` trait
+- **moosicbox_resampler**: Handles sample rate conversion automatically
+- **moosicbox_player**: Uses `AudioOutput` for playback
+- **moosicbox_stream_utils**: Provides streaming utilities
 
-async fn setup_player_with_audio_output() -> Result<(), Box<dyn std::error::Error>> {
-    // Create audio output
-    let audio_config = AudioOutputConfig {
-        backend: AudioBackend::Cpal,
-        sample_rate: 44100,
-        channels: 2,
-        bit_depth: 16,
-        buffer_size: 1024,
-        ..Default::default()
-    };
-
-    let audio_output = AudioOutput::new(audio_config).await?;
-
-    // Create player with audio output
-    let player = Player::with_audio_output(audio_output).await?;
-
-    Ok(())
-}
-```
+The `AudioOutput` implements the `AudioDecode` trait, allowing it to receive decoded audio directly from audio decoders.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **No audio output**: Check device selection and permissions
-2. **Audio crackling**: Increase buffer size or check sample rate compatibility
-3. **High latency**: Use JACK or ASIO backends, reduce buffer size
-4. **Device not found**: Verify device name and availability
+1. **No audio output**:
+   - Run `scan_outputs().await` to ensure devices are detected
+   - Check system audio settings and permissions
+   - Verify CPAL feature is enabled
 
-### Debug Information
+2. **Audio crackling or stuttering**:
+   - This is typically a system resource issue
+   - The package uses a 30-second ring buffer with 10-second initial buffering to prevent this
+   - Check CPU usage and system load
+
+3. **Device not found**:
+   - Verify the device is connected and enabled in system settings
+   - Run `output_factories().await` to list available devices
+
+4. **Build errors with JACK/ASIO**:
+   - Ensure you have the required development libraries installed
+   - JACK requires `libjack-jackd2-dev` on Linux
+   - ASIO requires ASIO SDK and drivers on Windows
+
+### Debug Logging
+
+Enable debug logging to troubleshoot issues:
 
 ```bash
 # Enable audio output debugging
 RUST_LOG=moosicbox_audio_output=debug cargo run
 
-# List available audio devices
-RUST_LOG=moosicbox_audio_output=debug cargo run -- --list-devices
-
-# Test audio output
-RUST_LOG=moosicbox_audio_output=debug cargo run -- --test-audio
+# Enable trace-level logging for detailed information
+RUST_LOG=moosicbox_audio_output=trace cargo run
 ```
 
 ### Platform-Specific Troubleshooting
 
 #### Linux
 ```bash
-# Check PulseAudio status
-pulseaudio --check -v
+# List ALSA devices
+aplay -l
 
-# List PulseAudio devices
-pactl list sinks
-
-# Test JACK connection
+# Check JACK status (if using JACK feature)
 jack_control status
 ```
 
 #### Windows
 ```bash
-# Check Windows audio devices
+# List audio devices
 powershell "Get-WmiObject Win32_SoundDevice"
 ```
 
 #### macOS
 ```bash
-# List Core Audio devices
+# List audio devices
 system_profiler SPAudioDataType
 ```
 
