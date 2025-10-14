@@ -45,13 +45,6 @@ cd packages/async/cargo
 cargo build --release
 ```
 
-### As Dependency
-
-```toml
-[dependencies]
-switchy_async_cargo = { path = "../async/cargo" }
-```
-
 ## Usage
 
 ### Command Line
@@ -97,7 +90,7 @@ Functions and methods that need `#[inject_yields]`:
 Attributes that exempt from checking:
 - **Function Level**: `#[inject_yields]` on the function
 - **Impl Level**: `#[inject_yields]` on the impl block
-- **Module Level**: `#[inject_yields_mod]` on the module
+- **Module Level**: `#[inject_yields]` on the module
 
 ### Example Code
 
@@ -126,7 +119,7 @@ impl MyStruct {
 }
 
 // ✅ Correct: Module-level attribute covers all functions
-#[inject_yields_mod]
+#[inject_yields]
 mod my_module {
     async fn function_in_module() {
         // Function body
@@ -136,7 +129,7 @@ mod my_module {
 
 ## Command Line Options
 
-- **`--root <PATH>`**: Specify root directory to analyze (defaults to `$CARGO_MANIFEST_DIR`)
+- **`--root <PATH>`**: Specify root directory to analyze (if not specified, uses `$CARGO_MANIFEST_DIR`)
 
 ## Error Handling
 
@@ -155,7 +148,8 @@ The tool handles various error conditions gracefully:
 - **Clap**: Command-line argument parsing
 - **Syn**: Rust syntax parsing and AST traversal
 - **WalkDir**: Recursive directory traversal
-- **Pretty Env Logger**: Logging support
+- **Log**: Logging facade
+- **Pretty Env Logger**: Logging implementation
 
 ## Integration
 
