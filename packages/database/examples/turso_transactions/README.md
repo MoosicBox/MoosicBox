@@ -7,7 +7,7 @@ This example demonstrates transaction management with the Turso Database backend
 * **Transaction Basics**: Creating and managing database transactions
 * **Successful Commits**: Transferring money between accounts with proper transaction commit
 * **Rollback on Failure**: Detecting insufficient funds and rolling back changes
-* **Nested Transactions**: Using savepoints for complex multi-step operations
+* **Multi-Step Transactions**: Performing multiple operations within a single transaction
 * **ACID Properties**: Ensuring atomicity, consistency, isolation, and durability
 
 ## Running the Example
@@ -50,7 +50,7 @@ Final: Alice: $800 (unchanged)
 
 The transaction is rolled back, leaving the database in its original state.
 
-### Example 3: Nested Transactions (Savepoints)
+### Example 3: Multi-Step Transaction
 
 Creates a new account (Charlie) and applies a bonus within a transaction:
 
@@ -125,5 +125,4 @@ This pattern is essential for:
 
 * This example uses an **in-memory database** (`:memory:`), so data is not persisted
 * Turso supports full ACID transaction semantics
-* Nested transactions use savepoints internally
 * Always handle errors and rollback on failure to maintain data integrity
