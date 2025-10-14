@@ -1,26 +1,26 @@
 # Handler Macro Test Example
 
-This example validates the handler macro system implementation, testing various handler signatures with different parameter counts across both Actix and Simulator backends.
+This example validates the handler extractor system implementation, testing various handler signatures with different extractor types across both Actix and Simulator backends.
 
 ## What This Example Demonstrates
 
-- **Handler Macro System**: Testing the `impl_handler!` macro for 0-16 parameter handlers
+- **Handler Extractor System**: Testing handlers with 0-2 parameter extractors
 - **Backend Compatibility**: Same handler code working with both Actix and Simulator
-- **Parameter Extraction**: Current state of parameter extraction implementation
+- **Parameter Extraction**: Working implementations of RequestInfo, Headers, Query, and Path extractors
 - **Compilation Validation**: Ensuring all handler signatures compile correctly
-- **Error Handling**: Proper error messages for unimplemented features
+- **Route Conversion**: Handlers successfully converting to Route objects
 
 ## Prerequisites
 
 - Rust toolchain (see root README)
 - Understanding of async Rust and handler patterns
-- Basic knowledge of macro systems
+- Basic knowledge of extractor patterns
 
 ## Available Test Binaries
 
-- **test_actix**: Tests handler macros with Actix backend
-- **test_simulator**: Tests handler macros with Simulator backend
-- **debug_actix**: Debug version for Actix backend development
+- **test_actix**: Tests handler extractors with Actix backend (includes Path extractor)
+- **test_simulator**: Tests handler extractors with Simulator backend
+- **debug_actix**: Debug version testing IntoHandler trait implementation
 
 ## Running the Tests
 
@@ -69,71 +69,90 @@ cargo build --bin test_actix --example handler_macro_test --features actix
 
 ### Successful Compilation
 All handler signatures should compile without errors:
-- 0-parameter handlers (legacy implementation)
-- 1-16 parameter handlers (macro-generated implementations)
+- 0-parameter handlers
+- 1-parameter handlers (with single extractor)
+- 2-parameter handlers (with multiple extractors)
 
 ### Runtime Behavior
 - ✅ **Route Registration**: Handlers successfully convert to Route objects
 - ✅ **Backend Compatibility**: Same code works with both backends
-- 📝 **Parameter Extraction**: Currently returns "not implemented" for 1+ parameters
-- 📝 **Send Bounds**: Some limitations with async parameter extraction
+- ✅ **Parameter Extraction**: Working extractors for RequestInfo, Headers, Query, and Path
+- ✅ **Send-Safe**: All extractors are Send-safe with no async boundary issues
 
 ## Code Structure
 
 ### Handler Signatures Tested
 ```rust
 // 0 parameters - fully implemented
-async fn handler_0() -> Result<HttpResponse, Error>
+async fn simple_handler() -> Result<HttpResponse, Error>
 
-// 1 parameter - macro generated
-async fn handler_1(param1: Type1) -> Result<HttpResponse, Error>
+// 1 parameter - RequestInfo extractor
+async fn info_handler(info: RequestInfo) -> Result<HttpResponse, Error>
 
-// 2 parameters - macro generated
-async fn handler_2(param1: Type1, param2: Type2) -> Result<HttpResponse, Error>
+// 1 parameter - Headers extractor
+async fn headers_handler(headers: Headers) -> Result<HttpResponse, Error>
 
-// ... up to 16 parameters
+// 1 parameter - Query extractor
+async fn query_handler(Query(query): Query<SearchQuery>) -> Result<HttpResponse, Error>
+
+// 1 parameter - Path extractor (Actix only)
+async fn path_handler(Path(user_id): Path<u32>) -> Result<HttpResponse, Error>
+
+// 2 parameters - multiple extractors
+async fn multi_handler(info: RequestInfo, headers: Headers) -> Result<HttpResponse, Error>
 ```
 
-### Macro System
+### Route Registration
 ```rust
-// The impl_handler! macro generates implementations like:
-impl_handler!(T1);
-impl_handler!(T1, T2);
-impl_handler!(T1, T2, T3);
-// ... up to 16 parameters
+// 0 parameters
+let route = Route::with_handler(Method::Get, "/hello", simple_handler);
+
+// 1 parameter
+let route = Route::with_handler1(Method::Get, "/info", info_handler);
+
+// 2 parameters
+let route = Route::with_handler2(Method::Get, "/multi", multi_handler);
 ```
 
-### Backend Testing
+### Extractors Available
 ```rust
-#[cfg(feature = "actix")]
-fn test_actix_handlers() {
-    // Test handlers with Actix backend
-}
+// RequestInfo - provides request metadata (path, method, etc.)
+async fn handler(info: RequestInfo) -> Result<HttpResponse, Error>
 
-#[cfg(feature = "simulator")]
-fn test_simulator_handlers() {
-    // Test handlers with Simulator backend
-}
+// Headers - provides access to HTTP headers
+async fn handler(headers: Headers) -> Result<HttpResponse, Error>
+
+// Query<T> - extracts query parameters
+async fn handler(Query(params): Query<MyStruct>) -> Result<HttpResponse, Error>
+
+// Path<T> - extracts path parameters (Actix only)
+async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 ```
 
 ## Current Implementation Status
 
 ### ✅ Completed Features
-- **Macro Generation**: All handler signatures (0-16 params) compile
-- **Route Conversion**: Handlers successfully convert to Route objects
-- **Backend Abstraction**: Same handler code works with both backends
-- **Error Handling**: Proper error messages for unimplemented features
+- **Handler Registration**: Handlers with 0-2 parameters successfully compile and convert to Route objects
+- **Route Conversion**: `Route::with_handler`, `Route::with_handler1`, and `Route::with_handler2` work correctly
+- **Backend Abstraction**: Same handler code works with both Actix and Simulator backends
+- **Working Extractors**:
+  - `RequestInfo` - request metadata (path, method, etc.)
+  - `Headers` - HTTP header access (including user-agent)
+  - `Query<T>` - query parameter extraction with serde deserialization
+  - `Path<T>` - path parameter extraction from URL segments (Actix only)
+- **Multiple Extractors**: Handlers can combine multiple extractors (up to 2 parameters tested)
+- **Send-Safe Design**: All extractors work without Send bound issues
 
 ### 📝 Known Limitations
-- **Parameter Extraction**: 1+ parameter handlers return "not implemented"
-- **Send Bounds**: Some async parameter extraction limitations
-- **Type Safety**: Limited compile-time parameter validation
+- **Path Extractor**: Only available in Actix backend (not yet implemented for Simulator)
+- **Parameter Count**: Currently tested up to 2 parameters (not 3+)
+- **Macro Syntax**: TODOs reference future `#[get("/path")]` attribute macro syntax
 
-### 🔄 Future Improvements
-- Complete parameter extraction implementation
-- Resolve Send bound issues
-- Add compile-time parameter validation
-- Implement more extractor types
+### 🔮 Planned Future Improvements
+- Attribute macro syntax for route definitions (e.g., `#[get("/path")]`)
+- Path extractor support for Simulator backend
+- Additional extractor types (Json body, Form data, etc.)
+- Support for 3+ parameter handlers
 
 ## Troubleshooting
 
@@ -146,12 +165,12 @@ fn test_simulator_handlers() {
 ```
 
 ### Compilation Errors
-**Problem**: Handler macro compilation failures
-**Solution**: Check that parameter types implement required traits
+**Problem**: Handler trait bound errors
+**Solution**: Ensure parameter types implement the `FromRequestData` trait and are used with the correct `Route::with_handlerN` method
 
 ### Runtime Errors
-**Problem**: "not implemented" errors for parameterized handlers
-**Solution**: This is expected behavior - parameter extraction is not yet fully implemented
+**Problem**: Path extractor not working in Simulator backend
+**Solution**: This is expected - Path extractor is currently only implemented for Actix backend
 
 ## Testing Strategy
 
@@ -175,21 +194,19 @@ cargo run --bin test_simulator --example handler_macro_test --features simulator
 cargo build --example handler_macro_test --features "actix,simulator"
 ```
 
-## Related Examples
+## Related Documentation
 
-- **handler_macros.rs**: Demonstrates working handler macro usage
-- **basic_handler**: Shows RequestData-based handlers
-- **query_extractor**: Parameter extraction patterns
-- **json_extractor**: Request body handling
-- **combined_extractors**: Multiple parameter extraction
+For more information about the web server abstraction layer and handler system, see:
+- The main `moosicbox_web_server` package documentation
+- Other examples in `packages/web_server/examples/`
 
 ## Development Notes
 
-This example serves as a validation tool for the handler macro system development. It helps ensure that:
+This example serves as a validation tool for the handler extractor system development. It helps ensure that:
 
-1. **Macro Generation Works**: All parameter combinations compile
-2. **Backend Compatibility**: Handlers work across different backends
-3. **Error Handling**: Proper error messages for incomplete features
-4. **Future Readiness**: Foundation is ready for full parameter extraction
+1. **Extractor Implementation Works**: All tested extractors (RequestInfo, Headers, Query, Path) function correctly
+2. **Backend Compatibility**: Handlers work across Actix and Simulator backends
+3. **Send-Safety**: No Send bound issues with extractor implementations
+4. **Route Conversion**: Handler functions properly convert to Route objects
 
-The example is particularly useful during development of the web server abstraction layer, providing immediate feedback on macro system changes and backend compatibility.
+The example is particularly useful during development of the web server abstraction layer, providing immediate feedback on extractor implementations and backend compatibility. The debug_actix binary specifically tests the `IntoHandler` trait implementation to verify the underlying trait system works correctly.
