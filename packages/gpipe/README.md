@@ -1,28 +1,35 @@
 # Generic Pipelines (gpipe)
 
-Universal CI/CD workflow orchestration tool for executing workflows across multiple backends.
+Abstract syntax tree and type definitions for a universal CI/CD workflow format. Planned: execution and translation across multiple backends.
 
 ## Overview
 
-Generic Pipelines provides a unified workflow format that can be:
-- Executed locally without containers
-- Translated to GitHub Actions YAML
-- Translated to GitLab CI YAML
-- Extended to support other CI/CD platforms
+Generic Pipelines defines a unified workflow format that will support:
+- Local execution without containers (planned)
+- Translation to GitHub Actions YAML (planned)
+- Translation to GitLab CI YAML (planned)
+- Extension to other CI/CD platforms (planned)
 
-The tool introduces a generic workflow format that allows you to write workflows once and run them anywhere, with backend-specific functionality supported through conditional execution blocks.
+Currently, this package provides the complete AST (Abstract Syntax Tree) types for representing generic workflow definitions in Rust. The AST supports a workflow format designed to be written once and executed anywhere, with backend-specific functionality through conditional execution blocks.
 
 ## Features
 
-- 🚀 **Local Execution** - Run workflows directly on your machine without Docker
-- 🔄 **Multi-Backend Support** - Target GitHub Actions, GitLab CI, and more
-- 🎯 **Backend Conditionals** - Execute steps only on specific platforms
-- 🧩 **Custom Actions** - Define reusable inline actions or reference external ones
-- 📊 **Matrix Builds** - Run jobs with multiple configurations
-- 🔗 **Job Dependencies** - Define complex workflows with job orchestration
-- 📤 **Step Outputs** - Pass data between steps and jobs
+### Implemented
+- ✅ **Workflow AST** - Complete abstract syntax tree types for workflow definitions
+- ✅ **Type Safety** - Fully typed Rust data structures with serde support
 
-## Workflow Schema
+### Planned
+- 🔮 **Local Execution** - Run workflows directly on your machine without Docker
+- 🔮 **Multi-Backend Support** - Target GitHub Actions, GitLab CI, and more
+- 🔮 **Backend Conditionals** - Execute steps only on specific platforms
+- 🔮 **Custom Actions** - Define reusable inline actions or reference external ones
+- 🔮 **Matrix Builds** - Run jobs with multiple configurations
+- 🔮 **Job Dependencies** - Define complex workflows with job orchestration
+- 🔮 **Step Outputs** - Pass data between steps and jobs
+
+## Workflow Schema Specification
+
+The AST types support the following workflow schema. This section documents the intended workflow format.
 
 ### Top-Level Structure
 
@@ -44,7 +51,7 @@ jobs: { ... }             # Job definitions with steps (required)
 
 ### Triggers
 
-Supported trigger types with backend mappings:
+Trigger types defined in the AST with planned backend mappings:
 
 | Generic | GitHub Actions | GitLab CI | Description |
 |---------|----------------|-----------|-------------|
@@ -67,7 +74,7 @@ triggers:
 
 ### Actions
 
-Three types of actions are supported:
+Three types of actions are defined in the schema:
 
 #### 1. GitHub Actions
 Reference existing GitHub Actions by repository:
@@ -167,7 +174,7 @@ steps:
 - Simple: `echo "key=value" >> $PIPELINE_OUTPUT`
 - Multi-line: Use heredoc syntax with EOF delimiter
 
-**Translation:**
+**Planned translation:**
 - GitHub Actions: `$PIPELINE_OUTPUT` → `$GITHUB_OUTPUT`
 - GitLab CI: Uses artifacts or CI variables
 - Local: Temporary file per step
@@ -194,11 +201,11 @@ steps:
     run: echo "GitHub push event"
 ```
 
-**Supported backends:**
+**Planned backend support:**
 - `'local'` - Direct command execution
 - `'github'` - GitHub Actions
 - `'gitlab'` - GitLab CI
-- `'jenkins'` - Jenkins (planned)
+- `'jenkins'` - Jenkins
 
 ### Matrix Strategies
 
@@ -220,7 +227,7 @@ jobs:
           echo "Testing on ${{ matrix.os }} with Rust ${{ matrix.rust-version }}"
 ```
 
-**Local execution:** Only runs combinations matching the current OS.
+**Planned local execution behavior:** Only runs combinations matching the current OS.
 
 ### Expression Language
 
@@ -261,14 +268,21 @@ See the `spec/generic-pipelines/examples/` directory for complete workflow examp
 
 ## Package Structure
 
-This is an umbrella crate that re-exports functionality from sub-packages:
+This is an umbrella crate that provides access to workflow AST types.
 
-- **`gpipe_ast`** ✅ - AST types and structures (complete)
-- **`gpipe_parser`** 🚧 - Workflow parsers (planned)
-- **`gpipe_runner`** 🚧 - Local execution engine (planned)
-- **`gpipe_translator`** 🚧 - Format translation (planned)
-- **`gpipe_actions`** 🚧 - Action loading and resolution (planned)
-- **`gpipe_cli`** 🚧 - Command-line interface (planned)
+### Current Structure
+- **`packages/gpipe/`** - Umbrella crate with re-exports
+- **`packages/gpipe/ast/`** - AST types and structures (✅ complete)
+  - `Workflow`, `Job`, `Step`, `Action` types
+  - `Expression` AST for conditionals
+  - Full serde support for serialization/deserialization
+
+### Planned Sub-Packages
+- **`gpipe_parser`** 🔮 - YAML workflow parsers
+- **`gpipe_runner`** 🔮 - Local execution engine
+- **`gpipe_translator`** 🔮 - Format translation (to GitHub Actions, GitLab CI, etc.)
+- **`gpipe_actions`** 🔮 - Action loading and resolution
+- **`gpipe_cli`** 🔮 - Command-line interface
 
 ## Usage (Planned)
 
@@ -291,12 +305,13 @@ gpipe validate workflow.yml
 
 ## Rust API
 
-This is an umbrella crate that re-exports the core AST types:
+This is an umbrella crate that re-exports the core AST types via the `ast` module:
 
 ```rust
-use gpipe::*;
+use gpipe::ast::*;
+use std::collections::BTreeMap;
 
-// Use the AST types
+// Create a basic workflow using the AST types
 let workflow = Workflow {
     version: "1.0".to_string(),
     name: "example".to_string(),
@@ -304,6 +319,9 @@ let workflow = Workflow {
     actions: BTreeMap::new(),
     jobs: BTreeMap::new(),
 };
+
+// Serialize to YAML
+let yaml = serde_yaml::to_string(&workflow).unwrap();
 ```
 
 ## Architecture
