@@ -21,5 +21,11 @@ moosicbox_session_models = { path = "../session/models" }
 
 ## Dependencies
 
-- **Serde**: Serialization and deserialization
-- **MoosicBox Core Models**: Core music and audio types
+- **serde**: Serialization and deserialization
+- **moosicbox_audio_zone_models**: Audio zone models
+- **moosicbox_music_models**: Music and track models
+- **moosicbox_json_utils**: JSON parsing utilities
+- **switchy_database**: Database value types and traits
+- **strum/strum_macros**: Enum string conversions
+- **log**: Logging facade
+- **utoipa** (optional): OpenAPI schema generation
