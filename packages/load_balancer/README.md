@@ -7,11 +7,11 @@ A high-performance HTTP/HTTPS load balancer built with Pingora for the MoosicBox
 The MoosicBox Load Balancer provides:
 
 - **High Performance**: Built on Cloudflare's Pingora framework for exceptional performance
-- **HTTP/HTTPS Support**: Handle both encrypted and unencrypted traffic
-- **Intelligent Routing**: Route requests to appropriate backend servers
-- **Health Checking**: Automatic detection and handling of unhealthy backends
-- **SSL/TLS Termination**: Handle SSL encryption/decryption at the edge
-- **Connection Pooling**: Efficient connection management to backend servers
+- **HTTP/HTTPS Support**: Handles both encrypted and unencrypted traffic
+- **Host-Based Routing**: Routes requests based on the Host header to appropriate backend clusters
+- **TCP Health Checking**: Automatic detection and handling of unhealthy backends via TCP health checks
+- **SSL/TLS Termination**: Handles SSL encryption/decryption at the edge with HTTP/2 support
+- **ACME Challenge Support**: Special routing for Let's Encrypt certificate validation
 
 ## Installation
 
@@ -37,22 +37,35 @@ cargo run --bin moosicbox_lb
 
 ### Configuration
 
-The load balancer can be configured through environment variables and configuration files.
+The load balancer is configured through environment variables.
 
 #### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BIND_ADDRESS` | Address to bind the load balancer | `0.0.0.0:80` |
-| `BACKEND_SERVERS` | Comma-separated list of backend servers | - |
-| `SSL_CERT_PATH` | Path to SSL certificate file | - |
-| `SSL_KEY_PATH` | Path to SSL private key file | - |
+| `PORT` | Port for HTTP traffic | `6188` |
+| `SSL_PORT` | Port for HTTPS traffic | `6189` |
+| `CLUSTERS` | Cluster configuration (see format below) | *Required* |
+| `SSL_CRT_PATH` | Path to SSL certificate file | `/etc/pingora/ssl/tls.crt` |
+| `SSL_KEY_PATH` | Path to SSL private key file | `/etc/pingora/ssl/tls.key` |
 
-#### Backend Server Configuration
+#### Cluster Configuration
 
-Configure backend servers via environment variables:
+The `CLUSTERS` environment variable defines backend clusters using this format:
+```
+host1,host2:backend1,backend2;host3:backend3,backend4
+```
+
+Examples:
 ```bash
-export BACKEND_SERVERS="http://127.0.0.1:8001,http://127.0.0.1:8002,http://127.0.0.1:8003"
+# Single cluster with wildcard routing
+export CLUSTERS="*:127.0.0.1:8001,127.0.0.1:8002"
+
+# Multiple hosts routing to different backends
+export CLUSTERS="api.example.com:10.0.1.1:8080,10.0.1.2:8080;web.example.com:10.0.2.1:80"
+
+# Including a solver for ACME challenges
+export CLUSTERS="example.com:10.0.1.1:8080;solver:127.0.0.1:8080"
 ```
 
 ### SSL/TLS Configuration
@@ -76,12 +89,12 @@ export SSL_KEY_PATH="./key.pem"
 
 ## Features
 
-- **Load Balancing Algorithms**: Round-robin, least connections, and weighted distribution
-- **Health Checks**: Active and passive health monitoring of backend servers
-- **SSL/TLS Support**: Full SSL termination with certificate management
-- **Request Routing**: Path-based and host-based routing capabilities
-- **Connection Limits**: Configure maximum connections per backend
-- **Graceful Shutdown**: Handle server restarts without dropping connections
+- **Load Balancing Algorithm**: Round-robin distribution across backend servers
+- **Health Checks**: TCP-based health monitoring of backend servers (checks every 10 seconds)
+- **SSL/TLS Support**: Full SSL termination with HTTP/2 support
+- **Host-Based Routing**: Routes requests to different backend clusters based on the Host header
+- **Wildcard Routing**: Supports `*` as a fallback cluster for unmatched hosts
+- **ACME Challenge Routing**: Automatic routing of `/.well-known/acme-challenge/*` requests to a dedicated solver cluster
 
 ## Development
 
@@ -104,7 +117,7 @@ cargo run --bin moosicbox_server -- 8001
 cargo run --bin moosicbox_server -- 8002
 
 # Terminal 3: Start load balancer
-export BACKEND_SERVERS="http://127.0.0.1:8001,http://127.0.0.1:8002"
+export CLUSTERS="*:127.0.0.1:8001,127.0.0.1:8002"
 cargo run --bin moosicbox_lb
 ```
 
@@ -121,7 +134,7 @@ RUN cargo build --release --bin moosicbox_lb
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/moosicbox_lb /usr/local/bin/
-EXPOSE 80 443
+EXPOSE 6188 6189
 CMD ["moosicbox_lb"]
 ```
 
@@ -146,11 +159,13 @@ spec:
       - name: moosicbox-lb
         image: moosicbox/load-balancer:latest
         ports:
-        - containerPort: 80
-        - containerPort: 443
+        - containerPort: 6188
+          name: http
+        - containerPort: 6189
+          name: https
         env:
-        - name: BACKEND_SERVERS
-          value: "http://moosicbox-server-1:8001,http://moosicbox-server-2:8001"
+        - name: CLUSTERS
+          value: "*:moosicbox-server-1:8001,moosicbox-server-2:8001"
 ```
 
 ## Troubleshooting
@@ -162,16 +177,18 @@ spec:
 3. **High latency**: Monitor backend server health and resource usage
 4. **Connection failures**: Check connection limits and timeout settings
 
-### Monitoring
+### Logging
 
-Monitor load balancer performance:
+The load balancer logs to `moosicbox_lb.log` and stdout. Enable debug logging for detailed information:
 ```bash
-# Check backend server status
-curl http://localhost/health
-
-# View load balancer metrics
-curl http://localhost/metrics
+RUST_LOG="moosicbox_load_balancer=debug" moosicbox_lb
 ```
+
+Logs include:
+- Cluster selection and upstream routing decisions
+- Health check status
+- SSL/TLS configuration status
+- Request routing details
 
 ## Performance Tuning
 
@@ -186,10 +203,13 @@ Increase system file descriptor limits for high-traffic scenarios:
 
 ### Load Balancer Configuration
 
-Optimize for your use case:
-- Increase connection pool sizes for high-throughput scenarios
-- Adjust health check intervals based on backend stability
-- Configure appropriate timeout values for your network conditions
+The load balancer uses Pingora's built-in connection pooling and management features. Key configuration points:
+
+- **Health Check Frequency**: Currently set to 10 seconds in the code (see `packages/load_balancer/src/server.rs:62`)
+- **Load Balancing**: Uses round-robin selection across healthy backends
+- **Backend Selection**: Automatically excludes unhealthy backends from rotation
+
+**Planned**: Additional configuration options for connection limits, timeout values, and health check intervals may be added in future versions.
 
 ## See Also
 
