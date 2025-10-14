@@ -7,8 +7,7 @@ Generic HTTP server integration for HyperChad HTML renderer with framework-agnos
 The HyperChad HTML HTTP Renderer provides:
 
 - **Framework Agnostic**: Works with any HTTP server implementation
-- **HTTP Standard**: Full HTTP/1.1 and HTTP/2 protocol support
-- **Request Processing**: Complete HTTP request parsing and routing
+- **Request Processing**: Process RouteRequest objects into HTTP responses
 - **Response Generation**: Standards-compliant HTTP response generation
 - **Static Assets**: Integrated static file serving
 - **Action Handling**: Server-side action processing
@@ -18,7 +17,7 @@ The HyperChad HTML HTTP Renderer provides:
 
 ### HTTP Server Capabilities
 - **Generic HTTP**: Works with any HTTP server framework
-- **Request Parsing**: Parse HTTP requests into RouteRequest objects
+- **Request Processing**: Process RouteRequest objects into HTTP responses
 - **Response Building**: Generate proper HTTP responses
 - **Status Codes**: Full HTTP status code support
 - **Headers**: Custom header management
@@ -33,9 +32,6 @@ The HyperChad HTML HTTP Renderer provides:
 
 ### Performance Features
 - **Async Processing**: Fully asynchronous request handling
-- **Streaming**: Support for streaming responses
-- **Caching**: Configurable response caching
-- **Compression**: Optional response compression
 
 ## Installation
 
@@ -45,10 +41,12 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_renderer_html_http = { path = "../hyperchad/renderer/html/http" }
 
-# With additional features
+# Default features: actions, assets, debug, json
+# Or with specific features only
 hyperchad_renderer_html_http = {
     path = "../hyperchad/renderer/html/http",
-    features = ["actions", "assets"]
+    default-features = false,
+    features = ["actions"]
 }
 ```
 
@@ -250,8 +248,13 @@ async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<d
 
 ### Static Asset Serving
 
+**Note:** Static asset serving requires the `assets` feature (enabled by default).
+
 ```rust
-use hyperchad_renderer::{assets::{StaticAssetRoute, AssetPathTarget}};
+use hyperchad_renderer_html_http::HttpApp;
+use hyperchad_renderer_html::DefaultHtmlTagRenderer;
+use hyperchad_router::Router;
+use hyperchad_renderer::assets::AssetPathTarget;
 use std::path::PathBuf;
 
 fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
@@ -259,26 +262,18 @@ fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
     let tag_renderer = DefaultHtmlTagRenderer::default();
 
     HttpApp::new(tag_renderer, router)
-        .with_static_asset_routes(vec![
-            StaticAssetRoute {
-                route: "/css/style.css".to_string(),
-                target: AssetPathTarget::File(PathBuf::from("assets/style.css")),
-            },
-            StaticAssetRoute {
-                route: "/js/app.js".to_string(),
-                target: AssetPathTarget::File(PathBuf::from("assets/app.js")),
-            },
-            StaticAssetRoute {
-                route: "/images/".to_string(),
-                target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
-            },
-        ])
         .with_static_asset_route_handler(|req| {
-            // Custom asset handler
-            if req.path.starts_with("/uploads/") {
-                Some(AssetPathTarget::Directory(PathBuf::from("uploads")))
-            } else {
-                None
+            // Map URL paths to filesystem paths
+            match req.path.as_str() {
+                "/css/style.css" => Some(AssetPathTarget::File(PathBuf::from("assets/style.css"))),
+                "/js/app.js" => Some(AssetPathTarget::File(PathBuf::from("assets/app.js"))),
+                path if path.starts_with("/images/") => {
+                    Some(AssetPathTarget::Directory(PathBuf::from("assets/images")))
+                }
+                path if path.starts_with("/uploads/") => {
+                    Some(AssetPathTarget::Directory(PathBuf::from("uploads")))
+                }
+                _ => None,
             }
         })
 }
@@ -316,8 +311,10 @@ fn render_page_with_assets() -> String {
 
 ### Action Handling
 
+**Note:** Action handling requires the `actions` feature (enabled by default).
+
 ```rust
-use hyperchad_actions::logic::Value;
+use hyperchad_renderer::transformer::actions::logic::Value;
 
 fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
     let (action_tx, action_rx) = flume::unbounded();
@@ -514,8 +511,13 @@ async fn handle_with_middleware(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 
 ## Feature Flags
 
-- **`actions`**: Enable server-side action processing
-- **`assets`**: Enable static asset serving
+Default features: `actions`, `assets`, `debug`, `json`
+
+- **`actions`**: Enable server-side action processing (depends on `_json` and `serde`)
+- **`assets`**: Enable static asset serving (depends on `mime_guess`, `switchy_async`, `switchy_fs`)
+- **`debug`**: Enable debug-specific functionality
+- **`json`**: Enable JSON content type support (depends on `_json`)
+- **`_json`**: Internal feature for JSON dependencies (do not enable directly)
 
 ## HTTP Standards Compliance
 
@@ -535,18 +537,23 @@ async fn handle_with_middleware(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 - **5xx Server Error**: 500 Internal Server Error, 503 Service Unavailable
 
 ### Headers
-- **Content-Type**: Automatic content type detection
-- **Cache-Control**: Configurable caching headers
-- **CORS**: Cross-origin resource sharing
-- **Security**: Security headers support
+- **Content-Type**: Automatic content type detection for assets and responses
+- Custom headers can be added via middleware (see middleware example)
 
 ## Dependencies
 
-- **HTTP**: Standard HTTP types and utilities
-- **HyperChad HTML Renderer**: Core HTML rendering functionality
-- **HyperChad Router**: Routing and navigation
-- **Async Trait**: Async trait support
-- **Thiserror**: Error handling
+Core dependencies:
+- **http**: Standard HTTP types and utilities
+- **hyperchad_renderer_html**: Core HTML rendering functionality
+- **hyperchad_router**: Routing and navigation
+- **hyperchad_renderer**: Renderer abstractions and traits
+- **thiserror**: Error handling
+- **flume**: Multi-producer, multi-consumer channels for action handling
+
+Optional dependencies (enabled by features):
+- **serde** & **serde_json**: JSON serialization for actions and API responses
+- **mime_guess**: Content-type detection for static assets
+- **switchy_async** & **switchy_fs**: Async file I/O for asset serving
 
 ## Integration
 
@@ -559,8 +566,6 @@ This renderer is designed for:
 
 ## Performance Considerations
 
-- **Zero-copy**: Minimize data copying where possible
-- **Async**: Fully asynchronous processing
-- **Streaming**: Support for streaming large responses
-- **Caching**: Configurable response caching
+- **Async**: Fully asynchronous processing with tokio/async runtime support
 - **Memory**: Efficient memory usage patterns
+- **File I/O**: Async file operations for asset serving
