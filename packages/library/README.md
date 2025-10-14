@@ -1,17 +1,17 @@
 # MoosicBox Library
 
-Basic music library management providing database operations for artists, albums, and tracks with support for favorites, search, and pagination.
+Music library management package providing database operations for artists, albums, and tracks with support for filtering, search, and pagination.
 
 ## Features
 
-- **Artist Management**: List, retrieve, and manage favorite artists
+- **Artist Management**: List and retrieve artists from the library
 - **Album Management**: Browse albums with filtering, sorting, and pagination
-- **Track Management**: Access track information and manage favorites
-- **Search Functionality**: Search across artists, albums, and tracks
+- **Track Management**: Access track information with detailed metadata
+- **Search Functionality**: Full-text search across artists, albums, and tracks
 - **Pagination Support**: Efficient browsing of large music collections
-- **Filtering & Sorting**: Filter albums by artist and sort by various criteria
+- **Filtering & Sorting**: Filter albums by artist, name, source, and sort by various criteria
 - **Database Integration**: Async database operations with proper error handling
-- **Version Support**: Handle multiple album versions from different sources
+- **Version Support**: Manage multiple album versions from different sources with varying quality levels
 
 ## Installation
 
@@ -19,10 +19,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_library = "0.1.1"
+moosicbox_library = "0.1.4"
 
 # Enable additional features
-moosicbox_library = { version = "0.1.1", features = ["api"] }
+moosicbox_library = { version = "0.1.4", features = ["api"] }
 ```
 
 ## Usage
@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let versions = album_versions(&db, &album_id).await?;
         println!("  Available versions: {}", versions.len());
         for version in versions {
-            println!("    Source: {:?}, Quality: {:?}", version.source, version.audio_format);
+            println!("    Source: {:?}, Format: {:?}", version.source, version.format);
         }
     }
 
@@ -144,23 +144,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use moosicbox_library::{filter_albums, sort_albums};
-use moosicbox_music_api_models::{AlbumsRequest, AlbumFilters, AlbumSort};
-use moosicbox_music_models::{Id, ApiSource};
+use moosicbox_music_api_models::{AlbumsRequest, AlbumFilters};
+use moosicbox_music_models::{AlbumSort, Id};
 
 fn example_filtering() {
     let albums = vec![]; // Your album collection
 
     // Create filter request
     let request = AlbumsRequest {
-        sources: Some(vec![ApiSource::Library]),
-        sort: Some(AlbumSort::Artist),
+        sources: None,
+        sort: Some(AlbumSort::ArtistAsc),
         filters: Some(AlbumFilters {
             name: Some("Dark Side".to_string()),
             artist_id: Some(Id::Number(123)),
             artist_api_id: None,
+            artist: None,
+            album_type: None,
             search: None,
         }),
-        ..Default::default()
+        page: None,
     };
 
     // Filter albums
@@ -178,7 +180,7 @@ fn example_filtering() {
 ### Search Operations
 
 ```rust
-use moosicbox_library::{search, SearchType, LibrarySearchType};
+use moosicbox_library::{search, LibrarySearchType};
 
 fn search_library() -> Result<(), Box<dyn std::error::Error>> {
     let query = "Pink Floyd";
@@ -200,21 +202,21 @@ fn search_library() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(artists) = &results.artists {
         println!("  Artists: {}", artists.len());
         for artist in artists {
-            println!("    {}", artist.name);
+            println!("    {}", artist.title);
         }
     }
 
     if let Some(albums) = &results.albums {
         println!("  Albums: {}", albums.len());
         for album in albums {
-            println!("    {} - {}", album.artist_name, album.name);
+            println!("    {} - {}", album.artist, album.title);
         }
     }
 
     if let Some(tracks) = &results.tracks {
         println!("  Tracks: {}", tracks.len());
         for track in tracks {
-            println!("    {} - {}", track.artist_name, track.name);
+            println!("    {} - {}", track.artist, track.title);
         }
     }
 
@@ -294,15 +296,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Core Functions
 
-- `favorite_artists()` - Get paginated favorite artists
-- `favorite_albums()` - Get paginated favorite albums with filtering
-- `favorite_tracks()` - Get paginated favorite tracks
+- `favorite_artists()` - Get paginated artists from the library
+- `favorite_albums()` - Get paginated albums with filtering and sorting
+- `favorite_tracks()` - Get paginated tracks with optional ID filtering
 - `artist()` - Get artist by ID
 - `album()` - Get album by ID
+- `album_from_source()` - Get album by ID and API source
 - `track()` - Get track by ID
-- `artist_albums()` - Get albums by specific artist
+- `artist_albums()` - Get albums by specific artist with optional type filtering
 - `album_tracks()` - Get tracks in specific album
-- `album_versions()` - Get available versions of an album
+- `album_versions()` - Get available versions of an album grouped by quality
 
 ### Utility Functions
 
@@ -310,15 +313,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `sort_albums()` - Sort albums by specified order
 - `search()` - Search across library content
 - `track_file_url()` - Get file URL for track playback
+- `reindex_global_search_index()` - Rebuild the search index from library data
 
 ### Management Functions
 
-- `add_favorite_artist()` - Add artist to favorites (placeholder)
-- `remove_favorite_artist()` - Remove artist from favorites (placeholder)
-- `add_favorite_album()` - Add album to favorites (placeholder)
-- `remove_favorite_album()` - Remove album from favorites (placeholder)
-- `add_favorite_track()` - Add track to favorites (placeholder)
-- `remove_favorite_track()` - Remove track from favorites (placeholder)
+**Note:** The following functions are currently non-functional placeholders that return `Ok(())`:
+
+- `add_favorite_artist()` - Placeholder: Add artist to favorites
+- `remove_favorite_artist()` - Placeholder: Remove artist from favorites
+- `add_favorite_album()` - Placeholder: Add album to favorites
+- `remove_favorite_album()` - Placeholder: Remove album from favorites
+- `add_favorite_track()` - Placeholder: Add track to favorites
+- `remove_favorite_track()` - Placeholder: Remove track from favorites
 
 ## Error Handling
 
@@ -347,7 +353,15 @@ The library provides specific error types for different operations:
 
 ## Features
 
-- `api` - Enable API integration features
+The following cargo features are available:
+
+- `api` - Enable API integration features (actix-web support)
+- `openapi` - Enable OpenAPI/utoipa schema generation
+- `fail-on-warnings` - Treat warnings as errors during compilation
+- `all-encoders` - Enable all audio encoders
+- `all-formats` - Enable all audio format support
+- Format-specific features: `format-aac`, `format-flac`, `format-mp3`, `format-opus`
+- Encoder-specific features: `encoder-aac`, `encoder-flac`, `encoder-mp3`, `encoder-opus`
 
 ## Dependencies
 
