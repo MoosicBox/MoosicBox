@@ -1,18 +1,17 @@
 # HyperChad
 
-A versatile, multi-renderer UI framework for building cross-platform applications with a unified codebase. HyperChad enables developers to write UI logic once and deploy across desktop (Egui, FLTK), web (HTML, Vanilla JS), and server-side (Actix, Lambda) environments.
+A template-based UI framework for building cross-platform applications with a unified codebase. HyperChad enables developers to write UI templates once and deploy across desktop (Egui, FLTK), web (HTML, Vanilla JS), and server-side (Actix, Lambda) environments.
 
 ## Features
 
 - **Multi-Renderer Architecture**: Support for Egui, FLTK, HTML, Vanilla JS, and server-side rendering
-- **Unified Component System**: Write components once, render everywhere
-- **State Management**: Reactive state system with persistence options
-- **Routing System**: Client-side and server-side routing with navigation
-- **Template Engine**: Flexible templating with logic support
+- **Template-Based UI**: Build interfaces using the `container!` macro system
+- **Routing System**: Async router with navigation support
 - **Action System**: Event handling and data flow management
+- **State Persistence**: Key-value state store with optional SQLite persistence
 - **Color Management**: Consistent theming across all renderers
 - **JavaScript Bundling**: Automatic bundling for web deployments
-- **Hot Reload**: Development-time hot reloading for rapid iteration
+- **Responsive Design**: Responsive triggers for adaptive layouts
 - **Cross-Platform**: Desktop, web, and server applications from single codebase
 
 ## Installation
@@ -29,242 +28,144 @@ hyperchad = "0.1.0"
 ### Basic Application
 
 ```rust
-use hyperchad::{App, Component, Renderer, Element};
+use hyperchad::app::{App, AppBuilder};
+use hyperchad::router::{Router, RoutePath};
+use hyperchad::template::container;
+use hyperchad::renderer_html::HtmlRenderer;
 
-#[derive(Debug, Clone)]
-struct Counter {
-    count: i32,
-}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let router = Router::new()
+        .with_route(RoutePath::Literal("/"), |_| async move {
+            let content = container! {
+                div {
+                    h1 { "Welcome to HyperChad" }
+                    button { "Click Me" }
+                }
+            };
+            Ok(content)
+        });
 
-impl Component for Counter {
-    type Props = ();
-    type State = i32;
+    let renderer = HtmlRenderer::new();
 
-    fn render(&self, props: &Self::Props, state: &Self::State) -> Element {
-        Element::div()
-            .child(Element::text(format!("Count: {}", state)))
-            .child(
-                Element::button()
-                    .text("Increment")
-                    .on_click(|_| CounterAction::Increment)
-            )
-            .child(
-                Element::button()
-                    .text("Decrement")
-                    .on_click(|_| CounterAction::Decrement)
-            )
-    }
-}
+    let app = AppBuilder::new()
+        .with_title("My App")
+        .with_renderer(renderer)
+        .with_router(router)
+        .build()?;
 
-#[derive(Debug, Clone)]
-enum CounterAction {
-    Increment,
-    Decrement,
-}
-
-// Run with different renderers
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = App::new()
-        .with_component(Counter { count: 0 })
-        .with_title("Counter App");
-
-    #[cfg(feature = "renderer-egui")]
-    app.run_egui()?;
-
-    #[cfg(feature = "renderer-html")]
-    app.run_html_server("0.0.0.0:8080")?;
-
+    app.run().await?;
     Ok(())
 }
 ```
 
-### Component System
+### Template System
+
+HyperChad uses a template macro system for building UIs:
 
 ```rust
-use hyperchad::{Component, Element, Props, State};
+use hyperchad::template::container;
 
-#[derive(Debug, Clone, Props)]
-struct ButtonProps {
-    text: String,
-    variant: ButtonVariant,
-    disabled: bool,
-}
-
-#[derive(Debug, Clone)]
-enum ButtonVariant {
-    Primary,
-    Secondary,
-    Danger,
-}
-
-#[derive(Debug, Clone)]
-struct Button;
-
-impl Component for Button {
-    type Props = ButtonProps;
-    type State = bool; // hover state
-
-    fn render(&self, props: &Self::Props, state: &Self::State) -> Element {
-        Element::button()
-            .text(&props.text)
-            .class(match props.variant {
-                ButtonVariant::Primary => "btn-primary",
-                ButtonVariant::Secondary => "btn-secondary",
-                ButtonVariant::Danger => "btn-danger",
-            })
-            .disabled(props.disabled)
-            .class_if("btn-hover", *state)
-            .on_mouse_enter(|_| ButtonAction::Hover(true))
-            .on_mouse_leave(|_| ButtonAction::Hover(false))
-    }
-}
-```
-
-### State Management
-
-```rust
-use hyperchad::{State, StateManager, Reducer};
-
-#[derive(Debug, Clone, State)]
-struct AppState {
-    user: Option<User>,
-    todos: Vec<Todo>,
-    loading: bool,
-}
-
-#[derive(Debug, Clone)]
-enum AppAction {
-    Login(User),
-    Logout,
-    AddTodo(String),
-    ToggleTodo(usize),
-    SetLoading(bool),
-}
-
-impl Reducer<AppAction> for AppState {
-    fn reduce(&mut self, action: AppAction) {
-        match action {
-            AppAction::Login(user) => {
-                self.user = Some(user);
-                self.loading = false;
-            }
-            AppAction::Logout => {
-                self.user = None;
-                self.todos.clear();
-            }
-            AppAction::AddTodo(text) => {
-                self.todos.push(Todo::new(text));
-            }
-            AppAction::ToggleTodo(index) => {
-                if let Some(todo) = self.todos.get_mut(index) {
-                    todo.completed = !todo.completed;
-                }
-            }
-            AppAction::SetLoading(loading) => {
-                self.loading = loading;
-            }
+let ui = container! {
+    div id="user-card" class="card" {
+        h2 { "User Profile" }
+        p { "Email: user@example.com" }
+        button fx-click=fx { navigate("/profile") } {
+            "View Profile"
         }
     }
-}
-
-// Use state in components
-let state_manager = StateManager::new(AppState::default());
-let app = App::new().with_state(state_manager);
+};
 ```
 
 ### Routing
 
 ```rust
-use hyperchad::{Router, Route, Navigate};
+use hyperchad::router::{Router, RoutePath, Navigation};
 
-#[derive(Debug, Clone)]
-enum AppRoute {
-    Home,
-    About,
-    User(u32),
-    NotFound,
-}
-
-impl Route for AppRoute {
-    fn from_path(path: &str) -> Self {
-        match path {
-            "/" => AppRoute::Home,
-            "/about" => AppRoute::About,
-            path if path.starts_with("/user/") => {
-                let id = path.strip_prefix("/user/")
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0);
-                AppRoute::User(id)
+let router = Router::new()
+    .with_route(RoutePath::Literal("/"), |_| async move {
+        let content = container! {
+            div { "Home Page" }
+        };
+        Ok(content)
+    })
+    .with_route(RoutePath::Literal("/about"), |_| async move {
+        let content = container! {
+            div { "About Page" }
+        };
+        Ok(content)
+    })
+    .with_route(RoutePath::LiteralPrefix("/user/"), |nav| async move {
+        let user_id = nav.path.strip_prefix("/user/").unwrap_or("");
+        let content = container! {
+            div {
+                h1 { "User Profile" }
+                p { format!("User ID: {}", user_id) }
             }
-            _ => AppRoute::NotFound,
-        }
-    }
+        };
+        Ok(content)
+    });
+```
 
-    fn to_path(&self) -> String {
-        match self {
-            AppRoute::Home => "/".to_string(),
-            AppRoute::About => "/about".to_string(),
-            AppRoute::User(id) => format!("/user/{}", id),
-            AppRoute::NotFound => "/404".to_string(),
-        }
-    }
+### State Management
+
+HyperChad provides a simple key-value state store:
+
+```rust
+use hyperchad::state::{StateStore, InMemoryStatePersistence};
+use serde_json::json;
+
+let state = StateStore::new(InMemoryStatePersistence::new());
+
+// Set values
+state.set("user_id".to_string(), json!("12345"))?;
+state.set("theme".to_string(), json!("dark"))?;
+
+// Get values
+if let Some(user_id) = state.get("user_id")? {
+    println!("User ID: {}", user_id);
 }
 
-#[derive(Debug, Clone)]
-struct App {
-    router: Router<AppRoute>,
-}
-
-impl Component for App {
-    type Props = ();
-    type State = AppRoute;
-
-    fn render(&self, _props: &Self::Props, route: &Self::State) -> Element {
-        Element::div()
-            .child(self.render_navbar())
-            .child(match route {
-                AppRoute::Home => self.render_home(),
-                AppRoute::About => self.render_about(),
-                AppRoute::User(id) => self.render_user(*id),
-                AppRoute::NotFound => self.render_404(),
-            })
-    }
+// With SQLite persistence (requires "state-sqlite" feature)
+#[cfg(feature = "state-sqlite")]
+{
+    use hyperchad::state::SqliteStatePersistence;
+    let state = StateStore::new(SqliteStatePersistence::new("app.db").await?);
 }
 ```
 
-### Templates
+### Action System
 
 ```rust
-use hyperchad::{Template, TemplateEngine, Context};
+use hyperchad::actions::{Action, ActionContext};
 
-// Define template
-let template = r#"
-<div class="user-card">
-    <h2>{{ user.name }}</h2>
-    <p>{{ user.email }}</p>
-    {% if user.is_admin %}
-        <span class="badge">Admin</span>
-    {% endif %}
-    <ul>
-    {% for skill in user.skills %}
-        <li>{{ skill }}</li>
-    {% endfor %}
-    </ul>
-</div>
-"#;
+// Define actions in templates
+let ui = container! {
+    div {
+        button fx-click=fx {
+            set_value("counter", "5")
+            navigate("/success")
+        } {
+            "Submit"
+        }
+    }
+};
 
-// Create context
-let context = Context::new()
-    .insert("user", User {
-        name: "John Doe".to_string(),
-        email: "john@example.com".to_string(),
-        is_admin: true,
-        skills: vec!["Rust".to_string(), "JavaScript".to_string()],
-    });
-
-// Render template
-let engine = TemplateEngine::new();
-let rendered = engine.render(template, &context)?;
+// Actions support conditionals and logic (with "actions-logic" feature)
+#[cfg(feature = "actions-logic")]
+{
+    let ui = container! {
+        button fx-click=fx {
+            if eq(get_value("status"), "active") {
+                navigate("/dashboard")
+            } else {
+                navigate("/login")
+            }
+        } {
+            "Continue"
+        }
+    };
+}
 ```
 
 ## Programming Interface
@@ -272,84 +173,75 @@ let rendered = engine.render(template, &context)?;
 ### Core Types
 
 ```rust
-pub trait Component: Clone + Send + Sync {
-    type Props: Clone + Send + Sync;
-    type State: Clone + Send + Sync;
-
-    fn render(&self, props: &Self::Props, state: &Self::State) -> Element;
-    fn update(&mut self, action: Self::Action) -> bool { false }
+// Container - the fundamental building block
+pub struct Container {
+    pub element: Element,
+    pub style: Style,
+    pub children: Vec<Container>,
+    // ... other fields
 }
 
-pub struct Element {
-    tag: String,
-    attributes: HashMap<String, String>,
-    children: Vec<Element>,
-    text: Option<String>,
-    event_handlers: HashMap<String, EventHandler>,
-}
-
-impl Element {
-    pub fn div() -> Self;
-    pub fn span() -> Self;
-    pub fn button() -> Self;
-    pub fn input() -> Self;
-    pub fn text<S: Into<String>>(content: S) -> Self;
-
-    pub fn attr<K, V>(mut self, key: K, value: V) -> Self
-    where K: Into<String>, V: Into<String>;
-
-    pub fn class<S: Into<String>>(mut self, class: S) -> Self;
-    pub fn class_if<S: Into<String>>(mut self, class: S, condition: bool) -> Self;
-    pub fn child(mut self, child: Element) -> Self;
-    pub fn children<I>(mut self, children: I) -> Self
-    where I: IntoIterator<Item = Element>;
+// Element - defines HTML/UI element types
+pub enum Element {
+    Div,
+    Span,
+    Button { r#type: Option<String> },
+    Input { input: Input, name: Option<String>, autofocus: Option<bool> },
+    Heading { size: HeaderSize },
+    Image { source: Option<String>, alt: Option<String>, /* ... */ },
+    Anchor { target: Option<LinkTarget>, href: Option<String> },
+    // ... other variants
 }
 ```
 
-### Renderer Traits
+### Renderer Trait
 
 ```rust
-pub trait Renderer: Send + Sync {
-    type Error;
-    type Output;
+use async_trait::async_trait;
 
-    fn render(&self, element: &Element) -> Result<Self::Output, Self::Error>;
-    fn handle_event(&mut self, event: Event) -> Result<(), Self::Error>;
-}
+#[async_trait]
+pub trait Renderer: ToRenderRunner + Send + Sync {
+    async fn init(&mut self, width: f32, height: f32, /* ... */)
+        -> Result<(), Box<dyn std::error::Error>>;
 
-// Specific renderer implementations
-pub struct EguiRenderer {
-    ctx: egui::Context,
-}
+    async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error>>;
 
-pub struct HtmlRenderer {
-    output: String,
-}
+    async fn render_partial(&self, partial: PartialView)
+        -> Result<(), Box<dyn std::error::Error>>;
 
-pub struct VanillaJsRenderer {
-    dom: VirtualDom,
+    async fn emit_event(&self, event_name: String, event_value: Option<String>)
+        -> Result<(), Box<dyn std::error::Error>>;
+
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
 }
 ```
 
-### State Management
+### Application Builder
 
 ```rust
-pub trait State: Clone + Send + Sync + 'static {}
-
-pub trait Reducer<A>: State {
-    fn reduce(&mut self, action: A);
+pub struct AppBuilder<R: Renderer + /* ... */ + 'static> {
+    // ...
 }
 
-pub struct StateManager<S: State> {
-    state: Arc<RwLock<S>>,
-    subscribers: Vec<Box<dyn Fn(&S) + Send + Sync>>,
+impl<R: Renderer + /* ... */> AppBuilder<R> {
+    pub fn new() -> Self;
+    pub fn with_title(self, title: impl Into<String>) -> Self;
+    pub fn with_renderer(self, renderer: R) -> Self;
+    pub fn with_router(self, router: Router) -> Self;
+    pub fn build(self) -> Result<App<R>, BuilderError>;
 }
 
-impl<S: State> StateManager<S> {
-    pub fn new(initial_state: S) -> Self;
-    pub fn get_state(&self) -> S;
-    pub fn dispatch<A>(&self, action: A) where S: Reducer<A>;
-    pub fn subscribe<F>(&mut self, callback: F) where F: Fn(&S) + Send + Sync + 'static;
+pub struct App<R: Renderer + /* ... */> {
+    pub renderer: R,
+    pub router: Router,
+    // ...
+}
+
+impl<R: Renderer + /* ... */> App<R> {
+    pub async fn run(&self) -> Result<(), Error>;
+    pub async fn serve(&self) -> Result<(), Error>;
+    pub async fn generate(&self) -> Result<(), Error>;
+    pub async fn clean(&self) -> Result<(), Error>;
 }
 ```
 
@@ -370,117 +262,70 @@ renderer-vanilla-js = ["hyperchad_renderer_vanilla_js"]
 # Platform features
 renderer-html-actix = ["hyperchad_renderer_html_actix"]
 renderer-html-lambda = ["hyperchad_renderer_html_lambda"]
+renderer-html-web-server = ["hyperchad_renderer_html_web_server"]
+
+# State features
+state = ["hyperchad_state"]
+state-sqlite = ["hyperchad_state/persistence-sqlite"]
 
 # Development features
-renderer-egui-debug = ["hyperchad_renderer_egui/debug"]
 actions-logic = ["hyperchad_actions/logic"]
+renderer-egui-debug = ["hyperchad_renderer_egui/debug"]
+debug = ["renderer-egui-debug", "renderer-fltk-debug"]
 ```
-
-### Environment Variables
-
-- `HYPERCHAD_RENDERER`: Default renderer to use (egui, html, fltk)
-- `HYPERCHAD_DEV_MODE`: Enable development features (default: false)
-- `HYPERCHAD_HOT_RELOAD`: Enable hot reloading (default: true in dev)
-- `HYPERCHAD_BUNDLE_JS`: Enable JavaScript bundling (default: true)
 
 ## Renderer-Specific Usage
 
 ### Egui Desktop Application
 
 ```rust
-use hyperchad::{App, EguiRenderer};
+use hyperchad::app::{App, AppBuilder};
+use hyperchad::renderer_egui::EguiRenderer;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = App::new()
-        .with_title("My Desktop App")
-        .with_size(800, 600);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = EguiRenderer::new();
 
-    let renderer = EguiRenderer::new()
-        .with_theme(Theme::Dark)
-        .with_font("Inter", 14.0);
+    let app = AppBuilder::new()
+        .with_title("Desktop App")
+        .with_renderer(renderer)
+        .with_router(router)
+        .build()?;
 
-    app.run_with_renderer(renderer)?;
+    app.run().await?;
     Ok(())
 }
 ```
 
-### Web Application
+### Web Application with Actix
 
 ```rust
-use hyperchad::{App, HtmlRenderer, VanillaJsRenderer};
-
-// Server-side rendering
-fn render_ssr() -> String {
-    let app = App::new();
-    let renderer = HtmlRenderer::new();
-    app.render_to_string(&renderer)
-}
-
-// Client-side hydration
-#[wasm_bindgen]
-pub fn hydrate() {
-    let app = App::new();
-    let renderer = VanillaJsRenderer::new();
-    app.hydrate_dom(&renderer);
-}
-```
-
-### Server Deployment
-
-```rust
-use hyperchad::{App, ActixRenderer};
-use actix_web::{web, App as ActixApp, HttpServer};
-
-async fn render_page(app: web::Data<App>) -> impl Responder {
-    let renderer = ActixRenderer::new();
-    app.render(&renderer).await
-}
+use hyperchad::app::{App, AppBuilder};
+use hyperchad::renderer_html_actix::ActixRenderer;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let app = App::new().build();
+    let renderer = ActixRenderer::new();
 
-    HttpServer::new(move || {
-        ActixApp::new()
-            .app_data(web::Data::new(app.clone()))
-            .route("/", web::get().to(render_page))
-    })
-    .bind("127.0.0.1:8080")?
-    .run()
-    .await
-}
-```
+    let app = AppBuilder::new()
+        .with_renderer(renderer)
+        .with_router(router)
+        .build()
+        .unwrap();
 
-## Development Tools
-
-### Hot Reloading
-
-```rust
-use hyperchad::{DevServer, WatchOptions};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let dev_server = DevServer::new()
-        .with_watch_paths(vec!["src/", "templates/"])
-        .with_reload_on_change(true)
-        .with_port(3000);
-
-    dev_server.start()?;
+    app.serve().await.unwrap();
     Ok(())
 }
 ```
 
-### Component Inspector
+### Server-Side Rendering with HTML
 
 ```rust
-use hyperchad::{Inspector, DebugMode};
+use hyperchad::renderer_html::HtmlRenderer;
 
-let app = App::new()
-    .with_debug_mode(DebugMode::Development)
-    .with_inspector(Inspector::new()
-        .show_component_tree(true)
-        .show_state_changes(true)
-        .show_performance_metrics(true)
-    );
+let renderer = HtmlRenderer::new();
+let view = /* ... create view from routing ... */;
+renderer.render(view).await?;
 ```
 
 ## Testing
@@ -492,70 +337,58 @@ cargo test
 # Test specific renderer
 cargo test --features "renderer-egui"
 
-# Run integration tests
-cargo test --test integration
-
 # Test with all renderers
 cargo test --features "all"
 ```
 
-## Performance Optimization
-
-### Virtual DOM Optimization
-
-```rust
-use hyperchad::{VirtualDom, DiffOptions};
-
-let vdom = VirtualDom::new()
-    .with_diff_options(DiffOptions {
-        skip_text_nodes: false,
-        batch_updates: true,
-        debounce_ms: 16, // 60fps
-    });
-```
-
-### State Updates
-
-```rust
-// Batch state updates for better performance
-state_manager.batch_dispatch(vec![
-    AppAction::SetLoading(true),
-    AppAction::ClearData,
-    AppAction::LoadData(data),
-    AppAction::SetLoading(false),
-]);
-
-// Use memoization for expensive computations
-let memoized_component = Component::memo(ExpensiveComponent, |prev, next| {
-    prev.data_id == next.data_id
-});
-```
-
 ## Error Handling
 
-```rust
-use hyperchad::{HyperChadError, RenderError};
+Each module provides its own error types:
 
-match app.render(&renderer) {
-    Ok(output) => println!("Rendered successfully"),
-    Err(HyperChadError::RenderError(e)) => {
-        eprintln!("Render error: {}", e);
-    }
-    Err(HyperChadError::StateError(e)) => {
-        eprintln!("State management error: {}", e);
-    }
-    Err(HyperChadError::ComponentError(e)) => {
-        eprintln!("Component error: {}", e);
-    }
-    Err(e) => eprintln!("Unexpected error: {}", e),
+```rust
+use hyperchad::app::{Error as AppError, BuilderError};
+use hyperchad::state::Error as StateError;
+use hyperchad::router::{NavigateError, ParseError};
+
+// App errors
+match app.run().await {
+    Ok(()) => println!("App completed successfully"),
+    Err(AppError::Router(e)) => eprintln!("Router error: {}", e),
+    Err(AppError::Renderer(e)) => eprintln!("Renderer error: {}", e),
+    Err(e) => eprintln!("Error: {}", e),
+}
+
+// State errors
+match state.get("key") {
+    Ok(Some(value)) => println!("Value: {}", value),
+    Ok(None) => println!("Key not found"),
+    Err(StateError::Persistence(e)) => eprintln!("Persistence error: {}", e),
+    Err(e) => eprintln!("Error: {}", e),
 }
 ```
 
+## Architecture
+
+HyperChad is built on these core concepts:
+
+1. **Templates**: Use the `container!` macro to define UI structure
+2. **Containers**: Styled elements that form the UI tree
+3. **Renderers**: Transform containers into platform-specific output
+4. **Router**: Maps paths to content generators (async closures)
+5. **Actions**: Handle events and trigger state changes or navigation
+6. **State**: Optional key-value persistence layer
+
 ## See Also
 
+- [`hyperchad_app`] - Application builder and runtime
+- [`hyperchad_renderer`] - Base renderer trait
 - [`hyperchad_renderer_egui`] - Egui desktop renderer implementation
+- [`hyperchad_renderer_fltk`] - FLTK desktop renderer implementation
 - [`hyperchad_renderer_html`] - HTML server-side renderer
 - [`hyperchad_renderer_vanilla_js`] - Client-side JavaScript renderer
-- [`hyperchad_state`] - State management system
+- [`hyperchad_state`] - State persistence system
 - [`hyperchad_router`] - Routing functionality
-- [`hyperchad_template`] - Template engine
+- [`hyperchad_template`] - Template macro system
+- [`hyperchad_actions`] - Action system for events
+- [`hyperchad_color`] - Color management
+- [`hyperchad_transformer`] - Container and element types
