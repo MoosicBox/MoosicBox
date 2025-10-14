@@ -80,11 +80,15 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 2. **Start the server**:
 
     ```bash
+    # Default port is 8000
+    cargo run -p moosicbox_server
+
+    # Or specify a custom port
     PORT=8001 cargo run -p moosicbox_server
     ```
 
 3. **Access your server**:
-    - Open your browser to `http://localhost:8001`
+    - Open your browser to `http://localhost:8000` (or your custom port)
     - Start adding your music library and connecting services
 
 #### Advanced Configuration
@@ -92,7 +96,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 **Development mode with debugging**:
 
 ```bash
-RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" PORT=8001 cargo run -p moosicbox_server
+RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo run -p moosicbox_server
 ```
 
 ---
@@ -128,12 +132,15 @@ MoosicBox supports multiple database backends for maximum flexibility:
 
 ## 🔧 Development
 
-MoosicBox is built as a comprehensive Rust workspace with 120+ packages:
+MoosicBox is built as a comprehensive Rust workspace with 150+ packages:
 
 ### Key Development Commands
 
 ```bash
-# Run the main server
+# Run the main server (default port 8000)
+cargo run -p moosicbox_server
+
+# Run with custom port
 PORT=8001 cargo run -p moosicbox_server
 
 # Run with debug logging
@@ -190,6 +197,9 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_player](packages/player)** - High-performance audio player with playback controls
 - **[moosicbox_resampler](packages/resampler)** - Audio resampling utilities for format conversion
 - **[moosicbox_downloader](packages/downloader)** - Media downloading and caching system
+- **[moosicbox_opus](packages/opus)** - Opus codec integration
+- **[moosicbox_opus_native](packages/opus_native)** - Native Opus codec bindings
+- **[moosicbox_opus_native_libopus](packages/opus_native/libopus)** - LibOpus native library
 - **[aconverter](packages/aconverter)** - Audio converter helper binary
 
 ### Music Services Integration
@@ -256,11 +266,12 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[hyperchad_renderer_fltk](packages/hyperchad/renderer/fltk)** - Cross-platform native GUI renderer using FLTK
 - **[hyperchad_renderer_html](packages/hyperchad/renderer/html)** - Server-side HTML renderer
 - **[hyperchad_renderer_html_actix](packages/hyperchad/renderer/html/actix)** - Actix Web integration for HTML renderer
+- **[hyperchad_renderer_html_cdn](packages/hyperchad/renderer/html/cdn)** - CDN integration for HTML renderer
 - **[hyperchad_renderer_html_http](packages/hyperchad/renderer/html/http)** - Generic HTTP server integration
 - **[hyperchad_renderer_html_lambda](packages/hyperchad/renderer/html/lambda)** - AWS Lambda integration for serverless deployment
+- **[hyperchad_renderer_html_web_server](packages/hyperchad/renderer/html/web_server)** - Web server utilities for HTML renderer
 - **[hyperchad_renderer_vanilla_js](packages/hyperchad/renderer/vanilla_js)** - Client-side JavaScript renderer
 - **[hyperchad_renderer_vanilla_js_hash](packages/hyperchad/renderer/vanilla_js/hash)** - Content-based hash generation for cache busting
-- **[@hyperchad/vanilla-js](packages/hyperchad/renderer/vanilla_js/web)** - Client-side JavaScript/TypeScript library for browser runtime
 
 ### Web & Networking
 
@@ -280,6 +291,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[switchy_tcp](packages/tcp)** - Generic TCP networking abstraction
 - **[switchy_upnp](packages/upnp)** - UPnP device discovery and communication
 - **[switchy_mdns](packages/mdns)** - mDNS service registration and discovery
+- **[switchy_p2p](packages/p2p)** - Peer-to-peer networking utilities
 - **[moosicbox_load_balancer](packages/load_balancer)** - Load balancing utilities
 - **[openport](packages/openport)** - Find free unused network ports
 
@@ -294,18 +306,22 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 - **[switchy_database](packages/database)** - Database abstraction layer
 - **[switchy_database_connection](packages/database_connection)** - Database connection management
+- **[switchy_schema](packages/switchy/schema)** - Database schema and migration framework
+- **[switchy_schema_cli](packages/switchy/schema/cli)** - CLI tool for schema migrations
 - **[moosicbox_schema](packages/schema)** - Database migration system
 - **[switchy_fs](packages/fs)** - Cross-platform filesystem abstraction
 
 ### Utilities & Infrastructure
 
 - **[moosicbox_config](packages/config)** - Configuration utilities for applications
+- **[switchy_env](packages/env)** - Environment configuration utilities
 - **[moosicbox_env_utils](packages/env_utils)** - Environment variable parsing utilities
 - **[moosicbox_logging](packages/logging)** - Logging utilities with feature-gated modules
 - **[switchy_telemetry](packages/telemetry)** - OpenTelemetry integration for distributed tracing
 - **[moosicbox_async_service](packages/async_service)** - Service framework for async applications
 - **[switchy_time](packages/time)** - Time abstraction utilities
 - **[switchy_random](packages/random)** - Random number generation utilities
+- **[switchy_uuid](packages/uuid)** - UUID generation and handling utilities
 
 ### Data Processing & Parsing
 
@@ -336,6 +352,11 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[simvar_utils](packages/simvar/utils)** - Simulation utilities and helpers
 - **[moosicbox_arb](packages/arb)** - Arbitrary data generation for testing
 - **[moosicbox_clippier](packages/clippier)** - Workspace analysis and CI generation tool
+- **[clippier_test_utilities](packages/clippier/test_utilities)** - Testing utilities for Clippier
+- **[hyperchad_simulator](packages/hyperchad/simulator)** - HyperChad simulation utilities
+- **[hyperchad_test_utils](packages/hyperchad/test_utils)** - HyperChad testing utilities
+- **[switchy_schema_test_utils](packages/switchy/schema/test_utils)** - Schema testing utilities
+- **[web_server_simulator](packages/web_server/simulator)** - Web server simulation utilities
 - **[bloaty](packages/bloaty)** - Binary analysis utilities (placeholder)
 
 ### Core Libraries
@@ -346,13 +367,21 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[switchy_async_macros](packages/async/macros)** - Macros for async runtime
 - **[moosicbox_assert](packages/assert)** - Conditional assertion macros
 
+### Transpiler & Code Generation
+
+- **[gpipe](packages/gpipe)** - General-purpose transpiler framework
+- **[gpipe_ast](packages/gpipe/ast)** - Abstract syntax tree for gpipe
+
 ### Examples & Demos
+
+**Note:** The workspace includes 25+ example packages demonstrating various features. Key examples include:
 
 - **[cancel](packages/async/examples/cancel)** - Async cancellation examples
 - **[simulated](packages/async/examples/simulated)** - Simulated async examples
 - **[simple_get](packages/http/examples/simple_get)** - Simple HTTP GET example
-- **[nested_get](packages/web_server/examples/nested_get)** - Nested GET endpoint example
-- **[openapi](packages/web_server/examples/openapi)** - OpenAPI integration example
-- **[simple_get](packages/web_server/examples/simple_get)** - Simple web server example
+- **[basic_handler](packages/web_server/examples/basic_handler)** - Basic web server handler example
+- **[from_request_test](packages/web_server/examples/from_request_test)** - Request extraction example
+
+For a complete list of examples, see the workspace members in `Cargo.toml`.
 
 </details>
