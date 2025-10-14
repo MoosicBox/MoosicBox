@@ -12,7 +12,7 @@ The MoosicBox Server is the core component that provides:
 - **Multi-Zone Audio**: Control playback across multiple devices and zones
 - **Web API**: RESTful API with OpenAPI documentation
 - **WebSocket Support**: Real-time communication for clients
-- **Database Flexibility**: SQLite, PostgreSQL, and MySQL support
+- **Database Flexibility**: SQLite and PostgreSQL support
 - **Tunnel Integration**: Remote access through tunnel server
 - **High-Quality Audio**: Hi-Fi audio playback with configurable quality
 
@@ -29,13 +29,18 @@ cargo install --path packages/server --features "all-apis,all-formats,all-source
 - **pkg-config** (optional, for OPUS support)
 - **libtool** (optional, for OPUS support)
 - **libvips** (optional, for image optimization)
-- **Database**: SQLite (included), PostgreSQL, or MySQL
+- **Database**: SQLite (included) or PostgreSQL
 
 ## Usage
 
 ### Basic Usage
 
-Start the server on port 8001:
+Start the server (defaults to port 8000):
+```bash
+moosicbox_server
+```
+
+Or specify a custom port:
 ```bash
 moosicbox_server 8001
 ```
@@ -68,11 +73,13 @@ moosicbox_server 8001
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BIND_INTERFACE` | Network interface to bind to | `0.0.0.0` |
-| `DATABASE_URL` | Database connection string | SQLite file |
-| `STATIC_TOKEN` | Static authentication token | - |
-| `WS_HOST` | WebSocket tunnel host | - |
-| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token | - |
+| `BIND_ADDR` | Network address to bind to | `0.0.0.0` |
+| `PORT` | Service port (can also be passed as first argument) | `8000` |
+| `ACTIX_WORKERS` | Number of Actix worker threads | Auto |
+| `MAX_THREADS` | Maximum blocking threads | `64` |
+| `STATIC_TOKEN` | Static authentication token (requires `static-token-auth` feature) | - |
+| `WS_HOST` | WebSocket tunnel host (requires `tunnel` feature) | - |
+| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token (requires `tunnel` feature) | - |
 
 ### Database Setup
 
@@ -81,12 +88,11 @@ No additional setup required. Database file created automatically.
 
 #### PostgreSQL
 ```bash
-export DATABASE_URL="postgres://username:password@localhost/moosicbox"
-```
+# Enable PostgreSQL support with features
+cargo run --bin moosicbox_server --features "all-apis,all-formats,all-sources,postgres-sqlx" -- 8001
 
-#### MySQL
-```bash
-export DATABASE_URL="mysql://username:password@localhost/moosicbox"
+# Connection string configured via switchy_database_connection
+# See documentation for database connection configuration
 ```
 
 ## Features
@@ -94,11 +100,11 @@ export DATABASE_URL="mysql://username:password@localhost/moosicbox"
 The server supports various feature flags for customization:
 
 ### Audio Formats
-- `format-aac` - AAC/M4A support
-- `format-flac` - FLAC support
+- `format-aac` - AAC/M4A support (requires OS encoders/decoders)
+- `format-flac` - FLAC support (requires OS encoders/decoders)
 - `format-mp3` - MP3 support
-- `format-opus` - Opus support
-- `all-formats` - Enable all formats
+- `format-opus` - Opus support (requires OS encoders/decoders)
+- `all-formats` - Enable all formats (includes `all-os-formats` and `format-mp3`)
 
 ### Audio Sources
 - `qobuz` - Qobuz streaming integration
@@ -112,13 +118,45 @@ The server supports various feature flags for customization:
 - `jack` - JACK audio support
 - `asio` - ASIO audio support (Windows)
 
+### Database
+- `sqlite-sqlx` - SQLite support via sqlx (default)
+- `sqlite-rusqlite` - SQLite support via rusqlite
+- `postgres-sqlx` - PostgreSQL support via sqlx
+- `postgres-raw` - PostgreSQL support via raw connections
+- `postgres-openssl` - PostgreSQL with OpenSSL
+- `postgres-native-tls` - PostgreSQL with native TLS
+
 ### APIs
-- `library` - Local music library API
-- `scan` - Music library scanning API
-- `player` - Audio player API
-- `search` - Global search API
-- `downloader` - Download management API
-- `all-apis` - Enable all APIs
+- `admin-htmx-api` - Admin web interface with HTMX
+- `audio-output-api` - Audio output configuration API
+- `audio-zone-api` - Audio zone management API
+- `auth-api` - Authentication API
+- `config-api` - Configuration API
+- `downloader-api` - Download management API
+- `files-api` - File serving API
+- `library-api` - Local music library API
+- `menu-api` - Menu API
+- `music-api-api` - Music API integration
+- `player-api` - Audio player API
+- `qobuz-api` - Qobuz-specific API endpoints
+- `scan-api` - Music library scanning API
+- `search-api` - Global search API
+- `session-api` - Session management API
+- `tidal-api` - Tidal-specific API endpoints
+- `upnp-api` - UPnP/DLNA API
+- `yt-api` - YouTube Music-specific API endpoints
+- `all-apis` - Enable all APIs (includes `app-apis`, `player-api`, `upnp-api`)
+
+### Additional Features
+- `openapi` - Enable OpenAPI documentation endpoints (enabled by default)
+- `tunnel` - Enable tunnel server integration for remote access (enabled by default)
+- `static-token-auth` - Enable static token authentication
+- `tls` - Enable TLS support
+- `telemetry` - Enable telemetry and metrics (enabled by default)
+- `profiling` - Enable profiling support (enabled by default)
+- `profiling-puffin` - Enable Puffin profiler
+- `profiling-tracy` - Enable Tracy profiler
+- `profiling-tracing` - Enable tracing profiler
 
 ## API Documentation
 
@@ -144,13 +182,9 @@ curl -X POST "http://localhost:8001/scan" \
 Configure audio zones for different rooms/devices:
 
 ```bash
-# List audio zones
-curl "http://localhost:8001/audio-zones"
-
-# Create audio zone
-curl -X POST "http://localhost:8001/audio-zones" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Living Room", "players": ["player-1"]}'
+# Audio zone API is available at /audio-zone
+# Requires the audio-zone-api feature (enabled by default with all-apis)
+curl "http://localhost:8001/audio-zone"
 ```
 
 ## Troubleshooting
