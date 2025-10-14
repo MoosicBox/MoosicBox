@@ -17,10 +17,11 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_paging = "0.1.1"
+moosicbox_paging = "0.1.4"
 
-# Enable OpenAPI schema generation
-moosicbox_paging = { version = "0.1.1", features = ["openapi"] }
+# OpenAPI schema generation is enabled by default
+# To disable it:
+moosicbox_paging = { version = "0.1.4", default-features = false }
 ```
 
 ## Usage
@@ -120,7 +121,7 @@ let strings = Page::WithTotal {
 let result: Result<Page<i32>, _> = strings.try_into();
 match result {
     Ok(numbers) => println!("All parsed successfully"),
-    Err(e) => println!("Parse error: {}", e.error),
+    Err(e) => println!("Parse error: {:?}", e),
 }
 ```
 
@@ -146,18 +147,22 @@ async fn load_all_pages() -> Result<(), String> {
 ### Error Handling and Mapping
 
 ```rust
-use moosicbox_paging::PagingResponse;
+use moosicbox_paging::{PagingResponse, Page};
 
-async fn process_with_errors() -> Result<(), String> {
-    let response: PagingResponse<Result<i32, String>, String> = /* ... */;
-
+async fn process_with_errors(
+    response: PagingResponse<Result<i32, String>, String>
+) -> Result<(), String> {
     // Transform error types
     let mapped = response.map_err(|e| format!("Database error: {}", e));
 
-    // Transpose Result<PagingResponse<T, E>, E> to PagingResponse<T, E>
-    let transposed = response.transpose()?;
-
     Ok(())
+}
+
+async fn transpose_example(
+    response: PagingResponse<Result<i32, String>, String>
+) -> Result<PagingResponse<i32, String>, String> {
+    // Transpose PagingResponse<Result<T, E>, E> to Result<PagingResponse<T, E>, E>
+    response.transpose()
 }
 ```
 
@@ -198,18 +203,36 @@ Simple struct for pagination parameters (offset and limit).
 
 ## Key Methods
 
-- `items()`: Get items in the current page
+### Page<T> Methods
+- `items()`: Get items in the current page as a slice
+- `into_items()`: Consume the page and return the items vector
 - `offset()`, `limit()`: Get pagination parameters
 - `total()`: Get total count (if available)
+- `remaining()`: Get remaining items count (if total is available)
 - `has_more()`: Check if more data is available
-- `rest_of_items()`: Load all remaining items
 - `map()`: Transform item types
-- `try_into()`: Convert with error handling
+- `into()`: Convert items using Into trait
+- `try_into()`: Convert items with error handling using TryInto trait
+- `empty()`: Create an empty page
+
+### PagingResponse<T, E> Methods
+- `rest_of_pages()`: Load remaining pages one by one
+- `rest_of_items()`: Load all remaining items
+- `rest_of_pages_in_batches()`: Load remaining pages in parallel batches
+- `rest_of_items_in_batches()`: Load all remaining items using parallel batches
+- `with_rest_of_pages()`: Include current page and load remaining pages
+- `with_rest_of_items()`: Include current page items and load remaining items
+- `map()`: Transform item types
+- `map_err()`: Transform error types
+- `transpose()`: Convert PagingResponse<Result<T, E>, E> to Result<PagingResponse<T, E>, E>
+- Various conversion methods: `ok_into`, `ok_try_into`, `err_into`, `inner_into`, `inner_try_into`
 
 ## Dependencies
 
-- `serde`: Serialization support
-- `futures`: Async utilities
-- `tokio`: Async runtime support
+- `serde`: Serialization and deserialization support
+- `futures`: Async utilities for pagination
+- `tokio`: Async runtime support (with `macros` and `sync` features)
+- `log`: Logging support for batch operations
+- `utoipa`: OpenAPI schema generation (optional, enabled by default)
 
 This library provides efficient pagination utilities for building responsive APIs and handling large datasets in the MoosicBox ecosystem.
