@@ -11,6 +11,7 @@ The HyperChad Transformer Models package provides:
 - **Position Models**: Element positioning and cursor types
 - **Route Models**: HTTP routing and HTMX integration
 - **Visual Models**: Visibility, image, and text styling options
+- **Typography Models**: Font weight and text decoration options
 - **Serialization**: Optional serde support for all models
 
 ## Models
@@ -24,8 +25,9 @@ The HyperChad Transformer Models package provides:
 
 ### Text & Typography
 - **TextAlign**: Start, Center, End, Justify alignment
-- **TextDecorationLine**: None, Underline, Overline, LineThrough
-- **TextDecorationStyle**: Solid, Double, Dotted, Dashed, Wavy
+- **TextDecorationLine**: Inherit, None, Underline, Overline, LineThrough
+- **TextDecorationStyle**: Inherit, Solid, Double, Dotted, Dashed, Wavy
+- **FontWeight**: Thin, ExtraLight, Light, Normal, Medium, SemiBold, Bold, ExtraBold, Black, Lighter, Bolder, and numeric weights (100-900)
 
 ### Visual Properties
 - **Visibility**: Visible/Hidden states
@@ -77,16 +79,17 @@ println!("Layout: {} {} {} {}", direction, overflow, justify, align);
 
 ```rust
 use hyperchad_transformer_models::{
-    TextAlign, TextDecorationLine, TextDecorationStyle
+    TextAlign, TextDecorationLine, TextDecorationStyle, FontWeight
 };
 
 // Text configuration
 let align = TextAlign::Center;
 let decoration = TextDecorationLine::Underline;
 let style = TextDecorationStyle::Dashed;
+let weight = FontWeight::Bold;
 
-println!("Text: {} {} {}", align, decoration, style);
-// Output: "Text: center underline dashed"
+println!("Text: {} {} {} {}", align, decoration, style, weight);
+// Output: "Text: center underline dashed bold"
 ```
 
 ### Visual Properties
@@ -149,6 +152,26 @@ println!("Targets: {} {} {}", self_target, blank_target, custom_target);
 // Output: "Targets: _self _blank custom-frame"
 ```
 
+### Font Weights
+
+```rust
+use hyperchad_transformer_models::FontWeight;
+
+// Semantic font weights
+let normal = FontWeight::Normal;
+let bold = FontWeight::Bold;
+
+// Numeric font weights
+let weight_400 = FontWeight::Weight400;
+let weight_700 = FontWeight::Weight700;
+
+println!("Semantic: {} {}", normal, bold);
+// Output: "Semantic: normal bold"
+
+println!("Numeric: {} {}", weight_400, weight_700);
+// Output: "Numeric: 400 700"
+```
+
 ### Layout Positioning (with `layout` feature)
 
 ```rust
@@ -178,6 +201,7 @@ use hyperchad_transformer_models::LayoutPosition;
 - **TextAlign**: Text alignment options
 - **TextDecorationLine**: Text decoration types
 - **TextDecorationStyle**: Decoration styling
+- **FontWeight**: Font weight variants (semantic and numeric)
 
 ### Visual Models
 - **Visibility**: Element visibility states
@@ -200,9 +224,12 @@ use hyperchad_transformer_models::*;
 
 // All models convert to CSS-compatible strings
 assert_eq!(LayoutDirection::Row.to_string(), "row");
+assert_eq!(LayoutDirection::Column.to_string(), "col");
 assert_eq!(JustifyContent::SpaceBetween.to_string(), "space-between");
 assert_eq!(TextAlign::Center.to_string(), "center");
 assert_eq!(Cursor::Pointer.to_string(), "pointer");
+assert_eq!(FontWeight::Bold.to_string(), "bold");
+assert_eq!(FontWeight::Weight700.to_string(), "700");
 ```
 
 ## Feature Flags
@@ -213,7 +240,14 @@ assert_eq!(Cursor::Pointer.to_string(), "pointer");
 
 ## Dependencies
 
-- **Serde**: Optional serialization support
+Core dependencies:
+- **log**: Logging support
+- **moosicbox_assert**: Assertion utilities
+
+Optional dependencies:
+- **serde**: Serialization/deserialization support (with `serde` feature)
+- **moosicbox_arb**: Arbitrary data generation (with `arb` feature)
+- **quickcheck**: Property-based testing support (with `arb` feature)
 
 ## Integration
 
