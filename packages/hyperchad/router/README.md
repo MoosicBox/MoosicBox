@@ -46,12 +46,20 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Default features include: form, format, json, serde, static-routes
 hyperchad_router = { path = "../hyperchad/router" }
 
-# Enable additional features
+# Disable default features and select specific ones
 hyperchad_router = {
     path = "../hyperchad/router",
-    features = ["serde", "form", "static-routes"]
+    default-features = false,
+    features = ["serde", "json"]
+}
+
+# Enable additional features beyond defaults
+hyperchad_router = {
+    path = "../hyperchad/router",
+    features = ["syntax-highlighting", "simd"]
 }
 ```
 
@@ -66,10 +74,10 @@ use hyperchad_renderer::Content;
 // Create router
 let router = Router::new()
     .with_route("/", |_req| async {
-        Some(Content::Html("<h1>Home</h1>".to_string()))
+        "<h1>Home</h1>".to_string()
     })
     .with_route("/about", |_req| async {
-        Some(Content::Html("<h1>About</h1>".to_string()))
+        "<h1>About</h1>".to_string()
     });
 
 // Navigate to route
@@ -133,15 +141,15 @@ let router = Router::new()
         if req.method == Method::Post {
             let form: LoginForm = req.parse_form()?;
             // Process login
-            Ok(Some(Content::Html("Login successful".to_string())))
+            Ok("Login successful".to_string())
         } else {
-            Ok(Some(Content::Html(r#"
+            Ok(r#"
                 <form method="post">
                     <input name="username" type="text" required>
                     <input name="password" type="password" required>
                     <button type="submit">Login</button>
                 </form>
-            "#.to_string())))
+            "#.to_string())
         }
     });
 ```
@@ -173,20 +181,29 @@ let router = Router::new()
             message: "User created".to_string(),
         };
 
-        Ok(Some(Content::Json(serde_json::to_string(&response)?)))
+        Ok(serde_json::to_value(&response)?)
     });
 ```
 
 ### Static Routes
 
 ```rust
+use hyperchad_renderer::Content;
+use bytes::Bytes;
+
 // Static routes (compiled at build time)
 let router = Router::new()
     .with_static_route("/static/css/style.css", |_req| async {
-        Some(Content::Css(include_str!("../static/style.css").to_string()))
+        Some(Content::Raw {
+            data: Bytes::from(include_str!("../static/style.css")),
+            content_type: "text/css".to_string(),
+        })
     })
     .with_static_route("/static/js/app.js", |_req| async {
-        Some(Content::JavaScript(include_str!("../static/app.js").to_string()))
+        Some(Content::Raw {
+            data: Bytes::from(include_str!("../static/app.js")),
+            content_type: "application/javascript".to_string(),
+        })
     });
 ```
 
@@ -244,11 +261,12 @@ match router.navigate("/api/endpoint").await {
 - **LiteralPrefix(String)**: Match strings with specific prefix
 
 ### Content Types
-- **Html**: HTML content
-- **Json**: JSON responses
-- **Css**: CSS stylesheets
-- **JavaScript**: JavaScript files
-- **Custom**: Custom content types
+
+The `Content` enum (from `hyperchad_renderer`) supports:
+- **View(View)**: HTML view content (created from strings, Containers, or Views)
+- **PartialView(PartialView)**: Partial view updates for specific targets
+- **Json(serde_json::Value)**: JSON responses (requires `json` feature)
+- **Raw { data, content_type }**: Raw content with custom MIME type
 
 ## Client Information
 
@@ -268,19 +286,25 @@ Automatic OS detection using the `os_info` crate provides default client informa
 
 ## Feature Flags
 
-- **`serde`**: Enable JSON and form parsing
-- **`form`**: Enable multipart form support
-- **`static-routes`**: Enable static route compilation
+- **`serde`**: Enable JSON and form parsing (enabled by default)
+- **`form`**: Enable multipart form support (enabled by default)
+- **`static-routes`**: Enable static route compilation (enabled by default)
+- **`json`**: Enable JSON content support (enabled by default)
+- **`format`**: Enable HTML formatting (enabled by default)
+- **`syntax-highlighting`**: Enable syntax highlighting support
+- **`simd`**: Enable SIMD optimizations
 
 ## Dependencies
 
-- **Tokio**: Async runtime and task management
+- **Switchy/Switchy Async**: Async runtime abstraction with Tokio support
 - **Futures**: Future utilities
 - **Bytes**: Efficient byte handling
 - **Flume**: Channel communication
 - **QString**: Query string parsing
+- **OS Info**: Operating system detection
 - **Serde**: Optional serialization support
 - **Mime Multipart**: Optional form parsing
+- **Base64**: Optional base64 encoding for file uploads
 
 ## Integration
 
