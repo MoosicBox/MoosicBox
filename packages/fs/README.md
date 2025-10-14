@@ -1,17 +1,19 @@
-# Filesystem (FS)
+# Switchy Filesystem (switchy_fs)
 
 Cross-platform filesystem abstraction with sync and async operations.
 
 ## Overview
 
-The FS package provides:
+The switchy_fs package provides:
 
 - **Sync and Async APIs**: Both synchronous and asynchronous filesystem operations
 - **Cross-platform**: Abstraction over different filesystem implementations
 - **Feature-gated Backends**: Standard library, Tokio, and simulator implementations
 - **File Operations**: Create, read, write, seek, and delete operations
-- **Directory Operations**: Create and remove directories recursively
+- **Directory Operations**: Create, remove, read, and walk directories with deterministic ordering
+- **Temporary Directories**: Automatic cleanup of temporary directories
 - **Flexible Options**: Configurable file open options
+- **Path Utilities**: Check path existence across backends
 
 ## Features
 
@@ -29,7 +31,9 @@ The FS package provides:
 - **File Reading**: Read file contents to string
 - **File Writing**: Write data to files
 - **File Seeking**: Random access file positioning
-- **Directory Management**: Create and remove directories
+- **Directory Management**: Create, remove, read, and walk directories
+- **Directory Traversal**: Sorted directory reading and recursive walking
+- **Path Checking**: Check if files or directories exist
 
 ### Open Options
 - **Create**: Create file if it doesn't exist
@@ -44,16 +48,16 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-fs = { path = "../fs" }
+switchy_fs = { path = "../fs" }
 
 # With specific features
-fs = {
+switchy_fs = {
     path = "../fs",
     features = ["sync", "async", "std", "tokio"]
 }
 
 # For testing
-fs = {
+switchy_fs = {
     path = "../fs",
     features = ["simulator", "sync", "async"]
 }
@@ -64,7 +68,7 @@ fs = {
 ### Synchronous File Operations
 
 ```rust
-use fs::sync::{File, OpenOptions, read_to_string, create_dir_all, remove_dir_all};
+use switchy_fs::sync::{File, OpenOptions, read_to_string, create_dir_all, remove_dir_all};
 use std::io::{Read, Write, Seek, SeekFrom};
 
 fn sync_file_operations() -> std::io::Result<()> {
@@ -111,7 +115,7 @@ fn sync_file_operations() -> std::io::Result<()> {
 ### Asynchronous File Operations
 
 ```rust
-use fs::unsync::{File, OpenOptions, read_to_string, create_dir_all, remove_dir_all};
+use switchy_fs::unsync::{File, OpenOptions, read_to_string, create_dir_all, remove_dir_all};
 use switchy_async::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt, SeekFrom};
 
 async fn async_file_operations() -> std::io::Result<()> {
@@ -161,7 +165,7 @@ async fn async_file_operations() -> std::io::Result<()> {
 ### File Open Options
 
 ```rust
-use fs::sync::OpenOptions;
+use switchy_fs::sync::OpenOptions;
 
 // Create new file, fail if exists
 let file = OpenOptions::new()
@@ -196,18 +200,42 @@ let file = OpenOptions::new()
 ### Directory Operations
 
 ```rust
-use fs::sync::{create_dir_all, remove_dir_all};
+use switchy_fs::sync::{create_dir_all, remove_dir_all, read_dir_sorted, walk_dir_sorted};
+use switchy_fs::exists;
 
 // Create nested directories
 create_dir_all("./deep/nested/directory/structure")?;
+
+// Check if path exists
+if exists("./deep") {
+    println!("Directory exists");
+}
+
+// Read directory entries (sorted by filename)
+let entries = read_dir_sorted("./deep")?;
+for entry in entries {
+    println!("{:?}", entry.path());
+}
+
+// Recursively walk directory tree (sorted by path)
+let all_entries = walk_dir_sorted("./deep")?;
+for entry in all_entries {
+    println!("{:?}", entry.path());
+}
 
 // Remove directory and all contents
 remove_dir_all("./deep")?;
 
 // Async versions
-use fs::unsync::{create_dir_all, remove_dir_all};
+use switchy_fs::unsync::{create_dir_all, remove_dir_all, read_dir_sorted, walk_dir_sorted};
 
 create_dir_all("./async/nested/dirs").await?;
+
+let entries = read_dir_sorted("./async").await?;
+for entry in entries {
+    println!("{:?}", entry.path());
+}
+
 remove_dir_all("./async").await?;
 ```
 
@@ -215,7 +243,7 @@ remove_dir_all("./async").await?;
 
 ```rust
 // Convert between sync and async options
-use fs::{sync, unsync};
+use switchy_fs::{sync, unsync};
 
 let async_options = unsync::OpenOptions::new()
     .create(true)
@@ -233,7 +261,7 @@ let sync_options = async_options.into_sync();
 ```rust
 #[cfg(test)]
 mod tests {
-    use fs::sync::{File, OpenOptions, read_to_string};
+    use switchy_fs::sync::{File, OpenOptions, read_to_string};
 
     #[test]
     fn test_file_operations() {
@@ -252,10 +280,56 @@ mod tests {
 }
 ```
 
+### Simulator Real Filesystem Access
+
+With the `simulator-real-fs` feature, you can temporarily access the real filesystem within simulator mode:
+
+```rust
+#[cfg(all(feature = "simulator", feature = "simulator-real-fs"))]
+use switchy_fs::with_real_fs;
+
+// In simulator mode, but need to access real filesystem temporarily
+let real_data = with_real_fs(|| {
+    std::fs::read_to_string("/path/to/real/file.txt")
+}).unwrap();
+
+// Back to simulated filesystem
+let sim_data = read_to_string("/simulated/file.txt")?;
+```
+
+### Temporary Directories
+
+The package provides temporary directory support that automatically cleans up when dropped:
+
+```rust
+use switchy_fs::{TempDir, tempdir, tempdir_in};
+
+// Create a temporary directory
+let temp = tempdir()?;
+let path = temp.path();
+
+// Use the directory
+std::fs::write(path.join("test.txt"), b"data")?;
+
+// Directory is automatically cleaned up when temp is dropped
+
+// Create temp directory with prefix
+let temp = TempDir::with_prefix("my-prefix-")?;
+
+// Create temp directory with suffix
+let temp = TempDir::with_suffix("-my-suffix")?;
+
+// Create temp directory in specific location
+let temp = tempdir_in("/custom/temp/location")?;
+
+// Persist the directory (prevent automatic cleanup)
+let kept_path = temp.keep();
+```
+
 ### Generic File Traits
 
 ```rust
-use fs::{GenericSyncFile, GenericAsyncFile};
+use switchy_fs::{GenericSyncFile, GenericAsyncFile};
 use std::io::{Read, Write, Seek};
 
 // Function that works with any sync file implementation
@@ -283,6 +357,12 @@ async fn process_async_file<F: GenericAsyncFile>(mut file: F) -> std::io::Result
 - **`std`**: Use standard library filesystem implementation
 - **`tokio`**: Use Tokio async filesystem implementation
 - **`simulator`**: Use mock filesystem for testing
+- **`simulator-real-fs`**: Enable real filesystem access within simulator mode using `with_real_fs`
+
+### Other Features
+- **`fail-on-warnings`**: Treat warnings as errors during compilation
+
+**Default features**: `async`, `simulator`, `std`, `sync`, `tokio`
 
 ## Backend Selection
 
@@ -295,7 +375,7 @@ The package automatically selects the appropriate backend based on enabled featu
 ## Error Handling
 
 ```rust
-use fs::sync::{File, OpenOptions};
+use switchy_fs::sync::{File, OpenOptions};
 use std::io::ErrorKind;
 
 match OpenOptions::new().read(true).open("nonexistent.txt") {
@@ -318,16 +398,19 @@ match OpenOptions::new().read(true).open("nonexistent.txt") {
 
 ## Dependencies
 
-- **Switchy Async**: Async I/O trait abstractions
-- **Standard Library**: `std::fs` and `std::io` (optional)
-- **Tokio**: `tokio::fs` and `tokio::io` (optional)
+- **switchy_async**: Async I/O trait abstractions (optional)
+- **bytes**: Byte buffer utilities for simulator backend (optional)
+- **scoped-tls**: Thread-local storage for simulator real-fs mode (optional)
+- **tempfile**: Temporary file management for standard library backend (optional)
+- **tokio**: Async filesystem operations (optional)
 
 ## Use Cases
 
 - **Configuration Files**: Read and write application configuration
 - **Data Persistence**: Store and retrieve application data
 - **Log Files**: Append-only log file operations
-- **Temporary Files**: Create and manage temporary files
-- **Testing**: Mock filesystem operations in unit tests
-- **Cross-platform Applications**: Unified filesystem interface
-- **Async Applications**: Non-blocking filesystem operations
+- **Temporary Directories**: Create and manage temporary directories with automatic cleanup
+- **Testing**: Mock filesystem operations in unit tests with simulator mode
+- **Cross-platform Applications**: Unified filesystem interface across different backends
+- **Async Applications**: Non-blocking filesystem operations with Tokio
+- **Deterministic Testing**: Sorted directory reading and walking for reproducible test results
