@@ -114,44 +114,10 @@ if let Some(tidal_id) = sources.get(&tidal_source) {
 ## Audio Formats
 
 ### Supported Formats
-- **FLAC**: Lossless compression (with ===============================================================================
-flac - Command-line FLAC encoder/decoder version 1.5.0
-Copyright (C) 2000-2009  Josh Coalson
-Copyright (C) 2011-2025  Xiph.Org Foundation
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-===============================================================================
-
-This is the short help; for all options use 'flac --help'; for more explanation
-and examples please consult the manual. This manual is often distributed
-alongside the program as a man page or an HTML file. It can also be found
-online at https://xiph.org/flac/documentation_tools_flac.html
-
-To encode:
-  flac [-#] [INPUTFILE [...]]
-
-  -# is -0 (fastest compression) to -8 (highest compression); -5 is the default
-
-To decode:
-  flac -d [INPUTFILE [...]]
-
-To test:
-  flac -t [INPUTFILE [...]] feature)
-- **MP3**: Lossy compression (with  feature)
-- **AAC**: Advanced Audio Coding (with  feature)
-- **Opus**: Modern lossy codec (with  feature)
+- **FLAC**: Lossless compression (with `flac` feature)
+- **MP3**: Lossy compression (with `mp3` feature)
+- **AAC**: Advanced Audio Coding (with `aac` feature)
+- **Opus**: Modern lossy codec (with `opus` feature)
 - **Source**: Original format preservation
 
 ### Format Detection
@@ -168,7 +134,7 @@ assert_eq!(format, Some(AudioFormat::Flac));
 ### Album Versions
 
 ```rust
-use moosicbox_music_models::{AlbumVersionQuality, AudioFormat};
+use moosicbox_music_models::{AlbumVersionQuality, AudioFormat, TrackApiSource};
 
 let hires_version = AlbumVersionQuality {
     format: Some(AudioFormat::Flac),
@@ -191,18 +157,32 @@ let cd_version = AlbumVersionQuality {
 
 - **`api`**: Enable API-compatible model structures
 - **`db`**: Enable database-compatible model structures
+- **`openapi`**: Enable OpenAPI/utoipa schema generation
+- **`tantivy`**: Enable Tantivy search index support
 - **`flac`**: Enable FLAC audio format support
 - **`mp3`**: Enable MP3 audio format support
 - **`aac`**: Enable AAC audio format support
 - **`opus`**: Enable Opus audio format support
+- **`all-formats`**: Enable all audio format support (includes all-os-formats and mp3)
+- **`all-os-formats`**: Enable all OS-supported formats (aac, flac, opus)
 
 ## Dependencies
 
-- **MoosicBox Date Utils**: Date parsing and formatting
-- **MoosicBox JSON Utils**: JSON parsing utilities
-- **Serde**: Serialization and deserialization
-- **Chrono**: Date and time handling
-- **Strum**: Enum string conversion
+Core dependencies:
+- **moosicbox_assert**: Assertion utilities
+- **moosicbox_date_utils**: Date parsing and formatting (with chrono features)
+- **moosicbox_json_utils**: JSON parsing utilities (with serde_json features)
+- **moosicbox_parsing_utils**: Parsing utilities
+- **serde**: Serialization and deserialization
+- **serde_json**: JSON serialization
+- **strum**: Enum string conversion and macros
+- **thiserror**: Error handling
+- **log**: Logging
+
+Optional dependencies:
+- **switchy_database**: Database integration (enabled with `db` feature)
+- **utoipa**: OpenAPI schema generation (enabled with `openapi` feature)
+- **tantivy**: Search indexing (enabled with `tantivy` feature)
 
 ## Integration
 
