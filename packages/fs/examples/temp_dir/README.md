@@ -34,6 +34,6 @@ The demo shows:
 1. Basic temp directory creation
 2. Temp directory with custom prefix
 3. Keeping a directory (preventing automatic cleanup)
-4. Manual directory cleanup
+4. Manual close (immediate cleanup)
 
-Each example is feature-gated to demonstrate behavior differences between std and simulator modes.
+Examples include conditional code to demonstrate behavior differences between std and simulator modes.
