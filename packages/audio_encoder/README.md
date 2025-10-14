@@ -28,13 +28,15 @@ The MoosicBox Audio Encoder package provides:
 ### Cargo Dependencies
 
 ```toml
+# All features enabled by default
 [dependencies]
 moosicbox_audio_encoder = { path = "../audio_encoder" }
 
-# Enable specific formats
+# Or disable default features and enable specific formats only
 moosicbox_audio_encoder = {
     path = "../audio_encoder",
-    features = ["mp3", "flac", "aac", "opus"]
+    default-features = false,
+    features = ["mp3", "flac"]
 }
 ```
 
@@ -56,34 +58,58 @@ fn handle_encode_result(info: EncodeInfo) {
 ```rust
 // AAC encoding (requires "aac" feature)
 #[cfg(feature = "aac")]
-use moosicbox_audio_encoder::aac;
+use moosicbox_audio_encoder::aac::{encoder_aac, encode_aac};
 
 // FLAC encoding (requires "flac" feature)
 #[cfg(feature = "flac")]
-use moosicbox_audio_encoder::flac;
+use moosicbox_audio_encoder::flac::{encoder_flac, encode_flac};
 
 // MP3 encoding (requires "mp3" feature)
 #[cfg(feature = "mp3")]
-use moosicbox_audio_encoder::mp3;
+use moosicbox_audio_encoder::mp3::{encoder_mp3, encode_mp3};
 
 // Opus encoding (requires "opus" feature)
 #[cfg(feature = "opus")]
-use moosicbox_audio_encoder::opus;
+use moosicbox_audio_encoder::opus::{encoder_opus, encode_opus_float};
 
-async fn encode_audio() -> Result<(), Box<dyn std::error::Error>> {
-    // Encoding functionality depends on enabled features
-    // and implementations in the respective modules
-
+fn encode_audio() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mp3")]
     {
-        // Use MP3 encoder from mp3 module
-        // (implementation details depend on the mp3 module)
+        // Create and use MP3 encoder
+        let mut encoder = encoder_mp3()?;
+        let input: Vec<i16> = vec![0; 1024]; // Your PCM data here
+        let (output, info) = encode_mp3(&mut encoder, &input)?;
+        println!("Encoded {} bytes", info.output_size);
+    }
+
+    #[cfg(feature = "aac")]
+    {
+        // Create and use AAC encoder
+        let encoder = encoder_aac()?;
+        let input: Vec<i16> = vec![0; 1024]; // Your PCM data here
+        let mut output = vec![0u8; 4096];
+        let info = encode_aac(&encoder, &input, &mut output)?;
+        println!("Encoded {} bytes", info.output_size);
     }
 
     #[cfg(feature = "flac")]
     {
-        // Use FLAC encoder from flac module
-        // (implementation details depend on the flac module)
+        // Create and use FLAC encoder
+        let mut encoder = encoder_flac()?;
+        let input: Vec<i32> = vec![0; 1024]; // Your PCM data here
+        let mut output = vec![0u8; 4096];
+        let info = encode_flac(&mut encoder, &input, &mut output)?;
+        println!("Encoded {} bytes", info.output_size);
+    }
+
+    #[cfg(feature = "opus")]
+    {
+        // Create and use Opus encoder
+        let mut encoder = encoder_opus()?;
+        let input: Vec<f32> = vec![0.0; 1024]; // Your PCM data here
+        let mut output = vec![0u8; 4096];
+        let info = encode_opus_float(&mut encoder, &input, &mut output)?;
+        println!("Encoded {} bytes", info.output_size);
     }
 
     Ok(())
@@ -96,15 +122,23 @@ async fn encode_audio() -> Result<(), Box<dyn std::error::Error>> {
 - Each audio format is implemented in its own module behind a feature flag
 - The `EncodeInfo` struct provides standardized encoding result information
 - Actual encoding functionality is contained within the format-specific modules
-- Features must be explicitly enabled to access format encoders
+- All features are enabled by default, but can be disabled if needed
+
+### Module APIs
+
+Each encoder module provides consistent functions:
+- **AAC** (`aac` feature): `encoder_aac()` creates encoder, `encode_aac(encoder, input, buf)` encodes i16 PCM data
+- **FLAC** (`flac` feature): `encoder_flac()` creates encoder, `encode_flac(encoder, input, buf)` encodes i32 PCM data
+- **MP3** (`mp3` feature): `encoder_mp3()` creates encoder, `encode_mp3(encoder, input)` encodes i16 PCM data and returns output buffer
+- **Opus** (`opus` feature): `encoder_opus()` creates encoder, `encode_opus_float(encoder, input, output)` encodes f32 PCM data, also includes `encode_audiopus()` and OGG container utilities
 
 ## Features
 
-- **Default**: Includes only the core `EncodeInfo` structure
-- **`aac`**: Enables AAC encoding module
-- **`flac`**: Enables FLAC encoding module
-- **`mp3`**: Enables MP3 encoding module
-- **`opus`**: Enables Opus encoding module
+- **Default**: All encoding formats are enabled by default (`aac`, `flac`, `mp3`, `opus`)
+- **`aac`**: Enables AAC encoding module via fdk-aac
+- **`flac`**: Enables FLAC encoding module via flacenc
+- **`mp3`**: Enables MP3 encoding module via mp3lame-encoder
+- **`opus`**: Enables Opus encoding module via audiopus/opus, includes OGG container support
 
 ## Development Status
 
@@ -124,10 +158,10 @@ use moosicbox_audio_encoder::EncodeInfo;
 
 // Feature-gated - format-specific encoders
 #[cfg(feature = "mp3")]
-use moosicbox_audio_encoder::mp3::*;
+use moosicbox_audio_encoder::mp3::{encoder_mp3, encode_mp3};
 
 #[cfg(feature = "flac")]
-use moosicbox_audio_encoder::flac::*;
+use moosicbox_audio_encoder::flac::{encoder_flac, encode_flac};
 ```
 
-This design allows consumers to include only the encoding formats they need, reducing binary size and dependencies.
+This design allows consumers to include only the encoding formats they need by disabling default features, reducing binary size and dependencies.
