@@ -21,7 +21,7 @@ The HTTP Models package provides:
 - **Serde Integration**: JSON serialization/deserialization
 
 ### HTTP Status Codes
-- **Full Status Code Set**: All standard HTTP status codes (100-511)
+- **Common Status Codes**: Standard HTTP status codes including informational (1xx), success (2xx), redirection (3xx), client error (4xx), and server error (5xx)
 - **Category Helpers**: Check if status is success, error, redirect, etc.
 - **Numeric Conversion**: Convert to/from u16 values
 - **MDN Documentation**: Based on Mozilla Developer Network reference
@@ -37,11 +37,12 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-http_models = { path = "../http/models" }
+switchy_http_models = { path = "../http/models" }
 
-# With framework support
-http_models = {
+# With specific features (default includes actix, reqwest, serde)
+switchy_http_models = {
     path = "../http/models",
+    default-features = false,
     features = ["actix", "reqwest", "serde"]
 }
 ```
@@ -51,7 +52,7 @@ http_models = {
 ### HTTP Methods
 
 ```rust
-use http_models::Method;
+use switchy_http_models::Method;
 use std::str::FromStr;
 
 // Create methods
@@ -80,7 +81,7 @@ match method {
 ### HTTP Status Codes
 
 ```rust
-use http_models::StatusCode;
+use switchy_http_models::StatusCode;
 
 // Create status codes
 let ok = StatusCode::Ok;
@@ -106,7 +107,7 @@ println!("{}", StatusCode::NotFound); // "NOT_FOUND"
 ### Status Code Categories
 
 ```rust
-use http_models::StatusCode;
+use switchy_http_models::StatusCode;
 
 // Informational (1xx)
 assert!(StatusCode::Continue.is_informational());
@@ -136,7 +137,7 @@ assert!(StatusCode::ServiceUnavailable.is_server_error());
 ### Serde Integration
 
 ```rust
-use http_models::{Method, StatusCode};
+use switchy_http_models::{Method, StatusCode};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
@@ -170,37 +171,45 @@ let json = serde_json::to_string(&response)?;
 ### Actix Web Integration
 
 ```rust
-#[cfg(feature = "actix")]
-use http_models::actix::*;
-use actix_web::{web, HttpResponse, Result};
+use switchy_http_models::StatusCode;
+use actix_web::{HttpResponse, Result};
 
 async fn handler() -> Result<HttpResponse> {
-    // Use HTTP models with Actix Web
-    let status: actix_web::http::StatusCode = http_models::StatusCode::Ok.into();
-    Ok(HttpResponse::build(status).json("Success"))
+    // Convert HTTP models to Actix Web types (requires actix feature)
+    #[cfg(feature = "actix")]
+    {
+        let status: actix_web::http::StatusCode = StatusCode::Ok.into();
+        Ok(HttpResponse::build(status).json("Success"))
+    }
+    #[cfg(not(feature = "actix"))]
+    {
+        Ok(HttpResponse::Ok().json("Success"))
+    }
 }
 ```
 
 ### Reqwest Integration
 
 ```rust
-#[cfg(feature = "reqwest")]
-use http_models::reqwest::*;
+use switchy_http_models::{Method, StatusCode};
 
 async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
 
-    // Convert HTTP models to reqwest types
-    let method: reqwest::Method = http_models::Method::Post.into();
+    // Convert HTTP models to reqwest types (requires reqwest feature)
+    #[cfg(feature = "reqwest")]
+    {
+        let method: reqwest::Method = Method::Post.into();
 
-    let response = client
-        .request(method, "https://api.example.com/users")
-        .send()
-        .await?;
+        let response = client
+            .request(method, "https://api.example.com/users")
+            .send()
+            .await?;
 
-    // Convert response status back to HTTP models
-    let status: http_models::StatusCode = response.status().into();
-    println!("Response status: {}", status);
+        // Convert reqwest status code to HTTP models
+        let status: StatusCode = response.status().into();
+        println!("Response status: {}", status);
+    }
 
     Ok(())
 }
@@ -283,7 +292,7 @@ async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
 ## Error Handling
 
 ```rust
-use http_models::{Method, StatusCode, InvalidMethod};
+use switchy_http_models::{Method, StatusCode, InvalidMethod};
 use std::str::FromStr;
 
 // Method parsing errors
@@ -307,9 +316,12 @@ match StatusCode::try_from(999) {
 
 ## Dependencies
 
-- **Serde**: Serialization support (optional)
+- **moosicbox_assert**: Internal assertion utilities
+- **Serde**: Serialization support (optional, enabled by default)
 - **Strum**: Enum utilities for string conversion
 - **Thiserror**: Error handling
+- **Actix Web**: Web framework integration (optional, enabled by default)
+- **Reqwest**: HTTP client integration (optional, enabled by default)
 
 ## Use Cases
 
