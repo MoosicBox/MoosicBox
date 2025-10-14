@@ -1,15 +1,15 @@
-# MoosicBox Tauri Config Generator
+# MoosicBox App Config Generator
 
-Configuration file generator for MoosicBox Tauri applications.
+Configuration file generator for MoosicBox applications.
 
 ## Overview
 
-The MoosicBox Tauri Config Generator provides:
+The MoosicBox App Config Generator provides:
 
-- **Build Configuration**: Generate TypeScript configuration for Tauri apps
+- **Build Configuration**: Generate TypeScript configuration files
 - **Feature Flags**: Configure web, app, and bundled features
-- **JSON Export**: Export configuration as TypeScript constants
-- **Build Integration**: Integrate with Tauri build process
+- **TypeScript Export**: Export configuration as TypeScript constants
+- **CLI Tool**: Command-line binary for configuration generation
 
 ## Features
 
@@ -26,13 +26,19 @@ The MoosicBox Tauri Config Generator provides:
 - **Path Flexibility**: Configurable output file paths
 - **Atomic Writes**: Safe file writing with truncation
 
+### Command-Line Interface
+
+- **Binary Tool**: `moosicbox_create_config` CLI binary
+- **Flexible Arguments**: Configure bundled flag and output path
+- **Logging Integration**: Built-in logging support
+
 ## Installation
 
 Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_app_tauri_create_config = { path = "../app/tauri/create_config" }
+moosicbox_app_create_config = { path = "../app/tauri/create_config" }
 ```
 
 ## Usage
@@ -40,7 +46,7 @@ moosicbox_app_tauri_create_config = { path = "../app/tauri/create_config" }
 ### Basic Configuration Generation
 
 ```rust
-use moosicbox_app_tauri_create_config::generate;
+use moosicbox_app_create_config::generate;
 
 // Generate config file for bundled app
 generate(true, "src/config.ts");
@@ -52,7 +58,7 @@ generate(false, "src/config.ts");
 ### Manual Configuration
 
 ```rust
-use moosicbox_app_tauri_create_config::Config;
+use moosicbox_app_create_config::Config;
 
 let config = Config {
     web: false,
@@ -65,7 +71,22 @@ println!("{}", typescript_output);
 // Output: export const config = {"web":false,"app":true,"bundled":true} as const;
 ```
 
+### Command-Line Usage
+
+```bash
+# Generate config for bundled app
+moosicbox_create_config --bundled --output src/config.ts
+
+# Generate config for non-bundled app
+moosicbox_create_config --output src/config.ts
+```
+
 ## Dependencies
 
-- **Serde**: JSON serialization
-- **Switchy FS**: File system operations
+- **serde**: Serialization framework
+- **serde_json**: JSON serialization
+- **switchy_fs**: Cross-platform file system operations
+- **clap**: Command-line argument parsing (CLI binary)
+- **log**: Logging facade
+- **moosicbox_logging**: MoosicBox logging utilities
+- **moosicbox_assert**: MoosicBox assertion utilities
