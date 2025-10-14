@@ -84,6 +84,13 @@ pub struct Decoder {
     #[cfg(feature = "silk")]
     silk_delay_samples: usize,
 
+    #[cfg(feature = "silk")]
+    silk_configured_rate: SampleRate,
+    #[cfg(feature = "silk")]
+    silk_configured_channels: Channels,
+    #[cfg(feature = "silk")]
+    silk_configured_frame_ms: u8,
+
     #[cfg(all(feature = "silk", feature = "resampling"))]
     silk_resampler_state: Option<moosicbox_resampler::Resampler<i16>>,
     #[cfg(all(feature = "silk", feature = "resampling"))]
@@ -135,6 +142,13 @@ impl Decoder {
 
             #[cfg(feature = "silk")]
             silk_delay_samples: 0,
+
+            #[cfg(feature = "silk")]
+            silk_configured_rate: SampleRate::Hz16000,
+            #[cfg(feature = "silk")]
+            silk_configured_channels: channels,
+            #[cfg(feature = "silk")]
+            silk_configured_frame_ms: 20,
 
             #[cfg(all(feature = "silk", feature = "resampling"))]
             silk_resampler_state: None,
@@ -356,7 +370,7 @@ impl Decoder {
     /// Calculates SILK algorithmic delay in samples for a given internal rate.
     ///
     /// SILK has inherent algorithmic delay due to LPC analysis and pitch filtering.
-    /// This delay is automatically removed from decoded output.
+    /// This delay is included in the decoded output (not automatically removed).
     ///
     /// # Arguments
     /// * `internal_rate` - SILK internal sample rate (8000, 12000, or 16000 Hz)
@@ -376,8 +390,8 @@ impl Decoder {
 
     /// Returns the current SILK algorithmic delay in samples.
     ///
-    /// This is the number of initial samples that contain lookahead data
-    /// and are automatically removed from the decoded output.
+    /// This is the number of initial samples that contain lookahead data.
+    /// The delay is included in the decoded output and should be skipped by the caller if needed.
     ///
     /// # Returns
     /// Delay in samples at the decoder's sample rate (0 if not using SILK)
@@ -609,7 +623,7 @@ impl Decoder {
     /// * Returns error if bandwidth invalid for SILK-only
     /// * Returns error if resampling fails
     #[cfg(feature = "silk")]
-    #[allow(dead_code)]
+    #[allow(dead_code, clippy::too_many_lines)]
     fn decode_silk_only(
         &mut self,
         frame_data: &[u8],
@@ -648,11 +662,18 @@ impl Decoder {
             20
         };
 
-        self.silk = silk::SilkDecoder::new(
-            SampleRate::from_hz(internal_rate)?,
-            channels,
-            silk_frame_size_ms,
-        )?;
+        // Only recreate SILK decoder if configuration changed (preserves state for stereo)
+        let target_rate = SampleRate::from_hz(internal_rate)?;
+        let needs_reconfigure = self.silk_configured_rate != target_rate
+            || self.silk_configured_channels != channels
+            || self.silk_configured_frame_ms != silk_frame_size_ms;
+
+        if needs_reconfigure {
+            self.silk = silk::SilkDecoder::new(target_rate, channels, silk_frame_size_ms)?;
+            self.silk_configured_rate = target_rate;
+            self.silk_configured_channels = channels;
+            self.silk_configured_frame_ms = silk_frame_size_ms;
+        }
 
         // Track SILK algorithmic delay for automatic removal
         self.silk_delay_samples = Self::calculate_silk_delay_samples(internal_rate);
@@ -663,15 +684,58 @@ impl Decoder {
         let total_samples = frame_samples * num_silk_frames;
         let mut silk_buffer = vec![0i16; total_samples * num_channels];
 
-        for frame_idx in 0..num_silk_frames {
-            for ch_idx in 0..num_channels {
-                let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
-                let vad_flag = header_flags
+        if channels == Channels::Stereo {
+            // Stereo: decode_silk_frame handles mid/side decoding and interleaving
+            for frame_idx in 0..num_silk_frames {
+                // VAD flags: [mid_frame0, mid_frame1, ..., side_frame0, side_frame1, ...]
+                let mid_vad = header_flags
                     .vad_flags
-                    .get(vad_flag_index)
+                    .get(frame_idx)
+                    .copied()
+                    .unwrap_or(true);
+                let side_vad = header_flags
+                    .vad_flags
+                    .get(num_silk_frames + frame_idx)
                     .copied()
                     .unwrap_or(true);
 
+                let frame_offset = frame_idx * frame_samples * 2;
+                let frame_end = frame_offset + frame_samples * 2;
+
+                if frame_end > silk_buffer.len() {
+                    return Err(Error::DecodeFailed(format!(
+                        "Stereo buffer overflow: frame {} needs {} samples, buffer has {}",
+                        frame_idx,
+                        frame_end,
+                        silk_buffer.len()
+                    )));
+                }
+
+                let frame_buffer = &mut silk_buffer[frame_offset..frame_end];
+
+                // decode_silk_frame_stereo returns samples per channel
+                let decoded = self.silk.decode_silk_frame_stereo(
+                    &mut ec,
+                    (mid_vad, side_vad),
+                    frame_buffer,
+                )?;
+
+                if decoded != frame_samples {
+                    return Err(Error::DecodeFailed(format!(
+                        "Stereo frame {frame_idx} sample count mismatch: expected {frame_samples}, got {decoded}"
+                    )));
+                }
+            }
+        } else {
+            // Mono: decode each frame independently
+            for frame_idx in 0..num_silk_frames {
+                let vad_flag = header_flags
+                    .vad_flags
+                    .get(frame_idx)
+                    .copied()
+                    .unwrap_or(true);
+
+                let frame_offset = frame_idx * frame_samples;
                 let mut frame_buffer = vec![0i16; frame_samples];
 
                 let decoded = self
@@ -680,15 +744,12 @@ impl Decoder {
 
                 if decoded != frame_samples {
                     return Err(Error::DecodeFailed(format!(
-                        "SILK sample count mismatch: expected {frame_samples}, got {decoded}"
+                        "Mono frame {frame_idx} sample count mismatch: expected {frame_samples}, got {decoded}"
                     )));
                 }
 
-                let base_offset = frame_idx * frame_samples * num_channels;
-                for sample_idx in 0..frame_samples {
-                    silk_buffer[base_offset + sample_idx * num_channels + ch_idx] =
-                        frame_buffer[sample_idx];
-                }
+                silk_buffer[frame_offset..frame_offset + frame_samples]
+                    .copy_from_slice(&frame_buffer);
             }
         }
 

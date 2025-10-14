@@ -140,29 +140,30 @@ pub struct SubframeParams {
     pub ltp_scale_q14: i16,
 }
 
+/// Stereo decoder state matching libopus `stereo_dec_state`
 #[derive(Debug, Clone)]
 struct StereoState {
-    prev_w0_q13: i16,
-    prev_w1_q13: i16,
-    mid_history: [f32; 2],
-    side_history: f32,
+    /// Previous stereo prediction weights in Q13 format [w0, w1]
+    pred_prev_q13: [i16; 2],
+    /// Mid channel 2-sample history
+    s_mid: [i16; 2],
+    /// Side channel 2-sample history
+    s_side: [i16; 2],
 }
 
 impl StereoState {
     const fn new() -> Self {
         Self {
-            prev_w0_q13: 0,
-            prev_w1_q13: 0,
-            mid_history: [0.0, 0.0],
-            side_history: 0.0,
+            pred_prev_q13: [0, 0],
+            s_mid: [0, 0],
+            s_side: [0, 0],
         }
     }
 
     const fn reset(&mut self) {
-        self.prev_w0_q13 = 0;
-        self.prev_w1_q13 = 0;
-        self.mid_history = [0.0, 0.0];
-        self.side_history = 0.0;
+        self.pred_prev_q13 = [0, 0];
+        self.s_mid = [0, 0];
+        self.s_side = [0, 0];
     }
 }
 
@@ -227,10 +228,10 @@ pub struct SilkDecoder {
     #[allow(dead_code)]
     lcg_seed: u32,
     #[allow(dead_code)]
-    ltp_state: LtpState,
+    ltp_state: [LtpState; 2], // Per-channel state [mid, side]
     #[allow(dead_code)]
     stereo_state: Option<StereoState>,
-    prev_gain_q16: i32,
+    prev_gain_q16: [i32; 2], // Per-channel previous gain
 }
 
 impl SilkDecoder {
@@ -253,8 +254,10 @@ impl SilkDecoder {
             _ => unreachable!(),
         };
 
-        let mut ltp_state = LtpState::new();
-        ltp_state.init();
+        let mut ltp_state_0 = LtpState::new();
+        ltp_state_0.init();
+        let mut ltp_state_1 = LtpState::new();
+        ltp_state_1.init();
 
         let stereo_state = if channels == Channels::Stereo {
             Some(StereoState::new())
@@ -275,9 +278,9 @@ impl SilkDecoder {
             uncoded_side_channel: false,
             previous_pitch_lag: [None, None],
             lcg_seed: 0,
-            ltp_state,
+            ltp_state: [ltp_state_0, ltp_state_1],
             stereo_state,
-            prev_gain_q16: 65536,
+            prev_gain_q16: [65536, 65536],
         })
     }
 
@@ -339,7 +342,11 @@ impl SilkDecoder {
     ///
     /// # Panics
     /// * Panics if LTP scale value exceeds i16 range (indicates corrupted data)
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        clippy::cast_precision_loss
+    )]
     fn decode_silk_frame_internal(
         &mut self,
         range_decoder: &mut RangeDecoder,
@@ -394,6 +401,9 @@ impl SilkDecoder {
 
         // RFC Table 5 Entry 3: Frame Type (vad_flag passed in from Opus frame level)
         let (frame_type, quant_offset) = self.decode_frame_type(range_decoder, vad_flag)?;
+        log::trace!(
+            "[CH{channel_idx} FRAME_TYPE] type={frame_type:?}, quant_offset={quant_offset:?}, vad={vad_flag}"
+        );
         log::trace!("[PARAMS] frame_type: {frame_type:?}, quant_offset: {quant_offset:?}");
 
         // Step 2: Decode subframe gains (RFC Table 5 entry 4)
@@ -404,6 +414,22 @@ impl SilkDecoder {
             channel_idx,
             self.decoder_reset, // is_first_frame
         )?;
+        log::trace!("[CH{channel_idx} GAIN_DECODE] gain_indices: {gain_indices:?}");
+
+        // Calculate actual gains for debugging
+        if channel_idx == 1 {
+            for (i, &idx) in gain_indices.iter().enumerate() {
+                let gain_q16 = Self::dequantize_gain(i32::from(idx));
+                log::trace!(
+                    "[CH1 GAIN{}] index={}, gain_q16={} (linear≈{:.2})",
+                    i,
+                    idx,
+                    gain_q16,
+                    gain_q16 as f32 / 65536.0
+                );
+            }
+        }
+
         log::trace!("[PARAMS] gain_indices: {gain_indices:?}");
 
         // Step 3: Decode LSF indices (RFC Table 5 entries 5-7)
@@ -637,6 +663,12 @@ impl SilkDecoder {
             full_excitation.extend_from_slice(block);
         }
 
+        // Clear LPC history on first subframe after decoder reset
+        // This ensures the first LPC synthesis starts with zero history
+        if self.decoder_reset {
+            self.ltp_state[channel_idx].lpc_history_q14.clear();
+        }
+
         // Now synthesize audio for each subframe
         let mut all_samples = Vec::with_capacity(total_samples);
 
@@ -714,13 +746,29 @@ impl SilkDecoder {
 
             // Apply LPC synthesis (short-term prediction) - returns i16 samples directly
             log::trace!("[SUBFRAME] Processing subframe {subframe_idx}/{num_subframes}");
-            let samples = self.lpc_synthesis(&residual_q14, &params, bandwidth)?;
+            if channel_idx == 0 {
+                log::trace!(
+                    "[SUBFRAME ch=0] Processing subframe {} of {}, output offset={}",
+                    subframe_idx,
+                    num_subframes,
+                    all_samples.len()
+                );
+            }
+            let samples = self.lpc_synthesis(&residual_q14, &params, bandwidth, channel_idx)?;
             log::trace!(
                 "[SUBFRAME] Subframe {} produced {} samples, first 5: {:?}",
                 subframe_idx,
                 samples.len(),
                 &samples[..samples.len().min(5)]
             );
+            if channel_idx == 0 {
+                log::trace!(
+                    "[SUBFRAME ch=0] Subframe {} produced {} samples: {:?}",
+                    subframe_idx,
+                    samples.len(),
+                    samples
+                );
+            }
 
             all_samples.extend(samples);
         }
@@ -759,7 +807,7 @@ impl SilkDecoder {
     /// * Table 5 Entry 1-2: Stereo weights and mid-only flag
     /// * Figures 15-16: Stereo decode flow
     #[allow(clippy::similar_names)]
-    fn decode_silk_frame_stereo(
+    pub(crate) fn decode_silk_frame_stereo(
         &mut self,
         range_decoder: &mut RangeDecoder,
         vad_flags: (bool, bool),
@@ -798,51 +846,72 @@ impl SilkDecoder {
         let total_samples = samples_per_subframe * num_subframes;
 
         // RFC Table 5 Entry 1: Stereo Prediction Weights
+        log::debug!("[decode_silk_frame_stereo] Decoding stereo weights");
         let (w0_q13, w1_q13) = self.decode_stereo_weights(range_decoder)?;
+        log::debug!("[decode_silk_frame_stereo] Decoded weights: w0_q13={w0_q13}, w1_q13={w1_q13}");
 
         // RFC Table 5 Entry 2: Mid-only Flag
-        let mid_only = self.decode_mid_only_flag(range_decoder)?;
-
-        // Decode mid channel
-        let mut mid_samples_i16 = vec![0_i16; total_samples];
-        self.decode_silk_frame_internal(range_decoder, vad_flags.0, &mut mid_samples_i16, 0)?;
-
-        // Convert mid to f32 for stereo unmixing
-        let mid_samples: Vec<f32> = mid_samples_i16
-            .iter()
-            .map(|&s| f32::from(s) / 32768.0)
-            .collect();
-
-        // Decode side channel (if not mid-only)
-        let side_samples = if mid_only {
-            None
+        // Per libopus dec_API.c line 367-372: only decode if side channel VAD is inactive
+        let mid_only = if vad_flags.1 {
+            false
         } else {
-            let mut side_samples_i16 = vec![0_i16; total_samples];
-            self.decode_silk_frame_internal(range_decoder, vad_flags.1, &mut side_samples_i16, 1)?;
-            let side_f32: Vec<f32> = side_samples_i16
-                .iter()
-                .map(|&s| f32::from(s) / 32768.0)
-                .collect();
-            Some(side_f32)
+            self.decode_mid_only_flag(range_decoder)?
         };
 
-        // Apply stereo unmixing
-        let (left, right) = self.stereo_unmix(
-            &mid_samples,
-            side_samples.as_deref(),
-            w0_q13,
-            w1_q13,
-            bandwidth,
-        )?;
+        // Allocate buffers with 2-sample history space at start
+        // libopus uses this for buffering in silk_stereo_MS_to_LR
+        let mut x1 = vec![0_i16; total_samples + 2]; // mid -> left
+        let mut x2 = vec![0_i16; total_samples + 2]; // side -> right
 
-        // Interleave and convert to i16
-        #[allow(clippy::cast_possible_truncation)]
+        // Decode mid channel into x1 starting at index 2 (skip history)
+        log::debug!(
+            "[decode_silk_frame_stereo] Decoding mid channel, vad={}",
+            vad_flags.0
+        );
+        self.decode_silk_frame_internal(range_decoder, vad_flags.0, &mut x1[2..], 0)?;
+        log::trace!(
+            "[decode_silk_frame_stereo] Mid channel first 10: {:?}",
+            &x1[2..12.min(x1.len())]
+        );
+        log::trace!("[MID_CH] First 20: {:?}", &x1[2..22.min(x1.len())]);
+
+        // Decode side channel (if not mid-only)
+        if mid_only {
+            log::debug!("[decode_silk_frame_stereo] mid_only=true, side channel is zero");
+        } else {
+            log::debug!(
+                "[decode_silk_frame_stereo] Decoding side channel, vad={}",
+                vad_flags.1
+            );
+            self.decode_silk_frame_internal(range_decoder, vad_flags.1, &mut x2[2..], 1)?;
+            log::trace!(
+                "[decode_silk_frame_stereo] Side channel first 10: {:?}",
+                &x2[2..12.min(x2.len())]
+            );
+            log::trace!("[SIDE_CH] First 20: {:?}", &x2[2..22.min(x2.len())]);
+        }
+
+        // Get fs_kHz for interpolation calculation
+        let fs_khz = match bandwidth {
+            Bandwidth::Narrowband => 8,
+            Bandwidth::Mediumband => 12,
+            Bandwidth::Wideband => 16,
+            _ => return Err(Error::SilkDecoder("Invalid bandwidth".to_string())),
+        };
+
+        // Apply fixed-point stereo MS->LR conversion
+        // This modifies x1 and x2 in-place: x1 becomes left, x2 becomes right
+        #[allow(clippy::tuple_array_conversions)]
+        self.stereo_ms_to_lr(&mut x1, &mut x2, [w0_q13, w1_q13], fs_khz, total_samples)?;
+
+        // Interleave left/right into output
+        // After MS->LR, output is in x1[1..frame_length+1] and x2[1..frame_length+1]
+        // But we decode into x1[2..] and x2[2..], so after MS->LR processing,
+        // the output is in x1[2..frame_length+2] and x2[2..frame_length+2]
         for i in 0..total_samples {
             if i * 2 + 1 < output.len() {
-                let left_clamped = left[i].clamp(-1.0, 1.0);
-                let right_clamped = right[i].clamp(-1.0, 1.0);
-                output[i * 2] = (left_clamped * 32768.0) as i16;
-                output[i * 2 + 1] = (right_clamped * 32768.0) as i16;
+                output[i * 2] = x1[i + 2]; // Left
+                output[i * 2 + 1] = x2[i + 2]; // Right
             }
         }
 
@@ -949,32 +1018,49 @@ impl SilkDecoder {
         &mut self,
         range_decoder: &mut RangeDecoder,
     ) -> Result<(i16, i16)> {
+        log::trace!("[decode_stereo_weights] Starting stereo weight decode");
+        log::trace!(
+            "[WEIGHT_DECODE] PDF1 len={}, PDF2 len={}, PDF3 len={}",
+            STEREO_WEIGHT_PDF_STAGE1.len(),
+            STEREO_WEIGHT_PDF_STAGE2.len(),
+            STEREO_WEIGHT_PDF_STAGE3.len()
+        );
+
         let n = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE1, 8)?;
+        log::trace!("[WEIGHT_DECODE] n={n}");
         let i0 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE2, 8)?;
+        log::trace!("[WEIGHT_DECODE] i0={i0}");
         let i1 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE3, 8)?;
+        log::trace!("[WEIGHT_DECODE] i1={i1}");
         let i2 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE2, 8)?;
+        log::trace!("[WEIGHT_DECODE] i2={i2}");
         let i3 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE3, 8)?;
+        log::trace!("[WEIGHT_DECODE] i3={i3}");
 
         #[allow(clippy::cast_possible_truncation)]
         let wi0 = (i0 + 3 * (n / 5)) as usize;
         #[allow(clippy::cast_possible_truncation)]
         let wi1 = (i2 + 3 * (n % 5)) as usize;
 
-        #[allow(clippy::cast_possible_wrap)]
-        let w1_q13 = i32::from(STEREO_WEIGHT_TABLE_Q13[wi1])
-            + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi1 + 1])
-                - i32::from(STEREO_WEIGHT_TABLE_Q13[wi1]))
-                * 6554)
-                >> 16)
-                * (i3 as i32 * 2 + 1);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let step1_q13 = ((i32::from(STEREO_WEIGHT_TABLE_Q13[wi1 + 1])
+            - i32::from(STEREO_WEIGHT_TABLE_Q13[wi1]))
+            * i32::from(6554_i16))
+            >> 16;
 
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let w1_q13 = i32::from(STEREO_WEIGHT_TABLE_Q13[wi1])
+            + i32::from(step1_q13 as i16) * (i3 as i32 * 2 + 1);
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let step0_q13 = ((i32::from(STEREO_WEIGHT_TABLE_Q13[wi0 + 1])
+            - i32::from(STEREO_WEIGHT_TABLE_Q13[wi0]))
+            * i32::from(6554_i16))
+            >> 16;
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let w0_q13 = i32::from(STEREO_WEIGHT_TABLE_Q13[wi0])
-            + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi0 + 1])
-                - i32::from(STEREO_WEIGHT_TABLE_Q13[wi0]))
-                * 6554)
-                >> 16)
-                * (i1 as i32 * 2 + 1)
+            + i32::from(step0_q13 as i16) * (i1 as i32 * 2 + 1)
             - w1_q13;
 
         #[allow(clippy::cast_possible_truncation)]
@@ -1003,7 +1089,10 @@ impl SilkDecoder {
     /// * Table 5 Entry 2 (lines 2060-2179): Mid-only flag decode order
     /// * Lines 1976-1978: Mid-only flag PDF `[192, 0]` (probability 75% false, 25% true)
     pub fn decode_mid_only_flag(&mut self, range_decoder: &mut RangeDecoder) -> Result<bool> {
-        const MID_ONLY_PDF: &[u8] = &[192, 0];
+        // RFC 6716 - silk_stereo_only_code_mid_iCDF from libopus/silk/tables_other.c
+        // For mid-only flag: P(0) = 192/256, P(1) = 64/256
+        // iCDF format: icdf[0] = cumulative prob of values ≥ 1 = 64
+        const MID_ONLY_PDF: &[u8] = &[64, 0];
         let mid_only = range_decoder.ec_dec_icdf(MID_ONLY_PDF, 8)?;
 
         if mid_only == 1 {
@@ -1601,7 +1690,8 @@ impl SilkDecoder {
         self.previous_lsf_nb = None;
         self.previous_lsf_wb = None;
         self.previous_stereo_weights = None;
-        self.ltp_state.reset();
+        self.ltp_state[0].reset();
+        self.ltp_state[1].reset();
         if let Some(ref mut state) = self.stereo_state {
             state.reset();
         }
@@ -1653,12 +1743,15 @@ impl SilkDecoder {
             let f = i32::from(n & 255); // Fractional part (next 8 bits)
 
             // Linear interpolation in Q16 format (matches libopus QA=16)
-            // cos_i is Q12, shift left 4 to get Q16
-            // delta * f is Q12 * Q8 = Q20, shift right 4 to get Q16
+            // cos_i is Q12, shift left 8 to get Q20
+            // delta * f is Q12 * Q8 = Q20
+            // Use RSHIFT_ROUND to convert Q20 to Q16 (matches libopus)
             let cos_i = i32::from(LSF_COS_TABLE_Q12[i]);
             let cos_i_plus_1 = i32::from(LSF_COS_TABLE_Q12[i + 1]);
             let delta = cos_i_plus_1 - cos_i;
-            c_q16_ordered[ordering[k]] = (cos_i << 4) + ((delta * f) >> 4);
+            let q20_sum = (cos_i << 8) + (delta * f);
+            // silk_RSHIFT_ROUND(x, 4) = (((x >> 3) + 1) >> 1)
+            c_q16_ordered[ordering[k]] = ((q20_sum >> 3) + 1) >> 1;
         }
         log::trace!("[LSF_TO_LPC] c_q16 (cosine values): {c_q16_ordered:?}");
 
@@ -1704,6 +1797,19 @@ impl SilkDecoder {
 
             a32_q17[k] = (-(q_diff + p_sum)) as i32;
             a32_q17[d_lpc - k - 1] = (q_diff - p_sum) as i32;
+
+            if k <= 1 {
+                log::trace!(
+                    "[LSF_TO_LPC EXTRACT k={}] q_diff={}, p_sum={}, a32_q17[{}]={}, a32_q17[{}]={}",
+                    k,
+                    q_diff,
+                    p_sum,
+                    k,
+                    a32_q17[k],
+                    d_lpc - k - 1,
+                    a32_q17[d_lpc - k - 1]
+                );
+            }
         }
 
         Ok(a32_q17)
@@ -2687,6 +2793,13 @@ impl SilkDecoder {
             e_q14[i] = value;
         }
 
+        log::trace!(
+            "[EXCITATION ch={}] e_q14[0..5]={:?}, frame_type={:?}, offset_q10={}",
+            i32::from(frame_type == FrameType::Inactive),
+            &e_q14[0..5.min(e_q14.len())],
+            frame_type,
+            offset_q10
+        );
         log::trace!("[RECONSTRUCT] e_q14: {e_q14:?}");
         e_q14
     }
@@ -2816,6 +2929,7 @@ impl SilkDecoder {
         params: &SubframeParams,
         subframe_index: usize,
         bandwidth: Bandwidth,
+        channel_idx: usize,
     ) -> Vec<f32> {
         let n = Self::samples_per_subframe(bandwidth);
         let j = Self::subframe_start_index(subframe_index, n);
@@ -2833,12 +2947,20 @@ impl SilkDecoder {
         let out_start = j.saturating_sub(pitch_lag + 2);
 
         for i in out_start..out_end {
-            let out_val = self.ltp_state.out_buffer.get(i).copied().unwrap_or(0.0);
+            let out_val = self.ltp_state[channel_idx]
+                .out_buffer
+                .get(i)
+                .copied()
+                .unwrap_or(0.0);
 
             let mut lpc_sum = 0.0_f32;
             for k in 0..d_lpc {
                 let idx = i.saturating_sub(k + 1);
-                let out_prev = self.ltp_state.out_buffer.get(idx).copied().unwrap_or(0.0);
+                let out_prev = self.ltp_state[channel_idx]
+                    .out_buffer
+                    .get(idx)
+                    .copied()
+                    .unwrap_or(0.0);
                 let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
                 lpc_sum += out_prev * (a_q12 / 4096.0);
             }
@@ -2852,12 +2974,20 @@ impl SilkDecoder {
         }
 
         for i in out_end..j {
-            let lpc_val = self.ltp_state.lpc_buffer.get(i).copied().unwrap_or(0.0);
+            let lpc_val = self.ltp_state[channel_idx]
+                .lpc_buffer
+                .get(i)
+                .copied()
+                .unwrap_or(0.0);
 
             let mut lpc_sum = 0.0_f32;
             for k in 0..d_lpc {
                 let idx = i.saturating_sub(k + 1);
-                let lpc_prev = self.ltp_state.lpc_buffer.get(idx).copied().unwrap_or(0.0);
+                let lpc_prev = self.ltp_state[channel_idx]
+                    .lpc_buffer
+                    .get(idx)
+                    .copied()
+                    .unwrap_or(0.0);
                 let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
                 lpc_sum += lpc_prev * (a_q12 / 4096.0);
             }
@@ -2907,6 +3037,7 @@ impl SilkDecoder {
         residual_q14: &[i32],
         params: &SubframeParams,
         bandwidth: Bandwidth,
+        channel_idx: usize,
     ) -> Result<Vec<i16>> {
         log::trace!(
             "[LPC_SYNTH] gain_q16={}, lpc_coeffs_q12={:?}",
@@ -2930,32 +3061,30 @@ impl SilkDecoder {
 
         // Copy history from previous subframe (matches libopus decode_core.c line 113)
         // libopus: silk_memcpy( sLPC_Q14, psDec->sLPC_Q14_buf, MAX_LPC_ORDER * sizeof( opus_int32 ) );
-        if self.ltp_state.lpc_history_q14.len() >= max_lpc_order {
-            slpc_q14[..max_lpc_order].copy_from_slice(
-                &self.ltp_state.lpc_history_q14
-                    [self.ltp_state.lpc_history_q14.len() - max_lpc_order..],
+        // On first subframe after decoder reset, history is empty (was cleared before loop)
+        if self.ltp_state[channel_idx].lpc_history_q14.len() >= d_lpc {
+            slpc_q14[max_lpc_order - d_lpc..max_lpc_order].copy_from_slice(
+                &self.ltp_state[channel_idx].lpc_history_q14
+                    [self.ltp_state[channel_idx].lpc_history_q14.len() - d_lpc..],
             );
-            log::trace!(
-                "[LPC_LOAD_STATE] Loaded {} samples from history: {:?}",
-                max_lpc_order,
-                &slpc_q14[..max_lpc_order]
-            );
-        } else if !self.ltp_state.lpc_history_q14.is_empty() {
-            let len = self.ltp_state.lpc_history_q14.len();
+            log::trace!("[LPC_LOAD_STATE] Loaded {d_lpc} samples from history");
+        } else if !self.ltp_state[channel_idx].lpc_history_q14.is_empty() {
+            let len = self.ltp_state[channel_idx].lpc_history_q14.len();
             slpc_q14[max_lpc_order - len..max_lpc_order]
-                .copy_from_slice(&self.ltp_state.lpc_history_q14);
+                .copy_from_slice(&self.ltp_state[channel_idx].lpc_history_q14);
             log::trace!("[LPC_LOAD_STATE] Loaded {len} samples from partial history");
         }
 
         // Gain interpolation between subframes (matches libopus decode_core.c lines 118-127)
         // When gain changes, scale LPC history by gain adjustment factor
-        if params.gain_q16 != self.prev_gain_q16 {
-            let gain_adj_q16 = (i64::from(self.prev_gain_q16) << 16) / i64::from(params.gain_q16);
+        if params.gain_q16 != self.prev_gain_q16[channel_idx] {
+            let gain_adj_q16 =
+                (i64::from(self.prev_gain_q16[channel_idx]) << 16) / i64::from(params.gain_q16);
             for value in slpc_q14.iter_mut().take(max_lpc_order) {
                 *value = ((i64::from(*value) * gain_adj_q16) >> 16) as i32;
             }
         }
-        self.prev_gain_q16 = params.gain_q16;
+        self.prev_gain_q16[channel_idx] = params.gain_q16;
 
         let mut output = Vec::with_capacity(n);
 
@@ -2969,15 +3098,36 @@ impl SilkDecoder {
                 let a_q12 = i32::from(params.lpc_coeffs_q12[k]);
                 let slpc_prev = slpc_q14[max_lpc_order + i - k - 1];
 
-                // SMLAWB: (a * b) >> 16, where a and b are i32
+                // silk_SMLAWB: (a + (b * (i16)c) >> 16)
+                // Cast a_q12 to i16 (low 16 bits) before multiplication
                 // slpc_prev is Q14, a_q12 is Q12, product is Q26, >> 16 gives Q10
-                lpc_pred_q10 = lpc_pred_q10
-                    .saturating_add(((i64::from(slpc_prev) * i64::from(a_q12)) >> 16) as i32);
+                let product = ((i64::from(slpc_prev) * i64::from(a_q12 as i16)) >> 16) as i32;
+                if channel_idx == 0 && i == 5 && n == 40 && k == 0 {
+                    log::trace!(
+                        "[SILK LPC i={} k={}] slpc_prev={}, a_q12={}, product={}, accum={}",
+                        i,
+                        k,
+                        slpc_prev,
+                        a_q12,
+                        product,
+                        lpc_pred_q10 + product
+                    );
+                }
+                lpc_pred_q10 = lpc_pred_q10.wrapping_add(product);
             }
 
             // Add residual: sLPC_Q14[i] = residual_Q14[i] + (LPC_pred_Q10 << 4)
             // LPC_pred_Q10 << 4 converts Q10 -> Q14
-            let slpc_val_q14 = residual_q14[i].saturating_add(lpc_pred_q10 << 4);
+            // libopus uses silk_LSHIFT_SAT32 which saturates the shift, then silk_ADD_SAT32
+            // LSHIFT_SAT32 saturates if shift would overflow
+            let lpc_pred_q14 = if lpc_pred_q10 > (i32::MAX >> 4) {
+                i32::MAX
+            } else if lpc_pred_q10 < (i32::MIN >> 4) {
+                i32::MIN
+            } else {
+                lpc_pred_q10 << 4
+            };
+            let slpc_val_q14 = residual_q14[i].saturating_add(lpc_pred_q14);
             slpc_q14[max_lpc_order + i] = slpc_val_q14;
 
             // Apply gain and convert to output (matches libopus decode_core.c line 230)
@@ -2995,14 +3145,28 @@ impl SilkDecoder {
 
             #[allow(clippy::cast_possible_truncation)]
             let sample = output_val.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+
+            if i == 5 && n == 40 && channel_idx == 0 {
+                log::trace!(
+                    "[SILK SYNTH ch={} i={}] LPC_pred_Q10={}, sLPC_Q14={}, Gain_Q10={}, pxq={}, residual_Q14={}",
+                    channel_idx,
+                    i,
+                    lpc_pred_q10,
+                    slpc_val_q14,
+                    gain_q10,
+                    sample,
+                    residual_q14[i]
+                );
+            }
+
             output.push(sample);
         }
 
         // Save LPC state for next subframe (matches libopus decode_core.c line 235)
         // libopus: silk_memcpy( psDec->sLPC_Q14_buf, &sLPC_Q14[ psDec->subfr_length ], MAX_LPC_ORDER * sizeof( opus_int32 ) );
         // This copies the last MAX_LPC_ORDER samples from sLPC_Q14 buffer
-        self.ltp_state.lpc_history_q14.clear();
-        self.ltp_state
+        self.ltp_state[channel_idx].lpc_history_q14.clear();
+        self.ltp_state[channel_idx]
             .lpc_history_q14
             .extend_from_slice(&slpc_q14[n..max_lpc_order + n]);
 
@@ -3016,135 +3180,219 @@ impl SilkDecoder {
         output: &[f32],
         subframe_index: usize,
         bandwidth: Bandwidth,
+        channel_idx: usize,
     ) {
         let n = Self::samples_per_subframe(bandwidth);
         let j = Self::subframe_start_index(subframe_index, n);
 
         for (offset, &val) in output.iter().enumerate() {
             let idx = j + offset;
-            if idx < self.ltp_state.out_buffer.len() {
-                self.ltp_state.out_buffer[idx] = val;
+            if idx < self.ltp_state[channel_idx].out_buffer.len() {
+                self.ltp_state[channel_idx].out_buffer[idx] = val;
             }
         }
 
         for (offset, &val) in unclamped_lpc.iter().enumerate() {
             let idx = j + offset;
-            if idx < self.ltp_state.lpc_buffer.len() {
-                self.ltp_state.lpc_buffer[idx] = val;
+            if idx < self.ltp_state[channel_idx].lpc_buffer.len() {
+                self.ltp_state[channel_idx].lpc_buffer[idx] = val;
             }
         }
     }
 
-    #[allow(dead_code)]
-    fn stereo_unmix(
+    #[allow(
+        dead_code,
+        clippy::too_many_lines,
+        clippy::similar_names,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    /// Convert adaptive Mid/Side to Left/Right stereo using fixed-point arithmetic.
+    /// Matches libopus `silk_stereo_MS_to_LR` exactly for bit-exact decoding.
+    ///
+    /// # Arguments
+    /// * `x1` - Mid channel samples (i16), will be overwritten with left channel
+    /// * `x2` - Side channel samples (i16), will be overwritten with right channel
+    /// * `pred_q13` - Stereo prediction weights [w0, w1] in Q13 format
+    /// * `fs_khz` - Sample rate in kHz (8, 12, or 16)
+    /// * `frame_length` - Number of samples in frame
+    fn stereo_ms_to_lr(
         &mut self,
-        mid_channel: &[f32],
-        side_channel: Option<&[f32]>,
-        w0_q13: i16,
-        w1_q13: i16,
-        bandwidth: Bandwidth,
-    ) -> Result<(Vec<f32>, Vec<f32>)> {
+        x1: &mut [i16],
+        x2: &mut [i16],
+        pred_q13: [i16; 2],
+        fs_khz: i32,
+        frame_length: usize,
+    ) -> Result<()> {
+        // STEREO_INTERP_LEN_MS = 8 (must be even)
+        const STEREO_INTERP_LEN_MS: i32 = 8;
+
         let state = self.stereo_state.as_mut().ok_or_else(|| {
-            Error::SilkDecoder("stereo_unmix called but stereo state not initialized".to_string())
+            Error::SilkDecoder(
+                "stereo_ms_to_lr called but stereo state not initialized".to_string(),
+            )
         })?;
 
-        let side_vec;
-        let side = if let Some(s) = side_channel {
-            if s.len() != mid_channel.len() {
-                return Err(Error::SilkDecoder(format!(
-                    "mid and side lengths don't match: {} vs {}",
-                    mid_channel.len(),
-                    s.len()
-                )));
-            }
-            s
-        } else {
-            side_vec = vec![0.0_f32; mid_channel.len()];
-            &side_vec
-        };
+        // Buffering: prepend 2-sample history (libopus lines 51-53)
+        log::trace!(
+            "[stereo_ms_to_lr] Before history: x1[0..5]={:?}, x2[0..5]={:?}",
+            &x1[0..x1.len().min(5)],
+            &x2[0..x2.len().min(5)]
+        );
+        x1[0] = state.s_mid[0];
+        x1[1] = state.s_mid[1];
+        x2[0] = state.s_side[0];
+        x2[1] = state.s_side[1];
+        log::trace!(
+            "[stereo_ms_to_lr] After history: x1[0..5]={:?}, x2[0..5]={:?}",
+            &x1[0..x1.len().min(5)],
+            &x2[0..x2.len().min(5)]
+        );
 
-        let n1 = match bandwidth {
-            Bandwidth::Narrowband => 64,
-            Bandwidth::Mediumband => 96,
-            Bandwidth::Wideband => 128,
-            _ => {
-                return Err(Error::SilkDecoder(format!(
-                    "invalid bandwidth for stereo: {bandwidth:?}"
-                )));
-            }
-        };
+        // Save last 2 samples as history for next frame (libopus lines 54-55)
+        state.s_mid[0] = x1[frame_length];
+        state.s_mid[1] = x1[frame_length + 1];
+        state.s_side[0] = x2[frame_length];
+        state.s_side[1] = x2[frame_length + 1];
 
-        let n2 = mid_channel.len();
-        let mut left = Vec::with_capacity(n2);
-        let mut right = Vec::with_capacity(n2);
+        // Interpolate predictors and add prediction to side channel (libopus lines 57-77)
+        let mut pred0_q13 = i32::from(state.pred_prev_q13[0]);
+        let mut pred1_q13 = i32::from(state.pred_prev_q13[1]);
 
-        #[allow(clippy::cast_precision_loss)]
-        for i in 0..n2 {
-            let phase1_progress = (i.min(n1) as f32) / (n1 as f32);
+        let interp_len = (STEREO_INTERP_LEN_MS * fs_khz) as usize;
 
-            let prev_w0 = f32::from(state.prev_w0_q13) / 8192.0;
-            let curr_w0 = f32::from(w0_q13) / 8192.0;
-            let w0 = phase1_progress.mul_add(curr_w0 - prev_w0, prev_w0);
+        // Compute deltas for linear interpolation
+        // silk_SMULBB: cast both difference and denom_q16 to i16 before multiply
+        let denom_q16 = ((1_i64 << 16) / i64::from(STEREO_INTERP_LEN_MS * fs_khz)) as i32;
+        let diff0 = pred_q13[0] - state.pred_prev_q13[0];
+        let diff1 = pred_q13[1] - state.pred_prev_q13[1];
+        let delta0_q13 = ((i32::from(diff0) * i32::from(denom_q16 as i16)) + (1 << 15)) >> 16;
+        let delta1_q13 = ((i32::from(diff1) * i32::from(denom_q16 as i16)) + (1 << 15)) >> 16;
 
-            let prev_w1 = f32::from(state.prev_w1_q13) / 8192.0;
-            let curr_w1 = f32::from(w1_q13) / 8192.0;
-            let w1 = phase1_progress.mul_add(curr_w1 - prev_w1, prev_w1);
+        log::debug!(
+            "[stereo_ms_to_lr] pred_q13={:?}, prev={:?}, denom_q16={}, delta={:?}",
+            pred_q13,
+            state.pred_prev_q13,
+            denom_q16,
+            [delta0_q13, delta1_q13]
+        );
 
-            let mid_i = mid_channel[i];
+        // Phase 1: Interpolation (libopus lines 62-68)
+        for n in 0..interp_len.min(frame_length) {
+            pred0_q13 = pred0_q13.wrapping_add(delta0_q13);
+            pred1_q13 = pred1_q13.wrapping_add(delta1_q13);
 
-            let mid_i1 = if i >= 1 {
-                mid_channel[i - 1]
-            } else {
-                state.mid_history[1]
-            };
+            log::trace!(
+                "[stereo_ms_to_lr] Phase1 n={}: pred=[{},{}], x1=[{},{},{}], x2[{}]={}",
+                n,
+                pred0_q13,
+                pred1_q13,
+                x1[n],
+                x1[n + 1],
+                x1[n + 2],
+                n + 1,
+                x2[n + 1]
+            );
 
-            let mid_i2 = if i >= 2 {
-                mid_channel[i - 2]
-            } else if i == 1 {
-                state.mid_history[1]
-            } else {
-                state.mid_history[0]
-            };
+            // sum = (x1[n] + x1[n+2] + 2*x1[n+1]) << 9  (Q11)
+            let sum_q11 = i32::from(x1[n]) + i32::from(x1[n + 2]) + (i32::from(x1[n + 1]) << 1);
+            let sum_q11_shifted = sum_q11 << 9;
 
-            let p0 = (2.0_f32.mul_add(mid_i1, mid_i2) + mid_i) / 4.0;
+            // sum = x2[n+1] << 8 + (sum_q11 * pred0_Q13) >> 16  (Q8)
+            // silk_SMLAWB: cast pred0_q13 to i16 first (low 16 bits)
+            let mut sum_q8 = i32::from(x2[n + 1]) << 8;
+            sum_q8 = sum_q8.wrapping_add(
+                ((i64::from(sum_q11_shifted) * i64::from(pred0_q13 as i16)) >> 16) as i32,
+            );
 
-            let side_i1 = if i >= 1 {
-                side[i - 1]
-            } else {
-                state.side_history
-            };
+            // sum = sum + (x1[n+1] << 11 * pred1_Q13) >> 16  (Q8)
+            // silk_SMLAWB: cast pred1_q13 to i16 first (low 16 bits)
+            sum_q8 = sum_q8.wrapping_add(
+                ((i64::from(i32::from(x1[n + 1]) << 11) * i64::from(pred1_q13 as i16)) >> 16)
+                    as i32,
+            );
 
-            let left_val = w0.mul_add(p0, (1.0 + w1).mul_add(mid_i1, side_i1));
-            let right_val = w0.mul_add(-p0, (1.0 - w1).mul_add(mid_i1, -side_i1));
+            // x2[n+1] = SAT16(RSHIFT_ROUND(sum, 8))
+            x2[n + 1] =
+                ((((sum_q8 >> 7) + 1) >> 1).clamp(i32::from(i16::MIN), i32::from(i16::MAX))) as i16;
 
-            left.push(left_val.clamp(-1.0, 1.0));
-            right.push(right_val.clamp(-1.0, 1.0));
+            log::trace!(
+                "[stereo_ms_to_lr] Phase1 n={}: sum_q11={}, sum_q8={}, x2[{}]={}",
+                n,
+                sum_q11,
+                sum_q8,
+                n + 1,
+                x2[n + 1]
+            );
         }
 
-        state.prev_w0_q13 = w0_q13;
-        state.prev_w1_q13 = w1_q13;
+        // Phase 2: Steady state with constant predictors (libopus lines 69-73)
+        pred0_q13 = i32::from(pred_q13[0]);
+        pred1_q13 = i32::from(pred_q13[1]);
+        for n in interp_len..frame_length {
+            let sum_q11 = i32::from(x1[n]) + i32::from(x1[n + 2]) + (i32::from(x1[n + 1]) << 1);
+            let sum_q11_shifted = sum_q11 << 9;
 
-        if n2 >= 2 {
-            state.mid_history = [mid_channel[n2 - 2], mid_channel[n2 - 1]];
-        } else if n2 == 1 {
-            state.mid_history = [state.mid_history[1], mid_channel[0]];
+            // silk_SMLAWB: cast pred0_q13 to i16 first (low 16 bits)
+            let mut sum_q8 = i32::from(x2[n + 1]) << 8;
+            sum_q8 = sum_q8.wrapping_add(
+                ((i64::from(sum_q11_shifted) * i64::from(pred0_q13 as i16)) >> 16) as i32,
+            );
+            sum_q8 = sum_q8.wrapping_add(
+                ((i64::from(i32::from(x1[n + 1]) << 11) * i64::from(pred1_q13 as i16)) >> 16)
+                    as i32,
+            );
+
+            x2[n + 1] =
+                ((((sum_q8 >> 7) + 1) >> 1).clamp(i32::from(i16::MIN), i32::from(i16::MAX))) as i16;
         }
 
-        if n2 >= 1 {
-            state.side_history = side[n2 - 1];
+        // Save predictors for next frame (libopus lines 74-75)
+        state.pred_prev_q13[0] = pred_q13[0];
+        state.pred_prev_q13[1] = pred_q13[1];
+
+        // Convert mid/side to left/right (libopus lines 77-82)
+        // Start at index 1 because index 0 is history
+        log::trace!(
+            "[stereo_ms_to_lr] Before MS->LR: x1[1..6]={:?}, x2[1..6]={:?}",
+            &x1[1..6.min(x1.len())],
+            &x2[1..6.min(x2.len())]
+        );
+
+        for n in 0..frame_length {
+            let sum = i32::from(x1[n + 1]) + i32::from(x2[n + 1]);
+            let diff = i32::from(x1[n + 1]) - i32::from(x2[n + 1]);
+
+            log::trace!(
+                "[stereo_ms_to_lr] MS->LR n={}: mid={}, side={}, L={}, R={}",
+                n,
+                x1[n + 1],
+                x2[n + 1],
+                sum,
+                diff
+            );
+
+            x1[n + 1] = (sum.clamp(i32::from(i16::MIN), i32::from(i16::MAX))) as i16;
+            x2[n + 1] = (diff.clamp(i32::from(i16::MIN), i32::from(i16::MAX))) as i16;
         }
 
-        Ok((left, right))
+        log::trace!(
+            "[stereo_ms_to_lr] After MS->LR: x1[1..6]={:?}, x2[1..6]={:?}",
+            &x1[1..6.min(x1.len())],
+            &x2[1..6.min(x2.len())]
+        );
+
+        Ok(())
     }
 
     #[allow(dead_code)]
-    fn apply_mono_delay(&mut self, samples: &[f32]) -> Vec<f32> {
+    fn apply_mono_delay(&mut self, samples: &[i16]) -> Vec<i16> {
         let mut delayed = Vec::with_capacity(samples.len());
 
         if let Some(state) = &self.stereo_state {
-            delayed.push(state.mid_history[1]);
+            delayed.push(state.s_mid[1]);
         } else {
-            delayed.push(0.0);
+            delayed.push(0);
         }
 
         if !samples.is_empty() {
@@ -3154,7 +3402,7 @@ impl SilkDecoder {
         if let Some(state) = &mut self.stereo_state
             && !samples.is_empty()
         {
-            state.mid_history[1] = samples[samples.len() - 1];
+            state.s_mid[1] = samples[samples.len() - 1];
         }
 
         delayed
@@ -5424,13 +5672,13 @@ mod tests {
     fn test_ltp_state_initialization() {
         let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
-        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+        assert_eq!(decoder.ltp_state[0].out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state[0].lpc_buffer.len(), 256);
 
-        for &val in &decoder.ltp_state.out_buffer {
+        for &val in &decoder.ltp_state[0].out_buffer {
             assert_eq!(val, 0.0);
         }
-        for &val in &decoder.ltp_state.lpc_buffer {
+        for &val in &decoder.ltp_state[0].lpc_buffer {
             assert_eq!(val, 0.0);
         }
     }
@@ -5440,21 +5688,21 @@ mod tests {
     fn test_ltp_state_reset() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        decoder.ltp_state.out_buffer[0] = 1.0;
-        decoder.ltp_state.lpc_buffer[0] = 2.0;
+        decoder.ltp_state[0].out_buffer[0] = 1.0;
+        decoder.ltp_state[0].lpc_buffer[0] = 2.0;
 
-        decoder.ltp_state.reset();
+        decoder.ltp_state[0].reset();
 
-        assert_eq!(decoder.ltp_state.out_buffer[0], 0.0);
-        assert_eq!(decoder.ltp_state.lpc_buffer[0], 0.0);
+        assert_eq!(decoder.ltp_state[0].out_buffer[0], 0.0);
+        assert_eq!(decoder.ltp_state[0].lpc_buffer[0], 0.0);
     }
 
     #[test]
     fn test_ltp_buffer_sizes() {
         let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
-        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+        assert_eq!(decoder.ltp_state[0].out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state[0].lpc_buffer.len(), 256);
     }
 
     #[test]
@@ -5676,7 +5924,7 @@ mod tests {
         };
 
         let output = decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert_eq!(output.len(), 80);
@@ -5697,7 +5945,7 @@ mod tests {
         };
 
         let output = decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert!(output.iter().all(|&x| x == 1));
@@ -5717,7 +5965,7 @@ mod tests {
         };
 
         let output = decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert!(output.iter().all(|&x| x == 0 || x == 1));
@@ -5737,7 +5985,7 @@ mod tests {
         };
 
         let output = decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert!(output.iter().all(|&x| x == 20));
@@ -5757,7 +6005,7 @@ mod tests {
         };
 
         decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
     }
 
@@ -5775,16 +6023,19 @@ mod tests {
         };
 
         decoder
-            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_q14, &params, Bandwidth::Wideband, 0)
             .unwrap();
 
-        assert_eq!(decoder.ltp_state.lpc_history_q14.len(), 16);
+        assert_eq!(decoder.ltp_state[0].lpc_history_q14.len(), 16);
         // With zero LPC coeffs and residual_q14=8192, slpc_q14 = 8192 + rounding (128) = 8320
         // Verify history contains the last 16 samples
         assert!(
-            decoder.ltp_state.lpc_history_q14.iter().all(|&x| x == 8320),
+            decoder.ltp_state[0]
+                .lpc_history_q14
+                .iter()
+                .all(|&x| x == 8320),
             "History values: {:?}",
-            &decoder.ltp_state.lpc_history_q14
+            &decoder.ltp_state[0].lpc_history_q14
         );
     }
 
@@ -5802,7 +6053,7 @@ mod tests {
         };
 
         decoder
-            .lpc_synthesis(&residual1_q14, &params1, Bandwidth::Wideband)
+            .lpc_synthesis(&residual1_q14, &params1, Bandwidth::Wideband, 0)
             .unwrap();
 
         let residual2_q14 = vec![0_i32; 80];
@@ -5815,7 +6066,7 @@ mod tests {
         };
 
         let output2 = decoder
-            .lpc_synthesis(&residual2_q14, &params2, Bandwidth::Wideband)
+            .lpc_synthesis(&residual2_q14, &params2, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert!(output2[0] > 0);
@@ -5836,7 +6087,7 @@ mod tests {
         };
 
         let output_nb = decoder
-            .lpc_synthesis(&residual_nb_q14, &params_nb, Bandwidth::Narrowband)
+            .lpc_synthesis(&residual_nb_q14, &params_nb, Bandwidth::Narrowband, 0)
             .unwrap();
 
         assert_eq!(output_nb.len(), 40);
@@ -5851,7 +6102,7 @@ mod tests {
             ltp_scale_q14: 14000,
         };
         let output_mb = decoder
-            .lpc_synthesis(&residual_mb_q14, &params_mb, Bandwidth::Mediumband)
+            .lpc_synthesis(&residual_mb_q14, &params_mb, Bandwidth::Mediumband, 0)
             .unwrap();
 
         assert_eq!(output_mb.len(), 60);
@@ -5867,7 +6118,7 @@ mod tests {
         };
 
         let output_wb = decoder
-            .lpc_synthesis(&residual_wb_q14, &params_wb, Bandwidth::Wideband)
+            .lpc_synthesis(&residual_wb_q14, &params_wb, Bandwidth::Wideband, 0)
             .unwrap();
 
         assert_eq!(output_wb.len(), 80);
@@ -5875,189 +6126,189 @@ mod tests {
     }
 
     #[test]
-    fn test_stereo_unmix_phase1_duration() {
+    fn test_stereo_ms_to_lr_phase1_duration() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
 
-        let mid = vec![0.5_f32; 320];
-        let side = vec![0.1_f32; 320];
+        let mut mid = vec![16384_i16; 322];
+        let mut side = vec![3276_i16; 322];
 
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Wideband)
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [1000, 500], 16, 320)
             .unwrap();
 
-        assert_eq!(left.len(), 320);
-        assert_eq!(right.len(), 320);
+        assert_eq!(mid.len(), 322);
+        assert_eq!(side.len(), 322);
     }
 
     #[test]
-    fn test_stereo_unmix_phase1_nb() {
+    fn test_stereo_ms_to_lr_phase1_nb() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Stereo, 20).unwrap();
 
-        let mid = vec![0.5_f32; 160];
-        let side = vec![0.1_f32; 160];
+        let mut mid = vec![16384_i16; 162];
+        let mut side = vec![3276_i16; 162];
 
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Narrowband)
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [1000, 500], 8, 160)
             .unwrap();
 
-        assert_eq!(left.len(), 160);
-        assert_eq!(right.len(), 160);
+        assert_eq!(mid.len(), 162);
+        assert_eq!(side.len(), 162);
     }
 
     #[test]
-    fn test_stereo_unmix_phase1_mb() {
+    fn test_stereo_ms_to_lr_phase1_mb() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Stereo, 20).unwrap();
 
-        let mid = vec![0.5_f32; 240];
-        let side = vec![0.1_f32; 240];
+        let mut mid = vec![16384_i16; 242];
+        let mut side = vec![3276_i16; 242];
 
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Mediumband)
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [1000, 500], 12, 240)
             .unwrap();
 
-        assert_eq!(left.len(), 240);
-        assert_eq!(right.len(), 240);
+        assert_eq!(mid.len(), 242);
+        assert_eq!(side.len(), 242);
     }
 
     #[test]
-    fn test_stereo_unmix_weight_interpolation() {
+    fn test_stereo_ms_to_lr_weight_interpolation() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
 
         if let Some(state) = &mut decoder.stereo_state {
-            state.prev_w0_q13 = 0;
-            state.prev_w1_q13 = 0;
+            state.pred_prev_q13 = [0, 0];
         }
 
-        let mid = vec![1.0_f32; 320];
-        let side = vec![0.0_f32; 320];
+        let mut mid = vec![32767_i16; 322];
+        let mut side = vec![0_i16; 322];
 
         decoder
-            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
+            .stereo_ms_to_lr(&mut mid, &mut side, [8192, 4096], 16, 320)
             .unwrap();
 
         if let Some(state) = &decoder.stereo_state {
-            assert_eq!(state.prev_w0_q13, 8192);
-            assert_eq!(state.prev_w1_q13, 4096);
+            assert_eq!(state.pred_prev_q13[0], 8192);
+            assert_eq!(state.pred_prev_q13[1], 4096);
         }
     }
 
     #[test]
-    fn test_stereo_unmix_side_not_coded() {
+    fn test_stereo_ms_to_lr_basic() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
 
-        let mid = vec![0.5_f32; 320];
-
-        let (left, right) = decoder
-            .stereo_unmix(&mid, None, 0, 0, Bandwidth::Wideband)
-            .unwrap();
-
-        assert_eq!(left.len(), 320);
-        assert_eq!(right.len(), 320);
-    }
-
-    #[test]
-    fn test_stereo_unmix_low_pass_filter() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
-
-        if let Some(state) = &mut decoder.stereo_state {
-            state.mid_history = [1.0, 2.0];
-        }
-
-        let mid = vec![3.0_f32; 320];
-        let side = vec![0.0_f32; 320];
+        let mut mid = vec![16384_i16; 322];
+        let mut side = vec![0_i16; 322];
 
         decoder
-            .stereo_unmix(&mid, Some(&side), 8192, 0, Bandwidth::Wideband)
+            .stereo_ms_to_lr(&mut mid, &mut side, [0, 0], 16, 320)
             .unwrap();
+
+        assert_eq!(mid.len(), 322);
+        assert_eq!(side.len(), 322);
     }
 
     #[test]
-    fn test_stereo_unmix_one_sample_delay() {
+    fn test_stereo_ms_to_lr_with_history() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
 
         if let Some(state) = &mut decoder.stereo_state {
-            state.mid_history = [0.0, 1.0];
-            state.side_history = 0.5;
+            state.s_mid = [1000, 2000];
         }
 
-        let mid = vec![2.0, 3.0, 4.0];
-        let side = vec![1.0, 1.5, 2.0];
-
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 0, 0, Bandwidth::Wideband)
-            .unwrap();
-
-        assert_eq!(left.len(), 3);
-        assert_eq!(right.len(), 3);
-    }
-
-    #[test]
-    fn test_stereo_unmix_formulas_zero_weights() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
-
-        if let Some(state) = &mut decoder.stereo_state {
-            state.mid_history = [0.0, 1.0];
-            state.side_history = 0.5;
-        }
-
-        let mid = vec![2.0_f32; 10];
-        let side = vec![1.0_f32; 10];
-
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 0, 0, Bandwidth::Wideband)
-            .unwrap();
-
-        assert!((left[0] - 1.0).abs() < 1e-6);
-        assert!((right[0] - 0.5).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_stereo_unmix_clamping_positive() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
-
-        let mid = vec![10.0_f32; 320];
-        let side = vec![10.0_f32; 320];
-
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
-            .unwrap();
-
-        assert!(left.iter().all(|&x| x <= 1.0));
-        assert!(right.iter().all(|&x| x <= 1.0));
-    }
-
-    #[test]
-    fn test_stereo_unmix_clamping_negative() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
-
-        let mid = vec![-10.0_f32; 320];
-        let side = vec![-10.0_f32; 320];
-
-        let (left, right) = decoder
-            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
-            .unwrap();
-
-        assert!(left.iter().all(|&x| x >= -1.0));
-        assert!(right.iter().all(|&x| x >= -1.0));
-    }
-
-    #[test]
-    fn test_stereo_unmix_history_updated() {
-        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
-
-        let mid = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let side = vec![0.1, 0.2, 0.3, 0.4, 0.5];
+        let mut mid = vec![3000_i16; 322];
+        let mut side = vec![0_i16; 322];
 
         decoder
-            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Wideband)
+            .stereo_ms_to_lr(&mut mid, &mut side, [8192, 0], 16, 320)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_stereo_ms_to_lr_short_frame() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.s_mid = [0, 1000];
+            state.s_side = [500, 1000];
+        }
+
+        let mut mid = vec![2000_i16, 3000, 4000, 5000, 6000];
+        let mut side = vec![1000_i16, 1500, 2000, 2500, 3000];
+
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [0, 0], 16, 3)
+            .unwrap();
+
+        assert_eq!(mid.len(), 5);
+        assert_eq!(side.len(), 5);
+    }
+
+    #[test]
+    fn test_stereo_ms_to_lr_zero_weights() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.s_mid = [0, 10000];
+            state.s_side = [5000, 8000];
+        }
+
+        let mut mid = vec![20000_i16; 12];
+        let mut side = vec![10000_i16; 12];
+
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [0, 0], 16, 10)
+            .unwrap();
+
+        // Output starts at index 1 (index 0 is history)
+        // After MS to LR conversion: L = M + S, R = M - S
+        // With M=20000, S=10000: L = 30000, R = 10000
+        assert!(mid[1] > 0);
+        assert!(side[1] > 0);
+    }
+
+    #[test]
+    fn test_stereo_ms_to_lr_large_values() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mut mid = vec![32767_i16; 322];
+        let mut side = vec![32767_i16; 322];
+
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [8192, 4096], 16, 320)
+            .unwrap();
+
+        assert!(mid.iter().all(|&x| (i16::MIN..=i16::MAX).contains(&x)));
+        assert!(side.iter().all(|&x| (i16::MIN..=i16::MAX).contains(&x)));
+    }
+
+    #[test]
+    fn test_stereo_ms_to_lr_negative_values() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mut mid = vec![-32767_i16; 322];
+        let mut side = vec![-32767_i16; 322];
+
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [8192, 4096], 16, 320)
+            .unwrap();
+
+        assert!(mid.iter().all(|&x| (i16::MIN..=i16::MAX).contains(&x)));
+        assert!(side.iter().all(|&x| (i16::MIN..=i16::MAX).contains(&x)));
+    }
+
+    #[test]
+    fn test_stereo_ms_to_lr_history_updated() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mut mid = vec![1000_i16, 2000, 3000, 4000, 5000, 6000, 7000];
+        let mut side = vec![100_i16, 200, 300, 400, 500, 600, 700];
+
+        decoder
+            .stereo_ms_to_lr(&mut mid, &mut side, [1000, 500], 16, 5)
             .unwrap();
 
         if let Some(state) = &decoder.stereo_state {
-            assert!((state.mid_history[0] - 4.0).abs() < 1e-6);
-            assert!((state.mid_history[1] - 5.0).abs() < 1e-6);
-            assert!((state.side_history - 0.5).abs() < 1e-6);
-            assert_eq!(state.prev_w0_q13, 1000);
-            assert_eq!(state.prev_w1_q13, 500);
+            assert_eq!(state.pred_prev_q13[0], 1000);
+            assert_eq!(state.pred_prev_q13[1], 500);
         }
     }
 
@@ -6065,15 +6316,15 @@ mod tests {
     fn test_mono_one_sample_delay() {
         let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
 
-        let samples = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let samples = vec![1000_i16, 2000, 3000, 4000, 5000];
         let delayed = decoder.apply_mono_delay(&samples);
 
         assert_eq!(delayed.len(), 5);
-        assert!((delayed[0] - 0.0).abs() < 1e-6);
-        assert!((delayed[1] - 1.0).abs() < 1e-6);
-        assert!((delayed[2] - 2.0).abs() < 1e-6);
-        assert!((delayed[3] - 3.0).abs() < 1e-6);
-        assert!((delayed[4] - 4.0).abs() < 1e-6);
+        assert_eq!(delayed[0], 0);
+        assert_eq!(delayed[1], 1000);
+        assert_eq!(delayed[2], 2000);
+        assert_eq!(delayed[3], 3000);
+        assert_eq!(delayed[4], 4000);
     }
 
     #[test]
