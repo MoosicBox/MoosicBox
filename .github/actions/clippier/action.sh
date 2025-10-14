@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-CLIPPIER_BIN="./target/release/clippier"
+# Change to repository root (clippier needs to run from repo root for git operations)
+cd "${GITHUB_WORKSPACE}"
+
+CLIPPIER_BIN="${GITHUB_WORKSPACE}/target/release/clippier"
 GIT_BASE=""
 GIT_HEAD=""
 
