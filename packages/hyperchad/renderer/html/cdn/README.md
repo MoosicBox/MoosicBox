@@ -5,7 +5,7 @@ This package provides CDN optimization utilities for HyperChad HTML applications
 ## Features
 
 - **Automatic CDN skeleton generation**: Creates optimized `index.html` for CDN deployment
-- **Dynamic content fetching**: Skeleton fetches full application content via XHR
+- **Dynamic content fetching**: Skeleton fetches full application content via `fetch()` API
 - **Zero configuration**: Automatically detects when optimization is needed
 - **Document replacement**: Uses `document.open()/write()/close()` for seamless content replacement
 
@@ -25,39 +25,20 @@ use hyperchad_router::Router;
 use hyperchad_renderer_html_cdn::setup_cdn_optimization;
 
 // Create router with dynamic root route
-let mut router = Router::new()
-    .with_route_result("/", home_handler);
+let router = Router::new()
+    .with_route("/", |_req| async move { "Hello, World!" });
 
 // Setup CDN optimization with custom title and viewport
-router = setup_cdn_optimization(
+let router = setup_cdn_optimization(
     router,
     Some("My App"),
     Some("width=device-width, initial-scale=1")
 );
-
-// Build and generate as normal
-let app = AppBuilder::new()
-    .with_router(router)
-    .build(HtmlRenderer::new())?;
-
-// Generate static assets (includes optimized index.html)
-app.generate(Some("dist".to_string())).await?;
 ```
 
 ### Usage Examples
 
 ```rust
-// With app configuration
-let app = AppBuilder::new()
-    .with_title("My Awesome App".to_string())
-    .with_viewport("width=device-width, initial-scale=1".to_string());
-
-let router = setup_cdn_optimization(
-    router,
-    app.title.as_deref(),
-    app.viewport.as_deref()
-);
-
 // Minimal setup (no title/viewport)
 let router = setup_cdn_optimization(router, None, None);
 
@@ -72,9 +53,9 @@ let router = setup_cdn_optimization(
 ## How It Works
 
 1. **Detection**: Only activates if root route ("/") is dynamic (not static)
-2. **Skeleton Generation**: Adds a static route for optimized `index.html`
-3. **Dynamic Endpoint**: Registers `/__hyperchad_dynamic_root__` that serves full content
-4. **Runtime**: CDN serves skeleton → browser fetches dynamic content → document replaced
+2. **Skeleton Generation**: Replaces root route with a static route containing optimized skeleton `index.html`
+3. **Dynamic Endpoint**: Registers `/__hyperchad_dynamic_root__` that serves the full application content
+4. **Runtime**: CDN serves skeleton → browser fetches dynamic content via `fetch()` → document replaced using `document.open()/write()/close()`
 
 ## CDN Architecture
 
