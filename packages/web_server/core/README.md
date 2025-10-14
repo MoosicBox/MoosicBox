@@ -95,7 +95,8 @@ async fn run_server(server: impl WebServer) {
 ## Dependencies
 
 - **Standard Library**: Core Future and Pin types
-- **No External Dependencies**: Minimal dependency footprint
+- **moosicbox_assert**: Internal assertion utilities
+- **Minimal Dependencies**: Lightweight dependency footprint
 
 ## Integration
 
