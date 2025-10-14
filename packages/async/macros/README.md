@@ -9,7 +9,8 @@ The MoosicBox Async Macros package provides:
 - **Yield Injection**: Automatic yield point insertion for simulation testing
 - **Async Transformation**: Transform async functions for deterministic execution
 - **Proc Macros**: `#[inject_yields]` and `inject_yields_mod!` macros
-- **Feature-Gated**: Only active when `simulator` feature is enabled
+- **Test Macros**: Simulator-aware test attribute macros (`#[test]`, `#[unsync_test]`, etc.)
+- **Feature-Gated**: Simulator features enabled by default; can be disabled
 - **AST Manipulation**: Sophisticated syntax tree transformation
 
 ## Features
@@ -21,9 +22,22 @@ The MoosicBox Async Macros package provides:
 - **Non-Intrusive**: No overhead when simulator feature is disabled
 
 ### Macro Types
+
+#### Yield Injection Macros
 - **`#[inject_yields]`**: Attribute macro for individual functions and impl blocks
 - **`inject_yields_mod!`**: Procedural macro for entire modules
-- **Conditional**: Only active with `simulator` feature flag
+- **Conditional**: Only active with `simulator` feature flag (enabled by default)
+
+#### Test Macros (simulator feature only)
+- **`#[test]`**: External test macro for `switchy_async` tests
+- **`#[internal_test]`**: Internal test macro using crate path
+- **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters
+- **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper
+
+#### Internal Macros (simulator feature only)
+- **`select_internal!`**: Internal select! macro with crate path parameter
+- **`join_internal!`**: Internal join! macro with crate path parameter
+- **`try_join_internal!`**: Internal try_join! macro with crate path parameter
 
 ### AST Transformation
 - **Await Wrapping**: Wraps `.await` expressions with yield points
@@ -37,12 +51,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Default includes simulator feature
 switchy_async_macros = { path = "../async/macros" }
 
-# Enable for simulation testing
+# Disable simulator feature
 switchy_async_macros = {
     path = "../async/macros",
-    features = ["simulator"]
+    default-features = false
 }
 ```
 
@@ -203,13 +218,15 @@ pub async fn library_function() -> Result<Data, Error> {
 
 ## Feature Flags
 
-- **`simulator`**: Enable yield injection transformation
+- **`simulator`**: Enable yield injection transformation and test macros (enabled by default)
+- **`fail-on-warnings`**: Deny all warnings during compilation
 
 ## Dependencies
 
-- **Proc Macro**: Procedural macro framework
-- **Syn**: Rust syntax parsing and AST manipulation
-- **Quote**: Code generation utilities
+- **proc-macro2**: Procedural macro support library
+- **syn**: Rust syntax parsing and AST manipulation (with `extra-traits`, `full`, `parsing`, `visit-mut` features)
+- **quote**: Code generation utilities
+- **log**: Logging facade
 
 ## Integration
 
