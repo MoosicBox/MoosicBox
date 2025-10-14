@@ -35,12 +35,18 @@ The HyperChad Vanilla JS Renderer provides:
 - **Form Plugin**: Advanced form handling and validation
 
 ### Action Plugins
-- **Click Actions**: Click event handling and processing
-- **Change Actions**: Form input change detection
-- **Mouse Events**: Mouse over, mouse down event handling
-- **Resize Actions**: Window and element resize handling
-- **Immediate Actions**: Instant action execution
-- **Event Actions**: Custom event triggering and handling
+- **Click Actions** (`plugin-actions-click`): Click event handling and processing
+- **Click Outside Actions** (`plugin-actions-click-outside`): Detect clicks outside elements
+- **Change Actions** (`plugin-actions-change`): Form input change detection
+- **Mouse Down Actions** (`plugin-actions-mouse-down`): Mouse down event handling
+- **Mouse Over Actions** (`plugin-actions-mouse-over`): Mouse over event handling
+- **Key Down Actions** (`plugin-actions-key-down`): Keyboard key down events
+- **Key Up Actions** (`plugin-actions-key-up`): Keyboard key up events
+- **Event Key Down Actions** (`plugin-actions-event-key-down`): Custom key down event handling
+- **Event Key Up Actions** (`plugin-actions-event-key-up`): Custom key up event handling
+- **Resize Actions** (`plugin-actions-resize`): Window and element resize handling
+- **Immediate Actions** (`plugin-actions-immediate`): Instant action execution on load
+- **Event Actions** (`plugin-actions-event`): Custom event triggering and handling
 
 ## Installation
 
@@ -81,6 +87,7 @@ hyperchad_renderer_vanilla_js = {
 use hyperchad_renderer_vanilla_js::VanillaJsTagRenderer;
 use hyperchad_renderer_html::{HtmlRenderer, HtmlApp};
 use hyperchad_template::container;
+use hyperchad_actions::ActionType;
 
 // Create vanilla JS tag renderer
 let tag_renderer = VanillaJsTagRenderer::default();
@@ -96,21 +103,21 @@ let view = container! {
 
         div class="controls" {
             button
-                onclick=show_str_id("message")
+                onclick=ActionType::show_str_id("message")
                 class="btn btn-primary"
             {
                 "Show Message"
             }
 
             button
-                onclick=hide_str_id("message")
+                onclick=ActionType::hide_str_id("message")
                 class="btn btn-secondary"
             {
                 "Hide Message"
             }
 
             button
-                onclick=toggle_str_id("advanced")
+                onclick=ActionType::toggle_visibility_str_id("advanced")
                 class="btn btn-info"
             {
                 "Toggle Advanced"
@@ -131,18 +138,7 @@ let view = container! {
             style="display: none;"
         {
             h3 { "Advanced Features" }
-
-            input
-                type="text"
-                placeholder="Enter some text"
-                onchange=set_data_attr("user-input", event_value())
-            {}
-
-            button
-                onclick=request_action("process_input", data_attr("user-input"))
-            {
-                "Process Input"
-            }
+            p { "Additional content can be placed here" }
         }
     }
 };
@@ -158,10 +154,7 @@ use hyperchad_template::container;
 use hyperchad_actions::ActionType;
 
 let form_view = container! {
-    form
-        class="user-form"
-        onsubmit=request_action("submit_form", form_data())
-    {
+    form class="user-form" {
         h2 { "User Registration" }
 
         div class="form-group" {
@@ -171,12 +164,6 @@ let form_view = container! {
                 id="username"
                 name="username"
                 required=true
-                onchange=validate_field("username", event_value())
-            {}
-            span
-                str_id="username-error"
-                class="error-message"
-                style="display: none;"
             {}
         }
 
@@ -187,12 +174,6 @@ let form_view = container! {
                 id="email"
                 name="email"
                 required=true
-                onchange=validate_field("email", event_value())
-            {}
-            span
-                str_id="email-error"
-                class="error-message"
-                style="display: none;"
             {}
         }
 
@@ -203,12 +184,6 @@ let form_view = container! {
                 id="password"
                 name="password"
                 required=true
-                onchange=validate_field("password", event_value())
-            {}
-            span
-                str_id="password-error"
-                class="error-message"
-                style="display: none;"
             {}
         }
 
@@ -237,13 +212,14 @@ let form_view = container! {
 ```rust
 // With plugin-nav feature enabled
 use hyperchad_template::container;
+use hyperchad_actions::ActionType;
 
 let navigation_view = container! {
     div class="app" {
         nav class="navbar" {
             a
                 href="/"
-                onclick=navigate("/")
+                onclick=ActionType::Navigate { url: "/".to_string() }
                 class="nav-link"
             {
                 "Home"
@@ -251,7 +227,7 @@ let navigation_view = container! {
 
             a
                 href="/about"
-                onclick=navigate("/about")
+                onclick=ActionType::Navigate { url: "/about".to_string() }
                 class="nav-link"
             {
                 "About"
@@ -259,7 +235,7 @@ let navigation_view = container! {
 
             a
                 href="/contact"
-                onclick=navigate("/contact")
+                onclick=ActionType::Navigate { url: "/contact".to_string() }
                 class="nav-link"
             {
                 "Contact"
@@ -274,280 +250,135 @@ let navigation_view = container! {
         }
     }
 };
-
-// Handle route changes
-let route_handler = container! {
-    div
-        data-route="/"
-        class="page"
-    {
-        h1 { "Home Page" }
-        p { "Welcome to our website!" }
-    }
-
-    div
-        data-route="/about"
-        class="page"
-        style="display: none;"
-    {
-        h1 { "About Us" }
-        p { "Learn more about our company." }
-    }
-
-    div
-        data-route="/contact"
-        class="page"
-        style="display: none;"
-    {
-        h1 { "Contact" }
-        p { "Get in touch with us." }
-    }
-};
 ```
 
-### Real-time Updates with SSE
-
-```rust
-// With plugin-sse feature enabled
-use hyperchad_template::container;
-
-let realtime_view = container! {
-    div class="dashboard" {
-        h1 { "Real-time Dashboard" }
-
-        div
-            str_id="status"
-            class="status-panel"
-            data-sse-endpoint="/api/status"
-            data-sse-event="status-update"
-        {
-            "Connecting..."
-        }
-
-        div
-            str_id="notifications"
-            class="notifications"
-            data-sse-endpoint="/api/notifications"
-            data-sse-event="notification"
-        {
-            // Notifications will be added here
-        }
-
-        div class="metrics" {
-            div
-                str_id="user-count"
-                class="metric"
-                data-sse-endpoint="/api/metrics"
-                data-sse-event="user-count"
-            {
-                "Users: 0"
-            }
-
-            div
-                str_id="cpu-usage"
-                class="metric"
-                data-sse-endpoint="/api/metrics"
-                data-sse-event="cpu-usage"
-            {
-                "CPU: 0%"
-            }
-        }
-    }
-};
-```
-
-### Canvas Graphics
-
-```rust
-// With plugin-canvas feature enabled
-use hyperchad_template::container;
-use hyperchad_renderer::canvas::{CanvasAction, CanvasUpdate};
-
-let canvas_view = container! {
-    div class="graphics-app" {
-        h2 { "Canvas Graphics" }
-
-        div class="canvas-controls" {
-            button
-                onclick=canvas_action("draw-canvas", "clear")
-            {
-                "Clear"
-            }
-
-            button
-                onclick=canvas_action("draw-canvas", "draw-rect")
-            {
-                "Draw Rectangle"
-            }
-
-            button
-                onclick=canvas_action("draw-canvas", "draw-circle")
-            {
-                "Draw Circle"
-            }
-        }
-
-        canvas
-            str_id="draw-canvas"
-            width=600
-            height=400
-            style="border: 1px solid #ccc;"
-        {}
-    }
-};
-
-// Canvas actions would be handled client-side
-let canvas_update = CanvasUpdate {
-    id: "draw-canvas".to_string(),
-    actions: vec![
-        CanvasAction::SetFillStyle("#ff0000".to_string()),
-        CanvasAction::FillRect { x: 10.0, y: 10.0, width: 100.0, height: 50.0 },
-        CanvasAction::SetStrokeStyle("#000000".to_string()),
-        CanvasAction::StrokeRect { x: 10.0, y: 10.0, width: 100.0, height: 50.0 },
-    ],
-};
-```
-
-### Custom Events and Actions
+### Working with Background Colors
 
 ```rust
 use hyperchad_template::container;
-use hyperchad_actions::{ActionType, ActionEffect};
+use hyperchad_actions::ActionType;
 
 let interactive_view = container! {
     div class="interactive-demo" {
-        h2 { "Custom Events Demo" }
+        h2 { "Interactive Background Demo" }
 
-        div class="color-picker" {
+        div class="color-controls" {
             button
-                data-color="red"
-                onclick=trigger_event("color-selected", data_attr("color"))
-                class="color-btn red"
-            {}
-
-            button
-                data-color="green"
-                onclick=trigger_event("color-selected", data_attr("color"))
-                class="color-btn green"
-            {}
+                onclick=ActionType::set_background_str_id("#ff0000", "display-box")
+            {
+                "Red"
+            }
 
             button
-                data-color="blue"
-                onclick=trigger_event("color-selected", data_attr("color"))
-                class="color-btn blue"
-            {}
+                onclick=ActionType::set_background_str_id("#00ff00", "display-box")
+            {
+                "Green"
+            }
+
+            button
+                onclick=ActionType::set_background_str_id("#0000ff", "display-box")
+            {
+                "Blue"
+            }
+
+            button
+                onclick=ActionType::remove_background_str_id("display-box")
+            {
+                "Reset"
+            }
         }
 
         div
-            str_id="color-display"
+            str_id="display-box"
             class="color-display"
-            on_event="color-selected" => set_style("background-color", event_value())
+            style="width: 200px; height: 200px; border: 1px solid #ccc;"
         {
-            "Selected color will appear here"
-        }
-
-        div class="counter" {
-            button
-                onclick=increment_counter("counter-value")
-            {
-                "+"
-            }
-
-            span
-                str_id="counter-value"
-                data-count="0"
-            {
-                "0"
-            }
-
-            button
-                onclick=decrement_counter("counter-value")
-            {
-                "-"
-            }
+            "Click a color button above"
         }
     }
 };
 ```
 
-### Tauri Integration
+## Available Actions
 
+The renderer supports various action types through the `ActionType` enum. Here are the commonly used actions:
+
+### Visibility Actions
+- `ActionType::show_str_id(target)` - Show element by string ID
+- `ActionType::hide_str_id(target)` - Hide element by string ID
+- `ActionType::toggle_visibility_str_id(target)` - Toggle element visibility (requires `logic` feature)
+- `ActionType::show_class(class)` - Show elements by class name
+- `ActionType::hide_class(class)` - Hide elements by class name
+
+### Display Actions
+- `ActionType::display_str_id(target)` - Set display to initial
+- `ActionType::no_display_str_id(target)` - Set display to none
+- `ActionType::display_class(class)` - Set display to initial for class
+- `ActionType::no_display_class(class)` - Set display to none for class
+
+### Focus Actions
+- `ActionType::focus_str_id(target)` - Focus element by string ID
+- `ActionType::focus_class(class)` - Focus element by class name
+- `ActionType::select_str_id(target)` - Select input text by string ID
+
+### Style Actions
+- `ActionType::set_background_str_id(color, target)` - Set background color
+- `ActionType::remove_background_str_id(target)` - Remove background color
+- `ActionType::set_background_class(color, class)` - Set background for class
+
+### Navigation Actions
+- `ActionType::Navigate { url }` - Navigate to URL (requires `plugin-nav`)
+
+### Utility Actions
+- `ActionType::Log { message, level }` - Log message to console
+- `ActionType::Custom { action }` - Custom action string
+- `ActionType::NoOp` - No operation
+
+### Combining Actions
 ```rust
-// With plugin-tauri-event feature enabled
-use hyperchad_template::container;
+use hyperchad_actions::ActionType;
 
-let tauri_view = container! {
-    div class="tauri-app" {
-        h1 { "Tauri Desktop App" }
+// Chain multiple actions
+let combined = ActionType::show_str_id("element1")
+    .and(ActionType::hide_str_id("element2"))
+    .and(ActionType::focus_str_id("input1"));
 
-        div class="file-operations" {
-            button
-                onclick=tauri_invoke("open_file_dialog", null)
-            {
-                "Open File"
-            }
+// Add throttling (300ms)
+let throttled = ActionType::show_str_id("modal").throttle(300);
 
-            button
-                onclick=tauri_invoke("save_file", data_attr("content"))
-            {
-                "Save File"
-            }
-
-            button
-                onclick=tauri_invoke("show_notification", "Hello from Tauri!")
-            {
-                "Show Notification"
-            }
-        }
-
-        textarea
-            str_id="file-content"
-            data-content=""
-            placeholder="File content will appear here"
-            onchange=set_data_attr("content", event_value())
-        {}
-
-        div
-            str_id="status"
-            class="status-bar"
-        {
-            "Ready"
-        }
-    }
-};
+// Add delay off (hide after 2000ms)
+let delayed = ActionType::show_str_id("notification").delay_off(2000);
 ```
 
 ## Plugin Features
 
 ### Navigation Plugin (`plugin-nav`)
-- **Client-side Routing**: Browser history management
-- **Route Matching**: Pattern-based route matching
-- **Navigation Actions**: Programmatic navigation
-- **History API**: Browser back/forward support
+Provides client-side navigation capabilities:
+- **Navigation Actions**: Use `ActionType::Navigate { url }` for programmatic navigation
+- **Browser History**: Integration with browser history API
+- **SPA Support**: Single-page application routing
 
 ### Idiomorph Plugin (`plugin-idiomorph`)
-- **Smart DOM Updates**: Intelligent DOM diffing and morphing
-- **Animation Support**: Smooth transitions between states
-- **Preserve State**: Maintain form state during updates
-- **Performance**: Minimal DOM manipulation
+Enables intelligent DOM updates:
+- **Smart DOM Morphing**: Minimal DOM manipulation for updates
+- **State Preservation**: Maintains form state and element focus during updates
+- **Performance**: Efficient diffing algorithm
 
 ### SSE Plugin (`plugin-sse`)
-- **Server-Sent Events**: Real-time server updates
-- **Automatic Reconnection**: Handle connection drops
-- **Event Filtering**: Subscribe to specific events
-- **Error Handling**: Graceful error recovery
+Server-Sent Events support for real-time updates:
+- **Real-time Updates**: Receive server-side events
+- **Event Handling**: Process server-sent data streams
+- **UUID Generation**: Requires `plugin-uuid` for event tracking
 
 ### Form Plugin (`plugin-form`)
-- **Form Validation**: Client-side validation rules
-- **Data Binding**: Two-way data binding
-- **Serialization**: Form data serialization
-- **Submit Handling**: Form submission processing
+Enhanced form handling capabilities:
+- **Form Processing**: Client-side form handling
+- **Data Serialization**: Form data collection and serialization
 
 ### Canvas Plugin (`plugin-canvas`)
+Canvas rendering support:
 - **2D Graphics**: Canvas 2D rendering context
-- **Drawing Operations**: Shapes, paths, and images
-- **Event Handling**: Canvas mouse and touch events
-- **Animation**: Frame-based animation support
+- **Drawing Operations**: Support for shapes, paths, and images through `CanvasUpdate` API
 
 ## Script Inclusion
 
@@ -587,18 +418,27 @@ The renderer automatically includes the appropriate JavaScript:
 - **`plugin-actions-click`**: Click event actions
 - **`plugin-actions-click-outside`**: Click outside detection
 - **`plugin-actions-event`**: Custom event actions
+- **`plugin-actions-event-key-down`**: Custom key down event handling
+- **`plugin-actions-event-key-up`**: Custom key up event handling
 - **`plugin-actions-immediate`**: Immediate actions
+- **`plugin-actions-key-down`**: Keyboard key down events
+- **`plugin-actions-key-up`**: Keyboard key up events
 - **`plugin-actions-mouse-down`**: Mouse down actions
 - **`plugin-actions-mouse-over`**: Mouse over actions
 - **`plugin-actions-resize`**: Resize actions
 
 ## Dependencies
 
-- **HyperChad Core**: Template, transformer, and action systems
-- **HyperChad HTML Renderer**: HTML generation and rendering
-- **Maud**: HTML template generation
-- **Convert Case**: String case conversion
-- **MD5**: Content hashing for cache busting
+- **hyperchad_renderer**: Core renderer with canvas and HTML features
+- **hyperchad_renderer_html**: HTML generation and rendering with assets and extension support
+- **hyperchad_transformer**: Transformer with HTML and logic features
+- **async-trait**: Async trait support
+- **const_format**: Compile-time string formatting
+- **convert_case**: String case conversion for JavaScript generation
+- **html-escape**: HTML attribute escaping
+- **log**: Logging support
+- **maud**: HTML template generation
+- **md5** (optional): Content hashing for cache busting (with `hash` feature)
 
 ## Integration
 
