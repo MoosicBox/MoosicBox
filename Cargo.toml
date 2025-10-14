@@ -377,7 +377,7 @@ chrono = { version = "0.4.42", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.48", features = ["derive"] }
+clap = { version = "4.5.49", features = ["derive"] }
 cmake = "0.1.54"
 color-backtrace = { version = "0.7.1", default-features = false, features = [
     "use-btparse-crate",
@@ -385,7 +385,7 @@ color-backtrace = { version = "0.7.1", default-features = false, features = [
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
-const-hex = "1.16.0"
+const-hex = "1.17.0"
 const_format = "0.2.35"
 convert_case = "0.8.0"
 cpal = "0.16.0"
@@ -484,18 +484,18 @@ rangemap = "1.6.0"
 ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.14.5"
-regex = "1.12.1"
-reqwest = { version = "0.12.23", default-features = false, features = [
+regex = "1.12.2"
+reqwest = { version = "0.12.24", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
-roxmltree = "0.21.0"
+roxmltree = "0.21.1"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust-embed = "8.7.2"
-rust_decimal = { version = "1.38.0", default-features = false }
-rust_decimal_macros = { version = "1.38.0", default-features = false }
+rust_decimal = { version = "1.39.0", default-features = false }
+rust_decimal_macros = { version = "1.39.0", default-features = false }
 ryu = "1.0.20"
 scoped-tls = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -531,7 +531,7 @@ swc_ecma_parser = "24.0.3"
 swc_ecma_transforms_base = "27.0.0"
 swc_ecma_transforms_typescript = "30.0.1"
 swc_ecma_visit = "15.0.0"
-symphonia = { version = "0.5.4", features = ["all"] }
+symphonia = { version = "0.5.5", features = ["all"] }
 syn = "2.0.106"
 syntect = "5.3.0"
 tantivy = "0.25.0"
@@ -548,7 +548,7 @@ test-log = "0.2.18"
 thiserror = "2.0.17"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.47.1" }
+tokio = { version = "1.48.0" }
 tokio-postgres = { version = "0.7.15", features = [
     "with-chrono-0_4",
     "with-uuid-1",
@@ -564,7 +564,7 @@ tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.32.0" }
 tracing-subscriber = "0.3.20"
 tracy-client = { version = "0.18.2", default-features = false }
-trybuild = "1.0.111"
+trybuild = "1.0.112"
 turso = "0.2.2"
 uaparser = "0.6.4"
 url = "2.5.7"
