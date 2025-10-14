@@ -32,6 +32,13 @@ The MoosicBox Music API API package provides:
 - **Scan Status**: Include scanning capabilities and current status
 - **Async Operations**: Async conversion with error handling
 
+### REST API Endpoints
+- **GET /**: List enabled music APIs with pagination
+- **POST /auth**: Authenticate a music API with credentials
+- **POST /scan**: Trigger a scan for a specific music API
+- **POST /scan-origins**: Enable scan origin for a music API
+- **GET /search**: Search across music APIs
+
 ### Authentication Support
 - **Username/Password**: Traditional credential-based authentication
 - **Poll Authentication**: OAuth-style polling authentication
@@ -110,18 +117,54 @@ println!("Scan Support: {}", api_model.supports_scan);
 println!("Scan Enabled: {}", api_model.scan_enabled);
 ```
 
+### API Endpoints (when `api` feature enabled)
+
+```rust
+use actix_web::{App, HttpServer};
+use moosicbox_music_api_api::api::bind_services;
+
+// Bind API endpoints to your Actix-web application
+HttpServer::new(|| {
+    App::new()
+        .service(
+            web::scope("/music-apis")
+                .configure(|scope| bind_services(scope))
+        )
+})
+.bind("127.0.0.1:8080")?
+.run()
+.await
+```
+
+Available endpoints:
+- `GET /music-apis` - List music APIs with pagination
+- `POST /music-apis/auth?apiSource=<source>` - Authenticate a music API
+- `POST /music-apis/scan?apiSource=<source>` - Scan a music API
+- `POST /music-apis/scan-origins?apiSource=<source>` - Enable scan origin
+- `GET /music-apis/search?query=<query>&apiSource=<source>` - Search APIs
+
 ## Feature Flags
 
-- **`api`**: Enable API endpoint implementations
+- **`api`**: Enable API endpoint implementations (default)
+- **`db`**: Enable database features (default)
 - **`auth-username-password`**: Enable username/password authentication
 - **`auth-poll`**: Enable polling-based authentication
-- **`openapi`**: Enable OpenAPI schema generation
+- **`openapi`**: Enable OpenAPI schema generation (default)
 
 ## Dependencies
 
-- **MoosicBox Music API**: Core music API traits
-- **Serde**: Serialization and deserialization
-- **UToipa**: Optional OpenAPI schema generation
+Core dependencies:
+- **moosicbox_music_api**: Core music API traits and interfaces
+- **moosicbox_paging**: Pagination utilities
+- **moosicbox_profiles**: Profile management with API features
+- **actix-web**: Web framework for REST API endpoints
+- **serde**: Serialization and deserialization
+- **log**: Logging functionality
+
+Optional dependencies:
+- **futures**: Async utilities (when `api` feature enabled)
+- **moosicbox_music_models**: Music data models (when `api` feature enabled)
+- **utoipa**: OpenAPI schema generation (when `openapi` feature enabled)
 
 ## Integration
 
