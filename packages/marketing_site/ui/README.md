@@ -48,13 +48,14 @@ moosicbox_marketing_site_ui = { path = "../marketing_site/ui" }
 ### Page Templates
 
 ```rust
-use moosicbox_marketing_site_ui::{home, download, try_now, not_found};
+use moosicbox_marketing_site_ui::{home, try_now, not_found};
+use moosicbox_marketing_site_ui::download;
 
 // Generate home page
 let home_page = home();
 
 // Generate download page
-let download_page = download::page();
+let download_page = download::download();
 
 // Generate try now page
 let try_now_page = try_now();
@@ -132,8 +133,9 @@ let text_align = if_responsive("mobile-large")
 ### Download Integration
 
 - **Download Module**: Specialized download page components
-- **Platform Detection**: Platform-specific download options
-- **Installation Guides**: Step-by-step installation instructions
+- **Release Listings**: Display GitHub releases with version information
+- **Asset Downloads**: Download links with file sizes and formats
+- **Platform Headers**: Organized display by operating system (Windows, macOS, Linux, Android)
 
 ## Styling
 
@@ -167,9 +169,19 @@ The components use these responsive breakpoints:
 
 ## Dependencies
 
-- **HyperChad**: UI framework and templating
-- **HyperChad Transformer Models**: Layout and styling types
-- **HyperChad Actions**: Interactive behavior and logic
+- **HyperChad**: UI framework and templating with features:
+  - `actions`: Interactive behavior and logic
+  - `actions-logic`: Conditional rendering logic
+  - `actions-serde`: Serialization support
+  - `color`: Color utilities
+  - `renderer`: HTML rendering
+  - `router`: Routing support
+  - `template`: Template macros
+  - `transformer`: Layout and styling types
+- **bytesize**: File size formatting
+- **chrono**: Date and time handling
+- **log**: Logging support
+- **regex**: Pattern matching for string formatting
 
 ## Integration
 
