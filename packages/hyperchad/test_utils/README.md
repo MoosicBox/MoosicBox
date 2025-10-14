@@ -1,16 +1,16 @@
 # MoosicBox HyperChad Test Utils
 
-Comprehensive test workflow builders and utilities for HyperChad application testing.
+Test workflow builders and utilities for HyperChad application testing.
 
 ## Features
 
 * **Fluent Test API**: Declarative test scenario building
-* **Navigation & Interaction**: URL navigation, clicks, form filling
-* **HTTP Testing**: Request/response validation
-* **DOM Assertions**: Element existence, content, attributes
-* **Wait Conditions**: Synchronization and timing control
-* **Conditional Logic**: If/else, loops, parallel execution
-* **Data-Driven Testing**: Parameterized test scenarios
+* **Navigation & Interaction**: URL navigation, clicks, form filling, keyboard/mouse events
+* **HTTP Testing**: Request building with multiple body formats
+* **Wait Conditions**: Element existence, URL patterns, and timing control
+* **Control Flow**: Loops, parallel execution, retry logic, try/catch patterns
+* **Data-Driven Testing**: Parameterized test scenarios with `ForEach` loops
+* **Reusable Fragments**: Pre-built test patterns for common scenarios
 
 ## Usage
 
@@ -23,19 +23,18 @@ let plan = TestPlan::new()
         .text("username", "testuser")
         .text("password", "secret123"))
     .click("#login-button")
-    .wait_for(WaitCondition::url_contains("/dashboard"))
-    .assert_dom("#welcome-message", DomMatcher::visible())
-    .assert_dom(".notification", DomMatcher::contains("Welcome"));
+    .wait_for_url("/dashboard")
+    .wait_for_element("#welcome-message");
 
-// Execute the test plan
-let result = simulator.run_test_plan(plan).await?;
+// Execute the test plan with your test executor
+let result = executor.run_test_plan(plan).await?;
 ```
 
 ## Test Step Types
 
-* **Navigation**: `navigate_to()`, `go_back()`, `reload()`
-* **Interaction**: `click()`, `hover()`, `key_press()`, `scroll()`
-* **Forms**: `fill_form()`, `select_option()`, `upload_file()`
-* **HTTP**: `send_request()`, `assert_response()`
-* **Timing**: `wait_for()`, `sleep()`
-* **Assertions**: `assert_dom()`, `assert_url()`, `assert_state()`
+* **Navigation**: `navigate_to()`, `go_back()`, `go_forward()`, `reload()`, `set_hash()`
+* **Interaction**: `click()`, `double_click()`, `right_click()`, `hover()`, `focus()`, `blur()`, `key_press()`, `key_sequence()`, `scroll()`
+* **Forms**: `fill_form()`, `fill_field()`, `select_option()`, `upload_file()`
+* **HTTP**: `send_request()` with support for GET, POST, PUT, DELETE requests and JSON/form/text bodies
+* **Timing**: `wait_for_element()`, `wait_for_url()`, `sleep()`
+* **Control Flow**: `repeat()`, `parallel()`, try/catch, retry with delay
