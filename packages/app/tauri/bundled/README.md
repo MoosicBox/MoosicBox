@@ -23,7 +23,7 @@ The MoosicBox Tauri Bundled Service provides:
 
 ### Embedded Server
 
-- **Basic Server**: MoosicBox server running on localhost:8016
+- **Basic Server**: MoosicBox server running on 0.0.0.0:8016
 - **App Configuration**: Configured for Tauri app usage
 - **Auto-Start**: Automatic server startup with application
 - **Background Operation**: Non-blocking server execution
@@ -48,14 +48,68 @@ moosicbox_app_tauri_bundled = { path = "../app/tauri/bundled" }
 
 ### Service Creation and Management
 
+```rust
+use moosicbox_app_tauri_bundled::{service::Service, Context, Command};
+use moosicbox_async_service::runtime::Handle;
+
+// Create the service context
+let handle = Handle::current();
+let context = Context::new(&handle);
+
+// Create and start the service
+let service = Service::new(context);
+service.start().await?;
+```
+
 ### Event Handling
+
+The service processes commands through an async service framework:
+
+```rust
+use moosicbox_app_tauri_bundled::Command;
+use moosicbox_async_service::Arc;
+use tauri::RunEvent;
+
+// Handle Tauri run events
+let event = Arc::new(run_event);
+service.send(Command::RunEvent { event }).await?;
+
+// Wait for server startup
+let (sender, receiver) = switchy_async::sync::oneshot::channel();
+service.send(Command::WaitForStartup { sender }).await?;
+receiver.await?;
+
+// Wait for server shutdown
+let (sender, receiver) = switchy_async::sync::oneshot::channel();
+service.send(Command::WaitForShutdown { sender }).await?;
+receiver.await?;
+```
 
 ## Dependencies
 
-- **MoosicBox Async Service**: Service framework foundation
-- **MoosicBox Server**: Embedded server functionality
-- **MoosicBox Downloader**: Download management
-- **MoosicBox Scan**: Library scanning integration
-- **MoosicBox Profiles**: Multi-profile support
-- **Tauri**: Desktop application framework
-- **Tokio**: Async runtime and synchronization
+### Core Dependencies
+
+- **moosicbox_async_service**: Service framework foundation
+- **moosicbox_server**: Embedded server functionality (with `app-apis` and `sqlite-sqlx` features)
+- **moosicbox_config**: Application configuration
+- **moosicbox_downloader**: Download management
+- **moosicbox_scan**: Library scanning integration
+- **moosicbox_profiles**: Multi-profile support (with `events` feature)
+- **moosicbox_assert**: Assertion utilities
+- **switchy_async**: Async utilities (with `sync` and `tokio` features)
+- **switchy_database**: Database management
+- **tauri**: Desktop application framework
+- **log**: Logging facade
+- **strum** / **strum_macros**: Enum utilities
+- **thiserror**: Error handling
+
+## Features
+
+- **tunnel**: Enable server tunnel functionality
+- **decoder-aac**: AAC audio decoder support
+- **decoder-flac**: FLAC audio decoder support
+- **decoder-mp3**: MP3 audio decoder support
+- **format-aac**: AAC audio format support
+- **format-flac**: FLAC audio format support
+- **format-mp3**: MP3 audio format support
+- **fail-on-warnings**: Treat warnings as errors in dependencies
