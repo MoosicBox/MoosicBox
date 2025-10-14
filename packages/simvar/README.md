@@ -4,25 +4,24 @@ Simulation variable system and testing harness for deterministic async testing.
 
 ## Overview
 
-The MoosicBox Simvar package provides:
+The MoosicBox Simvar package is a facade that re-exports functionality from:
 
-- **Simulation Harness**: Re-exports simulation testing framework
-- **Utilities**: Optional simulation utilities (with `utils` feature)
-- **Testing Framework**: Deterministic async testing capabilities
-- **Variable Management**: Simulation variable handling and control
+- **Simvar Harness**: Core simulation testing framework (`simvar_harness`)
+- **Simvar Utils**: Simulation utilities (`simvar_utils`, with `utils` feature)
+- **Switchy**: Underlying simulation and switching framework
 
-## Features
+This package provides a unified interface for simulation-based testing with deterministic async execution.
 
-### Simulation Harness
-- **Deterministic Testing**: Predictable async test execution
-- **Variable Control**: Manage simulation variables and state
-- **Test Framework**: Comprehensive testing utilities
-- **Async Support**: Full async/await testing support
+## Core Functionality
 
-### Optional Utilities
-- **Simulation Utils**: Additional utilities (with `utils` feature)
-- **Helper Functions**: Common simulation operations
-- **Variable Manipulation**: Advanced variable control
+The package re-exports from `simvar_harness`:
+
+- **`run_simulation`**: Main function to run simulation tests
+- **`SimBootstrap` trait**: Trait for configuring simulation lifecycle hooks (`init`, `on_start`, `on_step`, `on_end`)
+- **`Sim` trait**: Interface for managing hosts and clients in simulations
+- **Configuration types**: `SimConfig`, `SimProperties`, `SimResult`, `SimRunProperties`
+- **Modules**: `client`, `host`, `plan`
+- **`utils` module**: Re-exports `simvar_utils` functionality
 
 ## Installation
 
@@ -32,10 +31,10 @@ Add this to your `Cargo.toml`:
 [dependencies]
 moosicbox_simvar = { path = "../simvar" }
 
-# Enable utilities
+# Or with specific features
 moosicbox_simvar = {
     path = "../simvar",
-    features = ["utils"]
+    features = ["async", "tcp", "time"]
 }
 ```
 
@@ -46,8 +45,22 @@ moosicbox_simvar = {
 ```rust
 use moosicbox_simvar::*;
 
-// Use simulation harness functionality
-// (Re-exported from simvar_harness)
+struct MySimBootstrap;
+
+impl SimBootstrap for MySimBootstrap {
+    fn on_start(&self, sim: &mut impl Sim) {
+        // Setup hosts and clients
+        sim.host("my-host", || async {
+            // Host logic
+            Ok(())
+        });
+    }
+}
+
+fn main() {
+    let results = run_simulation(MySimBootstrap).unwrap();
+    // Process results
+}
 ```
 
 ### With Utilities
@@ -55,31 +68,42 @@ use moosicbox_simvar::*;
 ```rust
 #[cfg(feature = "utils")]
 use moosicbox_simvar::utils;
-
-#[cfg(feature = "utils")]
-{
-    // Use simulation utilities
-    // (Available when utils feature is enabled)
-}
 ```
 
 ## Feature Flags
 
-- **`utils`**: Enable simulation utilities module
+By default, all features are enabled. Individual features can be selected:
+
+- **`all`** (default): Enable all features
+- **`async`**: Async runtime support
+- **`database`**: Database simulation
+- **`fs`**: Filesystem simulation
+- **`http`**: HTTP client/server simulation
+- **`mdns`**: mDNS simulation
+- **`random`**: Random number generation simulation
+- **`tcp`**: TCP connection simulation
+- **`telemetry`**: Telemetry support
+- **`time`**: Time simulation
+- **`tui`**: Terminal UI for simulation visualization
+- **`upnp`**: UPnP simulation
+- **`utils`**: Simulation utilities module
+- **`web-server`**: Web server simulation
+- **`pretty_env_logger`**: Pretty logging output
+- **`fail-on-warnings`**: Treat warnings as errors
 
 ## Dependencies
 
-- **Simvar Harness**: Core simulation testing framework
-- **Simvar Utils**: Optional utilities (feature-gated)
+- **simvar_harness** (workspace): Core simulation testing framework
+- **simvar_utils** (workspace, optional): Simulation utilities
 
 ## Integration
 
 This package is designed for:
-- **Testing**: Deterministic async testing
-- **Simulation**: Variable-based simulation systems
-- **Development**: Testing framework for async applications
-- **Quality Assurance**: Reliable and predictable test execution
+- **Deterministic Testing**: Predictable async test execution with controlled time and randomness
+- **Concurrent Systems Testing**: Test multi-host, multi-client distributed systems
+- **Regression Testing**: Reproducible test scenarios for complex async applications
+- **Development**: Testing framework for async applications with simulated I/O
 
 ## Note
 
-This package serves as a facade for the simulation variable system, re-exporting functionality from the core harness and providing optional utilities. It provides a unified interface for simulation-based testing in MoosicBox applications.
+This package serves as a facade for the simulation variable system, re-exporting functionality from the core harness and providing optional utilities. The `simvar_harness` package provides the actual implementation of the simulation framework.
