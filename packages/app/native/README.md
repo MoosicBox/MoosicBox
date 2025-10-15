@@ -85,8 +85,8 @@ cargo run --features "egui-wgpu"
 
 Additional Egui variants:
 - `egui-glow` - OpenGL backend
-- `egui-v1` - Egui v1.x
-- `egui-v2` - Egui v2.x
+- `egui-v1` - Legacy HyperChad egui renderer implementation (original, overcomplicated)
+- `egui-v2` - New HyperChad egui renderer implementation (work in progress, simplified)
 
 #### FLTK (Lightweight)
 ```bash
