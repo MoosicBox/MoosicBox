@@ -1,11 +1,11 @@
 # Tauri Plugin Player
 
-A Tauri plugin that provides media player control functionality for desktop and mobile platforms (Android, with iOS planned).
+A Tauri plugin that provides media player control functionality for desktop and mobile platforms. Includes full Android support, with iOS planned.
 
 ## Features
 
 - **Player State Management**: Update and manage player state including playback status, position, seek, volume, and playlists
-- **Media Event Channel**: Receive media control events (play/pause, next/previous track) from native platform integrations
+- **Media Event Channel**: Receive media control events (play/pause, next/previous track) from native platform integrations (Android only)
 - **Cross-Platform Support**: Works on desktop (stub implementation) and Android (full native integration)
 - **Type-Safe API**: Fully typed Rust and Kotlin APIs with serde serialization
 
@@ -22,10 +22,10 @@ A Tauri plugin that provides media player control functionality for desktop and 
 
 ### Android Implementation (`android/`)
 
-- **`PlayerPlugin.kt`**: Tauri plugin interface with commands:
+- **`PlayerPlugin.kt`**: Tauri plugin interface (`com.moosicbox.playerplugin`) with commands:
     - `initChannel`: Initialize event channel for media events
     - `updateState`: Update player state from frontend
-- **`Player.kt`**: Player implementation with state management and event emission
+- **`Player.kt`**: Player companion object with state management and `sendMediaEvent` for event emission
 
 ## Data Models
 
@@ -110,7 +110,7 @@ The plugin exposes the following Tauri command:
 
 - **Desktop** (Windows, macOS, Linux): Stub implementation (methods return empty responses)
 - **Android**: Full native implementation with media session integration
-- **iOS**: Planned (native bindings defined but not implemented)
+- **iOS**: Planned (binding macro exists in Rust but no implementation files present)
 
 ## Development
 
@@ -133,6 +133,6 @@ The Android implementation is located in `android/` and follows standard Tauri p
 
 ## Notes
 
-- The desktop implementation currently provides stub methods that return empty responses
-- The iOS implementation structure exists but is not yet fully implemented
+- The desktop implementation currently provides stub methods (`update_state` and `init_channel`) that return empty responses
+- iOS binding exists only as a macro in `src/mobile.rs` - no implementation files are present
 - The JavaScript/TypeScript guest bindings (`guest-js/`) are not currently included in the repository
