@@ -229,9 +229,9 @@ Disable with `NO_TUI` environment variable or by excluding default features.
 - **fs**: File system simulation (via switchy)
 - **http**: HTTP simulation (via switchy)
 - **mdns**: mDNS simulation (via switchy)
-- **tcp**: TCP network simulation (enabled by default via switchy)
+- **tcp**: TCP network simulation (via switchy)
 - **telemetry**: Telemetry support (via switchy)
-- **time**: Time manipulation for simulation (enabled by default via switchy)
+- **time**: Time manipulation for simulation (via switchy)
 - **upnp**: UPnP simulation (via switchy)
 - **web-server**: Web server simulation support
 
