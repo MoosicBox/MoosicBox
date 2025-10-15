@@ -61,9 +61,10 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_transformer = { path = "../hyperchad/transformer" }
 
-# Enable additional features
+# Or with specific features (default includes most features)
 hyperchad_transformer = {
     path = "../hyperchad/transformer",
+    default-features = false,
     features = ["html", "layout", "layout-offset"]
 }
 ```
@@ -73,7 +74,8 @@ hyperchad_transformer = {
 ### Basic Container Creation
 
 ```rust
-use hyperchad_transformer::{Container, Element, Number, LayoutDirection};
+use hyperchad_transformer::{Container, Element, Number};
+use hyperchad_transformer::models::LayoutDirection;
 use hyperchad_color::Color;
 
 let mut container = Container {
@@ -126,7 +128,8 @@ let font_size = Number::RealDvw(4.0); // 4dvw
 ### Element Types
 
 ```rust
-use hyperchad_transformer::{Element, Input, HeaderSize, ImageFit, LinkTarget};
+use hyperchad_transformer::{Element, Input, HeaderSize, Number};
+use hyperchad_transformer::models::{ImageFit, ImageLoading, LinkTarget};
 
 // Form input
 let text_input = Element::Input {
@@ -135,6 +138,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter text...".to_string()),
     },
     name: Some("username".to_string()),
+    autofocus: None,
 };
 
 // Image with responsive loading
@@ -213,7 +217,7 @@ if let Some(old_element) = root.replace_str_id_with_elements(
 
 ```rust
 use hyperchad_transformer::{Container, ConfigOverride, OverrideCondition, OverrideItem, Number};
-use hyperchad_transformer::models::LayoutDirection;
+use hyperchad_transformer::models::{LayoutDirection};
 
 let mut container = Container::default();
 
@@ -257,7 +261,7 @@ use hyperchad_transformer::layout::Calc;
 ### Table Operations
 
 ```rust
-use hyperchad_transformer::Container;
+use hyperchad_transformer::{Container, Element};
 
 let mut table = Container {
     element: Element::Table,
@@ -293,6 +297,7 @@ let text_input = Element::Input {
         placeholder: Some("Enter your name".to_string()),
     },
     name: Some("name".to_string()),
+    autofocus: None,
 };
 
 // Checkbox
@@ -301,6 +306,7 @@ let checkbox = Element::Input {
         checked: Some(true),
     },
     name: Some("agree".to_string()),
+    autofocus: None,
 };
 
 // Password input
@@ -310,6 +316,7 @@ let password = Element::Input {
         placeholder: Some("Password".to_string()),
     },
     name: Some("password".to_string()),
+    autofocus: None,
 };
 ```
 
@@ -375,15 +382,31 @@ let calc = Number::Calc(Calculation::Add(
 
 - **`html`**: Enable HTML generation and parsing
 - **`layout`**: Enable layout calculation system
-- **`layout-offset`**: Enable offset calculations
+- **`layout-offset`**: Enable offset calculations (requires `layout`)
+- **`canvas`**: Enable canvas element support
+- **`logic`**: Enable logic/conditional features (requires `hyperchad_actions/logic`)
+- **`format`**: Enable XML formatting for pretty-printing
+- **`syntax-highlighting`**: Enable syntax highlighting support
+- **`benchmark`**: Enable benchmarking features
+- **`profiling`**: Enable profiling instrumentation
+- **`simd`**: Enable SIMD optimizations for HTML parsing
 
 ## Dependencies
 
-- **HyperChad Actions**: Interactive action system
+### Core Dependencies
+- **HyperChad Actions**: Interactive action system with event handling
 - **HyperChad Color**: Color handling and conversion
 - **HyperChad Transformer Models**: Layout and styling types
 - **Serde**: Serialization and deserialization
-- **Strum**: Enum utilities
+- **Strum**: Enum utilities and derives
+- **html-escape**: HTML entity encoding/decoding
+
+### Optional Dependencies
+- **tl**: Fast HTML parsing library (enabled with `html` feature)
+- **bumpalo**: Bump allocator for layout calculations (enabled with `layout` feature)
+- **xml**: XML formatting (enabled with `format` feature)
+- **syntect**: Syntax highlighting (enabled with `syntax-highlighting` feature)
+- **profiling**: Performance profiling support (enabled with `profiling` feature)
 
 ## Integration
 
