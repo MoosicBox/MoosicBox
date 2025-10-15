@@ -13,6 +13,10 @@ version     = "0.1.2"
 [package.metadata.workspaces]
 independent = true
 
+[[bin]]
+name = "openport"
+path = "src/main.rs"
+
 [dependencies]
 switchy_random = { workspace = true, features = ["rand"], optional = true }
 
