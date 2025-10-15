@@ -128,7 +128,7 @@ When run with the simulator, it will automatically test all endpoints:
 
 ✅ JSON Extractor Examples Complete!
    - Json<T> extractor working with serde deserialization
-   - Support for simple JSON structures
+   - Support for simple and complex nested JSON structures
    - Optional field handling with partial updates
    - JSON response generation with serde_json
    - Combined JSON + RequestData extraction
