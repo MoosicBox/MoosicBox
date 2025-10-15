@@ -20,7 +20,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 
 ### 🎧 **Hi-Fi Audio Experience**
 
-- **Lossless audio streaming** with support for FLAC, ALAC, and other high-quality formats
+- **Lossless audio streaming** with support for FLAC and other high-quality formats
 - **Real-time audio encoding** (AAC, MP3, Opus) optimized for your connection
 - **High-resolution audio support** for audiophile-grade listening
 
@@ -28,7 +28,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 
 - **Web interface** - Stream from any browser
 - **Desktop applications** - Native apps for Windows, macOS, and Linux
-- **Mobile apps** - iOS (in-progress) and Android applications
+- **Mobile apps** - Planned: iOS and Android applications (in early development)
 - **Cross-device sync** - Continue listening where you left off
 
 ### 🎼 **Music Service Integration**
@@ -36,6 +36,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 - **Local library** - Your personal music collection
 - **Tidal** - Access millions of hi-fi tracks and MQA content
 - **Qobuz** - Studio-quality streaming with large catalog
+- **YouTube** - YouTube content integration
 - **Global search** across all connected services and local library
 
 ### 🏠 **Self-Hosted & Private**
@@ -48,7 +49,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 
 - **Multi-zone audio** - Play different music in different rooms
 - **Multiple simultaneous outputs** - Stream to multiple devices at once
-- **Automatic image optimization** - Perfect album art for any screen size
+- **Automatic image optimization** - Perfect album art for any screen size (Note: libvips Windows support is limited due to Rust binding issues; falls back to pure Rust implementation)
 - **Database flexibility** - Support for PostgreSQL, MySQL, and SQLite
 - **Audio visualization** - See waveforms and track progress
 - **Remote library access** - Connect to other MoosicBox servers
@@ -116,7 +117,7 @@ MoosicBox is built with a modular, high-performance architecture:
 ### Supported Platforms
 
 - **🖥️ Desktop**: Windows, macOS, Linux (via Tauri)
-- **📱 Mobile**: iOS, Android
+- **📱 Mobile**: Planned (in early development)
 - **🌐 Web**: All modern browsers
 - **🐧 Server**: Linux, Docker, cloud deployments
 
@@ -132,7 +133,7 @@ MoosicBox supports multiple database backends for maximum flexibility:
 
 ## 🔧 Development
 
-MoosicBox is built as a comprehensive Rust workspace with 150+ packages:
+MoosicBox is built as a comprehensive Rust workspace with 150+ packages (156 total):
 
 ### Key Development Commands
 
