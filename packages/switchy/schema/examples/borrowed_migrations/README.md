@@ -19,7 +19,7 @@ This example demonstrates how to use `switchy_schema` with borrowed data migrati
 ## Running the Example
 
 ```bash
-cargo run --bin borrowed_migrations_example
+cargo run -p borrowed_migrations_example
 ```
 
 This will:
