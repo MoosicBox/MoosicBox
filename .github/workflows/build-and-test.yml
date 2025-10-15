@@ -22,6 +22,7 @@ on:
             - '!**/Dockerfile'
             - '!**/*.Dockerfile'
             - '!**/*.dockerignore'
+            - '!**/*.md'
     pull_request:
         branches: ['master', 'edge']
     schedule:

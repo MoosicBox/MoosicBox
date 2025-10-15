@@ -6,6 +6,7 @@ on:
         paths:
             - app-website/**
             - .github/workflows/app-website-build-and-test.yml
+            - '!**/*.md'
     pull_request:
         branches: ['master']
 
