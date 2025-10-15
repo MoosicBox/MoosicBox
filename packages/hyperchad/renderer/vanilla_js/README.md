@@ -310,9 +310,9 @@ The renderer supports various action types through the `ActionType` enum. Here a
 
 - `ActionType::show_str_id(target)` - Show element by string ID
 - `ActionType::hide_str_id(target)` - Hide element by string ID
-- `ActionType::toggle_visibility_str_id(target)` - Toggle element visibility (requires `logic` feature)
 - `ActionType::show_class(class)` - Show elements by class name
 - `ActionType::hide_class(class)` - Hide elements by class name
+- `ActionType::toggle_visibility_str_id(target)` - Toggle element visibility (requires `logic` feature, enabled by default)
 
 ### Display Actions
 
@@ -329,9 +329,9 @@ The renderer supports various action types through the `ActionType` enum. Here a
 
 ### Style Actions
 
-- `ActionType::set_background_str_id(color, target)` - Set background color
-- `ActionType::remove_background_str_id(target)` - Remove background color
-- `ActionType::set_background_class(color, class)` - Set background for class
+- `ActionType::set_background_str_id(color, target)` - Set background color by string ID
+- `ActionType::remove_background_str_id(target)` - Remove background color by string ID
+- `ActionType::remove_background_class(class)` - Remove background color for class
 
 ### Navigation Actions
 
