@@ -172,7 +172,7 @@ let view = container! {
                 background="green"
                 color="white"
                 padding=10
-                onclick=show_str_id("message")
+                fx-click=fx { show("message") }
             {
                 "Show Message"
             }
@@ -181,7 +181,7 @@ let view = container! {
                 background="red"
                 color="white"
                 padding=10
-                onclick=hide_str_id("message")
+                fx-click=fx { hide("message") }
             {
                 "Hide Message"
             }
@@ -207,7 +207,6 @@ renderer.render(View::from(view)).await?;
 
 ```rust
 use hyperchad_template::container;
-use hyperchad_actions::ActionType;
 
 let form_view = container! {
     div
@@ -224,20 +223,20 @@ let form_view = container! {
             type="text"
             name="username"
             placeholder="Enter username"
-            onchange=set_data_attr("username", event_value())
+            fx-change=fx { set_data_attr("username", event_value()) }
         {}
 
         input
             type="password"
             name="password"
             placeholder="Enter password"
-            onchange=set_data_attr("password", event_value())
+            fx-change=fx { set_data_attr("password", event_value()) }
         {}
 
         input
             type="checkbox"
             name="agree"
-            onchange=set_data_attr("agreed", event_value())
+            fx-change=fx { set_data_attr("agreed", event_value()) }
         {}
 
         span { "I agree to the terms" }
@@ -246,7 +245,7 @@ let form_view = container! {
             background="blue"
             color="white"
             padding="10px 20px"
-            onclick=request_action("submit_form", data_attrs())
+            fx-click=fx { request_action("submit_form", data_attrs()) }
         {
             "Register"
         }
@@ -289,7 +288,7 @@ let image_view = container! {
                 width=100
                 height=100
                 fit="cover"
-                onclick=set_attr("main-image", "src", "/assets/image1.jpg")
+                fx-click=fx { set_attr("main-image", "src", "/assets/image1.jpg") }
             {}
 
             img
@@ -297,7 +296,7 @@ let image_view = container! {
                 width=100
                 height=100
                 fit="cover"
-                onclick=set_attr("main-image", "src", "/assets/image2.jpg")
+                fx-click=fx { set_attr("main-image", "src", "/assets/image2.jpg") }
             {}
         }
     }

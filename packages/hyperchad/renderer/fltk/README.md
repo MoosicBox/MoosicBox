@@ -160,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     height=30
                     background="green"
                     color="white"
-                    onclick=show_str_id("message")
+                    fx-click=fx { show("message") }
                 {
                     "Show"
                 }
@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     height=30
                     background="red"
                     color="white"
-                    onclick=hide_str_id("message")
+                    fx-click=fx { hide("message") }
                 {
                     "Hide"
                 }
@@ -205,7 +205,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use hyperchad_template::container;
-use hyperchad_actions::ActionType;
 
 let button_view = container! {
     div
@@ -234,7 +233,7 @@ let button_view = container! {
                 background="blue"
                 color="white"
                 padding=10
-                onclick=request_action("button_clicked", "action1")
+                fx-click=fx { request_action("button_clicked", "action1") }
             {
                 "Action 1"
             }
@@ -245,7 +244,7 @@ let button_view = container! {
                 background="green"
                 color="white"
                 padding=10
-                onclick=request_action("button_clicked", "action2")
+                fx-click=fx { request_action("button_clicked", "action2") }
             {
                 "Action 2"
             }
@@ -256,7 +255,7 @@ let button_view = container! {
                 background="red"
                 color="white"
                 padding=10
-                onclick=request_action("button_clicked", "action3")
+                fx-click=fx { request_action("button_clicked", "action3") }
             {
                 "Action 3"
             }
@@ -307,7 +306,7 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                onclick=set_attr("main-image", "src", "https://picsum.photos/400/300?random=1")
+                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=1") }
             {}
 
             img
@@ -315,7 +314,7 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                onclick=set_attr("main-image", "src", "https://picsum.photos/400/300?random=2")
+                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=2") }
             {}
 
             img
@@ -323,7 +322,7 @@ let gallery_view = container! {
                 width=150
                 height=150
                 fit="cover"
-                onclick=set_attr("main-image", "src", "https://picsum.photos/400/300?random=3")
+                fx-click=fx { set_attr("main-image", "src", "https://picsum.photos/400/300?random=3") }
             {}
         }
 
