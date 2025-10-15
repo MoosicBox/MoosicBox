@@ -29,17 +29,11 @@ jobs:
             id-token: write
             actions: read # Required for Claude to read CI results on PRs
         steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  ref: ${{ github.event.pull_request.head.ref || github.ref }}
-                  repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-                  fetch-depth: 0
-
             - name: Get PR details for issue comments
               id: pr_details
               if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               run: |
                   echo "Fetching PR details for issue comment..."
                   PR_DATA=$(gh api "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}")
@@ -54,17 +48,13 @@ jobs:
                   echo "head_ref=$HEAD_REF" >> $GITHUB_OUTPUT
                   echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
                   echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
-            - name: Checkout PR branch for issue comments
-              if: github.event_name == 'issue_comment' && github.event.issue.pull_request
-              run: |
-                  echo "Checking out PR branch: ${{ steps.pr_details.outputs.head_ref }}"
-                  git fetch origin ${{ steps.pr_details.outputs.head_ref }}
-                  git checkout ${{ steps.pr_details.outputs.head_ref }}
-                  echo "Current branch: $(git branch --show-current)"
-                  echo "Current commit: $(git rev-parse HEAD)"
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  ref: ${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref }}
+                  fetch-depth: 0
 
             - name: Setup git configuration
               run: |
@@ -74,6 +64,8 @@ jobs:
             - name: Get comment thread context
               id: thread_context
               if: github.event_name == 'pull_request_review_comment'
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               run: |
                   CURRENT_ID="${{ github.event.comment.id }}"
                   PR_NUMBER="${{ github.event.pull_request.number }}"
@@ -157,8 +149,6 @@ jobs:
                     # No previous history, just the current comment
                     echo "thread_history=" >> $GITHUB_OUTPUT
                   fi
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
             - name: Run Claude Code
               id: claude
@@ -392,9 +382,9 @@ jobs:
             - name: Detect and push changes with conflict handling
               id: push_changes
               if: always()
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
               run: |
+                  git remote set-url origin "https://x-access-token:${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}@github.com/${{ github.repository }}.git"
+
                   # Check if there are any commits to push
                   CURRENT_BRANCH=$(git branch --show-current)
 
