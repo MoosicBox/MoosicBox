@@ -124,14 +124,14 @@ use moosicbox_music_api::MusicApi;
 use moosicbox_paging::Page;
 
 // Fetch album tracks with pagination
-let paging_result = music_api
+let mut paging_result = music_api
     .album_tracks(&album_id, Some(0), Some(50), None, None)
     .await?;
 
 // Get the first page of results
-let tracks = paging_result.into_vec();
+let tracks = &paging_result[..];
 
-// Or fetch more pages using the provided fetch function
+// Fetch more pages using the provided fetch function
 let next_page = (paging_result.fetch.lock().await)(50, 50).await?;
 ```
 
