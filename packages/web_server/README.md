@@ -329,6 +329,7 @@ fn create_server_with_openapi() {
 ### Builder Methods
 
 **WebServerBuilder Methods:**
+
 - `with_addr()`, `with_port()` - Server address configuration
 - `with_scope()` - Add route scope
 - `with_cors()` - Configure CORS (requires `cors` feature)
@@ -336,6 +337,7 @@ fn create_server_with_openapi() {
 - `build()` - Build the web server
 
 **Scope Methods:**
+
 - `new(path)` - Create a new scope with a base path
 - `with_route()` - Add a single route
 - `with_routes()` - Add multiple routes
@@ -350,6 +352,7 @@ fn create_server_with_openapi() {
 - `head(path, handler)` - Add a HEAD route
 
 **Route Methods:**
+
 - `new(method, path, handler)` - Create a new route
 - `with_handler(method, path, handler)` - Create route with handler that supports extractors
 - `get(path, handler)` - Create a GET route
@@ -364,6 +367,7 @@ fn create_server_with_openapi() {
 Default features: `actix`, `compress`, `cors`, `htmx`, `openapi-all`, `serde`, `tls`
 
 Available features:
+
 - `actix` - Enable Actix Web backend support (enabled by default)
 - `simulator` - Enable test simulator backend (for testing without Actix)
 - `serde` - Enable JSON serialization/deserialization support (enabled by default)
@@ -397,6 +401,7 @@ This package includes comprehensive examples demonstrating various web server fe
 ### Example Structure
 
 Each example is a complete Cargo project with:
+
 - Its own `Cargo.toml` with appropriate dependencies
 - Comprehensive `README.md` with usage instructions
 - Self-contained code demonstrating specific features
@@ -425,24 +430,28 @@ cargo run -p json_extractor_standalone_example --features actix --no-default-fea
 Each example is a complete Cargo project with its own dependencies and comprehensive README:
 
 **Basic Handler** (`basic_handler_standalone/`)
+
 - **Purpose**: Demonstrates RequestData extraction without any serde dependencies
 - **Run**: `cargo run -p basic_handler_standalone_example`
 - **Features**: Simple request handling, multiple extractors, no JSON dependencies
 - **[Full Documentation](examples/basic_handler_standalone/README.md)**
 
 **JSON Extractor** (`json_extractor_standalone/`)
+
 - **Purpose**: Shows JSON request/response handling with serde
 - **Run**: `cargo run -p json_extractor_standalone_example`
 - **Features**: Json<T> extractor, optional fields, JSON responses, error handling
 - **[Full Documentation](examples/json_extractor_standalone/README.md)**
 
 **Query Extractor** (`query_extractor_standalone/`)
+
 - **Purpose**: Demonstrates query parameter parsing with serde
 - **Run**: `cargo run -p query_extractor_standalone_example`
 - **Features**: Query<T> extractor, optional parameters, type-safe parsing
 - **[Full Documentation](examples/query_extractor_standalone/README.md)**
 
 **Combined Extractors** (`combined_extractors_standalone/`)
+
 - **Purpose**: Shows multiple extractors working together
 - **Run**: `cargo run -p combined_extractors_standalone_example`
 - **Features**: Query + RequestData, Json + RequestData combinations, JSON API patterns
@@ -451,29 +460,35 @@ Each example is a complete Cargo project with its own dependencies and comprehen
 #### Directory Examples (With Individual READMEs)
 
 **Basic Handler** (`basic_handler/`)
+
 - **Purpose**: Fundamental handler implementation using RequestData
 - **Run**: `cargo run --example basic_handler --features actix`
 - **Shows**: Basic request/response handling with the new abstraction layer
 
 **Simple GET** (`simple_get/`)
+
 - **Purpose**: Simple GET endpoint implementation
 - **Run**: `cargo run --example simple_get --features actix`
 - **Shows**: Basic routing and response generation
 
 **Nested GET** (`nested_get/`)
+
 - **Purpose**: Demonstrates nested route structures
 - **Run**: `cargo run --example nested_get --features actix`
 - **Shows**: Route organization and scope nesting
 
 **From Request Test** (`from_request_test/`)
+
 - **Purpose**: Testing FromRequest trait implementations
 - **Shows**: Custom extractors and request data extraction
 
 **Handler Macro Test** (`handler_macro_test/`)
+
 - **Purpose**: Testing handler macros and code generation
 - **Shows**: Advanced handler patterns and macro usage
 
 **OpenAPI Integration** (`openapi/`)
+
 - **Purpose**: OpenAPI documentation generation
 - **Run**: `cargo run --example openapi --features "actix,openapi-all"`
 - **Shows**: API documentation with utoipa integration
@@ -481,6 +496,7 @@ Each example is a complete Cargo project with its own dependencies and comprehen
 ### Testing Examples
 
 #### Running Tests
+
 ```bash
 # Test individual examples
 cargo test -p basic_handler_standalone_example
@@ -495,11 +511,13 @@ cargo test -p moosicbox_web_server --features "actix,serde"
 The standalone examples include detailed curl examples in their individual READMEs. When running with Actix backend:
 
 **GET Requests**
+
 ```bash
 curl http://localhost:8080/endpoint
 ```
 
 **POST with JSON**
+
 ```bash
 curl -X POST http://localhost:8080/endpoint \
   -H "Content-Type: application/json" \
@@ -507,6 +525,7 @@ curl -X POST http://localhost:8080/endpoint \
 ```
 
 **Query Parameters**
+
 ```bash
 curl "http://localhost:8080/endpoint?page=1&limit=10"
 ```
@@ -514,14 +533,17 @@ curl "http://localhost:8080/endpoint?page=1&limit=10"
 ### Troubleshooting
 
 #### Feature Flag Issues
+
 **Problem**: "trait bound not satisfied" errors
 **Solution**: Ensure correct feature flags are enabled (`actix` or `simulator`)
 
 #### Port Conflicts
+
 **Problem**: "address already in use"
 **Solution**: Change port in example or kill existing process with `lsof -ti:8080 | xargs kill`
 
 #### Compilation Errors
+
 **Problem**: Missing traits or types
 **Solution**: Check feature dependencies and ensure all required features are enabled
 
@@ -530,6 +552,7 @@ curl "http://localhost:8080/endpoint?page=1&limit=10"
 The web server abstraction currently requires feature flags to select between Actix and Simulator backends. This is a known limitation that will be addressed in future versions.
 
 Examples must use conditional compilation:
+
 - `#[cfg(feature = "actix")]` for Actix-specific code
 - `#[cfg(feature = "simulator")]` for test simulator code
 
@@ -540,11 +563,13 @@ Future versions will provide a unified API that removes this requirement.
 #### From Raw Actix Web
 
 **Handler Changes**
+
 - Replace `HttpRequest` with `RequestData` for Send-safety
 - Use handler macros instead of manual implementations
 - Extractors remain mostly the same but work through the abstraction layer
 
 **Route Registration**
+
 ```rust
 // Before (raw Actix)
 App::new().route("/api/users", web::get().to(get_users))
@@ -560,6 +585,7 @@ Scope::new("/api").with_route(Route {
 ## Dependencies
 
 Core dependencies:
+
 - `switchy_http_models` - HTTP types and status codes
 - `serde-querystring` - Query string parsing
 - `moosicbox_web_server_core` - Core server functionality
@@ -567,6 +593,7 @@ Core dependencies:
 - `futures` - Async runtime utilities
 
 Optional dependencies (feature-gated):
+
 - `moosicbox_web_server_cors` - CORS middleware (with `cors` feature)
 - `actix-web` - Actix Web server backend (with `actix` feature)
 - `actix-cors` - Actix CORS support (with `cors` feature)

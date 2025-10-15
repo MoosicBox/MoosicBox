@@ -14,10 +14,12 @@ The MoosicBox Audio Encoder package provides:
 ## Current Implementation
 
 ### Core Components
+
 - **EncodeInfo**: Structure containing encoding results (output size, input consumed)
 - **Feature-Gated Modules**: Format-specific encoding implementations
 
 ### Available Features
+
 - **`aac`**: Advanced Audio Coding encoder module
 - **`flac`**: Free Lossless Audio Codec encoder module
 - **`mp3`**: MPEG Layer III encoder module
@@ -127,6 +129,7 @@ fn encode_audio() -> Result<(), Box<dyn std::error::Error>> {
 ### Module APIs
 
 Each encoder module provides consistent functions:
+
 - **AAC** (`aac` feature): `encoder_aac()` creates encoder, `encode_aac(encoder, input, buf)` encodes i16 PCM data
 - **FLAC** (`flac` feature): `encoder_flac()` creates encoder, `encode_flac(encoder, input, buf)` encodes i32 PCM data
 - **MP3** (`mp3` feature): `encoder_mp3()` creates encoder, `encode_mp3(encoder, input)` encodes i16 PCM data and returns output buffer

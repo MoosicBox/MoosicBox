@@ -14,11 +14,13 @@ The MoosicBox Logging package provides:
 ## Current Implementation
 
 ### Core Components
+
 - **Free Log Module**: Provides `init()` function to configure free_log_client with file writing and custom layers
 - **Macro Module**: Provides `debug_or_trace!` macro for conditional logging based on log level
 - **Re-exports**: Exposes `free_log_client` and `log` crates for convenience
 
 ### Available Features
+
 - **`api`**: Enables API features in free_log_client (enabled by default)
 - **`free_log`**: Enables free_log integration module with init function (enabled by default)
 - **`macros`**: Enables logging macro utilities (enabled by default)
@@ -64,6 +66,7 @@ fn setup_logging() -> Result<(), InitError> {
 ```
 
 The `init` function:
+
 - Configures environment-based log filtering (`MOOSICBOX_LOG` or `RUST_LOG` environment variables)
 - Sets default log level to `trace` in debug builds, `info` in release builds
 - Optionally writes logs to a file in the config directory's `logs` subdirectory
@@ -108,6 +111,7 @@ fn example() {
 ### Free Log Module (feature = "free_log")
 
 #### `init` Function
+
 ```rust
 pub fn init(
     filename: Option<&str>,
@@ -118,22 +122,26 @@ pub fn init(
 Initializes the logging system with optional file output and custom layers.
 
 **Parameters:**
+
 - `filename`: Optional log file name (written to `{config_dir}/logs/{filename}`)
 - `layers`: Optional vector of custom tracing layers
 
 **Returns:** `Result<FreeLogLayer, InitError>`
 
 **Errors:**
+
 - `InitError::Logs`: Failed to initialize logs
 - `InitError::BuildLogsConfig`: Failed to build logs config
 - `InitError::BuildFileWriterConfig`: Failed to build file writer config
 
 #### Re-exports
+
 - `pub use free_log_client;` - Exposes the entire free_log_client crate
 
 ### Macros Module (feature = "macros")
 
 #### `debug_or_trace!` Macro
+
 ```rust
 debug_or_trace!(
     ($debug_message),
@@ -144,16 +152,19 @@ debug_or_trace!(
 Conditionally logs at trace level if enabled, otherwise logs at debug level.
 
 #### Re-exports
+
 - `pub use log;` - Exposes the standard `log` crate
 
 ## Dependencies
 
 ### Core Dependencies (always included)
+
 - `free_log_client`: Free log client for structured logging
 - `log`: Standard Rust logging facade
 - `thiserror`: Error handling
 
 ### Feature-Specific Dependencies
+
 - `moosicbox_config` (when `free_log` is enabled): Config directory utilities
 - `moosicbox_env_utils` (when `free_log` is enabled): Environment variable helpers
 

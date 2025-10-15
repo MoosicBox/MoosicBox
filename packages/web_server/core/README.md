@@ -14,12 +14,14 @@ The MoosicBox Web Server Core package provides:
 ## Features
 
 ### WebServer Trait
+
 - **start()**: Async server startup operation
 - **stop()**: Async server shutdown operation
 - **Future-based**: Returns pinned futures for async operations
 - **Lifecycle Management**: Standard server lifecycle interface
 
 ### Async Operations
+
 - **Pin<Box<dyn Future>>**: Boxed futures for dynamic dispatch
 - **Async/Await**: Full async support for server operations
 - **Non-blocking**: Async operations don't block execution
@@ -83,11 +85,13 @@ async fn run_server(server: impl WebServer) {
 ## Design Principles
 
 ### Framework Agnostic
+
 - **Abstract Interface**: No dependency on specific web frameworks
 - **Implementation Freedom**: Implementers can use any underlying technology
 - **Consistent API**: Standard interface regardless of implementation
 
 ### Async First
+
 - **Future-based**: All operations return futures
 - **Non-blocking**: Designed for async runtimes
 - **Composable**: Easy to integrate with async applications
@@ -101,6 +105,7 @@ async fn run_server(server: impl WebServer) {
 ## Integration
 
 This package is designed for:
+
 - **Web Framework Abstraction**: Common interface for different web servers
 - **Server Management**: Lifecycle management for web services
 - **Testing**: Mock server implementations for testing

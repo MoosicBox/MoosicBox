@@ -80,6 +80,7 @@ marked as completed WITHOUT executing their SQL. This is useful for:
 - **Recovery**: When schema table needs to be rebuilt after corruption
 
 **Behavior:**
+
 - ✅ Creates the migration tracking table if it doesn't exist
 - ✅ Records all migrations as completed with timestamps
 - ✅ Logs summary of marked migrations (newly marked, updated, already completed)
@@ -89,6 +90,7 @@ marked as completed WITHOUT executing their SQL. This is useful for:
 ensures proper migration state tracking even when SQL execution is skipped.
 
 **Example:**
+
 ```rust
 use moosicbox_schema::migrate_library;
 
@@ -103,6 +105,7 @@ migrate_library(&*db).await?;
 **Scope Behavior:**
 
 The `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment variable uses the safest scope (`PendingOnly`):
+
 - ✅ Only marks untracked migrations as completed
 - ⏭️ Preserves failed migration states (they remain failed)
 - ⏭️ Preserves in-progress migration states (they remain in-progress)
@@ -110,6 +113,7 @@ The `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment variable uses the safest sc
 This ensures that if you have failed migrations tracked, they won't be incorrectly marked as completed. The environment variable is designed for initialization scenarios, not recovery from failed migrations.
 
 **If you need to mark failed migrations as completed**, use the CLI instead:
+
 ```bash
 switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
 ```
@@ -300,8 +304,8 @@ CREATE TABLE __moosicbox_schema_migrations (
 ## Error Types
 
 - `MigrateError`: Wraps both database and schema migration errors
-  - `MigrateError::Database(DatabaseError)`: Database connection/execution errors
-  - `MigrateError::Schema(SwitchyMigrationError)`: Migration logic errors
+    - `MigrateError::Database(DatabaseError)`: Database connection/execution errors
+    - `MigrateError::Schema(SwitchyMigrationError)`: Migration logic errors
 
 ## Development Notes
 

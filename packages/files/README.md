@@ -5,6 +5,7 @@ A comprehensive file handling and streaming utility library for the MoosicBox ec
 ## Features
 
 Core features (always available):
+
 - **File Download**: Download files from remote URLs with HTTP client support
 - **Stream Saving**: Save byte streams to files with progress monitoring
 - **Progress Tracking**: Monitor download progress and speed during file operations
@@ -14,6 +15,7 @@ Core features (always available):
 - **Error Handling**: Detailed error types for different failure scenarios
 
 With optional features enabled:
+
 - **Track Management**: Handle audio track files, metadata, and streaming (requires `files` feature)
 - **Album/Artist Artwork**: Manage album and artist cover images (requires `files` feature)
 - **HTTP Range Support**: Parse and handle HTTP byte range requests (requires `range` feature)
@@ -246,15 +248,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Additional Modules (feature-gated)
 
 With the `files` feature enabled:
+
 - `files::track` - Track file management and streaming
 - `files::album` - Album cover art handling
 - `files::artist` - Artist artwork handling
 - `files::track_pool` - Track pooling and caching
 
 With the `api` feature enabled:
+
 - `api` - Actix-web endpoints for file serving, track streaming, and artwork delivery
 
 With the `range` feature enabled:
+
 - `range` - HTTP byte range parsing utilities
 
 ## Error Handling
@@ -279,6 +284,7 @@ The package provides several optional features:
 - `profiling` - Enable profiling support
 
 Audio format features (decoder/encoder support):
+
 - `all-decoders` / `all-encoders` - Enable all supported codecs
 - `decoder-aac`, `decoder-flac`, `decoder-mp3`, `decoder-opus` - Individual decoder features
 - `encoder-aac`, `encoder-flac`, `encoder-mp3`, `encoder-opus` - Individual encoder features
@@ -286,6 +292,7 @@ Audio format features (decoder/encoder support):
 ## Dependencies
 
 Core dependencies:
+
 - `switchy_http` - HTTP client functionality with streaming support
 - `switchy_fs` - Cross-platform async filesystem operations
 - `switchy_time` - Cross-platform time utilities
@@ -297,6 +304,7 @@ Core dependencies:
 - `futures` - Asynchronous stream processing
 
 Optional dependencies (enabled by features):
+
 - `actix-web` / `actix-files` - Web server framework (with `api` feature)
 - `moosicbox_music_api` / `moosicbox_music_models` - Music API integration (with `files` feature)
 - `moosicbox_audio_decoder` / `moosicbox_audio_output` - Audio processing (with decoder/encoder features)

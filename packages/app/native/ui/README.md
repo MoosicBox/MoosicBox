@@ -15,18 +15,21 @@ The MoosicBox Native App UI package provides:
 ## Components
 
 ### Core UI
+
 - **Navigation**: Sidebar navigation and routing
 - **Player**: Audio player controls and visualization
 - **Footer**: Bottom player interface
 - **Modal**: Modal dialog components
 
 ### Music UI
+
 - **Albums**: Album browsing and display
 - **Artists**: Artist listing and navigation
 - **Search**: Music search interface
 - **Play Queue**: Playback queue management
 
 ### Settings
+
 - **Audio Zones**: Multi-zone audio configuration
 - **Downloads**: Download management interface
 - **Playback Sessions**: Session management UI
@@ -35,17 +38,20 @@ The MoosicBox Native App UI package provides:
 ## Features
 
 ### Responsive Design
+
 - **Adaptive Layouts**: Responsive to different screen sizes
 - **Flexible Components**: Configurable component sizing
 - **Modern Styling**: Contemporary UI design patterns
 
 ### Music Integration
+
 - **Real-time Updates**: Live playback state updates
 - **Album Art**: Cover art display and management
 - **Progress Tracking**: Playback progress visualization
 - **Volume Control**: Audio volume management
 
 ### Action System
+
 - **Custom Actions**: Comprehensive action system for user interactions
 - **Playback Control**: Play, pause, skip, seek functionality
 - **Queue Management**: Add to queue, play album, track selection
@@ -122,6 +128,7 @@ let action = Action::PlayAlbum {
 ## Constants
 
 ### Layout Constants
+
 - `FOOTER_HEIGHT`: Footer component height (calculated from VIZ_HEIGHT + VIZ_PADDING + FOOTER_BORDER_SIZE)
 - `FOOTER_ICON_SIZE`: Icon sizes in footer (25px)
 - `FOOTER_BORDER_SIZE`: Footer border size (3px)
@@ -130,10 +137,12 @@ let action = Action::PlayAlbum {
 - `VIZ_PADDING`: Visualization padding (5px)
 
 ### Color Constants
+
 - `DARK_BACKGROUND`: Dark theme background color (`#080a0b`)
 - `BACKGROUND`: Standard background color (`#181a1b`)
 
 ### Element IDs
+
 - `AUDIO_ZONES_ID`: Audio zones modal identifier
 - `AUDIO_ZONES_CONTENT_ID`: Audio zones content container identifier
 - `PLAYBACK_SESSIONS_ID`: Playback sessions modal identifier

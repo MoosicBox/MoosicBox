@@ -15,6 +15,7 @@ A comprehensive example showcasing all the key features of the web_server backen
 - **Error Handling**: 404 pages, form validation
 
 **Quick Start:**
+
 ```bash
 cd basic_web_server
 cargo run --bin basic_web_server
@@ -25,30 +26,35 @@ Visit `http://localhost:8343` to see the example in action.
 ## Features Demonstrated
 
 ### Core Web Server Backend
+
 - ✅ `router_to_web_server()` function usage
 - ✅ Actix backend integration
 - ✅ Route handling with async functions
 - ✅ Request/response processing
 
 ### Static Asset Serving
+
 - ✅ CSS file serving
 - ✅ JavaScript file serving
 - ✅ Image serving (planned)
 - ✅ Embedded assets with `include_str!`
 
 ### Interactive Features
+
 - ✅ Form handling and validation
 - ✅ API endpoints with JSON responses
 - ✅ Client-side JavaScript integration
 - ✅ Real-time user interactions
 
 ### Modern Web Development
+
 - ✅ Responsive CSS design
 - ✅ Dark mode support
 - ✅ Mobile-first approach
 - ✅ Progressive enhancement
 
 ### Testing & Development
+
 - ✅ Simulator integration (optional)
 - ✅ Development-friendly setup
 - ✅ Easy customization
@@ -102,18 +108,21 @@ The web_server backend provides:
 ## Key Benefits
 
 ### Developer Experience
+
 - **Easy Setup**: Simple `router_to_web_server()` call
 - **Hot Reload**: Fast development iteration
 - **Type Safety**: Full Rust type checking
 - **Modern Tooling**: Cargo, clippy, rustfmt integration
 
 ### Performance
+
 - **Actix Backend**: High-performance HTTP handling
 - **Efficient Assets**: Optimized static file serving
 - **Minimal JavaScript**: Enhanced UX without bloat
 - **Responsive Design**: Fast loading on all devices
 
 ### Flexibility
+
 - **Multiple Backends**: Actix or simulator modes
 - **Customizable**: Easy to extend and modify
 - **Scalable**: Production-ready architecture
@@ -122,6 +131,7 @@ The web_server backend provides:
 ## Common Patterns
 
 ### Basic Route Handler
+
 ```rust
 router.get("/path", |_req: RouteRequest| async move {
     Ok(Some(hyperchad_renderer::Content::View(
@@ -134,6 +144,7 @@ router.get("/path", |_req: RouteRequest| async move {
 ```
 
 ### API Endpoint
+
 ```rust
 router.get("/api/data", |_req: RouteRequest| async move {
     let data = serde_json::json!({"key": "value"});
@@ -142,6 +153,7 @@ router.get("/api/data", |_req: RouteRequest| async move {
 ```
 
 ### Static Asset
+
 ```rust
 StaticAssetRoute {
     route: "/static/style.css".to_string(),
@@ -150,6 +162,7 @@ StaticAssetRoute {
 ```
 
 ### Form Handler
+
 ```rust
 router.post("/contact", |req: RouteRequest| async move {
     // Process form data from req.body
@@ -165,6 +178,7 @@ router.post("/contact", |req: RouteRequest| async move {
 ## Best Practices
 
 ### Project Structure
+
 ```
 your_app/
 ├── Cargo.toml
@@ -181,18 +195,21 @@ your_app/
 ```
 
 ### Error Handling
+
 - Always provide fallback routes for 404 errors
 - Validate user input on both client and server
 - Use proper HTTP status codes
 - Provide helpful error messages
 
 ### Performance
+
 - Use `include_str!` for small assets
 - Implement proper caching headers
 - Optimize CSS and JavaScript
 - Use responsive images
 
 ### Security
+
 - Validate all user input
 - Use HTTPS in production
 - Implement proper CORS policies
@@ -203,11 +220,13 @@ your_app/
 ### Common Issues
 
 **Port Already in Use**
+
 ```bash
 PORT=8080 cargo run --bin basic_web_server
 ```
 
 **Build Errors**
+
 ```bash
 # Check dependencies
 cargo check -p hyperchad_renderer_html_web_server
@@ -217,6 +236,7 @@ cargo clean && cargo build
 ```
 
 **Static Assets Not Loading**
+
 - Ensure files are included with `include_str!`
 - Check route paths match asset routes
 - Verify file permissions

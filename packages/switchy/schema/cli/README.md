@@ -107,21 +107,25 @@ switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
 ```
 
 **⚠️ WARNING:** These operations bypass migration execution and can cause:
+
 - Database schema inconsistencies
 - Failed future migrations
 - Data corruption
 
 **Default behavior** (`mark-all-completed` without flags):
+
 - ✅ Safe: Only marks untracked migrations as completed
 - ⏭️ Preserves: Failed and in-progress migration states
 - 💡 Use for: Initializing tracking for existing databases
 
 **With flags** (`--include-failed`, `--include-in-progress`, `--all`):
+
 - ⚠️ Dangerous: Changes migration states
 - 🔄 Updates: Failed/in-progress migrations to completed
 - 💡 Use for: Recovery scenarios only
 
 **With `--drop` flag** (CRITICAL):
+
 - 🔥 **DESTROYS ALL MIGRATION HISTORY**
 - 🗑️ Drops the entire migration tracking table
 - 🆕 Recreates fresh tracking table
@@ -225,11 +229,13 @@ switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
 The `--drop` flag is the most destructive operation and should only be used in extreme recovery scenarios.
 
 **What it does:**
+
 1. Drops the entire migration tracking table (`__switchy_migrations`)
 2. Recreates the table with fresh schema
 3. Marks all migrations from source as completed with new checksums
 
 **What you lose:**
+
 - All migration execution history
 - Timestamps of when migrations ran
 - Failure reasons and error messages
@@ -237,12 +243,14 @@ The `--drop` flag is the most destructive operation and should only be used in e
 - Migration status tracking (completed/failed/in-progress)
 
 **When to use:**
+
 - ✅ Migration tracking table is corrupted or unreadable
 - ✅ Table schema is incompatible with current code version
 - ✅ Need to completely reset migration history
 - ❌ **NOT** for normal recovery scenarios - use scopes instead
 
 **Examples:**
+
 ```bash
 # Drop and recreate tracking table (requires triple confirmation)
 switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
@@ -258,10 +266,10 @@ switchy-migrate mark-all-completed --drop --force --database-url sqlite:./app.db
 
 - Rollback operations require user confirmation
 - Mark-completed operations have progressive confirmation levels:
-  - Default scope (pending only): Single confirmation
-  - Dangerous scopes (include-failed/in-progress): Double confirmation
-  - All scope: Double confirmation with extreme warnings
-  - **Drop flag: Double confirmation with CRITICAL warnings**
+    - Default scope (pending only): Single confirmation
+    - Dangerous scopes (include-failed/in-progress): Double confirmation
+    - All scope: Double confirmation with extreme warnings
+    - **Drop flag: Double confirmation with CRITICAL warnings**
 - Danger-level-aware warnings adapt to selected scope
 - Database connections are validated before operations
 - Migration ordering is deterministic (alphabetical by ID)

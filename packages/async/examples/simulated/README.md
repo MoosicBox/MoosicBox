@@ -126,6 +126,7 @@ This pattern is useful for:
 ### Simulation Support
 
 When built with the `simulator` feature:
+
 - **Deterministic execution** - Same seed produces same results
 - **Controlled timing** - Predictable scheduling for testing
 - **Reproducible behavior** - Consistent results across runs
@@ -145,10 +146,10 @@ When built with the `simulator` feature:
 
 ## Comparison with other examples
 
-| Example | Focus | Key Feature |
-|---------|-------|-------------|
-| [Cancel](../cancel/README.md) | Graceful shutdown | Cancellation tokens |
-| **Simulated** | Concurrent execution | Task spawning and nesting |
+| Example                       | Focus                | Key Feature               |
+| ----------------------------- | -------------------- | ------------------------- |
+| [Cancel](../cancel/README.md) | Graceful shutdown    | Cancellation tokens       |
+| **Simulated**                 | Concurrent execution | Task spawning and nesting |
 
 ## Related
 

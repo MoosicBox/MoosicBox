@@ -220,6 +220,7 @@ export SWITCHY_MIGRATION_TABLE="__switchy_migrations"
 
 When set to `1`, skips executing migration SQL but still populates the migration
 tracking table with all migrations marked as completed. This is useful for:
+
 - Initializing a tracking table for an existing database with matching schema
 - Read-only deployments where schema is managed externally
 - Recovery scenarios where migrations were manually applied
@@ -236,70 +237,75 @@ tracking table is populated for proper migration state management.
 When using `mark-all-completed`, you can control which migration states are affected:
 
 #### Default Behavior (Safest)
+
 ```bash
 switchy-migrate mark-all-completed -d DATABASE_URL
 ```
 
 Only marks untracked (pending) migrations as completed:
 
-| Current State | Action | Result |
-|---------------|--------|--------|
-| Not Tracked   | ✅ Mark | Completed |
-| Completed     | ⏭️ Skip | Completed |
-| Failed        | ⏭️ Skip | Failed |
+| Current State | Action  | Result     |
+| ------------- | ------- | ---------- |
+| Not Tracked   | ✅ Mark | Completed  |
+| Completed     | ⏭️ Skip | Completed  |
+| Failed        | ⏭️ Skip | Failed     |
 | InProgress    | ⏭️ Skip | InProgress |
 
 **Use When:** Initializing tracking for an existing database
 
 #### With `--include-failed`
+
 ```bash
 switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
 ```
 
 Marks pending and failed migrations:
 
-| Current State | Action | Result |
-|---------------|--------|--------|
-| Not Tracked   | ✅ Mark | Completed |
-| Completed     | ⏭️ Skip | Completed |
-| Failed        | ⚠️ Update | Completed |
-| InProgress    | ⏭️ Skip | InProgress |
+| Current State | Action    | Result     |
+| ------------- | --------- | ---------- |
+| Not Tracked   | ✅ Mark   | Completed  |
+| Completed     | ⏭️ Skip   | Completed  |
+| Failed        | ⚠️ Update | Completed  |
+| InProgress    | ⏭️ Skip   | InProgress |
 
 **Use When:** Multiple failed migrations were manually fixed
 
 #### With `--include-in-progress`
+
 ```bash
 switchy-migrate mark-all-completed --include-in-progress -d DATABASE_URL
 ```
 
 Marks pending and in-progress migrations:
 
-| Current State | Action | Result |
-|---------------|--------|--------|
-| Not Tracked   | ✅ Mark | Completed |
-| Completed     | ⏭️ Skip | Completed |
-| Failed        | ⏭️ Skip | Failed |
+| Current State | Action    | Result    |
+| ------------- | --------- | --------- |
+| Not Tracked   | ✅ Mark   | Completed |
+| Completed     | ⏭️ Skip   | Completed |
+| Failed        | ⏭️ Skip   | Failed    |
 | InProgress    | ⚠️ Update | Completed |
 
 **Use When:** Migration process was interrupted/crashed
 
 #### With `--all` (Most Dangerous)
+
 ```bash
 switchy-migrate mark-all-completed --all -d DATABASE_URL
 ```
 
 Marks all migrations regardless of state:
 
-| Current State | Action | Result |
-|---------------|--------|--------|
-| Not Tracked   | ✅ Mark | Completed |
-| Completed     | ⏭️ Skip | Completed |
+| Current State | Action    | Result    |
+| ------------- | --------- | --------- |
+| Not Tracked   | ✅ Mark   | Completed |
+| Completed     | ⏭️ Skip   | Completed |
 | Failed        | ⚠️ Update | Completed |
 | InProgress    | ⚠️ Update | Completed |
 
 **Use When:** Complete reset/sync of migration tracking table
 
 #### With `--drop` (CRITICAL - DESTROYS HISTORY)
+
 ```bash
 switchy-migrate mark-all-completed --drop -d DATABASE_URL
 ```
@@ -307,11 +313,13 @@ switchy-migrate mark-all-completed --drop -d DATABASE_URL
 **CRITICAL OPERATION** - Drops the entire migration tracking table before marking:
 
 **Steps:**
+
 1. 🗑️ DROP entire `__switchy_migrations` table
 2. 🆕 CREATE fresh tracking table with current schema
 3. ✅ MARK all source migrations as completed with new checksums
 
 **What You Lose:**
+
 - All migration execution history
 - Timestamps of when migrations ran
 - Failure reasons and error messages
@@ -319,12 +327,14 @@ switchy-migrate mark-all-completed --drop -d DATABASE_URL
 - All status tracking (completed/failed/in-progress)
 
 **Use When:**
+
 - ✅ Migration tracking table is corrupted or unreadable
 - ✅ Table schema is incompatible with current code
 - ✅ Need to completely reset migration history
 - ❌ **NOT** for normal recovery - use scopes instead
 
 **Example:**
+
 ```bash
 # Most common: drop and recreate with default scope (pending only)
 switchy-migrate mark-all-completed --drop -d DATABASE_URL
@@ -427,6 +437,7 @@ let migrations = source.migrations().await?;
 ```
 
 **Directory Structure:**
+
 ```
 migrations/
 ├── 001_create_users/
@@ -567,15 +578,15 @@ let migrations: Vec<Box<dyn Migration<'a> + 'a>> = source.migrations().await?;
 
 The system creates a `__switchy_migrations` table to track migration state:
 
-| Column         | Type      | Description                           |
-|----------------|-----------|---------------------------------------|
-| `id`           | TEXT      | Unique migration identifier           |
-| `checksum`     | TEXT      | Content hash for validation           |
-| `status`       | TEXT      | Current state (pending/completed/etc) |
-| `failure_reason` | TEXT    | Error message if failed               |
-| `run_on`       | TIMESTAMP | When migration started                |
-| `finished_on`  | TIMESTAMP | When migration completed              |
-| `executed_at`  | TIMESTAMP | Legacy timestamp field                |
+| Column           | Type      | Description                           |
+| ---------------- | --------- | ------------------------------------- |
+| `id`             | TEXT      | Unique migration identifier           |
+| `checksum`       | TEXT      | Content hash for validation           |
+| `status`         | TEXT      | Current state (pending/completed/etc) |
+| `failure_reason` | TEXT      | Error message if failed               |
+| `run_on`         | TIMESTAMP | When migration started                |
+| `finished_on`    | TIMESTAMP | When migration completed              |
+| `executed_at`    | TIMESTAMP | Legacy timestamp field                |
 
 ## Error Handling & Recovery
 
@@ -629,6 +640,7 @@ switchy_schema = { version = "0.1.0", default-features = false }
 ```
 
 Available features:
+
 - `embedded` - Compile-time embedded migrations
 - `directory` - Runtime directory-based migrations
 - `code` - Programmatic code-based migrations
@@ -642,14 +654,16 @@ Available features:
 ### Development Workflow
 
 1. **Always check status before migrating**:
-   ```bash
-   switchy-migrate status --show-failed
-   ```
+
+    ```bash
+    switchy-migrate status --show-failed
+    ```
 
 2. **Use dry-run for testing**:
-   ```bash
-   switchy-migrate migrate --dry-run
-   ```
+
+    ```bash
+    switchy-migrate migrate --dry-run
+    ```
 
 3. **Monitor long-running migrations** - Check status during execution
 
@@ -690,6 +704,7 @@ Available features:
 **Cause**: Process crashed or was interrupted during migration.
 
 **Solution**:
+
 ```bash
 # Check status
 switchy-migrate status --show-failed
@@ -706,6 +721,7 @@ switchy-migrate mark-completed MIGRATION_ID --force
 **Cause**: Migration file was modified after being executed.
 
 **Solution**:
+
 1. Determine if the change was intentional
 2. If unintentional, revert the migration file
 3. If intentional, create a new migration with the changes
@@ -715,6 +731,7 @@ switchy-migrate mark-completed MIGRATION_ID --force
 **Cause**: Network issues, wrong credentials, or database unavailable.
 
 **Solution**:
+
 ```bash
 # Test connection
 switchy-migrate status -d DATABASE_URL
@@ -730,6 +747,7 @@ echo $SWITCHY_DATABASE_URL
 **Cause**: Using `--force` flag bypasses safety checks.
 
 **Understanding**:
+
 - Only use `--force` when you understand the implications
 - Can cause data loss or corruption if used incorrectly
 - Always backup before using `--force` in production
@@ -807,17 +825,17 @@ cargo run
 #### Example Projects
 
 - **`examples/static_migrations/`** - Complete project demonstrating:
-  - Custom migration implementations with `'static` lifetimes
-  - All three discovery methods (embedded, directory, code)
-  - Query builder integration
-  - Migration runner usage
-  - Comprehensive test coverage
+    - Custom migration implementations with `'static` lifetimes
+    - All three discovery methods (embedded, directory, code)
+    - Query builder integration
+    - Migration runner usage
+    - Comprehensive test coverage
 
 - **`examples/borrowed_migrations/`** - Advanced project showing:
-  - Configuration-driven migrations with borrowed data
-  - Explicit lifetime management (`'a`)
-  - Temporary migration sources
-  - Function-based migration generation
+    - Configuration-driven migrations with borrowed data
+    - Explicit lifetime management (`'a`)
+    - Temporary migration sources
+    - Function-based migration generation
 
 ### Integration Example
 

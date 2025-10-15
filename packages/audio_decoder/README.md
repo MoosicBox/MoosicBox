@@ -7,6 +7,7 @@ Audio decoding library for the MoosicBox ecosystem, built on top of the Symphoni
 The MoosicBox Audio Decoder package provides a wrapper around the [Symphonia](https://github.com/pdm-project/symphonia) media framework, enabling audio decoding for multiple formats within the MoosicBox ecosystem.
 
 **Current Features:**
+
 - Multi-format audio decoding via Symphonia
 - Streaming support through media source streams
 - Handler-based audio output management
@@ -295,6 +296,7 @@ These can be used with Symphonia's `MediaSourceStream` for flexible input handli
 ## Dependencies
 
 Core dependencies:
+
 - **symphonia**: Media demuxing and decoding framework
 - **moosicbox_stream_utils**: Streaming utilities (remote bytestream, stalled monitoring)
 - **tokio**: Async runtime

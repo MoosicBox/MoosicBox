@@ -15,10 +15,12 @@ The MoosicBox App Models package provides:
 ## Models
 
 ### Connection
+
 - **name**: Display name for the connection
 - **api_url**: MoosicBox server API endpoint URL
 
 ### MusicApiSettings
+
 - **id**: Unique identifier for the music service
 - **name**: Display name of the music service
 - **logged_in**: Authentication status
@@ -28,10 +30,12 @@ The MoosicBox App Models package provides:
 - **auth_method**: Optional authentication method configuration (requires `music-api-api` feature)
 
 ### DownloadSettings
+
 - **download_locations**: List of available download locations with IDs
 - **default_download_location**: Default download path
 
 ### ScanSettings
+
 - **scan_paths**: List of local filesystem paths to scan for music
 
 ## Installation
@@ -103,11 +107,13 @@ let download_settings = DownloadSettings {
 ## Feature Flags
 
 ### Default Features
+
 - **`music-api-api`**: Integration with MoosicBox music API authentication (includes `AuthMethod`)
 - **`auth-poll`**: Support for poll-based authentication flows
 - **`auth-username-password`**: Support for username/password authentication
 
 ### Additional Features
+
 - **`fail-on-warnings`**: Treat compiler warnings as errors
 
 ## Dependencies

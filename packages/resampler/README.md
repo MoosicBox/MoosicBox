@@ -136,6 +136,7 @@ where
 ### Resampling Engine
 
 This package uses the [rubato](https://crates.io/crates/rubato) library's `FftFixedIn` resampler, which provides:
+
 - FFT-based sample rate conversion
 - Fixed input chunk size for predictable latency
 - High-quality output suitable for audio playback
@@ -143,6 +144,7 @@ This package uses the [rubato](https://crates.io/crates/rubato) library's `FftFi
 ### Processing Model
 
 The resampler operates on fixed-size chunks:
+
 1. Input samples are buffered until `duration` frames are available
 2. The buffered chunk is resampled using rubato
 3. Output is converted from planar to interleaved format

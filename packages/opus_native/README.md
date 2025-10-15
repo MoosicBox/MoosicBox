@@ -35,6 +35,7 @@ See `../../spec/opus-native/plan.md` for detailed implementation roadmap.
 ## Acknowledgments
 
 This implementation references the official Opus codec from Xiph.Org Foundation:
+
 - Repository: https://gitlab.xiph.org/xiph/opus
 - License: BSD 3-Clause
 - Copyright: Xiph.Org Foundation

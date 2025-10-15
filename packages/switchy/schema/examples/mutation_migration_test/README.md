@@ -23,6 +23,7 @@ cargo run --bin mutation_migration_test
 ```
 
 This will:
+
 1. Create an in-memory SQLite database
 2. Run migrations with data mutations applied between specific migrations
 3. Verify that migrations handle interleaved data changes correctly
@@ -31,6 +32,7 @@ This will:
 ## Migration Structure
 
 The example includes four migrations:
+
 - `CreateUsersTable`: Creates users table with status and email fields
 - `CreatePostsTable`: Creates posts table with user_id foreign key reference
 - `CreateAnalyticsTable`: Creates analytics table for tracking user events
@@ -39,6 +41,7 @@ The example includes four migrations:
 ## Data Mutations
 
 Data is inserted between migrations using `Executable` implementations:
+
 - After users table: Inserts 3 test users (2 active, 1 inactive)
 - After posts table: Inserts 4 test posts linked to users
 - After analytics table: Inserts 5 analytics events tracking user activity
@@ -46,6 +49,7 @@ Data is inserted between migrations using `Executable` implementations:
 ## Use Cases
 
 This pattern is ideal for:
+
 - Testing migrations with realistic data patterns
 - Ensuring foreign key constraints work correctly
 - Validating that indexes can be created on populated tables

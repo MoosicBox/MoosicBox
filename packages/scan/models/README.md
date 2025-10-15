@@ -31,6 +31,7 @@ moosicbox_scan_models = { path = "../scan/models", features = ["openapi"] }
 ```
 
 Available features:
+
 - `api`: API models (enabled by default)
 - `openapi`: OpenAPI schema support via utoipa (enabled by default)
 

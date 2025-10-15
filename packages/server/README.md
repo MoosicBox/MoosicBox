@@ -36,16 +36,19 @@ cargo install --path packages/server --features "all-apis,all-formats,all-source
 ### Basic Usage
 
 Start the server (defaults to port 8000):
+
 ```bash
 moosicbox_server
 ```
 
 Or specify a custom port:
+
 ```bash
 moosicbox_server 8001
 ```
 
 Or using cargo:
+
 ```bash
 cargo run --bin moosicbox_server --features "all-apis,all-formats,all-sources" -- 8001
 ```
@@ -53,6 +56,7 @@ cargo run --bin moosicbox_server --features "all-apis,all-formats,all-sources" -
 ### Development Mode
 
 Run with debug logging:
+
 ```bash
 RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" moosicbox_server 8001
 ```
@@ -60,6 +64,7 @@ RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" moosicbox_server 8001
 ### Production Deployment
 
 With tunnel server integration:
+
 ```bash
 WS_HOST="wss://tunnel.moosicbox.com/ws" \
 TUNNEL_ACCESS_TOKEN='your_access_token' \
@@ -71,22 +76,24 @@ moosicbox_server 8001
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BIND_ADDR` | Network address to bind to | `0.0.0.0` |
-| `PORT` | Service port (can also be passed as first argument) | `8000` |
-| `ACTIX_WORKERS` | Number of Actix worker threads | Auto |
-| `MAX_THREADS` | Maximum blocking threads | `64` |
-| `STATIC_TOKEN` | Static authentication token (requires `static-token-auth` feature) | - |
-| `WS_HOST` | WebSocket tunnel host (requires `tunnel` feature) | - |
-| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token (requires `tunnel` feature) | - |
+| Variable              | Description                                                        | Default   |
+| --------------------- | ------------------------------------------------------------------ | --------- |
+| `BIND_ADDR`           | Network address to bind to                                         | `0.0.0.0` |
+| `PORT`                | Service port (can also be passed as first argument)                | `8000`    |
+| `ACTIX_WORKERS`       | Number of Actix worker threads                                     | Auto      |
+| `MAX_THREADS`         | Maximum blocking threads                                           | `64`      |
+| `STATIC_TOKEN`        | Static authentication token (requires `static-token-auth` feature) | -         |
+| `WS_HOST`             | WebSocket tunnel host (requires `tunnel` feature)                  | -         |
+| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token (requires `tunnel` feature)             | -         |
 
 ### Database Setup
 
 #### SQLite (Default)
+
 No additional setup required. Database file created automatically.
 
 #### PostgreSQL
+
 ```bash
 # Enable PostgreSQL support with features
 cargo run --bin moosicbox_server --features "all-apis,all-formats,all-sources,postgres-sqlx" -- 8001
@@ -100,6 +107,7 @@ cargo run --bin moosicbox_server --features "all-apis,all-formats,all-sources,po
 The server supports various feature flags for customization:
 
 ### Audio Formats
+
 - `format-aac` - AAC/M4A support (requires OS encoders/decoders)
 - `format-flac` - FLAC support (requires OS encoders/decoders)
 - `format-mp3` - MP3 support
@@ -107,18 +115,21 @@ The server supports various feature flags for customization:
 - `all-formats` - Enable all formats (includes `all-os-formats` and `format-mp3`)
 
 ### Audio Sources
+
 - `qobuz` - Qobuz streaming integration
 - `tidal` - Tidal streaming integration
 - `yt` - YouTube Music integration
 - `all-sources` - Enable all sources
 
 ### Audio Outputs
+
 - `cpal` - Cross-platform audio library
 - `pulseaudio` - PulseAudio support
 - `jack` - JACK audio support
 - `asio` - ASIO audio support (Windows)
 
 ### Database
+
 - `sqlite-sqlx` - SQLite support via sqlx (default)
 - `sqlite-rusqlite` - SQLite support via rusqlite
 - `postgres-sqlx` - PostgreSQL support via sqlx
@@ -127,6 +138,7 @@ The server supports various feature flags for customization:
 - `postgres-native-tls` - PostgreSQL with native TLS
 
 ### APIs
+
 - `admin-htmx-api` - Admin web interface with HTMX
 - `audio-output-api` - Audio output configuration API
 - `audio-zone-api` - Audio zone management API
@@ -148,6 +160,7 @@ The server supports various feature flags for customization:
 - `all-apis` - Enable all APIs (includes `app-apis`, `player-api`, `upnp-api`)
 
 ### Additional Features
+
 - `openapi` - Enable OpenAPI documentation endpoints (enabled by default)
 - `tunnel` - Enable tunnel server integration for remote access (enabled by default)
 - `static-token-auth` - Enable static token authentication
@@ -161,6 +174,7 @@ The server supports various feature flags for customization:
 ## API Documentation
 
 When running with the `openapi` feature, API documentation is available at:
+
 - Swagger UI: `http://localhost:8001/swagger-ui/`
 - ReDoc: `http://localhost:8001/redoc/`
 - Scalar: `http://localhost:8001/scalar/`
@@ -199,6 +213,7 @@ curl "http://localhost:8001/audio-zone"
 ### Logs
 
 Enable detailed logging:
+
 ```bash
 RUST_LOG="moosicbox_server=debug,moosicbox_audio=debug" moosicbox_server 8001
 ```

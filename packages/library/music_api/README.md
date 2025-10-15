@@ -15,6 +15,7 @@ The MoosicBox Library Music API provides:
 ## Features
 
 ### MusicApi Implementation
+
 - **Complete API**: Full implementation of MusicApi trait for local library
 - **Artists**: Browse and manage favorite artists with ordering and pagination
 - **Albums**: Album browsing with artist filtering, album type filtering, and pagination
@@ -23,6 +24,7 @@ The MoosicBox Library Music API provides:
 - **Album Versions**: Support for multiple quality versions per album
 
 ### Library Operations
+
 - **Favorites**: Add/remove favorite artists, albums, and tracks
 - **Cover Art**: Album and artist cover art management via local file paths
 - **File Access**: Direct file system access for local tracks
@@ -30,6 +32,7 @@ The MoosicBox Library Music API provides:
 - **Audio Encoding**: Support for multiple audio formats (AAC, FLAC, MP3, Opus)
 
 ### Scanning & Indexing
+
 - **Library Scanning**: Automatic music library scanning via MoosicBox Scan integration
 - **Scan Control**: Enable/disable and check scan status
 - **Profile Integration**: Multi-profile library management via LibraryMusicApiProfiles

@@ -15,26 +15,31 @@ The MoosicBox Music API Models package provides:
 ## Models
 
 ### Request Types
+
 - **AlbumsRequest**: Album query with filtering, sorting, and pagination
 - **AlbumFilters**: Advanced album filtering by name, artist, type, etc.
 - **PagingRequest**: Pagination parameters for large result sets
 
 ### Ordering & Sorting
+
 - **ArtistOrder/ArtistOrderDirection**: Artist sorting options
 - **AlbumOrder/AlbumOrderDirection**: Album sorting options
 - **TrackOrder/TrackOrderDirection**: Track sorting options
 
 ### Audio Quality
+
 - **TrackAudioQuality**: Audio quality levels (Low, FlacLossless, FlacHiRes, FlacHighestRes)
 - **AudioFormat**: Supported audio formats integration
 - **Quality Mapping**: Quality to format conversion
 
 ### Source Types
+
 - **TrackSource**: Local file paths and remote URLs for tracks
 - **ImageCoverSource**: Local and remote image sources
 - **ImageCoverSize**: Cover art size specifications
 
 ### Search Integration
+
 - **Search Models**: Search request and response types (with `api-search` feature)
 - **Query Processing**: Search query parsing and handling
 
@@ -148,6 +153,7 @@ let size = ImageCoverSize::Large; // Max, Large, Medium, Small, Thumbnail
 ## Dependencies
 
 ### Core Dependencies
+
 - **MoosicBox Music Models**: Core music data types
 - **MoosicBox JSON Utils**: JSON parsing utilities (with `serde_json` feature)
 - **MoosicBox Paging**: Pagination support
@@ -156,5 +162,6 @@ let size = ImageCoverSize::Large; // Max, Large, Medium, Small, Thumbnail
 - **Strum**: Enum string conversion
 
 ### Optional Dependencies
+
 - **Tantivy**: Full-text search engine (with `search` feature)
 - **utoipa**: OpenAPI schema generation (with `openapi` feature)

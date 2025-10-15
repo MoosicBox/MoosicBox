@@ -193,17 +193,21 @@ let json = serde_json::to_string(&page)?;
 ## Core Types
 
 ### Page<T>
+
 Represents a single page of data with either total count or "has more" information.
 
 ### PagingResponse<T, E>
+
 Async-aware pagination with the ability to fetch additional pages lazily.
 
 ### PagingRequest
+
 Simple struct for pagination parameters (offset and limit).
 
 ## Key Methods
 
 ### Page<T> Methods
+
 - `items()`: Get items in the current page as a slice
 - `into_items()`: Consume the page and return the items vector
 - `offset()`, `limit()`: Get pagination parameters
@@ -216,6 +220,7 @@ Simple struct for pagination parameters (offset and limit).
 - `empty()`: Create an empty page
 
 ### PagingResponse<T, E> Methods
+
 - `rest_of_pages()`: Load remaining pages one by one
 - `rest_of_items()`: Load all remaining items
 - `rest_of_pages_in_batches()`: Load remaining pages in parallel batches

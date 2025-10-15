@@ -71,6 +71,7 @@ Compute Backend
 ```
 
 This architecture provides:
+
 - **Fast initial load**: Skeleton served from CDN edge
 - **Dynamic content**: Full application functionality preserved
 - **Cost efficiency**: Static assets don't consume compute resources

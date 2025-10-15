@@ -35,10 +35,10 @@ Each test vector consists of three files in a subdirectory:
 
 ```json
 {
-  "sample_rate": 48000,
-  "channels": 2,
-  "frame_size_ms": 20,
-  "mode": "celt"
+    "sample_rate": 48000,
+    "channels": 2,
+    "frame_size_ms": 20,
+    "mode": "celt"
 }
 ```
 
@@ -54,6 +54,7 @@ Test vectors are automatically generated during the build process via `build.rs`
 ### Signal Types Generated
 
 The `build.rs` script generates test vectors with the following signal types:
+
 - **Impulse**: Sharp impulses for testing transient response
 - **Sine waves**: Various frequencies appropriate for each bandwidth
 - **White noise**: Random noise for testing statistical behavior
@@ -79,26 +80,27 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
 ## Package Components
 
 - **`src/lib.rs`**: Test vector loader and SNR calculation utilities
-  - `TestVector::load()` - Load a single test vector from a directory
-  - `TestVector::load_all()` - Load all test vectors from a directory
-  - `calculate_snr()` - Calculate signal-to-noise ratio between reference and decoded PCM
-  - `test_vectors_dir()` - Get path to generated test vectors
-  - `vectors_available()` - Check if test vectors have been generated
+    - `TestVector::load()` - Load a single test vector from a directory
+    - `TestVector::load_all()` - Load all test vectors from a directory
+    - `calculate_snr()` - Calculate signal-to-noise ratio between reference and decoded PCM
+    - `test_vectors_dir()` - Get path to generated test vectors
+    - `vectors_available()` - Check if test vectors have been generated
 
 - **`build.rs`**: Automatic test vector generation at build time
-  - Uses `moosicbox_opus_native_libopus` encoder to create raw Opus packets
-  - Uses `moosicbox_opus_native_libopus` decoder to create reference PCM output
-  - Generates SILK vectors for NB/MB/WB/SWB bandwidths
-  - Generates CELT fullband vector
-  - Generates integration (hybrid mode) vector
+    - Uses `moosicbox_opus_native_libopus` encoder to create raw Opus packets
+    - Uses `moosicbox_opus_native_libopus` decoder to create reference PCM output
+    - Generates SILK vectors for NB/MB/WB/SWB bandwidths
+    - Generates CELT fullband vector
+    - Generates integration (hybrid mode) vector
 
 - **`../tests/integration_tests.rs`**: Integration tests using generated vectors
-  - `test_decode_silk_vectors` - Tests SILK decoder with all generated vectors
-  - `test_sine_stereo_bit_exact` - Focused test for stereo SILK decoding
-  - `test_decode_silk_vectors_skip_delay` - Tests with algorithmic delay compensation
+    - `test_decode_silk_vectors` - Tests SILK decoder with all generated vectors
+    - `test_sine_stereo_bit_exact` - Focused test for stereo SILK decoding
+    - `test_decode_silk_vectors_skip_delay` - Tests with algorithmic delay compensation
 
 ## Dependencies
 
 From `Cargo.toml`:
+
 - **`moosicbox_opus_native_libopus`** (workspace dependency): libopus FFI bindings for generating reference test vectors
 - **`serde_json`** (workspace dependency): Parsing `meta.json` metadata files

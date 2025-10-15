@@ -14,12 +14,14 @@ The MoosicBox Music API API package provides:
 ## Models
 
 ### ApiMusicApi
+
 - **Service Info**: ID, name, and display information
 - **Authentication Status**: Login status and authentication methods
 - **Scan Support**: Scanning capabilities and status
 - **Feature Flags**: Supported operations and configurations
 
 ### Authentication
+
 - **AuthMethod**: Available authentication methods (UsernamePassword, Poll)
 - **AuthValues**: Authentication credential structures
 - **Login Status**: Real-time authentication status checking
@@ -27,12 +29,14 @@ The MoosicBox Music API API package provides:
 ## Features
 
 ### API Model Conversion
+
 - **MusicApi to ApiMusicApi**: Convert service instances to API models
 - **Authentication Integration**: Include authentication status and methods
 - **Scan Status**: Include scanning capabilities and current status
 - **Async Operations**: Async conversion with error handling
 
 ### REST API Endpoints
+
 - **GET /**: List enabled music APIs with pagination
 - **POST /auth**: Authenticate a music API with credentials
 - **POST /scan**: Trigger a scan for a specific music API
@@ -40,6 +44,7 @@ The MoosicBox Music API API package provides:
 - **GET /search**: Search across music APIs
 
 ### Authentication Support
+
 - **Username/Password**: Traditional credential-based authentication
 - **Poll Authentication**: OAuth-style polling authentication
 - **Status Checking**: Real-time authentication status verification
@@ -137,6 +142,7 @@ HttpServer::new(|| {
 ```
 
 Available endpoints:
+
 - `GET /music-apis` - List music APIs with pagination
 - `POST /music-apis/auth?apiSource=<source>` - Authenticate a music API
 - `POST /music-apis/scan?apiSource=<source>` - Scan a music API
@@ -154,6 +160,7 @@ Available endpoints:
 ## Dependencies
 
 Core dependencies:
+
 - **moosicbox_music_api**: Core music API traits and interfaces
 - **moosicbox_paging**: Pagination utilities
 - **moosicbox_profiles**: Profile management with API features
@@ -162,6 +169,7 @@ Core dependencies:
 - **log**: Logging functionality
 
 Optional dependencies:
+
 - **futures**: Async utilities (when `api` feature enabled)
 - **moosicbox_music_models**: Music data models (when `api` feature enabled)
 - **utoipa**: OpenAPI schema generation (when `openapi` feature enabled)
@@ -169,6 +177,7 @@ Optional dependencies:
 ## Integration
 
 This package is designed for:
+
 - **REST API Development**: API model definitions for endpoints
 - **Authentication Systems**: Authentication method handling
 - **Service Management**: Music service configuration and status

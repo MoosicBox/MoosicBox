@@ -14,12 +14,14 @@ The MoosicBox Music API Helpers package provides:
 ## Features
 
 ### Scan Operations
+
 - **Enable Scan**: Enable scanning for specific music APIs
 - **Scan Status**: Check if scanning is enabled for APIs
 - **Trigger Scan**: Execute scanning operations for music APIs
 - **Authentication**: Handle authentication requirements for scanning
 
 ### Database Integration
+
 - **Profile Management**: Work with multi-profile databases
 - **Origin Tracking**: Track scan origins and sources
 - **Error Handling**: Comprehensive error management

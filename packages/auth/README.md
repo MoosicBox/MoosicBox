@@ -15,15 +15,18 @@ The MoosicBox Auth package provides:
 ## Features
 
 ### Core Authentication Functions
+
 - **Client ID Generation**: Generate unique client identifiers as UUIDs
 - **Token Management**: Store and retrieve client access tokens from database
 - **Signature Token Access**: Fetch signature tokens for secure operations
 
 ### Request Authorization
+
 - **Non-Tunnel Authorization**: Validate that requests are not from tunnel services
 - **Header-Based Auth**: Check user agent headers for authorization
 
 ### API Endpoints (requires `api` feature, enabled by default)
+
 - **GET /magic-token**: Retrieve credentials associated with a magic token
 - **POST /magic-token**: Create a new magic token for authentication flows
 - Magic tokens expire after 1 day and are single-use (deleted after retrieval)
@@ -99,6 +102,7 @@ async fn main() -> std::io::Result<()> {
 ```
 
 This enables:
+
 - `GET /auth/magic-token?magicToken=<token>` - Retrieve credentials for a magic token
 - `POST /auth/magic-token?host=<host>` - Create a new magic token
 
@@ -146,12 +150,14 @@ async fn protected_handler(_auth: NonTunnelRequestAuthorized) -> Result<HttpResp
 The package uses the following database tables:
 
 ### `client_access_tokens`
+
 - `client_id`: String - The unique client identifier
 - `token`: String - The access token for the client
 - `expires`: Optional timestamp - Token expiration time
 - `updated`: Timestamp - Last update time
 
 ### `magic_tokens` (requires `api` feature)
+
 - `magic_token`: String - The magic token UUID
 - `client_id`: String - Associated client identifier
 - `access_token`: String - Associated access token

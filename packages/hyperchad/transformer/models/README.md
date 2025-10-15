@@ -17,6 +17,7 @@ The HyperChad Transformer Models package provides:
 ## Models
 
 ### Layout System
+
 - **LayoutDirection**: Row/Column layout directions
 - **LayoutOverflow**: Auto, Scroll, Expand, Squash, Wrap, Hidden
 - **JustifyContent**: Start, Center, End, SpaceBetween, SpaceEvenly
@@ -24,12 +25,14 @@ The HyperChad Transformer Models package provides:
 - **LayoutPosition**: Grid positioning with row/column (with `layout` feature)
 
 ### Text & Typography
+
 - **TextAlign**: Start, Center, End, Justify alignment
 - **TextDecorationLine**: Inherit, None, Underline, Overline, LineThrough
 - **TextDecorationStyle**: Inherit, Solid, Double, Dotted, Dashed, Wavy
 - **FontWeight**: Thin, ExtraLight, Light, Normal, Medium, SemiBold, Bold, ExtraBold, Black, Lighter, Bolder, and numeric weights (100-900)
 
 ### Visual Properties
+
 - **Visibility**: Visible/Hidden states
 - **Position**: Static, Relative, Absolute, Sticky, Fixed
 - **Cursor**: Comprehensive cursor type definitions
@@ -37,6 +40,7 @@ The HyperChad Transformer Models package provides:
 - **ImageFit**: Default, Contain, Cover, Fill, None
 
 ### Routing & HTMX
+
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
 - **SwapTarget**: This, Children, Id targeting for HTMX swaps
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
@@ -191,6 +195,7 @@ use hyperchad_transformer_models::LayoutPosition;
 ## Model Categories
 
 ### Layout Models
+
 - **LayoutDirection**: Flexbox direction (row/column)
 - **LayoutOverflow**: Content overflow behavior
 - **JustifyContent**: Main axis alignment
@@ -198,12 +203,14 @@ use hyperchad_transformer_models::LayoutPosition;
 - **LayoutPosition**: Grid positioning (feature-gated)
 
 ### Typography Models
+
 - **TextAlign**: Text alignment options
 - **TextDecorationLine**: Text decoration types
 - **TextDecorationStyle**: Decoration styling
 - **FontWeight**: Font weight variants (semantic and numeric)
 
 ### Visual Models
+
 - **Visibility**: Element visibility states
 - **Position**: CSS positioning types
 - **Cursor**: Mouse cursor appearances
@@ -211,6 +218,7 @@ use hyperchad_transformer_models::LayoutPosition;
 - **ImageFit**: Image fitting modes
 
 ### Interaction Models
+
 - **Route**: HTTP routing with HTMX support
 - **SwapTarget**: HTMX content swap targets
 - **LinkTarget**: Link navigation targets
@@ -241,10 +249,12 @@ assert_eq!(FontWeight::Weight700.to_string(), "700");
 ## Dependencies
 
 Core dependencies:
+
 - **log**: Logging support
 - **moosicbox_assert**: Assertion utilities
 
 Optional dependencies:
+
 - **serde**: Serialization/deserialization support (with `serde` feature)
 - **moosicbox_arb**: Arbitrary data generation (with `arb` feature)
 - **quickcheck**: Property-based testing support (with `arb` feature)
@@ -252,6 +262,7 @@ Optional dependencies:
 ## Integration
 
 This package is designed for:
+
 - **UI Frameworks**: Core UI component modeling
 - **CSS Generation**: CSS class and style generation
 - **HTMX Integration**: Server-side rendered applications

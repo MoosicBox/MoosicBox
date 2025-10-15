@@ -38,18 +38,21 @@ When you run the example, the server will start and listen on port 8080 (the def
 ### Manual Testing with curl
 
 **Basic GET Request**
+
 ```bash
 curl http://localhost:8080/example
 # Expected: hello, world! path=/example query=
 ```
 
 **With Query Parameters**
+
 ```bash
 curl "http://localhost:8080/example?name=test&value=123"
 # Expected: hello, world! path=/example query=name=test&value=123
 ```
 
 **Test CORS Headers**
+
 ```bash
 curl -H "Origin: https://example.com" \
      -H "Access-Control-Request-Method: GET" \
@@ -61,6 +64,7 @@ curl -H "Origin: https://example.com" \
 ## Code Walkthrough
 
 ### Server Configuration
+
 ```rust
 let server = moosicbox_web_server::WebServerBuilder::new()
     .with_cors(cors)                    // Enable CORS
@@ -72,6 +76,7 @@ let server = moosicbox_web_server::WebServerBuilder::new()
 ```
 
 ### CORS Setup
+
 ```rust
 let cors = moosicbox_web_server::cors::Cors::default()
     .allow_any_origin()     // Allow requests from any origin
@@ -81,6 +86,7 @@ let cors = moosicbox_web_server::cors::Cors::default()
 ```
 
 ### Route Handler
+
 ```rust
 .get("/example", |req| {
     let path = req.path().to_string();      // Extract path
@@ -95,38 +101,44 @@ let cors = moosicbox_web_server::cors::Cors::default()
 ## Key Concepts
 
 ### WebServerBuilder Pattern
+
 - **Fluent API**: Chain configuration methods for clean setup
 - **Flexible Configuration**: Add CORS, scopes, middleware as needed
 - **Backend Agnostic**: Same API works with different server implementations
 
 ### Scope-Based Routing
+
 - **Hierarchical Organization**: Group related routes under scopes
 - **Method Shortcuts**: `.get()`, `.post()`, `.put()`, `.delete()` for common methods
 - **Path Composition**: Scope path + route path = full endpoint path
 
 ### Request Information Access
+
 - **Path Access**: `req.path()` returns the request path
 - **Query String**: `req.query_string()` returns raw query parameters
 - **Header Access**: `req.header("name")` for specific headers
 
 ## Differences from basic_handler_standalone
 
-| Aspect | simple_get | basic_handler_standalone |
-|--------|------------|---------------|
-| **Route Registration** | Uses `Scope::get()` shortcut | Uses `Route` struct with handler |
-| **Request Type** | Uses `HttpRequest` directly | Uses `RequestData` for Send-safety |
-| **Handler Style** | Inline closure | Separate async function |
-| **Information Access** | Direct method calls | Pre-extracted fields |
+| Aspect                 | simple_get                   | basic_handler_standalone           |
+| ---------------------- | ---------------------------- | ---------------------------------- |
+| **Route Registration** | Uses `Scope::get()` shortcut | Uses `Route` struct with handler   |
+| **Request Type**       | Uses `HttpRequest` directly  | Uses `RequestData` for Send-safety |
+| **Handler Style**      | Inline closure               | Separate async function            |
+| **Information Access** | Direct method calls          | Pre-extracted fields               |
 
 ## Architecture Notes
 
 ### Current Implementation
+
 - Uses the older `HttpRequest` API (pre-RequestData)
 - Demonstrates the scope-based routing system
 - Shows CORS integration with the web server
 
 ### Migration Path
+
 This example could be updated to use:
+
 - `RequestData` instead of `HttpRequest` for better Send-safety
 - Handler macros for cleaner syntax
 - Extractors for more sophisticated request parsing
@@ -134,13 +146,16 @@ This example could be updated to use:
 ## Troubleshooting
 
 ### Port Conflicts
+
 **Problem**: "address already in use"
 **Solution**: Kill existing process or change port:
+
 ```bash
 lsof -ti:8080 | xargs kill
 ```
 
 ### CORS Issues
+
 **Problem**: Browser blocks requests due to CORS
 **Solution**: This example uses permissive CORS settings, but check browser dev tools for specific errors
 

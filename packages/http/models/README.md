@@ -15,18 +15,21 @@ The HTTP Models package provides:
 ## Features
 
 ### HTTP Methods
+
 - **Complete Method Set**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, CONNECT, TRACE
 - **Case-insensitive Parsing**: Parse from various string formats
 - **Display Implementation**: Convert methods back to strings
 - **Serde Integration**: JSON serialization/deserialization
 
 ### HTTP Status Codes
+
 - **Common Status Codes**: Standard HTTP status codes including informational (1xx), success (2xx), redirection (3xx), client error (4xx), and server error (5xx)
 - **Category Helpers**: Check if status is success, error, redirect, etc.
 - **Numeric Conversion**: Convert to/from u16 values
 - **MDN Documentation**: Based on Mozilla Developer Network reference
 
 ### Framework Integration
+
 - **Actix Web**: Conversion traits for actix-web types
 - **Reqwest**: Conversion traits for reqwest HTTP client
 - **Generic Support**: Works with any HTTP framework
@@ -218,12 +221,14 @@ async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
 ## Complete Status Code List
 
 ### Informational (1xx)
+
 - `Continue` (100)
 - `SwitchingProtocols` (101)
 - `Processing` (102)
 - `EarlyHints` (103)
 
 ### Success (2xx)
+
 - `Ok` (200)
 - `Created` (201)
 - `Accepted` (202)
@@ -236,6 +241,7 @@ async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
 - `IMUsed` (226)
 
 ### Redirection (3xx)
+
 - `MultipleChoices` (300)
 - `MovedPermanently` (301)
 - `Found` (302)
@@ -246,6 +252,7 @@ async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
 - `PermanentRedirect` (308)
 
 ### Client Error (4xx)
+
 - `BadRequest` (400)
 - `Unauthorized` (401)
 - `PaymentRequired` (402)
@@ -277,6 +284,7 @@ async fn make_request() -> Result<(), Box<dyn std::error::Error>> {
 - `UnavailableForLegalReasons` (451)
 
 ### Server Error (5xx)
+
 - `InternalServerError` (500)
 - `NotImplemented` (501)
 - `BadGateway` (502)

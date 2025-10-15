@@ -18,6 +18,7 @@ The HyperChad FLTK Renderer provides:
 ## Supported Elements
 
 ### Fully Supported
+
 - **Containers**: `div`, `aside`, `header`, `footer`, `main`, `section`, `form`, `span`
 - **Lists**: `ul` (unordered list), `ol` (ordered list), `li` (list item)
 - **Tables**: `table`, `thead`, `th`, `tbody`, `tr`, `td`
@@ -27,18 +28,21 @@ The HyperChad FLTK Renderer provides:
 - **Buttons**: `button` (rendered as clickable containers)
 
 ### Not Rendered
+
 - **Form Inputs**: `input` (text, password, checkbox, radio, etc.)
 - **Canvas**: `canvas` (element exists but no rendering implementation)
 
 ## Features
 
 ### Native GUI Capabilities
+
 - **FLTK Widgets**: Rendering of HyperChad elements using FLTK widgets
 - **Native Styling**: Platform-native appearance and behavior
 - **Window Management**: Single-window support with resize handling
 - **Planned**: Menu systems, dialog boxes, and multi-window support
 
 ### Layout and Styling
+
 - **Flexbox Layout**: Complete CSS flexbox implementation
 - **Positioning**: Support for layout positioning
 - **Spacing**: Margins, padding, and gap support
@@ -47,6 +51,7 @@ The HyperChad FLTK Renderer provides:
 - **Colors**: Background colors, text colors, and theming
 
 ### Interactive Elements
+
 - **Containers**: Divs, sections, headers, footers, and other semantic elements
 - **Clickable Elements**: Buttons (rendered as containers) and anchors with navigation
 - **Scrollable Areas**: Horizontal and vertical scrolling with overflow support
@@ -54,6 +59,7 @@ The HyperChad FLTK Renderer provides:
 - **Planned**: Form inputs (text, checkbox, radio), selection widgets (dropdowns, list boxes)
 
 ### Image and Media
+
 - **Image Loading**: Async HTTP image loading with caching
 - **Image Formats**: Support for PNG, JPEG, GIF, and other formats
 - **Image Scaling**: Automatic scaling and aspect ratio preservation
@@ -77,17 +83,20 @@ hyperchad_renderer_fltk = {
 ### System Dependencies
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt-get install libfltk1.3-dev libxinerama-dev libxft-dev libxcursor-dev
 ```
 
 **macOS:**
+
 ```bash
 # FLTK is included in the build
 # No additional dependencies needed
 ```
 
 **Windows:**
+
 ```bash
 # FLTK is statically linked
 # No additional dependencies needed
@@ -469,6 +478,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ## Layout System
 
 ### Flexbox Support
+
 - **Direction**: row, column, row-reverse, column-reverse
 - **Justify Content**: start, center, end, space-between, space-around
 - **Align Items**: start, center, end, stretch
@@ -476,12 +486,14 @@ if let Some(href) = renderer.wait_for_navigation().await {
 - **Gap**: Space between flex items
 
 ### Positioning
+
 - **Static**: Normal document flow
 - **Relative**: Positioned relative to normal position
 - **Absolute**: Positioned relative to parent container
 - **Fixed**: Positioned relative to window
 
 ### Sizing
+
 - **Fixed Sizes**: Pixel values for width and height
 - **Percentage**: Relative to parent container
 - **Constraints**: min-width, max-width, min-height, max-height
@@ -490,6 +502,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ## Image Loading
 
 ### Supported Formats
+
 - **PNG**: Portable Network Graphics
 - **JPEG**: Joint Photographic Experts Group
 - **GIF**: Graphics Interchange Format
@@ -497,6 +510,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 - **TIFF**: Tagged Image File Format
 
 ### Loading Features
+
 - **Async Loading**: Non-blocking image loading
 - **HTTP Support**: Load images from URLs
 - **Caching**: Automatic image caching
@@ -512,12 +526,14 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ## Performance Characteristics
 
 ### Advantages
+
 - **Low Memory**: Minimal memory footprint
 - **Fast Startup**: Quick application startup time
 - **Native Performance**: Native widget performance
 - **Small Binary**: Compact executable size
 
 ### Considerations
+
 - **Retained Mode**: Widgets persist between updates
 - **Layout Calculation**: Efficient layout algorithms
 - **Image Caching**: Smart caching to reduce memory usage
@@ -526,6 +542,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ## Dependencies
 
 ### Core Dependencies
+
 - **fltk**: Fast Light Toolkit GUI library (with ninja build support)
 - **hyperchad_renderer**: Core renderer traits and utilities (with canvas and viewport-retained features)
 - **hyperchad_transformer**: Template transformation and layout engine (with html and layout features)
@@ -533,6 +550,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 - **moosicbox_app_native_image**: Native image asset handling
 
 ### Runtime Dependencies
+
 - **image**: Image processing and format support
 - **tokio**: Async runtime for image loading (with sync feature)
 - **switchy_http**: HTTP client for remote image loading (reqwest backend)
@@ -543,6 +561,7 @@ if let Some(href) = renderer.wait_for_navigation().await {
 ## Integration
 
 This renderer is designed for:
+
 - **Desktop Applications**: Traditional desktop GUI applications
 - **Utility Tools**: System utilities and development tools
 - **Embedded Systems**: Applications for embedded devices
@@ -552,6 +571,7 @@ This renderer is designed for:
 ## Limitations
 
 ### Not Yet Implemented
+
 - **Form Inputs**: Text inputs, checkboxes, radio buttons are not rendered
 - **Selection Widgets**: Dropdowns and list boxes are not available
 - **Multi-Window Support**: Currently limited to single window applications
@@ -559,6 +579,7 @@ This renderer is designed for:
 - **Dialog Boxes**: File choosers and message boxes not integrated
 
 ### Design Constraints
+
 - **Theming**: Basic theming capabilities compared to web renderers
 - **Animations**: No animation support
 - **Advanced CSS**: Some advanced CSS features not supported

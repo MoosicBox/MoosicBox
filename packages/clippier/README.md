@@ -37,11 +37,13 @@ Clippier provides several subcommands for different analysis tasks:
 ### Dependencies Analysis
 
 Analyze workspace dependencies for a specific package:
+
 ```bash
 clippier dependencies Cargo.toml --output json
 ```
 
 With specific OS and feature filters:
+
 ```bash
 clippier dependencies Cargo.toml --os linux --features "feature1,feature2"
 ```
@@ -49,6 +51,7 @@ clippier dependencies Cargo.toml --os linux --features "feature1,feature2"
 ### Environment Configuration
 
 Generate environment configurations:
+
 ```bash
 clippier environment Cargo.toml --os ubuntu-latest --output json
 ```
@@ -56,6 +59,7 @@ clippier environment Cargo.toml --os ubuntu-latest --output json
 ### CI Steps Generation
 
 Generate CI pipeline steps for testing:
+
 ```bash
 clippier ci-steps Cargo.toml --os ubuntu-latest --features "default,feature1"
 ```
@@ -63,6 +67,7 @@ clippier ci-steps Cargo.toml --os ubuntu-latest --features "default,feature1"
 ### Feature Matrix Analysis
 
 Analyze and generate feature combinations for testing:
+
 ```bash
 clippier features Cargo.toml \
   --max 10 \
@@ -78,6 +83,7 @@ clippier features Cargo.toml \
 #### Deterministic Randomization with Seed
 
 Use a specific seed for reproducible randomized feature combinations:
+
 ```bash
 clippier features Cargo.toml \
   --chunked 3 \
@@ -87,6 +93,7 @@ clippier features Cargo.toml \
 ```
 
 When `--randomize` is used without `--seed`, a random seed is generated and printed to stderr (not affecting JSON output):
+
 ```bash
 clippier features Cargo.toml \
   --chunked 3 \
@@ -100,6 +107,7 @@ This enables replaying the same randomized distribution by using the printed see
 #### Package Filtering
 
 Filter feature matrix generation to specific packages:
+
 ```bash
 # Process only specific packages
 clippier features . \
@@ -118,6 +126,7 @@ clippier features . \
 ```
 
 This is particularly useful for:
+
 - **Focused testing**: Test only specific packages during development
 - **CI optimization**: Build matrix for selected components
 - **Monorepo management**: Process subsets of large workspaces
@@ -125,6 +134,7 @@ This is particularly useful for:
 #### Enhanced Change Impact Analysis
 
 Include only features for packages affected by specific file changes:
+
 ```bash
 clippier features Cargo.toml \
   --changed-files "src/lib.rs,packages/server/src/main.rs" \
@@ -135,6 +145,7 @@ clippier features Cargo.toml \
 #### Git-Based External Dependency Analysis (Requires git-diff feature)
 
 Analyze feature matrices considering both file changes and external dependency changes:
+
 ```bash
 clippier features Cargo.toml \
   --changed-files "Cargo.lock,src/lib.rs" \
@@ -165,6 +176,7 @@ clippier packages . --max-parallel 10 --output json
 #### With Change Detection (Requires git-diff feature)
 
 List only packages affected by file changes:
+
 ```bash
 # Using manual changed files
 clippier packages . \
@@ -186,6 +198,7 @@ clippier packages . \
 ```
 
 The packages command provides:
+
 - **Package enumeration**: List all workspace packages with metadata
 - **Change-based filtering**: Only include packages affected by specific changes
 - **Git integration**: Automatically detect changed files from git commits
@@ -193,22 +206,24 @@ The packages command provides:
 - **CI matrix optimization**: Generate one job per package instead of per feature
 
 **Output format:**
+
 ```json
 [
-  {
-    "name": "server",
-    "path": "packages/server",
-    "os": "ubuntu-latest"
-  },
-  {
-    "name": "auth",
-    "path": "packages/auth",
-    "os": "ubuntu-latest"
-  }
+    {
+        "name": "server",
+        "path": "packages/server",
+        "os": "ubuntu-latest"
+    },
+    {
+        "name": "auth",
+        "path": "packages/auth",
+        "os": "ubuntu-latest"
+    }
 ]
 ```
 
 **Use cases:**
+
 - **CI/CD**: Generate job matrices for parallel package testing
 - **Change analysis**: Identify which packages need rebuilding
 - **Monorepo management**: List subsets of packages for targeted operations
@@ -217,11 +232,13 @@ The packages command provides:
 ### Workspace Dependencies
 
 Find all workspace dependencies for a package:
+
 ```bash
 clippier workspace-deps /path/to/workspace package-name --format json
 ```
 
 Include specific features:
+
 ```bash
 clippier workspace-deps /path/to/workspace package-name \
   --features "feature1,feature2" \
@@ -231,6 +248,7 @@ clippier workspace-deps /path/to/workspace package-name \
 #### All Potential Dependencies Mode
 
 Include all potential workspace dependencies (useful for Docker builds):
+
 ```bash
 clippier workspace-deps /path/to/workspace package-name \
   --all-potential-deps \
@@ -242,6 +260,7 @@ This mode includes all workspace dependencies regardless of feature activation, 
 ### Generate Dockerfile
 
 Automatically generate optimized multi-stage Dockerfiles:
+
 ```bash
 clippier generate-dockerfile /path/to/workspace target-package \
   --features "feature1,feature2" \
@@ -253,6 +272,7 @@ clippier generate-dockerfile /path/to/workspace target-package \
 ```
 
 The generated Dockerfiles include:
+
 - Multi-stage builds for optimized layer caching
 - Automatic system dependency detection from `clippier.toml` files
 - Workspace member optimization
@@ -262,6 +282,7 @@ The generated Dockerfiles include:
 ### Affected Packages Analysis
 
 Determine which packages are affected by file changes:
+
 ```bash
 clippier affected-packages /path/to/workspace \
   --changed-files "src/lib.rs,Cargo.toml,packages/server/src/main.rs" \
@@ -272,6 +293,7 @@ clippier affected-packages /path/to/workspace \
 #### Enhanced Git-Based Analysis (Requires git-diff feature)
 
 Analyze impact including external dependency changes from Cargo.lock:
+
 ```bash
 clippier affected-packages /path/to/workspace \
   --changed-files "Cargo.lock,src/lib.rs,packages/server/src/main.rs" \
@@ -281,6 +303,7 @@ clippier affected-packages /path/to/workspace \
 ```
 
 This enhanced mode:
+
 - Detects changes in external dependencies by analyzing Cargo.lock diff
 - Maps external dependency changes to affected workspace packages
 - Provides comprehensive impact analysis for both internal and external changes
@@ -305,17 +328,20 @@ The feature validator ensures that when a package depends on another workspace p
 #### Common Use Cases
 
 **Validate fail-on-warnings propagation:**
+
 ```bash
 clippier validate-feature-propagation . --features "fail-on-warnings"
 ```
 
 **Auto-detect features that need propagation:**
+
 ```bash
 # Automatically finds features that exist in multiple packages
 clippier validate-feature-propagation . --workspace-only
 ```
 
 **CI/CD Integration:**
+
 ```bash
 clippier validate-feature-propagation . \
   --features "fail-on-warnings" \
@@ -323,6 +349,7 @@ clippier validate-feature-propagation . \
 ```
 
 **Get detailed JSON report:**
+
 ```bash
 clippier validate-feature-propagation . \
   --features "fail-on-warnings,std,async" \
@@ -335,6 +362,7 @@ clippier validate-feature-propagation . \
 The validator provides clear feedback about feature propagation issues:
 
 **Successful validation:**
+
 ```
 ✅ All packages correctly propagate features!
 Total packages checked: 147
@@ -342,6 +370,7 @@ Valid packages: 147
 ```
 
 **Validation with errors:**
+
 ```
 ❌ Found 2 packages with incorrect feature propagation:
 
@@ -356,17 +385,20 @@ Valid packages: 147
 The validator detects two types of issues:
 
 **Missing Propagations:**
+
 - A dependency has a feature but it's not propagated
 - Example: `pkg_a` depends on `pkg_b` which has `fail-on-warnings`, but `pkg_a` doesn't propagate it
 - Fix: Add `"pkg_b/fail-on-warnings"` to the feature definition in `pkg_a`
 
 **Incorrect Propagations:**
+
 - A feature is propagated to a non-existent dependency or feature
 - Example: `pkg_a` propagates `pkg_b/feature` but `pkg_b` doesn't have `feature`
 - Fix: Remove the incorrect propagation or add the missing feature to the dependency
 
 **Optional Dependencies:**
 The validator correctly handles optional dependencies using the `?` syntax:
+
 - `dep?/feature` - Propagates feature only when the optional dependency is activated
 - Required for dependencies marked with `optional = true` in Cargo.toml
 
@@ -412,83 +444,83 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Global Options
 
-| Option | Description |
-|--------|-------------|
+| Option     | Description                  |
+| ---------- | ---------------------------- |
 | `--output` | Output format: `json`, `raw` |
 
 ### Features Command Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--os` | Target operating system | - |
-| `--offset` | Skip first N features | 0 |
-| `--max` | Maximum number of features | All |
-| `--max-parallel` | Maximum parallel jobs | - |
-| `--chunked` | Group features into chunks | - |
-| `--spread` | Spread features across jobs | false |
-| `--randomize` | Randomize features before chunking/spreading | false |
-| `--seed` | Seed for deterministic randomization | - |
-| `--features` | Specific features to include | - |
-| `--skip-features` | Features to exclude | - |
-| `--required-features` | Always-required features | - |
-| `--packages` | Comma-separated list of packages to process | All packages |
-| `--changed-files` | Filter by changed files | - |
-| `--git-base` | Git base commit for external dep analysis | - |
-| `--git-head` | Git head commit for external dep analysis | - |
+| Option                | Description                                  | Default      |
+| --------------------- | -------------------------------------------- | ------------ |
+| `--os`                | Target operating system                      | -            |
+| `--offset`            | Skip first N features                        | 0            |
+| `--max`               | Maximum number of features                   | All          |
+| `--max-parallel`      | Maximum parallel jobs                        | -            |
+| `--chunked`           | Group features into chunks                   | -            |
+| `--spread`            | Spread features across jobs                  | false        |
+| `--randomize`         | Randomize features before chunking/spreading | false        |
+| `--seed`              | Seed for deterministic randomization         | -            |
+| `--features`          | Specific features to include                 | -            |
+| `--skip-features`     | Features to exclude                          | -            |
+| `--required-features` | Always-required features                     | -            |
+| `--packages`          | Comma-separated list of packages to process  | All packages |
+| `--changed-files`     | Filter by changed files                      | -            |
+| `--git-base`          | Git base commit for external dep analysis    | -            |
+| `--git-head`          | Git head commit for external dep analysis    | -            |
 
 ### Packages Command Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--os` | Target operating system | `ubuntu` |
-| `--packages` | Comma-separated list of packages to include | All packages |
-| `--changed-files` | Filter by changed files | - |
-| `--git-base` | Git base commit for change detection | - |
-| `--git-head` | Git head commit for change detection | - |
-| `--include-reasoning` | Include reasoning for affected packages | false |
-| `--max-parallel` | Maximum number of packages to return | - |
-| `--output` | Output format: `json`, `raw` | `json` |
+| Option                | Description                                 | Default      |
+| --------------------- | ------------------------------------------- | ------------ |
+| `--os`                | Target operating system                     | `ubuntu`     |
+| `--packages`          | Comma-separated list of packages to include | All packages |
+| `--changed-files`     | Filter by changed files                     | -            |
+| `--git-base`          | Git base commit for change detection        | -            |
+| `--git-head`          | Git head commit for change detection        | -            |
+| `--include-reasoning` | Include reasoning for affected packages     | false        |
+| `--max-parallel`      | Maximum number of packages to return        | -            |
+| `--output`            | Output format: `json`, `raw`                | `json`       |
 
 ### Workspace Dependencies Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--features` | Features to enable | - |
-| `--format` | Output format: `json`, `text` | `text` |
-| `--all-potential-deps` | Include all potential dependencies | false |
+| Option                 | Description                        | Default |
+| ---------------------- | ---------------------------------- | ------- |
+| `--features`           | Features to enable                 | -       |
+| `--format`             | Output format: `json`, `text`      | `text`  |
+| `--all-potential-deps` | Include all potential dependencies | false   |
 
 ### Docker Generation Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--base-image` | Docker builder image | `rust:1-bookworm` |
-| `--final-image` | Docker runtime image | `debian:bookworm-slim` |
-| `--build-args` | Cargo build arguments | - |
-| `--generate-dockerignore` | Generate .dockerignore | true |
-| `--env` | Runtime environment variables | - |
-| `--build-env` | Build-time environment variables | - |
-| `--arg` | Arguments to pass to binary | - |
-| `--bin` | Specify binary name | Auto-detect |
+| Option                    | Description                      | Default                |
+| ------------------------- | -------------------------------- | ---------------------- |
+| `--base-image`            | Docker builder image             | `rust:1-bookworm`      |
+| `--final-image`           | Docker runtime image             | `debian:bookworm-slim` |
+| `--build-args`            | Cargo build arguments            | -                      |
+| `--generate-dockerignore` | Generate .dockerignore           | true                   |
+| `--env`                   | Runtime environment variables    | -                      |
+| `--build-env`             | Build-time environment variables | -                      |
+| `--arg`                   | Arguments to pass to binary      | -                      |
+| `--bin`                   | Specify binary name              | Auto-detect            |
 
 ### Affected Packages Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--changed-files` | List of changed files | Required |
-| `--target-package` | Specific package to check | - |
-| `--git-base` | Git base commit for external dep analysis | - |
-| `--git-head` | Git head commit for external dep analysis | - |
-| `--output` | Output format: `json`, `raw` | `json` |
+| Option             | Description                               | Default  |
+| ------------------ | ----------------------------------------- | -------- |
+| `--changed-files`  | List of changed files                     | Required |
+| `--target-package` | Specific package to check                 | -        |
+| `--git-base`       | Git base commit for external dep analysis | -        |
+| `--git-head`       | Git head commit for external dep analysis | -        |
+| `--output`         | Output format: `json`, `raw`              | `json`   |
 
 ### Feature Validation Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--features` | Comma-separated list of features to validate | Auto-detect |
-| `--workspace-only` | Only validate workspace packages | true |
-| `--output` | Output format: `json`, `raw` | `raw` |
-| `--path` | Workspace root path | Current directory |
-| `--fail-on-error` | Exit with error code if validation fails | true |
+| Option             | Description                                  | Default           |
+| ------------------ | -------------------------------------------- | ----------------- |
+| `--features`       | Comma-separated list of features to validate | Auto-detect       |
+| `--workspace-only` | Only validate workspace packages             | true              |
+| `--output`         | Output format: `json`, `raw`                 | `raw`             |
+| `--path`           | Workspace root path                          | Current directory |
+| `--fail-on-error`  | Exit with error code if validation fails     | true              |
 
 ## Configuration
 
@@ -602,6 +634,7 @@ clippier features . \
 ```
 
 When both `--packages` and `--changed-files` are specified:
+
 - First filters to specified packages
 - Then applies change detection within those packages
 - Results in highly targeted feature matrices
@@ -654,6 +687,7 @@ The `--packages` flag enables targeted processing of specific workspace packages
 - **Monorepo management**: Handle subsets of large multi-package repositories
 
 Example workflow for package groups:
+
 ```bash
 # Frontend packages
 clippier features . --packages ui,web,app --output json
@@ -696,61 +730,66 @@ The Docker generation feature provides:
 ## Output Formats
 
 ### JSON Output
+
 Structured data suitable for programmatic processing:
 
 ```json
 {
-  "packages": [
-    {
-      "name": "package-name",
-      "features": ["feature1", "feature2"],
-      "dependencies": ["dep1", "dep2"],
-      "os": "ubuntu-latest",
-      "path": "packages/package-name"
-    }
-  ]
+    "packages": [
+        {
+            "name": "package-name",
+            "features": ["feature1", "feature2"],
+            "dependencies": ["dep1", "dep2"],
+            "os": "ubuntu-latest",
+            "path": "packages/package-name"
+        }
+    ]
 }
 ```
 
 For affected packages analysis:
+
 ```json
 {
-  "affected_packages": ["server", "auth", "database"],
-  "package": "server",
-  "affected": true,
-  "all_affected": ["server", "auth", "database"]
+    "affected_packages": ["server", "auth", "database"],
+    "package": "server",
+    "affected": true,
+    "all_affected": ["server", "auth", "database"]
 }
 ```
 
 For feature validation results:
+
 ```json
 {
-  "total_packages": 147,
-  "valid_packages": 145,
-  "errors": [
-    {
-      "package": "moosicbox_server",
-      "errors": [
+    "total_packages": 147,
+    "valid_packages": 145,
+    "errors": [
         {
-          "feature": "fail-on-warnings",
-          "missing_propagations": [
-            {
-              "dependency": "moosicbox_tcp",
-              "expected": "moosicbox_tcp/fail-on-warnings",
-              "reason": "Dependency 'moosicbox_tcp' has feature 'fail-on-warnings' but it's not propagated"
-            }
-          ],
-          "incorrect_propagations": []
+            "package": "moosicbox_server",
+            "errors": [
+                {
+                    "feature": "fail-on-warnings",
+                    "missing_propagations": [
+                        {
+                            "dependency": "moosicbox_tcp",
+                            "expected": "moosicbox_tcp/fail-on-warnings",
+                            "reason": "Dependency 'moosicbox_tcp' has feature 'fail-on-warnings' but it's not propagated"
+                        }
+                    ],
+                    "incorrect_propagations": []
+                }
+            ]
         }
-      ]
-    }
-  ],
-  "warnings": []
+    ],
+    "warnings": []
 }
 ```
 
 ### Raw/Text Output
+
 Human-readable text format for direct use in scripts:
+
 ```
 server
 auth
@@ -762,6 +801,7 @@ database
 ### Development Workflow
 
 Focus on packages you're actively developing:
+
 ```bash
 # Working on authentication system
 clippier features . \
@@ -781,44 +821,44 @@ clippier features . \
 ```yaml
 name: Component Testing
 on:
-  workflow_dispatch:
-    inputs:
-      component:
-        description: 'Component to test'
-        required: true
-        type: choice
-        options:
-          - frontend
-          - backend
-          - core
+    workflow_dispatch:
+        inputs:
+            component:
+                description: 'Component to test'
+                required: true
+                type: choice
+                options:
+                    - frontend
+                    - backend
+                    - core
 
 jobs:
-  test-component:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    test-component:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Set package list
-        id: packages
-        run: |
-          case "${{ github.event.inputs.component }}" in
-            frontend)
-              echo "list=ui,web,app" >> $GITHUB_OUTPUT
-              ;;
-            backend)
-              echo "list=server,api,auth" >> $GITHUB_OUTPUT
-              ;;
-            core)
-              echo "list=core,utils,common" >> $GITHUB_OUTPUT
-              ;;
-          esac
+            - name: Set package list
+              id: packages
+              run: |
+                  case "${{ github.event.inputs.component }}" in
+                    frontend)
+                      echo "list=ui,web,app" >> $GITHUB_OUTPUT
+                      ;;
+                    backend)
+                      echo "list=server,api,auth" >> $GITHUB_OUTPUT
+                      ;;
+                    core)
+                      echo "list=core,utils,common" >> $GITHUB_OUTPUT
+                      ;;
+                  esac
 
-      - name: Generate test matrix
-        run: |
-          clippier features . \
-            --packages "${{ steps.packages.outputs.list }}" \
-            --max 10 \
-            --output json
+            - name: Generate test matrix
+              run: |
+                  clippier features . \
+                    --packages "${{ steps.packages.outputs.list }}" \
+                    --max 10 \
+                    --output json
 ```
 
 ### Performance Comparison
@@ -1012,76 +1052,84 @@ echo "🎯 Feature validation completed successfully!"
 ### Feature Propagation Validation
 
 1. **Run in CI/CD pipelines**: Catch propagation issues early before they cause build failures
-   ```bash
-   # In your CI pipeline
-   clippier validate-feature-propagation . --features "fail-on-warnings"
-   ```
+
+    ```bash
+    # In your CI pipeline
+    clippier validate-feature-propagation . --features "fail-on-warnings"
+    ```
 
 2. **Use auto-detection mode**: Finds all features that might need propagation across your workspace
-   ```bash
-   # Discovers features that exist in multiple packages
-   clippier validate-feature-propagation . --workspace-only
-   ```
+
+    ```bash
+    # Discovers features that exist in multiple packages
+    clippier validate-feature-propagation . --workspace-only
+    ```
 
 3. **Validate after adding dependencies**: Ensure new workspace dependencies don't break feature propagation
-   ```bash
-   # Quick check after adding a new workspace dependency
-   clippier validate-feature-propagation . --features "fail-on-warnings,your-feature"
-   ```
+
+    ```bash
+    # Quick check after adding a new workspace dependency
+    clippier validate-feature-propagation . --features "fail-on-warnings,your-feature"
+    ```
 
 4. **Use workspace-only mode**: Focus validation on packages you control, excluding external dependencies
-   ```bash
-   # Avoids false positives from external dependencies
-   clippier validate-feature-propagation . --workspace-only
-   ```
+
+    ```bash
+    # Avoids false positives from external dependencies
+    clippier validate-feature-propagation . --workspace-only
+    ```
 
 5. **Document required features**: Make feature propagation requirements explicit in your workspace
-   ```toml
-   # In Cargo.toml, document why features are propagated
-   [features]
-   fail-on-warnings = [
-       "dep_a/fail-on-warnings",  # Required for consistent builds
-       "dep_b?/fail-on-warnings", # Optional dep - only when enabled
-   ]
-   ```
+    ```toml
+    # In Cargo.toml, document why features are propagated
+    [features]
+    fail-on-warnings = [
+        "dep_a/fail-on-warnings",  # Required for consistent builds
+        "dep_b?/fail-on-warnings", # Optional dep - only when enabled
+    ]
+    ```
 
 ### Package Selection Best Practices
 
 1. **Use exact package names**: Specify packages exactly as they appear in Cargo.toml
-   ```bash
-   # Correct
-   clippier features . --packages moosicbox_server,moosicbox_auth
 
-   # Incorrect (unless packages are actually named this way)
-   clippier features . --packages server,auth
-   ```
+    ```bash
+    # Correct
+    clippier features . --packages moosicbox_server,moosicbox_auth
+
+    # Incorrect (unless packages are actually named this way)
+    clippier features . --packages server,auth
+    ```
 
 2. **Combine with other filters for precision**: Layer multiple filters for targeted analysis
-   ```bash
-   clippier features . \
-     --packages server,database \
-     --os ubuntu \
-     --features "production" \
-     --skip-features "dev,test"
-   ```
+
+    ```bash
+    clippier features . \
+      --packages server,database \
+      --os ubuntu \
+      --features "production" \
+      --skip-features "dev,test"
+    ```
 
 3. **Use in CI/CD for component testing**: Create separate workflows for different components
-   ```bash
-   # Test only affected services
-   clippier features . \
-     --packages $AFFECTED_SERVICES \
-     --changed-files "$CHANGED_FILES"
-   ```
+
+    ```bash
+    # Test only affected services
+    clippier features . \
+      --packages $AFFECTED_SERVICES \
+      --changed-files "$CHANGED_FILES"
+    ```
 
 4. **Performance optimization for large workspaces**: Process packages in groups
-   ```bash
-   # Process in batches for very large workspaces
-   BATCH1="pkg1,pkg2,pkg3,pkg4,pkg5"
-   BATCH2="pkg6,pkg7,pkg8,pkg9,pkg10"
 
-   clippier features . --packages $BATCH1 --output json > batch1.json
-   clippier features . --packages $BATCH2 --output json > batch2.json
-   ```
+    ```bash
+    # Process in batches for very large workspaces
+    BATCH1="pkg1,pkg2,pkg3,pkg4,pkg5"
+    BATCH2="pkg6,pkg7,pkg8,pkg9,pkg10"
+
+    clippier features . --packages $BATCH1 --output json > batch1.json
+    clippier features . --packages $BATCH2 --output json > batch2.json
+    ```
 
 ### General Workspace Management
 
@@ -1095,26 +1143,31 @@ echo "🎯 Feature validation completed successfully!"
 ### Feature Validation Issues
 
 **"Feature not found" errors:**
+
 - Ensure the feature exists in at least one workspace package
 - Check spelling and case sensitivity in feature names
 - Use auto-detection mode to see which features are available
 
 **Too many false positives:**
+
 - Use `--workspace-only` to exclude external dependencies
 - Specify exact features with `--features` instead of auto-detection
 - Check that external dependencies actually need the features
 
 **Missing optional dependency syntax:**
+
 - Use `dep?/feature` syntax for optional dependencies
 - Ensure the dependency is marked as `optional = true` in Cargo.toml
 - Verify the optional dependency actually has the feature you're propagating
 
 **CI/CD integration issues:**
+
 - Use `--output json` for programmatic output parsing
 - Use `--fail-on-error` to control exit codes in CI pipelines
 - Verify the clippier binary is built and available in the workflow
 
 **Performance issues with large workspaces:**
+
 - Use `--features` to validate specific features instead of auto-detection
 - Consider `--workspace-only` to reduce scope
 - Run validation in parallel with other CI steps
@@ -1122,18 +1175,21 @@ echo "🎯 Feature validation completed successfully!"
 ### Package Selection Issues
 
 **"Package not found" warnings:**
+
 - Verify package names match exactly as in Cargo.toml
 - Check for typos or incorrect prefixes
 - Use `cargo metadata` to list all workspace packages
 - Remember packages are case-sensitive
 
 **Empty results with --packages:**
+
 - Ensure packages exist in the workspace
 - Check that packages have Cargo.toml files
 - Verify workspace members list includes the packages
 - Try without --packages flag to see all available packages
 
 **Combining --packages with --changed-files:**
+
 - Both filters are applied (packages AND changes)
 - May result in empty set if no changes affect selected packages
 - Use one or the other for broader results
@@ -1142,16 +1198,19 @@ echo "🎯 Feature validation completed successfully!"
 ### General Troubleshooting
 
 **Command not found errors:**
+
 - Ensure clippier is built: `cargo build --release --package clippier`
 - Check the binary path: `./target/release/clippier`
 - Verify you're in the workspace root directory
 
 **Git-related errors (external dependency analysis):**
+
 - Ensure git history is available (use `fetch-depth: 0` in GitHub Actions)
 - Check that base and head commits exist
 - Verify you have the `git-diff` feature enabled (default)
 
 **JSON parsing errors:**
+
 - Verify JSON output with `jq` or similar tools
 - Check for proper shell escaping in CI environments
 - Ensure output is captured correctly in scripts

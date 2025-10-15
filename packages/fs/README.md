@@ -18,15 +18,18 @@ The switchy_fs package provides:
 ## Features
 
 ### Operation Modes
+
 - **Synchronous**: Blocking filesystem operations via `sync` module
 - **Asynchronous**: Non-blocking operations via `unsync` module
 
 ### Backend Implementations
+
 - **Standard Library**: `std::fs` based implementation
 - **Tokio**: `tokio::fs` based async implementation
 - **Simulator**: Mock filesystem for testing
 
 ### File Operations
+
 - **File Creation**: Create new files with various options
 - **File Reading**: Read file contents to string
 - **File Writing**: Write data to files
@@ -36,6 +39,7 @@ The switchy_fs package provides:
 - **Path Checking**: Check if files or directories exist
 
 ### Open Options
+
 - **Create**: Create file if it doesn't exist
 - **Append**: Append to existing file content
 - **Read**: Open file for reading
@@ -350,16 +354,19 @@ async fn process_async_file<F: GenericAsyncFile>(mut file: F) -> std::io::Result
 ## Feature Flags
 
 ### Operation Modes
+
 - **`sync`**: Enable synchronous filesystem operations
 - **`async`**: Enable asynchronous filesystem operations
 
 ### Backend Implementations
+
 - **`std`**: Use standard library filesystem implementation
 - **`tokio`**: Use Tokio async filesystem implementation
 - **`simulator`**: Use mock filesystem for testing
 - **`simulator-real-fs`**: Enable real filesystem access within simulator mode using `with_real_fs`
 
 ### Other Features
+
 - **`fail-on-warnings`**: Treat warnings as errors during compilation
 
 **Default features**: `async`, `simulator`, `std`, `sync`, `tokio`

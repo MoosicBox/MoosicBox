@@ -14,12 +14,14 @@ The MoosicBox Stream Utils package provides:
 ## Features
 
 ### Core Components
+
 - **ByteWriter**: Write bytes to multiple stream receivers
 - **ByteStream**: Async stream that receives bytes from a ByteWriter
 - **TypedWriter<T>**: Generic writer for any cloneable type T
 - **TypedStream<T>**: Generic stream for receiving typed data
 
 ### Optional Features
+
 - **Stalled Monitor**: Monitor streams for stalled reads (requires `stalled-monitor` feature)
 - **Remote ByteStream**: Support for remote byte streaming (requires `remote-bytestream` feature)
 

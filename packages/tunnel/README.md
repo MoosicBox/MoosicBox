@@ -153,6 +153,7 @@ pub struct TunnelResponse {
 ### TunnelStream
 
 A `Stream` implementation that:
+
 - Receives `TunnelResponse` packets via an unbounded channel
 - Automatically reorders out-of-sequence packets
 - Tracks metrics (packet count, byte count, timing)
@@ -185,24 +186,28 @@ moosicbox_tunnel = { version = "0.1.4", default-features = false }
 ### TryFromBytesError
 
 Errors when converting bytes to `TunnelResponse`:
+
 - `TryFromSlice`: Invalid byte slice length
 - `Serde`: JSON deserialization error
 
 ### Base64DecodeError
 
 Errors when decoding base64-encoded tunnel responses:
+
 - `InvalidContent`: Malformed base64 string
 - `Decode`: Base64 decoding error
 
 ### TunnelStreamError
 
 Errors during stream processing:
+
 - `Aborted`: Stream was cancelled
 - `EndOfStream`: Stream ended unexpectedly
 
 ## Dependencies
 
 Core dependencies (from `Cargo.toml`):
+
 - `bytes` - Efficient byte buffer handling
 - `futures-util` - Stream trait implementation
 - `serde` / `serde_json` - Serialization support

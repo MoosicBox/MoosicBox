@@ -106,6 +106,7 @@ The package provides request extractors for Actix Web:
 - **Query Parameter Support**: Reads from `moosicboxProfile` query parameter
 
 Profile names are extracted in this order of precedence:
+
 1. Query parameter `moosicboxProfile`
 2. HTTP header `moosicbox-profile`
 
@@ -118,5 +119,6 @@ Profile names are extracted in this order of precedence:
 ## Thread Safety
 
 All operations are thread-safe:
+
 - Profile storage uses `std::sync::RwLock` for concurrent access
 - Event listeners (with `events` feature) use `tokio::sync::RwLock` for async-safe access

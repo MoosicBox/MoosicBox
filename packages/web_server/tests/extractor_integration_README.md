@@ -19,14 +19,14 @@ This test suite validates the dual-mode extractor system that allows the same ha
 
 ### Test Coverage
 
-| Extractor Type | Actix Tests | Simulator Tests | Edge Cases | Performance |
-|----------------|-------------|-----------------|------------|-------------|
-| **Query**      | ✅          | ✅              | ✅         | ✅          |
-| **Json**       | ✅          | ✅              | ✅         | ✅          |
-| **Path**       | ✅          | ✅              | ✅         | -           |
-| **Header**     | ✅          | ✅              | ✅         | ✅          |
-| **State**      | ✅          | ✅              | -          | -           |
-| **Combinations** | ✅        | ✅              | -          | -           |
+| Extractor Type   | Actix Tests | Simulator Tests | Edge Cases | Performance |
+| ---------------- | ----------- | --------------- | ---------- | ----------- |
+| **Query**        | ✅          | ✅              | ✅         | ✅          |
+| **Json**         | ✅          | ✅              | ✅         | ✅          |
+| **Path**         | ✅          | ✅              | ✅         | -           |
+| **Header**       | ✅          | ✅              | ✅         | ✅          |
+| **State**        | ✅          | ✅              | -          | -           |
+| **Combinations** | ✅          | ✅              | -          | -           |
 
 ## Running Tests
 
@@ -76,16 +76,19 @@ cargo test -p moosicbox_web_server --features actix test_state_extractor_compila
 ## Test Results
 
 ### Actix Backend Tests
+
 - **7 tests** covering all extractor types
 - **Compilation focus**: Validates synchronous extraction with Send bounds
 - **All tests passing** ✅
 
 ### Simulator Backend Tests
+
 - **8 tests** covering all extractor types + StateContainer integration
 - **Compilation focus**: Validates asynchronous extraction
 - **All tests passing** ✅
 
 ### Total Test Coverage
+
 - **15 compilation tests** across both backends
 - **4 consistency tests** ensuring identical behavior
 - **8 edge case tests** for error conditions
@@ -167,11 +170,13 @@ fn error_handler(_query: Query<String>) -> Result<String, Error> {
 ## Backend-Specific Features
 
 ### Actix Backend
+
 - **Synchronous extraction**: No async/await required
 - **Send bounds**: All extractors implement Send
 - **Direct integration**: Works with existing actix-web handlers
 
 ### Simulator Backend
+
 - **Asynchronous extraction**: Uses async/await
 - **StateContainer**: Enhanced state management
 - **Simulation data**: Pre-loaded request data for testing

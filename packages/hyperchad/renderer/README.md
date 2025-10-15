@@ -16,24 +16,28 @@ The HyperChad Renderer package provides:
 ## Features
 
 ### Core Abstractions
+
 - **Renderer Trait**: Main rendering interface for backends
 - **RenderRunner**: Application execution and lifecycle management
 - **ToRenderRunner**: Conversion trait for renderer instances
 - **HtmlTagRenderer**: HTML-specific rendering capabilities
 
 ### Content System
+
 - **View**: Full page view with immediate and future content
 - **PartialView**: Targeted partial content updates
 - **Content Enum**: Unified content representation (View, PartialView, Raw)
 - **JSON Support**: Optional JSON content handling (with `json` feature)
 
 ### Event Handling
+
 - **RendererEvent**: Event types for renderer communication
 - **Custom Events**: User-defined event processing
 - **Canvas Events**: Optional canvas update events
 - **Async Events**: Async event emission and handling
 
 ### HTML Rendering
+
 - **Tag Generation**: HTML element and attribute generation
 - **CSS Media Queries**: Responsive CSS generation
 - **Root HTML**: Complete HTML document generation
@@ -268,15 +272,18 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 ## Content Types
 
 ### View
+
 - **immediate**: Content available immediately
 - **future**: Content that will be available asynchronously
 - **Container**: HyperChad container structure
 
 ### PartialView
+
 - **target**: CSS selector for target element
 - **container**: Content to insert/replace
 
 ### Content Enum
+
 - **View**: Full page content
 - **PartialView**: Partial content update
 - **Raw**: Raw data with content type
@@ -285,20 +292,25 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 ## Traits
 
 ### Renderer
+
 Core rendering interface with initialization, rendering, and event handling.
 
 ### RenderRunner
+
 Application execution interface for running renderer instances.
 
 ### ToRenderRunner
+
 Conversion trait for creating runner instances from renderers.
 
 ### HtmlTagRenderer
+
 HTML-specific rendering with CSS generation and document structure.
 
 ## Feature Flags
 
 ### Default Features
+
 - **`assets`**: Static asset management
 - **`canvas`**: Canvas rendering capabilities
 - **`html`**: HTML rendering support
@@ -307,6 +319,7 @@ HTML-specific rendering with CSS generation and document structure.
 - **`viewport-retained`**: Retained mode viewport rendering
 
 ### Optional Features
+
 - **`json`**: JSON content support
 - **`logic`**: Logic components support
 - **`serde`**: Serialization/deserialization support
@@ -319,6 +332,7 @@ HTML-specific rendering with CSS generation and document structure.
 ## Dependencies
 
 Core dependencies:
+
 - **hyperchad_transformer**: UI transformation and container system (with `html` feature)
 - **hyperchad_color**: Color handling and conversion
 - **switchy_async**: Async runtime abstraction (with `rt-multi-thread` and `tokio` features)
@@ -327,12 +341,14 @@ Core dependencies:
 - **log**: Logging support
 
 Optional dependencies:
+
 - **serde**: Serialization framework (with `serde` feature)
 - **serde_json**: JSON serialization (with `json` feature)
 
 ## Integration
 
 This package is designed for:
+
 - **Rendering Backends**: Implementation base for different renderers
 - **UI Frameworks**: Core rendering abstractions
 - **Web Applications**: HTML and CSS generation

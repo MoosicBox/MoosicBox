@@ -15,18 +15,21 @@ The MoosicBox Async Cargo package provides:
 ## Features
 
 ### Async Function Analysis
+
 - **Function Detection**: Identifies async functions and methods
 - **Attribute Checking**: Verifies presence of `#[inject_yields]` attribute
 - **Impl Block Support**: Analyzes async methods in impl blocks
 - **Module Support**: Handles module-level attribute inheritance
 
 ### Code Coverage
+
 - **Workspace Scanning**: Recursively scans all Rust source files
 - **File Filtering**: Processes only `.rs` files
 - **Syntax Parsing**: Robust parsing with error handling
 - **Path Resolution**: Handles complex file structures
 
 ### Reporting
+
 - **Warning Messages**: Clear warnings for missing attributes
 - **File Location**: Reports exact file and function names
 - **Exit Codes**: Returns appropriate exit codes for CI/CD
@@ -74,20 +77,24 @@ warning: src/handlers.rs: async method `handle_request` in impl is missing #[inj
 # GitHub Actions example
 - name: Check async functions
   run: |
-    cargo install --path packages/async/cargo
-    switchy-async-cargo
+      cargo install --path packages/async/cargo
+      switchy-async-cargo
 ```
 
 ## Attribute Rules
 
 ### Required Attributes
+
 Functions and methods that need `#[inject_yields]`:
+
 - **Async Functions**: All `async fn` declarations
 - **Async Methods**: All `async fn` in impl blocks
 - **Public APIs**: Especially important for public async functions
 
 ### Exemptions
+
 Attributes that exempt from checking:
+
 - **Function Level**: `#[inject_yields]` on the function
 - **Impl Level**: `#[inject_yields]` on the impl block
 - **Module Level**: `inject_yields_mod!` wrapping the module
@@ -135,6 +142,7 @@ inject_yields_mod! {
 ## Error Handling
 
 The tool handles various error conditions gracefully:
+
 - **Parse Errors**: Continues processing other files if one file fails to parse
 - **File Access**: Handles missing or inaccessible files
 - **Syntax Errors**: Provides empty AST for unparseable files
@@ -155,6 +163,7 @@ The tool handles various error conditions gracefully:
 ## Integration
 
 This tool is designed for:
+
 - **Development**: Local development workflow
 - **CI/CD**: Continuous integration checks
 - **Code Quality**: Ensuring consistent async function attributes
@@ -164,6 +173,7 @@ This tool is designed for:
 ## Why inject_yields?
 
 The `#[inject_yields]` attribute is important for:
+
 - **Simulation Testing**: Enables deterministic async testing
 - **Yield Points**: Provides controlled execution points
 - **Debugging**: Improves debugging capabilities

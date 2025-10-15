@@ -14,12 +14,14 @@ The HyperChad JavaScript Bundler package provides:
 ## Features
 
 ### Bundler Support
+
 - **ESBuild**: Fast JavaScript bundler and minifier via external esbuild binary
 - **SWC**: Rust-based JavaScript/TypeScript compiler with full bundling implementation
 - **Pluggable**: Choose bundler based on requirements via feature flags
 - **Performance**: High-performance bundling options
 
 ### Node.js Integration
+
 - **Command Execution**: Node.js and npm package manager command execution
 - **Multi-toolchain Support**: Supports npm, pnpm, and bun (feature-gated)
 - **Process Management**: Automatic binary selection and process handling
@@ -102,6 +104,7 @@ swc::bundle(
 ```
 
 The SWC bundler supports:
+
 - TypeScript and JavaScript files
 - Minification and code optimization
 - Tree shaking and dead code elimination
@@ -133,10 +136,12 @@ run_command(
 ## Feature Flags
 
 ### Bundlers
+
 - **`esbuild`**: Enable ESBuild bundler support (requires `node` feature)
 - **`swc`**: Enable SWC compiler support
 
 ### Package Managers
+
 - **`node`**: Base feature for Node.js command execution
 - **`npm`**: Enable npm package manager support (enables `node`)
 - **`pnpm`**: Enable pnpm package manager support (enables `node`)
@@ -144,46 +149,53 @@ run_command(
 - **`all-web-toolchains`**: Enable all package managers (npm, pnpm, bun)
 
 ### Other
+
 - **`fail-on-warnings`**: Treat warnings as errors
 - **`default`**: Includes `all-web-toolchains`, `esbuild`, and `swc`
 
 ## Bundler Comparison
 
 ### ESBuild
+
 - **Implementation**: Executes external esbuild binary via npm
 - **Speed**: Extremely fast bundling and minification
 - **Dependencies**: Requires npm/pnpm/bun installation
 - **Features**: Automatic minification and bundling via command-line flags
 
 ### SWC
+
 - **Implementation**: Fully integrated Rust-based bundler
 - **Speed**: Fast Rust-native bundling
 - **TypeScript**: Native TypeScript stripping and compilation
 - **Features**:
-  - Configurable minification with compress and mangle options
-  - Module resolution via Node.js resolver with caching
-  - Dead code elimination (DCE)
-  - ES module output
-  - Import meta property handling
+    - Configurable minification with compress and mangle options
+    - Module resolution via Node.js resolver with caching
+    - Dead code elimination (DCE)
+    - ES module output
+    - Import meta property handling
 
 ## Dependencies
 
 Core dependencies (always included):
+
 - **log**: Logging facade
 - **switchy_env**: Environment variable utilities
 
 Feature-gated dependencies:
-- **SWC feature**: Includes swc_bundler, swc_common, swc_ecma_* crates, and anyhow
+
+- **SWC feature**: Includes swc*bundler, swc_common, swc_ecma*\* crates, and anyhow
 - **ESBuild feature**: No Rust dependencies (uses external binary)
 - **Node feature**: No additional dependencies (command execution only)
 
 External requirements:
+
 - **ESBuild**: Requires npm/pnpm/bun and esbuild package installation
 - **SWC**: No external requirements (fully Rust-based)
 
 ## Integration
 
 This package is designed for:
+
 - **Build Systems**: JavaScript build pipeline integration
 - **Development Tools**: Development server bundling
 - **Production Builds**: Optimized production bundling

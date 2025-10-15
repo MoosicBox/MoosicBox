@@ -6,10 +6,10 @@ This crate provides the core data structures for workflows, jobs, steps, and exp
 
 ## Features
 
-* Complete AST for generic workflow definitions
-* GitHub Actions compatible expression language
-* Serde serialization/deserialization support
-* BTreeMap collections for deterministic ordering
+- Complete AST for generic workflow definitions
+- GitHub Actions compatible expression language
+- Serde serialization/deserialization support
+- BTreeMap collections for deterministic ordering
 
 ## Usage
 

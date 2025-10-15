@@ -17,12 +17,14 @@ The HyperChad HTML Lambda Renderer provides:
 ## Features
 
 ### Lambda Runtime Support
+
 - **Lambda HTTP**: Integration with lambda_http crate
 - **Event Processing**: Handle API Gateway and ALB events
 - **Response Generation**: Generate proper Lambda HTTP responses
 - **Error Handling**: Lambda-compatible error responses
 
 ### Response Features
+
 - **HTML Responses**: Server-rendered HTML pages
 - **JSON Responses**: API responses in JSON format (with `json` feature)
 - **Raw Responses**: Binary content with custom content-type
@@ -30,6 +32,7 @@ The HyperChad HTML Lambda Renderer provides:
 - **Headers**: Custom header support
 
 ### Performance Optimizations
+
 - **Cold Start**: Minimal initialization overhead
 - **Memory Efficiency**: Low memory footprint
 - **Compression**: Automatic gzip compression for reduced response sizes
@@ -412,29 +415,29 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Resources:
-  HyperChadFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: target/lambda/hyperchad-lambda/
-      Handler: provided
-      Runtime: provided.al2
-      Architectures:
-        - x86_64
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        Root:
-          Type: Api
-          Properties:
-            Path: /
-            Method: ANY
-      Environment:
-        Variables:
-          RUST_LOG: info
-          ENVIRONMENT: production
+    HyperChadFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: target/lambda/hyperchad-lambda/
+            Handler: provided
+            Runtime: provided.al2
+            Architectures:
+                - x86_64
+            Events:
+                Api:
+                    Type: Api
+                    Properties:
+                        Path: /{proxy+}
+                        Method: ANY
+                Root:
+                    Type: Api
+                    Properties:
+                        Path: /
+                        Method: ANY
+            Environment:
+                Variables:
+                    RUST_LOG: info
+                    ENVIRONMENT: production
 ```
 
 ### Build Script
@@ -462,10 +465,12 @@ sam deploy --guided
 ## Performance Optimizations
 
 ### Cold Start Reduction
+
 - **Minimal Dependencies**: Only essential dependencies included
 - **Binary Size**: Optimized for fast cold starts
 
 ### Memory Efficiency
+
 - **Compression**: Automatic gzip compression for all responses
 - **Binary Responses**: Efficient binary body handling
 
@@ -482,6 +487,7 @@ sam deploy --guided
 ## Integration
 
 This renderer is designed for:
+
 - **Serverless Web Apps**: Full serverless web applications
 - **API Services**: REST and JSON APIs
 - **Server-Rendered Pages**: Dynamic HTML page generation

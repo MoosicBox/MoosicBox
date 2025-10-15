@@ -165,21 +165,27 @@ fn main() {
 ## Assertion Types
 
 ### `assert!(condition [, message])`
+
 Exits the process with colored output when condition fails and assertions are enabled.
 
 ### `assert_or_err!(condition, error [, message])`
+
 Returns the error when condition fails, or exits with assertion if `ENABLE_ASSERT=1`.
 
 ### `assert_or_error!(condition, message)`
+
 Logs an error when condition fails, or exits with assertion if `ENABLE_ASSERT=1`.
 
 ### `assert_or_panic!(condition [, message])`
+
 Panics with colored output when condition fails, or exits with assertion if `ENABLE_ASSERT=1`.
 
 ### `assert_or_unimplemented!(condition [, message])`
+
 Calls `unimplemented!()` when condition fails, or exits with assertion if `ENABLE_ASSERT=1`.
 
 ### `die!([message])`
+
 Unconditionally exits with colored output when assertions are enabled.
 
 ## Additional Macros
@@ -200,6 +206,7 @@ The library also provides additional utility macros for specialized use cases:
 ## Output Format
 
 When assertions fail, the output includes:
+
 - **Red background** with **white text** for visibility
 - **Bold** and **underlined** formatting
 - **Full stack trace** showing the failure location

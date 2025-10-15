@@ -16,6 +16,7 @@ The MoosicBox Async Macros package provides:
 ## Features
 
 ### Yield Injection
+
 - **Automatic Yields**: Insert yield points after every `.await`
 - **Deterministic Testing**: Enable predictable async execution in tests
 - **Simulation Support**: Required for simulation-based testing
@@ -24,17 +25,20 @@ The MoosicBox Async Macros package provides:
 ### Macro Types
 
 #### Yield Injection Macros
+
 - **`#[inject_yields]`**: Attribute macro for individual functions and impl blocks
 - **`inject_yields_mod!`**: Procedural macro for entire modules
 - **Conditional**: Only active with `simulator` feature flag
 
 #### Test Macros
+
 - **`#[test]`**: External test macro for `switchy_async` tests (simulator feature only)
 - **`#[internal_test]`**: Internal test macro using crate path (simulator feature only)
 - **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
 - **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper (always available)
 
 ### AST Transformation
+
 - **Await Wrapping**: Wraps `.await` expressions with yield points
 - **Function Support**: Handles async functions and methods
 - **Module Support**: Process entire modules recursively
@@ -166,11 +170,13 @@ async fn my_function() {
 ### Await Expression Transformation
 
 **Before:**
+
 ```rust
 let result = async_call().await;
 ```
 
 **After (with simulator feature):**
+
 ```rust
 let result = {
     let __yield_res = async_call().await;
@@ -180,12 +186,14 @@ let result = {
 ```
 
 ### Supported Constructs
+
 - **Async Functions**: `async fn` declarations
 - **Async Methods**: Methods in impl blocks
 - **Nested Modules**: Recursive module processing
 - **Complex Expressions**: Handles complex await expressions
 
 ### Unsupported/Unchanged
+
 - **Sync Functions**: Non-async functions remain unchanged
 - **Await in Macros**: Await expressions inside macro calls
 - **Non-Simulator**: No transformation without simulator feature
@@ -193,6 +201,7 @@ let result = {
 ## Use Cases
 
 ### Simulation Testing
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -208,6 +217,7 @@ mod tests {
 ```
 
 ### Library Development
+
 ```rust
 // Library functions that need deterministic testing
 #[inject_yields]
@@ -233,6 +243,7 @@ pub async fn library_function() -> Result<Data, Error> {
 ## Integration
 
 This package is designed for:
+
 - **Testing**: Deterministic async testing with simulation
 - **Development**: Consistent async behavior during development
 - **Library Development**: Libraries that need predictable async execution

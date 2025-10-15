@@ -15,6 +15,7 @@ The MoosicBox Tunnel Server provides:
 ## Features
 
 ### Core Functionality
+
 - **WebSocket Server**: Handles WebSocket connections for tunneling
 - **Authentication**: Basic client registration and token-based auth
 - **Database Storage**: Client data stored in PostgreSQL
@@ -22,6 +23,7 @@ The MoosicBox Tunnel Server provides:
 - **CORS Support**: Cross-origin resource sharing enabled
 
 ### Available Endpoints
+
 - **Health Check**: `/health` endpoint for service monitoring
 - **WebSocket**: `/ws` endpoint for tunnel connections
 - **Client Registration**: Authentication and client management

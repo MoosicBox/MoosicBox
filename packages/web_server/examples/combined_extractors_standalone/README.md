@@ -14,11 +14,13 @@ This example demonstrates using multiple extractors together in a single handler
 ## Running the Example
 
 ### With Simulator (default)
+
 ```bash
 cargo run -p combined_extractors_standalone_example
 ```
 
 ### With Actix
+
 ```bash
 cargo run -p combined_extractors_standalone_example --features actix --no-default-features
 ```
@@ -33,24 +35,27 @@ cargo run -p combined_extractors_standalone_example --features actix --no-defaul
 ## Data Structures
 
 ### SearchQuery (for /search)
+
 ```json
 {
-  "q": "string (required)",
-  "limit": "number (optional)",
-  "offset": "number (optional)"
+    "q": "string (required)",
+    "limit": "number (optional)",
+    "offset": "number (optional)"
 }
 ```
 
 ### UserUpdate (for /update)
+
 ```json
 {
-  "name": "string (optional)",
-  "email": "string (optional)",
-  "bio": "string (optional)"
+    "name": "string (optional)",
+    "email": "string (optional)",
+    "bio": "string (optional)"
 }
 ```
 
 ### ApiResponse (returned by all handlers)
+
 ```json
 {
   "success": boolean,
@@ -62,12 +67,14 @@ cargo run -p combined_extractors_standalone_example --features actix --no-defaul
 ## Example Requests (if using Actix)
 
 ### Search Handler (Query + RequestData)
+
 ```bash
 curl "http://localhost:8080/search?q=rust+web+server&limit=20&offset=10" \
   -H "User-Agent: MyApp/1.0"
 ```
 
 ### Update Handler (JSON + RequestData)
+
 ```bash
 curl -X PUT http://localhost:8080/update \
   -H "Content-Type: application/json" \
@@ -76,12 +83,14 @@ curl -X PUT http://localhost:8080/update \
 ```
 
 ### JSON Info Handler (RequestData with JSON response)
+
 ```bash
 curl "http://localhost:8080/json-info?debug=true" \
   -H "User-Agent: MyApp/1.0"
 ```
 
 ### Double Data Handler (RequestData + RequestData)
+
 ```bash
 curl "http://localhost:8080/double?param1=value1&param2=value2" \
   -H "User-Agent: MyApp/1.0"
@@ -145,6 +154,7 @@ When run with the simulator, it will automatically test all combinations:
 ## Common Patterns
 
 ### Search with Metadata
+
 ```rust
 async fn search_handler(
     query: Query<SearchQuery>,
@@ -157,6 +167,7 @@ async fn search_handler(
 ```
 
 ### Update with Audit Trail
+
 ```rust
 async fn update_handler(
     json: Json<UpdateData>,
@@ -169,6 +180,7 @@ async fn update_handler(
 ```
 
 ### Pagination with Context
+
 ```rust
 async fn list_handler(
     query: Query<PaginationQuery>,
@@ -183,6 +195,7 @@ async fn list_handler(
 ## Use Cases
 
 This example is perfect for:
+
 - Building comprehensive REST APIs
 - Learning advanced extractor patterns
 - Understanding request data correlation

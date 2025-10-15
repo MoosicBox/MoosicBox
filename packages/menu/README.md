@@ -102,10 +102,10 @@ HttpServer::new(|| {
 
 - **`models`** - Re-exported menu data models from `moosicbox_menu_models`
 - **`library`** - Library-specific menu functionality
-  - `library::artists` - Functions for fetching, filtering, and sorting artists
-  - `library::albums` - Functions for managing albums (get, add, remove, refavorite)
+    - `library::artists` - Functions for fetching, filtering, and sorting artists
+    - `library::albums` - Functions for managing albums (get, add, remove, refavorite)
 - **`api`** - Optional REST API endpoints (requires `api` feature)
-  - Provides endpoints for artists, albums, tracks, and album management operations
+    - Provides endpoints for artists, albums, tracks, and album management operations
 
 ## Available Features
 

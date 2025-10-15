@@ -248,24 +248,28 @@ cargo test --features "simulator"
 ### Common Issues
 
 **No Devices Found**
+
 - Check network connectivity and firewall settings
 - Ensure devices are on the same network subnet
 - Verify multicast is enabled on network interface
 - Try increasing discovery timeout
 
 **Connection Refused**
+
 - Verify device URLs are accessible
 - Check if devices require authentication
 - Ensure correct protocol (HTTP vs HTTPS)
 - Validate device descriptions and service URLs
 
 **Playback Issues**
+
 - Verify media format compatibility
 - Check network bandwidth and stability
 - Ensure media URLs are accessible from renderer
 - Validate media metadata and MIME types
 
 **Event Subscription Failures**
+
 - Check if device supports event subscriptions
 - Verify callback URL is accessible from device
 - Ensure subscription timeout is reasonable

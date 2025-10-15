@@ -13,11 +13,13 @@ This example demonstrates query parameter extraction and parsing with serde dese
 ## Running the Example
 
 ### With Simulator (default)
+
 ```bash
 cargo run -p query_extractor_standalone_example
 ```
 
 ### With Actix
+
 ```bash
 cargo run -p query_extractor_standalone_example --features actix --no-default-features
 ```
@@ -34,10 +36,12 @@ cargo run -p query_extractor_standalone_example --features actix --no-default-fe
 ## Query Parameter Structures
 
 ### SimpleQuery (for /simple)
+
 - `name`: string (required)
 - `age`: number (required)
 
 ### OptionalQuery (for /optional)
+
 - `search`: string (required)
 - `limit`: number (optional)
 - `offset`: number (optional)
@@ -48,11 +52,13 @@ cargo run -p query_extractor_standalone_example --features actix --no-default-fe
 **Note:** This example demonstrates query extraction but does not include a running HTTP server. The requests below show how these handlers would be used if integrated into an actual Actix Web or similar HTTP server.
 
 ### Simple Query Handler
+
 ```bash
 curl "http://localhost:8080/simple?name=Alice&age=30"
 ```
 
 ### Optional Query Handler
+
 ```bash
 # With all parameters
 curl "http://localhost:8080/optional?search=rust&limit=10&offset=20&sort=date"
@@ -65,11 +71,13 @@ curl "http://localhost:8080/optional?search=example&limit=5"
 ```
 
 ### Combined Handler
+
 ```bash
 curl "http://localhost:8080/combined?name=Bob&age=25"
 ```
 
 ### Error Handler (displays raw query string)
+
 ```bash
 curl "http://localhost:8080/error?any=parameters&you=want"
 ```
@@ -127,6 +135,7 @@ When run with the simulator, it will automatically test all endpoints:
 ## Common Query Parameter Patterns
 
 ### Pagination
+
 ```rust
 #[derive(Deserialize)]
 struct PaginationQuery {
@@ -136,6 +145,7 @@ struct PaginationQuery {
 ```
 
 ### Filtering
+
 ```rust
 #[derive(Deserialize)]
 struct FilterQuery {
@@ -147,6 +157,7 @@ struct FilterQuery {
 ```
 
 ### Sorting
+
 ```rust
 #[derive(Deserialize)]
 struct SortQuery {
@@ -158,6 +169,7 @@ struct SortQuery {
 ## Use Cases
 
 This example is perfect for:
+
 - REST APIs with query-based filtering
 - Search endpoints with parameters
 - Pagination and sorting

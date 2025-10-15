@@ -17,6 +17,7 @@ The HyperChad HTML Renderer provides:
 ## Features
 
 ### HTML Generation
+
 - **Complete HTML Output**: Full HTML documents with DOCTYPE, head, and body
 - **CSS Styling**: Inline styles and CSS classes generation
 - **Responsive CSS**: Media queries for responsive design
@@ -24,12 +25,14 @@ The HyperChad HTML Renderer provides:
 - **Semantic HTML**: Proper semantic HTML element generation
 
 ### Framework Support
+
 - **Actix Web**: Full integration with Actix Web framework
 - **AWS Lambda**: Serverless deployment support
 - **Generic HTTP**: Works with any HTTP server implementation
 - **Static Assets**: File serving and asset management
 
 ### Rendering Modes
+
 - **Full Page Rendering**: Complete HTML documents
 - **Partial Rendering**: HTMX-compatible partial updates
 - **Component Rendering**: Individual component HTML generation
@@ -235,6 +238,7 @@ let renderer = router_to_actix(tag_renderer, router)
 ### Partial Updates
 
 The HTML renderer supports partial page updates through the `PartialView` type. When a route returns a `PartialView`, the renderer:
+
 - Generates only the updated HTML content
 - Sets the `v-fragment` header with the target element selector
 - Works seamlessly with HTMX and similar frameworks
@@ -272,12 +276,14 @@ async fn update_handler() -> Content {
 ## HTML Output Features
 
 ### CSS Generation
+
 - **Inline Styles**: Component styles rendered as inline CSS attributes
 - **CSS Classes**: Automatic CSS class application from HyperChad components
 - **Media Queries**: Responsive breakpoint CSS via `@media` queries
 - **Flexbox & Grid**: CSS flexbox and grid layout generation
 
 ### SEO Optimization
+
 - **Semantic HTML**: Proper HTML5 semantic elements (div, aside, main, header, footer, section, etc.)
 - **Meta Tags**: Title, description, and viewport meta tags
 - **Server-side Rendering**: Full HTML documents for search engine crawlers
@@ -300,6 +306,7 @@ async fn update_handler() -> Content {
 ## Integration
 
 This renderer is designed for:
+
 - **Web Applications**: Server-side rendered web apps with Actix Web
 - **Serverless**: AWS Lambda deployments
 - **Microservices**: Lightweight HTML rendering services
@@ -308,6 +315,7 @@ This renderer is designed for:
 ## Architecture
 
 The package provides:
+
 1. **`DefaultHtmlTagRenderer`**: Core HTML tag rendering implementation
 2. **`HtmlRenderer<T>`**: Generic renderer wrapper for different app types
 3. **`router_to_actix()`**: Helper to create Actix Web-integrated renderers

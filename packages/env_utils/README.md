@@ -142,21 +142,25 @@ fn main() {
 ### Compile-Time Macros
 
 **Required Value Extraction:**
+
 - `env_usize!(name)` - Extract required usize at compile time (panics if not set)
 
 **Default Value Extraction (unsigned):**
+
 - `default_env_usize!(name, default)` - Extract usize with default at compile time
 - `default_env_u64!(name, default)` - Extract u64 with default at compile time
 - `default_env_u32!(name, default)` - Extract u32 with default at compile time
 - `default_env_u16!(name, default)` - Extract u16 with default at compile time
 
 **Optional Value Extraction (unsigned):**
+
 - `option_env_usize!(name)` - Extract Option\<usize\> at compile time
 - `option_env_u64!(name)` - Extract Option\<u64\> at compile time
 - `option_env_u32!(name)` - Extract Option\<u32\> at compile time
 - `option_env_u16!(name)` - Extract Option\<u16\> at compile time
 
 **Optional Value Extraction (signed):**
+
 - `option_env_isize!(name)` - Extract Option\<isize\> at compile time
 - `option_env_i64!(name)` - Extract Option\<i64\> at compile time
 - `option_env_i32!(name)` - Extract Option\<i32\> at compile time
@@ -164,6 +168,7 @@ fn main() {
 - `option_env_i8!(name)` - Extract Option\<i8\> at compile time
 
 **String Values:**
+
 - `default_env!(name, default)` - Get string environment variable with default at compile time
 
 ### Const Functions
@@ -178,7 +183,7 @@ The library uses compile-time macros that panic on errors rather than returning 
 - **`env_usize!`** - Panics if the environment variable is not set at compile time
 - **`option_env_*!` macros** - Panic if the environment variable is set but contains an invalid value
 - **`ParseIntError`** - Error type for const parsing functions (`parse_usize`, `parse_isize`)
-  - `InvalidDigit` - Invalid digit encountered during parsing
+    - `InvalidDigit` - Invalid digit encountered during parsing
 
 Note: Because these are compile-time macros, errors are caught during compilation rather than at runtime.
 

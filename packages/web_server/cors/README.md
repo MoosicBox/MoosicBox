@@ -14,6 +14,7 @@ The MoosicBox Web Server CORS package provides:
 ## Features
 
 ### CORS Configuration
+
 - **Origins**: Configure allowed origins with wildcard or specific domains
 - **Methods**: Specify allowed HTTP methods
 - **Headers**: Control allowed and exposed headers
@@ -21,11 +22,13 @@ The MoosicBox Web Server CORS package provides:
 - **Max Age**: Set preflight cache duration
 
 ### AllOrSome Pattern
+
 - **Flexible Permissions**: Allow all or restrict to specific values
 - **Type Safety**: Generic pattern for different permission types
 - **Default Behavior**: Sensible defaults for security
 
 ### Builder API
+
 - **Fluent Interface**: Chain configuration methods
 - **Incremental Building**: Add permissions incrementally
 - **Method Chaining**: Build complex CORS policies easily
@@ -139,6 +142,7 @@ println!("All headers allowed: {}", cors.allowed_headers.is_all());
 ## CORS Structure
 
 ### Cors Configuration
+
 - **allowed_origins**: Origins that can make requests
 - **allowed_methods**: HTTP methods permitted
 - **allowed_headers**: Request headers allowed
@@ -147,6 +151,7 @@ println!("All headers allowed: {}", cors.allowed_headers.is_all());
 - **max_age**: Preflight cache duration in seconds
 
 ### AllOrSome<T>
+
 - **All**: Allow everything (equivalent to `*`)
 - **Some(T)**: Allow only specific values
 - **Type Default**: `AllOrSome<T>` type defaults to `All`, but the `Cors` struct explicitly uses `Some(vec![])` for security
@@ -154,11 +159,13 @@ println!("All headers allowed: {}", cors.allowed_headers.is_all());
 ## Security Considerations
 
 ### Default Behavior
+
 - **Restrictive Defaults**: Default configuration is restrictive
 - **Explicit Permissions**: Require explicit permission grants
 - **Credential Handling**: Credentials disabled by default
 
 ### Best Practices
+
 - **Specific Origins**: Avoid `allow_any_origin()` in production
 - **Minimal Headers**: Only allow necessary headers
 - **Credential Security**: Be cautious with credential support
@@ -170,6 +177,7 @@ println!("All headers allowed: {}", cors.allowed_headers.is_all());
 ## Integration
 
 This package is designed for:
+
 - **Web Server Middleware**: CORS middleware implementation
 - **API Security**: Cross-origin request policy enforcement
 - **Development Tools**: Flexible CORS configuration for development

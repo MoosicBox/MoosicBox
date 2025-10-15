@@ -16,6 +16,7 @@ The Telemetry package provides:
 ## Features
 
 ### Tracing System
+
 - **OTLP Export**: Send traces to OpenTelemetry collectors
 - **Trace Context Propagation**: W3C Trace Context standard support
 - **Batch Export**: Efficient batched span transmission
@@ -23,11 +24,13 @@ The Telemetry package provides:
 - **Instrumentation Scope**: Proper scope management for spans
 
 ### HTTP Metrics
+
 - **Request Metrics**: HTTP request/response monitoring
 - **Actix Web Middleware**: Drop-in middleware for request tracing
 - **Custom Handlers**: Pluggable metrics collection handlers
 
 ### Simulator Support
+
 - **Testing Mode**: Simulate telemetry without external dependencies
 - **Mock Handlers**: Test HTTP metrics collection
 - **Development Friendly**: Easy local development setup
@@ -207,9 +210,11 @@ let tracer_layer = init_tracer("test-service")?;
 ## Configuration
 
 ### Environment Variables
+
 - **`OTEL_ENDPOINT`**: OpenTelemetry collector endpoint (default: `http://127.0.0.1:4317`)
 
 ### Default Configuration
+
 - **Protocol**: OTLP over gRPC (using Tonic)
 - **Propagator**: W3C Trace Context
 - **Export**: Batch exporter for efficiency

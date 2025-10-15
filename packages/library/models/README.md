@@ -17,11 +17,13 @@ The MoosicBox Library Models package provides:
 ### Core Models
 
 #### LibraryArtist
+
 - **Basic Info**: ID, title, cover artwork
 - **API Sources**: Integration with multiple music services via `ApiSources`
 - **Conversion**: Converts to generic `Artist` model via `From` trait
 
 #### LibraryAlbum
+
 - **Album Data**: Title, artist, type, release dates (released and added)
 - **Artwork**: Cover art path and blur effect flag
 - **Versions**: Multiple quality versions via `AlbumVersionQuality` (Hi-Res, CD, etc.)
@@ -30,6 +32,7 @@ The MoosicBox Library Models package provides:
 - **Conversion**: Converts to/from generic `Album` model via `TryFrom` trait
 
 #### LibraryTrack
+
 - **Track Info**: Number, title, duration, format details
 - **Audio Metadata**: Bitrate, sample rate, channels, bit depth
 - **File Info**: Local file path and byte size
@@ -39,6 +42,7 @@ The MoosicBox Library Models package provides:
 - **Helper Methods**: `directory()` to extract parent directory from file path
 
 #### LibraryAlbumType
+
 - **Album Categories**: `Lp`, `Live`, `Compilations`, `EpsAndSingles`, `Other`
 - **Conversion**: Maps to/from generic `AlbumType` via `From` trait
 - **Serialization**: JSON (via serde) and database compatible
@@ -47,15 +51,18 @@ The MoosicBox Library Models package provides:
 ### API Models (available with `api` feature)
 
 #### ApiLibraryArtist
+
 - API-compatible artist model with ID fields for external sources (Tidal, Qobuz, YT)
 - `contains_cover` flag instead of cover path
 
 #### ApiLibraryAlbum
+
 - API-compatible album model with `ApiAlbumVersionQuality` for versions
 - `contains_cover` flag instead of artwork path
 - Converts to/from `LibraryAlbum` and `ApiAlbum`
 
 #### ApiLibraryTrack
+
 - API-compatible track model without file path information
 - Includes all metadata and source tracking
 - Converts to/from `LibraryTrack` and `Track`
@@ -142,8 +149,8 @@ The `db` feature enables database integration via `switchy_database`:
 - **Type Mappings**: `LibraryAlbumType` implements database value conversions
 - **ID Traits**: All models implement `AsId` for database operations
 - **Helper Functions**:
-  - `get_album_version_qualities()`: Retrieves album versions from the database with sorting
-  - `sort_album_versions()`: Sorts album versions by sample rate, bit depth, and source
+    - `get_album_version_qualities()`: Retrieves album versions from the database with sorting
+    - `sort_album_versions()`: Sorts album versions by sample rate, bit depth, and source
 
 These traits enable seamless conversion between database rows and library models, supporting complex queries with joins and relationship loading.
 
@@ -161,6 +168,7 @@ sort_album_versions(&mut versions);
 ## Dependencies
 
 Core dependencies:
+
 - **moosicbox_music_models**: Core music data types and models
 - **moosicbox_date_utils**: Date parsing and formatting (with chrono support)
 - **moosicbox_json_utils**: JSON utilities and database value conversions
@@ -170,6 +178,7 @@ Core dependencies:
 - **log**: Logging support
 
 Optional dependencies (feature-gated):
+
 - **switchy_database**: Database abstraction layer (enabled with `db` feature)
 - **utoipa**: OpenAPI schema generation (enabled with `openapi` feature)
 - **async-trait**: Async trait support (enabled with `db` feature)

@@ -23,13 +23,14 @@ A Tauri plugin that provides media player control functionality for desktop and 
 ### Android Implementation (`android/`)
 
 - **`PlayerPlugin.kt`**: Tauri plugin interface with commands:
-  - `initChannel`: Initialize event channel for media events
-  - `updateState`: Update player state from frontend
+    - `initChannel`: Initialize event channel for media events
+    - `updateState`: Update player state from frontend
 - **`Player.kt`**: Player implementation with state management and event emission
 
 ## Data Models
 
 ### Track
+
 ```rust
 pub struct Track {
     pub id: String,
@@ -44,6 +45,7 @@ pub struct Track {
 ```
 
 ### UpdateState
+
 ```rust
 pub struct UpdateState {
     pub playing: Option<bool>,
@@ -55,6 +57,7 @@ pub struct UpdateState {
 ```
 
 ### MediaEvent
+
 ```rust
 pub struct MediaEvent {
     pub play: Option<bool>,

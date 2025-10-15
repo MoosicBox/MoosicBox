@@ -19,17 +19,20 @@ The MoosicBox Audio Output package provides:
 All audio backends are provided through CPAL (Cross-Platform Audio Library):
 
 ### CPAL (Cross-Platform Audio Library)
+
 - **Platforms**: Windows (WASAPI, DirectSound), macOS (Core Audio), Linux (ALSA)
 - **Use Case**: General-purpose audio output with good cross-platform compatibility
 - **Default Backend**: Enabled by default
 
 ### JACK (JACK Audio Connection Kit)
+
 - **Platforms**: Linux, macOS, Windows
 - **Use Case**: Professional audio, low-latency applications
 - **Features**: Real-time audio routing, minimal latency
 - **Enabled via**: `jack` feature flag
 
 ### ASIO (Audio Stream Input/Output)
+
 - **Platforms**: Windows
 - **Use Case**: Professional audio interfaces, ultra-low latency
 - **Requirements**: ASIO-compatible audio hardware
@@ -140,22 +143,26 @@ async fn progress_tracking_example() -> Result<(), Box<dyn std::error::Error>> {
 ## Feature Flags
 
 ### Audio Backends
+
 - `cpal` - Enable CPAL backend (cross-platform, enabled by default)
 - `jack` - Enable JACK backend via CPAL (professional audio)
 - `asio` - Enable ASIO backend via CPAL (Windows professional audio)
 - `oboe-shared-stdcxx` - Enable Oboe backend via CPAL (Android)
 
 ### Audio Encoding Formats
+
 - `aac` - Support for encoding to AAC format
 - `flac` - Support for encoding to FLAC format
 - `mp3` - Support for encoding to MP3 format
 - `opus` - Support for encoding to Opus format
 
 ### API Features
+
 - `api` - Enable API models for integration (enabled by default)
 - `openapi` - Enable OpenAPI/utoipa support (enabled by default)
 
 ### Default Features
+
 The `default` feature enables: `api`, `default-windows`, and `openapi`.
 
 The `default-windows` feature enables: `aac`, `cpal`, `flac`, `mp3`, `oboe-shared-stdcxx`, and `opus`.
@@ -186,6 +193,7 @@ let spec = SignalSpec {
 ```
 
 Audio quality is determined by the source material and the audio device's capabilities. The package automatically handles:
+
 - Sample rate conversion (resampling)
 - Channel configuration
 - Buffer management (30-second ring buffer with 10-second initial buffering)
@@ -193,6 +201,7 @@ Audio quality is determined by the source material and the audio device's capabi
 ## Platform-Specific Notes
 
 ### Linux
+
 - **ALSA**: Default backend via CPAL (direct hardware access)
 - **JACK**: Optional professional audio backend (enable with `jack` feature)
 
@@ -202,6 +211,7 @@ sudo apt-get install libjack-jackd2-dev
 ```
 
 ### macOS
+
 - **Core Audio**: Native macOS audio (via CPAL)
 - **JACK**: Optional professional audio backend (enable with `jack` feature)
 
@@ -211,11 +221,13 @@ brew install jack
 ```
 
 ### Windows
+
 - **WASAPI**: Modern Windows audio API (default via CPAL)
 - **DirectSound**: Legacy Windows audio (fallback via CPAL)
 - **ASIO**: Optional professional audio backend (enable with `asio` feature)
 
 For ASIO support:
+
 - ASIO-compatible audio hardware
 - ASIO drivers from hardware manufacturer
 - Enable the `asio` feature flag in Cargo.toml
@@ -259,11 +271,13 @@ match audio_output.write(audio_buffer) {
 ### Buffer Management
 
 The CPAL implementation uses a ring buffer architecture:
+
 - **Ring buffer size**: 30 seconds of audio
 - **Initial buffering**: 10 seconds before playback starts
 - **Purpose**: Prevents audio underruns and ensures smooth playback
 
 This approach ensures that:
+
 - Short audio clips (< 10 seconds) start immediately on flush
 - Long audio content has ample buffering to prevent crackling
 - Volume changes are applied immediately in the CPAL callback
@@ -271,6 +285,7 @@ This approach ensures that:
 ### Sample Rate Handling
 
 The package automatically handles sample rate conversion:
+
 - Uses the `moosicbox_resampler` crate for high-quality resampling
 - Converts input audio to match the output device's sample rate
 - Maintains audio quality during conversion
@@ -278,6 +293,7 @@ The package automatically handles sample rate conversion:
 ### Progress Tracking
 
 Progress tracking uses a dedicated `ProgressTracker`:
+
 - Tracks consumed samples from the CPAL audio callback
 - Calculates playback position based on actual output sample rate
 - Triggers callbacks when position changes by ≥0.1 seconds
@@ -299,23 +315,23 @@ The `AudioOutput` implements the `AudioDecode` trait, allowing it to receive dec
 ### Common Issues
 
 1. **No audio output**:
-   - Run `scan_outputs().await` to ensure devices are detected
-   - Check system audio settings and permissions
-   - Verify CPAL feature is enabled
+    - Run `scan_outputs().await` to ensure devices are detected
+    - Check system audio settings and permissions
+    - Verify CPAL feature is enabled
 
 2. **Audio crackling or stuttering**:
-   - This is typically a system resource issue
-   - The package uses a 30-second ring buffer with 10-second initial buffering to prevent this
-   - Check CPU usage and system load
+    - This is typically a system resource issue
+    - The package uses a 30-second ring buffer with 10-second initial buffering to prevent this
+    - Check CPU usage and system load
 
 3. **Device not found**:
-   - Verify the device is connected and enabled in system settings
-   - Run `output_factories().await` to list available devices
+    - Verify the device is connected and enabled in system settings
+    - Run `output_factories().await` to list available devices
 
 4. **Build errors with JACK/ASIO**:
-   - Ensure you have the required development libraries installed
-   - JACK requires `libjack-jackd2-dev` on Linux
-   - ASIO requires ASIO SDK and drivers on Windows
+    - Ensure you have the required development libraries installed
+    - JACK requires `libjack-jackd2-dev` on Linux
+    - ASIO requires ASIO SDK and drivers on Windows
 
 ### Debug Logging
 
@@ -332,6 +348,7 @@ RUST_LOG=moosicbox_audio_output=trace cargo run
 ### Platform-Specific Troubleshooting
 
 #### Linux
+
 ```bash
 # List ALSA devices
 aplay -l
@@ -341,12 +358,14 @@ jack_control status
 ```
 
 #### Windows
+
 ```bash
 # List audio devices
 powershell "Get-WmiObject Win32_SoundDevice"
 ```
 
 #### macOS
+
 ```bash
 # List audio devices
 system_profiler SPAudioDataType

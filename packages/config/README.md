@@ -15,6 +15,7 @@ The MoosicBox Config package provides:
 ## Features
 
 ### Core Functionality
+
 - **Path Management**: Get and create configuration directory paths
 - **Profile Directories**: Manage profile-specific configuration directories
 - **Cache Directories**: Handle cache directory creation and access
@@ -22,12 +23,14 @@ The MoosicBox Config package provides:
 - **Root Directory Configuration**: Configurable root directory for all configs
 
 ### Available Operations
+
 - **Directory Creation**: Automatically create config and cache directories
 - **Profile Management**: Create, read, upsert, and delete user profiles
 - **Server Identity**: Manage unique server identity for distributed setups
 - **Path Resolution**: Resolve paths for different configuration contexts
 
 ### Optional Features
+
 - **API Module**: REST API endpoints for profile management (requires `api` feature)
 - **Database Module**: Profile and identity storage (requires `db` feature)
 

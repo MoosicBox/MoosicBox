@@ -26,6 +26,7 @@ This package acts as a convenient way to:
 This package re-exports the following MoosicBox components as optional dependencies. Enable the ones you need via feature flags.
 
 ### Core Components
+
 - **moosicbox_player** - Audio playback engine
 - **moosicbox_library** - Music library management
 - **moosicbox_library_models** - Library data models
@@ -35,23 +36,27 @@ This package re-exports the following MoosicBox components as optional dependenc
 - **moosicbox_session_models** - Session data models
 
 ### API & Routing
+
 - **moosicbox_music_api** - Music streaming API
 - **moosicbox_auth** - Authentication functionality
 - **moosicbox_profiles** - User profile management
 
 ### Audio Processing
+
 - **moosicbox_audio_decoder** - Audio format decoding
 - **moosicbox_audio_encoder** - Audio format encoding
 - **moosicbox_audio_output** - Audio output management
 - **moosicbox_resampler** - Audio sample rate conversion
 
 ### Streaming Sources
+
 - **moosicbox_qobuz** - Qobuz streaming integration (optional)
 - **moosicbox_tidal** - Tidal streaming integration (optional)
 - **moosicbox_yt** - YouTube Music integration (optional)
 - **moosicbox_remote_library** - Remote library access
 
 ### Utilities
+
 - **moosicbox_files** - File handling and streaming
 - **moosicbox_image** - Image processing and optimization
 - **moosicbox_downloader** - Download management
@@ -61,6 +66,7 @@ This package re-exports the following MoosicBox components as optional dependenc
 - **moosicbox_menu** - Menu functionality
 
 ### Infrastructure
+
 - **moosicbox_config** - Configuration management
 - **moosicbox_logging** - Centralized logging
 - **moosicbox_assert** - Assertion utilities
@@ -74,12 +80,14 @@ This package re-exports the following MoosicBox components as optional dependenc
 - **moosicbox_load_balancer** - Load balancing functionality
 
 ### Networking
+
 - **moosicbox_tunnel** - Tunnel client functionality
 - **moosicbox_tunnel_sender** - Tunnel communication
 - **moosicbox_ws** - WebSocket support
 - **moosicbox_middleware** - HTTP middleware
 
 ### User Interface
+
 - **moosicbox_app_models** - Application data models
 - **moosicbox_app_native_ui** - Native UI components
 - **moosicbox_admin_htmx** - Admin interface
@@ -123,13 +131,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 This package provides feature flags that enable specific components and pass through to their dependencies.
 
 ### Streaming Sources
+
 - `qobuz` - Enable Qobuz streaming support
 - `tidal` - Enable Tidal streaming support
 - `yt` - Enable YouTube Music support
 - `all-sources` - Enable all streaming sources (qobuz, tidal, yt)
 
 ### Component Enablement
+
 Individual components can be enabled with their respective feature flags:
+
 - `admin-htmx`, `app-models`, `app-native-ui`, `arb`, `assert`, `async-service`
 - `audio-decoder`, `audio-encoder`, `audio-output`, `audio-zone`, `audio-zone-models`
 - `auth`, `channel-utils`, `config`, `downloader`, `env-utils`, `files`
@@ -139,12 +150,14 @@ Individual components can be enabled with their respective feature flags:
 - `session`, `session-models`, `stream-utils`, `tunnel`, `tunnel-sender`, `ws`
 
 ### Meta Features
+
 - `default` - Enables all components with their default features (`all-default`)
 - `all` - Enable all components (without sub-features)
 - `all-default` - Enable all components with their default sub-features
 - `fail-on-warnings` - Treat warnings as errors (development)
 
 ### Tunnel Encoding
+
 - `tunnel-base64` - Enable base64 encoding for tunnel
 - `tunnel-sender-base64` - Enable base64 encoding for tunnel sender
 

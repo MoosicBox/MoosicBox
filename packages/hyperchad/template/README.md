@@ -18,24 +18,28 @@ The HyperChad Template package provides:
 ## Features
 
 ### Template Macro
+
 - **`container!` Macro**: Declarative UI component construction
 - **Nested Elements**: Support for nested container hierarchies
 - **Attribute Syntax**: CSS-like attribute specification
 - **Dynamic Content**: Runtime content generation and insertion
 
 ### Rendering System
+
 - **HTML Generation**: Convert containers to HTML strings
 - **Debug Attributes**: Optional debug information in output
 - **Pretty Printing**: Formatted HTML output for debugging
 - **String Conversion**: Multiple string conversion utilities
 
 ### Extension Traits
+
 - **ContainerVecMethods**: Methods for Vec<Container> collections
 - **ContainerVecExt**: Additional utility methods
 - **RenderContainer**: Trait for renderable types
 - **Conversion Traits**: Type conversion utilities
 
 ### Calculation System
+
 - **CSS calc()**: Support for CSS calculation expressions
 - **CSS Math Functions**: `min()`, `max()`, `clamp()` for responsive sizing
 - **Unit Functions**: `vw()`, `vh()`, `dvw()`, `dvh()` viewport units, `percent()` for percentages
@@ -44,6 +48,7 @@ The HyperChad Template package provides:
 - **Raw Percent Values**: Direct percentage notation (e.g., `100%`, `50%`)
 
 ### Color System
+
 - **RGB Functions**: `rgb()` color creation (3 or 4 arguments)
 - **RGBA Functions**: `rgba()` as alias for 4-argument `rgb()`
 - **Alpha Support**: Float (0.0-1.0), integer (0-255), or percentage ("50%")
@@ -270,6 +275,7 @@ let vec: Vec<Container> = list.into();
 ## Type Conversions
 
 ### Boolean Conversion
+
 ```rust
 use hyperchad_template::ToBool;
 
@@ -277,6 +283,7 @@ let visible = some_condition.to_bool();
 ```
 
 ### Border Conversion
+
 ```rust
 use hyperchad_template::IntoBorder;
 
@@ -284,6 +291,7 @@ let border = ("red", 2).into_border(); // (Color, Number)
 ```
 
 ### Action Effect Conversion
+
 ```rust
 use hyperchad_template::IntoActionEffect;
 use hyperchad_template::actions::ActionType;
@@ -325,6 +333,7 @@ The package supports the following feature flags:
 ## Integration
 
 This package is designed for:
+
 - **UI Component Libraries**: Building reusable UI components
 - **Template Systems**: Server-side template rendering
 - **Static Site Generation**: Pre-rendered HTML generation

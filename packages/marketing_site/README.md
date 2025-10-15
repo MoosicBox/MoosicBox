@@ -66,15 +66,15 @@ cargo build --bin moosicbox_marketing_site_lambda_vanilla_js --features "lambda,
 
 ### Environment Variables
 
-| Variable         | Description                      | Default   |
-| ---------------- | -------------------------------- | --------- |
-| `WINDOW_WIDTH`   | Initial window width (pixels)    | `1000.0`  |
-| `WINDOW_HEIGHT`  | Initial window height (pixels)   | `600.0`   |
-| `WINDOW_X`       | Initial window X position        | (unset)   |
-| `WINDOW_Y`       | Initial window Y position        | (unset)   |
-| `MAX_THREADS`    | Max blocking threads             | `64`      |
-| `TOKIO_CONSOLE`  | Enable tokio console (1 or true) | (unset)   |
-| `RUST_LOG`       | Logging level                    | (unset)   |
+| Variable        | Description                      | Default  |
+| --------------- | -------------------------------- | -------- |
+| `WINDOW_WIDTH`  | Initial window width (pixels)    | `1000.0` |
+| `WINDOW_HEIGHT` | Initial window height (pixels)   | `600.0`  |
+| `WINDOW_X`      | Initial window X position        | (unset)  |
+| `WINDOW_Y`      | Initial window Y position        | (unset)  |
+| `MAX_THREADS`   | Max blocking threads             | `64`     |
+| `TOKIO_CONSOLE` | Enable tokio console (1 or true) | (unset)  |
+| `RUST_LOG`      | Logging level                    | (unset)  |
 
 ### Runtime Configuration
 

@@ -35,6 +35,7 @@ Note: This example uses the actix backend, which is enabled by default in the mo
 ## Expected Output
 
 The server creates a single endpoint at `/nested/example` by combining:
+
 - Scope prefix: `/nested`
 - Route path: `/example`
 - Final endpoint: `/nested/example`
@@ -44,18 +45,21 @@ The server creates a single endpoint at `/nested/example` by combining:
 ### Manual Testing with curl
 
 **Access the Nested Route**
+
 ```bash
 curl http://localhost:8080/nested/example
 # Expected: hello, world! path=/nested/example query=
 ```
 
 **With Query Parameters**
+
 ```bash
 curl "http://localhost:8080/nested/example?category=test&id=456"
 # Expected: hello, world! path=/nested/example query=category=test&id=456
 ```
 
 **Test Non-Existent Routes**
+
 ```bash
 # This should return 404 - route doesn't exist at root level
 curl http://localhost:8080/example
@@ -67,6 +71,7 @@ curl http://localhost:8080/other/example
 ## Code Walkthrough
 
 ### Scope Creation and Nesting
+
 ```rust
 let server = moosicbox_web_server::WebServerBuilder::new()
     .with_cors(cors)
@@ -78,11 +83,13 @@ let server = moosicbox_web_server::WebServerBuilder::new()
 ```
 
 ### Path Resolution
+
 - **Scope prefix**: `/nested`
 - **Route path**: `/example`
 - **Final URL**: `http://localhost:8080/nested/example`
 
 ### Handler Implementation
+
 ```rust
 .get("/example", |req| {
     let path = req.path().to_string();      // Returns "/nested/example"
@@ -97,6 +104,7 @@ let server = moosicbox_web_server::WebServerBuilder::new()
 ## Advanced Nesting Patterns
 
 ### Multiple Levels of Nesting
+
 ```rust
 // This example shows single-level nesting, but you can nest deeper:
 Scope::new("/api")
@@ -112,6 +120,7 @@ Scope::new("/api")
 ```
 
 ### Multiple Routes in Same Scope
+
 ```rust
 Scope::new("/nested")
     .get("/example", handler1)
@@ -123,34 +132,38 @@ Scope::new("/nested")
 ## Key Concepts
 
 ### Scope Benefits
+
 - **Organization**: Group related routes logically
 - **Maintainability**: Easier to manage large APIs
 - **Middleware**: Apply middleware to entire scopes
 - **Versioning**: Easy API versioning with scope prefixes
 
 ### Path Composition Rules
+
 - Scope paths and route paths are concatenated
 - Leading/trailing slashes are handled automatically
 - Empty scope prefix (`""`) creates routes at root level
 - Multiple scopes can be nested for complex hierarchies
 
 ### CORS Inheritance
+
 - CORS configuration applies to all routes in all scopes
 - Nested routes inherit the server's CORS settings
 - No additional CORS configuration needed for nested routes
 
 ## Comparison with simple_get
 
-| Aspect | nested_get | simple_get |
-|--------|------------|------------|
-| **Endpoint URL** | `/nested/example` | `/example` |
-| **Scope Usage** | Uses `/nested` prefix | Uses empty `""` scope |
-| **Organization** | Demonstrates hierarchy | Shows flat structure |
-| **Use Case** | API organization | Simple endpoints |
+| Aspect           | nested_get             | simple_get            |
+| ---------------- | ---------------------- | --------------------- |
+| **Endpoint URL** | `/nested/example`      | `/example`            |
+| **Scope Usage**  | Uses `/nested` prefix  | Uses empty `""` scope |
+| **Organization** | Demonstrates hierarchy | Shows flat structure  |
+| **Use Case**     | API organization       | Simple endpoints      |
 
 ## Real-World Applications
 
 ### API Versioning
+
 ```rust
 Scope::new("/api/v1")
     .get("/users", list_users_v1)
@@ -162,6 +175,7 @@ Scope::new("/api/v2")
 ```
 
 ### Feature Grouping
+
 ```rust
 Scope::new("/admin")
     .get("/dashboard", admin_dashboard)
@@ -175,14 +189,17 @@ Scope::new("/public")
 ## Troubleshooting
 
 ### Route Not Found (404)
+
 **Problem**: Requests to `/example` return 404
 **Solution**: The route is at `/nested/example`, not `/example`
 
 ### Build Issues
+
 **Problem**: Compilation errors about missing traits
 **Solution**: The actix feature is enabled by default via workspace dependencies
 
 ### Path Confusion
+
 **Problem**: Unsure what the final URL will be
 **Solution**: Final URL = scope prefix + route path
 

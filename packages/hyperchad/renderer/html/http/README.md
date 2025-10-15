@@ -16,6 +16,7 @@ The HyperChad HTML HTTP Renderer provides:
 ## Features
 
 ### HTTP Server Capabilities
+
 - **Generic HTTP**: Works with any HTTP server framework
 - **Request Processing**: Process RouteRequest objects into HTTP responses
 - **Response Building**: Generate proper HTTP responses
@@ -24,6 +25,7 @@ The HyperChad HTML HTTP Renderer provides:
 - **Content Types**: Automatic content type detection
 
 ### HyperChad Integration
+
 - **HTML Rendering**: Server-side HTML generation
 - **Routing**: URL routing and path matching
 - **Action Processing**: Handle HyperChad actions
@@ -31,6 +33,7 @@ The HyperChad HTML HTTP Renderer provides:
 - **Asset Serving**: Static asset management
 
 ### Performance Features
+
 - **Async Processing**: Fully asynchronous request handling
 
 ## Installation
@@ -522,6 +525,7 @@ Default features: `actions`, `assets`, `debug`, `json`
 ## HTTP Standards Compliance
 
 ### Supported Methods
+
 - **GET**: Retrieve resources
 - **POST**: Create resources
 - **PUT**: Update resources
@@ -531,18 +535,21 @@ Default features: `actions`, `assets`, `debug`, `json`
 - **OPTIONS**: CORS preflight
 
 ### Status Codes
+
 - **2xx Success**: 200 OK, 201 Created, 204 No Content
 - **3xx Redirection**: 301 Moved Permanently, 302 Found, 304 Not Modified
 - **4xx Client Error**: 400 Bad Request, 401 Unauthorized, 404 Not Found
 - **5xx Server Error**: 500 Internal Server Error, 503 Service Unavailable
 
 ### Headers
+
 - **Content-Type**: Automatic content type detection for assets and responses
 - Custom headers can be added via middleware (see middleware example)
 
 ## Dependencies
 
 Core dependencies:
+
 - **http**: Standard HTTP types and utilities
 - **hyperchad_renderer_html**: Core HTML rendering functionality
 - **hyperchad_router**: Routing and navigation
@@ -551,6 +558,7 @@ Core dependencies:
 - **flume**: Multi-producer, multi-consumer channels for action handling
 
 Optional dependencies (enabled by features):
+
 - **serde** & **serde_json**: JSON serialization for actions and API responses
 - **mime_guess**: Content-type detection for static assets
 - **switchy_async** & **switchy_fs**: Async file I/O for asset serving
@@ -558,6 +566,7 @@ Optional dependencies (enabled by features):
 ## Integration
 
 This renderer is designed for:
+
 - **Custom HTTP Servers**: Build your own HTTP server
 - **Framework Integration**: Integrate with existing frameworks
 - **Microservices**: HTTP-based microservices
