@@ -41,7 +41,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_app_tauri_bundled = { path = "../app/tauri/bundled" }
+moosicbox_app_tauri_bundled = { workspace = true }
 ```
 
 ## Usage
