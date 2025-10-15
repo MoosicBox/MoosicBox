@@ -73,7 +73,8 @@ hyperchad_transformer = {
 ### Basic Container Creation
 
 ```rust
-use hyperchad_transformer::{Container, Element, Number, LayoutDirection};
+use hyperchad_transformer::{Container, Element, Number};
+use hyperchad_transformer::models::LayoutDirection;
 use hyperchad_color::Color;
 
 let mut container = Container {
@@ -126,7 +127,8 @@ let font_size = Number::RealDvw(4.0); // 4dvw
 ### Element Types
 
 ```rust
-use hyperchad_transformer::{Element, Input, HeaderSize, ImageFit, LinkTarget};
+use hyperchad_transformer::{Element, Input, HeaderSize};
+use hyperchad_transformer::models::{ImageFit, ImageLoading, LinkTarget};
 
 // Form input
 let text_input = Element::Input {
