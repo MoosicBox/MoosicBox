@@ -32,6 +32,7 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v4
               with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   ref: ${{ github.event.pull_request.head.ref || github.ref }}
                   repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
                   fetch-depth: 0
@@ -54,7 +55,7 @@ jobs:
                   echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
                   echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
               env:
-                  GH_TOKEN: ${{ github.token }}
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
             - name: Checkout PR branch for issue comments
               if: github.event_name == 'issue_comment' && github.event.issue.pull_request
@@ -64,6 +65,11 @@ jobs:
                   git checkout ${{ steps.pr_details.outputs.head_ref }}
                   echo "Current branch: $(git branch --show-current)"
                   echo "Current commit: $(git rev-parse HEAD)"
+
+            - name: Setup git configuration
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
 
             - name: Get comment thread context
               id: thread_context
@@ -152,7 +158,7 @@ jobs:
                     echo "thread_history=" >> $GITHUB_OUTPUT
                   fi
               env:
-                  GH_TOKEN: ${{ github.token }}
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
             - name: Run Claude Code
               id: claude
@@ -285,8 +291,9 @@ jobs:
                          - If it's phrased as a COMMAND/STATEMENT (imperative, declarative, "please fix", "update X", etc.):
                            → Implement changes to the SPECIFIC code mentioned
                            → Create commits with descriptive messages
-                           → **ALWAYS push commits to the remote repository with `git push`**
-                           → Create branches/PRs if needed
+                           → **DO NOT push commits - the workflow will handle pushing safely**
+                           → After committing, your work is done - the workflow will automatically push for you
+                           → The workflow has built-in conflict detection and fallback branch creation
 
                       2. **When in doubt**: Ask for clarification before taking action.
 
@@ -314,3 +321,168 @@ jobs:
                       ', github.event.issue.number, github.repository) }}
 
                       Now respond appropriately based on whether this is a question or a command.
+
+            - name: Detect and push changes with conflict handling
+              id: push_changes
+              if: always()
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  # Check if there are any commits to push
+                  CURRENT_BRANCH=$(git branch --show-current)
+
+                  # Get the target branch
+                  TARGET_BRANCH="${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref_name }}"
+
+                  # Count commits ahead of origin
+                  COMMITS_AHEAD=$(git rev-list --count origin/$TARGET_BRANCH..HEAD 2>/dev/null || echo "0")
+
+                  if [ "$COMMITS_AHEAD" = "0" ]; then
+                    echo "📭 No commits to push"
+                    echo "push_status=no_changes" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+
+                  echo "📊 Found $COMMITS_AHEAD commit(s) to push to $TARGET_BRANCH"
+
+                  MAX_RETRIES=5
+                  RETRY_COUNT=0
+                  BACKOFF=1
+                  MAX_TIME=30
+                  START_TIME=$(date +%s)
+
+                  # Attempt push with rebase retry (no conflict resolution)
+                  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                    ELAPSED=$(($(date +%s) - START_TIME))
+                    if [ $ELAPSED -gt $MAX_TIME ]; then
+                      echo "⏱️ Timeout reached after ${ELAPSED}s"
+                      break
+                    fi
+
+                    echo "📤 Push attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
+
+                    if git push origin "$TARGET_BRANCH" 2>&1; then
+                      echo "✅ Successfully pushed to $TARGET_BRANCH"
+                      echo "push_status=success" >> $GITHUB_OUTPUT
+                      echo "push_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+                      exit 0
+                    fi
+
+                    echo "⚠️ Push rejected, attempting rebase..."
+
+                    # Fetch latest changes
+                    git fetch origin "$TARGET_BRANCH"
+
+                    # Attempt rebase (no conflict resolution strategies)
+                    if git rebase "origin/$TARGET_BRANCH" 2>&1; then
+                      echo "✅ Rebase successful, retrying push..."
+                      RETRY_COUNT=$((RETRY_COUNT + 1))
+                      sleep $BACKOFF
+                      BACKOFF=$((BACKOFF * 2))
+                      continue
+                    else
+                      # Rebase failed
+                      echo "❌ Rebase failed"
+
+                      # Check if there are conflicts
+                      if git status | grep -E "both modified|both added|both deleted|conflict" >/dev/null 2>&1; then
+                        echo "🚫 CONFLICTS DETECTED during rebase"
+                        git rebase --abort 2>/dev/null || true
+                        break
+                      else
+                        echo "Rebase failed for non-conflict reason"
+                        git rebase --abort 2>/dev/null || true
+                        break
+                      fi
+                    fi
+                  done
+
+                  # Create fallback branch if push failed
+                  echo "🔀 Creating fallback branch..."
+                  TIMESTAMP=$(date +%s)
+                  FALLBACK_BRANCH="claude-${{ github.run_id }}-pr-${{ github.event.issue.number || github.event.pull_request.number }}-${TIMESTAMP}"
+
+                  # Ensure clean state
+                  git rebase --abort 2>/dev/null || true
+
+                  # Create fallback branch from current commits
+                  git checkout -B "$FALLBACK_BRANCH"
+
+                  echo "📤 Pushing to fallback branch: $FALLBACK_BRANCH"
+                  if git push origin "$FALLBACK_BRANCH" 2>&1; then
+                    echo "✅ Successfully pushed to fallback branch"
+                    echo "push_status=fallback" >> $GITHUB_OUTPUT
+                    echo "push_branch=$FALLBACK_BRANCH" >> $GITHUB_OUTPUT
+                    echo "original_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+                    echo "commits_count=$COMMITS_AHEAD" >> $GITHUB_OUTPUT
+
+                    # Create compare URL
+                    COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${TARGET_BRANCH}...${FALLBACK_BRANCH}"
+                    echo "compare_url=$COMPARE_URL" >> $GITHUB_OUTPUT
+                    exit 0
+                  else
+                    echo "❌ Failed to push even to fallback branch"
+                    echo "push_status=failed" >> $GITHUB_OUTPUT
+                    exit 1
+                  fi
+
+            - name: Notify about fallback branch
+              if: always() && steps.push_changes.outputs.push_status == 'fallback'
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  cat > /tmp/fallback_notice.md << 'ENDOFMSG'
+                  ## ⚠️ Changes Pushed to Fallback Branch
+
+                  I completed your request and committed **${{ steps.push_changes.outputs.commits_count }} commit(s)**, but couldn't push them to `${{ steps.push_changes.outputs.original_branch }}` due to:
+                  - Recent updates to the branch while I was working, OR
+                  - Conflicts that require manual resolution
+
+                  **Your changes are safe!** I've pushed them to a fallback branch:
+
+                  ### 📦 Fallback Branch
+                  **Branch:** `${{ steps.push_changes.outputs.push_branch }}`
+
+                  ### 📊 Review Changes
+                  [**Compare branches and see diff**](${{ steps.push_changes.outputs.compare_url }})
+
+                  ### 🔀 How to Merge
+
+                  **Option 1: Create a PR (Recommended)**
+                  1. [Create PR from fallback branch](${{ github.server_url }}/${{ github.repository }}/compare/${{ steps.push_changes.outputs.original_branch }}...${{ steps.push_changes.outputs.push_branch }})
+                  2. Review changes and resolve any conflicts in the GitHub UI
+                  3. Merge when ready
+
+                  **Option 2: Command Line Merge**
+                  ```bash
+                  git fetch origin ${{ steps.push_changes.outputs.push_branch }}
+                  git checkout ${{ steps.push_changes.outputs.original_branch }}
+                  git merge origin/${{ steps.push_changes.outputs.push_branch }}
+                  # If conflicts appear, resolve them
+                  git push origin ${{ steps.push_changes.outputs.original_branch }}
+                  ```
+
+                  **Option 3: Cherry-pick Commits**
+                  ```bash
+                  git fetch origin ${{ steps.push_changes.outputs.push_branch }}
+                  git checkout ${{ steps.push_changes.outputs.original_branch }}
+                  git cherry-pick origin/${{ steps.push_changes.outputs.push_branch }}
+                  ```
+
+                  ---
+
+                  💡 **Tip:** Once merged, you can delete the fallback branch with:
+                  ```bash
+                  git push origin --delete ${{ steps.push_changes.outputs.push_branch }}
+                  ```
+                  ENDOFMSG
+
+                  # Post notification based on event type
+                  if [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+                    gh api -X POST "/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/${{ steps.thread_context.outputs.root_comment_id }}/replies" \
+                      -F body=@/tmp/fallback_notice.md 2>&1 || echo "Failed to post fallback notice"
+                  elif [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
+                    gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file /tmp/fallback_notice.md 2>&1 || echo "Failed to post fallback notice"
+                  else
+                    gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file /tmp/fallback_notice.md 2>&1 || echo "Failed to post fallback notice"
+                  fi
