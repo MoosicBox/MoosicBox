@@ -43,8 +43,7 @@ All audio backends are provided through CPAL (Cross-Platform Audio Library):
 ### Basic Audio Output
 
 ```rust
-use moosicbox_audio_output::{scan_outputs, default_output};
-use moosicbox_audio_output::AudioWrite;
+use moosicbox_audio_output::{scan_outputs, default_output, AudioWrite};
 use symphonia::core::audio::AudioBuffer;
 
 #[tokio::main]
@@ -53,7 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     scan_outputs().await?;
 
     // Get the default audio output
-    let mut audio_output = default_output().await?;
+    let mut audio_output = default_output().await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     // Write audio samples (expects AudioBuffer<f32> from Symphonia)
     // The AudioBuffer would typically come from an audio decoder
@@ -147,7 +147,7 @@ async fn progress_tracking_example() -> Result<(), Box<dyn std::error::Error>> {
 - `cpal` - Enable CPAL backend (cross-platform, enabled by default)
 - `jack` - Enable JACK backend via CPAL (professional audio)
 - `asio` - Enable ASIO backend via CPAL (Windows professional audio)
-- `oboe-shared-stdcxx` - Enable Oboe backend via CPAL (Android)
+- `oboe-shared-stdcxx` - Enable Oboe backend via CPAL
 
 ### Audio Encoding Formats
 
