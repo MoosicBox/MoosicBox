@@ -167,10 +167,8 @@ async fn main() -> std::io::Result<()> {
 ```rust
 use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_lambda};
 use hyperchad_router::Router;
-use hyperchad_renderer::{Handle, ToRenderRunner};
 
-#[tokio::main]
-async fn main() -> Result<(), lambda_runtime::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create HTML tag renderer
     let tag_renderer = DefaultHtmlTagRenderer::default();
 
@@ -179,13 +177,12 @@ async fn main() -> Result<(), lambda_runtime::Error> {
     // ... configure routes
 
     // Create HTML renderer with Lambda integration
-    let renderer = router_to_lambda(tag_renderer, router)
+    let _renderer = router_to_lambda(tag_renderer, router)
         .with_title(Some("My Serverless App".to_string()))
         .with_viewport(Some("width=device-width, initial-scale=1".to_string()));
 
-    // Convert to runner and start Lambda handler
-    let runner = renderer.to_runner(Handle::current())?;
-    runner.run().map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+    // The Lambda runtime and handler are managed internally
+    // Use this renderer within your Lambda function handler
 
     Ok(())
 }
