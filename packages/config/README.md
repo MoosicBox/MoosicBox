@@ -31,7 +31,7 @@ The MoosicBox Config package provides:
 
 ### Optional Features
 
-- **API Module**: REST API endpoints for profile management (requires `api` feature)
+- **API Module**: REST API endpoints for profile management (requires `api` feature, which includes `db`)
 - **Database Module**: Profile and identity storage (requires `db` feature)
 
 ## Installation
@@ -112,18 +112,22 @@ fn configure_root_directory() {
 ### Profile Management (with db feature)
 
 ```rust
-use moosicbox_config::{upsert_profile, delete_profile, get_profiles};
+use moosicbox_config::{create_profile, upsert_profile, delete_profile, get_profiles};
 use switchy_database::config::ConfigDatabase;
 
 async fn manage_profiles(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
-    // Create or get existing profile
+    // Create a new profile
+    let profile = create_profile(db, "my_profile").await?;
+    println!("Created profile: {} (id: {})", profile.name, profile.id);
+
+    // Create or get existing profile (upsert)
     let profile = upsert_profile(db, "my_profile").await?;
-    println!("Profile: {}", profile.name);
+    println!("Profile: {} (id: {})", profile.name, profile.id);
 
     // Get all profiles
     let profiles = get_profiles(db).await?;
     for profile in profiles {
-        println!("Found profile: {}", profile.name);
+        println!("Found profile: {} (id: {})", profile.name, profile.id);
     }
 
     // Delete profile
@@ -200,9 +204,18 @@ pub enum AppType {
 }
 ```
 
+### Profile Model (with db feature)
+
+```rust
+pub struct Profile {
+    pub id: u64,
+    pub name: String,
+}
+```
+
 ## Feature Flags
 
-- **`api`**: Enable REST API endpoints for profile management
+- **`api`**: Enable REST API endpoints for profile management (includes `db` feature)
 - **`db`**: Enable database functionality for profiles and server identity
 - **`openapi`**: Enable OpenAPI/utoipa schema generation
 - **`test`**: Enable test utilities for temporary directories
