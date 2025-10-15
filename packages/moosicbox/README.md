@@ -50,9 +50,9 @@ This package re-exports the following MoosicBox components as optional dependenc
 
 ### Streaming Sources
 
-- **moosicbox_qobuz** - Qobuz streaming integration (optional)
-- **moosicbox_tidal** - Tidal streaming integration (optional)
-- **moosicbox_yt** - YouTube Music integration (optional)
+- **moosicbox_qobuz** - Qobuz streaming integration
+- **moosicbox_tidal** - Tidal streaming integration
+- **moosicbox_yt** - YouTube Music integration
 - **moosicbox_remote_library** - Remote library access
 
 ### Utilities
@@ -151,10 +151,12 @@ Individual components can be enabled with their respective feature flags:
 
 ### Meta Features
 
-- `default` - Enables all components with their default features (`all-default`)
-- `all` - Enable all components (without sub-features)
-- `all-default` - Enable all components with their default sub-features
+- `default` - Enables all components with their default features (equivalent to `all-default`)
+- `all` - Enable all components (without sub-features, excluding streaming sources)
+- `all-default` - Enable all components with their default sub-features (excluding streaming sources)
 - `fail-on-warnings` - Treat warnings as errors (development)
+
+**Note**: The streaming sources (qobuz, tidal, yt) are not included in `all` or `all-default`. Use the `all-sources` feature or enable them individually.
 
 ### Tunnel Encoding
 
