@@ -28,31 +28,27 @@ hyperchad = "0.1.0"
 ### Basic Application
 
 ```rust
-use hyperchad::app::{App, AppBuilder};
-use hyperchad::router::{Router, RoutePath};
+use hyperchad::app::AppBuilder;
+use hyperchad::router::{RouteRequest, Router};
 use hyperchad::template::container;
-use hyperchad::renderer_html::HtmlRenderer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
-        .with_route(RoutePath::Literal("/"), |_| async move {
+        .with_route_result("/", |_req: RouteRequest| async move {
             let content = container! {
                 div {
                     h1 { "Welcome to HyperChad" }
                     button { "Click Me" }
                 }
             };
-            Ok(content)
+            Ok(content.into())
         });
 
-    let renderer = HtmlRenderer::new();
-
     let app = AppBuilder::new()
-        .with_title("My App")
-        .with_renderer(renderer)
+        .with_title("My App".to_string())
         .with_router(router)
-        .build()?;
+        .build_default()?;
 
     app.run().await?;
     Ok(())
@@ -80,30 +76,31 @@ let ui = container! {
 ### Routing
 
 ```rust
-use hyperchad::router::{Router, RoutePath, Navigation};
+use hyperchad::router::{Router, RouteRequest};
+use hyperchad::template::container;
 
 let router = Router::new()
-    .with_route(RoutePath::Literal("/"), |_| async move {
+    .with_route_result("/", |_req: RouteRequest| async move {
         let content = container! {
             div { "Home Page" }
         };
-        Ok(content)
+        Ok(content.into())
     })
-    .with_route(RoutePath::Literal("/about"), |_| async move {
+    .with_route_result("/about", |_req: RouteRequest| async move {
         let content = container! {
             div { "About Page" }
         };
-        Ok(content)
+        Ok(content.into())
     })
-    .with_route(RoutePath::LiteralPrefix("/user/"), |nav| async move {
-        let user_id = nav.path.strip_prefix("/user/").unwrap_or("");
+    .with_route_result("/user/:id", |req: RouteRequest| async move {
+        let user_id = req.path.strip_prefix("/user/").unwrap_or("");
         let content = container! {
             div {
                 h1 { "User Profile" }
                 p { format!("User ID: {}", user_id) }
             }
         };
-        Ok(content)
+        Ok(content.into())
     });
 ```
 
@@ -118,11 +115,11 @@ use serde_json::json;
 let state = StateStore::new(InMemoryStatePersistence::new());
 
 // Set values
-state.set("user_id".to_string(), json!("12345"))?;
-state.set("theme".to_string(), json!("dark"))?;
+state.set("user_id", &json!("12345")).await?;
+state.set("theme", &json!("dark")).await?;
 
 // Get values
-if let Some(user_id) = state.get("user_id")? {
+if let Some(user_id) = state.get::<serde_json::Value>("user_id").await? {
     println!("User ID: {}", user_id);
 }
 
@@ -175,10 +172,29 @@ let ui = container! {
 ```rust
 // Container - the fundamental building block
 pub struct Container {
+    pub id: usize,
+    pub str_id: Option<String>,
+    pub classes: Vec<String>,
     pub element: Element,
-    pub style: Style,
     pub children: Vec<Container>,
-    // ... other fields
+    pub direction: LayoutDirection,
+    pub overflow_x: LayoutOverflow,
+    pub overflow_y: LayoutOverflow,
+    pub width: Option<Number>,
+    pub height: Option<Number>,
+    pub background: Option<Color>,
+    pub padding_left: Option<Number>,
+    pub padding_right: Option<Number>,
+    pub padding_top: Option<Number>,
+    pub padding_bottom: Option<Number>,
+    pub margin_left: Option<Number>,
+    pub margin_right: Option<Number>,
+    pub margin_top: Option<Number>,
+    pub margin_bottom: Option<Number>,
+    pub font_size: Option<Number>,
+    pub color: Option<Color>,
+    pub actions: Vec<Action>,
+    // ... many other styling and layout fields
 }
 
 // Element - defines HTML/UI element types
@@ -188,9 +204,33 @@ pub enum Element {
     Button { r#type: Option<String> },
     Input { input: Input, name: Option<String>, autofocus: Option<bool> },
     Heading { size: HeaderSize },
-    Image { source: Option<String>, alt: Option<String>, /* ... */ },
+    Image {
+        source: Option<String>,
+        alt: Option<String>,
+        fit: Option<ImageFit>,
+        source_set: Option<String>,
+        sizes: Option<Number>,
+        loading: Option<ImageLoading>,
+    },
     Anchor { target: Option<LinkTarget>, href: Option<String> },
-    // ... other variants
+    Raw { value: String },
+    Aside,
+    Main,
+    Header,
+    Footer,
+    Section,
+    Form,
+    UnorderedList,
+    OrderedList,
+    ListItem,
+    Table,
+    THead,
+    TH,
+    TBody,
+    TR,
+    TD,
+    #[cfg(feature = "canvas")]
+    Canvas,
 }
 ```
 
@@ -201,34 +241,46 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait Renderer: ToRenderRunner + Send + Sync {
-    async fn init(&mut self, width: f32, height: f32, /* ... */)
-        -> Result<(), Box<dyn std::error::Error>>;
-
-    async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error>>;
-
-    async fn render_partial(&self, partial: PartialView)
-        -> Result<(), Box<dyn std::error::Error>>;
-
-    async fn emit_event(&self, event_name: String, event_value: Option<String>)
-        -> Result<(), Box<dyn std::error::Error>>;
+    async fn init(
+        &mut self,
+        width: f32,
+        height: f32,
+        x: Option<i32>,
+        y: Option<i32>,
+        background: Option<Color>,
+        title: Option<&str>,
+        description: Option<&str>,
+        viewport: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
+
+    // Note: render, render_partial, and emit_event methods are implemented
+    // via the ToRenderRunner trait and RenderRunner
 }
 ```
 
 ### Application Builder
 
 ```rust
-pub struct AppBuilder<R: Renderer + /* ... */ + 'static> {
+pub struct AppBuilder {
     // ...
 }
 
-impl<R: Renderer + /* ... */> AppBuilder<R> {
+impl AppBuilder {
     pub fn new() -> Self;
-    pub fn with_title(self, title: impl Into<String>) -> Self;
-    pub fn with_renderer(self, renderer: R) -> Self;
+    pub fn with_title(self, title: String) -> Self;
     pub fn with_router(self, router: Router) -> Self;
-    pub fn build(self) -> Result<App<R>, BuilderError>;
+    pub fn with_width(self, width: f32) -> Self;
+    pub fn with_height(self, height: f32) -> Self;
+    pub fn with_background(self, color: Color) -> Self;
+
+    // Build methods for different renderers
+    pub fn build<R>(self, renderer: R) -> Result<App<R>, BuilderError>;
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError>;
+    pub fn build_default_egui(self) -> Result<App<EguiRenderer>, BuilderError>;
+    pub fn build_default_html(self) -> Result<App<HtmlStubRenderer>, BuilderError>;
+    // ... other renderer-specific build methods
 }
 
 pub struct App<R: Renderer + /* ... */> {
@@ -240,8 +292,8 @@ pub struct App<R: Renderer + /* ... */> {
 impl<R: Renderer + /* ... */> App<R> {
     pub async fn run(&self) -> Result<(), Error>;
     pub async fn serve(&self) -> Result<(), Error>;
-    pub async fn generate(&self) -> Result<(), Error>;
-    pub async fn clean(&self) -> Result<(), Error>;
+    pub async fn generate(&self, output: Option<String>) -> Result<(), Error>;
+    pub async fn clean(&self, output: Option<String>) -> Result<(), Error>;
 }
 ```
 
@@ -279,18 +331,14 @@ debug = ["renderer-egui-debug", "renderer-fltk-debug"]
 ### Egui Desktop Application
 
 ```rust
-use hyperchad::app::{App, AppBuilder};
-use hyperchad::renderer_egui::EguiRenderer;
+use hyperchad::app::AppBuilder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let renderer = EguiRenderer::new();
-
     let app = AppBuilder::new()
-        .with_title("Desktop App")
-        .with_renderer(renderer)
+        .with_title("Desktop App".to_string())
         .with_router(router)
-        .build()?;
+        .build_default_egui()?;
 
     app.run().await?;
     Ok(())
@@ -300,17 +348,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Web Application with Actix
 
 ```rust
-use hyperchad::app::{App, AppBuilder};
-use hyperchad::renderer_html_actix::ActixRenderer;
+use hyperchad::app::AppBuilder;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let renderer = ActixRenderer::new();
-
     let app = AppBuilder::new()
-        .with_renderer(renderer)
         .with_router(router)
-        .build()
+        .build_default_html_actix()
         .unwrap();
 
     app.serve().await.unwrap();
@@ -321,11 +365,20 @@ async fn main() -> std::io::Result<()> {
 ### Server-Side Rendering with HTML
 
 ```rust
-use hyperchad::renderer_html::HtmlRenderer;
+use hyperchad::renderer_html::{HtmlRenderer, DefaultHtmlTagRenderer, router_to_web_server};
+use hyperchad::router::Router;
 
-let renderer = HtmlRenderer::new();
-let view = /* ... create view from routing ... */;
-renderer.render(view).await?;
+let router = Router::new();
+// Add routes...
+
+let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
+    .with_title(Some("My App".to_string()));
+
+// Create runner and serve
+let runtime = switchy::unsync::runtime::Runtime::new();
+let handle = runtime.handle();
+let mut runner = app.to_runner(handle)?;
+runner.run()?;
 ```
 
 ## Testing
@@ -348,21 +401,19 @@ Each module provides its own error types:
 ```rust
 use hyperchad::app::{Error as AppError, BuilderError};
 use hyperchad::state::Error as StateError;
-use hyperchad::router::{NavigateError, ParseError};
+#[cfg(feature = "serde")]
+use hyperchad::router::ParseError;
 
 // App errors
 match app.run().await {
     Ok(()) => println!("App completed successfully"),
-    Err(AppError::Router(e)) => eprintln!("Router error: {}", e),
-    Err(AppError::Renderer(e)) => eprintln!("Renderer error: {}", e),
     Err(e) => eprintln!("Error: {}", e),
 }
 
 // State errors
-match state.get("key") {
+match state.get::<String>("key").await {
     Ok(Some(value)) => println!("Value: {}", value),
     Ok(None) => println!("Key not found"),
-    Err(StateError::Persistence(e)) => eprintln!("Persistence error: {}", e),
     Err(e) => eprintln!("Error: {}", e),
 }
 ```
