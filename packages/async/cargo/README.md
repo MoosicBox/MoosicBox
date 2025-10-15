@@ -54,13 +54,13 @@ cargo build --release
 
 ```bash
 # Check current workspace
-switchy-async-cargo
+switchy_async_cargo
 
 # Check specific directory
-switchy-async-cargo --root /path/to/project
+switchy_async_cargo --root /path/to/project
 
 # Use in CI/CD
-switchy-async-cargo || exit 1
+switchy_async_cargo || exit 1
 ```
 
 ### Example Output
@@ -78,7 +78,7 @@ warning: src/handlers.rs: async method `handle_request` in impl is missing #[inj
 - name: Check async functions
   run: |
       cargo install --path packages/async/cargo
-      switchy-async-cargo
+      switchy_async_cargo
 ```
 
 ## Attribute Rules
