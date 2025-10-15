@@ -169,16 +169,16 @@ jobs:
                       Use the appropriate command based on the comment type:
                       ${{ github.event_name == 'pull_request_review_comment' && format('
                       - Reply to the comment thread using the ROOT comment ID (this ensures proper threading):
-                        `gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -f body="👀 Looking into this..." 2>&1 || echo "Failed to post acknowledgment"`
-
+                        `gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -f body="👀 Looking into this...\n\n[View workflow run](https://github.com/{0}/actions/runs/{3})" 2>&1 || echo "Failed to post acknowledgment"`
+                        
                         IMPORTANT: Use the root comment ID {2} for all replies to ensure they appear in the correct thread.
-                      ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
+                      ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id, github.run_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
                       - Post a PR comment:
-                        `gh pr comment {0} --repo {1} --body "👀 Looking into this..."`
-                      ', github.event.issue.number, github.repository) || format('
+                        `gh pr comment {0} --repo {1} --body "👀 Looking into this...\n\n[View workflow run](https://github.com/{1}/actions/runs/{2})"`
+                      ', github.event.issue.number, github.repository, github.run_id) || format('
                       - Post an issue comment:
-                        `gh issue comment {0} --repo {1} --body "👀 Looking into this..."`
-                      ', github.event.issue.number, github.repository) }}
+                        `gh issue comment {0} --repo {1} --body "👀 Looking into this...\n\n[View workflow run](https://github.com/{1}/actions/runs/{2})"`
+                      ', github.event.issue.number, github.repository, github.run_id) }}
 
                       STEP 2 - ANALYZE THE SPECIFIC CONTEXT:
 
