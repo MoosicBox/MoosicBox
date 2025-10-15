@@ -134,6 +134,12 @@ let app = AppBuilder::new()
 
 Note: Static asset routes require the `assets` feature (enabled by default).
 
+For this example, you'll need to add `bytes` to your `Cargo.toml`:
+```toml
+[dependencies]
+bytes = "1"
+```
+
 ```rust
 use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 use bytes::Bytes;
