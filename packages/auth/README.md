@@ -61,13 +61,11 @@ moosicbox_auth = { version = "0.1.4", default-features = false }
 use moosicbox_auth::{get_client_id_and_access_token, AuthError};
 use switchy_database::config::ConfigDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), AuthError> {
-    let db = ConfigDatabase::new().await?;
+async fn register_client(db: &ConfigDatabase) -> Result<(), AuthError> {
     let host = "https://api.example.com";
 
     // Get or create client credentials
-    let (client_id, access_token) = get_client_id_and_access_token(&db, host).await?;
+    let (client_id, access_token) = get_client_id_and_access_token(db, host).await?;
 
     println!("Client ID: {}", client_id);
     println!("Access Token: {}", access_token);
@@ -81,19 +79,14 @@ async fn main() -> Result<(), AuthError> {
 The package provides REST API endpoints when the `api` feature is enabled (default). To use these endpoints in your Actix Web application:
 
 ```rust
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpServer};
 use moosicbox_auth::api::bind_services;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
-            .service(
-                web::scope("/auth")
-                    .configure(|cfg| {
-                        bind_services(cfg);
-                    })
-            )
+            .service(bind_services(actix_web::web::scope("/auth")))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
