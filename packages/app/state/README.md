@@ -11,14 +11,14 @@ The MoosicBox App State package provides:
 - **WebSocket Integration**: Real-time communication with MoosicBox servers
 - **Audio Zone Support**: Multi-zone audio configuration and control
 - **UPnP Support**: Network audio device discovery and integration (optional)
-- **Persistence**: SQLite-based state persistence with HyperChad integration
+- **Persistence**: SQLite-based state persistence using HyperChad's state-sqlite feature
 - **Event System**: Comprehensive event listeners for state changes
 
 ## Features
 
 ### Core State Management
 
-- **Thread-Safe State**: Arc<RwLock<T>> wrapped state for concurrent access
+- **Thread-Safe State**: `Arc<RwLock<T>>` wrapped state for concurrent access
 - **Connection Management**: API and WebSocket connection state
 - **Session Tracking**: Current playback sessions and targets
 - **Profile Management**: User profile and authentication state
@@ -105,10 +105,10 @@ let players = app_state.get_players(session_id, Some(&playback_target)).await;
 ```rust
 // Add event listeners during state creation
 let app_state = AppState::new()
-    .with_on_after_handle_playback_update_listener(|session| async move {
+    .with_on_after_handle_playback_update_listener(|session: ApiUpdateSession| async move {
         println!("Session updated: {:?}", session);
     })
-    .with_on_current_sessions_updated_listener(|sessions| async move {
+    .with_on_current_sessions_updated_listener(|sessions: Vec<ApiSession>| async move {
         println!("Sessions updated: {} active", sessions.len());
     });
 ```
@@ -116,13 +116,15 @@ let app_state = AppState::new()
 ### WebSocket Integration
 
 ```rust
+use moosicbox_ws::models::{InboundPayload, EmptyPayload};
+
 // WebSocket operations are handled automatically
 // State changes trigger WebSocket messages when connected
 
 // Manual WebSocket operations
-app_state.init_ws().await?;
-app_state.send_ws_message(payload).await?;
-app_state.close_ws().await?;
+app_state.start_ws_connection().await?;
+app_state.queue_ws_message(InboundPayload::GetConnectionId(EmptyPayload {}), true).await?;
+app_state.close_ws_connection().await?;
 ```
 
 ## State Structure
@@ -187,26 +189,37 @@ app_state.close_ws().await?;
 All operations return `Result<T, AppStateError>` with comprehensive error types:
 
 - **PlayerError**: Audio player operation failures
-- **InitUpnpError**: UPnP initialization failures
+- **InitUpnpError**: UPnP initialization failures (when `upnp` feature is enabled)
 - **RegisterPlayersError**: Player registration failures
 - **ScanOutputsError**: Audio output scanning failures
 - **ProxyRequestError**: API proxy request failures
+- **FetchAudioZonesError**: Audio zone fetch failures
+- **InitWsError**: WebSocket initialization failures
+- **CloseWsError**: WebSocket close failures
+- **SendWsMessageError**: WebSocket message send failures
+- **HandleWsMessageError**: WebSocket message handling failures
+- **ConnectWsError**: WebSocket connection failures
 
 ## Threading and Concurrency
 
-- **Thread-Safe**: All state access is protected by Arc<RwLock<T>>
+- **Thread-Safe**: All state access is protected by `Arc<RwLock<T>>`
 - **Async Operations**: All operations are async-compatible
 - **Event Listeners**: Async event handler support
 - **WebSocket**: Background WebSocket handling with join handles
 
 ## Dependencies
 
-- **HyperChad**: State persistence framework
+Core dependencies include:
+
+- **HyperChad**: State persistence framework (with state-sqlite feature)
 - **MoosicBox Player**: Audio playback management
 - **MoosicBox Session**: Session and connection models
 - **MoosicBox Audio Output**: Audio output management
-- **MoosicBox WebSocket**: WebSocket communication
-- **Tokio**: Async runtime and synchronization
+- **MoosicBox App WebSocket**: WebSocket client implementation
+- **MoosicBox WebSocket**: WebSocket protocol models
+- **Switchy Async**: Async runtime utilities with Tokio support
+- **Switchy HTTP**: HTTP client (reqwest-based with JSON support)
+- **Switchy UPnP**: UPnP device discovery and control (optional, with player feature)
 
 ## Integration
 
