@@ -10,7 +10,7 @@ A generic HTTP client abstraction library providing unified interfaces for HTTP 
 - **Response Handling**: Unified response interface for status, headers, text, bytes, and streaming
 - **JSON Support**: Built-in JSON serialization/deserialization support
 - **Streaming Support**: Byte stream responses for large data handling
-- **Method Support**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, CONNECT, TRACE methods
+- **Method Support**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS methods with dedicated functions; CONNECT and TRACE via `request()` method
 - **Error Handling**: Unified error types across different backends
 
 ## Installation
