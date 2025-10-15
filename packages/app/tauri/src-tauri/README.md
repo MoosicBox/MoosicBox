@@ -100,7 +100,7 @@ cargo tauri dev
 ### Basic Application
 
 ```rust
-use moosicbox_app_tauri::{run, TauriUpdateAppState};
+use moosicbox_lib::{run, TauriUpdateAppState};
 use tauri::{Manager, Window};
 
 #[tokio::main]
