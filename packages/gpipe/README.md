@@ -1,6 +1,6 @@
 # Generic Pipelines (gpipe)
 
-Abstract syntax tree and type definitions for a universal CI/CD workflow format. Planned: execution and translation across multiple backends.
+Universal CI/CD workflow orchestration tool. Currently provides type definitions and AST. Planned: execution and translation across multiple backends.
 
 ## Overview
 
