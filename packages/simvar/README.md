@@ -17,7 +17,7 @@ This package provides a unified interface for simulation-based testing with dete
 The package re-exports from `simvar_harness`:
 
 - **`run_simulation`**: Main function to run simulation tests
-- **`SimBootstrap` trait**: Trait for configuring simulation lifecycle hooks (`init`, `on_start`, `on_step`, `on_end`)
+- **`SimBootstrap` trait**: Trait for configuring simulation lifecycle hooks (`init`, `on_start`, `on_step`, `on_end`, `props`, `build_sim`)
 - **`Sim` trait**: Interface for managing hosts and clients in simulations
 - **Configuration types**: `SimConfig`, `SimProperties`, `SimResult`, `SimRunProperties`
 - **Modules**: `client`, `host`, `plan`
@@ -50,9 +50,11 @@ struct MySimBootstrap;
 impl SimBootstrap for MySimBootstrap {
     fn on_start(&self, sim: &mut impl Sim) {
         // Setup hosts and clients
-        sim.host("my-host", || async {
-            // Host logic
-            Ok(())
+        sim.host("my-host", || {
+            Box::pin(async {
+                // Host logic
+                Ok(())
+            })
         });
     }
 }
