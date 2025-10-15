@@ -254,7 +254,7 @@ async fn create_schema(db: &dyn Database) -> Result<(), DatabaseError> {
     // Create index
     db.create_index("idx_users_email")
         .table("users")
-        .columns(&["email"])
+        .column("email")
         .unique(true)
         .execute(db)
         .await?;
