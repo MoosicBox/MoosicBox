@@ -11,13 +11,42 @@ This package provides a web server backend for HyperChad HTML rendering using th
 
 ## Usage
 
+This package provides low-level web server backend infrastructure. Users typically interact with it via higher-level packages like `hyperchad_renderer_html` which provides the `router_to_web_server()` helper function.
+
+To use this package directly, implement the `WebServerResponseProcessor` trait:
+
 ```rust
 use hyperchad_renderer_html_web_server::*;
 use hyperchad_renderer::{Handle, ToRenderRunner};
 use flume::unbounded;
+use async_trait::async_trait;
 
-// Create a web server app with a response processor
-let (tx, rx) = unbounded();
+// Implement WebServerResponseProcessor for your response type
+#[derive(Clone)]
+struct MyProcessor;
+
+#[async_trait]
+impl WebServerResponseProcessor<MyRequestType> for MyProcessor {
+    fn prepare_request(
+        &self,
+        req: HttpRequest,
+        body: Option<Arc<bytes::Bytes>>,
+    ) -> Result<MyRequestType, WebServerError> {
+        // Implementation here
+    }
+
+    async fn to_response(&self, data: MyRequestType) -> Result<HttpResponse, WebServerError> {
+        // Implementation here
+    }
+
+    async fn to_body(&self, content: hyperchad_renderer::Content, data: MyRequestType) -> Result<(bytes::Bytes, String), WebServerError> {
+        // Implementation here
+    }
+}
+
+// Create a web server app with your processor
+let (_tx, rx) = unbounded();
+let processor = MyProcessor;
 let app = WebServerApp::new(processor, rx);
 
 // Convert to a runner and start
