@@ -133,8 +133,8 @@ jobs:
                   additional_permissions: |
                       actions: read
 
-                  # Grant access to gh commands for posting comments and file editing tools
-                  claude_args: '--allowedTools "Edit,Read,Write,Bash(gh pr comment:*),Bash(gh issue comment:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(gh api:*)"'
+                  # Grant access to file editing tools and all bash commands
+                  claude_args: '--allowedTools "Edit,Read,Write,Bash"'
 
                   prompt: |
                       You are helping with a GitHub repository. A user has mentioned @claude in a comment.
