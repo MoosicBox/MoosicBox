@@ -183,8 +183,11 @@ Core dependencies (automatically managed by Cargo):
 - `cargo_metadata` - Workspace metadata access
 - `clap` - Command-line argument parsing
 - `glob` - File pattern matching
+- `log` - Logging facade
+- `pretty_env_logger` - Logging implementation
 - `regex` - Pattern matching for filters
 - `serde_json` - JSON output formatting
+- `switchy_time` - Time utilities
 
 Optional external tools:
 
