@@ -105,8 +105,8 @@ let players = app_state.get_players(session_id, Some(&playback_target)).await;
 ```rust
 // Add event listeners during state creation
 let app_state = AppState::new()
-    .with_on_after_handle_playback_update_listener(|session| async move {
-        println!("Session updated: {:?}", session);
+    .with_on_after_handle_playback_update_listener(|update_session| async move {
+        println!("Session updated: {:?}", update_session);
     })
     .with_on_current_sessions_updated_listener(|sessions| async move {
         println!("Sessions updated: {} active", sessions.len());
@@ -120,9 +120,9 @@ let app_state = AppState::new()
 // State changes trigger WebSocket messages when connected
 
 // Manual WebSocket operations
-app_state.init_ws().await?;
-app_state.send_ws_message(payload).await?;
-app_state.close_ws().await?;
+app_state.start_ws_connection().await?;
+app_state.queue_ws_message(payload, true).await?;
+app_state.close_ws_connection().await?;
 ```
 
 ## State Structure
