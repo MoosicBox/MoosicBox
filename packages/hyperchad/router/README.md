@@ -26,8 +26,8 @@ The HyperChad Router package provides:
 
 - **HTTP Methods**: Support for GET, POST, PUT, DELETE, PATCH
 - **Query Parameters**: Automatic query string parsing
-- **Headers**: Complete header access and manipulation
-- **Cookies**: Cookie parsing and management
+- **Headers**: Complete header access
+- **Cookies**: Cookie storage in request context
 - **Body Parsing**: JSON and form data parsing
 
 ### Form Processing
@@ -199,13 +199,13 @@ use bytes::Bytes;
 let router = Router::new()
     .with_static_route("/static/css/style.css", |_req| async {
         Some(Content::Raw {
-            data: Bytes::from(include_str!("../static/style.css")),
+            data: Bytes::from_static(include_bytes!("../static/style.css")),
             content_type: "text/css".to_string(),
         })
     })
     .with_static_route("/static/js/app.js", |_req| async {
         Some(Content::Raw {
-            data: Bytes::from(include_str!("../static/app.js")),
+            data: Bytes::from_static(include_bytes!("../static/app.js")),
             content_type: "application/javascript".to_string(),
         })
     });
@@ -304,15 +304,20 @@ Automatic OS detection using the `os_info` crate provides default client informa
 
 ## Dependencies
 
-- **Switchy/Switchy Async**: Async runtime abstraction with Tokio support
-- **Futures**: Future utilities
-- **Bytes**: Efficient byte handling
-- **Flume**: Channel communication
-- **QString**: Query string parsing
-- **OS Info**: Operating system detection
-- **Serde**: Optional serialization support
-- **Mime Multipart**: Optional form parsing
-- **Base64**: Optional base64 encoding for file uploads
+- **switchy**: HTTP models and async runtime abstraction
+- **switchy_async**: Async runtime with Tokio support (rt-multi-thread, sync features)
+- **futures**: Future utilities
+- **bytes**: Efficient byte handling
+- **flume**: Channel communication
+- **qstring**: Query string parsing
+- **os_info**: Operating system detection
+- **serde**: Optional serialization support (with derive feature)
+- **serde_json**: Optional JSON serialization
+- **serde_urlencoded**: Optional URL-encoded form parsing
+- **mime_multipart**: Optional multipart form parsing
+- **base64**: Optional base64 encoding for file uploads
+- **hyper** (v0.10): Optional dependency for multipart form support
+- **mime** (v0.2): Optional dependency for MIME type handling
 
 ## Integration
 
