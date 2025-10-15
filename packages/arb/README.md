@@ -102,11 +102,12 @@ quickcheck! {
 
 - **`xml`**: Enable XML string generation utilities (XmlString, XmlAttrNameString)
 - **`css`**: Enable CSS identifier generation utilities (CssIdentifierString)
-- **`serde`**: Enable JSON value generation utilities (JsonValue, JsonF64, JsonF32)
+- **`serde`**: Enable JSON value generation utilities (JsonValue, JsonF64, JsonF32). Requires `xml` feature.
 - **`default`**: Enables all features: `["css", "serde", "xml"]`
 
 ## Dependencies
 
 - **quickcheck**: Property-based testing framework (required)
+- **log**: Logging framework (required)
 - **serde_json**: JSON serialization support (optional, enabled with `serde` feature)
 - **moosicbox_assert**: Internal assertion utilities (required)
