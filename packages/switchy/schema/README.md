@@ -388,34 +388,31 @@ The `MigrationRunner` provides programmatic migration execution:
 use switchy_schema::runner::MigrationRunner;
 use switchy_database::Database;
 
-let runner = MigrationRunner::new(
-    Box::new(db),
-    source,
-    "__switchy_migrations".to_string(),
-);
+let runner = MigrationRunner::new(Box::new(source))
+    .with_table_name("__switchy_migrations");
 
 // Run all pending migrations
-let results = runner.migrate().await?;
+runner.run(db).await?;
 
 // Check migration status
-let info = runner.list_migrations().await?;
+let info = runner.list_migrations(db).await?;
 for migration in info {
     println!("Migration {}: {:?}", migration.id, migration.status);
 }
 
 // Retry a specific migration
-runner.retry_migration("001_create_users").await?;
+runner.retry_migration(db, "001_create_users").await?;
 
 // Mark untracked migrations as completed (default, safest)
-let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly).await?;
+let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::PendingOnly).await?;
 println!("Marked {} new migrations", summary.newly_marked);
 
 // Mark failed migrations as completed too
-let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeFailed).await?;
+let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::IncludeFailed).await?;
 println!("Marked {} failed migrations", summary.failed_marked);
 
 // Mark ALL migrations as completed (dangerous)
-let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::All).await?;
+let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::All).await?;
 println!("Total: {}, New: {}, Failed: {}, InProgress: {}",
          summary.total, summary.newly_marked, summary.failed_marked, summary.in_progress_marked);
 ```
@@ -593,20 +590,20 @@ The system creates a `__switchy_migrations` table to track migration state:
 The package provides comprehensive error handling with recovery capabilities:
 
 ```rust
-use switchy_schema::{Result, Error, ValidationError};
+use switchy_schema::{Result, MigrationError};
 
 // Handle different error types
-match runner.migrate().await {
-    Ok(results) => println!("Migrations completed: {:?}", results),
-    Err(Error::Validation(ValidationError::MigrationInProgress { id })) => {
-        println!("Migration {} is in progress - may need recovery", id);
-        // Use runner.retry_migration(&id) or CLI recovery commands
+match runner.run(db).await {
+    Ok(()) => println!("Migrations completed successfully"),
+    Err(MigrationError::DirtyState { migrations }) => {
+        println!("Migrations in progress - may need recovery: {:?}", migrations);
+        // Use runner.retry_migration(db, &id) or CLI recovery commands
     }
-    Err(Error::Validation(ValidationError::ChecksumMismatch { id, .. })) => {
-        println!("Migration {} content changed after execution", id);
+    Err(MigrationError::ChecksumValidationFailed { mismatches }) => {
+        println!("Migration content changed after execution: {:?}", mismatches);
         // Investigate migration file changes
     }
-    Err(Error::Database(db_err)) => {
+    Err(MigrationError::Database(db_err)) => {
         println!("Database error: {}", db_err);
         // Handle database connectivity or SQL errors
     }
@@ -614,15 +611,16 @@ match runner.migrate().await {
 }
 ```
 
-### ValidationError Types
+### MigrationError Types
 
-The system provides structured validation errors:
+The system provides structured migration errors:
 
-- **MigrationInProgress**: Migration is currently running (dirty state)
-- **ChecksumMismatch**: Migration file changed after execution
-- **MigrationNotFound**: Referenced migration doesn't exist
-- **InvalidMigrationStatus**: Migration in unexpected state
-- **DuplicateMigration**: Multiple migrations with same ID
+- **DirtyState**: Migrations currently running (in-progress state)
+- **ChecksumValidationFailed**: Migration file(s) changed after execution
+- **Database**: Database connectivity or SQL errors
+- **Execution**: Migration execution failures
+- **Discovery**: Migration discovery failures
+- **Validation**: Migration validation failures
 
 ## Features
 
@@ -846,23 +844,20 @@ use switchy_schema::{
 };
 use switchy_database::Database;
 
-async fn run_migrations(db: Box<dyn Database>) -> Result<(), Error> {
+async fn run_migrations(db: &dyn Database) -> switchy_schema::Result<()> {
     let source = DirectoryMigrationSource::from_path("./migrations");
-    let runner = MigrationRunner::new(
-        db,
-        Box::new(source),
-        "__switchy_migrations".to_string(),
-    );
+    let runner = MigrationRunner::new(Box::new(source))
+        .with_table_name("__switchy_migrations");
 
     // Check current status
-    let migrations = runner.list_migrations().await?;
+    let migrations = runner.list_migrations(db).await?;
     for migration in &migrations {
         println!("Migration {}: {:?}", migration.id, migration.status);
     }
 
     // Run pending migrations
-    let results = runner.migrate().await?;
-    println!("Applied {} migrations", results.len());
+    runner.run(db).await?;
+    println!("Migrations completed successfully");
 
     Ok(())
 }
