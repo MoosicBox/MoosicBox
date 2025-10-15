@@ -116,19 +116,12 @@ The SWC bundler supports:
 Execute npm/pnpm/bun commands:
 
 ```rust
-use hyperchad_js_bundler::node::{run_npm_command, run_command};
+use hyperchad_js_bundler::node::run_npm_command;
 use std::path::Path;
 
 // Run npm command (tries pnpm, bun, npm in order based on enabled features)
 run_npm_command(
     &["install"],
-    Path::new(".")
-);
-
-// Run custom commands with binary fallback
-run_command(
-    ["pnpm", "bun", "npm"].iter().map(|s| s.to_string()),
-    &["run", "build"],
     Path::new(".")
 );
 ```
