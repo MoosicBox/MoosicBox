@@ -10,7 +10,7 @@ The Image Helper (`image_helper`) is a utility for image processing operations i
 - **Format Conversion**: Convert between JPEG and WebP formats
 - **Quality Control**: Configurable compression quality settings
 - **Smart Resizing**: Automatic aspect ratio calculation
-- **libvips Integration**: High-performance image processing (non-Windows platforms only)
+- **libvips Integration**: High-performance image processing (Linux/macOS only; Rust bindings unavailable on Windows)
 
 ## Installation
 
@@ -20,7 +20,7 @@ The Image Helper (`image_helper`) is a utility for image processing operations i
 # Linux/macOS (with libvips support)
 cargo install --path packages/image --features "build-binary,image,libvips"
 
-# Windows (libvips not available)
+# Windows (libvips Rust crate has build issues)
 cargo install --path packages/image --features "build-binary,image"
 ```
 
