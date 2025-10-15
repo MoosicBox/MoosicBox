@@ -8,7 +8,8 @@ The MoosicBox Bloaty package provides binary size analysis for Rust packages in 
 
 ## Features
 
-- **Feature size analysis**: Measures the size impact of each feature on both rlib and binary targets
+- **Feature size analysis**: Measures the size impact of each feature on rlib targets and binary executables
+- **Binary target analysis**: For binary targets, analyzes both the rlib and the final executable sizes
 - **Multiple output formats**: Supports text, JSON, and JSONL report formats
 - **Package filtering**: Select specific packages using patterns or explicit lists
 - **Feature filtering**: Skip features using patterns or explicit lists
@@ -146,12 +147,18 @@ The JSON report provides structured data:
                 {
                     "name": "moosicbox_core",
                     "base_size": 1258291,
+                    "base_binary_size": 0,
                     "features": [
                         {
                             "name": "async",
                             "size": 1360384,
                             "diff": 102093,
-                            "diff_formatted": "+102 KB"
+                            "diff_formatted": "+102 KB",
+                            "size_formatted": "1.3 MB",
+                            "binary_size": 0,
+                            "binary_diff": 0,
+                            "binary_diff_formatted": "+0 B",
+                            "binary_size_formatted": "0 B"
                         }
                     ]
                 }
@@ -183,8 +190,11 @@ Core dependencies (automatically managed by Cargo):
 - `cargo_metadata` - Workspace metadata access
 - `clap` - Command-line argument parsing
 - `glob` - File pattern matching
+- `log` - Logging framework
+- `pretty_env_logger` - Pretty logging output
 - `regex` - Pattern matching for filters
 - `serde_json` - JSON output formatting
+- `switchy_time` - Cross-platform time utilities
 
 Optional external tools:
 
@@ -196,10 +206,11 @@ Optional external tools:
 
 1. **Package Discovery**: Uses `cargo_metadata` to find workspace members
 2. **Feature Extraction**: Identifies available features from each package's `Cargo.toml`
-3. **Baseline Build**: Builds each target with no features enabled and measures size
-4. **Feature Analysis**: Builds each target with individual features and compares sizes
-5. **Binary Analysis**: For binary targets, measures both library and executable sizes
-6. **Report Generation**: Outputs results in requested formats
+3. **Baseline Build**: Builds each target with no features enabled and measures rlib size
+4. **Baseline Binary Build**: For binary targets, also builds and measures the executable size
+5. **Feature Analysis**: Builds each target with individual features and compares rlib sizes
+6. **Binary Feature Analysis**: For binary targets, also builds executables with features and compares sizes
+7. **Report Generation**: Outputs results in requested formats (text, JSON, JSONL)
 
 ## Contributing
 
