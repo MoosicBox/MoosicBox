@@ -22,8 +22,8 @@ The MoosicBox Stream Utils package provides:
 
 ### Optional Features
 
-- **Stalled Monitor**: Monitor streams for stalled reads (requires `stalled-monitor` feature)
-- **Remote ByteStream**: Support for remote byte streaming (requires `remote-bytestream` feature)
+- **Stalled Monitor**: Monitor streams for stalled reads (`stalled-monitor` feature, enabled by default)
+- **Remote ByteStream**: Support for remote byte streaming (`remote-bytestream` feature, enabled by default)
 
 ## Installation
 
