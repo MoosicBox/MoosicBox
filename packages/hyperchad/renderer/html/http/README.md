@@ -55,15 +55,20 @@ hyperchad_renderer_html_http = {
 
 ## Usage
 
+**Note:** The code examples below are simplified for clarity. In production code, you'll need to add proper error handling, import all required types, and handle edge cases appropriately.
+
 ### Basic HTTP Application
 
 ```rust
 use hyperchad_renderer_html_http::HttpApp;
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
-use hyperchad_router::{Router, RouteRequest};
+use hyperchad_router::{Router, RouteRequest, RequestInfo};
 use hyperchad_template::container;
-use http::{Request, Response, StatusCode};
-use std::collections::HashMap;
+use http::{Request, Response};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use bytes::Bytes;
+use switchy::http::models::Method;
 
 async fn handle_request(req: Request<Vec<u8>>) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
     // Create router and tag renderer
@@ -72,19 +77,30 @@ async fn handle_request(req: Request<Vec<u8>>) -> Result<Response<Vec<u8>>, Box<
 
     // Create HTTP app
     let app = HttpApp::new(tag_renderer, router)
-        .with_title("My HyperChad App".to_string())
-        .with_description("A HyperChad HTTP application".to_string())
-        .with_viewport("width=device-width, initial-scale=1".to_string());
+        .with_title("My HyperChad App")
+        .with_description("A HyperChad HTTP application")
+        .with_viewport("width=device-width, initial-scale=1");
+
+    // Parse query parameters
+    let query = req.uri().query()
+        .map(|q| {
+            qstring::QString::from(q)
+                .into_iter()
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
 
     // Convert HTTP request to RouteRequest
     let route_request = RouteRequest {
         path: req.uri().path().to_string(),
-        query: req.uri().query().map(|q| q.to_string()),
-        method: req.method().to_string(),
+        query,
+        method: Method::from(req.method().as_str()),
         headers: req.headers().iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect(),
-        body: Some(req.into_body()),
+        cookies: BTreeMap::new(),
+        info: RequestInfo::default(),
+        body: Some(Arc::new(Bytes::from(req.into_body()))),
     };
 
     // Process the request
@@ -132,23 +148,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Advanced Routing
 
+**Note:** The Router uses a builder pattern with `with_route_result` for adding routes. Route handlers must return `Result<Option<Content>, BoxError>`.
+
 ```rust
-use hyperchad_router::{Router, RoutePath};
+use hyperchad_router::{Router, RouteRequest};
+use hyperchad_renderer::Content;
 use hyperchad_template::container;
 
 fn create_router() -> Router {
-    let mut router = Router::new();
-
-    // Add routes
-    router.add_route("/", render_home);
-    router.add_route("/about", render_about);
-    router.add_route("/users/{id}", render_user);
-    router.add_route("/api/users", handle_api_users);
-
-    router
+    Router::new()
+        .with_route_result("/", |_req: RouteRequest| async {
+            Ok(Some(render_home()))
+        })
+        .with_route_result("/about", |_req: RouteRequest| async {
+            Ok(Some(render_about()))
+        })
+        .with_route_result("/users/{id}", |req: RouteRequest| async {
+            // Note: Path parameter extraction needs custom implementation
+            let user_id = req.path.split('/').last().unwrap_or("unknown");
+            Ok(Some(render_user(user_id)))
+        })
+        .with_route_result("/api/users", |req: RouteRequest| async {
+            handle_api_users(&req).await
+        })
 }
 
-fn render_home() -> String {
+fn render_home() -> Content {
     let view = container! {
         html {
             head {
@@ -182,10 +207,29 @@ fn render_home() -> String {
         }
     };
 
-    view.to_string()
+    Content::from(view)
 }
 
-fn render_user(user_id: &str) -> String {
+fn render_about() -> Content {
+    let view = container! {
+        html {
+            head {
+                title { "About - HyperChad HTTP" }
+            }
+            body {
+                div class="container" {
+                    h1 { "About HyperChad HTTP" }
+                    p { "A framework-agnostic HTTP renderer for HyperChad." }
+                    a href="/" { "← Back to Home" }
+                }
+            }
+        }
+    };
+
+    Content::from(view)
+}
+
+fn render_user(user_id: &str) -> Content {
     let view = container! {
         html {
             head {
@@ -207,43 +251,40 @@ fn render_user(user_id: &str) -> String {
         }
     };
 
-    view.to_string()
+    Content::from(view)
 }
 
-async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
-    match req.method.as_str() {
-        "GET" => {
+async fn handle_api_users(req: &RouteRequest) -> Result<Option<Content>, Box<dyn std::error::Error>> {
+    use hyperchad_renderer::Content;
+    use switchy::http::models::Method;
+
+    match req.method {
+        Method::Get => {
             let users = serde_json::json!([
                 {"id": 1, "name": "Alice", "email": "alice@example.com"},
                 {"id": 2, "name": "Bob", "email": "bob@example.com"}
             ]);
 
-            Ok(Response::builder()
-                .status(200)
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(&users)?)?)
+            Ok(Some(Content::Json(users)))
         }
-        "POST" => {
+        Method::Post => {
             // Handle user creation
-            let body = req.body.as_ref().unwrap();
+            let body = req.body.as_ref().ok_or("Missing body")?;
             let new_user: serde_json::Value = serde_json::from_slice(body)?;
 
             let response = serde_json::json!({
                 "id": 123,
                 "name": new_user["name"],
-                "email": new_user["email"],
-                "created_at": chrono::Utc::now()
+                "email": new_user["email"]
             });
 
-            Ok(Response::builder()
-                .status(201)
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(&response)?)?)
+            Ok(Some(Content::Json(response)))
         }
         _ => {
-            Ok(Response::builder()
-                .status(405)
-                .body(b"Method Not Allowed".to_vec())?)
+            Ok(Some(Content::Raw {
+                data: b"Method Not Allowed".to_vec(),
+                content_type: "text/plain".to_string(),
+            }))
         }
     }
 }
@@ -281,7 +322,7 @@ fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
         })
 }
 
-fn render_page_with_assets() -> String {
+fn render_page_with_assets() -> Content {
     let view = container! {
         html {
             head {
@@ -308,7 +349,7 @@ fn render_page_with_assets() -> String {
         }
     };
 
-    view.to_string()
+    Content::from(view)
 }
 ```
 
@@ -352,7 +393,7 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
         .with_action_tx(action_tx)
 }
 
-fn render_contact_form() -> String {
+fn render_contact_form() -> Content {
     let view = container! {
         html {
             head {
@@ -404,7 +445,7 @@ fn render_contact_form() -> String {
         }
     };
 
-    view.to_string()
+    Content::from(view)
 }
 ```
 
@@ -412,25 +453,23 @@ fn render_contact_form() -> String {
 
 ```rust
 use http::StatusCode;
+use hyperchad_template::container;
 
 async fn handle_request_with_errors(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
-    match process_request(req).await {
+    match handle_request(req).await {
         Ok(response) => response,
         Err(e) => handle_error(e),
     }
 }
 
 fn handle_error(error: Box<dyn std::error::Error>) -> Response<Vec<u8>> {
-    let (status, message) = match error.downcast_ref::<hyperchad_renderer_html_http::Error>() {
-        Some(hyperchad_renderer_html_http::Error::Navigate(nav_err)) => {
-            (StatusCode::NOT_FOUND, format!("Page not found: {}", nav_err))
-        }
-        Some(hyperchad_renderer_html_http::Error::IO(io_err)) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("IO error: {}", io_err))
-        }
-        _ => {
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-        }
+    // Determine status code and message based on error type
+    let (status, message) = if error.to_string().contains("not found") {
+        (StatusCode::NOT_FOUND, format!("Page not found: {}", error))
+    } else if error.to_string().contains("IO") {
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("IO error: {}", error))
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
     };
 
     let error_page = container! {
@@ -516,11 +555,11 @@ async fn handle_with_middleware(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 
 Default features: `actions`, `assets`, `debug`, `json`
 
-- **`actions`**: Enable server-side action processing (depends on `_json` and `serde`)
-- **`assets`**: Enable static asset serving (depends on `mime_guess`, `switchy_async`, `switchy_fs`)
+- **`actions`**: Enable server-side action processing (enables `_json`, `serde`, `hyperchad_renderer/logic`, `hyperchad_router/serde`)
+- **`assets`**: Enable static asset serving (enables `mime_guess`, `switchy_async`, `switchy_fs`, `hyperchad_renderer/assets`)
 - **`debug`**: Enable debug-specific functionality
-- **`json`**: Enable JSON content type support (depends on `_json`)
-- **`_json`**: Internal feature for JSON dependencies (do not enable directly)
+- **`json`**: Enable JSON content type support (enables `_json`, `hyperchad_renderer/json`)
+- **`_json`**: Internal feature that enables `serde_json` (do not enable directly, use `actions` or `json` instead)
 
 ## HTTP Standards Compliance
 
@@ -551,17 +590,21 @@ Default features: `actions`, `assets`, `debug`, `json`
 Core dependencies:
 
 - **http**: Standard HTTP types and utilities
+- **hyperchad_color**: Color handling
+- **hyperchad_renderer**: Renderer abstractions and traits (with `canvas` feature)
 - **hyperchad_renderer_html**: Core HTML rendering functionality
 - **hyperchad_router**: Routing and navigation
-- **hyperchad_renderer**: Renderer abstractions and traits
+- **moosicbox_assert**: Assertion utilities
+- **moosicbox_env_utils**: Environment utilities
 - **thiserror**: Error handling
-- **flume**: Multi-producer, multi-consumer channels for action handling
+- **flume**: Multi-producer, multi-consumer channels
+- **log**: Logging facade
 
 Optional dependencies (enabled by features):
 
-- **serde** & **serde_json**: JSON serialization for actions and API responses
-- **mime_guess**: Content-type detection for static assets
-- **switchy_async** & **switchy_fs**: Async file I/O for asset serving
+- **serde** & **serde_json**: JSON serialization (enabled by `actions` and `json` features)
+- **mime_guess**: Content-type detection for static assets (enabled by `assets` feature)
+- **switchy_async** & **switchy_fs**: Async file I/O for asset serving (enabled by `assets` feature)
 
 ## Integration
 
