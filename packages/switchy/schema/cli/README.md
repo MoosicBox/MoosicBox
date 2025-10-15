@@ -1,4 +1,4 @@
-# switchy-migrate
+# switchy_schema_cli
 
 A command-line interface for managing database schema migrations using the `switchy_schema` library.
 
