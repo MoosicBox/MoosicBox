@@ -410,7 +410,7 @@ futures-core = "0.3.31"
 futures-util = { version = "0.3.31", default-features = false, features = [
     "std",
 ] }
-getrandom = "0.3.3"
+getrandom = "0.3.4"
 git2 = "0.20.2"
 glob = "0.3.3"
 hex = "0.4.3"
