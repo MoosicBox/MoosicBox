@@ -16,23 +16,24 @@ The MoosicBox Native App UI package provides:
 
 ### Core UI
 
-- **Navigation**: Sidebar navigation and routing
-- **Player**: Audio player controls and visualization
-- **Footer**: Bottom player interface
-- **Modal**: Modal dialog components
+- **Navigation**: Sidebar navigation with links to home, downloads, albums, and artists
+- **Player**: Audio player controls with play/pause, previous/next track, seek, and volume controls
+- **Footer**: Bottom player interface containing the player and visualization
+- **Modal**: Reusable modal dialog component with header and content sections
+- **Visualization**: Canvas-based audio visualization component
 
 ### Music UI
 
-- **Albums**: Album browsing and display
-- **Artists**: Artist listing and navigation
-- **Search**: Music search interface
-- **Play Queue**: Playback queue management
+- **Albums**: Album browsing, display, and cover art with filtering and sorting support
+- **Artists**: Artist listing, navigation, and cover art display
+- **Search**: Global music search interface supporting albums, artists, and tracks
+- **Play Queue**: Playback queue display and management with track listings
 
-### Settings
+### Settings & Management
 
-- **Audio Zones**: Multi-zone audio configuration
-- **Downloads**: Download management interface
-- **Playback Sessions**: Session management UI
+- **Audio Zones**: Multi-zone audio configuration UI with zone creation and management
+- **Downloads**: Download management interface with progress tracking and history
+- **Playback Sessions**: Session management UI for multiple playback sessions
 - **Settings**: Application configuration interface
 
 ## Features
@@ -84,7 +85,7 @@ let content = container! {
 
 let ui = page(&state, &content);
 
-// Create footer with player
+// Create footer with player controls
 let footer_ui = footer(&state);
 ```
 
@@ -93,7 +94,7 @@ let footer_ui = footer(&state);
 ```rust
 use moosicbox_app_native_ui::player;
 
-// Create player interface
+// Create player interface (used within footer)
 let player_ui = player(&state);
 ```
 
@@ -125,11 +126,28 @@ let action = Action::PlayAlbum {
 // - Action::PlayTracks { track_ids, api_source }
 ```
 
+### Utility Functions
+
+```rust
+use moosicbox_app_native_ui::{modal, public_img};
+
+// Create a modal dialog
+let modal_ui = modal(
+    "modal-id",
+    &header_content,
+    &body_content,
+);
+
+// Reference public image assets
+let icon_path = public_img!("icon128.png");
+// Expands to: "/public/img/icon128.png"
+```
+
 ## Constants
 
 ### Layout Constants
 
-- `FOOTER_HEIGHT`: Footer component height (calculated from VIZ_HEIGHT + VIZ_PADDING + FOOTER_BORDER_SIZE)
+- `FOOTER_HEIGHT`: Footer component height (118px: calculated as 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE)
 - `FOOTER_ICON_SIZE`: Icon sizes in footer (25px)
 - `FOOTER_BORDER_SIZE`: Footer border size (3px)
 - `CURRENT_ALBUM_SIZE`: Current album artwork size (70px)
@@ -158,27 +176,39 @@ let action = Action::PlayAlbum {
 The package is organized into the following modules:
 
 - `albums` - Album browsing, display, and cover art management
+- `api` - API integration utilities (includes Tidal API support)
 - `artists` - Artist listing, navigation, and cover art
 - `audio_zones` - Audio zone configuration UI
 - `downloads` - Download management interface with progress tracking
-- `formatting` - Time and data formatting utilities
+- `formatting` - Time, data, and formatting utilities (includes date formatting, byte size formatting, and various type formatters)
 - `play_queue` - Playback queue display and management
 - `playback_sessions` - Session management UI
-- `search` - Music search interface
+- `search` - Music search interface with global search support
 - `settings` - Application configuration interface
-- `state` - Application state management
+- `state` - Application state management (includes PlaybackState and PlayerState)
 
 ## Dependencies
 
-- **HyperChad**: UI framework and templating with actions, logic, color, and renderer features
-- **MoosicBox App Models**: Application-level models
+### Core Dependencies
+
+- **HyperChad**: UI framework and templating with actions, logic, color, canvas renderer, serialization, templates, and transformer features
+- **MoosicBox App Models**: Application-level models with music API support
 - **MoosicBox Audio Zone Models**: Audio zone data structures
+- **MoosicBox Date Utils**: Date and time utilities with chrono support
 - **MoosicBox Downloader**: Download management with API support
 - **MoosicBox Menu Models**: Menu data structures with API support
 - **MoosicBox Music API Models**: Music API data structures with search support
 - **MoosicBox Music Models**: Music data structures with API support
 - **MoosicBox Paging**: Pagination utilities
 - **MoosicBox Session Models**: Session management data structures
-- **Serde**: Serialization for actions and state
+- **switchy_env**: Environment variable utilities with std support
+
+### Utility Dependencies
+
 - **bytesize**: Byte size formatting
+- **log**: Logging infrastructure
 - **rust_decimal**: Decimal number handling
+- **rust_decimal_macros**: Macros for decimal literals
+- **serde**: Serialization framework for actions and state
+- **serde_json**: JSON serialization support
+- **strum**: Enum utilities for string conversions
