@@ -4,7 +4,7 @@ A state management package for the HyperChad framework, providing in-memory cach
 
 ## Overview
 
-`hyperchad_state` provides a `StateStore` that combines in-memory caching with pluggable persistence backends. Currently supports SQLite persistence and has provisions for iOS-specific storage.
+`hyperchad_state` provides a `StateStore` that combines in-memory caching with pluggable persistence backends. Currently supports SQLite persistence.
 
 ## What it provides
 
