@@ -286,9 +286,9 @@ This is an umbrella crate that provides access to workflow AST types.
 ### Current Structure
 
 - **`packages/gpipe/`** - Umbrella crate with re-exports
-- **`packages/gpipe/ast/`** - AST types and structures (✅ complete)
-    - `Workflow`, `Job`, `Step`, `Action` types
-    - `Expression` AST for conditionals
+- **`packages/gpipe/ast/`** - AST types and structures (✅ implemented)
+    - `Workflow`, `Job`, `Step`, `ActionDef` types
+    - `Expression` AST for conditionals and expressions
     - Full serde support for serialization/deserialization
 
 ### Planned Sub-Packages
