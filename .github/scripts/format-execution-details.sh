@@ -187,7 +187,8 @@ jq -c '.[]' "$EXECUTION_FILE" | while IFS= read -r turn; do
             if [ "$item_type" = "text" ]; then
                 text=$(echo "$item" | jq -r '.text // ""')
                 if [ -n "$text" ]; then
-                    echo "$text" >> "$OUTPUT_FILE"
+                    # Format as blockquote to visually distinguish thinking/reasoning
+                    echo "$text" | sed 's/^/> /' >> "$OUTPUT_FILE"
                     echo "" >> "$OUTPUT_FILE"
                 fi
             elif [ "$item_type" = "tool_use" ]; then
