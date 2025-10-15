@@ -155,7 +155,7 @@ async fn manage_albums() -> Result<(), Box<dyn std::error::Error>> {
         // Get album details
         let album_id = Id::String(album.id.clone());
         let album_detail = album(&db, &album_id, None, None, None, None).await?;
-        println!("  Tracks: {}", album_detail.track_count.unwrap_or(0));
+        println!("  Tracks: {}", album_detail.number_of_tracks);
 
         // Get album tracks
         let tracks_result = album_tracks(
