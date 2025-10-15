@@ -34,11 +34,6 @@ The MoosicBox Async Macros package provides:
 - **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
 - **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper (always available)
 
-#### Internal Macros (simulator feature only)
-- **`select_internal!`**: Internal select! macro with crate path parameter
-- **`join_internal!`**: Internal join! macro with crate path parameter
-- **`try_join_internal!`**: Internal try_join! macro with crate path parameter
-
 ### AST Transformation
 - **Await Wrapping**: Wraps `.await` expressions with yield points
 - **Function Support**: Handles async functions and methods
