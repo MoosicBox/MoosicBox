@@ -32,7 +32,38 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v4
               with:
-                  fetch-depth: 1
+                  ref: ${{ github.event.pull_request.head.ref || github.ref }}
+                  repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+                  fetch-depth: 0
+
+            - name: Get PR details for issue comments
+              id: pr_details
+              if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+              run: |
+                  echo "Fetching PR details for issue comment..."
+                  PR_DATA=$(gh api "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}")
+                  HEAD_REF=$(echo "$PR_DATA" | jq -r '.head.ref')
+                  HEAD_REPO=$(echo "$PR_DATA" | jq -r '.head.repo.full_name')
+                  HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+
+                  echo "PR Branch: $HEAD_REF"
+                  echo "PR Repo: $HEAD_REPO"
+                  echo "PR SHA: $HEAD_SHA"
+
+                  echo "head_ref=$HEAD_REF" >> $GITHUB_OUTPUT
+                  echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
+                  echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
+              env:
+                  GH_TOKEN: ${{ github.token }}
+
+            - name: Checkout PR branch for issue comments
+              if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+              run: |
+                  echo "Checking out PR branch: ${{ steps.pr_details.outputs.head_ref }}"
+                  git fetch origin ${{ steps.pr_details.outputs.head_ref }}
+                  git checkout ${{ steps.pr_details.outputs.head_ref }}
+                  echo "Current branch: $(git branch --show-current)"
+                  echo "Current commit: $(git rev-parse HEAD)"
 
             - name: Get comment thread context
               id: thread_context
@@ -146,6 +177,7 @@ jobs:
                       Context:
                       - REPO: ${{ github.repository }}
                       - PR/ISSUE NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+                      - BRANCH: ${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref_name }}
                       - Comment Type: ${{ github.event_name }}
                       ${{ github.event_name == 'pull_request_review_comment' && format('
 
@@ -170,7 +202,6 @@ jobs:
                       ${{ github.event_name == 'pull_request_review_comment' && format('
                       - Reply to the comment thread using the ROOT comment ID (this ensures proper threading):
                         `gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -f body="👀 Looking into this...\n\n[View workflow run](https://github.com/{0}/actions/runs/{3})" 2>&1 || echo "Failed to post acknowledgment"`
-                        
                         IMPORTANT: Use the root comment ID {2} for all replies to ensure they appear in the correct thread.
                       ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id, github.run_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
                       - Post a PR comment:
