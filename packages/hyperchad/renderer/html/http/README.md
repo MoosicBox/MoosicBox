@@ -63,7 +63,8 @@ use hyperchad_renderer_html::DefaultHtmlTagRenderer;
 use hyperchad_router::{Router, RouteRequest};
 use hyperchad_template::container;
 use http::{Request, Response, StatusCode};
-use std::collections::HashMap;
+use bytes::Bytes;
+use qstring::QString;
 
 async fn handle_request(req: Request<Vec<u8>>) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
     // Create router and tag renderer
@@ -77,14 +78,18 @@ async fn handle_request(req: Request<Vec<u8>>) -> Result<Response<Vec<u8>>, Box<
         .with_viewport("width=device-width, initial-scale=1".to_string());
 
     // Convert HTTP request to RouteRequest
+    let query_str = req.uri().query().unwrap_or("");
+    let query = QString::from(query_str).into_iter().collect();
     let route_request = RouteRequest {
         path: req.uri().path().to_string(),
-        query: req.uri().query().map(|q| q.to_string()),
-        method: req.method().to_string(),
+        method: switchy::http::models::Method::from(req.method().as_str()),
+        query,
         headers: req.headers().iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect(),
-        body: Some(req.into_body()),
+        cookies: std::collections::BTreeMap::new(),
+        info: hyperchad_router::RequestInfo::default(),
+        body: Some(std::sync::Arc::new(Bytes::from(req.into_body()))),
     };
 
     // Process the request
@@ -137,13 +142,16 @@ use hyperchad_router::{Router, RoutePath};
 use hyperchad_template::container;
 
 fn create_router() -> Router {
-    let mut router = Router::new();
+    let router = Router::new();
 
     // Add routes
-    router.add_route("/", render_home);
-    router.add_route("/about", render_about);
-    router.add_route("/users/{id}", render_user);
-    router.add_route("/api/users", handle_api_users);
+    router.add_route_result("/", |_req| async { Ok::<_, Box<dyn std::error::Error>>(render_home()) });
+    router.add_route_result("/about", |_req| async { Ok::<_, Box<dyn std::error::Error>>(render_about()) });
+    router.add_route_result("/users/{id}", |req| async move {
+        let user_id = req.path.strip_prefix("/users/").unwrap_or("");
+        Ok::<_, Box<dyn std::error::Error>>(render_user(user_id))
+    });
+    router.add_route_result("/api/users", |req| async move { handle_api_users(&req).await });
 
     router
 }
@@ -326,13 +334,13 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
     tokio::spawn(async move {
         while let Ok((action_name, value)) = action_rx.recv_async().await {
             match action_name.as_str() {
-                "submit_contact_form" => {
+                "\"submit_contact_form\"" => {
                     if let Some(Value::Object(data)) = value {
                         println!("Contact form submitted: {:?}", data);
                         // Send email, save to database, etc.
                     }
                 }
-                "user_login" => {
+                "\"user_login\"" => {
                     if let Some(Value::Object(credentials)) = value {
                         println!("Login attempt: {:?}", credentials);
                         // Authenticate user
@@ -350,61 +358,6 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
 
     HttpApp::new(tag_renderer, router)
         .with_action_tx(action_tx)
-}
-
-fn render_contact_form() -> String {
-    let view = container! {
-        html {
-            head {
-                title { "Contact Us" }
-            }
-            body {
-                div class="container" {
-                    h1 { "Contact Us" }
-
-                    form
-                        method="post"
-                        action="/$action"
-                        onsubmit=request_action("submit_contact_form", form_data())
-                    {
-                        div class="form-group" {
-                            label for="name" { "Name:" }
-                            input
-                                type="text"
-                                id="name"
-                                name="name"
-                                required=true
-                            {}
-                        }
-
-                        div class="form-group" {
-                            label for="email" { "Email:" }
-                            input
-                                type="email"
-                                id="email"
-                                name="email"
-                                required=true
-                            {}
-                        }
-
-                        div class="form-group" {
-                            label for="message" { "Message:" }
-                            textarea
-                                id="message"
-                                name="message"
-                                rows=5
-                                required=true
-                            {}
-                        }
-
-                        button type="submit" { "Send Message" }
-                    }
-                }
-            }
-        }
-    };
-
-    view.to_string()
 }
 ```
 
