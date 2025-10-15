@@ -36,7 +36,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_simvar_utils = { path = "../simvar/utils" }
+simvar_utils = { path = "../simvar/utils" }
 ```
 
 ## Usage
@@ -44,7 +44,7 @@ moosicbox_simvar_utils = { path = "../simvar/utils" }
 ### Thread Management
 
 ```rust
-use moosicbox_simvar_utils::worker_thread_id;
+use simvar_utils::worker_thread_id;
 
 // Get unique thread ID for current worker
 let thread_id = worker_thread_id();
@@ -54,7 +54,7 @@ println!("Worker thread ID: {}", thread_id);
 ### Cancellation Management
 
 ```rust
-use moosicbox_simvar_utils::{
+use simvar_utils::{
     cancel_simulation, cancel_global_simulation,
     is_simulator_cancelled, is_global_simulator_cancelled,
     reset_simulator_cancellation_token, reset_global_simulator_cancellation_token
@@ -82,7 +82,7 @@ reset_global_simulator_cancellation_token();
 ### Running Futures with Cancellation
 
 ```rust
-use moosicbox_simvar_utils::run_until_simulation_cancelled;
+use simvar_utils::run_until_simulation_cancelled;
 
 // Run future until simulation is cancelled
 let result = run_until_simulation_cancelled(async {
