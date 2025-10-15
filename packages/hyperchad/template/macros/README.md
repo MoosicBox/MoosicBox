@@ -300,4 +300,3 @@ The crate includes comprehensive tests covering:
 - Numeric units (tests/number_inference_test.rs)
 - Font properties (tests/font_family_test.rs, tests/font_weight_test.rs)
 - Srcset attributes (tests/srcset_test.rs)
-- Interactive behaviors and `fx` DSL (tests/fx_actions.rs)
