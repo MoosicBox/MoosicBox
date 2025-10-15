@@ -10,7 +10,7 @@ The MoosicBox Async Macros package provides:
 - **Async Transformation**: Transform async functions for deterministic execution
 - **Proc Macros**: `#[inject_yields]` and `inject_yields_mod!` macros
 - **Test Macros**: Simulator-aware test attribute macros (`#[test]`, `#[unsync_test]`, etc.)
-- **Feature-Gated**: Simulator features enabled by default; can be disabled
+- **Feature-Gated**: Simulator features are optional (included in default features for IDE support only)
 - **AST Manipulation**: Sophisticated syntax tree transformation
 
 ## Features
@@ -26,7 +26,7 @@ The MoosicBox Async Macros package provides:
 #### Yield Injection Macros
 - **`#[inject_yields]`**: Attribute macro for individual functions and impl blocks
 - **`inject_yields_mod!`**: Procedural macro for entire modules
-- **Conditional**: Only active with `simulator` feature flag (enabled by default)
+- **Conditional**: Only active with `simulator` feature flag
 
 #### Test Macros
 - **`#[test]`**: External test macro for `switchy_async` tests (simulator feature only)
@@ -46,13 +46,20 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Default includes simulator feature
+# With default features (includes simulator for IDE support)
 switchy_async_macros = { path = "../async/macros" }
 
-# Disable simulator feature
+# Production usage: disable default features to exclude simulator
 switchy_async_macros = {
     path = "../async/macros",
     default-features = false
+}
+
+# Explicitly enable simulator for testing
+switchy_async_macros = {
+    path = "../async/macros",
+    default-features = false,
+    features = ["simulator"]
 }
 ```
 
@@ -213,7 +220,7 @@ pub async fn library_function() -> Result<Data, Error> {
 
 ## Feature Flags
 
-- **`simulator`**: Enable yield injection transformation and test macros (enabled by default)
+- **`simulator`**: Enable yield injection transformation and test macros (included in default features for IDE support; disable for production)
 - **`fail-on-warnings`**: Deny all warnings during compilation
 
 ## Dependencies
