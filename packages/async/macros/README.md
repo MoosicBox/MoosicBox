@@ -28,11 +28,11 @@ The MoosicBox Async Macros package provides:
 - **`inject_yields_mod!`**: Procedural macro for entire modules
 - **Conditional**: Only active with `simulator` feature flag (enabled by default)
 
-#### Test Macros (simulator feature only)
-- **`#[test]`**: External test macro for `switchy_async` tests
-- **`#[internal_test]`**: Internal test macro using crate path
-- **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters
-- **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper
+#### Test Macros
+- **`#[test]`**: External test macro for `switchy_async` tests (simulator feature only)
+- **`#[internal_test]`**: Internal test macro using crate path (simulator feature only)
+- **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
+- **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper (always available)
 
 #### Internal Macros (simulator feature only)
 - **`select_internal!`**: Internal select! macro with crate path parameter
