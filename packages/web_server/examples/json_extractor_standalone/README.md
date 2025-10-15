@@ -14,11 +14,13 @@ This example demonstrates JSON request/response handling with serde deserializat
 ## Running the Example
 
 ### With Simulator (default)
+
 ```bash
 cargo run -p json_extractor_standalone_example
 ```
 
 ### With Actix
+
 ```bash
 cargo run -p json_extractor_standalone_example --features actix --no-default-features
 ```
@@ -34,6 +36,7 @@ cargo run -p json_extractor_standalone_example --features actix --no-default-fea
 ## Data Structures
 
 ### User (for /simple and /echo)
+
 ```json
 {
   "name": "string",
@@ -43,6 +46,7 @@ cargo run -p json_extractor_standalone_example --features actix --no-default-fea
 ```
 
 ### UpdateUser (for /optional)
+
 ```json
 {
   "name": "string (optional)",
@@ -55,6 +59,7 @@ cargo run -p json_extractor_standalone_example --features actix --no-default-fea
 ## Example Requests (if using Actix)
 
 ### Simple JSON Handler
+
 ```bash
 curl -X POST http://localhost:8080/simple \
   -H "Content-Type: application/json" \
@@ -62,6 +67,7 @@ curl -X POST http://localhost:8080/simple \
 ```
 
 ### Optional Fields Handler
+
 ```bash
 curl -X PATCH http://localhost:8080/optional \
   -H "Content-Type: application/json" \
@@ -69,6 +75,7 @@ curl -X PATCH http://localhost:8080/optional \
 ```
 
 ### Combined Handler
+
 ```bash
 curl -X POST http://localhost:8080/combined \
   -H "Content-Type: application/json" \
@@ -76,6 +83,7 @@ curl -X POST http://localhost:8080/combined \
 ```
 
 ### Echo Handler (returns modified JSON)
+
 ```bash
 curl -X POST http://localhost:8080/echo \
   -H "Content-Type: application/json" \
@@ -140,6 +148,7 @@ When run with the simulator, it will automatically test all endpoints:
 ## Use Cases
 
 This example is perfect for:
+
 - REST APIs that accept JSON payloads
 - CRUD operations with structured data
 - Learning JSON handling in web services

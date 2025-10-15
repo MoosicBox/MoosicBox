@@ -98,6 +98,7 @@ bloaty --report-file my_analysis
 ```
 
 This generates files like:
+
 - `my_analysis.txt` (text report)
 - `my_analysis.json` (complete JSON report)
 - `my_analysis.jsonl` (streaming JSONL format)
@@ -137,26 +138,26 @@ The JSON report provides structured data:
 
 ```json
 {
-  "timestamp": 1234567890,
-  "packages": [
-    {
-      "name": "moosicbox_core",
-      "targets": [
+    "timestamp": 1234567890,
+    "packages": [
         {
-          "name": "moosicbox_core",
-          "base_size": 1258291,
-          "features": [
-            {
-              "name": "async",
-              "size": 1360384,
-              "diff": 102093,
-              "diff_formatted": "+102 KB"
-            }
-          ]
+            "name": "moosicbox_core",
+            "targets": [
+                {
+                    "name": "moosicbox_core",
+                    "base_size": 1258291,
+                    "features": [
+                        {
+                            "name": "async",
+                            "size": 1360384,
+                            "diff": 102093,
+                            "diff_formatted": "+102 KB"
+                        }
+                    ]
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
 ```
 
@@ -186,6 +187,7 @@ Core dependencies (automatically managed by Cargo):
 - `serde_json` - JSON output formatting
 
 Optional external tools:
+
 - `cargo-bloat` - For detailed binary bloat analysis
 - `cargo-llvm-lines` - For LLVM IR line count analysis
 - `cargo-size` - For size profiling

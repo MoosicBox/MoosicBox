@@ -15,17 +15,20 @@ The MoosicBox Async package provides:
 ## Features
 
 ### Runtime Abstraction
+
 - **GenericRuntime**: Common interface for all async runtimes
 - **Runtime Builder**: Configurable runtime construction
 - **Backend Selection**: Choose between Tokio and simulation runtimes
 - **Future Support**: Standard Future trait integration
 
 ### Backend Support
+
 - **Tokio**: Production async runtime
 - **Simulator**: Deterministic simulation runtime for testing
 - **Feature-Gated**: Enable only needed backends
 
 ### Async Utilities
+
 - **Thread ID**: Unique thread identification
 - **Task Management**: Task spawning and joining
 - **File System**: Async file system operations (feature-gated)
@@ -212,10 +215,12 @@ match handle.await {
 ## Feature Flags
 
 ### Backend Selection
+
 - **`tokio`**: Enable Tokio async runtime
 - **`simulator`**: Enable simulation runtime for testing
 
 ### Tokio Features
+
 - **`rt-multi-thread`**: Multi-threaded Tokio runtime
 - **`fs`**: Async file system operations
 - **`io`**: Async I/O operations
@@ -226,17 +231,20 @@ match handle.await {
 - **`macros`**: Async macros (select!, join!, try_join!, etc.)
 
 ### Macro Features
+
 - **`macros`**: Enable async macros and yield injection utilities
 
 ## Runtime Comparison
 
 ### Tokio Runtime
+
 - **Production**: Optimized for production use
 - **Performance**: High-performance async execution
 - **Ecosystem**: Full Tokio ecosystem support
 - **Threading**: Multi-threaded execution
 
 ### Simulation Runtime
+
 - **Testing**: Deterministic execution for tests
 - **Reproducible**: Consistent behavior across runs
 - **Debugging**: Easier debugging and tracing
@@ -245,12 +253,14 @@ match handle.await {
 ## Dependencies
 
 Core dependencies:
+
 - **thiserror**: Error handling
 - **pin-project-lite**: Pin projection utilities
 - **scoped-tls**: Scoped thread-local storage
 - **log**: Logging facade
 
 Feature-gated dependencies:
+
 - **futures**: Core Future trait and utilities (enabled with backend features)
 - **tokio**: Tokio async runtime (optional, enabled with `tokio` feature)
 - **tokio-util**: Additional Tokio utilities (optional, enabled with `util` feature)
@@ -262,6 +272,7 @@ Feature-gated dependencies:
 ## Integration
 
 This package is designed for:
+
 - **Application Runtime**: Main async runtime for applications
 - **Testing**: Deterministic async testing with simulation
 - **Library Development**: Runtime-agnostic async libraries

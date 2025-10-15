@@ -15,15 +15,18 @@ The HyperChad Vanilla JS Hash package provides:
 ## Features
 
 ### Hash Generation
+
 - **SHA256 Algorithm**: Secure cryptographic hashing
 - **Plugin Detection**: Automatically includes enabled plugin features in hash
 - **Compile-time Computation**: No runtime performance impact
 - **Deterministic**: Same plugin configuration always produces same hash
 
 ### Plugin Support
+
 All HyperChad Vanilla JS plugins are included in the hash:
 
 #### Core Plugins
+
 - **Navigation (`plugin-nav`)**: Client-side routing
 - **Idiomorph (`plugin-idiomorph`)**: DOM morphing
 - **SSE (`plugin-sse`)**: Server-Sent Events
@@ -36,6 +39,7 @@ All HyperChad Vanilla JS plugins are included in the hash:
 - **Form (`plugin-form`)**: Form handling
 
 #### Action Plugins
+
 - **Change Actions (`plugin-actions-change`)**: Input change handling
 - **Click Actions (`plugin-actions-click`)**: Click event handling
 - **Click Outside (`plugin-actions-click-outside`)**: Click outside detection
@@ -225,19 +229,25 @@ fn main() {
 ## Constants
 
 ### `PLUGIN_HASH`
+
 Raw string containing all enabled plugin identifiers:
+
 ```rust
 pub const PLUGIN_HASH: &str = "plugins-nav-idiomorph-sse-actions-click";
 ```
 
 ### `RAW_HASH`
+
 Raw SHA256 hash bytes:
+
 ```rust
 pub const RAW_HASH: [u8; 32] = [/* 32 bytes */];
 ```
 
 ### `PLUGIN_HASH_HEX`
+
 Hexadecimal string representation of the hash:
+
 ```rust
 pub const PLUGIN_HASH_HEX: &str = "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456";
 ```
@@ -267,6 +277,7 @@ plugin-actions-click = []
 All HyperChad Vanilla JS plugin features are supported:
 
 ### Core Plugins
+
 - **`plugin-nav`**: Navigation plugin
 - **`plugin-idiomorph`**: DOM morphing plugin
 - **`plugin-sse`**: Server-Sent Events plugin
@@ -279,6 +290,7 @@ All HyperChad Vanilla JS plugin features are supported:
 - **`plugin-form`**: Form handling plugin
 
 ### Action Plugins
+
 - **`plugin-actions-change`**: Change event actions
 - **`plugin-actions-click`**: Click event actions
 - **`plugin-actions-click-outside`**: Click outside detection
@@ -295,6 +307,7 @@ All HyperChad Vanilla JS plugin features are supported:
 ## Use Cases
 
 ### Cache Busting
+
 Ensure clients always get the correct script version when plugins change:
 
 ```rust
@@ -308,6 +321,7 @@ Ensure clients always get the correct script version when plugins change:
 ```
 
 ### CDN Deployment
+
 Deploy different script versions to CDN based on plugin configuration:
 
 ```bash
@@ -317,6 +331,7 @@ aws s3 cp hyperchad-full.min.js s3://cdn/hyperchad/f6g7h8i9j0/
 ```
 
 ### Build System Integration
+
 Integrate with build systems for automatic asset management:
 
 ```rust

@@ -18,6 +18,7 @@ The HyperChad HTML Actix Renderer provides:
 ## Features
 
 ### Web Server Capabilities
+
 - **HTTP**: Full HTTP protocol support
 - **Routing**: Flexible URL routing and path matching
 - **Middleware**: Request/response middleware pipeline
@@ -26,6 +27,7 @@ The HyperChad HTML Actix Renderer provides:
 - **Static Files**: Efficient static file serving
 
 ### HyperChad Integration
+
 - **HTML Rendering**: Server-side HTML generation
 - **Action Processing**: Handle HyperChad actions server-side
 - **Partial Updates**: HTMX-compatible partial page updates
@@ -33,6 +35,7 @@ The HyperChad HTML Actix Renderer provides:
 - **Asset Management**: Integrated static asset serving
 
 ### Performance Features
+
 - **Async Processing**: Fully asynchronous request handling
 - **Streaming**: Streaming responses for large content and SSE
 
@@ -416,6 +419,7 @@ App::new()
 ## Configuration
 
 ### CORS Configuration
+
 The renderer includes comprehensive CORS configuration:
 
 - **Allowed Origins**: Any origin (configurable)
@@ -425,6 +429,7 @@ The renderer includes comprehensive CORS configuration:
 - **Credentials**: Supports credentials for authenticated requests
 
 ### Compression
+
 Automatic response compression is enabled by default via Actix Web middleware:
 
 - **Gzip**: Standard gzip compression
@@ -444,6 +449,7 @@ Note: SSE streams support Gzip, Deflate, and Zlib encoding.
 ## Integration
 
 This renderer is designed for:
+
 - **Web Applications**: Full-featured web applications
 - **API Servers**: REST and GraphQL API servers
 - **Microservices**: Service-oriented architectures

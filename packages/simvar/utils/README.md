@@ -14,15 +14,18 @@ The MoosicBox Simulation Utilities package provides:
 ## Features
 
 ### Thread Management
+
 - **Worker Thread IDs**: Unique thread identification for simulation workers
 - **Thread-Local Storage**: Per-thread state management
 
 ### Cancellation Management
+
 - **Local Cancellation**: Per-thread simulation cancellation
 - **Global Cancellation**: System-wide simulation termination
 - **Token Reset**: Cancellation token lifecycle management
 
 ### Async Support
+
 - **Future Cancellation**: Run futures until simulation cancellation
 - **Cancellation Detection**: Check if simulation is cancelled
 - **Graceful Shutdown**: Clean simulation termination

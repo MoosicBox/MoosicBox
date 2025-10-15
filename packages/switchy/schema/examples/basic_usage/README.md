@@ -5,12 +5,14 @@ This example demonstrates the core functionality of `switchy_schema` using type-
 ## What This Example Shows
 
 ### Clean, Type-Safe Migrations
+
 - **Create Table**: Uses `db.create_table()` with `Column` structs for type safety
 - **Create Index**: Uses `db.create_index()` with fluent builder API
 - **Alter Table**: Uses `db.alter_table().add_column()` for schema evolution
 - **Drop Operations**: Uses `db.drop_table()` and `db.drop_index()` for rollback
 
 ### Complete Migration Lifecycle
+
 - **Migration Status**: Check which migrations are applied/pending
 - **Forward Migration**: Run all pending migrations
 - **Schema Verification**: Insert and query test data to verify schema
@@ -58,6 +60,7 @@ cargo run --bin basic_usage
 ## Migration Patterns
 
 ### 1. Create Table Migration
+
 ```rust
 async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
     db.create_table("users")
@@ -77,6 +80,7 @@ async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
 ```
 
 ### 2. Create Index Migration
+
 ```rust
 async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
     db.create_index("idx_users_email")
@@ -90,6 +94,7 @@ async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
 ```
 
 ### 3. Alter Table Migration
+
 ```rust
 async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
     db.alter_table("users")

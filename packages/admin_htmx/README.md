@@ -15,6 +15,7 @@ The MoosicBox Admin HTMX package provides:
 ## Current Implementation
 
 ### Available Modules
+
 - **Profiles**: Profile creation, selection, and deletion management
 - **Scan**: Music library scan path management and scan execution
 - **Info**: Server identity and system information display
@@ -23,6 +24,7 @@ The MoosicBox Admin HTMX package provides:
 - **Utilities**: Common helper functions for HTMX interactions
 
 ### Features
+
 - **Web Interface**: Full HTML-based admin interface using HTMX and Maud templating
 - **Profile Management**: Create, select, and delete user profiles
 - **Library Scanning**: Configure scan paths, add/remove scan sources, and trigger library scans
@@ -70,9 +72,11 @@ async fn main() -> std::io::Result<()> {
 The package provides HTMX-compatible HTML endpoints:
 
 **Main Interface:**
+
 - `GET /admin` - Main admin dashboard
 
 **Profile Management:**
+
 - `GET /admin/profiles` - List all profiles
 - `GET /admin/profiles/select` - Profile selection dropdown
 - `POST /admin/profiles/select` - Select a profile
@@ -81,17 +85,20 @@ The package provides HTMX-compatible HTML endpoints:
 - `DELETE /admin/profiles` - Delete a profile
 
 **Scan Management (requires `scan` feature):**
+
 - `GET /admin/scans` - View scan paths and controls
 - `POST /admin/scan-paths` - Add a new scan path
 - `DELETE /admin/scan-paths` - Remove a scan path
 - `POST /admin/run-scan` - Trigger a library scan
 
 **Qobuz Integration (requires `qobuz` feature):**
+
 - `GET /admin/qobuz/settings` - Qobuz settings and login status
 - `POST /admin/qobuz/auth/user-login` - Login to Qobuz
 - `POST /admin/qobuz/run-scan` - Run Qobuz library scan
 
 **Tidal Integration (requires `tidal` feature):**
+
 - `GET /admin/tidal/settings` - Tidal settings and login status
 - `POST /admin/tidal/auth/device-authorization` - Start Tidal device auth
 - `POST /admin/tidal/auth/device-authorization/token` - Poll for auth token
@@ -140,6 +147,7 @@ use moosicbox_admin_htmx::api;
 ```
 
 Each module provides:
+
 - `bind_services()` - Registers endpoints with Actix Web
 - Public functions returning `Markup` for HTML rendering
 - HTMX-compatible endpoints for dynamic updates
@@ -178,6 +186,7 @@ To contribute to this package:
 7. Update documentation for new endpoints
 
 When adding new endpoints:
+
 - Return `Result<Markup, actix_web::Error>` from endpoint handlers
 - Use `#[route(...)]` attribute macro for endpoint registration
 - Implement `bind_services()` function to register with Actix Web

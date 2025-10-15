@@ -193,11 +193,11 @@ async fn process_batch(tx: &dyn Database, batch: &[String]) -> Result<(), Databa
 
 #### Backend Support
 
-| Database | Savepoint Support | Notes |
-|----------|------------------|-------|
-| SQLite | ✅ Full | Can create savepoints after errors |
-| PostgreSQL | ✅ Full | Must create before potential errors |
-| MySQL | ✅ Full (InnoDB) | Requires InnoDB storage engine |
+| Database   | Savepoint Support | Notes                               |
+| ---------- | ----------------- | ----------------------------------- |
+| SQLite     | ✅ Full           | Can create savepoints after errors  |
+| PostgreSQL | ✅ Full           | Must create before potential errors |
+| MySQL      | ✅ Full (InnoDB)  | Requires InnoDB storage engine      |
 
 #### Common Use Cases
 
@@ -366,6 +366,7 @@ async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
 The following feature flags are available in `Cargo.toml`:
 
 ### Backend Features
+
 - `sqlite-rusqlite` - SQLite backend using rusqlite driver
 - `sqlite-sqlx` - SQLite backend using sqlx driver
 - `postgres-raw` - PostgreSQL backend using tokio-postgres
@@ -374,6 +375,7 @@ The following feature flags are available in `Cargo.toml`:
 - `turso` - Turso (libSQL) cloud database support
 
 ### Additional Features
+
 - `schema` - Schema management and introspection (enabled by default)
 - `cascade` - CASCADE deletion support for schema operations
 - `auto-reverse` - Auto-reverse migration support
@@ -383,6 +385,7 @@ The following feature flags are available in `Cargo.toml`:
 - `api` - Actix-web integration for web APIs
 
 ### Placeholder Features
+
 - `all-placeholders` - Support for all placeholder styles
 - `placeholder-question-mark` - `?` placeholder support
 - `placeholder-dollar-number` - `$1, $2` placeholder support
@@ -422,6 +425,7 @@ match db.select("tracks").where_eq("id", track_id).execute_first(db).await {
 ### Backend-Specific Errors
 
 Each backend has its own error variant:
+
 - `DatabaseError::Rusqlite(rusqlite::RusqliteDatabaseError)` - rusqlite backend errors
 - `DatabaseError::SqliteSqlx(sqlx::sqlite::SqlxDatabaseError)` - sqlx SQLite errors
 - `DatabaseError::Postgres(postgres::postgres::PostgresDatabaseError)` - raw PostgreSQL errors
@@ -460,6 +464,7 @@ The `schema::DataType` enum provides database-agnostic type definitions:
 ### Database Trait
 
 The core `Database` trait provides:
+
 - Query builder methods (`select`, `insert`, `update`, `delete`, `upsert`)
 - Schema methods (`create_table`, `drop_table`, `create_index`, `alter_table`) - requires `schema` feature
 - Execution methods (`query`, `query_first`, `exec_update`, `exec_insert`, etc.)
@@ -470,6 +475,7 @@ The core `Database` trait provides:
 ### DatabaseTransaction Trait
 
 The `DatabaseTransaction` trait extends `Database` with:
+
 - `commit()` - Commit the transaction
 - `rollback()` - Rollback the transaction
 - `savepoint(name)` - Create a savepoint within the transaction
@@ -478,6 +484,7 @@ The `DatabaseTransaction` trait extends `Database` with:
 ### Savepoint Trait
 
 The `Savepoint` trait provides:
+
 - `release()` - Commit the savepoint
 - `rollback_to()` - Rollback to the savepoint
 - `name()` - Get the savepoint name
@@ -489,37 +496,37 @@ The `Savepoint` trait provides:
 Two SQLite implementations are available:
 
 1. **rusqlite** (`sqlite-rusqlite` feature):
-   - Uses `?` placeholders
-   - Blocking operations wrapped in async
-   - Connection pooling for concurrent transactions
+    - Uses `?` placeholders
+    - Blocking operations wrapped in async
+    - Connection pooling for concurrent transactions
 
 2. **sqlx** (`sqlite-sqlx` feature):
-   - Uses `$1, $2` placeholders (via transformation)
-   - Native async support
-   - Built-in connection pooling
+    - Uses `$1, $2` placeholders (via transformation)
+    - Native async support
+    - Built-in connection pooling
 
 ### PostgreSQL
 
 Two PostgreSQL implementations are available:
 
 1. **Raw** (`postgres-raw` feature):
-   - Uses tokio-postgres and deadpool-postgres
-   - Uses `$1, $2` placeholders
-   - Custom connection pool management
+    - Uses tokio-postgres and deadpool-postgres
+    - Uses `$1, $2` placeholders
+    - Custom connection pool management
 
 2. **sqlx** (`postgres-sqlx` feature):
-   - Uses sqlx driver
-   - Uses `$1, $2` placeholders
-   - Built-in connection pooling
+    - Uses sqlx driver
+    - Uses `$1, $2` placeholders
+    - Built-in connection pooling
 
 ### MySQL
 
 One MySQL implementation using sqlx:
 
 - **sqlx** (`mysql-sqlx` feature):
-  - Uses `?` placeholders (via transformation)
-  - Built-in connection pooling
-  - Full transaction support
+    - Uses `?` placeholders (via transformation)
+    - Built-in connection pooling
+    - Full transaction support
 
 ### Turso
 

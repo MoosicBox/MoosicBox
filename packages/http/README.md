@@ -230,6 +230,7 @@ async fn handle_errors() {
 ### Header Enumeration
 
 Common HTTP headers are available as enum variants:
+
 - `Authorization`
 - `UserAgent`
 - `Range`
@@ -238,15 +239,19 @@ Common HTTP headers are available as enum variants:
 ## Backend Features
 
 ### `reqwest` Feature
+
 Enables integration with the popular `reqwest` HTTP client library.
 
 ### `simulator` Feature
+
 Enables a simulated HTTP backend for testing and development.
 
 ### `json` Feature
+
 Adds JSON serialization/deserialization support using `serde_json`.
 
 ### `stream` Feature
+
 Enables streaming response support for handling large responses.
 
 ## Error Types

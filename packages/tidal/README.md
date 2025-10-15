@@ -15,17 +15,20 @@ The MoosicBox Tidal package provides integration with Tidal's streaming API thro
 ## Features
 
 ### Authentication
+
 - OAuth2 device authorization flow
 - Token refresh handling
 - Optional database credential persistence
 
 ### Content Access
+
 - Access favorite artists, albums, and tracks
 - Browse artist albums (with filtering by album type)
 - Retrieve album tracks
 - Search across the Tidal catalog
 
 ### Audio Streaming
+
 - Track streaming URL retrieval
 - Support for multiple quality levels (High, Lossless, HiResLossless)
 - Track playback metadata
@@ -33,6 +36,7 @@ The MoosicBox Tidal package provides integration with Tidal's streaming API thro
 ## Architecture
 
 The package is organized into:
+
 - `lib.rs` - Core API implementation and MusicApi trait integration (packages/tidal/src/lib.rs)
 - `models.rs` - Data models for Tidal entities (packages/tidal/src/models.rs)
 - `api.rs` - HTTP API endpoints for server integration (packages/tidal/src/api.rs)

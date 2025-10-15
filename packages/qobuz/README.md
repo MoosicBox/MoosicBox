@@ -7,6 +7,7 @@ High-resolution music streaming integration with Qobuz's lossless and Hi-Res aud
 The MoosicBox Qobuz package provides integration with Qobuz for streaming high-quality music. It implements the `MusicApi` trait to enable Qobuz as a music source within the MoosicBox ecosystem.
 
 **Key Features:**
+
 - Authentication via username/password
 - Access to Qobuz catalog (artists, albums, tracks)
 - Favorite management (add/remove artists, albums, tracks)
@@ -17,6 +18,7 @@ The MoosicBox Qobuz package provides integration with Qobuz for streaming high-q
 ## Implementation Details
 
 This package provides:
+
 - `QobuzMusicApi`: Main API implementation conforming to `MusicApi` trait
 - Models for Qobuz entities (`QobuzArtist`, `QobuzAlbum`, `QobuzTrack`)
 - Authentication handling with automatic token refresh

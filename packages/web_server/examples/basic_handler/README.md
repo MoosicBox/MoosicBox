@@ -19,6 +19,7 @@ This example demonstrates the fundamental handler implementation using the `Rout
 ## Running the Example
 
 ### With Actix Web (Production Backend)
+
 ```bash
 # From repository root
 cargo run -p basic_handler_example --features actix
@@ -28,6 +29,7 @@ nix develop .#server --command cargo run -p basic_handler_example --features act
 ```
 
 ### With Simulator (Testing Backend - Default)
+
 ```bash
 # From repository root
 cargo run -p basic_handler_example --features simulator
@@ -42,7 +44,9 @@ nix develop .#server --command cargo run -p basic_handler_example --features sim
 ## Expected Output
 
 ### Actix Backend
+
 When you run with the `actix` feature:
+
 ```
 🎯 Basic Handler Example - Route::with_handler() Method
 =====================================================
@@ -63,7 +67,9 @@ When you run with the `actix` feature:
 ```
 
 ### Simulator Backend
+
 When you run with the `simulator` feature (or default):
+
 ```
 🎯 Basic Handler Example - Route::with_handler() Method
 =====================================================
@@ -107,6 +113,7 @@ This example demonstrates the handler registration API but does not start an HTT
 ### Key Components
 
 **RequestData Structure**
+
 ```rust
 async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     // RequestData provides Send-safe access to:
@@ -121,6 +128,7 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
 ```
 
 **Handler Registration**
+
 ```rust
 // Using the new Route::with_handler1() method for handlers with one parameter
 let route = Route::with_handler1(Method::Post, "/demo", demo_handler);
@@ -138,6 +146,7 @@ let route = Route::with_handler1(Method::Post, "/demo", demo_handler);
 ### Current Implementation
 
 This example demonstrates the current web server abstraction layer:
+
 - Uses `RequestData` for Send-safe request handling
 - Requires feature flags to select backend (`actix` or `simulator`)
 - Handler registration through `Route::with_handler1()` for single-parameter handlers
@@ -153,6 +162,7 @@ This example demonstrates the current web server abstraction layer:
 ### Future Improvements
 
 Planned: The web server abstraction is being enhanced to:
+
 - Remove feature flag requirements
 - Provide unified server execution API
 - Add comprehensive extractor system
@@ -161,8 +171,10 @@ Planned: The web server abstraction is being enhanced to:
 ## Troubleshooting
 
 ### Feature Flag Issues
+
 **Problem**: "trait bound not satisfied" errors
 **Solution**: Ensure either `actix` or `simulator` feature is enabled:
+
 ```bash
 cargo run -p basic_handler_example --features actix
 # or
@@ -170,6 +182,7 @@ cargo run -p basic_handler_example --features simulator
 ```
 
 ### Compilation Errors
+
 **Problem**: Missing RequestData or handler traits
 **Solution**: Check that web server dependencies are correctly configured in workspace
 

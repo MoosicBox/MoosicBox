@@ -15,23 +15,27 @@ The MoosicBox Native App Bundled Service provides:
 ## Features
 
 ### Service Management
+
 - **Async Service**: Built on MoosicBox async service framework
 - **Command Processing**: Event-driven command handling
 - **Context Management**: Shared application context and state
 - **Error Handling**: Comprehensive error management
 
 ### Embedded Server
+
 - **Basic Server**: MoosicBox server running on 0.0.0.0:8016
 - **App Configuration**: Configured for native app usage
 - **Auto-Start**: Automatic server startup with application
 - **Background Operation**: Non-blocking server execution
 
 ### Event Integration
+
 - **Tauri Events**: Native Tauri application event handling
 - **Exit Handling**: Clean application exit processing (ExitRequested triggers server shutdown)
 - **Event Forwarding**: Receives lifecycle events (Exit, WindowEvent, Ready, Resumed, MainEventsCleared)
 
 ### Coordination
+
 - **Startup Sync**: Wait for server startup completion
 - **Shutdown Sync**: Coordinated application and server shutdown
 - **State Management**: Application and server state coordination
@@ -104,12 +108,15 @@ println!("Application shutdown complete");
 ## Commands
 
 ### Available Commands
+
 - **RunEvent**: Process Tauri application events
 - **WaitForStartup**: Wait for server startup completion
 - **WaitForShutdown**: Wait for application shutdown
 
 ### Command Processing
+
 All commands are processed asynchronously through the service framework with:
+
 - Error handling and logging
 - State management
 - Response coordination
@@ -117,11 +124,13 @@ All commands are processed asynchronously through the service framework with:
 ## Context Management
 
 ### Context Structure
+
 - **server_handle**: Background server task handle
 - **receiver**: Startup synchronization receiver
 - **Event handling**: Tauri event processing logic
 
 ### Server Configuration
+
 - **Address**: 0.0.0.0 (all interfaces)
 - **Port**: 8016 (fixed port for native apps)
 - **Type**: App configuration for native use
@@ -130,6 +139,7 @@ All commands are processed asynchronously through the service framework with:
 ## Event Handling
 
 ### Supported Tauri Events
+
 - **Exit**: Application exit events
 - **ExitRequested**: User-initiated exit requests (triggers server shutdown)
 - **WindowEvent**: Window-specific events
@@ -138,12 +148,14 @@ All commands are processed asynchronously through the service framework with:
 - **MainEventsCleared**: Main event loop cleared
 
 ### Event Processing
+
 - Automatic server shutdown on exit requests (ExitRequested event)
 - Other events are received but not actively processed
 
 ## Error Handling
 
 Comprehensive error management for:
+
 - **Service Errors**: Service framework operation failures
 - **IO Errors**: Server startup and shutdown failures
 - **Command Errors**: Command processing failures
@@ -164,6 +176,7 @@ Comprehensive error management for:
 ## Integration
 
 This package is designed for:
+
 - **Native Desktop Apps**: Standalone desktop applications
 - **Bundled Deployments**: Self-contained application distributions
 - **Embedded Servers**: Applications with built-in server functionality

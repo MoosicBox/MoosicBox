@@ -99,6 +99,7 @@ By default, all features are enabled. Individual features can be selected:
 ## Integration
 
 This package is designed for:
+
 - **Deterministic Testing**: Predictable async test execution with controlled time and randomness
 - **Concurrent Systems Testing**: Test multi-host, multi-client distributed systems
 - **Regression Testing**: Reproducible test scenarios for complex async applications

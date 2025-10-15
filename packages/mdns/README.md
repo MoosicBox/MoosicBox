@@ -84,6 +84,7 @@ match register_service("MyServer", "192.168.1.100", 8000).await {
 ## Dependencies
 
 Core dependencies:
+
 - `mdns-sd`: Core mDNS service daemon functionality
 - `hostname`: System hostname detection
 - `thiserror`: Error handling utilities
@@ -92,6 +93,7 @@ Core dependencies:
 - `moosicbox_assert`: Assertion utilities
 
 Additional dependencies for `scanner` feature:
+
 - `kanal`: Async channel for service discovery events
 - `moosicbox_async_service`: Async service framework
 - `strum_macros`: Enum utilities

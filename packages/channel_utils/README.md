@@ -110,12 +110,15 @@ The prioritized sender maintains an internal buffer to sort messages by priority
 ## Core Types
 
 ### MoosicBoxSender<T, E>
+
 Basic trait for channel senders with a consistent `send` method.
 
 ### PrioritizedSender<T>
+
 An unbounded sender that buffers and sorts messages by priority before sending.
 
 ### PrioritizedReceiver<T>
+
 A receiver that works with PrioritizedSender to process messages in priority order.
 
 ## Cargo Features

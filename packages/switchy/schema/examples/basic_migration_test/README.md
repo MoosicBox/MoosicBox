@@ -23,6 +23,7 @@ cargo run --bin basic_migration_test
 ```
 
 This will:
+
 1. Create an in-memory SQLite database
 2. Run the migration test using `verify_migrations_full_cycle`
 3. Display the results
@@ -30,6 +31,7 @@ This will:
 ## Migration Structure
 
 The example includes three migrations:
+
 - `CreateUsersTable` (001): Creates a users table with id, name, email, and created_at columns, plus a unique index on email
 - `AddUsersStatusColumn` (002): Adds a status column to the users table with a default value
 - `CreatePostsTable` (003): Creates a posts table with a foreign key relationship to users

@@ -33,6 +33,7 @@ The following system dependencies may be required depending on the formats you w
 ### Basic Usage
 
 Convert a single audio file:
+
 ```bash
 aconverter input.flac --output output.mp3
 ```
@@ -40,6 +41,7 @@ aconverter input.flac --output output.mp3
 ### Specify Output Format
 
 Explicitly specify the output format:
+
 ```bash
 aconverter input.mp3 --output output.flac --encoding FLAC
 ```
@@ -49,6 +51,7 @@ aconverter input.mp3 --output output.flac --encoding FLAC
 **Note**: Quality parameter is parsed but not currently implemented in the encoding process.
 
 Set encoding quality (0-100, default 80):
+
 ```bash
 aconverter input.wav --output output.mp3 --quality 95
 ```
@@ -65,15 +68,16 @@ aconverter \
 
 ## Command Line Options
 
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--encoding` | `-e` | Output format (AAC, FLAC, MP3, OPUS) | Auto-detect from extension |
-| `--output` | `-o` | Output file path | Required |
-| `--quality` | `-q` | Encoding quality (0-100) (currently not implemented) | 80 |
+| Option       | Short | Description                                          | Default                    |
+| ------------ | ----- | ---------------------------------------------------- | -------------------------- |
+| `--encoding` | `-e`  | Output format (AAC, FLAC, MP3, OPUS)                 | Auto-detect from extension |
+| `--output`   | `-o`  | Output file path                                     | Required                   |
+| `--quality`  | `-q`  | Encoding quality (0-100) (currently not implemented) | 80                         |
 
 ## Supported Formats
 
 ### Input Formats
+
 - **MP3** (.mp3)
 - **FLAC** (.flac)
 - **AAC/M4A** (.aac, .m4a, .mp4)
@@ -82,6 +86,7 @@ aconverter \
 - **OGG** (.ogg)
 
 ### Output Formats
+
 - **AAC** (.aac, .m4a) - Advanced Audio Codec
 - **FLAC** (.flac) - Free Lossless Audio Codec
 - **MP3** (.mp3) - MPEG Layer 3
@@ -105,33 +110,38 @@ The converter automatically preserves the following metadata tags:
 **Note**: The quality parameter is currently not implemented in the encoding process. The information below describes planned functionality.
 
 ### Lossless Formats
+
 - **FLAC**: Perfect quality preservation, larger file size
 - Use for archival purposes or when quality is paramount
 
 ### Lossy Formats (Planned)
+
 - **AAC**: Excellent quality at lower bitrates, good for streaming
-  - Quality 80-90: Good for general listening
-  - Quality 90-100: High quality for critical listening
+    - Quality 80-90: Good for general listening
+    - Quality 90-100: High quality for critical listening
 - **MP3**: Widely compatible, good quality
-  - Quality 70-80: Good for portable devices
-  - Quality 80-95: High quality for most uses
+    - Quality 70-80: Good for portable devices
+    - Quality 80-95: High quality for most uses
 - **Opus**: Best quality per bitrate, modern codec
-  - Quality 60-80: Excellent for voice/music streaming
-  - Quality 80-95: High quality music
+    - Quality 60-80: Excellent for voice/music streaming
+    - Quality 80-95: High quality music
 
 ## Examples
 
 ### Convert FLAC to MP3
+
 ```bash
 aconverter album.flac --output album.mp3
 ```
 
 ### Convert MP3 to lossless FLAC
+
 ```bash
 aconverter song.mp3 --output song.flac
 ```
 
 ### Batch convert with shell script
+
 ```bash
 #!/bin/bash
 for file in *.flac; do
@@ -140,6 +150,7 @@ done
 ```
 
 ### Convert with format specification
+
 ```bash
 aconverter input.flac --output output.m4a --encoding AAC
 ```

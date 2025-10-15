@@ -15,6 +15,7 @@ The MoosicBox WebSocket package provides:
 ## Architecture
 
 This package is designed as a **framework-agnostic message handler**. It does not provide:
+
 - WebSocket server implementation (handled by integration layer)
 - Network transport (provided by framework like `actix-web`, `axum`, etc.)
 - Authentication implementation (uses `moosicbox_session` integration)
@@ -26,6 +27,7 @@ Instead, it provides the core message processing logic that can be integrated wi
 ### Message Types
 
 **Inbound Messages** (Client → Server):
+
 - `Ping` - Connection heartbeat
 - `GetConnectionId` - Request connection identifier
 - `GetSessions` - Request active sessions list
@@ -38,6 +40,7 @@ Instead, it provides the core message processing logic that can be integrated wi
 - `SetSeek` - Synchronize seek position across clients
 
 **Outbound Messages** (Server → Client):
+
 - `ConnectionId` - Connection identifier response
 - `Sessions` - Active sessions list
 - `SessionUpdated` - Session state change notification
@@ -50,6 +53,7 @@ Instead, it provides the core message processing logic that can be integrated wi
 ### Connection Management
 
 The package tracks active connections using an in-memory `BTreeMap`:
+
 - Connects clients and assigns connection IDs
 - Registers connections with database
 - Handles disconnection and cleanup
@@ -337,6 +341,7 @@ packages/ws/src/
 ## Integration with MoosicBox
 
 This package is used by MoosicBox server implementations to handle WebSocket communication. The server provides:
+
 - WebSocket upgrade handling
 - Connection management
 - `WebsocketSender` implementation

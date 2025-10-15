@@ -4,16 +4,16 @@ This example demonstrates the fundamental operations of the Turso Database backe
 
 ## What This Example Demonstrates
 
-* **Database Creation**: Creating an in-memory Turso database
-* **Schema Creation**: Creating tables with SQL DDL
-* **CRUD Operations**:
-  * **Create**: Inserting records with parameterized queries
-  * **Read**: Querying data with and without parameters
-  * **Update**: Modifying existing records
-  * **Delete**: Removing records
-* **Schema Introspection**:
-  * Checking if tables exist
-  * Retrieving table column metadata
+- **Database Creation**: Creating an in-memory Turso database
+- **Schema Creation**: Creating tables with SQL DDL
+- **CRUD Operations**:
+    - **Create**: Inserting records with parameterized queries
+    - **Read**: Querying data with and without parameters
+    - **Update**: Modifying existing records
+    - **Delete**: Removing records
+- **Schema Introspection**:
+    - Checking if tables exist
+    - Retrieving table column metadata
 
 ## Running the Example
 
@@ -42,9 +42,9 @@ The example will:
 7. Delete a user (Bob)
 8. Show final user count (2 remaining)
 9. Demonstrate schema introspection:
-   * Check if `users` table exists (true)
-   * Check if `posts` table exists (false)
-   * List all columns in `users` table with their types
+    - Check if `users` table exists (true)
+    - Check if `posts` table exists (false)
+    - List all columns in `users` table with their types
 
 ## Code Highlights
 
@@ -83,10 +83,10 @@ let columns = db.get_table_columns("users").await?;
 
 ## Related Examples
 
-* **[turso_transactions](../turso_transactions/)**: Transaction management with commit/rollback
+- **[turso_transactions](../turso_transactions/)**: Transaction management with commit/rollback
 
 ## Notes
 
-* This example uses an **in-memory database** (`:memory:`), so data is not persisted
-* All operations use **raw SQL** with parameterized queries
-* For file-based persistence, use a file path instead of `:memory:`
+- This example uses an **in-memory database** (`:memory:`), so data is not persisted
+- All operations use **raw SQL** with parameterized queries
+- For file-based persistence, use a file path instead of `:memory:`

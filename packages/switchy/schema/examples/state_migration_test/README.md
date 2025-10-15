@@ -23,6 +23,7 @@ cargo run --bin state_migration_test
 ```
 
 This will:
+
 1. Create an in-memory SQLite database
 2. Set up initial state with test data
 3. Run migrations and verify data integrity
@@ -31,6 +32,7 @@ This will:
 ## Migration Structure
 
 The example includes:
+
 - `setup_initial_data`: Function that creates the initial users table with 3 test users
 - `AddUsersBioColumn`: Migration that adds a `bio` column with a default empty string value
 - `AddEmailIndex`: Migration that creates an index on the `email` column
@@ -39,6 +41,7 @@ The example includes:
 ## Use Cases
 
 This pattern is ideal for:
+
 - Adding columns with default values to existing tables
 - Creating indexes on tables with existing data
 - Ensuring no data loss during migrations

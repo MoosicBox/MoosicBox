@@ -51,6 +51,7 @@ actions_dsl! {
 ```
 
 **Available element methods:**
+
 - `element(selector).show()` - Show the element
 - `element(selector).hide()` - Hide the element
 - `element(selector).toggle_visibility()` - Toggle element visibility
@@ -110,6 +111,7 @@ actions_dsl! {
 ## Action Types
 
 ### Visibility Actions
+
 - `show(id)` - Show an element by ID
 - `hide(id)` - Hide an element by ID
 - `set_visibility(id, visibility)` - Set element visibility state
@@ -117,13 +119,16 @@ actions_dsl! {
 - `hide_self()` - Hide the current element
 
 ### Navigation Actions
+
 - `navigate(url)` - Navigate to a URL
 
 ### Logging Actions
+
 - `log(message)` - Log an info message
 - `custom(action_name)` - Execute a custom action
 
 ### Element Reference Functions
+
 - `element(selector)` - Get an element reference (supports `#id` and `.class` selectors)
 - `element(selector).show()` - Show the element
 - `element(selector).hide()` - Hide the element
@@ -132,21 +137,25 @@ actions_dsl! {
 - `element(selector).set_visibility(visibility)` - Set visibility state
 
 ### Conditional Functions
+
 - `get_visibility(id)` - Get element visibility state
 - `visible()` - Visibility state constant
 - `hidden()` - Hidden state constant
 
 ### Parameterized Actions
+
 - `invoke(action, value)` - Execute a parameterized action
 - `throttle(duration, action)` - Throttle action execution
 - `delay_off(duration, action)` - Delay action deactivation
 - `unique(action)` - Ensure action uniqueness
 
 ### Event Handling
+
 - `on_event(event_name, closure)` - Handle custom events
 - `get_event_value()` - Get the current event value (use within event handlers)
 
 ### Background Styling
+
 - `set_background_self(color)` - Set background color of current element
 - `remove_background_self()` - Remove background from current element
 - `remove_background_str_id(id)` - Remove background from element by ID
@@ -154,10 +163,12 @@ actions_dsl! {
 - `set_visibility_child_class(visibility, class)` - Set visibility for child elements by class
 
 ### Mathematical Operations
+
 - `clamp(min, value, max)` - Clamp a value between min and max
 - Arithmetic operators: `+`, `-`, `*`, `/` (converted to method calls)
 
 ### Getters and Queries
+
 - `get_width_px_self()` - Get width of current element in pixels
 - `get_height_px_str_id(id)` - Get height of element by ID
 - `get_mouse_x_self()` - Get mouse X position relative to current element

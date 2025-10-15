@@ -185,15 +185,19 @@ async fn query_sessions(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::
 ## Core Types
 
 ### Session
+
 Represents a user session with playback state, playlist, and audio zone information.
 
 ### Connection
+
 Represents a device connection with associated players.
 
 ### Player
+
 Represents an audio output device or player within a connection.
 
 ### SessionPlaylist
+
 Links sessions to playlists for playback management.
 
 ## Error Handling
@@ -203,6 +207,7 @@ The library uses `DatabaseFetchError` for database operations and `CreatePlayers
 ## Dependencies
 
 Core dependencies:
+
 - `moosicbox_session_models`: Session data models and types
 - `moosicbox_audio_zone`: Audio zone integration
 - `moosicbox_music_models`: Music API track models
@@ -212,6 +217,7 @@ Core dependencies:
 - `switchy_async`: Async runtime utilities
 
 Optional dependencies:
+
 - `actix-web`: Web framework for API endpoints (feature: `api`)
 - `moosicbox_paging`: Pagination support (feature: `api`)
 - `utoipa`: OpenAPI documentation (feature: `openapi`)

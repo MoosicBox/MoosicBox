@@ -17,6 +17,7 @@ The HyperChad Transformer package provides:
 ## Features
 
 ### Container Model
+
 - **Comprehensive Styling**: Complete CSS property support
 - **Layout Properties**: Flexbox, grid, positioning, and spacing
 - **Typography**: Font families, sizes, colors, and text decoration
@@ -25,6 +26,7 @@ The HyperChad Transformer package provides:
 - **State Management**: Component state and data attributes
 
 ### Layout System
+
 - **Flexbox Layout**: Complete flexbox implementation
 - **Grid Layout**: CSS Grid support with cell sizing
 - **Positioning**: Static, relative, absolute, fixed, and sticky
@@ -33,6 +35,7 @@ The HyperChad Transformer package provides:
 - **Viewport Handling**: Dynamic viewport size calculations
 
 ### Element Types
+
 - **Semantic HTML**: div, main, header, footer, section, aside
 - **Forms**: input, button, form elements
 - **Media**: images with responsive loading and sizing
@@ -43,6 +46,7 @@ The HyperChad Transformer package provides:
 - **Canvas**: Optional canvas element support
 
 ### Tree Operations
+
 - **BFS Traversal**: Breadth-first search with level tracking
 - **Element Finding**: Find by ID, string ID, or CSS class
 - **Parent/Child**: Navigate parent-child relationships
@@ -312,6 +316,7 @@ let password = Element::Input {
 ## Number System
 
 ### Basic Numbers
+
 ```rust
 use hyperchad_transformer::Number;
 
@@ -322,6 +327,7 @@ let viewport_height = Number::RealVh(50.0);
 ```
 
 ### Calculations
+
 ```rust
 use hyperchad_transformer::{Number, Calculation};
 
@@ -335,6 +341,7 @@ let calc = Number::Calc(Calculation::Add(
 ## Container Properties
 
 ### Layout Properties
+
 - **direction**: LayoutDirection (Row/Column)
 - **overflow_x/overflow_y**: LayoutOverflow handling
 - **justify_content**: Main axis alignment
@@ -342,20 +349,23 @@ let calc = Number::Calc(Calculation::Add(
 - **flex**: Flexbox grow, shrink, basis
 
 ### Spacing Properties
+
 - **width/height**: Element dimensions
 - **min_width/max_width**: Size constraints
-- **margin_***: External spacing
-- **padding_***: Internal spacing
+- **margin\_\***: External spacing
+- **padding\_\***: Internal spacing
 - **column_gap/row_gap**: Flexbox/grid gaps
 
 ### Visual Properties
+
 - **background**: Background color
 - **color**: Text color
 - **opacity**: Element transparency
-- **border_***: Border styling
-- **border_*_radius**: Corner rounding
+- **border\_\***: Border styling
+- **border\_\*\_radius**: Corner rounding
 
 ### Typography Properties
+
 - **font_family**: Font stack
 - **font_size**: Text size
 - **text_align**: Text alignment
@@ -378,6 +388,7 @@ let calc = Number::Calc(Calculation::Add(
 ## Integration
 
 This package is designed for:
+
 - **UI Frameworks**: Core UI component system
 - **Layout Engines**: Advanced layout calculation
 - **HTML Generation**: Server-side rendering

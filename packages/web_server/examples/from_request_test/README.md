@@ -25,6 +25,7 @@ This example provides comprehensive validation of the dual-mode FromRequest trai
 ## Running the Tests
 
 ### Synchronous Extraction Tests
+
 ```bash
 # From example directory
 cd packages/web_server/examples/from_request_test
@@ -38,6 +39,7 @@ nix develop .#server --command cargo run --package from_request_test --bin test_
 ```
 
 ### Asynchronous Extraction Tests
+
 ```bash
 # From example directory
 cd packages/web_server/examples/from_request_test
@@ -51,6 +53,7 @@ nix develop .#server --command cargo run --package from_request_test --bin test_
 ```
 
 ### Build All Tests
+
 ```bash
 # Test compilation of both binaries
 cargo build --bins
@@ -62,7 +65,9 @@ cargo build --bin test_sync_extraction
 ## Test Coverage
 
 ### Synchronous Extraction Tests
+
 (Implemented in `src/test_sync_extraction.rs`)
+
 - **RequestData Extraction**: Validates all RequestData fields (method, path, query, headers, user_agent, content_type, remote_addr)
 - **String Extraction**: Tests query string extraction
 - **u32 Extraction**: Tests numeric parsing with valid inputs and error handling for invalid inputs
@@ -70,7 +75,9 @@ cargo build --bin test_sync_extraction
 - **Error Cases**: Validates proper error handling with "Failed to parse" error messages
 
 ### Asynchronous Extraction Tests
+
 (Implemented in `src/test_async_extraction.rs`)
+
 - **RequestData Async**: Tests async extraction of RequestData with POST method
 - **i32 Async Extraction**: Tests negative number parsing asynchronously with error handling
 - **Future Types**: Validates Future resolution for String and RequestData types
@@ -80,6 +87,7 @@ cargo build --bin test_sync_extraction
 ## Expected Test Results
 
 ### Successful Validation
+
 ✅ **Data Extraction**: All extraction methods successfully parse valid inputs
 ✅ **Field Validation**: RequestData fields match expected values
 ✅ **Type Conversion**: Primitive types correctly parsed from strings
@@ -87,6 +95,7 @@ cargo build --bin test_sync_extraction
 ✅ **Sync/Async Consistency**: Both modes produce identical results
 
 ### Test Output Example
+
 ```
 🧪 Testing synchronous extraction with FromRequest trait...
 
@@ -144,6 +153,7 @@ Testing Future types are properly implemented...
 ## Code Structure
 
 ### Test Request Creation
+
 ```rust
 fn create_test_request() -> HttpRequest {
     // Creates HttpRequest with test data:
@@ -155,6 +165,7 @@ fn create_test_request() -> HttpRequest {
 ```
 
 ### Extraction Testing
+
 ```rust
 // Sync extraction
 let data = RequestData::from_request_sync(&req)?;
@@ -167,6 +178,7 @@ assert_eq!(data.method, Method::Get);
 ```
 
 ### Error Case Testing
+
 ```rust
 // Test invalid number parsing
 let result = u32::from_request_sync(&invalid_req);
@@ -177,18 +189,21 @@ assert!(result.unwrap_err().to_string().contains("invalid"));
 ## Test Quality Features
 
 ### Real Method Calls
+
 - 🎯 **Actual Execution**: Tests call real FromRequest methods
 - 🔍 **Result Validation**: Assertions verify extracted values
 - ❌ **Error Testing**: Invalid inputs tested for proper error handling
 - 📊 **Behavior Comparison**: Sync vs async consistency validation
 
 ### Comprehensive Coverage
+
 - **All Types**: Tests RequestData, String, u32, i32, bool extraction
 - **Valid Cases**: Tests successful extraction with various inputs
 - **Invalid Cases**: Tests error handling with malformed data
 - **Edge Cases**: Tests boundary conditions and special values
 
 ### Production Readiness
+
 - **Real Data**: Uses realistic HTTP request data
 - **Error Messages**: Validates error message quality
 - **Performance**: Tests both sync and async performance characteristics
@@ -197,35 +212,44 @@ assert!(result.unwrap_err().to_string().contains("invalid"));
 ## Troubleshooting
 
 ### Dependency Issues
+
 **Problem**: FromRequest trait not available
 **Solution**: The package uses the `simulator` feature by default (configured in Cargo.toml). No additional feature flags are needed for basic usage.
 
 ### Test Failures
+
 **Problem**: Extraction tests failing
 **Solution**: Check that mock request data matches expected format
 
 ### Compilation Errors
+
 **Problem**: FromRequest trait not found
 **Solution**: Verify web server dependencies are correctly configured
 
 ## Development Usage
 
 ### Validation Tool
+
 This example serves as a validation tool for:
+
 - FromRequest trait implementations
 - Parameter extraction logic
 - Error handling consistency
 - Sync/async behavior parity
 
 ### Regression Testing
+
 Use this example to:
+
 - Verify changes don't break extraction
 - Test new parameter types
 - Validate error handling improvements
 - Ensure backend compatibility
 
 ### Performance Testing
+
 The example can be extended for:
+
 - Extraction performance benchmarks
 - Memory usage validation
 - Async overhead measurement
@@ -243,13 +267,17 @@ The example can be extended for:
 ## Implementation Notes
 
 ### Dual-Mode Design
+
 The FromRequest trait supports both sync and async extraction:
+
 - **Sync Mode**: Immediate extraction for simple types
 - **Async Mode**: Future-based extraction for complex operations
 - **Consistency**: Both modes produce identical results
 
 ### Error Handling
+
 Comprehensive error handling includes:
+
 - **Type Conversion Errors**: Invalid string-to-type conversions
 - **Missing Parameters**: Required parameters not found
 - **Format Errors**: Malformed request data

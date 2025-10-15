@@ -16,6 +16,7 @@ The HyperChad App package provides:
 ## Features
 
 ### Application Builder
+
 - **Fluent API**: Chain configuration methods for easy setup
 - **Router Integration**: Built-in routing with initial route support
 - **Window Configuration**: Position, size, background, and metadata
@@ -23,18 +24,21 @@ The HyperChad App package provides:
 - **Event Handling**: Action handlers and resize listeners
 
 ### CLI Commands
+
 - **Serve**: Start development server
 - **Generate**: Build static assets and routes
 - **Clean**: Clean generated assets
 - **Dynamic Routes**: List available dynamic routes
 
 ### Renderer Support
+
 - **Multiple Backends**: Support for different rendering targets
 - **Generator Interface**: Static site generation capabilities
 - **Cleaner Interface**: Asset cleanup and management
 - **Render Runner**: Application execution and lifecycle
 
 ### Action System
+
 - **Action Handlers**: Custom action processing
 - **Logic Integration**: Conditional action handling
 - **Event Processing**: User interaction event handling
@@ -203,6 +207,7 @@ match AppBuilder::new().build(renderer) {
 ## App Structure
 
 ### AppBuilder
+
 - **Router**: Application routing configuration
 - **Initial Route**: Starting route for the application
 - **Window Properties**: Position, size, background, title, description
@@ -211,6 +216,7 @@ match AppBuilder::new().build(renderer) {
 - **Assets**: Static asset route configuration
 
 ### App
+
 - **Renderer**: Rendering backend implementation
 - **Router**: Request routing and handling
 - **Runtime**: Async runtime management
@@ -219,20 +225,25 @@ match AppBuilder::new().build(renderer) {
 ## CLI Commands
 
 ### serve
+
 Start development server with hot reloading and dynamic routing.
 
 ### gen
+
 Generate static assets and pre-rendered routes for production deployment.
 
 ### clean
+
 Remove generated assets and clean build artifacts.
 
 ### dynamic-routes
+
 Display available dynamic routes for debugging and development.
 
 ## Traits
 
 ### Generator
+
 ```rust
 #[async_trait]
 pub trait Generator {
@@ -241,6 +252,7 @@ pub trait Generator {
 ```
 
 ### Cleaner
+
 ```rust
 #[async_trait]
 pub trait Cleaner {
@@ -251,7 +263,9 @@ pub trait Cleaner {
 ## Feature Flags
 
 ### Default Features
+
 The following features are enabled by default:
+
 - **`actix`**: Actix web server support
 - **`assets`**: Static asset management
 - **`egui-wgpu`**: Egui renderer with WGPU backend
@@ -265,6 +279,7 @@ The following features are enabled by default:
 - **`vanilla-js`**: Vanilla JavaScript renderer
 
 ### Additional Features
+
 - **`egui`**, **`egui-glow`**, **`egui-v1`**, **`egui-v2`**: Egui renderer variants
 - **`actions`**, **`sse`**: Server-sent events and action support
 - **`web-server`**, **`web-server-actix`**, **`web-server-simulator`**: Web server variants
@@ -280,6 +295,7 @@ The following features are enabled by default:
 ## Dependencies
 
 ### Core Dependencies
+
 - **hyperchad_router**: Application routing system
 - **hyperchad_renderer**: Rendering abstraction layer
 - **hyperchad_actions**: Interactive action system
@@ -289,12 +305,14 @@ The following features are enabled by default:
 - **moosicbox_assert**: Assertion utilities
 
 ### Optional Renderer Dependencies
+
 - **hyperchad_renderer_egui**: Egui rendering backend (optional)
 - **hyperchad_renderer_fltk**: FLTK rendering backend (optional)
 - **hyperchad_renderer_html**: HTML rendering backend (optional)
 - **hyperchad_renderer_vanilla_js**: Vanilla JS rendering backend (optional)
 
 ### Utility Dependencies
+
 - **async-trait**: Async trait support
 - **clap**: Command-line argument parsing
 - **flume**: Multi-producer multi-consumer channels
@@ -305,6 +323,7 @@ The following features are enabled by default:
 ## Integration
 
 This package is designed for:
+
 - **Desktop Applications**: Native desktop app development
 - **Web Applications**: Browser-based applications
 - **Static Sites**: Static site generation

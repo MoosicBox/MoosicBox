@@ -358,12 +358,14 @@ POST /player/update-playback?playing=true&position=2&volume=0.7
 The player supports various feature flags for customization:
 
 **Audio Output Backends:**
+
 - `cpal` - Cross-platform audio output (default)
 - `jack` - JACK audio server support
 - `asio` - ASIO low-latency support (Windows)
 - `oboe-shared-stdcxx` - Oboe audio output (Android)
 
 **Audio Decoders:**
+
 - `decoder-aac` - AAC audio decoding
 - `decoder-flac` - FLAC audio decoding
 - `decoder-mp3` - MP3 audio decoding
@@ -371,6 +373,7 @@ The player supports various feature flags for customization:
 - `all-decoders` - Enable all decoders
 
 **Audio Encoders:**
+
 - `encoder-aac` - AAC audio encoding
 - `encoder-flac` - FLAC audio encoding
 - `encoder-mp3` - MP3 audio encoding
@@ -378,6 +381,7 @@ The player supports various feature flags for customization:
 - `all-encoders` - Enable all encoders
 
 **Other Features:**
+
 - `api` - Enable HTTP API endpoints
 - `openapi` - Generate OpenAPI documentation
 - `local` - Enable local player implementation

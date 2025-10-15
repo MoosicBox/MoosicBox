@@ -4,11 +4,11 @@ This example demonstrates a complete web application built with the HyperChad fr
 
 ## Features
 
-* **Server-side rendering** with type-safe HTML generation using the `container!` macro
-* **Component-based architecture** with reusable page functions
-* **Built-in routing** for multiple pages and API endpoints
-* **JSON API endpoints** for dynamic functionality
-* **Modern HTML structure** with semantic elements
+- **Server-side rendering** with type-safe HTML generation using the `container!` macro
+- **Component-based architecture** with reusable page functions
+- **Built-in routing** for multiple pages and API endpoints
+- **JSON API endpoints** for dynamic functionality
+- **Modern HTML structure** with semantic elements
 
 ## Project Structure
 
@@ -22,10 +22,10 @@ basic_web_server/
 
 ## Routes
 
-* **GET /** - Home page with welcome message and features
-* **GET /about** - About page with framework information
-* **GET /contact** - Contact page with a form
-* **GET /api/status** - API endpoint returning server status as JSON
+- **GET /** - Home page with welcome message and features
+- **GET /about** - About page with framework information
+- **GET /contact** - Contact page with a form
+- **GET /api/status** - API endpoint returning server status as JSON
 
 ## Running the Example
 
@@ -117,14 +117,15 @@ let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
 
 ## Technology Stack
 
-* **HyperChad** - Web framework with type-safe HTML generation
-* **Switchy** - Async runtime abstraction for high-performance I/O
-* **Serde JSON** - JSON serialization for API responses
-* **Actix Web** - Underlying HTTP server (via hyperchad's web server integration)
+- **HyperChad** - Web framework with type-safe HTML generation
+- **Switchy** - Async runtime abstraction for high-performance I/O
+- **Serde JSON** - JSON serialization for API responses
+- **Actix Web** - Underlying HTTP server (via hyperchad's web server integration)
 
 ## Supported Elements
 
 The `container!` macro supports these HTML elements:
+
 - `div`, `section`, `aside`, `main`, `header`, `footer`
 - `form`, `span`, `button`, `anchor`, `image`, `input`
 - `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
@@ -136,9 +137,9 @@ The `container!` macro supports these HTML elements:
 
 This example provides a solid foundation for building larger applications. Consider exploring:
 
-* Database integration for persistent data
-* User authentication and sessions
-* WebSocket support for real-time features
-* More complex form handling and validation
-* Middleware for logging, CORS, etc.
-* Static asset optimization and caching
+- Database integration for persistent data
+- User authentication and sessions
+- WebSocket support for real-time features
+- More complex form handling and validation
+- Middleware for logging, CORS, etc.
+- Static asset optimization and caching

@@ -26,11 +26,13 @@ cargo install --path packages/load_balancer
 ### Basic Usage
 
 Start the load balancer:
+
 ```bash
 moosicbox_lb
 ```
 
 Or using cargo:
+
 ```bash
 cargo run --bin moosicbox_lb
 ```
@@ -41,22 +43,24 @@ The load balancer is configured through environment variables.
 
 #### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Port for HTTP traffic | `6188` |
-| `SSL_PORT` | Port for HTTPS traffic | `6189` |
-| `CLUSTERS` | Cluster configuration (see format below) | *Required* |
-| `SSL_CRT_PATH` | Path to SSL certificate file | `/etc/pingora/ssl/tls.crt` |
-| `SSL_KEY_PATH` | Path to SSL private key file | `/etc/pingora/ssl/tls.key` |
+| Variable       | Description                              | Default                    |
+| -------------- | ---------------------------------------- | -------------------------- |
+| `PORT`         | Port for HTTP traffic                    | `6188`                     |
+| `SSL_PORT`     | Port for HTTPS traffic                   | `6189`                     |
+| `CLUSTERS`     | Cluster configuration (see format below) | _Required_                 |
+| `SSL_CRT_PATH` | Path to SSL certificate file             | `/etc/pingora/ssl/tls.crt` |
+| `SSL_KEY_PATH` | Path to SSL private key file             | `/etc/pingora/ssl/tls.key` |
 
 #### Cluster Configuration
 
 The `CLUSTERS` environment variable defines backend clusters using this format:
+
 ```
 host1,host2:backend1,backend2;host3:backend3,backend4
 ```
 
 Examples:
+
 ```bash
 # Single cluster with wildcard routing
 export CLUSTERS="*:127.0.0.1:8001,127.0.0.1:8002"
@@ -101,6 +105,7 @@ export SSL_KEY_PATH="./key.pem"
 ### Debug Mode
 
 Run with detailed logging:
+
 ```bash
 RUST_LOG="moosicbox_load_balancer=debug" moosicbox_lb
 ```
@@ -144,28 +149,28 @@ CMD ["moosicbox_lb"]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: moosicbox-lb
+    name: moosicbox-lb
 spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: moosicbox-lb
-  template:
-    metadata:
-      labels:
-        app: moosicbox-lb
-    spec:
-      containers:
-      - name: moosicbox-lb
-        image: moosicbox/load-balancer:latest
-        ports:
-        - containerPort: 6188
-          name: http
-        - containerPort: 6189
-          name: https
-        env:
-        - name: CLUSTERS
-          value: "*:moosicbox-server-1:8001,moosicbox-server-2:8001"
+    replicas: 2
+    selector:
+        matchLabels:
+            app: moosicbox-lb
+    template:
+        metadata:
+            labels:
+                app: moosicbox-lb
+        spec:
+            containers:
+                - name: moosicbox-lb
+                  image: moosicbox/load-balancer:latest
+                  ports:
+                      - containerPort: 6188
+                        name: http
+                      - containerPort: 6189
+                        name: https
+                  env:
+                      - name: CLUSTERS
+                        value: '*:moosicbox-server-1:8001,moosicbox-server-2:8001'
 ```
 
 ## Troubleshooting
@@ -180,11 +185,13 @@ spec:
 ### Logging
 
 The load balancer logs to `moosicbox_lb.log` and stdout. Enable debug logging for detailed information:
+
 ```bash
 RUST_LOG="moosicbox_load_balancer=debug" moosicbox_lb
 ```
 
 Logs include:
+
 - Cluster selection and upstream routing decisions
 - Health check status
 - SSL/TLS configuration status
@@ -195,6 +202,7 @@ Logs include:
 ### System Limits
 
 Increase system file descriptor limits for high-traffic scenarios:
+
 ```bash
 # /etc/security/limits.conf
 * soft nofile 65536

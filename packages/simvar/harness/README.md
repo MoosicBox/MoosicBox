@@ -16,24 +16,28 @@ The MoosicBox Simulation Testing Harness provides:
 ## Features
 
 ### Simulation Management
+
 - **Multi-Run Support**: Execute multiple simulation runs with parallel execution
 - **Cancellation Support**: Graceful simulation cancellation and cleanup
 - **Thread Management**: Worker thread allocation and management
 - **Progress Tracking**: Real-time simulation progress monitoring
 
 ### Testing Framework
+
 - **Host Simulation**: Server-side simulation with async action support
 - **Client Simulation**: Client-side simulation and interaction testing
 - **Result Aggregation**: Simulation result collection and analysis
 - **Network Bouncing**: Planned: Host restart and failover simulation
 
 ### User Interface
+
 - **TUI Mode**: Optional terminal-based monitoring interface
 - **Logging Integration**: Comprehensive logging with environment logger
 - **Progress Display**: Real-time simulation status and progress
 - **Error Reporting**: Detailed error reporting and stack traces
 
 ### Configuration
+
 - **Environment Variables**: Runtime configuration via environment variables
 - **Bootstrap System**: Configurable simulation initialization
 - **Properties**: Custom simulation properties and metadata
@@ -177,6 +181,7 @@ sim.client("load_client", async {
 ## Environment Configuration
 
 ### Runtime Variables
+
 - `SIMULATOR_RUNS`: Number of simulation runs (default: 1)
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
 - `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
@@ -185,6 +190,7 @@ sim.client("load_client", async {
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 
 ### Example Configuration
+
 ```bash
 # Run 10 simulations with 4 parallel workers
 export SIMULATOR_RUNS=10
@@ -201,11 +207,14 @@ cargo test simulation_test
 The package supports the following features:
 
 ### Default Features
+
 - **pretty_env_logger**: Environment-based logging configuration
 - **tui**: Terminal user interface for simulation monitoring
 
 ### TUI Interface
+
 When built with the `tui` feature (enabled by default), provides:
+
 - Real-time simulation progress
 - Run status and results
 - Error display and debugging
@@ -214,6 +223,7 @@ When built with the `tui` feature (enabled by default), provides:
 Disable with `NO_TUI` environment variable or by excluding default features.
 
 ### Optional Features
+
 - **async**: Async simulation support (via switchy)
 - **database**: Database connection simulation (via switchy)
 - **fs**: File system simulation (via switchy)
@@ -226,6 +236,7 @@ Disable with `NO_TUI` environment variable or by excluding default features.
 - **web-server**: Web server simulation support
 
 ### Logging Integration
+
 - Environment-based log level configuration
 - Structured logging with simulation context
 - Error tracking and stack traces
@@ -234,6 +245,7 @@ Disable with `NO_TUI` environment variable or by excluding default features.
 ## Error Handling
 
 Comprehensive error types:
+
 - **Step Errors**: Simulation step execution failures
 - **Join Errors**: Thread joining and coordination failures
 - **IO Errors**: File system and network operation failures
@@ -249,6 +261,7 @@ Comprehensive error types:
 ## Integration
 
 This package is designed for:
+
 - **Load Testing**: High-throughput simulation testing
 - **Integration Testing**: Multi-service interaction testing
 - **Chaos Engineering**: Failure injection and recovery testing

@@ -16,12 +16,14 @@ The HyperChad Router package provides:
 ## Features
 
 ### Route Matching
+
 - **Literal Routes**: Exact path matching
 - **Multiple Literals**: Match against multiple possible paths
 - **Prefix Matching**: Match paths with specific prefixes
 - **Flexible Patterns**: Support for various route patterns
 
 ### Request Handling
+
 - **HTTP Methods**: Support for GET, POST, PUT, DELETE, PATCH
 - **Query Parameters**: Automatic query string parsing
 - **Headers**: Complete header access and manipulation
@@ -29,6 +31,7 @@ The HyperChad Router package provides:
 - **Body Parsing**: JSON and form data parsing
 
 ### Form Processing
+
 - **Multipart Forms**: Complete multipart form support
 - **File Uploads**: File upload handling with base64 encoding
 - **JSON Bodies**: JSON request body parsing
@@ -36,6 +39,7 @@ The HyperChad Router package provides:
 - **Content-Type Detection**: Automatic content type handling
 
 ### Client Information
+
 - **OS Detection**: Automatic operating system detection
 - **Client Info**: Structured client information
 - **Request Context**: Rich request context and metadata
@@ -256,6 +260,7 @@ match router.navigate("/api/endpoint").await {
 ## Route Types
 
 ### RoutePath Variants
+
 - **Literal(String)**: Exact string match
 - **Literals(Vec<String>)**: Match any of multiple strings
 - **LiteralPrefix(String)**: Match strings with specific prefix
@@ -263,6 +268,7 @@ match router.navigate("/api/endpoint").await {
 ### Content Types
 
 The `Content` enum (from `hyperchad_renderer`) supports:
+
 - **View(View)**: HTML view content (created from strings, Containers, or Views)
 - **PartialView(PartialView)**: Partial view updates for specific targets
 - **Json(serde_json::Value)**: JSON responses (requires `json` feature)
@@ -271,6 +277,7 @@ The `Content` enum (from `hyperchad_renderer`) supports:
 ## Client Information
 
 ### ClientInfo Structure
+
 ```rust
 pub struct ClientInfo {
     pub os: ClientOs,
@@ -282,6 +289,7 @@ pub struct ClientOs {
 ```
 
 ### Default Client Detection
+
 Automatic OS detection using the `os_info` crate provides default client information.
 
 ## Feature Flags
@@ -309,6 +317,7 @@ Automatic OS detection using the `os_info` crate provides default client informa
 ## Integration
 
 This package is designed for:
+
 - **Web Applications**: Full-featured web application routing
 - **API Servers**: RESTful API endpoint handling
 - **Form Processing**: Web form and file upload handling

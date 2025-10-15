@@ -20,6 +20,7 @@ The MoosicBox Opus package provides an Opus audio codec decoder that integrates 
 ## Implementation
 
 This package implements:
+
 - **Packet parsing** (`packet.rs`) - Pure Rust parsing of Opus packet structures
 - **TOC handling** (`toc.rs`) - Configuration and mode extraction
 - **Frame processing** (`frame.rs`) - Frame length decoding and packing modes

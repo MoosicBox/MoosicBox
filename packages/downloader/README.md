@@ -9,6 +9,7 @@ The MoosicBox Downloader package provides functionality for downloading music tr
 ## Features
 
 ### Core Functionality
+
 - **Track Downloads**: Download music tracks with automatic metadata tagging
 - **Album Downloads**: Download entire albums including all tracks
 - **Cover Art Downloads**: Download album and artist cover images
@@ -20,6 +21,7 @@ The MoosicBox Downloader package provides functionality for downloading music tr
 - **Local Scanning**: Automatic library scanning after downloads complete
 
 ### Supported Sources
+
 - **Local Library**: Direct file downloads from local MoosicBox instances
 - **Music APIs**: Downloads from integrated music API sources (via `moosicbox_music_api`)
 - **Remote Library**: Downloads from remote MoosicBox servers
@@ -295,8 +297,8 @@ async fn manage_locations(db: &LibraryDatabase) -> Result<(), Box<dyn std::error
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable               | Description                  | Default           |
+| ---------------------- | ---------------------------- | ----------------- |
 | `MOOSICBOX_CONFIG_DIR` | Configuration directory path | Platform-specific |
 
 The default download directory is `{MOOSICBOX_CONFIG_DIR}/downloads`.
@@ -319,6 +321,7 @@ features = [
 ```
 
 Available features:
+
 - `api` - Enables REST API endpoints for download management
 - `openapi` - Includes OpenAPI/Swagger documentation
 - `all-formats` / `all-os-formats` - Enables all audio format support
@@ -529,6 +532,7 @@ Filenames are automatically sanitized to be filesystem-safe.
 ### Audio Tagging
 
 Downloaded audio files are automatically tagged with metadata:
+
 - Title
 - Track number
 - Album title
@@ -539,6 +543,7 @@ Downloaded audio files are automatically tagged with metadata:
 ### Resume Support
 
 Downloads automatically resume from where they left off if interrupted. The downloader:
+
 - Checks existing file size
 - Uses HTTP range requests to resume from the last byte
 - Retries on timeout with exponential backoff (via recursive retry logic)

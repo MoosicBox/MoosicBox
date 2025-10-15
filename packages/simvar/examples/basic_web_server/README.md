@@ -5,6 +5,7 @@ This example demonstrates how to use simvar with moosicbox_web_server to create 
 ## Overview
 
 The simulation creates:
+
 - **Web Server Host**: Serves HTTP requests on multiple endpoints
 - **Multiple Client Actors**: Make periodic requests to test the server
 
@@ -23,7 +24,7 @@ The simulation creates:
 The web server provides these endpoints:
 
 - `GET /api/v1/health` - Health check endpoint
-- `GET /api/v1/status` - Server status with uptime information  
+- `GET /api/v1/status` - Server status with uptime information
 - `POST /api/v1/echo` - Echo endpoint that accepts JSON and returns a response
 
 ## Running the Example
@@ -48,6 +49,7 @@ The simulation can be configured by modifying the `BasicWebServerBootstrap`:
 ## Expected Output
 
 The simulation will show:
+
 - Success/failure statistics
 - Final simulation results
 
@@ -56,20 +58,25 @@ For detailed server startup and client request logs, run with `RUST_LOG=debug` o
 ## Key Concepts
 
 ### SimBootstrap
+
 Configures the simulation parameters and sets up initial actors.
 
 ### Host Actor
+
 Runs the web server that handles incoming HTTP requests.
 
 ### Client Actors
+
 Make periodic HTTP requests to test server functionality.
 
 ### Simulation Time
+
 Uses simvar's time simulation for deterministic testing.
 
 ## Next Steps
 
 This basic example can be extended to:
+
 - Add more complex request patterns
 - Implement load testing scenarios
 - Add database interactions

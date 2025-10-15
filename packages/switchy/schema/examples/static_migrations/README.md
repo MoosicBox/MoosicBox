@@ -25,6 +25,7 @@ cargo run --bin static_migrations_example
 ```
 
 This will:
+
 1. Demonstrate a custom migration source with owned migrations
 2. Show directory-based migration loading (example code only)
 3. Create code-based migrations using raw SQL strings
@@ -36,22 +37,26 @@ This will:
 The example demonstrates:
 
 ### 1. Custom Migration Source
+
 - Custom `Migration<'static>` implementation
 - Custom `MigrationSource<'static>` implementation
 - Owned data structures with `String` types
 - Example migrations: users table, posts table, and indexes
 
 ### 2. Directory-based (Code Example)
+
 - Commented example showing directory-based discovery
 - Would load from `./migrations` directory
 - Each subdirectory becomes a migration with `up.sql` and `down.sql`
 
 ### 3. Code Migration Source (Raw SQL)
+
 - Using `CodeMigrationSource::new()`
 - Adding migrations with raw SQL strings
 - Example migrations: categories and tags tables
 
 ### 4. Code Migration Source (Query Builders)
+
 - Using `create_table()` query builder from `switchy_database`
 - Type-safe schema definitions with `Column` and `DataType`
 - Example migration: products table with multiple columns and primary key
@@ -59,6 +64,7 @@ The example demonstrates:
 ## Dependencies
 
 Based on `Cargo.toml`:
+
 - `switchy_schema` with features: `code`, `directory`, `embedded`
 - `switchy_database` for query builders
 - `switchy_async` with `macros` and `tokio` features
@@ -68,6 +74,7 @@ Based on `Cargo.toml`:
 ## Use Cases
 
 This pattern is ideal for:
+
 - Applications needing full control over migration sources
 - Projects using multiple migration discovery methods
 - Learning different approaches to defining migrations

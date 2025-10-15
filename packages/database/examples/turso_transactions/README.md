@@ -4,11 +4,11 @@ This example demonstrates transaction management with the Turso Database backend
 
 ## What This Example Demonstrates
 
-* **Transaction Basics**: Creating and managing database transactions
-* **Successful Commits**: Transferring money between accounts with proper transaction commit
-* **Rollback on Failure**: Detecting insufficient funds and rolling back changes
-* **Multi-Step Transactions**: Performing multiple operations within a single transaction
-* **ACID Properties**: Ensuring atomicity, consistency, isolation, and durability
+- **Transaction Basics**: Creating and managing database transactions
+- **Successful Commits**: Transferring money between accounts with proper transaction commit
+- **Rollback on Failure**: Detecting insufficient funds and rolling back changes
+- **Multi-Step Transactions**: Performing multiple operations within a single transaction
+- **ACID Properties**: Ensuring atomicity, consistency, isolation, and durability
 
 ## Running the Example
 
@@ -103,26 +103,26 @@ let balance = rows[0].get("balance").unwrap().as_i64().unwrap();
 
 ## Transaction Guarantees
 
-* **Atomicity**: All operations in a transaction succeed or fail together
-* **Consistency**: Database constraints are maintained
-* **Isolation**: Transactions don't see each other's uncommitted changes
-* **Durability**: Committed changes are persisted
+- **Atomicity**: All operations in a transaction succeed or fail together
+- **Consistency**: Database constraints are maintained
+- **Isolation**: Transactions don't see each other's uncommitted changes
+- **Durability**: Committed changes are persisted
 
 ## Use Cases
 
 This pattern is essential for:
 
-* Financial transactions (transfers, payments)
-* Multi-table updates that must stay synchronized
-* Complex operations requiring rollback on error
-* Ensuring data integrity across related changes
+- Financial transactions (transfers, payments)
+- Multi-table updates that must stay synchronized
+- Complex operations requiring rollback on error
+- Ensuring data integrity across related changes
 
 ## Related Examples
 
-* **[turso_basic](../turso_basic/)**: Basic CRUD operations and schema introspection
+- **[turso_basic](../turso_basic/)**: Basic CRUD operations and schema introspection
 
 ## Notes
 
-* This example uses an **in-memory database** (`:memory:`), so data is not persisted
-* Turso supports full ACID transaction semantics
-* Always handle errors and rollback on failure to maintain data integrity
+- This example uses an **in-memory database** (`:memory:`), so data is not persisted
+- Turso supports full ACID transaction semantics
+- Always handle errors and rollback on failure to maintain data integrity

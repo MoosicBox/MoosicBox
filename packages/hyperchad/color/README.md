@@ -16,18 +16,21 @@ The HyperChad Color package provides:
 ## Features
 
 ### Color Parsing
+
 - **Hex Strings**: Parse 3, 4, 6, and 8 character hex strings
 - **Flexible Input**: Support for #-prefixed and plain hex strings
 - **Whitespace Handling**: Automatic whitespace trimming
 - **Case Insensitive**: Support for both uppercase and lowercase hex
 
 ### Color Formats
+
 - **RGB**: Standard red, green, blue color values
 - **RGBA**: RGB with alpha transparency channel
 - **Short Form**: 3-character hex (#RGB) expansion
 - **Long Form**: 6-character hex (#RRGGBB) support
 
 ### Error Handling
+
 - **ParseHexError**: Comprehensive error types for parsing failures
 - **Invalid Characters**: Detailed error reporting for invalid hex characters
 - **Length Validation**: Proper validation of hex string lengths
@@ -185,6 +188,7 @@ pub struct Color {
 - **8-character**: `#RRGGBBAA` (e.g., `#FF000080`)
 
 All formats support:
+
 - Optional `#` prefix
 - Uppercase and lowercase hex digits
 - Leading/trailing whitespace (automatically trimmed)
@@ -209,11 +213,13 @@ pub enum ParseHexError {
 ## Dependencies
 
 ### Core Dependencies
+
 - **color-hex**: Core hex parsing functionality
 - **thiserror**: Error handling and display
 - **moosicbox_assert**: Assertion utilities
 
 ### Optional Dependencies
+
 - **serde**: Serialization/deserialization support (feature: `serde`)
 - **egui**: egui Color32 conversion support (feature: `egui`)
 - **quickcheck**: Arbitrary data generation for testing (feature: `arb`)
@@ -221,6 +227,7 @@ pub enum ParseHexError {
 ## Integration
 
 This package is designed for:
+
 - **UI Frameworks**: Color management in UI applications
 - **CSS Generation**: Converting colors to CSS-compatible formats
 - **Theme Systems**: Dynamic color scheme management

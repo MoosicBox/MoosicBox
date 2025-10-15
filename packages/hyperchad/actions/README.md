@@ -16,6 +16,7 @@ The HyperChad Actions package provides:
 ## Features
 
 ### Action Triggers
+
 - **Click**: Standard click events
 - **ClickOutside**: Click outside element detection
 - **MouseDown**: Mouse button down events
@@ -27,6 +28,7 @@ The HyperChad Actions package provides:
 - **Immediate**: Execute immediately without trigger
 
 ### Element Targeting
+
 - **String ID**: Target elements by string identifier
 - **Numeric ID**: Target elements by numeric ID
 - **Class**: Target elements by CSS class
@@ -35,6 +37,7 @@ The HyperChad Actions package provides:
 - **Last Child**: Target the last child element
 
 ### Action Types
+
 - **Style Actions**: Visibility, display, background, and focus control
 - **Input Actions**: Element selection and focus management
 - **Navigation**: URL navigation and routing
@@ -45,6 +48,7 @@ The HyperChad Actions package provides:
 - **Multi-Actions**: Execute multiple actions sequentially
 
 ### Style Control
+
 - **Visibility**: Show/hide elements with visibility property
 - **Display**: Show/hide elements with display property
 - **Background**: Set/remove background colors (requires `handler` feature)
@@ -221,16 +225,19 @@ let clamped = mouse_x.clamp(0.0, 100.0);
 ## Action Structure
 
 ### Action
+
 - **trigger**: When the action should be triggered (ActionTrigger)
 - **effect**: The effect to execute (ActionEffect)
 
 ### ActionEffect
+
 - **action**: The action type to execute (ActionType)
 - **delay_off**: Optional delay in milliseconds before deactivation
 - **throttle**: Optional throttling in milliseconds to prevent rapid execution
 - **unique**: Whether to prevent duplicate executions
 
 ### ActionTrigger
+
 - **Click/ClickOutside/MouseDown/KeyDown/Hover**: User interaction events
 - **Change**: Input change events
 - **Resize**: Window resize events
@@ -285,6 +292,7 @@ use hyperchad_actions::handler::{
 ## Integration
 
 This package is designed for:
+
 - **Interactive UIs**: Dynamic user interface behaviors
 - **Event Handling**: Comprehensive event response system
 - **Animation Control**: Show/hide and styling animations with timing

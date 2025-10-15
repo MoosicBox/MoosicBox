@@ -14,16 +14,19 @@ The Parsing Utils package provides:
 ## Features
 
 ### Integer Sequence Parsing
+
 - **Comma-separated Lists**: Parse "1,2,3,4,5" into Vec<u64>
 - **Single Values**: Handle single integers as sequences
 - **Validation**: Ensure all values are valid u64 integers
 
 ### Integer Range Parsing
+
 - **Hyphen-separated Ranges**: Parse "1-10" into expanded sequence
 - **Range Limits**: Prevent ranges larger than 100,000 items
 - **Comma-separated Integers**: Handle comma-separated integers within range boundaries
 
 ### Error Handling
+
 - **Parse Errors**: Invalid integer format detection
 - **Unmatched Ranges**: Detect malformed range syntax
 - **Size Limits**: Prevent memory exhaustion from large ranges
@@ -104,26 +107,30 @@ match parse_integer_ranges("1-100000000") {
 ## Range Parsing Logic
 
 ### Simple Sequences
+
 - Input: `"1,2,3,4"`
 - Output: `[1, 2, 3, 4]`
 
 ### Simple Ranges
+
 - Input: `"1-5"`
 - Output: `[1, 2, 3, 4, 5]`
 
 ### Ranges with Commas
+
 - Input: `"1,2,3-7,8"`
 - Processing:
-  1. Split by hyphens: `["1,2,3", "7,8"]`
-  2. Parse start sequence: `"1,2,3"` → `[1, 2, 3]`
-  3. Parse end sequence: `"7,8"` → `[7, 8]`
-  4. Take last from start (`3`) and first from end (`7`)
-  5. Expand range from `4` to `6`: `[4, 5, 6]`
-  6. Combine: `[1, 2, 3, 4, 5, 6, 7, 8]`
+    1. Split by hyphens: `["1,2,3", "7,8"]`
+    2. Parse start sequence: `"1,2,3"` → `[1, 2, 3]`
+    3. Parse end sequence: `"7,8"` → `[7, 8]`
+    4. Take last from start (`3`) and first from end (`7`)
+    5. Expand range from `4` to `6`: `[4, 5, 6]`
+    6. Combine: `[1, 2, 3, 4, 5, 6, 7, 8]`
 
 **Note**: The function splits on hyphens first, treating them as range delimiters. Commas are parsed within the start and end portions of a range.
 
 ### Range Validation
+
 - Maximum range size: 100,000 items
 - Prevents memory exhaustion attacks
 - Returns `RangeTooLarge` error for excessive ranges

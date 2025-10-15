@@ -12,11 +12,13 @@ This example demonstrates basic request handling using only `RequestData` extrac
 ## Running the Example
 
 ### With Simulator (default)
+
 ```bash
 cargo run -p basic_handler_standalone_example
 ```
 
 ### With Actix
+
 ```bash
 cargo run -p basic_handler_standalone_example --features actix --no-default-features
 ```
@@ -24,6 +26,7 @@ cargo run -p basic_handler_standalone_example --features actix --no-default-feat
 ## What It Does
 
 The example sets up several routes:
+
 - `/basic-info` - Extracts and displays request information
 - `/double` - Demonstrates using two `RequestData` extractors
 - `/error` - Demonstrates basic handler with tips about RequestData usage
@@ -31,11 +34,13 @@ The example sets up several routes:
 ## Expected Output
 
 When run with the simulator, it will:
+
 1. Create the routes
 2. Run test requests against them
 3. Display the extracted request data
 
 Example output:
+
 ```
 🎯 Basic Handler Examples - RequestData Only
 ============================================
@@ -78,6 +83,7 @@ Example output:
 ## Use Cases
 
 This example is perfect for:
+
 - Simple web services that don't need JSON
 - Learning the basics of the web server framework
 - Building lightweight APIs

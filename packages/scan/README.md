@@ -9,6 +9,7 @@ The MoosicBox Scan package provides music library scanning capabilities for the 
 ## Features
 
 ### Core Scanning
+
 - **Local File Scanning**: Recursive directory scanning for audio files
 - **Music API Scanning**: Integration with external music services (via `moosicbox_music_api`)
 - **Multi-Format Support**: MP3, FLAC, AAC, and Opus audio files
@@ -17,6 +18,7 @@ The MoosicBox Scan package provides music library scanning capabilities for the 
 - **Progress Tracking**: Scan progress events and listener system
 
 ### Supported Operations
+
 - Enable/disable scan origins (Local, Tidal, Qobuz, etc.)
 - Manage local scan paths (add, remove, list)
 - Run scans on-demand via API

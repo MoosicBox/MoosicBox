@@ -14,15 +14,18 @@ The MoosicBox ARB package provides:
 ## Features
 
 ### XML Utilities
+
 - **XmlString**: Valid XML character string generation
 - **XmlAttrNameString**: XML attribute name generation
 - **Character Validation**: XML character validity checking
 
 ### CSS Utilities
+
 - **CssIdentifierString**: Generate valid CSS identifier strings
 - **Testing Support**: CSS identifier generation for property-based tests
 
 ### Serde Support
+
 - **JsonValue**: Arbitrary JSON value generation (currently strings)
 - **JsonF64**: Finite f64 generation for JSON compatibility
 - **JsonF32**: Finite f32 generation for JSON compatibility

@@ -9,6 +9,7 @@ This example shows how to use `CancellationToken` to gracefully shutdown async o
 ## The code
 
 The example:
+
 1. Creates a global `CancellationToken`
 2. Sets up a Ctrl+C signal handler that calls `TOKEN.cancel()`
 3. Runs `time::sleep(Duration::MAX)` inside `TOKEN.run_until_cancelled()`
@@ -17,11 +18,13 @@ The example:
 ## Key parts
 
 ### Global cancellation token
+
 ```rust
 static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 ```
 
 ### Signal handler
+
 ```rust
 fn ctrl_c() {
     println!("ctrl+c received. shutting runtime down...");
@@ -30,6 +33,7 @@ fn ctrl_c() {
 ```
 
 ### Cancellable operation
+
 ```rust
 runtime.block_on(TOKEN.run_until_cancelled(async move {
     println!("Blocking Function. Press ctrl+c to exit");

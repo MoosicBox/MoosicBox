@@ -15,23 +15,27 @@ The MoosicBox Music Models package provides:
 ## Models
 
 ### Artist
+
 - **Basic Info**: ID, title, cover artwork
 - **API Integration**: Source tracking across multiple services
 - **Serialization**: Full JSON and database support
 
 ### Album
+
 - **Metadata**: Title, artist, type, release dates
 - **Versions**: Multiple quality versions and formats
 - **Sources**: Local and streaming service tracking
 - **Artwork**: Cover art and blur effect support
 
 ### Track
+
 - **Audio Info**: Duration, format, bitrate, sample rate
 - **File Data**: Local file path and size information
 - **Relationships**: Album and artist associations
 - **Quality**: Bit depth, channels, audio metadata
 
 ### ApiSource
+
 - **Registration**: Dynamic source registration system
 - **Multi-Service**: Support for multiple streaming services
 - **Library Integration**: Built-in local library source
@@ -114,6 +118,7 @@ if let Some(tidal_id) = sources.get(&tidal_source) {
 ## Audio Formats
 
 ### Supported Formats
+
 - **FLAC**: Lossless compression (with `flac` feature)
 - **MP3**: Lossy compression (with `mp3` feature)
 - **AAC**: Advanced Audio Coding (with `aac` feature)
@@ -169,6 +174,7 @@ let cd_version = AlbumVersionQuality {
 ## Dependencies
 
 Core dependencies:
+
 - **moosicbox_assert**: Assertion utilities
 - **moosicbox_date_utils**: Date parsing and formatting (with chrono features)
 - **moosicbox_json_utils**: JSON parsing utilities (with serde_json features)
@@ -180,6 +186,7 @@ Core dependencies:
 - **log**: Logging
 
 Optional dependencies:
+
 - **switchy_database**: Database integration (enabled with `db` feature)
 - **utoipa**: OpenAPI schema generation (enabled with `openapi` feature)
 - **tantivy**: Search indexing (enabled with `tantivy` feature)
@@ -187,6 +194,7 @@ Optional dependencies:
 ## Integration
 
 This package is the foundation for:
+
 - **Music Library Management**: Core data structures
 - **Streaming Service Integration**: Multi-source support
 - **API Development**: REST endpoint models

@@ -23,6 +23,7 @@ cargo run --bin borrowed_migrations_example
 ```
 
 This will:
+
 1. Create migrations with borrowed data
 2. Generate migrations from configuration at runtime
 3. Demonstrate lifetime management
@@ -31,6 +32,7 @@ This will:
 ## Migration Structure
 
 The example demonstrates:
+
 - Migrations with explicit lifetime parameters
 - Borrowing data from external sources
 - Runtime migration content generation
@@ -39,6 +41,7 @@ The example demonstrates:
 ## Use Cases
 
 This pattern is ideal for:
+
 - Applications that generate migrations dynamically
 - Complex migration scenarios with external data dependencies
 - Advanced Rust applications that need precise lifetime control
@@ -47,6 +50,7 @@ This pattern is ideal for:
 ## Lifetime Considerations
 
 When working with borrowed migrations:
+
 - Ensure referenced data lives long enough
 - Use appropriate lifetime annotations
 - Consider using `Arc` or `Rc` for shared data

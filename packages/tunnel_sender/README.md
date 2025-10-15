@@ -70,12 +70,12 @@ The library provides several error types for different failure scenarios:
 - `SendBytesError`: Errors when sending binary data
 - `SendMessageError`: Errors when sending messages
 - `TunnelRequestError`: Comprehensive error type for tunnel requests including:
-  - Bad requests
-  - Not found errors
-  - Invalid queries
-  - WebSocket message errors
-  - I/O errors
-  - JSON serialization errors
+    - Bad requests
+    - Not found errors
+    - Invalid queries
+    - WebSocket message errors
+    - I/O errors
+    - JSON serialization errors
 
 ## Dependencies
 

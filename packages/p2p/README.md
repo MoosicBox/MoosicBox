@@ -7,9 +7,9 @@ P2P communication abstraction system - enables direct device-to-device connectio
 ### Core Abstractions
 
 - **Trait-based P2P System**: Generic abstractions over different P2P implementations
-  - `P2PSystem` - Core system interface for connections and discovery
-  - `P2PConnection` - Reliable message streaming between peers
-  - `P2PNodeId` - 256-bit node identifiers with deterministic/random generation
+    - `P2PSystem` - Core system interface for connections and discovery
+    - `P2PConnection` - Reliable message streaming between peers
+    - `P2PNodeId` - 256-bit node identifiers with deterministic/random generation
 
 ### Network Simulator
 
@@ -21,11 +21,11 @@ The package includes a complete P2P network simulator with realistic network con
 - **Network Partitions**: Support for simulating and healing network splits
 - **Async Message Passing**: FIFO-ordered message delivery with realistic delays
 - **Environment Configuration**: Tunable parameters via environment variables:
-  - `SIMULATOR_DEFAULT_LATENCY_MS` (default: 50ms)
-  - `SIMULATOR_DEFAULT_PACKET_LOSS` (default: 1%)
-  - `SIMULATOR_DISCOVERY_DELAY_MS` (default: 100ms)
-  - `SIMULATOR_CONNECTION_TIMEOUT_SECS` (default: 30s)
-  - `SIMULATOR_MAX_MESSAGE_SIZE` (default: 1MB)
+    - `SIMULATOR_DEFAULT_LATENCY_MS` (default: 50ms)
+    - `SIMULATOR_DEFAULT_PACKET_LOSS` (default: 1%)
+    - `SIMULATOR_DISCOVERY_DELAY_MS` (default: 100ms)
+    - `SIMULATOR_CONNECTION_TIMEOUT_SECS` (default: 30s)
+    - `SIMULATOR_MAX_MESSAGE_SIZE` (default: 1MB)
 
 ### Usage Example
 
@@ -54,6 +54,7 @@ let response = conn.recv().await?;
 - `fail-on-warnings` - Treat warnings as errors (CI use)
 
 **Planned:**
+
 - `iroh` - Integration with Iroh for production P2P networking
 - `test-utils` - Testing utilities and property-based tests
 
@@ -75,6 +76,7 @@ let response = conn.recv().await?;
 ### Future Roadmap
 
 **Planned features:**
+
 - Iroh integration for production use with real NAT traversal
 - Connection listener support (`P2PListener` trait)
 - Property-based testing with proptest

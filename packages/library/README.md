@@ -341,14 +341,17 @@ The library provides specific error types for different operations:
 ## Enums and Types
 
 ### Order and Direction
+
 - `LibraryArtistOrder`, `LibraryAlbumOrder`, `LibraryTrackOrder`
 - `LibraryArtistOrderDirection`, `LibraryAlbumOrderDirection`, `LibraryTrackOrderDirection`
 
 ### Search Types
+
 - `LibrarySearchType` - Artists, Albums, Tracks, Videos, Playlists, UserProfiles
 - `SearchType` - Enum variants for search filtering
 
 ### Audio Quality
+
 - `LibraryAudioQuality` - High, Lossless, HiResLossless
 
 ## Features

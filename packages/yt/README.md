@@ -392,6 +392,7 @@ The package provides a framework for OAuth2 device flow authentication:
 ## Dependencies
 
 Core dependencies:
+
 - `moosicbox_music_api` - Generic music API trait implementation
 - `moosicbox_music_models` - Common music data models
 - `switchy_database` - Database integration (required for most features)
@@ -401,6 +402,7 @@ Core dependencies:
 - `async-trait` - Async trait support for MusicApi implementation
 
 Optional dependencies:
+
 - `actix-web` - Web server framework (with `api` feature)
 - `utoipa` - OpenAPI documentation generation (with `openapi` feature)
 

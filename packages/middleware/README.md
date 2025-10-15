@@ -46,6 +46,7 @@ async fn hello_handler() -> HttpResponse {
 ```
 
 The API logger middleware provides:
+
 - Request method, path, and query string logging
 - Request headers logging (Range)
 - Response headers logging (Content-Range, Accept-Ranges, Content-Length)
@@ -116,12 +117,14 @@ async fn tunnel_handler(tunnel_info: TunnelInfo) -> HttpResponse {
 ### ApiLogger
 
 The `ApiLogger` middleware logs:
+
 - **Request Start**: Method, path, query string, and relevant headers
 - **Request End**: Response status, timing, and relevant response headers
 - **Success/Failure**: Different log levels for success vs. error responses
 - **Error Details**: Full error information for debugging
 
 Log output example:
+
 ```
 TRACE GET /api/tracks?limit=10 headers=[("range", "bytes=0-1023")] STARTED
 TRACE GET /api/tracks?limit=10 headers=[("range", "bytes=0-1023")] resp_headers=[("content-length", "2048"), ("accept-ranges", "bytes")] FINISHED SUCCESS "200 OK" (25 ms)

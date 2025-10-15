@@ -5,6 +5,7 @@ Switchable UUID generation supporting both production and simulation modes.
 ## Overview
 
 This package provides UUID v4 generation with configurable behavior:
+
 - **Production mode**: Cryptographically secure random UUIDs via the standard `uuid` crate
 - **Simulation mode**: Deterministic, seeded UUIDs for reproducible testing
 

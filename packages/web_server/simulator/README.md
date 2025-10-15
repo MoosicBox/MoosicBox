@@ -4,20 +4,20 @@ In-memory HTTP request/response simulation for deterministic testing. This packa
 
 ## Features
 
-* **In-Memory HTTP**: No actual network operations
-* **Deterministic Behavior**: Predictable responses for testing
-* **Request/Response Types**: Complete HTTP request/response simulation with headers, bodies, and status codes
-* **Route Handlers**: Dynamic route registration with async handler support
-* **Mock Responses**: Pre-configured responses for specific request patterns
-* **Request Logging**: Track all handled requests for test verification
+- **In-Memory HTTP**: No actual network operations
+- **Deterministic Behavior**: Predictable responses for testing
+- **Request/Response Types**: Complete HTTP request/response simulation with headers, bodies, and status codes
+- **Route Handlers**: Dynamic route registration with async handler support
+- **Mock Responses**: Pre-configured responses for specific request patterns
+- **Request Logging**: Track all handled requests for test verification
 
 ## Core Types
 
-* `SimulationWebServer`: Main server implementation with route and mock management
-* `SimulatedRequest`: Represents an HTTP request with method, path, headers, and body
-* `SimulatedResponse`: Represents an HTTP response with status code, headers, and body
-* `RouteHandler`: Async handler function for processing requests
-* `Error`: Error types for route matching and handler execution
+- `SimulationWebServer`: Main server implementation with route and mock management
+- `SimulatedRequest`: Represents an HTTP request with method, path, headers, and body
+- `SimulatedResponse`: Represents an HTTP response with status code, headers, and body
+- `RouteHandler`: Async handler function for processing requests
+- `Error`: Error types for route matching and handler execution
 
 ## Usage
 
@@ -57,10 +57,10 @@ let response = server.handle_request(request).await.unwrap();
 
 The `handlers` module provides convenience functions for common response patterns:
 
-* `json_response()`: Create JSON response handlers
-* `text_response()`: Create plain text response handlers
-* `html_response()`: Create HTML response handlers
-* `health_check()`: Create health check endpoints
+- `json_response()`: Create JSON response handlers
+- `text_response()`: Create plain text response handlers
+- `html_response()`: Create HTML response handlers
+- `health_check()`: Create health check endpoints
 
 ## Integration
 

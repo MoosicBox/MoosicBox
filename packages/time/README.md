@@ -252,6 +252,7 @@ cargo run --features simulator
 ## Time Calculation
 
 In simulator mode, time is calculated as:
+
 ```
 time = UNIX_EPOCH + Duration::from_millis(epoch_offset + (step * step_multiplier))
 ```

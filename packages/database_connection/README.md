@@ -16,24 +16,28 @@ The Database Connection package provides:
 ## Features
 
 ### Database Backends
+
 - **PostgreSQL**: Raw tokio-postgres and SQLx implementations
 - **SQLite**: Rusqlite and SQLx implementations
 - **Turso**: Turso database support (libSQL-compatible)
 - **Simulator**: Mock database for testing and development
 
 ### PostgreSQL Options
+
 - **Raw Implementation**: Direct tokio-postgres with connection pooling
 - **SQLx Implementation**: SQLx-based PostgreSQL connections
 - **TLS Support**: Native TLS, OpenSSL, or no TLS options
 - **Connection Pooling**: Managed connection pools
 
 ### SQLite Options
+
 - **Rusqlite**: Synchronous SQLite with async wrapper
 - **SQLx**: Async SQLite via SQLx
 - **In-memory**: Support for in-memory databases
 - **File-based**: Persistent SQLite database files
 
 ### Turso Options
+
 - **Local Files**: Local Turso/libSQL database files
 - **In-memory**: In-memory Turso databases
 
@@ -364,20 +368,24 @@ match init(None, None).await {
 ## Feature Flags
 
 ### PostgreSQL Features
+
 - **`postgres-raw`**: Raw tokio-postgres implementation
 - **`postgres-sqlx`**: SQLx PostgreSQL implementation
 - **`postgres-native-tls`**: Native TLS support for PostgreSQL
 - **`postgres-openssl`**: OpenSSL support for PostgreSQL
 
 ### SQLite Features
+
 - **`sqlite`**: Enable SQLite support
 - **`sqlite-rusqlite`**: Rusqlite implementation
 - **`sqlite-sqlx`**: SQLx SQLite implementation
 
 ### Turso Features
+
 - **`turso`**: Turso/libSQL database support
 
 ### Other Features
+
 - **`simulator`**: Mock database for testing
 - **`creds`**: AWS SSM credential management (optional)
 - **`tls`**: TLS support via rustls

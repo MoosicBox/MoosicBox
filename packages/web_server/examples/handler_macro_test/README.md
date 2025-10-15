@@ -25,6 +25,7 @@ This example validates the handler extractor system implementation, testing vari
 ## Running the Tests
 
 ### Actix Backend Tests
+
 ```bash
 # From repository root
 cargo run --bin test_actix --example handler_macro_test --features actix
@@ -38,6 +39,7 @@ nix develop .#server --command cargo run --bin test_actix --example handler_macr
 ```
 
 ### Simulator Backend Tests
+
 ```bash
 # From repository root
 cargo run --bin test_simulator --example handler_macro_test --features simulator
@@ -51,12 +53,14 @@ nix develop .#server --command cargo run --bin test_simulator --example handler_
 ```
 
 ### Debug Mode
+
 ```bash
 # Debug Actix backend behavior
 cargo run --bin debug_actix --example handler_macro_test --features actix
 ```
 
 ### Build All Binaries
+
 ```bash
 # Test compilation of all binaries
 cargo build --bins --example handler_macro_test --features "actix,simulator"
@@ -68,12 +72,15 @@ cargo build --bin test_actix --example handler_macro_test --features actix
 ## Expected Results
 
 ### Successful Compilation
+
 All handler signatures should compile without errors:
+
 - 0-parameter handlers
 - 1-parameter handlers (with single extractor)
 - 2-parameter handlers (with multiple extractors)
 
 ### Runtime Behavior
+
 - ✅ **Route Registration**: Handlers successfully convert to Route objects
 - ✅ **Backend Compatibility**: Same code works with both backends
 - ✅ **Parameter Extraction**: Working extractors for RequestInfo, Headers, Query, and Path
@@ -82,6 +89,7 @@ All handler signatures should compile without errors:
 ## Code Structure
 
 ### Handler Signatures Tested
+
 ```rust
 // 0 parameters - fully implemented
 async fn simple_handler() -> Result<HttpResponse, Error>
@@ -103,6 +111,7 @@ async fn multi_handler(info: RequestInfo, headers: Headers) -> Result<HttpRespon
 ```
 
 ### Route Registration
+
 ```rust
 // 0 parameters
 let route = Route::with_handler(Method::Get, "/hello", simple_handler);
@@ -115,6 +124,7 @@ let route = Route::with_handler2(Method::Get, "/multi", multi_handler);
 ```
 
 ### Extractors Available
+
 ```rust
 // RequestInfo - provides request metadata (path, method, etc.)
 async fn handler(info: RequestInfo) -> Result<HttpResponse, Error>
@@ -132,23 +142,26 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 ## Current Implementation Status
 
 ### ✅ Completed Features
+
 - **Handler Registration**: Handlers with 0-2 parameters successfully compile and convert to Route objects
 - **Route Conversion**: `Route::with_handler`, `Route::with_handler1`, and `Route::with_handler2` work correctly
 - **Backend Abstraction**: Same handler code works with both Actix and Simulator backends
 - **Working Extractors**:
-  - `RequestInfo` - request metadata (path, method, etc.)
-  - `Headers` - HTTP header access (including user-agent)
-  - `Query<T>` - query parameter extraction with serde deserialization
-  - `Path<T>` - path parameter extraction from URL segments (Actix only)
+    - `RequestInfo` - request metadata (path, method, etc.)
+    - `Headers` - HTTP header access (including user-agent)
+    - `Query<T>` - query parameter extraction with serde deserialization
+    - `Path<T>` - path parameter extraction from URL segments (Actix only)
 - **Multiple Extractors**: Handlers can combine multiple extractors (up to 2 parameters tested)
 - **Send-Safe Design**: All extractors work without Send bound issues
 
 ### 📝 Known Limitations
+
 - **Path Extractor**: Only available in Actix backend (not yet implemented for Simulator)
 - **Parameter Count**: Currently tested up to 2 parameters (not 3+)
 - **Macro Syntax**: TODOs reference future `#[get("/path")]` attribute macro syntax
 
 ### 🔮 Planned Future Improvements
+
 - Attribute macro syntax for route definitions (e.g., `#[get("/path")]`)
 - Path extractor support for Simulator backend
 - Additional extractor types (Json body, Form data, etc.)
@@ -157,24 +170,29 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 ## Troubleshooting
 
 ### Feature Flag Issues
+
 **Problem**: "trait bound not satisfied" errors
 **Solution**: Ensure correct backend feature is enabled:
+
 ```bash
 --features actix        # for Actix backend
 --features simulator    # for Simulator backend
 ```
 
 ### Compilation Errors
+
 **Problem**: Handler trait bound errors
 **Solution**: Ensure parameter types implement the `FromRequestData` trait and are used with the correct `Route::with_handlerN` method
 
 ### Runtime Errors
+
 **Problem**: Path extractor not working in Simulator backend
 **Solution**: This is expected - Path extractor is currently only implemented for Actix backend
 
 ## Testing Strategy
 
 ### Compilation Tests
+
 ```bash
 # Verify all handler signatures compile
 cargo check --example handler_macro_test --features actix
@@ -182,6 +200,7 @@ cargo check --example handler_macro_test --features simulator
 ```
 
 ### Runtime Tests
+
 ```bash
 # Test actual handler execution
 cargo run --bin test_actix --example handler_macro_test --features actix
@@ -189,6 +208,7 @@ cargo run --bin test_simulator --example handler_macro_test --features simulator
 ```
 
 ### Cross-Backend Validation
+
 ```bash
 # Ensure same behavior across backends
 cargo build --example handler_macro_test --features "actix,simulator"
@@ -197,6 +217,7 @@ cargo build --example handler_macro_test --features "actix,simulator"
 ## Related Documentation
 
 For more information about the web server abstraction layer and handler system, see:
+
 - The main `moosicbox_web_server` package documentation
 - Other examples in `packages/web_server/examples/`
 

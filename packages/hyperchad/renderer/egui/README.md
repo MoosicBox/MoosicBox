@@ -19,6 +19,7 @@ The HyperChad Egui Renderer provides:
 ## Features
 
 ### Rendering Capabilities
+
 - **Container Rendering**: Full HyperChad container hierarchy support
 - **Element Types**: All HTML-equivalent elements (div, span, input, button, image, etc.)
 - **Layout Systems**: Flexbox, positioning, margins, padding, borders
@@ -27,6 +28,7 @@ The HyperChad Egui Renderer provides:
 - **Responsive Design**: Conditional styling and responsive breakpoints
 
 ### Interactive Features
+
 - **Form Elements**: Text inputs, checkboxes, buttons with validation
 - **Event Handling**: Click, hover, focus, resize, and custom events
 - **Action System**: Comprehensive action framework with effects
@@ -35,6 +37,7 @@ The HyperChad Egui Renderer provides:
 - **Canvas Support**: Canvas rendering for graphics (available in v1 renderer)
 
 ### Performance Features
+
 - **Efficient Rendering**: Immediate mode rendering with minimal overhead
 - **Layout Caching**: Cached layout calculations for performance
 - **Image Caching**: Smart image loading and caching system
@@ -432,6 +435,7 @@ renderer.render_canvas(canvas_update).await?;
 ## Integration
 
 This renderer is designed for:
+
 - **Desktop Applications**: Native desktop apps with rich UI
 - **Development Tools**: IDE-like applications and editors
 - **Games**: Game UI and tools with immediate mode benefits

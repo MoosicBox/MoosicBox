@@ -16,17 +16,20 @@ The TCP package provides:
 ## Features
 
 ### Generic TCP Interface
+
 - **GenericTcpListener**: Abstract TCP listener trait
 - **GenericTcpStream**: Abstract TCP stream trait with read/write
 - **GenericTcpStreamReadHalf**: Abstract read-only stream interface
 - **GenericTcpStreamWriteHalf**: Abstract write-only stream interface
 
 ### Implementation Support
+
 - **Tokio TCP**: Production async TCP networking
 - **Simulator TCP**: Mock networking for testing and development
 - **Wrapper Types**: Type-safe wrappers for different implementations
 
 ### Stream Operations
+
 - **AsyncRead/AsyncWrite**: Tokio async I/O trait implementations
 - **Stream Splitting**: Separate read and write operations
 - **Address Information**: Access to local and peer socket addresses
@@ -301,6 +304,7 @@ pub type TcpStreamWriteHalf = TokioTcpStreamWriteHalf;
 ```
 
 To access specific implementations when both features are enabled:
+
 ```rust
 use switchy_tcp::tokio::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
 use switchy_tcp::simulator::{TcpListener as SimTcpListener, TcpStream as SimTcpStream};
@@ -309,6 +313,7 @@ use switchy_tcp::simulator::{TcpListener as SimTcpListener, TcpStream as SimTcpS
 ## Dependencies
 
 Core dependencies:
+
 - **switchy_async**: Async runtime abstraction with I/O, macros, sync, time, and util support
 - **tokio**: Networking primitives (required, with `net` feature)
 - **async-trait**: Async trait support
@@ -317,6 +322,7 @@ Core dependencies:
 - **log**: Logging
 
 Simulator-specific dependencies (when `simulator` feature is enabled):
+
 - **bytes**: Byte buffer management
 - **flume**: MPSC channel implementation
 - **scoped-tls**: Thread-local storage for simulator context

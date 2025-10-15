@@ -18,6 +18,7 @@ The MoosicBox Tauri Application provides:
 ## Features
 
 ### Desktop Application Features
+
 - **Cross-platform**: Runs on Windows, macOS, and Linux
 - **Native Performance**: Rust backend with web frontend
 - **System Integration**: Media keys, notifications, and system tray
@@ -25,6 +26,7 @@ The MoosicBox Tauri Application provides:
 - **Window Management**: Multiple windows and advanced window controls
 
 ### Music Player Features
+
 - **Audio Playback**: High-quality audio playback with multiple format support
 - **Playlist Management**: Create, edit, and manage playlists
 - **Library Integration**: Browse and search music library
@@ -32,12 +34,14 @@ The MoosicBox Tauri Application provides:
 - **Metadata Display**: Rich metadata display with album art
 
 ### Streaming Integration
+
 - **Multiple Sources**: Support for Tidal, Qobuz, YouTube Music, and local files
 - **Real-time Sync**: Real-time synchronization with other clients
 - **Session Management**: Multi-device session management
 - **Quality Control**: Configurable audio quality settings
 
 ### Development Features
+
 - **Bundled Mode**: Self-contained application with bundled services
 - **Native UI**: Optional native UI components with HyperChad
 - **HTTP Server**: Built-in HTTP server for web interface
@@ -48,6 +52,7 @@ The MoosicBox Tauri Application provides:
 ### Prerequisites
 
 **System Dependencies:**
+
 ```bash
 # macOS
 brew install node
@@ -65,6 +70,7 @@ sudo dnf group install "C Development Tools and Libraries"
 ```
 
 **Rust and Tauri CLI:**
+
 ```bash
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -144,7 +150,7 @@ async fn create_player_window(app: AppHandle) -> Result<(), String> {
     .resizable(false)
     .build()
     .map_err(|e| e.to_string())?;
-    
+
     Ok(())
 }
 ```
@@ -257,7 +263,7 @@ async fn get_data_dir() -> Result<PathBuf, String> {
 async fn read_config_file() -> Result<String, String> {
     let data_dir = get_data_dir().await?;
     let config_path = data_dir.join("config.json");
-    
+
     std::fs::read_to_string(config_path)
         .map_err(|e| e.to_string())
 }
@@ -266,7 +272,7 @@ async fn read_config_file() -> Result<String, String> {
 async fn write_config_file(content: String) -> Result<(), String> {
     let data_dir = get_data_dir().await?;
     let config_path = data_dir.join("config.json");
-    
+
     std::fs::write(config_path, content)
         .map_err(|e| e.to_string())
 }
@@ -285,20 +291,20 @@ async fn handle_http_request(request: HttpRequest) -> Result<HttpResponse, Strin
     let view = container! {
         div class="app" {
             h1 { "MoosicBox Native UI" }
-            
+
             div class="player-controls" {
                 button onclick=tauri_invoke("play_track", 123) { "Play" }
                 button onclick=tauri_invoke("pause_track", null) { "Pause" }
                 button onclick=tauri_invoke("next_track", null) { "Next" }
             }
-            
+
             div class="library" {
                 h2 { "Music Library" }
                 // Library content
             }
         }
     };
-    
+
     Ok(HttpResponse::Ok()
         .content_type("text/html")
         .body(view.to_string()))
@@ -320,7 +326,7 @@ fn create_system_tray() -> SystemTray {
         .add_item(SystemTrayMenuItem::new("Previous", "previous"))
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(SystemTrayMenuItem::new("Quit", "quit"));
-    
+
     SystemTray::new().with_menu(menu)
 }
 
@@ -386,7 +392,7 @@ impl Default for AppConfig {
 #[tauri::command]
 async fn load_config() -> Result<AppConfig, String> {
     let config_path = get_data_dir().await?.join("config.json");
-    
+
     if config_path.exists() {
         let content = std::fs::read_to_string(config_path)
             .map_err(|e| e.to_string())?;
@@ -402,7 +408,7 @@ async fn save_config(config: AppConfig) -> Result<(), String> {
     let config_path = get_data_dir().await?.join("config.json");
     let content = serde_json::to_string_pretty(&config)
         .map_err(|e| e.to_string())?;
-    
+
     std::fs::write(config_path, content)
         .map_err(|e| e.to_string())
 }
@@ -456,81 +462,87 @@ cargo tauri build --bundles rpm  # Linux RPM
 ## Feature Flags
 
 ### Core Features
+
 - **`bundled`**: Include bundled MoosicBox services
 - **`moosicbox-app-native`**: Enable native UI components
 
 ### Audio Sources
+
 - **`tidal`**: Tidal streaming integration
 - **`qobuz`**: Qobuz streaming integration
 - **`yt`**: YouTube Music integration
 
 ### Development Features
+
 - **`fail-on-warnings`**: Treat warnings as errors
 - **`debug`**: Enable debug features
 
 ## Configuration Files
 
 ### `tauri.conf.json`
+
 ```json
 {
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
-  },
-  "package": {
-    "productName": "MoosicBox",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "fs": {
-        "all": true,
-        "scope": ["$APPDATA/*", "$AUDIO/*", "$DOWNLOAD/*"]
-      }
+    "build": {
+        "beforeDevCommand": "npm run dev",
+        "beforeBuildCommand": "npm run build",
+        "devPath": "http://localhost:1420",
+        "distDir": "../dist"
     },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.moosicbox.app",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ]
+    "package": {
+        "productName": "MoosicBox",
+        "version": "0.1.0"
     },
-    "security": {
-      "csp": null
-    },
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "MoosicBox",
-        "width": 1200,
-        "height": 800
-      }
-    ]
-  }
+    "tauri": {
+        "allowlist": {
+            "all": false,
+            "shell": {
+                "all": false,
+                "open": true
+            },
+            "fs": {
+                "all": true,
+                "scope": ["$APPDATA/*", "$AUDIO/*", "$DOWNLOAD/*"]
+            }
+        },
+        "bundle": {
+            "active": true,
+            "targets": "all",
+            "identifier": "com.moosicbox.app",
+            "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+            ]
+        },
+        "security": {
+            "csp": null
+        },
+        "windows": [
+            {
+                "fullscreen": false,
+                "resizable": true,
+                "title": "MoosicBox",
+                "width": 1200,
+                "height": 800
+            }
+        ]
+    }
 }
 ```
 
 ## Dependencies
 
 ### Core Dependencies
+
 - **Tauri**: Desktop application framework
 - **MoosicBox Core**: Music streaming and player functionality
 - **Tokio**: Async runtime
 - **Serde**: Serialization framework
 
 ### Optional Dependencies
+
 - **HyperChad**: Native UI components (with `moosicbox-app-native`)
 - **HTTP Server**: Built-in HTTP server for web interface
 - **WebSocket**: Real-time communication
@@ -538,11 +550,13 @@ cargo tauri build --bundles rpm  # Linux RPM
 ## Platform Support
 
 ### Supported Platforms
+
 - **Windows**: Windows 10+ (x86_64, aarch64)
 - **macOS**: macOS 10.15+ (x86_64, aarch64)
 - **Linux**: Ubuntu 18.04+, Debian 10+, Arch Linux, Fedora 31+
 
 ### System Requirements
+
 - **RAM**: 4GB minimum, 8GB recommended
 - **Storage**: 500MB for application, additional for music cache
 - **Network**: Internet connection for streaming services
@@ -553,6 +567,7 @@ cargo tauri build --bundles rpm  # Linux RPM
 ### Common Issues
 
 **Build Failures:**
+
 ```bash
 # Clear build cache
 cargo clean
@@ -562,6 +577,7 @@ cargo tauri build
 ```
 
 **WebView Issues:**
+
 ```bash
 # Update WebView2 (Windows)
 # Install webkit2gtk (Linux)
@@ -569,6 +585,7 @@ sudo apt update && sudo apt install webkit2gtk-4.0
 ```
 
 **Permission Issues:**
+
 ```bash
 # macOS: Grant permissions in System Preferences
 # Linux: Install required packages
@@ -586,6 +603,7 @@ sudo apt install libappindicator3-1
 ## Integration
 
 This application integrates with:
+
 - **MoosicBox Server**: Core music streaming backend
 - **Streaming Services**: Tidal, Qobuz, YouTube Music
 - **Local Files**: Local music library

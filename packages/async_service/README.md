@@ -155,13 +155,17 @@ match handle.send_command_async(command).await {
 ## Core Components
 
 ### Service
+
 The main service struct that manages command processing and lifecycle.
 
 ### Handle
+
 A cloneable handle for sending commands to the service from other tasks.
 
 ### Commander Trait
+
 Provides methods for sending commands:
+
 - `send_command()`: Send without waiting (non-async)
 - `send_command_async()`: Send asynchronously without waiting
 - `send_command_and_wait_async()`: Send and wait for completion
@@ -169,11 +173,13 @@ Provides methods for sending commands:
 - `shutdown()`: Shutdown the service
 
 ### Processor Trait
+
 Define how your service processes commands and handles lifecycle events.
 
 ## Dependencies
 
 The library re-exports commonly used async utilities:
+
 - `switchy_async`: Cross-runtime async compatibility layer (supports both tokio and async-std)
 - `async_trait`: Async trait support
 - `flume`: Fast MPMC channels

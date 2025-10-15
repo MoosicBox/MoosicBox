@@ -13,6 +13,7 @@ This example demonstrates comprehensive OpenAPI (Swagger) documentation integrat
 - **Documentation-First Approach**: Shows how to write comprehensive API documentation using the `path!` macro
 
 **Important**: The OpenAPI documentation in this example intentionally does not match the simple handler implementation. This demonstrates how to write documentation specifications independently, which is useful for:
+
 - Planning APIs before implementation
 - Documenting expected behavior for future development
 - Learning the OpenAPI documentation patterns without implementation complexity
@@ -27,6 +28,7 @@ This example demonstrates comprehensive OpenAPI (Swagger) documentation integrat
 ## Running the Example
 
 ### With Actix Web (Production Backend)
+
 ```bash
 # From repository root
 cargo run --package web_server_openapi
@@ -46,6 +48,7 @@ nix develop .#server --command cargo run -p web_server_openapi
 ## Expected Output
 
 The server starts with multiple endpoints:
+
 - **API Endpoint**: `/example` - The actual API
 - **Documentation**: `/openapi/swagger-ui/` - Interactive Swagger UI
 - **Specification**: `/openapi/openapi.json` - Raw OpenAPI spec
@@ -56,15 +59,18 @@ The server starts with multiple endpoints:
 ### Interactive Documentation
 
 **Swagger UI (Primary Interface)**
+
 ```
 http://localhost:8080/openapi/swagger-ui/
 ```
+
 - Interactive API exploration
 - Direct request testing
 - Parameter input forms
 - Response visualization
 
 **Alternative Documentation UIs**
+
 ```
 http://localhost:8080/openapi/redoc/      # ReDoc - Clean, responsive docs
 http://localhost:8080/openapi/rapidoc/   # RapiDoc - Fast, customizable
@@ -74,11 +80,13 @@ http://localhost:8080/openapi/scalar/    # Scalar - Modern, beautiful UI
 ### API Specification
 
 **JSON Format**
+
 ```bash
 curl http://localhost:8080/openapi/openapi.json
 ```
 
 **YAML Format** (if enabled)
+
 ```bash
 curl http://localhost:8080/openapi/openapi.yaml
 ```
@@ -86,6 +94,7 @@ curl http://localhost:8080/openapi/openapi.yaml
 ### Testing the Actual API
 
 **Basic API Call**
+
 ```bash
 curl http://localhost:8080/example
 # Expected: Plain text response showing path and query string
@@ -99,6 +108,7 @@ curl http://localhost:8080/example
 ### OpenAPI Specification Setup
 
 **API Definition** (from `src/main.rs:37-49`)
+
 ```rust
 pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> =
     std::sync::LazyLock::new(|| {
@@ -125,6 +135,7 @@ struct ApiDoc;
 The example uses the `path!` macro to define OpenAPI documentation for the `/example` endpoint (from `src/main.rs:70-115`):
 
 **Parameter Documentation**
+
 ```rust
 .parameter(
     Parameter::builder()
@@ -145,6 +156,7 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 ```
 
 **Response Documentation**
+
 ```rust
 .responses(
     Responses::builder()
@@ -171,6 +183,7 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 ### Documentation Serving
 
 **Automatic Binding** (from `src/main.rs:18-20`)
+
 ```rust
 .with_scope(moosicbox_web_server::openapi::bind_services(
     Scope::new("/openapi")
@@ -178,6 +191,7 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 ```
 
 This automatically creates:
+
 - `/openapi/swagger-ui/` - Swagger UI interface
 - `/openapi/openapi.json` - OpenAPI specification
 - `/openapi/redoc/` - ReDoc interface
@@ -217,24 +231,28 @@ This pattern supports hierarchical API organization for complex applications wit
 ## Key Features and Benefits
 
 ### Automatic Documentation Generation
+
 - **Always Current**: Documentation generated directly from code
 - **Standard Format**: OpenAPI 3.0 specification compliance
 - **Multiple Formats**: JSON, YAML, and interactive HTML interfaces
 - **Zero Maintenance**: No separate documentation to maintain
 
 ### Interactive Testing
+
 - **Built-in Testing**: Test APIs directly from the documentation
 - **Parameter Validation**: Real-time validation of request parameters
 - **Response Visualization**: Formatted response display
 - **Multiple UIs**: Choose from Swagger UI, ReDoc, RapiDoc, or Scalar
 
 ### Developer Experience
+
 - **Self-Documenting**: Code serves as the source of truth
 - **Type Safety**: Schema validation and type checking
 - **Client Generation**: Generate client libraries in multiple languages
 - **API Exploration**: Easy discovery of available endpoints
 
 ### Production Benefits
+
 - **API Governance**: Standardized API specifications
 - **Version Control**: Documentation versioned with code
 - **Team Collaboration**: Shared understanding of API contracts
@@ -243,6 +261,7 @@ This pattern supports hierarchical API organization for complex applications wit
 ## Advanced OpenAPI Patterns
 
 ### Custom Response Schemas (Example Pattern)
+
 ```rust
 #[derive(utoipa::ToSchema, serde::Serialize)]
 struct ApiResponse {
@@ -256,6 +275,7 @@ struct ApiResponse {
 ```
 
 ### Security Schemes (Example Pattern)
+
 ```rust
 .components(Some(
     utoipa::openapi::Components::builder()
@@ -274,7 +294,9 @@ struct ApiResponse {
 ```
 
 ### Nested API Organization ✅ Implemented
+
 The `nest_api` function is implemented in this example (`src/main.rs:57-67`):
+
 ```rust
 fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
     nested.paths.paths.iter_mut().for_each(|(path, item)| {
@@ -286,9 +308,11 @@ fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
     api.nest(path, nested)
 }
 ```
+
 This pattern is useful for combining multiple API specifications in modular designs.
 
 ### Error Response Documentation (Example Pattern)
+
 ```rust
 .response(
     "404",
@@ -309,39 +333,46 @@ This pattern is useful for combining multiple API specifications in modular desi
 ## Troubleshooting
 
 ### Feature Flag Issues
+
 **Problem**: OpenAPI features not available
 **Solution**: This example has `openapi-all` enabled by default in its `Cargo.toml`. If you've modified the dependencies, ensure `moosicbox_web_server` is included with the `openapi-all` feature:
+
 ```toml
 moosicbox_web_server = { workspace = true, features = ["actix", "cors", "openapi-all"] }
 ```
 
 ### Documentation Not Loading
+
 **Problem**: Swagger UI shows blank page
 **Solution**:
+
 - Verify the server is running and accessible at `http://localhost:8080`
 - Check that the OpenAPI spec is available at `http://localhost:8080/openapi/openapi.json`
 - Look for any error messages in the server console
 
 ### Missing Documentation
+
 **Problem**: Some endpoints not appearing in docs
 **Solution**: Ensure all routes are properly added to the OpenAPI specification in the `API` static variable and registered via the `path!` macro
 
 ### CORS Issues with Documentation
+
 **Problem**: Documentation UI can't access API
 **Solution**: CORS is configured in this example to allow all origins for development (`src/main.rs:8-12`)
 
 ## Comparison with Other Examples
 
-| Example | Focus | Documentation | Interactive Testing |
-|---------|-------|---------------|-------------------|
-| **openapi** | API documentation | Full OpenAPI 3.0 | ✅ Swagger UI |
-| simple_get | Basic routing | None | ❌ Manual only |
-| nested_get | Route organization | None | ❌ Manual only |
-| basic_handler | Handler patterns | None | ❌ Manual only |
+| Example       | Focus              | Documentation    | Interactive Testing |
+| ------------- | ------------------ | ---------------- | ------------------- |
+| **openapi**   | API documentation  | Full OpenAPI 3.0 | ✅ Swagger UI       |
+| simple_get    | Basic routing      | None             | ❌ Manual only      |
+| nested_get    | Route organization | None             | ❌ Manual only      |
+| basic_handler | Handler patterns   | None             | ❌ Manual only      |
 
 ## Real-World Applications
 
 ### API Versioning (Example Pattern)
+
 ```rust
 // v1 API
 Scope::new("/api/v1")
@@ -357,6 +388,7 @@ let v2_api = /* build v2 OpenAPI spec */;
 ```
 
 ### Microservice Documentation (Example Pattern)
+
 ```rust
 // Combine multiple service specs using the nest_api pattern
 // demonstrated in this example (src/main.rs:57-67)
@@ -368,7 +400,9 @@ let combined_api = nest_api(
 ```
 
 ### Client SDK Generation
+
 Once you have your OpenAPI specification running, you can generate client SDKs:
+
 ```bash
 # Generate TypeScript client
 openapi-generator-cli generate \
@@ -418,7 +452,9 @@ openapi-generator-cli generate \
 ## Next Steps
 
 ### Enhance This Example
+
 To make this example production-ready, you could:
+
 1. **Match Implementation to Docs**: Update the handler to actually validate the documented parameters
 2. **Add Authentication**: Implement and document security schemes for protected endpoints
 3. **Custom Schemas**: Create typed request/response models with `#[derive(utoipa::ToSchema)]`
@@ -426,13 +462,16 @@ To make this example production-ready, you could:
 5. **Validation**: Add request validation that enforces the documented constraints
 
 ### Learning Path
+
 After understanding this example:
+
 1. Review the **basic_handler** example for handler implementation patterns
 2. Explore the **json_extractor** example to handle JSON request bodies
 3. Study the **combined_extractors** example for parameter validation
 4. Apply OpenAPI documentation to those patterns
 
 ### Production Deployment Considerations
+
 1. **Environment Configuration**: Consider different documentation settings for dev/staging/prod
 2. **Access Control**: Restrict documentation access in production environments
 3. **Performance**: The documentation is generated once at startup and served efficiently

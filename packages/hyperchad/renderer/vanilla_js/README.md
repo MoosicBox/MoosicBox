@@ -18,6 +18,7 @@ The HyperChad Vanilla JS Renderer provides:
 ## Features
 
 ### Core Functionality
+
 - **DOM Rendering**: Convert HyperChad components to DOM elements
 - **Event System**: Mouse, keyboard, and custom event handling
 - **Action Processing**: Client-side action execution and effects
@@ -25,6 +26,7 @@ The HyperChad Vanilla JS Renderer provides:
 - **Element Targeting**: Flexible element selection and manipulation
 
 ### Plugin System
+
 - **Modular Architecture**: Enable only needed functionality
 - **Navigation Plugin**: Client-side routing and history management
 - **Idiomorph Plugin**: Intelligent DOM morphing for smooth updates
@@ -35,6 +37,7 @@ The HyperChad Vanilla JS Renderer provides:
 - **Form Plugin**: Advanced form handling and validation
 
 ### Action Plugins
+
 - **Click Actions** (`plugin-actions-click`): Click event handling and processing
 - **Click Outside Actions** (`plugin-actions-click-outside`): Detect clicks outside elements
 - **Change Actions** (`plugin-actions-change`): Form input change detection
@@ -304,6 +307,7 @@ let interactive_view = container! {
 The renderer supports various action types through the `ActionType` enum. Here are the commonly used actions:
 
 ### Visibility Actions
+
 - `ActionType::show_str_id(target)` - Show element by string ID
 - `ActionType::hide_str_id(target)` - Hide element by string ID
 - `ActionType::toggle_visibility_str_id(target)` - Toggle element visibility (requires `logic` feature)
@@ -311,30 +315,36 @@ The renderer supports various action types through the `ActionType` enum. Here a
 - `ActionType::hide_class(class)` - Hide elements by class name
 
 ### Display Actions
+
 - `ActionType::display_str_id(target)` - Set display to initial
 - `ActionType::no_display_str_id(target)` - Set display to none
 - `ActionType::display_class(class)` - Set display to initial for class
 - `ActionType::no_display_class(class)` - Set display to none for class
 
 ### Focus Actions
+
 - `ActionType::focus_str_id(target)` - Focus element by string ID
 - `ActionType::focus_class(class)` - Focus element by class name
 - `ActionType::select_str_id(target)` - Select input text by string ID
 
 ### Style Actions
+
 - `ActionType::set_background_str_id(color, target)` - Set background color
 - `ActionType::remove_background_str_id(target)` - Remove background color
 - `ActionType::set_background_class(color, class)` - Set background for class
 
 ### Navigation Actions
+
 - `ActionType::Navigate { url }` - Navigate to URL (requires `plugin-nav`)
 
 ### Utility Actions
+
 - `ActionType::Log { message, level }` - Log message to console
 - `ActionType::Custom { action }` - Custom action string
 - `ActionType::NoOp` - No operation
 
 ### Combining Actions
+
 ```rust
 use hyperchad_actions::ActionType;
 
@@ -353,30 +363,40 @@ let delayed = ActionType::show_str_id("notification").delay_off(2000);
 ## Plugin Features
 
 ### Navigation Plugin (`plugin-nav`)
+
 Provides client-side navigation capabilities:
+
 - **Navigation Actions**: Use `ActionType::Navigate { url }` for programmatic navigation
 - **Browser History**: Integration with browser history API
 - **SPA Support**: Single-page application routing
 
 ### Idiomorph Plugin (`plugin-idiomorph`)
+
 Enables intelligent DOM updates:
+
 - **Smart DOM Morphing**: Minimal DOM manipulation for updates
 - **State Preservation**: Maintains form state and element focus during updates
 - **Performance**: Efficient diffing algorithm
 
 ### SSE Plugin (`plugin-sse`)
+
 Server-Sent Events support for real-time updates:
+
 - **Real-time Updates**: Receive server-side events
 - **Event Handling**: Process server-sent data streams
 - **UUID Generation**: Requires `plugin-uuid` for event tracking
 
 ### Form Plugin (`plugin-form`)
+
 Enhanced form handling capabilities:
+
 - **Form Processing**: Client-side form handling
 - **Data Serialization**: Form data collection and serialization
 
 ### Canvas Plugin (`plugin-canvas`)
+
 Canvas rendering support:
+
 - **2D Graphics**: Canvas 2D rendering context
 - **Drawing Operations**: Support for shapes, paths, and images through `CanvasUpdate` API
 
@@ -398,10 +418,12 @@ The renderer automatically includes the appropriate JavaScript:
 ## Feature Flags
 
 ### Core Features
+
 - **`script`**: Include JavaScript code in the binary
 - **`hash`**: Generate content-based script hashes
 
 ### Plugins
+
 - **`plugin-nav`**: Navigation and routing
 - **`plugin-idiomorph`**: DOM morphing
 - **`plugin-sse`**: Server-Sent Events
@@ -414,6 +436,7 @@ The renderer automatically includes the appropriate JavaScript:
 - **`plugin-form`**: Form handling
 
 ### Action Plugins
+
 - **`plugin-actions-change`**: Change event actions
 - **`plugin-actions-click`**: Click event actions
 - **`plugin-actions-click-outside`**: Click outside detection
@@ -443,6 +466,7 @@ The renderer automatically includes the appropriate JavaScript:
 ## Integration
 
 This renderer is designed for:
+
 - **Web Applications**: Interactive client-side web apps
 - **Progressive Enhancement**: Add interactivity to server-rendered pages
 - **Single Page Applications**: Full SPA functionality

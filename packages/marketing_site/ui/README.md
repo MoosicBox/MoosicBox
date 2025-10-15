@@ -170,14 +170,14 @@ The components use these responsive breakpoints:
 ## Dependencies
 
 - **HyperChad**: UI framework and templating with features:
-  - `actions`: Interactive behavior and logic
-  - `actions-logic`: Conditional rendering logic
-  - `actions-serde`: Serialization support
-  - `color`: Color utilities
-  - `renderer`: HTML rendering
-  - `router`: Routing support
-  - `template`: Template macros
-  - `transformer`: Layout and styling types
+    - `actions`: Interactive behavior and logic
+    - `actions-logic`: Conditional rendering logic
+    - `actions-serde`: Serialization support
+    - `color`: Color utilities
+    - `renderer`: HTML rendering
+    - `router`: Routing support
+    - `template`: Template macros
+    - `transformer`: Layout and styling types
 - **bytesize**: File size formatting
 - **chrono**: Date and time handling
 - **log**: Logging support

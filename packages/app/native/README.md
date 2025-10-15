@@ -29,6 +29,7 @@ Download from the [releases page](https://github.com/MoosicBox/MoosicBox/release
 ### System Dependencies
 
 #### Linux
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install pkg-config libssl-dev libgtk-3-dev
@@ -41,6 +42,7 @@ sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 ```
 
 #### macOS
+
 ```bash
 # Using Homebrew
 brew install pkg-config openssl
@@ -50,6 +52,7 @@ brew install portaudio
 ```
 
 #### Windows
+
 - Visual Studio Build Tools or Visual Studio Community
 - Windows SDK
 
@@ -58,11 +61,13 @@ brew install portaudio
 ### Basic Usage
 
 Start the native app:
+
 ```bash
 moosicbox_app_native
 ```
 
 Or using cargo:
+
 ```bash
 cargo run --bin moosicbox_app_native --features "default"
 ```
@@ -70,6 +75,7 @@ cargo run --bin moosicbox_app_native --features "default"
 ### Connection Configuration
 
 Server connections are configured through the in-app settings interface:
+
 - Navigate to Settings → Connections
 - Add a new connection with your server URL
 - Select the connection to use
@@ -79,26 +85,31 @@ Server connections are configured through the in-app settings interface:
 The default build includes multiple UI backends. You can enable specific backends with cargo features:
 
 #### Egui (GPU Accelerated - Default)
+
 ```bash
 cargo run --features "egui-wgpu"
 ```
 
 Additional Egui variants:
+
 - `egui-glow` - OpenGL backend
 - `egui-v1` - Legacy HyperChad egui renderer implementation (original, overcomplicated)
 - `egui-v2` - New HyperChad egui renderer implementation (work in progress, simplified)
 
 #### FLTK (Lightweight)
+
 ```bash
 cargo run --features "fltk" --no-default-features
 ```
 
 #### Web Interface (HTML + JavaScript)
+
 ```bash
 cargo run --features "html,vanilla-js" --no-default-features
 ```
 
 The web interface supports additional deployment options:
+
 - `actix` - Deploy with Actix web server
 - `lambda` - Deploy as AWS Lambda function
 
@@ -106,39 +117,43 @@ The web interface supports additional deployment options:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `WINDOW_WIDTH` | Initial window width | `1000.0` |
-| `WINDOW_HEIGHT` | Initial window height | `600.0` |
-| `WINDOW_X` | Initial window X position | - |
-| `WINDOW_Y` | Initial window Y position | - |
-| `MAX_THREADS` | Maximum blocking threads | `64` |
-| `TOKIO_CONSOLE` | Enable tokio console (requires `console-subscriber` feature) | - |
-| `RUST_LOG` | Logging configuration | - |
+| Variable        | Description                                                  | Default  |
+| --------------- | ------------------------------------------------------------ | -------- |
+| `WINDOW_WIDTH`  | Initial window width                                         | `1000.0` |
+| `WINDOW_HEIGHT` | Initial window height                                        | `600.0`  |
+| `WINDOW_X`      | Initial window X position                                    | -        |
+| `WINDOW_Y`      | Initial window Y position                                    | -        |
+| `MAX_THREADS`   | Maximum blocking threads                                     | `64`     |
+| `TOKIO_CONSOLE` | Enable tokio console (requires `console-subscriber` feature) | -        |
+| `RUST_LOG`      | Logging configuration                                        | -        |
 
 Note: Server connection settings are configured through the in-app settings interface rather than environment variables.
 
 ## Features
 
 ### Audio Formats Support
+
 - **FLAC** - Lossless audio with full quality
 - **AAC/M4A** - High-quality lossy compression
 - **MP3** - Universal compatibility
 - **Opus** - Modern, efficient codec
 
 ### Music Sources
+
 - **Local Library** - Your personal music collection
 - **Tidal** - Hi-Fi streaming service
 - **Qobuz** - Hi-Res audio streaming
 - **YouTube Music** - Google's music service
 
 ### Playback Features
+
 - **Audio Visualization** - Real-time waveform display
 - **Volume Control** - Adjust playback volume
 - **Seek Control** - Navigate within tracks
 - **Queue Management** - Control playback order
 
 #### Planned Features
+
 - Gapless playback
 - Crossfade transitions
 - Replay Gain normalization
@@ -146,6 +161,7 @@ Note: Server connection settings are configured through the in-app settings inte
 - Lyrics display
 
 ### Interface Features
+
 - **Library Browser** - Navigate your music collection
 - **Albums View** - Browse and filter albums by source
 - **Artist View** - View artist details and albums
@@ -202,6 +218,7 @@ cargo build --release --features "bundled,all-sources,all-decoders"
 ```
 
 ### Bundled Mode Features
+
 - **Standalone Operation** - Embedded server runs in the same process
 - **Auto-Configuration** - Automatic server startup and initialization
 - **Performance** - Direct in-process communication with the server

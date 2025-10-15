@@ -15,6 +15,7 @@ The MoosicBox Audio Zone package provides:
 ## Features
 
 ### Core Functionality
+
 - **Zone CRUD**: Basic create, read, update, delete operations for audio zones
 - **Database Integration**: Database abstraction layer for zone data storage
 - **Zone Queries**: Fetch zones with optional session information
@@ -22,6 +23,7 @@ The MoosicBox Audio Zone package provides:
 - **Player Management**: Associate multiple players with audio zones
 
 ### Available Operations
+
 - **Get Zones**: Retrieve all configured audio zones
 - **Get Zone**: Fetch a specific zone by ID
 - **Create Zone**: Add new audio zone configuration
@@ -30,6 +32,7 @@ The MoosicBox Audio Zone package provides:
 - **Zones with Sessions**: Get zones with associated session data
 
 ### Optional Features
+
 - **API Module**: REST API endpoints for zone management (enabled by default, requires `api` feature)
 - **Events Module**: Zone update events via subscription system (enabled by default, requires `events` feature)
 - **OpenAPI**: OpenAPI documentation support (enabled by default, requires `openapi` feature)
@@ -199,6 +202,7 @@ When the `api` feature is enabled (default), REST endpoints are available for zo
 When the `events` feature is enabled (default), zone configuration changes trigger events that can be consumed by other parts of the MoosicBox system.
 
 ### Available Events
+
 - **`audio_zones_updated_event`**: Triggered when zones are created, updated, or deleted
 
 ### Event Usage
