@@ -55,6 +55,8 @@ generate(true, "src/config.ts");
 generate(false, "src/config.ts");
 ```
 
+**Note**: The `generate` function will panic if the file fails to open or write.
+
 ### Manual Configuration
 
 ```rust
@@ -70,6 +72,8 @@ let typescript_output = config.to_json();
 println!("{}", typescript_output);
 // Output: export const config = {"web":false,"app":true,"bundled":true} as const;
 ```
+
+**Note**: The `to_json` method will panic if serialization fails.
 
 ### Command-Line Usage
 
