@@ -413,8 +413,8 @@ renderer.render_canvas(canvas_update).await?;
 - **`profiling-tracing`**: Enable tracing profiler integration
 - **`profiling-tracy`**: Enable Tracy profiler integration
 - **`debug`**: Enable debug rendering features (enabled by default)
-- **`v1`**: Use v1 renderer implementation (enabled by default)
-- **`v2`**: Use v2 renderer implementation (enabled by default)
+- **`v1`**: Use v1 renderer implementation (enabled by default) - Full-featured renderer with complete canvas support, comprehensive action handling, and mature viewport management. This is the production-ready implementation (~3800 lines).
+- **`v2`**: Use v2 renderer implementation (enabled by default) - Refactored renderer with modular action handling using the new `ActionHandler` API from `hyperchad_actions`. This version uses simplified, more maintainable code architecture (~1000 lines). Canvas rendering and some advanced features are stubbed but not yet fully implemented. When both features are enabled, v2 takes precedence.
 
 ## Performance Considerations
 
