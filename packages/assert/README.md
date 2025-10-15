@@ -216,6 +216,7 @@ When assertions fail, the output includes:
 
 - `colored`: For colorized terminal output
 - `moosicbox_env_utils`: For environment variable handling
+- `log`: For logging warnings and errors
 - Standard library backtrace support
 
 ## Use Cases
