@@ -142,7 +142,7 @@ The `TunnelInfo` extractor provides access to tunnel host configuration via Acti
 
 ```rust
 // API Logger (middleware)
-pub struct ApiLogger;
+pub struct ApiLogger {}
 pub struct ApiLoggerMiddleware<S>;
 
 // Service Info (request extractor)
