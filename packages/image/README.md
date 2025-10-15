@@ -143,7 +143,7 @@ image_helper input.jpg --output output.jpg --height 600
 
 ```bash
 # Original dimensions preserved, format/quality change only
-image_helper input.png output.jpg --output output.jpg --encoding JPEG --quality 85
+image_helper input.png --output output.jpg --encoding JPEG --quality 85
 ```
 
 ## Quality Guidelines
