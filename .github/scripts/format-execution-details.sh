@@ -16,10 +16,10 @@ fi
 
 truncate_content() {
     local content="$1"
-    local max_length=3000
+    local max_length=2000
 
     if [ ${#content} -gt $max_length ]; then
-        echo "${content:0:2997}..."
+        echo "${content:0:1997}..."
     else
         echo "$content"
     fi
@@ -69,47 +69,98 @@ detect_content_type() {
     echo "text"
 }
 
-format_result_content() {
+count_lines() {
     local content="$1"
+    echo "$content" | wc -l
+}
 
-    if [ -z "$content" ] || [ "$content" = "null" ]; then
-        echo "*(No output)*"
-        echo ""
-        return
-    fi
+should_show_output() {
+    local tool_name="$1"
 
-    content=$(echo "$content" | jq -r 'if type == "array" and length > 0 and .[0].type == "text" then .[0].text else . end' 2>/dev/null || echo "$content")
+    case "$tool_name" in
+        Read|Glob|Grep|List|grep|glob|list|read)
+            echo "false"
+            ;;
+        *)
+            echo "true"
+            ;;
+    esac
+}
 
-    content=$(truncate_content "$content")
+extract_tool_context() {
+    local tool_name="$1"
+    local tool_input="$2"
 
-    local content_type=$(detect_content_type "$content")
-
-    if [ "$content_type" = "json" ]; then
-        content=$(echo "$content" | jq . 2>/dev/null || echo "$content")
-    fi
-
-    if [ "$content_type" = "text" ] && [ ${#content} -lt 100 ] && ! echo "$content" | grep -q $'\n'; then
-        echo "**→** $content"
-        echo ""
-    else
-        echo "**Result:**"
-        echo "\`\`\`$content_type"
-        echo "$content"
-        echo "\`\`\`"
-        echo ""
-    fi
+    case "$tool_name" in
+        Read|read)
+            filepath=$(echo "$tool_input" | jq -r '.file_path // .filePath // .file // .path // empty' 2>/dev/null)
+            if [ -n "$filepath" ]; then
+                echo " on \`$filepath\`"
+            fi
+            ;;
+        Edit|edit)
+            filepath=$(echo "$tool_input" | jq -r '.file_path // .filePath // .file // empty' 2>/dev/null)
+            if [ -n "$filepath" ]; then
+                echo " on \`$filepath\`"
+            fi
+            ;;
+        Write|write)
+            filepath=$(echo "$tool_input" | jq -r '.file_path // .filePath // .file // empty' 2>/dev/null)
+            if [ -n "$filepath" ]; then
+                echo " to \`$filepath\`"
+            fi
+            ;;
+        Glob|glob)
+            pattern=$(echo "$tool_input" | jq -r '.pattern // empty' 2>/dev/null)
+            if [ -n "$pattern" ]; then
+                echo " for \`$pattern\`"
+            fi
+            ;;
+        Grep|grep)
+            pattern=$(echo "$tool_input" | jq -r '.pattern // empty' 2>/dev/null)
+            if [ -n "$pattern" ]; then
+                echo " for \`$pattern\`"
+            fi
+            ;;
+        List|list)
+            path=$(echo "$tool_input" | jq -r '.path // empty' 2>/dev/null)
+            if [ -n "$path" ]; then
+                echo " in \`$path\`"
+            fi
+            ;;
+        Bash|bash)
+            command=$(echo "$tool_input" | jq -r '.command // empty' 2>/dev/null)
+            if [ -n "$command" ]; then
+                # Show command inline, truncate if too long
+                if echo "$command" | grep -q $'\n'; then
+                    # Multiline command - show first line with ellipsis
+                    first_line=$(echo "$command" | head -n1)
+                    if [ ${#first_line} -gt 200 ]; then
+                        echo ": \`${first_line:0:197}...\`"
+                    else
+                        echo ": \`$first_line...\`"
+                    fi
+                elif [ ${#command} -gt 200 ]; then
+                    # Single line but too long - truncate
+                    echo ": \`${command:0:197}...\`"
+                else
+                    # Short single line - show full command
+                    echo ": \`$command\`"
+                fi
+            fi
+            ;;
+    esac
 }
 
 cat > "$OUTPUT_FILE" << 'HEADER'
 ---
 
 <details>
-<summary>🔍 View Execution Details</summary>
-
-## Claude's Reasoning & Actions
+<summary>💭 How I worked on this</summary>
 
 HEADER
 
+total_actions=0
 total_input_tokens=0
 total_output_tokens=0
 total_cost=0
@@ -130,36 +181,25 @@ jq -c '.[]' "$EXECUTION_FILE" | while IFS= read -r turn; do
 
         total_input=$((input_tokens + cache_creation + cache_read))
 
-        has_content=false
-
         echo "$content" | jq -c '.[]' | while IFS= read -r item; do
             item_type=$(echo "$item" | jq -r '.type // "unknown"')
 
             if [ "$item_type" = "text" ]; then
                 text=$(echo "$item" | jq -r '.text // ""')
                 if [ -n "$text" ]; then
-                    has_content=true
-                    echo "### 💭 Thinking" >> "$OUTPUT_FILE"
-                    echo "" >> "$OUTPUT_FILE"
                     echo "$text" >> "$OUTPUT_FILE"
                     echo "" >> "$OUTPUT_FILE"
                 fi
             elif [ "$item_type" = "tool_use" ]; then
-                has_content=true
+                total_actions=$((total_actions + 1))
                 tool_name=$(echo "$item" | jq -r '.name // "unknown_tool"')
                 tool_input=$(echo "$item" | jq -r '.input // {}')
                 tool_id=$(echo "$item" | jq -r '.id // ""')
 
-                echo "### 🔧 \`$tool_name\`" >> "$OUTPUT_FILE"
-                echo "" >> "$OUTPUT_FILE"
+                tool_context=$(extract_tool_context "$tool_name" "$tool_input")
+                echo "→ Used \`$tool_name\`$tool_context" >> "$OUTPUT_FILE"
 
-                if [ "$tool_input" != "{}" ]; then
-                    echo "**Parameters:**" >> "$OUTPUT_FILE"
-                    echo "\`\`\`json" >> "$OUTPUT_FILE"
-                    echo "$tool_input" | jq . >> "$OUTPUT_FILE"
-                    echo "\`\`\`" >> "$OUTPUT_FILE"
-                    echo "" >> "$OUTPUT_FILE"
-                fi
+                show_output=$(should_show_output "$tool_name")
 
                 if [ -n "$tool_id" ]; then
                     tool_result=$(jq -r --arg tool_id "$tool_id" '
@@ -173,25 +213,45 @@ jq -c '.[]' "$EXECUTION_FILE" | while IFS= read -r turn; do
                         result_content=$(echo "$tool_result" | jq -r '.content // ""')
 
                         if [ "$is_error" = "true" ]; then
-                            echo "❌ **Error:** \`$result_content\`" >> "$OUTPUT_FILE"
                             echo "" >> "$OUTPUT_FILE"
-                        else
-                            format_result_content "$result_content" >> "$OUTPUT_FILE"
+                            echo "⚠️ Error: \`$(truncate_content "$result_content")\`" >> "$OUTPUT_FILE"
+                            echo "" >> "$OUTPUT_FILE"
+                        elif [ "$show_output" = "true" ] && [ -n "$result_content" ] && [ "$result_content" != "null" ]; then
+                            result_content=$(echo "$result_content" | jq -r 'if type == "array" and length > 0 and .[0].type == "text" then .[0].text else . end' 2>/dev/null || echo "$result_content")
+
+                            result_content=$(truncate_content "$result_content")
+                            line_count=$(count_lines "$result_content")
+                            content_type=$(detect_content_type "$result_content")
+
+                            if [ "$line_count" -le 10 ] && [ ${#result_content} -lt 200 ]; then
+                                if [ "$content_type" = "text" ] && ! echo "$result_content" | grep -q $'\n'; then
+                                    echo " • $result_content" >> "$OUTPUT_FILE"
+                                else
+                                    echo "" >> "$OUTPUT_FILE"
+                                    echo "\`\`\`$content_type" >> "$OUTPUT_FILE"
+                                    echo "$result_content" >> "$OUTPUT_FILE"
+                                    echo "\`\`\`" >> "$OUTPUT_FILE"
+                                fi
+                            else
+                                if [ "$content_type" = "json" ]; then
+                                    result_content=$(echo "$result_content" | jq . 2>/dev/null || echo "$result_content")
+                                fi
+
+                                echo "" >> "$OUTPUT_FILE"
+                                echo "<details><summary>View output ($line_count lines)</summary>" >> "$OUTPUT_FILE"
+                                echo "" >> "$OUTPUT_FILE"
+                                echo "\`\`\`$content_type" >> "$OUTPUT_FILE"
+                                echo "$result_content" >> "$OUTPUT_FILE"
+                                echo "\`\`\`" >> "$OUTPUT_FILE"
+                                echo "</details>" >> "$OUTPUT_FILE"
+                            fi
                         fi
                     fi
                 fi
+
+                echo "" >> "$OUTPUT_FILE"
             fi
         done
-
-        if [ "$total_input" -gt 0 ] || [ "$output_tokens" -gt 0 ]; then
-            echo "*Token usage: $total_input input, $output_tokens output*" >> "$OUTPUT_FILE"
-            echo "" >> "$OUTPUT_FILE"
-        fi
-
-        if [ "$has_content" = true ]; then
-            echo "---" >> "$OUTPUT_FILE"
-            echo "" >> "$OUTPUT_FILE"
-        fi
     elif [ "$turn_type" = "result" ]; then
         total_cost=$(echo "$turn" | jq -r '.total_cost_usd // .cost_usd // 0')
         total_duration=$(echo "$turn" | jq -r '.duration_ms // 0')
@@ -201,9 +261,28 @@ done
 if [ "$(echo "$total_cost > 0" | bc -l 2>/dev/null || echo "0")" = "1" ] || [ "$total_duration" -gt 0 ]; then
     duration_sec=$(echo "scale=1; $total_duration / 1000" | bc -l 2>/dev/null || echo "0.0")
 
+    total_input_k=$(echo "scale=1; $total_input_tokens / 1000" | bc -l 2>/dev/null || echo "0.0")
+    total_output_k=$(echo "scale=1; $total_output_tokens / 1000" | bc -l 2>/dev/null || echo "0.0")
+
+    if [ "$total_input_k" = "0.0" ]; then
+        total_input_display="${total_input_tokens}"
+    else
+        total_input_display="${total_input_k}k"
+    fi
+
+    if [ "$total_output_k" = "0.0" ]; then
+        total_output_display="${total_output_tokens}"
+    else
+        total_output_display="${total_output_k}k"
+    fi
+
     echo "---" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
-    echo "**Total Cost:** \$$total_cost | **Duration:** ${duration_sec}s" >> "$OUTPUT_FILE"
+    if [ "$total_actions" -gt 0 ]; then
+        echo "**Summary:** $total_actions actions • ${total_input_display} tokens • \$$total_cost • ${duration_sec}s" >> "$OUTPUT_FILE"
+    else
+        echo "**Summary:** ${total_input_display} tokens • \$$total_cost • ${duration_sec}s" >> "$OUTPUT_FILE"
+    fi
     echo "" >> "$OUTPUT_FILE"
 fi
 
