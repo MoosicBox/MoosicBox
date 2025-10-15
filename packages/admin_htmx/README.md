@@ -17,8 +17,8 @@ The MoosicBox Admin HTMX package provides:
 ### Available Modules
 
 - **Profiles**: Profile creation, selection, and deletion management
-- **Scan**: Music library scan path management and scan execution
-- **Info**: Server identity and system information display
+- **Scan**: Music library scan path management and scan execution (optional, enabled with `scan` feature)
+- **Info**: Server identity and system information display (displayed as part of profile view)
 - **Qobuz**: Qobuz service authentication and settings (optional, enabled with `qobuz` feature)
 - **Tidal**: Tidal service authentication and settings (optional, enabled with `tidal` feature)
 - **Utilities**: Common helper functions for HTMX interactions
@@ -80,7 +80,6 @@ The package provides HTMX-compatible HTML endpoints:
 - `GET /admin/profiles` - List all profiles
 - `GET /admin/profiles/select` - Profile selection dropdown
 - `POST /admin/profiles/select` - Select a profile
-- `GET /admin/profiles/new` - New profile form
 - `POST /admin/profiles/new` - Create new profile
 - `DELETE /admin/profiles` - Delete a profile
 
@@ -93,16 +92,16 @@ The package provides HTMX-compatible HTML endpoints:
 
 **Qobuz Integration (requires `qobuz` feature):**
 
-- `GET /admin/qobuz/settings` - Qobuz settings and login status
+- `GET /admin/qobuz/settings` - Qobuz settings and login status (also supports OPTIONS, HEAD)
 - `POST /admin/qobuz/auth/user-login` - Login to Qobuz
-- `POST /admin/qobuz/run-scan` - Run Qobuz library scan
+- `POST /admin/qobuz/run-scan` - Run Qobuz library scan (requires `scan` feature)
 
 **Tidal Integration (requires `tidal` feature):**
 
 - `GET /admin/tidal/settings` - Tidal settings and login status
 - `POST /admin/tidal/auth/device-authorization` - Start Tidal device auth
 - `POST /admin/tidal/auth/device-authorization/token` - Poll for auth token
-- `POST /admin/tidal/run-scan` - Run Tidal library scan
+- `POST /admin/tidal/run-scan` - Run Tidal library scan (requires `scan` feature)
 
 ### Web Interface
 
@@ -123,11 +122,11 @@ cargo build --package moosicbox_admin_htmx --no-default-features --features api,
 
 ### Available Features
 
-- `api` - Enables Actix Web integration (required for all endpoints)
-- `scan` - Enables library scanning functionality
-- `qobuz` - Enables Qobuz service integration
-- `tidal` - Enables Tidal service integration
-- `base64` - Base64 encoding support (used by Tidal)
+- `api` - Enables Actix Web integration and HTTP endpoints
+- `scan` - Enables library scanning functionality and scan-related endpoints
+- `qobuz` - Enables Qobuz service integration and authentication endpoints
+- `tidal` - Enables Tidal service integration and authentication endpoints
+- `base64` - Base64 encoding support (automatically enabled by `tidal` feature)
 
 Default features: `api`, `qobuz`, `scan`, `tidal`
 
@@ -140,7 +139,7 @@ use moosicbox_admin_htmx::api;
 
 // Available modules (depending on features):
 // - profiles: Profile management
-// - info: System information
+// - info: System information (no standalone endpoints, displayed in profile view)
 // - scan: Library scanning (requires scan feature)
 // - qobuz: Qobuz integration (requires qobuz feature)
 // - tidal: Tidal integration (requires tidal feature)
