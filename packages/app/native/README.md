@@ -90,7 +90,7 @@ Additional Egui variants:
 
 #### FLTK (Lightweight)
 ```bash
-cargo run --features "fltk"
+cargo run --features "fltk" --no-default-features
 ```
 
 #### Web Interface (HTML + JavaScript)
