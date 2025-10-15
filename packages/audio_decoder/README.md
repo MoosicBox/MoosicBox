@@ -4,7 +4,7 @@ Audio decoding library for the MoosicBox ecosystem, built on top of the Symphoni
 
 ## Overview
 
-The MoosicBox Audio Decoder package provides a wrapper around the [Symphonia](https://github.com/pdm-project/symphonia) media framework, enabling audio decoding for multiple formats within the MoosicBox ecosystem.
+The MoosicBox Audio Decoder package provides a wrapper around the [Symphonia](https://github.com/pdm-audio/symphonia) media framework, enabling audio decoding for multiple formats within the MoosicBox ecosystem.
 
 **Current Features:**
 
@@ -317,6 +317,6 @@ For advanced features like custom resampling, format conversion, or metadata ext
 
 ## See Also
 
-- [Symphonia](https://github.com/pdm-project/symphonia) - The underlying media framework
+- [Symphonia](https://github.com/pdm-audio/symphonia) - The underlying media framework
 - [MoosicBox Stream Utils](../stream_utils/README.md) - Streaming utilities
 - [MoosicBox Player](../player/README.md) - Audio playback engine
