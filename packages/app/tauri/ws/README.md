@@ -1,13 +1,13 @@
-# MoosicBox App WebSocket
+# MoosicBox Tauri WebSocket
 
-WebSocket client implementation for MoosicBox applications.
+WebSocket client implementation for MoosicBox Tauri applications.
 
 ## Overview
 
-The MoosicBox App WebSocket package provides:
+The MoosicBox Tauri WebSocket package provides:
 
-- **WebSocket Client**: Async WebSocket client with message handling
-- **Real-time Communication**: Live updates and messaging
+- **WebSocket Client**: Tauri-specific async WebSocket client with message handling
+- **Real-time Communication**: Live updates and messaging for Tauri applications
 - **Connection Management**: Automatic reconnection and error handling
 - **Cancellation Support**: Graceful shutdown via cancellation tokens
 
