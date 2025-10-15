@@ -23,7 +23,7 @@ The HyperChad HTML Actix Renderer provides:
 - **Routing**: Flexible URL routing and path matching
 - **Middleware**: Request/response middleware pipeline
 - **CORS**: Configurable cross-origin resource sharing
-- **Compression**: Gzip, Deflate, and Zlib compression for responses
+- **Compression**: Gzip, Deflate, Brotli, and Zstd compression for responses
 - **Static Files**: Efficient static file serving
 
 ### HyperChad Integration
@@ -61,40 +61,37 @@ hyperchad_renderer_html_actix = {
 ```rust
 use actix_web::{web, App, HttpServer, HttpRequest, HttpResponse, Result};
 use hyperchad_renderer_html_actix::{ActixApp, ActixResponseProcessor};
-use hyperchad_renderer_html::DefaultHtmlTagRenderer;
-use hyperchad_router::{Router, RouteRequest};
-use hyperchad_template::container;
-use std::collections::HashMap;
 use bytes::Bytes;
+
+#[derive(Clone)]
+struct MyRequest {
+    path: String,
+    method: String,
+}
 
 struct MyProcessor;
 
 #[async_trait::async_trait]
-impl ActixResponseProcessor<RouteRequest> for MyProcessor {
+impl ActixResponseProcessor<MyRequest> for MyProcessor {
     fn prepare_request(
         &self,
         req: HttpRequest,
-        body: Option<std::sync::Arc<Bytes>>,
-    ) -> Result<RouteRequest, actix_web::Error> {
-        Ok(RouteRequest {
+        _body: Option<std::sync::Arc<Bytes>>,
+    ) -> Result<MyRequest, actix_web::Error> {
+        Ok(MyRequest {
             path: req.path().to_string(),
-            query: req.query_string().to_string().into(),
             method: req.method().to_string(),
-            headers: req.headers().iter()
-                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-                .collect(),
-            body: body.map(|b| b.to_vec()),
         })
     }
 
-    async fn to_response(&self, data: RouteRequest) -> Result<HttpResponse, actix_web::Error> {
+    async fn to_response(&self, data: MyRequest) -> Result<HttpResponse, actix_web::Error> {
         match data.path.as_str() {
             "/" => Ok(HttpResponse::Ok()
                 .content_type("text/html")
-                .body(render_home_page())),
+                .body("<html><body><h1>Welcome to HyperChad!</h1></body></html>")),
             "/about" => Ok(HttpResponse::Ok()
                 .content_type("text/html")
-                .body(render_about_page())),
+                .body("<html><body><h1>About Us</h1></body></html>")),
             _ => Ok(HttpResponse::NotFound().body("Page not found")),
         }
     }
@@ -102,7 +99,7 @@ impl ActixResponseProcessor<RouteRequest> for MyProcessor {
     async fn to_body(
         &self,
         content: hyperchad_renderer::Content,
-        _data: RouteRequest,
+        _data: MyRequest,
     ) -> Result<(bytes::Bytes, String), actix_web::Error> {
         let body = content.to_string();
         let content_type = "text/html".to_string();
@@ -110,33 +107,12 @@ impl ActixResponseProcessor<RouteRequest> for MyProcessor {
     }
 }
 
-fn render_home_page() -> String {
-    let view = container! {
-        div class="page" {
-            h1 { "Welcome to HyperChad!" }
-            p { "This is a server-rendered page using Actix Web." }
-            a href="/about" { "About Us" }
-        }
-    };
-
-    let tag_renderer = DefaultHtmlTagRenderer::default();
-    tag_renderer.root_html(
-        &HashMap::new(),
-        &view,
-        view.to_string(),
-        Some("width=device-width, initial-scale=1"),
-        None,
-        Some("Home"),
-        Some("Welcome to our HyperChad application"),
-    )
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     let processor = MyProcessor;
-    let (tx, rx) = flume::unbounded();
+    let (_tx, rx) = flume::unbounded();
     let app = ActixApp::new(processor, rx);
 
     HttpServer::new(move || {
@@ -152,7 +128,7 @@ async fn main() -> std::io::Result<()> {
 async fn handle_request(
     req: HttpRequest,
     body: web::Bytes,
-    data: web::Data<ActixApp<RouteRequest, MyProcessor>>,
+    data: web::Data<ActixApp<MyRequest, MyProcessor>>,
 ) -> Result<HttpResponse> {
     let body = if body.is_empty() {
         None
@@ -169,7 +145,7 @@ async fn handle_request(
 
 ```rust
 use hyperchad_renderer_html_actix::ActixApp;
-use hyperchad_actions::logic::Value;
+use hyperchad_renderer::transformer::actions::logic::Value;
 
 // With actions feature enabled
 let (action_tx, action_rx) = flume::unbounded();
@@ -225,82 +201,75 @@ app.static_asset_routes = vec![
 
 ### HTMX Integration
 
+This renderer fully supports HTMX through its CORS configuration, which includes all HTMX headers in allowed and exposed headers. Here's an example of handling HTMX requests:
+
 ```rust
-use hyperchad_template::container;
-use hyperchad_renderer::PartialView;
+use actix_web::{HttpRequest, HttpResponse, Result};
 
 async fn handle_htmx_request(req: HttpRequest) -> Result<HttpResponse> {
     if req.headers().contains_key("hx-request") {
         // Handle HTMX partial update
-        let partial_content = container! {
-            div class="updated-content" {
-                h2 { "Updated Content" }
-                p { "This was loaded via HTMX." }
-                span { format!("Loaded at: {}", chrono::Utc::now()) }
-            }
-        };
+        let partial_content = r#"
+            <div class="updated-content">
+                <h2>Updated Content</h2>
+                <p>This was loaded via HTMX.</p>
+            </div>
+        "#;
 
         Ok(HttpResponse::Ok()
             .content_type("text/html")
-            .body(partial_content.to_string()))
+            .body(partial_content))
     } else {
         // Handle full page request
-        let full_page = container! {
-            html {
-                head {
-                    title { "HTMX Demo" }
-                    script src="https://unpkg.com/htmx.org@1.9.10" {}
-                }
-                body {
-                    div class="container" {
-                        h1 { "HTMX Demo" }
-
-                        button
+        let full_page = r#"
+            <html>
+                <head>
+                    <title>HTMX Demo</title>
+                    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>HTMX Demo</h1>
+                        <button
                             hx-get="/api/update"
                             hx-target="#content"
-                            hx-swap="innerHTML"
-                        {
-                            "Load Content"
-                        }
-
-                        div id="content" {
-                            "Click the button to load content"
-                        }
-                    }
-                }
-            }
-        };
+                            hx-swap="innerHTML">
+                            Load Content
+                        </button>
+                        <div id="content">
+                            Click the button to load content
+                        </div>
+                    </div>
+                </body>
+            </html>
+        "#;
 
         Ok(HttpResponse::Ok()
             .content_type("text/html")
-            .body(full_page.to_string()))
+            .body(full_page))
     }
 }
 ```
 
 ### Server-Sent Events
 
+The renderer includes built-in SSE support when the `sse` feature is enabled (default). The SSE endpoint is automatically registered at `/$sse` and streams `RendererEvent`s from the renderer event channel:
+
 ```rust
-use actix_web::{web, HttpResponse, Result};
-use actix_web_lab::sse::{self, Sse};
-use futures_util::stream;
+use hyperchad_renderer_html_actix::ActixApp;
+use hyperchad_renderer::RendererEvent;
 
-async fn sse_endpoint() -> Result<HttpResponse> {
-    let stream = stream::iter(vec![
-        sse::Event::Data(sse::Data::new("Hello from SSE!")),
-        sse::Event::Data(sse::Data::new("Another message")),
-    ]);
+// Create the app with a renderer event channel
+let (_event_tx, event_rx) = flume::unbounded();
+let app = ActixApp::new(processor, event_rx);
 
-    Ok(Sse::from_stream(stream)
-        .with_keep_alive(std::time::Duration::from_secs(30))
-        .into_response())
-}
+// The SSE endpoint at /$sse is automatically available
+// Send events through the channel:
+// event_tx.send(RendererEvent::View(view)).unwrap();
+// event_tx.send(RendererEvent::Partial(partial_view)).unwrap();
 
-// In your app configuration
-App::new()
-    .app_data(web::Data::new(app.clone()))
-    .route("/events", web::get().to(sse_endpoint))
-    .default_service(web::route().to(handle_request))
+// Client can connect to: http://localhost:8080/$sse
+// Events are streamed in SSE format with compression support
 ```
 
 ### Custom Middleware
@@ -374,28 +343,33 @@ App::new()
 ### Error Handling
 
 ```rust
-use actix_web::{middleware::ErrorHandlerResponse, Result};
+use actix_web::{
+    HttpResponse, Result,
+    dev::ServiceResponse,
+    middleware::{ErrorHandlerResponse, ErrorHandlers},
+    http,
+};
 
 fn handle_404<B>(res: ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
-    let error_page = container! {
-        html {
-            head {
-                title { "Page Not Found" }
-            }
-            body {
-                div class="error-page" {
-                    h1 { "404 - Page Not Found" }
-                    p { "The page you're looking for doesn't exist." }
-                    a href="/" { "Go Home" }
-                }
-            }
-        }
-    };
+    let error_page = r#"
+        <html>
+            <head>
+                <title>Page Not Found</title>
+            </head>
+            <body>
+                <div class="error-page">
+                    <h1>404 - Page Not Found</h1>
+                    <p>The page you're looking for doesn't exist.</p>
+                    <a href="/">Go Home</a>
+                </div>
+            </body>
+        </html>
+    "#;
 
     let new_response = res.into_response(
         HttpResponse::NotFound()
             .content_type("text/html")
-            .body(error_page.to_string())
+            .body(error_page)
     );
 
     Ok(ErrorHandlerResponse::Response(new_response.map_into_left_body()))
@@ -403,7 +377,7 @@ fn handle_404<B>(res: ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
 
 // Configure error handling
 App::new()
-    .wrap(middleware::ErrorHandlers::new()
+    .wrap(ErrorHandlers::new()
         .handler(http::StatusCode::NOT_FOUND, handle_404))
     .app_data(web::Data::new(app.clone()))
     .default_service(web::route().to(handle_request))
@@ -424,7 +398,7 @@ The renderer includes comprehensive CORS configuration:
 
 - **Allowed Origins**: Any origin (configurable)
 - **Allowed Methods**: GET, POST, OPTIONS, DELETE, PUT, PATCH
-- **Allowed Headers**: Authorization, Accept, Content-Type, HyperChad headers
+- **Allowed Headers**: Authorization, Accept, Content-Type, HTMX headers, moosicbox-profile
 - **Exposed Headers**: HTMX headers for client-side updates
 - **Credentials**: Supports credentials for authenticated requests
 
@@ -434,17 +408,25 @@ Automatic response compression is enabled by default via Actix Web middleware:
 
 - **Gzip**: Standard gzip compression
 - **Deflate**: Deflate compression support
-- **Zlib**: Zlib compression support
+- **Brotli**: Brotli compression support
+- **Zstd**: Zstandard compression support
 
 Note: SSE streams support Gzip, Deflate, and Zlib encoding.
 
 ## Dependencies
 
-- **Actix Web**: Web framework and HTTP server
-- **HyperChad HTML Renderer**: Core HTML rendering functionality
-- **HyperChad Core**: Template, transformer, and action systems
-- **Flume**: Async channel communication
-- **Bytes**: Efficient byte handling
+Key dependencies include:
+
+- **actix-web**: Web framework and HTTP server
+- **actix-cors**: CORS middleware for Actix Web
+- **actix-files**: Static file serving (when `assets` feature is enabled)
+- **hyperchad_renderer**: Core HyperChad rendering functionality
+- **flume**: Async channel communication for events and actions
+- **bytes**: Efficient byte handling
+- **flate2**: Compression support for SSE streams
+- **async-trait**: Async trait support for `ActixResponseProcessor`
+- **moosicbox_middleware**: API logging middleware
+- **serde/serde_json**: JSON serialization (when `actions` or `sse` features are enabled)
 
 ## Integration
 
