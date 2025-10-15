@@ -156,4 +156,3 @@ When built with the `simulator` feature:
 - [`switchy_async`](../../README.md) - Main async runtime package
 - [`switchy_random`](../../../random/README.md) - Random number generation
 - [Cancel Example](../cancel/README.md) - Cancellation and shutdown patterns
-- [MoosicBox Task](../../../task/README.md) - Production task management
