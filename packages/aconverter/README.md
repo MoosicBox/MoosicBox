@@ -73,6 +73,8 @@ aconverter \
 | `--encoding` | `-e`  | Output format (AAC, FLAC, MP3, OPUS)                 | Auto-detect from extension |
 | `--output`   | `-o`  | Output file path                                     | Required                   |
 | `--quality`  | `-q`  | Encoding quality (0-100) (currently not implemented) | 80                         |
+| `--width`    |       | Output width (currently not implemented)             | None                       |
+| `--height`   |       | Output height (currently not implemented)            | None                       |
 
 ## Supported Formats
 
