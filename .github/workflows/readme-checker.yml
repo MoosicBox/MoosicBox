@@ -284,6 +284,25 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 7
 
+            - name: Format README with prettier
+              if: steps.check_readme.outputs.exists == 'true'
+              run: |
+                  # Check if README was modified by Claude
+                  if git diff --name-only | grep -q "${{ matrix.package.path }}/README.md" || \
+                     git diff --cached --name-only | grep -q "${{ matrix.package.path }}/README.md"; then
+
+                    echo "📝 README modified, running prettier..."
+
+                    if ! npx -y prettier --write "${{ matrix.package.path }}/README.md"; then
+                      echo "⚠️ Prettier failed - continuing with unformatted README"
+                      echo "This may indicate malformed markdown in Claude's output"
+                    else
+                      echo "✅ Prettier formatting complete"
+                    fi
+                  else
+                    echo "ℹ️ No README changes detected, skipping prettier"
+                  fi
+
             - name: Commit changes with resilient push
               if: steps.check_readme.outputs.exists == 'true'
               run: |
@@ -445,6 +464,24 @@ jobs:
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
+
+            - name: Format README with prettier
+              run: |
+                  # Check if README was modified by Claude
+                  if git diff --name-only | grep -q "^README.md$" || \
+                     git diff --cached --name-only | grep -q "^README.md$"; then
+
+                    echo "📝 Root README modified, running prettier..."
+
+                    if ! npx -y prettier --write "README.md"; then
+                      echo "⚠️ Prettier failed - continuing with unformatted README"
+                      echo "This may indicate malformed markdown in Claude's output"
+                    else
+                      echo "✅ Prettier formatting complete"
+                    fi
+                  else
+                    echo "ℹ️ No README changes detected, skipping prettier"
+                  fi
 
             - name: Commit changes with resilient push
               run: |
