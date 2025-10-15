@@ -238,7 +238,7 @@ When adding new components to this re-export package:
 
 ## Compatibility
 
-- **Rust Version**: MSRV 1.70+
+- **Rust Version**: MSRV 1.85+
 - **Operating Systems**: Linux, macOS, Windows
 - **Architectures**: x86_64, ARM64
 
