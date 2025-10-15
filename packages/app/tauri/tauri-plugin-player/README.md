@@ -1,6 +1,6 @@
 # Tauri Plugin Player
 
-A Tauri plugin that provides media player control functionality for desktop and mobile platforms (Android).
+A Tauri plugin that provides media player control functionality for desktop and mobile platforms (Android, with iOS planned).
 
 ## Features
 
