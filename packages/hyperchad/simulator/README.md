@@ -39,9 +39,10 @@ let plan = TestPlan::new()
 
 // Run simulation (requires "test-utils" feature)
 let result = simulator.run_test_plan(plan)?;
+assert!(result.success);
 ```
 
-## Features
+## Cargo Features
 
 Enable the `test-utils` feature to use `TestPlan` execution:
 
