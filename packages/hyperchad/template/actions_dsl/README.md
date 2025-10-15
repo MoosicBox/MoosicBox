@@ -22,19 +22,19 @@ The `fx` function itself is just a marker - all the real work happens at compile
 
 ```rust
 // Show an element
-fx { show("panel") }
+button fx-click=fx { show("panel") } { "Show Panel" }
 
 // Hide an element
-fx { hide("modal") }
+button fx-click=fx { hide("modal") } { "Close Modal" }
 
 // Navigate to a URL
-fx { navigate("/dashboard") }
+button fx-click=fx { navigate("/dashboard") } { "Go to Dashboard" }
 
 // Log a message
-fx { log("Button clicked") }
+button fx-click=fx { log("Button clicked") } { "Click Me" }
 
 // Custom action
-fx { custom("my-action") }
+button fx-click=fx { custom("my-action") } { "Custom Action" }
 ```
 
 ### Element Reference API
@@ -43,19 +43,19 @@ The DSL supports an element reference API for cleaner element manipulation with 
 
 ```rust
 // Element references support ID and class selectors
-fx {
+button fx-click=fx {
     // Using element() with method chaining
     element("#my-id").show();
     element(".my-class").hide();
     element("#panel").set_visibility(Visibility::Visible);
-}
+} { "Toggle Elements" }
 
 // Conditional visibility checks
-fx {
+button fx-click=fx {
     if element(".modal").get_visibility() == Visibility::Hidden {
         element(".modal").show();
     }
-}
+} { "Show Modal If Hidden" }
 ```
 
 **Available element methods:**
@@ -71,11 +71,11 @@ fx {
 Chain multiple actions together:
 
 ```rust
-fx {
+button fx-click=fx {
     hide("modal");
     show("success-message");
     log("Modal closed successfully");
-}
+} { "Close and Confirm" }
 ```
 
 ### Variables and Reusability
@@ -83,14 +83,14 @@ fx {
 Use variables to make your actions more maintainable:
 
 ```rust
-fx {
+button fx-click=fx {
     let modal_id = "user-modal";
     let overlay_id = "modal-overlay";
 
     hide(modal_id);
     hide(overlay_id);
     log("User modal workflow completed");
-}
+} { "Close User Modal" }
 ```
 
 ### Conditional Expressions
@@ -98,22 +98,22 @@ fx {
 The DSL supports if/else conditionals with visibility checks:
 
 ```rust
-fx {
+button fx-click=fx {
     if get_visibility("panel") == hidden() {
         show("panel");
     } else {
         hide("panel");
     }
-}
+} { "Toggle Panel" }
 
 // With element references
-fx {
+button fx-click=fx {
     if element(".panel").get_visibility() == Visibility::Hidden {
         element(".panel").show();
     } else {
         element(".panel").hide();
     }
-}
+} { "Toggle Panel" }
 ```
 
 ## Action Types
@@ -190,7 +190,7 @@ fx {
 Handle custom events with closures that transform parameter references to `get_event_value()` calls:
 
 ```rust
-fx {
+div fx-mounted=fx {
     on_event("play-track", |value| {
         if value == get_data_attr_value_self("track-id") {
             set_background_self("#333");
@@ -201,7 +201,7 @@ fx {
             set_visibility_child_class(Visibility::Visible, "track-number");
         }
     });
-}
+} { /* track content */ }
 ```
 
 ### Complex Parameterized Actions
@@ -209,13 +209,15 @@ fx {
 Combine multiple functions for sophisticated interactions:
 
 ```rust
-fx {
-    // Seek to track position based on mouse click
+// Seek bar - click to jump to position
+div fx-click=fx {
     invoke(Action::SeekCurrentTrackPercent, get_mouse_x_self() / get_width_px_self());
+} { /* seek bar content */ }
 
-    // Set volume with clamping and throttling
+// Volume slider - drag to adjust
+div fx-mousemove=fx {
     throttle(30, invoke(Action::SetVolume, clamp(0.0, get_width_px_self(), 1.0)));
-}
+} { /* volume slider */ }
 ```
 
 ### Arithmetic Expressions
@@ -223,13 +225,13 @@ fx {
 The DSL supports arithmetic operations that are converted to method calls:
 
 ```rust
-fx {
+div fx-click=fx {
     invoke(
         Action::SetVolume,
         ((get_height_px_str_id("container") - get_mouse_y_str_id("container")) / get_height_px_str_id("container"))
             .clamp(0.0, 1.0)
     );
-}
+} id="container" { /* vertical volume control */ }
 ```
 
 ## Best Practices
