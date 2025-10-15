@@ -114,7 +114,7 @@ use hyperchad_actions::logic::Value;
 
 let app = AppBuilder::new()
     .with_router(router)
-    .with_action_handler(|action: &str, value: Option<&Value>| {
+    .with_action_handler(|action, value| {
         match action {
             "custom-action" => {
                 println!("Custom action triggered with value: {:?}", value);
