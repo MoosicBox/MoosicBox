@@ -331,7 +331,7 @@ The renderer supports various action types through the `ActionType` enum. Here a
 
 - `ActionType::set_background_str_id(color, target)` - Set background color
 - `ActionType::remove_background_str_id(target)` - Remove background color
-- `ActionType::set_background_class(color, class)` - Set background for class
+- `ActionType::remove_background_class(class)` - Remove background color from class
 
 ### Navigation Actions
 
