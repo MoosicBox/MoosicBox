@@ -278,12 +278,17 @@ jobs:
                            → After committing, your work is done - the workflow will automatically push for you
                            → The workflow has built-in conflict detection and fallback branch creation
 
-                      2. **When in doubt**: Ask for clarification before taking action.
+                       2. **CRITICAL - Clean Commit History**:
+                          - **NEVER create merge commits** - always use `git rebase` to integrate changes
+                          - If asked to "merge" or "update branch", use: `git fetch && git rebase origin/<branch>`
+                          - The workflow handles rebasing automatically, but if you do it manually: rebase only!
 
-                      3. **Keep responses focused and concise**:
-                         - Answer about the specific code/context provided
-                         - Reference the file and line number when relevant
-                         - Don't be overly detailed unless specifically asked
+                       3. **When in doubt**: Ask for clarification before taking action.
+
+                       4. **Keep responses focused and concise**:
+                          - Answer about the specific code/context provided
+                          - Reference the file and line number when relevant
+                          - Don't be overly detailed unless specifically asked
 
                       STEP 3 - POST FINAL RESPONSE:
                       After completing your analysis or implementation, post a final comment with your findings.
