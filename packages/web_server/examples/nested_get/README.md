@@ -30,7 +30,7 @@ cargo run
 nix develop .#server --command cargo run --example nested_get
 ```
 
-Note: This example uses the actix backend, which is enabled by default in the moosicbox_web_server dependency.
+Note: This example uses the actix backend, which is enabled via the features in the moosicbox_web_server dependency.
 
 ## Expected Output
 
