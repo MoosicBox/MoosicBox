@@ -181,8 +181,8 @@ use moosicbox_web_server::{WebServerBuilder, cors::Cors};
 fn server_with_cors() {
     let cors = Cors::default()
         .allow_origin("https://example.com")
-        .allow_methods(["GET", "POST", "PUT", "DELETE"])
-        .allow_headers(["Content-Type", "Authorization"]);
+        .allowed_methods(["GET", "POST", "PUT", "DELETE"])
+        .allowed_headers(["Content-Type", "Authorization"]);
 
     let server = WebServerBuilder::new()
         .with_port(8080)
