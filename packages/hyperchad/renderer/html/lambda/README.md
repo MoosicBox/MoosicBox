@@ -45,6 +45,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_renderer_html_lambda = { path = "../hyperchad/renderer/html/lambda" }
+hyperchad_template = { path = "../hyperchad/template" }  # For template DSL support
 
 # With JSON support
 hyperchad_renderer_html_lambda = {
@@ -61,10 +62,13 @@ hyperchad_renderer_html_lambda = {
 
 ## Usage
 
+> **Note**: The examples below use the HyperChad template DSL (`container!` macro from `hyperchad_template`). While the Lambda renderer itself only handles HTML strings, most users will be using HyperChad templates to generate that HTML. You can also use raw HTML strings or any other templating approach that returns a `String`.
+
 ### Basic Lambda Function
 
 ```rust
 use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+use hyperchad_template::container;
 use lambda_http::Request;
 use lambda_runtime::Error;
 use bytes::Bytes;
@@ -116,13 +120,57 @@ impl LambdaResponseProcessor<String> for MyLambdaProcessor {
 }
 
 fn render_home_page() -> String {
-    // Returns HTML string
-    String::from("<html><body><h1>Welcome to HyperChad on Lambda!</h1></body></html>")
+    let view = container! {
+        html {
+            head {
+                title { "HyperChad Lambda" }
+                meta name="viewport" content="width=device-width, initial-scale=1";
+            }
+            body {
+                div class="container" {
+                    h1 { "Welcome to HyperChad on Lambda!" }
+                    p { "This page is rendered by AWS Lambda." }
+
+                    nav {
+                        a href="/about" { "About" }
+                        " | "
+                        a href="/api/health" { "Health Check" }
+                    }
+
+                    div class="info" {
+                        h2 { "Serverless Benefits" }
+                        ul {
+                            li { "Automatic scaling" }
+                            li { "Pay per request" }
+                            li { "Zero server management" }
+                            li { "Global deployment" }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    view.to_string()
 }
 
 fn render_about_page() -> String {
-    // Returns HTML string
-    String::from("<html><body><h1>About HyperChad Lambda</h1></body></html>")
+    let view = container! {
+        html {
+            head {
+                title { "About - HyperChad Lambda" }
+            }
+            body {
+                div class="container" {
+                    h1 { "About HyperChad Lambda" }
+                    p { "HyperChad Lambda brings the power of HyperChad to serverless environments." }
+                    a href="/" { "Back to Home" }
+                }
+            }
+        }
+    };
+
+    view.to_string()
 }
 
 #[tokio::main]
@@ -145,6 +193,7 @@ This example requires the `json` feature to be enabled.
 #[cfg(feature = "json")]
 mod api_example {
     use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+    use hyperchad_template::container;
     use lambda_http::Request;
     use lambda_runtime::Error;
     use bytes::Bytes;
@@ -233,7 +282,33 @@ mod api_example {
     }
 
     fn render_api_docs() -> String {
-        String::from("<html><body><h1>API Documentation</h1></body></html>")
+        let view = container! {
+            html {
+                head {
+                    title { "API Documentation" }
+                }
+                body {
+                    div class="container" {
+                        h1 { "API Documentation" }
+
+                        section {
+                            h2 { "GET /api/users" }
+                            p { "Returns a list of all users." }
+                        }
+
+                        section {
+                            h2 { "POST /api/users" }
+                            p { "Creates a new user." }
+                            pre {
+                                "{\n  \"name\": \"string\",\n  \"email\": \"string\"\n}"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        view.to_string()
     }
 }
 ```
@@ -247,6 +322,7 @@ This example requires the `assets` feature to be enabled.
 mod asset_example {
     use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
     use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
+    use hyperchad_template::container;
     use lambda_http::Request;
     use lambda_runtime::Error;
     use bytes::Bytes;
@@ -298,18 +374,31 @@ mod asset_example {
     }
 
     fn render_home_with_assets() -> String {
-        String::from(r#"<html>
-            <head>
-                <title>HyperChad with Assets</title>
-                <link rel="stylesheet" href="/css/style.css">
-            </head>
-            <body>
-                <div class="container">
-                    <h1>HyperChad with Static Assets</h1>
-                    <p>This page includes CSS assets.</p>
-                </div>
-            </body>
-        </html>"#)
+        let view = container! {
+            html {
+                head {
+                    title { "HyperChad with Assets" }
+                    link rel="stylesheet" href="/css/style.css";
+                }
+                body {
+                    div class="container" {
+                        h1 { "HyperChad with Static Assets" }
+                        p { "This page includes CSS assets served from Lambda." }
+
+                        div class="styled-content" {
+                            p { "Static assets are bundled and served efficiently." }
+                            ul {
+                                li { "CSS stylesheets" }
+                                li { "JavaScript files" }
+                                li { "Images and fonts" }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        view.to_string()
     }
 
     // Example of using the static_asset_routes field in LambdaApp
