@@ -6,12 +6,12 @@ Native desktop application for MoosicBox music streaming platform built with Tau
 
 The MoosicBox Tauri Application provides:
 
-- **Native Desktop App**: Cross-platform desktop application for Windows, macOS, and Linux
+- **Native Desktop App**: Cross-platform desktop application for Windows, macOS, Linux, and Android
 - **Web Integration**: Embedded web view with native API access
-- **Music Streaming**: Full MoosicBox music streaming functionality
-- **Player Integration**: Native media player controls and system integration
-- **File Management**: Local file access and management
-- **System Integration**: System notifications, tray integration, and OS-specific features
+- **Music Streaming**: Full MoosicBox music streaming functionality via WebSocket communication
+- **Player Integration**: Native media player controls via Tauri plugin
+- **mDNS Discovery**: Automatic discovery of MoosicBox servers on the local network
+- **UPnP Support**: UPnP device integration for audio streaming
 - **HTTP Proxy**: Built-in HTTP proxy for API communication
 - **WebSocket Support**: Real-time communication with MoosicBox servers
 
@@ -19,33 +19,30 @@ The MoosicBox Tauri Application provides:
 
 ### Desktop Application Features
 
-- **Cross-platform**: Runs on Windows, macOS, and Linux
+- **Cross-platform**: Runs on Windows, macOS, Linux, and Android
 - **Native Performance**: Rust backend with web frontend
-- **System Integration**: Media keys, notifications, and system tray
-- **File Access**: Local file system access and management
-- **Window Management**: Multiple windows and advanced window controls
+- **File Access**: Local file system access and management via Tauri plugins
+- **Notifications**: System notifications via Tauri plugin
 
 ### Music Player Features
 
-- **Audio Playback**: High-quality audio playback with multiple format support
-- **Playlist Management**: Create, edit, and manage playlists
-- **Library Integration**: Browse and search music library
-- **Queue Management**: Advanced queue and playback controls
-- **Metadata Display**: Rich metadata display with album art
+- **Audio Playback**: High-quality audio playback with multiple format support (via `moosicbox_player`)
+- **Session Management**: Multi-device session management with WebSocket synchronization
+- **Quality Control**: Configurable audio quality settings
+- **Media Controls**: Play/pause/next/previous controls (Android native media integration)
 
 ### Streaming Integration
 
-- **Multiple Sources**: Support for Tidal, Qobuz, YouTube Music, and local files
-- **Real-time Sync**: Real-time synchronization with other clients
-- **Session Management**: Multi-device session management
-- **Quality Control**: Configurable audio quality settings
+- **Multiple Sources**: Support for Tidal, Qobuz, YouTube Music, and local files (via feature flags)
+- **Real-time Sync**: Real-time synchronization with other clients via WebSocket
+- **API Proxy**: Proxied HTTP requests to MoosicBox API with authentication
 
 ### Development Features
 
-- **Bundled Mode**: Self-contained application with bundled services
-- **Native UI**: Optional native UI components with HyperChad
-- **HTTP Server**: Built-in HTTP server for web interface
-- **Action System**: Comprehensive action handling system
+- **Bundled Mode**: Self-contained application with bundled MoosicBox services (optional)
+- **Native UI**: Optional native UI components with HyperChad (via `moosicbox-app-native` feature)
+- **mDNS Scanner**: Automatic server discovery on local network
+- **UPnP Listener**: UPnP device discovery and integration
 
 ## Installation
 
@@ -97,321 +94,131 @@ cargo tauri dev
 
 ## Usage
 
-### Basic Application
+This is a Tauri application binary, not a library. The main entry point is:
 
 ```rust
-use moosicbox_app_tauri::{run, TauriUpdateAppState};
-use tauri::{Manager, Window};
-
-#[tokio::main]
-async fn main() {
-    // Run the Tauri application
-    run();
-}
-
-// Application startup
-#[tauri::command]
-async fn on_startup() -> Result<(), tauri::Error> {
-    println!("MoosicBox application started");
-    Ok(())
-}
-
-// Update application state
-#[tauri::command]
-async fn set_state(state: TauriUpdateAppState) -> Result<(), String> {
-    // Update connection settings, API URLs, etc.
-    println!("State updated: {:?}", state);
-    Ok(())
+// main.rs
+fn main() {
+    moosicbox_lib::run()
 }
 ```
 
-### Window Management
+### Tauri Commands
 
-```rust
-use tauri::{AppHandle, Manager, Window};
+The application exposes the following Tauri commands that can be invoked from the frontend:
 
-#[tauri::command]
-async fn show_main_window(window: Window) {
-    window.get_webview_window("main")
-        .unwrap()
-        .show()
-        .unwrap();
-}
+#### Application State Management
 
-#[tauri::command]
-async fn create_player_window(app: AppHandle) -> Result<(), String> {
-    let player_window = tauri::WindowBuilder::new(
-        &app,
-        "player",
-        tauri::WindowUrl::App("player.html".into())
-    )
-    .title("MoosicBox Player")
-    .inner_size(400.0, 600.0)
-    .resizable(false)
-    .build()
-    .map_err(|e| e.to_string())?;
+```typescript
+// TypeScript/JavaScript frontend code
 
-    Ok(())
-}
+// Update application connection and settings
+await invoke('set_state', {
+  state: {
+    connectionId: 'connection-uuid',
+    connectionName: 'My Connection',
+    apiUrl: 'https://api.moosicbox.com',
+    clientId: 'client-uuid',
+    signatureToken: 'signature-token',
+    apiToken: 'api-token',
+    profile: 'default',
+    playbackTarget: { type: 'local' },
+    currentSessionId: 123
+  }
+});
+
+// Called during app startup
+await invoke('on_startup');
 ```
 
-### Music Player Integration
+#### Playback Control
 
-```rust
-use moosicbox_player::{Playback, PlayerError};
-use moosicbox_music_models::{ApiTrack, PlaybackQuality};
+```typescript
+// Set audio playback quality
+await invoke('set_playback_quality', {
+  quality: 'High' // or 'Low', 'FlacHighestRes', etc.
+});
+```
 
-#[tauri::command]
-async fn play_track(track_id: u64) -> Result<(), String> {
-    // Play a specific track
-    println!("Playing track: {}", track_id);
-    Ok(())
-}
+#### WebSocket Communication
 
-#[tauri::command]
-async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), String> {
-    // Set audio quality
-    println!("Quality set to: {:?}", quality);
-    Ok(())
-}
-
-#[tauri::command]
-async fn get_current_playback() -> Result<Option<Playback>, String> {
-    // Get current playback state
-    Ok(None)
-}
-
-// Handle media events from the player plugin
-async fn handle_media_event(event: MediaEvent) -> Result<(), String> {
-    match event {
-        MediaEvent::Play => println!("Playback started"),
-        MediaEvent::Pause => println!("Playback paused"),
-        MediaEvent::Stop => println!("Playback stopped"),
-        MediaEvent::Next => println!("Next track"),
-        MediaEvent::Previous => println!("Previous track"),
+```typescript
+// Propagate WebSocket messages from frontend to backend
+await invoke('propagate_ws_message', {
+  message: {
+    // InboundPayload structure
+    UpdateSession: {
+      payload: {
+        sessionId: 123,
+        playing: true,
+        position: 5,
+        // ... other session fields
+      }
     }
-    Ok(())
-}
+  }
+});
 ```
 
-### API Integration
+#### API Proxy
 
-```rust
-use serde_json::Value;
+```typescript
+// Proxy GET requests to MoosicBox API
+const result = await invoke('api_proxy_get', {
+  url: '/menu',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
-#[tauri::command]
-async fn api_proxy_get(
-    url: String,
-    headers: Option<Value>,
-) -> Result<Value, String> {
-    // Proxy GET request to MoosicBox API
-    println!("GET request to: {}", url);
-    Ok(serde_json::json!({"success": true}))
-}
-
-#[tauri::command]
-async fn api_proxy_post(
-    url: String,
-    body: Option<Value>,
-    headers: Option<Value>,
-) -> Result<Value, String> {
-    // Proxy POST request to MoosicBox API
-    println!("POST request to: {}", url);
-    Ok(serde_json::json!({"success": true}))
-}
+// Proxy POST requests to MoosicBox API
+const result = await invoke('api_proxy_post', {
+  url: '/sessions',
+  body: { name: 'My Session' },
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 ```
 
-### WebSocket Communication
+#### mDNS Server Discovery
 
-```rust
-use moosicbox_ws::models::{InboundPayload, OutboundPayload};
-
-#[tauri::command]
-async fn propagate_ws_message(message: InboundPayload) -> Result<(), String> {
-    // Handle WebSocket messages from the web interface
-    println!("WebSocket message: {:?}", message);
-    Ok(())
-}
-
-async fn handle_ws_message(message: OutboundPayload) {
-    // Handle outbound WebSocket messages
-    match message {
-        OutboundPayload::SessionUpdated(session) => {
-            println!("Session updated: {:?}", session);
-        }
-        OutboundPayload::PlaybackUpdate(update) => {
-            println!("Playback update: {:?}", update);
-        }
-        _ => {}
-    }
-}
+```typescript
+// Fetch discovered MoosicBox servers on the local network
+const servers = await invoke('fetch_moosicbox_servers');
+// Returns: Array<{ id: string, name: string, host: string, dns: string }>
 ```
 
-### File System Access
+#### Window Management (Desktop Only)
 
-```rust
-use std::path::PathBuf;
-
-#[tauri::command]
-async fn get_data_dir() -> Result<PathBuf, String> {
-    // Get application data directory
-    tauri::api::path::app_data_dir(&tauri::Config::default())
-        .ok_or_else(|| "Failed to get data directory".to_string())
-}
-
-#[tauri::command]
-async fn read_config_file() -> Result<String, String> {
-    let data_dir = get_data_dir().await?;
-    let config_path = data_dir.join("config.json");
-
-    std::fs::read_to_string(config_path)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn write_config_file(content: String) -> Result<(), String> {
-    let data_dir = get_data_dir().await?;
-    let config_path = data_dir.join("config.json");
-
-    std::fs::write(config_path, content)
-        .map_err(|e| e.to_string())
-}
+```typescript
+// Show the main window (not available on Android)
+await invoke('show_main_window');
 ```
 
-### Native UI Integration
+### Event Listeners
 
-```rust
-// With moosicbox-app-native feature
-use hyperchad_renderer_vanilla_js::VanillaJsTagRenderer;
-use hyperchad_renderer_html_http::HttpApp;
-use hyperchad_template::container;
+The application emits events that the frontend can listen to:
 
-async fn handle_http_request(request: HttpRequest) -> Result<HttpResponse, String> {
-    // Handle HTTP requests for native UI
-    let view = container! {
-        div class="app" {
-            h1 { "MoosicBox Native UI" }
+```typescript
+import { listen } from '@tauri-apps/api/event';
 
-            div class="player-controls" {
-                button onclick=tauri_invoke("play_track", 123) { "Play" }
-                button onclick=tauri_invoke("pause_track", null) { "Pause" }
-                button onclick=tauri_invoke("next_track", null) { "Next" }
-            }
+// Listen for WebSocket connection events
+await listen('ws-connect', (event) => {
+  console.log('WebSocket connected:', event.payload);
+  // payload: { connection_id: string, ws_url: string }
+});
 
-            div class="library" {
-                h2 { "Music Library" }
-                // Library content
-            }
-        }
-    };
+// Listen for WebSocket messages from the backend
+await listen('ws-message', (event) => {
+  console.log('WebSocket message:', event.payload);
+  // payload: OutboundPayload (various message types)
+});
 
-    Ok(HttpResponse::Ok()
-        .content_type("text/html")
-        .body(view.to_string()))
-}
-```
-
-### System Integration
-
-```rust
-use tauri::{SystemTray, SystemTrayMenu, SystemTrayMenuItem, SystemTrayEvent};
-
-fn create_system_tray() -> SystemTray {
-    let menu = SystemTrayMenu::new()
-        .add_item(SystemTrayMenuItem::new("Show", "show"))
-        .add_item(SystemTrayMenuItem::new("Hide", "hide"))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(SystemTrayMenuItem::new("Play/Pause", "play_pause"))
-        .add_item(SystemTrayMenuItem::new("Next", "next"))
-        .add_item(SystemTrayMenuItem::new("Previous", "previous"))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(SystemTrayMenuItem::new("Quit", "quit"));
-
-    SystemTray::new().with_menu(menu)
-}
-
-fn handle_system_tray_event(app: &AppHandle, event: SystemTrayEvent) {
-    match event {
-        SystemTrayEvent::LeftClick { .. } => {
-            let window = app.get_window("main").unwrap();
-            window.show().unwrap();
-            window.set_focus().unwrap();
-        }
-        SystemTrayEvent::MenuItemClick { id, .. } => {
-            match id.as_str() {
-                "show" => {
-                    let window = app.get_window("main").unwrap();
-                    window.show().unwrap();
-                }
-                "hide" => {
-                    let window = app.get_window("main").unwrap();
-                    window.hide().unwrap();
-                }
-                "play_pause" => {
-                    // Toggle playback
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
-}
-```
-
-### Configuration
-
-```rust
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppConfig {
-    pub api_url: Option<String>,
-    pub connection_name: Option<String>,
-    pub audio_quality: PlaybackQuality,
-    pub auto_start: bool,
-    pub minimize_to_tray: bool,
-    pub theme: String,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            api_url: None,
-            connection_name: None,
-            audio_quality: PlaybackQuality::High,
-            auto_start: false,
-            minimize_to_tray: true,
-            theme: "dark".to_string(),
-        }
-    }
-}
-
-#[tauri::command]
-async fn load_config() -> Result<AppConfig, String> {
-    let config_path = get_data_dir().await?.join("config.json");
-
-    if config_path.exists() {
-        let content = std::fs::read_to_string(config_path)
-            .map_err(|e| e.to_string())?;
-        serde_json::from_str(&content)
-            .map_err(|e| e.to_string())
-    } else {
-        Ok(AppConfig::default())
-    }
-}
-
-#[tauri::command]
-async fn save_config(config: AppConfig) -> Result<(), String> {
-    let config_path = get_data_dir().await?.join("config.json");
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| e.to_string())?;
-
-    std::fs::write(config_path, content)
-        .map_err(|e| e.to_string())
-}
+// Listen for SSE events (when using moosicbox-app-native feature)
+await listen('sse-event', (event) => {
+  console.log('SSE event:', event.payload);
+  // payload: { id?: string, event: string, data: string }
+});
 ```
 
 ## Building and Distribution
@@ -463,103 +270,145 @@ cargo tauri build --bundles rpm  # Linux RPM
 
 ### Core Features
 
-- **`bundled`**: Include bundled MoosicBox services
-- **`moosicbox-app-native`**: Enable native UI components
+- **`bundled`**: Include bundled MoosicBox services (self-contained server)
+- **`client`**: Enable client-specific functionality
+- **`moosicbox-app-native`**: Enable native UI components with HyperChad
+- **`custom-protocol`**: Enable Tauri custom protocol (required for production builds)
+- **`android`**: Android platform support
+- **`desktop`**: Desktop platform support (includes tunnel support when bundled)
 
-### Audio Sources
+### Audio Output
 
+- **`cpal`**: CPAL audio output (default)
+- **`asio`**: ASIO audio output
+- **`jack`**: JACK audio output
+
+### Audio Formats
+
+- **`all-formats`**: All audio formats (default)
+- **`all-os-formats`**: OS-compatible formats only (AAC, FLAC)
+- **`format-aac`**: AAC format support
+- **`format-flac`**: FLAC format support
+- **`format-mp3`**: MP3 format support
+
+### Audio Decoders
+
+- **`all-decoders`**: All audio decoders
+- **`all-os-decoders`**: OS-compatible decoders (AAC, FLAC)
+- **`decoder-aac`**: AAC decoder
+- **`decoder-flac`**: FLAC decoder
+- **`decoder-mp3`**: MP3 decoder
+
+### Streaming Sources
+
+- **`all-sources`**: All streaming sources (default)
 - **`tidal`**: Tidal streaming integration
 - **`qobuz`**: Qobuz streaming integration
 - **`yt`**: YouTube Music integration
 
 ### Development Features
 
-- **`fail-on-warnings`**: Treat warnings as errors
-- **`debug`**: Enable debug features
+- **`fail-on-warnings`**: Treat warnings as errors during compilation
+- **`devtools`**: Enable Tauri devtools
+- **`tauri-logger`**: Use Tauri's logging plugin instead of custom logger
 
-## Configuration Files
+## Architecture
 
-### `tauri.conf.json`
+### Core Components
 
-```json
-{
-    "build": {
-        "beforeDevCommand": "npm run dev",
-        "beforeBuildCommand": "npm run build",
-        "devPath": "http://localhost:1420",
-        "distDir": "../dist"
-    },
-    "package": {
-        "productName": "MoosicBox",
-        "version": "0.1.0"
-    },
-    "tauri": {
-        "allowlist": {
-            "all": false,
-            "shell": {
-                "all": false,
-                "open": true
-            },
-            "fs": {
-                "all": true,
-                "scope": ["$APPDATA/*", "$AUDIO/*", "$DOWNLOAD/*"]
-            }
-        },
-        "bundle": {
-            "active": true,
-            "targets": "all",
-            "identifier": "com.moosicbox.app",
-            "icon": [
-                "icons/32x32.png",
-                "icons/128x128.png",
-                "icons/icon.icns",
-                "icons/icon.ico"
-            ]
-        },
-        "security": {
-            "csp": null
-        },
-        "windows": [
-            {
-                "fullscreen": false,
-                "resizable": true,
-                "title": "MoosicBox",
-                "width": 1200,
-                "height": 800
-            }
-        ]
-    }
-}
-```
+1. **lib.rs**: Main application entry point with the `run()` function
+   - Initializes Tauri application
+   - Sets up plugins (fs, dialog, notification, player)
+   - Configures WebSocket and state management
+   - Spawns background services (mDNS, UPnP)
+   - Registers Tauri commands
+
+2. **mdns.rs**: mDNS service discovery
+   - `fetch_moosicbox_servers()` command to retrieve discovered servers
+   - Background scanner for automatic server discovery
+
+3. **AppState** (from `moosicbox_app_state`): Central state management
+   - Connection management (API URL, tokens, client ID)
+   - WebSocket connection handling
+   - Player state synchronization
+   - Session management
+
+4. **Native UI** (optional, via `moosicbox-app-native` feature):
+   - HyperChad-based native UI rendering
+   - Custom URI scheme handler for `tauri://` protocol
+   - SSE-style event system for UI updates
+
+### Application Flow
+
+1. **Startup**:
+   - Initialize logging
+   - Set up data directory
+   - Initialize AppState
+   - Start bundled services (if `bundled` feature enabled)
+   - Start mDNS scanner
+   - Start UPnP listener
+   - Register playback event handlers
+
+2. **State Management**:
+   - Frontend calls `set_state()` to configure connection
+   - Backend updates internal state and log properties
+   - State changes propagate to listeners
+
+3. **WebSocket Communication**:
+   - Frontend receives `ws-connect` event with connection details
+   - Frontend establishes WebSocket connection
+   - Messages flow bidirectionally via `propagate_ws_message()`
+   - Backend emits `ws-message` events to frontend
+
+4. **Playback**:
+   - Playback events trigger `on_playback_event()` callback
+   - Updates propagate to player plugin (Android)
+   - Updates sent via WebSocket to other clients
+   - Session state synchronized across devices
 
 ## Dependencies
 
 ### Core Dependencies
 
-- **Tauri**: Desktop application framework
-- **MoosicBox Core**: Music streaming and player functionality
-- **Tokio**: Async runtime
-- **Serde**: Serialization framework
+- **tauri**: Desktop application framework (v2.x)
+- **moosicbox_app_state**: Application state management with UPnP support
+- **moosicbox_player**: Audio playback engine with local playback support
+- **moosicbox_session**: Session management
+- **moosicbox_ws**: WebSocket message models
+- **moosicbox_music_models**: Music data models
+- **switchy**: Runtime and service orchestration (mDNS, UPnP)
+- **tokio**: Async runtime
+- **serde/serde_json**: Serialization
+
+### Tauri Plugins
+
+- **tauri-plugin-fs**: File system access
+- **tauri-plugin-dialog**: Native dialogs
+- **tauri-plugin-notification**: System notifications
+- **app-tauri-plugin-player**: Custom player plugin
+- **tauri-plugin-log**: Logging (optional)
 
 ### Optional Dependencies
 
-- **HyperChad**: Native UI components (with `moosicbox-app-native`)
-- **HTTP Server**: Built-in HTTP server for web interface
-- **WebSocket**: Real-time communication
+- **moosicbox_app_tauri_bundled**: Bundled MoosicBox server (with `bundled` feature)
+- **moosicbox_app_client**: Client functionality (with `client` feature)
+- **moosicbox_app_native**: Native UI with HyperChad (with `moosicbox-app-native` feature)
+- **hyperchad**: UI framework for native rendering
 
 ## Platform Support
 
 ### Supported Platforms
 
-- **Windows**: Windows 10+ (x86_64, aarch64)
-- **macOS**: macOS 10.15+ (x86_64, aarch64)
+- **Windows**: Windows 10+ (x86_64)
+- **macOS**: macOS 10.15+ (x86_64, aarch64/Apple Silicon)
 - **Linux**: Ubuntu 18.04+, Debian 10+, Arch Linux, Fedora 31+
+- **Android**: Android 7.0+ (API level 24+)
 
 ### System Requirements
 
 - **RAM**: 4GB minimum, 8GB recommended
-- **Storage**: 500MB for application, additional for music cache
-- **Network**: Internet connection for streaming services
+- **Storage**: 100-500MB for application (varies by platform and features)
+- **Network**: Internet connection for streaming services and server communication
 - **Audio**: Audio output device
 
 ## Troubleshooting
@@ -571,41 +420,49 @@ cargo tauri build --bundles rpm  # Linux RPM
 ```bash
 # Clear build cache
 cargo clean
+cd packages/app/tauri
 rm -rf node_modules
 npm install
 cargo tauri build
 ```
 
-**WebView Issues:**
+**WebView Issues on Linux:**
 
 ```bash
-# Update WebView2 (Windows)
-# Install webkit2gtk (Linux)
-sudo apt update && sudo apt install webkit2gtk-4.0
+# Install webkit2gtk
+sudo apt update && sudo apt install webkit2gtk-4.1-dev
 ```
 
-**Permission Issues:**
+**Missing System Dependencies:**
 
-```bash
-# macOS: Grant permissions in System Preferences
-# Linux: Install required packages
-sudo apt install libappindicator3-1
-```
+Refer to the Prerequisites section above for platform-specific system dependencies.
+
+**Logging:**
+
+By default, logs are written to `moosicbox_app.log` in the application data directory (except on Android). Enable `TOKIO_CONSOLE=1` environment variable for tokio-console integration.
 
 ## Security Considerations
 
-- **CSP**: Content Security Policy configuration
-- **File Access**: Scoped file system access
-- **API Keys**: Secure storage of API credentials
-- **Network**: HTTPS-only communication
-- **Updates**: Secure update mechanism
+- **File Access**: Scoped file system access via Tauri's permission system
+- **API Authentication**: Signature tokens and API tokens for secure server communication
+- **Network**: Communication with MoosicBox servers (HTTP/WebSocket)
+- **Custom Protocol**: Uses Tauri's custom protocol for production builds
 
 ## Integration
 
 This application integrates with:
 
-- **MoosicBox Server**: Core music streaming backend
-- **Streaming Services**: Tidal, Qobuz, YouTube Music
-- **Local Files**: Local music library
-- **System Audio**: Native audio system integration
-- **Media Keys**: System media key handling
+- **MoosicBox Server**: Core music streaming backend (via HTTP and WebSocket)
+- **Streaming Services**: Tidal, Qobuz, YouTube Music (when respective features enabled)
+- **Local Files**: Local music library and file system access
+- **mDNS**: Automatic discovery of MoosicBox servers on local network
+- **UPnP**: UPnP device discovery and integration
+- **Audio Playback**: Local audio playback via `moosicbox_player` with multiple output options (CPAL, ASIO, JACK)
+
+## Related Packages
+
+- **moosicbox_app_state**: Application state management (`packages/app/state/`)
+- **moosicbox_app_tauri_bundled**: Bundled server mode (`packages/app/tauri/bundled/`)
+- **moosicbox_app_native**: Native UI components (`packages/app/native/`)
+- **moosicbox_app_client**: Client functionality (`packages/app/client/`)
+- **app-tauri-plugin-player**: Tauri player plugin (`packages/app/tauri/plugin-player/`)
