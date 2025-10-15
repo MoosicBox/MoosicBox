@@ -184,6 +184,7 @@ The library re-exports commonly used async utilities:
 - `async_trait`: Async trait support
 - `flume`: Fast MPMC channels
 - `futures`: Additional async utilities
+- `log`: Logging facade
 - `thiserror`: Error derivation macros
 
 This framework provides a foundation for building robust async services in the MoosicBox ecosystem.
