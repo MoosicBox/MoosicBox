@@ -133,7 +133,7 @@ async fn get_zones_with_sessions(
     let zones = zones_with_sessions(config_db, library_db).await?;
 
     for zone in zones {
-        println!("Zone: {} - Session: {:?}", zone.name, zone.session);
+        println!("Zone: {} - Session: {:?}", zone.name, zone.session_id);
     }
 
     Ok(())
