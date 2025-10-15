@@ -120,26 +120,27 @@ let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
 - **HyperChad** - Web framework with type-safe HTML generation
 - **Switchy** - Async runtime abstraction for high-performance I/O
 - **Serde JSON** - JSON serialization for API responses
-- **Actix Web** - Underlying HTTP server (via hyperchad's web server integration)
+- **Env Logger** - Logging infrastructure
 
-## Supported Elements
+## Elements Used in This Example
 
-The `container!` macro supports these HTML elements:
+This example demonstrates the following HTML elements with the `container!` macro:
 
-- `div`, `section`, `aside`, `main`, `header`, `footer`
-- `form`, `span`, `button`, `anchor`, `image`, `input`
-- `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
-- `ul`, `ol`, `li`
-- `table`, `thead`, `th`, `tbody`, `tr`, `td`
-- `canvas`
+- **Layout**: `div`, `section`, `main`, `header`, `footer`
+- **Text**: `h1`, `h2`, `h3`, `span`
+- **Forms**: `form`, `input`, `button`
+- **Navigation**: `anchor`
+- **Lists**: `ul`, `li`
 
-## Next Steps
+Note: The HyperChad framework supports additional elements beyond those demonstrated here.
+
+## Potential Enhancements
 
 This example provides a solid foundation for building larger applications. Consider exploring:
 
-- Database integration for persistent data
-- User authentication and sessions
-- WebSocket support for real-time features
-- More complex form handling and validation
-- Middleware for logging, CORS, etc.
-- Static asset optimization and caching
+- **Planned/Future**: Database integration for persistent data
+- **Planned/Future**: User authentication and sessions
+- **Planned/Future**: WebSocket support for real-time features
+- **Planned/Future**: More complex form handling and validation
+- **Planned/Future**: Middleware for logging, CORS, etc.
+- **Planned/Future**: Static asset optimization and caching
