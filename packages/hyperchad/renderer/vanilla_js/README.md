@@ -106,21 +106,21 @@ let view = container! {
 
         div class="controls" {
             button
-                onclick=ActionType::show_str_id("message")
+                fx-click=fx { show("message") }
                 class="btn btn-primary"
             {
                 "Show Message"
             }
 
             button
-                onclick=ActionType::hide_str_id("message")
+                fx-click=fx { hide("message") }
                 class="btn btn-secondary"
             {
                 "Hide Message"
             }
 
             button
-                onclick=ActionType::toggle_visibility_str_id("advanced")
+                fx-click=fx { toggle_visibility("advanced") }
                 class="btn btn-info"
             {
                 "Toggle Advanced"
@@ -222,7 +222,7 @@ let navigation_view = container! {
         nav class="navbar" {
             a
                 href="/"
-                onclick=ActionType::Navigate { url: "/".to_string() }
+                fx-click=fx { navigate("/") }
                 class="nav-link"
             {
                 "Home"
@@ -230,7 +230,7 @@ let navigation_view = container! {
 
             a
                 href="/about"
-                onclick=ActionType::Navigate { url: "/about".to_string() }
+                fx-click=fx { navigate("/about") }
                 class="nav-link"
             {
                 "About"
@@ -238,7 +238,7 @@ let navigation_view = container! {
 
             a
                 href="/contact"
-                onclick=ActionType::Navigate { url: "/contact".to_string() }
+                fx-click=fx { navigate("/contact") }
                 class="nav-link"
             {
                 "Contact"
@@ -267,25 +267,25 @@ let interactive_view = container! {
 
         div class="color-controls" {
             button
-                onclick=ActionType::set_background_str_id("#ff0000", "display-box")
+                fx-click=fx { set_background("display-box", "#ff0000") }
             {
                 "Red"
             }
 
             button
-                onclick=ActionType::set_background_str_id("#00ff00", "display-box")
+                fx-click=fx { set_background("display-box", "#00ff00") }
             {
                 "Green"
             }
 
             button
-                onclick=ActionType::set_background_str_id("#0000ff", "display-box")
+                fx-click=fx { set_background("display-box", "#0000ff") }
             {
                 "Blue"
             }
 
             button
-                onclick=ActionType::remove_background_str_id("display-box")
+                fx-click=fx { remove_background("display-box") }
             {
                 "Reset"
             }
@@ -346,18 +346,29 @@ The renderer supports various action types through the `ActionType` enum. Here a
 ### Combining Actions
 
 ```rust
-use hyperchad_actions::ActionType;
+use hyperchad_template::container;
 
-// Chain multiple actions
-let combined = ActionType::show_str_id("element1")
-    .and(ActionType::hide_str_id("element2"))
-    .and(ActionType::focus_str_id("input1"));
+// Chain multiple actions using fx syntax
+let view = container! {
+    button fx-click=fx {
+        show("element1");
+        hide("element2");
+        focus("input1")
+    } {
+        "Execute Multiple Actions"
+    }
+};
 
-// Add throttling (300ms)
-let throttled = ActionType::show_str_id("modal").throttle(300);
+// Add throttling (300ms) and delay_off (2000ms) using action modifiers
+let view_with_effects = container! {
+    button fx-click=fx { show("modal") }.throttle(300) {
+        "Show Modal (Throttled)"
+    }
 
-// Add delay off (hide after 2000ms)
-let delayed = ActionType::show_str_id("notification").delay_off(2000);
+    button fx-click=fx { show("notification") }.delay_off(2000) {
+        "Show Notification (Auto-hide)"
+    }
+};
 ```
 
 ## Plugin Features
