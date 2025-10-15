@@ -567,10 +567,13 @@ sam deploy --guided
 
 - **lambda_http**: AWS Lambda HTTP event handling
 - **lambda_runtime**: AWS Lambda runtime integration
-- **hyperchad_renderer**: Core HTML rendering functionality
+- **hyperchad_renderer**: Core HTML rendering functionality with canvas support
 - **flate2**: Gzip compression support
 - **bytes**: Efficient byte buffer handling
 - **async-trait**: Async trait support
+- **log**: Logging support
+- **moosicbox_assert**: Assertion utilities
+- **moosicbox_env_utils**: Environment utilities
 - **serde_json**: JSON serialization (optional, enabled by default)
 
 ## Integration
