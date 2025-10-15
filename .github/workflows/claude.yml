@@ -334,16 +334,50 @@ jobs:
                     exit 0
                   fi
 
-                  # Try to get user's public email from GitHub API
-                  echo "🔍 Checking for public email for ${COMMENTER_LOGIN}..."
+                  # Try multiple sources to find user's email
+                  echo "🔍 Searching for email for ${COMMENTER_LOGIN}..."
+
+                  # 1. Try user profile API
                   USER_EMAIL=$(gh api "/users/${COMMENTER_LOGIN}" --jq '.email // empty' 2>/dev/null || echo "")
 
                   if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "null" ]; then
-                    # User has a public email
-                    COMMENTER_EMAIL="$USER_EMAIL"
-                    echo "✅ Found public email: $COMMENTER_EMAIL"
+                    echo "✅ Found email from user profile: $USER_EMAIL"
                   else
-                    # Fall back to GitHub's noreply email format
+                    echo "   User profile email not available, trying recent commits..."
+
+                    # 2. Try to get email from user's recent public commits
+                    USER_EMAIL=$(gh api "/users/${COMMENTER_LOGIN}/events/public" --jq '
+                      [.[] | select(.type == "PushEvent") | .payload.commits[]? | .author.email]
+                      | map(select(. != null and . != ""))
+                      | first // empty
+                    ' 2>/dev/null || echo "")
+
+                    if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "null" ]; then
+                      echo "✅ Found email from recent commits: $USER_EMAIL"
+                    else
+                      echo "   No email in recent commits, trying PR commits..."
+
+                      # 3. Try to get email from commits in this PR
+                      PR_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+                      if [ -n "$PR_NUM" ]; then
+                        USER_EMAIL=$(gh api "/repos/${{ github.repository }}/pulls/$PR_NUM/commits" --jq '
+                          [.[] | select(.author.login == "'${COMMENTER_LOGIN}'") | .commit.author.email]
+                          | map(select(. != null and . != ""))
+                          | first // empty
+                        ' 2>/dev/null || echo "")
+
+                        if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "null" ]; then
+                          echo "✅ Found email from PR commits: $USER_EMAIL"
+                        fi
+                      fi
+                    fi
+                  fi
+
+                  # Use found email or fallback to noreply
+                  if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "null" ]; then
+                    COMMENTER_EMAIL="$USER_EMAIL"
+                    echo "👤 Using email: $COMMENTER_EMAIL"
+                  else
                     COMMENTER_EMAIL="${COMMENTER_ID}+${COMMENTER_LOGIN}@users.noreply.github.com"
                     echo "📧 Using noreply email: $COMMENTER_EMAIL"
                   fi
