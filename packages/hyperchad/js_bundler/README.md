@@ -116,19 +116,12 @@ The SWC bundler supports:
 Execute npm/pnpm/bun commands:
 
 ```rust
-use hyperchad_js_bundler::node::{run_npm_command, run_command};
+use hyperchad_js_bundler::node::run_npm_command;
 use std::path::Path;
 
 // Run npm command (tries pnpm, bun, npm in order based on enabled features)
 run_npm_command(
     &["install"],
-    Path::new(".")
-);
-
-// Run custom commands with binary fallback
-run_command(
-    ["pnpm", "bun", "npm"].iter().map(|s| s.to_string()),
-    &["run", "build"],
     Path::new(".")
 );
 ```
@@ -183,7 +176,7 @@ Core dependencies (always included):
 
 Feature-gated dependencies:
 
-- **SWC feature**: Includes swc*bundler, swc_common, swc_ecma*\* crates, and anyhow
+- **SWC feature**: Includes swc_bundler, swc_common, swc_ecma_ast, swc_ecma_codegen, swc_ecma_loader, swc_ecma_minifier, swc_ecma_parser, swc_ecma_transforms_base, swc_ecma_transforms_typescript, swc_ecma_visit, and anyhow
 - **ESBuild feature**: No Rust dependencies (uses external binary)
 - **Node feature**: No additional dependencies (command execution only)
 
@@ -205,11 +198,11 @@ This package is designed for:
 
 The package consists of the following modules:
 
-- **`bundler.rs`**: Unified bundler interface that dispatches to SWC or ESBuild
-- **`esbuild.rs`**: ESBuild integration via external binary execution
-- **`swc.rs`**: Full SWC bundler implementation with custom loader and hooks
-- **`node.rs`**: Command execution utilities for npm/pnpm/bun
-- **`lib.rs`**: Feature-gated module exports
+- **`lib.rs`**: Feature-gated module exports and public API surface
+- **`bundler.rs`**: Internal unified bundler interface (feature-gated, requires `esbuild` or `swc`)
+- **`esbuild.rs`**: ESBuild integration via external binary execution (requires `esbuild` feature)
+- **`swc.rs`**: Full SWC bundler implementation with custom loader and hooks (requires `swc` feature)
+- **`node.rs`**: Command execution utilities for npm/pnpm/bun (requires `node` feature)
 
 ## Note
 
