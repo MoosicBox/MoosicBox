@@ -388,8 +388,8 @@ use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction};
 use hyperchad_renderer::Color;
 
 let canvas_update = CanvasUpdate {
-    id: "my-canvas".to_string(),
-    actions: vec![
+    target: "my-canvas".to_string(),
+    canvas_actions: vec![
         CanvasAction::Clear,
         CanvasAction::StrokeColor(Color::new(255, 0, 0, 255)),
         CanvasAction::StrokeSize(2.0),
