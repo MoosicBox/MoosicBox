@@ -10,9 +10,11 @@ The HyperChad Template package provides:
 - **Template DSL**: Domain-specific language for UI component definition with CSS-like syntax
 - **Rendering System**: Convert containers to HTML strings
 - **Extension Traits**: Utility methods for container collections (`ContainerVecMethods`, `ContainerVecExt`)
-- **Calculation Functions**: CSS `calc()`, `min()`, `max()`, `clamp()` with viewport units
+- **Calculation Functions**: CSS `calc()` with `min()`, `max()`, `clamp()`, and viewport units
+- **Unit Functions**: `vw()`, `vh()`, `dvw()`, `dvh()` for viewport-relative sizing
+- **Percent Syntax**: Direct `%` suffix notation for percentages
 - **Color Functions**: `rgb()` and `rgba()` with multiple alpha formats, hex colors, named colors
-- **Action System**: `fx` DSL for interactive behaviors
+- **Action System**: Integration with HyperChad actions for interactive behaviors
 - **No-std Support**: Core functionality works without standard library (uses `alloc`)
 
 ## Features
@@ -40,12 +42,12 @@ The HyperChad Template package provides:
 
 ### Calculation System
 
-- **CSS calc()**: Support for CSS calculation expressions
-- **CSS Math Functions**: `min()`, `max()`, `clamp()` for responsive sizing
-- **Unit Functions**: `vw()`, `vh()`, `dvw()`, `dvh()` viewport units, `percent()` for percentages
-- **Math Operations**: Add, subtract, multiply, divide operations
+- **CSS calc()**: Support for CSS calculation expressions with `calc()` macro
+- **CSS Math Functions**: `min()`, `max()`, `clamp()` within `calc()` expressions for responsive sizing
+- **Unit Functions**: `vw()`, `vh()`, `dvw()`, `dvh()` for viewport units
+- **Percent Syntax**: Direct percentage notation with `%` suffix (e.g., `100%`, `50%`, `value%`)
+- **Math Operations**: Add, subtract, multiply, divide operations within `calc()`
 - **Responsive Units**: Percentage and viewport-relative units
-- **Raw Percent Values**: Direct percentage notation (e.g., `100%`, `50%`)
 
 ### Color System
 
@@ -117,7 +119,7 @@ let template = container! {
 ### Dynamic Content
 
 ```rust
-use hyperchad_template::{container, RenderContainer};
+use hyperchad_template::{container, Container, RenderContainer};
 
 // Custom type that can be rendered
 struct UserCard {
@@ -126,7 +128,7 @@ struct UserCard {
 }
 
 impl RenderContainer for UserCard {
-    type Error = std::fmt::Error;
+    type Error = core::fmt::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let card = container! {
@@ -161,7 +163,7 @@ use hyperchad_template::container;
 let template = container! {
     div
         width=calc(100% - 20)
-        height=min(500, 80vh)
+        height=calc(min(500, 80vh))
         margin=calc(10 + 5%)
     {
         "Calculated dimensions"
@@ -169,7 +171,7 @@ let template = container! {
 };
 ```
 
-### Unit Functions
+### Unit Functions and Percent Syntax
 
 ```rust
 use hyperchad_template::container;
@@ -179,8 +181,17 @@ let template = container! {
         width=vw(100)      // 100vw
         height=vh(50)      // 50vh
         font-size=dvw(4)   // 4dvw
+        margin=80%         // Direct percent syntax
     {
-        "Viewport-relative sizing"
+        "Viewport-relative sizing and percentages"
+    }
+};
+
+// Percent suffix also works with variables and expressions
+let value = 50;
+let template2 = container! {
+    div width=value% {     // 50%
+        "Variable with percent"
     }
 };
 ```
@@ -223,12 +234,13 @@ let html = template.into_string();
 ### Border Utilities
 
 ```rust
-use hyperchad_template::{container, IntoBorder};
+use hyperchad_template::container;
+use hyperchad_color::Color;
 
 let template = container! {
     div
-        border-top=("red", 2)          // Red 2px border
-        border-left=(Color::BLUE, 1)   // Blue 1px border
+        border-top=("red", 2)          // Red 2px border (hex string, width)
+        border-left=(Color::BLUE, 1)   // Blue 1px border (Color, width)
         border-radius=5
     {
         "Bordered content"
@@ -240,10 +252,11 @@ let template = container! {
 
 ```rust
 use hyperchad_template::container;
+use hyperchad_actions::{ActionType, Target};
 
 let template = container! {
     button
-        fx-click=fx { hide("modal") }
+        fx-click=(ActionType::hide_str_id(Target::literal("modal")))
     {
         "Close Modal"
     }
@@ -276,10 +289,13 @@ let vec: Vec<Container> = list.into();
 
 ### Boolean Conversion
 
+The `ToBool` trait converts values to boolean, primarily for handling conditional logic expressions:
+
 ```rust
 use hyperchad_template::ToBool;
 
-let visible = some_condition.to_bool();
+let visible: bool = true;
+let result = visible.to_bool(); // Works with bool types
 ```
 
 ### Border Conversion
@@ -301,14 +317,13 @@ let effect = ActionType::show_str_id("element").into_action_effect();
 
 ## No-std Support
 
-The package is `no_std` compatible:
+The package is `no_std` compatible (requires `alloc`):
 
 ```rust
 #![no_std]
 extern crate alloc;
 
-use hyperchad_template::{container, ContainerVecMethods};
-use alloc::string::String;
+use hyperchad_template::container;
 ```
 
 ## Feature Flags
