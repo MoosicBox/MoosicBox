@@ -89,10 +89,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .service(
-                web::scope("/auth")
-                    .configure(|cfg| {
-                        bind_services(cfg);
-                    })
+                bind_services(web::scope("/auth"))
             )
     })
     .bind(("127.0.0.1", 8080))?
