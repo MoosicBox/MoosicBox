@@ -294,10 +294,9 @@ The crate includes comprehensive tests covering:
 
 - Simple inputs and attributes (tests/simple_input_test.rs)
 - Dynamic expressions (tests/expression_test.rs)
-- String concatenation (tests/concatenation_test.rs)
+- String concatenation (tests/concatenation_test.rs, tests/concatenation_order_test.rs, tests/sequential_concatenation_test.rs)
 - HTMX attributes (tests/htmx_test.rs)
 - Pattern matching (tests/match_expr_test.rs)
 - Numeric units (tests/number_inference_test.rs)
 - Font properties (tests/font_family_test.rs, tests/font_weight_test.rs)
-- Srcset attributes (tests/srcset_test.rs)
-- Interactive behaviors and `fx` DSL (tests/fx_actions.rs)
+- Srcset attributes (tests/srcset_test.rs, tests/srcset_demo.rs)
