@@ -23,7 +23,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_app_client = { path = "../app/tauri/client" }
+moosicbox_app_client = { workspace = true }
 ```
 
 ## Dependencies
