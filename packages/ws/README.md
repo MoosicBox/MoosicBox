@@ -132,7 +132,7 @@ async fn handle_websocket_message(
 ```rust
 use moosicbox_ws::{connect, disconnect, WebsocketContext};
 
-async fn on_connect(sender: &impl WebsocketSender, connection_id: String) {
+fn on_connect(sender: &impl WebsocketSender, connection_id: String) {
     let context = WebsocketContext {
         connection_id,
         profile: None,
