@@ -79,7 +79,7 @@ let versions = library_api.library_album_versions(&album_id).await?;
 
 ### Cargo Features
 
-- **api**: Actix-web integration for HTTP endpoints
+- **api**: Actix-web request extraction support
 - **encoder-aac**: AAC audio encoding support
 - **encoder-flac**: FLAC audio encoding support
 - **encoder-mp3**: MP3 audio encoding support
