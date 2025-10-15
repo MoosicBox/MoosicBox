@@ -23,14 +23,16 @@ moosicbox_audio_zone_models = { path = "../audio_zone/models" }
 ## Core Models
 
 - **AudioZone/ApiAudioZone**: Zone configuration with ID, name, and players
-- **AudioZoneWithSession/ApiAudioZoneWithSession**: Zone configuration with session integration
-- **Player/ApiPlayer**: Player information including audio output ID, name, and playback state
-- **CreateAudioZone**: Model for creating new audio zones
-- **UpdateAudioZone**: Model for updating existing zones
+- **AudioZoneWithSession/ApiAudioZoneWithSession**: Zone configuration with session integration and ID
+- **Player/ApiPlayer**: Player information including ID, audio output ID, name, playback state, and timestamps
+- **CreateAudioZone**: Model for creating new audio zones with a name
+- **UpdateAudioZone**: Model for updating existing zones with optional name and player list changes
 
 ## Dependencies
 
 - **serde**: Serialization and deserialization
 - **moosicbox_json_utils**: JSON utilities and database value conversion
 - **switchy_database**: Database integration and value types
+- **moosicbox_assert**: Assertion utilities
+- **log**: Logging functionality
 - **utoipa** (optional): OpenAPI schema generation support
