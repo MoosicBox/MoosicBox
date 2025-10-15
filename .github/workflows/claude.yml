@@ -292,21 +292,111 @@ jobs:
                       After completing your analysis or implementation, post a final comment with your findings.
                       Reference the specific code context in your response if applicable.
 
+                      CRITICAL: After posting your response, save the comment ID to /tmp/claude_final_comment_id.txt for tracking.
+
                       Use the appropriate command based on the comment type:
                       ${{ github.event_name == 'pull_request_review_comment' && format('
                       - Reply to the comment thread using the ROOT comment ID:
-                        `gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -f body="your detailed response" 2>&1 || echo "Failed to post response"`
+                        ```
+                        cat > /tmp/response.txt << ''EOF''
+                        your detailed response here
+                        EOF
+                        RESPONSE=$(gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/response.txt 2>&1)
+                        echo "$RESPONSE" | jq -r ''.id'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        ```
 
                         IMPORTANT: Use the root comment ID {2} for all replies.
                       ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
                       - Post a PR comment:
-                        `gh pr comment {0} --repo {1} --body "your response"`
+                        ```
+                        cat > /tmp/response.txt << ''EOF''
+                        your detailed response here
+                        EOF
+                        RESPONSE=$(gh pr comment {0} --repo {1} --body-file /tmp/response.txt 2>&1)
+                        echo "$RESPONSE" | grep -oP ''#issuecomment-\K\d+'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        ```
                       ', github.event.issue.number, github.repository) || format('
                       - Post an issue comment:
-                        `gh issue comment {0} --repo {1} --body "your response"`
+                        ```
+                        cat > /tmp/response.txt << ''EOF''
+                        your detailed response here
+                        EOF
+                        RESPONSE=$(gh issue comment {0} --repo {1} --body-file /tmp/response.txt 2>&1)
+                        echo "$RESPONSE" | grep -oP ''#issuecomment-\K\d+'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        ```
                       ', github.event.issue.number, github.repository) }}
 
                       Now respond appropriately based on whether this is a question or a command.
+
+            - name: Append execution details to Claude's response
+              if: always() && steps.claude.outputs.execution_file != ''
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  EXECUTION_FILE="${{ steps.claude.outputs.execution_file }}"
+
+                  if [ ! -f "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
+                      echo "⚠️ Execution file not found or empty, skipping details"
+                      exit 0
+                  fi
+
+                  echo "📋 Generating execution details from $EXECUTION_FILE..."
+                  "$GITHUB_WORKSPACE/.github/scripts/format-execution-details.sh" "$EXECUTION_FILE" /tmp/execution_details.md
+
+                  COMMENT_ID=""
+                  if [ -f /tmp/claude_final_comment_id.txt ]; then
+                      COMMENT_ID=$(cat /tmp/claude_final_comment_id.txt)
+                      echo "✅ Found saved comment ID: $COMMENT_ID"
+                  else
+                      echo "⚠️ No saved comment ID found, searching for latest comment..."
+
+                      ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+                      if [ -n "$ISSUE_NUM" ]; then
+                          COMMENT_ID=$(gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
+                              --jq '.[-1] | select(.user.login == "claude[bot]" or .user.login == "MoosicBoxBot") | .id')
+
+                          if [ -n "$COMMENT_ID" ]; then
+                              echo "✅ Found latest comment ID: $COMMENT_ID"
+                          fi
+                      fi
+                  fi
+
+                  if [ -z "$COMMENT_ID" ]; then
+                      echo "❌ Could not find Claude's comment to update"
+                      exit 0
+                  fi
+
+                  echo "📝 Fetching current comment body..."
+
+                  # Determine the correct API endpoint based on event type
+                  if [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+                      API_ENDPOINT="/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID"
+                      echo "Using PR review comment API endpoint"
+                  else
+                      API_ENDPOINT="/repos/${{ github.repository }}/issues/comments/$COMMENT_ID"
+                      echo "Using issue/PR comment API endpoint"
+                  fi
+
+                  CURRENT_BODY=$(gh api "$API_ENDPOINT" --jq '.body' 2>&1)
+
+                  if [ $? -ne 0 ] || [ -z "$CURRENT_BODY" ]; then
+                      echo "❌ Could not fetch comment body from $API_ENDPOINT"
+                      echo "Response: $CURRENT_BODY"
+                      exit 0
+                  fi
+
+                  echo "✍️ Appending execution details to comment..."
+                  DETAILS=$(cat /tmp/execution_details.md)
+
+                  printf '%s\n\n%s' "$CURRENT_BODY" "$DETAILS" | \
+                      gh api -X PATCH "$API_ENDPOINT" -F body=@- 2>&1
+
+                  if [ $? -eq 0 ]; then
+                      echo "✅ Successfully appended execution details to comment #$COMMENT_ID"
+                  else
+                      echo "❌ Failed to update comment"
+                      exit 1
+                  fi
 
             - name: Add co-author to commits
               if: always()
