@@ -96,13 +96,13 @@ println!("Server is ready!");
 ### Shutdown Coordination
 
 ```rust
-// Wait for clean shutdown
+// Wait for server shutdown and cleanup
 let (sender, receiver) = switchy_async::sync::oneshot::channel();
 service.send(Command::WaitForShutdown { sender }).await?;
 
-// Wait for shutdown completion
+// Wait for shutdown completion (awaits server handle join)
 receiver.await?;
-println!("Application shutdown complete");
+println!("Server shutdown complete");
 ```
 
 ## Commands
@@ -110,8 +110,8 @@ println!("Application shutdown complete");
 ### Available Commands
 
 - **RunEvent**: Process Tauri application events
-- **WaitForStartup**: Wait for server startup completion
-- **WaitForShutdown**: Wait for application shutdown
+- **WaitForStartup**: Wait for server startup completion (consumes the receiver)
+- **WaitForShutdown**: Wait for server shutdown (takes and awaits the server handle)
 
 ### Command Processing
 
@@ -125,9 +125,8 @@ All commands are processed asynchronously through the service framework with:
 
 ### Context Structure
 
-- **server_handle**: Background server task handle
-- **receiver**: Startup synchronization receiver
-- **Event handling**: Tauri event processing logic
+- **server_handle**: `Option<JoinHandle<std::io::Result<()>>>` - Background server task handle
+- **receiver**: `Option<switchy_async::sync::oneshot::Receiver<()>>` - Startup synchronization receiver
 
 ### Server Configuration
 
@@ -149,7 +148,7 @@ All commands are processed asynchronously through the service framework with:
 
 ### Event Processing
 
-- Automatic server shutdown on exit requests (ExitRequested event)
+- Server shutdown triggered on exit requests (ExitRequested event calls `abort()` on server handle)
 - Other events are received but not actively processed
 
 ## Error Handling
