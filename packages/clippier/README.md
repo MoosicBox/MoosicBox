@@ -470,9 +470,9 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Packages Command Options
 
-| Option                | Description                                 | Default      |
-| --------------------- | ------------------------------------------- | ------------ |
-| `--os`                | Target operating system                     | `ubuntu`     |
+| Option                | Description                                 | Default           |
+| --------------------- | ------------------------------------------- | ----------------- |
+| `--os`                | Target operating system                     | `ubuntu-latest`   |
 | `--packages`          | Comma-separated list of packages to include | All packages |
 | `--changed-files`     | Filter by changed files                     | -            |
 | `--git-base`          | Git base commit for change detection        | -            |
