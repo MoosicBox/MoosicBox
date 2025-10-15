@@ -126,7 +126,7 @@ struct UserCard {
 }
 
 impl RenderContainer for UserCard {
-    type Error = std::fmt::Error;
+    type Error = core::fmt::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let card = container! {
