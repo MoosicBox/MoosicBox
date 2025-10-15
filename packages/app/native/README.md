@@ -299,7 +299,7 @@ The user interface is built using the HyperChad framework and includes:
 6. **Settings** - Configure connections, downloads, music API sources, and scan settings
 7. **Audio Zones & Sessions** - Manage playback zones and sessions
 
-The interface and keyboard shortcuts are determined by the UI backend being used (Egui, FLTK, or Web).
+The interface and keyboard shortcuts are currently determined by the UI backend being used (Egui, FLTK, or Web). **Note**: Standardized keybindings across all UI backends is a planned future enhancement.
 
 ## Troubleshooting
 
