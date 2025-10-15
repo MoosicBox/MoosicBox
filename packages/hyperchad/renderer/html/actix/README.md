@@ -169,7 +169,7 @@ async fn handle_request(
 
 ```rust
 use hyperchad_renderer_html_actix::ActixApp;
-use hyperchad_actions::logic::Value;
+use hyperchad_renderer::transformer::actions::logic::Value;
 
 // With actions feature enabled
 let (action_tx, action_rx) = flume::unbounded();
@@ -280,28 +280,15 @@ async fn handle_htmx_request(req: HttpRequest) -> Result<HttpResponse> {
 
 ### Server-Sent Events
 
-```rust
-use actix_web::{web, HttpResponse, Result};
-use actix_web_lab::sse::{self, Sse};
-use futures_util::stream;
+Server-Sent Events are automatically available at the `/$sse` endpoint when the `sse` feature is enabled. The SSE endpoint streams `RendererEvent` updates from the renderer event channel to connected clients.
 
-async fn sse_endpoint() -> Result<HttpResponse> {
-    let stream = stream::iter(vec![
-        sse::Event::Data(sse::Data::new("Hello from SSE!")),
-        sse::Event::Data(sse::Data::new("Another message")),
-    ]);
+Events include:
+- `view`: Full view updates
+- `partial_view`: Partial view updates with target IDs
+- `canvas_update`: Canvas updates for HTML5 canvas elements
+- `event`: Custom events with name and value
 
-    Ok(Sse::from_stream(stream)
-        .with_keep_alive(std::time::Duration::from_secs(30))
-        .into_response())
-}
-
-// In your app configuration
-App::new()
-    .app_data(web::Data::new(app.clone()))
-    .route("/events", web::get().to(sse_endpoint))
-    .default_service(web::route().to(handle_request))
-```
+The SSE stream automatically handles compression (Gzip, Deflate, Zlib) based on client capabilities.
 
 ### Custom Middleware
 
