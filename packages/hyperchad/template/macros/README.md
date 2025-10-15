@@ -44,6 +44,103 @@ The `container!` macro parses HTML-like template syntax and generates `Vec<Conta
     button hx-post="/submit" hx-swap="children" { }
     ```
 
+### Interactive Behaviors with `fx`
+
+The `fx` DSL enables declarative interactive behaviors through special `fx-*` attributes. Use the `fx { ... }` syntax to define actions that execute in response to user events.
+
+#### Event Triggers
+
+- **`fx-click`**: Fires when the element is clicked
+- **`fx-hover`**: Fires when the mouse hovers over the element
+- **`fx-mouse-down`**: Fires on mouse button press
+- **`fx-click-outside`**: Fires when clicking outside the element
+- **`fx-resize`**: Fires when the window is resized
+- **Custom events**: Any `fx-*` attribute creates a corresponding event trigger
+
+#### Basic Actions
+
+```rust
+// Show/hide elements
+button fx-click=fx { show("modal") } { "Open Modal" }
+button fx-click=fx { hide("modal") } { "Close Modal" }
+
+// Navigate to routes
+button fx-click=fx { navigate("/search") } { "Go to Search" }
+
+// Log messages
+button fx-click=fx { log("Button clicked") } { "Click me" }
+
+// Custom actions
+button fx-click=fx { custom("refresh-data") } { "Refresh" }
+```
+
+#### Multiple Actions
+
+Chain multiple actions with semicolons:
+
+```rust
+button fx-click=fx {
+    hide("modal");
+    show("success");
+    log("Operation completed");
+} {
+    "Submit"
+}
+```
+
+#### Conditional Logic
+
+Use `if/else` expressions for dynamic behavior:
+
+```rust
+// Toggle visibility
+button fx-click=fx {
+    if get_visibility("panel") == visible() {
+        hide("panel")
+    } else {
+        show("panel")
+    }
+} {
+    "Toggle Panel"
+}
+```
+
+#### Multiple Event Handlers
+
+Elements can have multiple `fx-*` attributes:
+
+```rust
+div
+    fx-mouse-down=fx { log("Mouse down on slider") }
+    fx-hover=fx { show("tooltip") }
+{
+    "Interactive element"
+}
+```
+
+#### Advanced Usage
+
+For complex action sequences, you can also use Rust expressions with `ActionType` or `ActionEffect`:
+
+```rust
+// Using ActionType directly
+div fx-click=(ActionType::hide_str_id("test")) {
+    "Click to hide"
+}
+
+// Using ActionEffect for timing control
+div fx-click=(ActionEffect {
+    action: ActionType::hide_str_id(Target::literal("test")),
+    delay_off: Some(1000),
+    throttle: Some(500),
+    unique: Some(true),
+}) {
+    "Advanced control"
+}
+```
+
+See also the `actions_dsl!` macro for building action sequences programmatically.
+
 ### Control Flow
 
 - **Conditionals**: `@if`, `@else`, `@if let`
@@ -203,3 +300,4 @@ The crate includes comprehensive tests covering:
 - Numeric units (tests/number_inference_test.rs)
 - Font properties (tests/font_family_test.rs, tests/font_weight_test.rs)
 - Srcset attributes (tests/srcset_test.rs)
+- Interactive behaviors and `fx` DSL (tests/fx_actions.rs)
