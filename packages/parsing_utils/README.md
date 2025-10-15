@@ -37,7 +37,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-parsing_utils = { path = "../parsing_utils" }
+moosicbox_parsing_utils = { path = "../parsing_utils" }
 ```
 
 ## Usage
@@ -45,7 +45,7 @@ parsing_utils = { path = "../parsing_utils" }
 ### Parse Integer Sequences
 
 ```rust
-use parsing_utils::integer_range::parse_integer_sequences;
+use moosicbox_parsing_utils::integer_range::parse_integer_sequences;
 
 // Parse comma-separated integers
 let result = parse_integer_sequences("1,2,3,4,5")?;
@@ -65,7 +65,7 @@ match parse_integer_sequences("1,abc,3") {
 ### Parse Integer Ranges
 
 ```rust
-use parsing_utils::integer_range::parse_integer_ranges;
+use moosicbox_parsing_utils::integer_range::parse_integer_ranges;
 
 // Parse simple range
 let result = parse_integer_ranges("1-5")?;
@@ -87,7 +87,7 @@ assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
 ### Error Handling
 
 ```rust
-use parsing_utils::integer_range::{parse_integer_ranges, ParseIntegersError};
+use moosicbox_parsing_utils::integer_range::{parse_integer_ranges, ParseIntegersError};
 
 // Handle different error types
 match parse_integer_ranges("1-100000000") {
@@ -155,7 +155,7 @@ pub enum ParseIntegersError {
 ### Error Examples
 
 ```rust
-use parsing_utils::integer_range::parse_integer_ranges;
+use moosicbox_parsing_utils::integer_range::parse_integer_ranges;
 
 // ParseId error
 let result = parse_integer_ranges("1,abc,3");
