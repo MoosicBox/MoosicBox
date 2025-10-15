@@ -72,9 +72,9 @@ hyperchad_renderer_html = {
 ```rust
 use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_actix};
 use hyperchad_router::Router;
-use hyperchad_renderer::Renderer;
+use hyperchad_renderer::{Renderer, Handle, ToRenderRunner};
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create HTML tag renderer
     let tag_renderer = DefaultHtmlTagRenderer::default();
@@ -99,6 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("My HyperChad App"), // description
         Some("width=device-width, initial-scale=1"), // viewport
     ).await?;
+
+    // Convert to runner to start the application
+    let runner = renderer.to_runner(Handle::current())?;
 
     Ok(())
 }
@@ -170,7 +173,7 @@ use hyperchad_router::Router;
 use hyperchad_renderer::{Handle, ToRenderRunner};
 
 #[tokio::main]
-async fn main() -> Result<(), lambda_runtime::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send>> {
     // Create HTML tag renderer
     let tag_renderer = DefaultHtmlTagRenderer::default();
 
@@ -185,7 +188,7 @@ async fn main() -> Result<(), lambda_runtime::Error> {
 
     // Convert to runner and start Lambda handler
     let runner = renderer.to_runner(Handle::current())?;
-    runner.run().map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+    runner.run()?;
 
     Ok(())
 }
@@ -195,12 +198,18 @@ async fn main() -> Result<(), lambda_runtime::Error> {
 
 ```rust
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
-use hyperchad_transformer::{ResponsiveTrigger, Number};
+use hyperchad_transformer::ResponsiveTrigger;
 
 // Create tag renderer with responsive breakpoints
 let tag_renderer = DefaultHtmlTagRenderer::default()
-    .with_responsive_trigger("mobile", ResponsiveTrigger::MaxWidth(Number::Real(768.0)))
-    .with_responsive_trigger("tablet", ResponsiveTrigger::MaxWidth(Number::Real(1024.0)));
+    .with_responsive_trigger(
+        "mobile",
+        ResponsiveTrigger::MaxWidth(hyperchad_transformer::Number::Real(768.0))
+    )
+    .with_responsive_trigger(
+        "tablet",
+        ResponsiveTrigger::MaxWidth(hyperchad_transformer::Number::Real(1024.0))
+    );
 
 // The tag renderer will generate appropriate CSS media queries
 // for responsive overrides defined in your HyperChad components
@@ -258,20 +267,65 @@ async fn update_handler() -> Content {
 }
 ```
 
+### Extension System (requires `extend` feature)
+
+The extension system allows you to hook into the rendering lifecycle:
+
+```rust
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, router_to_actix, extend::{ExtendHtmlRenderer, HtmlRendererEventPub}};
+use hyperchad_renderer::{PartialView, View, canvas::CanvasUpdate};
+use hyperchad_router::Router;
+use async_trait::async_trait;
+
+// Implement custom extension
+struct MyExtension;
+
+#[async_trait]
+impl ExtendHtmlRenderer for MyExtension {
+    async fn render(
+        &self,
+        _pub: HtmlRendererEventPub,
+        view: View,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        // Custom logic when rendering a view
+        println!("Rendering view");
+        Ok(())
+    }
+
+    async fn render_partial(
+        &self,
+        _pub: HtmlRendererEventPub,
+        partial: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        // Custom logic when rendering a partial view
+        println!("Rendering partial: {}", partial.target);
+        Ok(())
+    }
+}
+
+// Use the extension
+let tag_renderer = DefaultHtmlTagRenderer::default();
+let router = Router::default();
+let renderer = router_to_actix(tag_renderer, router)
+    .with_extend_html_renderer(MyExtension);
+```
+
 ## Feature Flags
 
-- **`actix`**: Enable Actix Web integration (implies `extend`)
+- **`actix`**: Enable Actix Web integration (enables `extend` feature)
 - **`lambda`**: Enable AWS Lambda integration
-- **`web-server`**: Enable generic web server integration (implies `extend`)
-- **`web-server-actix`**: Enable Actix-based web server (implies `web-server`)
-- **`web-server-simulator`**: Enable simulator-based web server (implies `web-server`)
-- **`assets`**: Enable static asset serving
-- **`extend`**: Enable renderer extension system
+- **`web-server`**: Enable generic web server integration (enables `extend` feature)
+- **`web-server-actix`**: Enable Actix-based web server (enables `web-server` feature)
+- **`web-server-simulator`**: Enable simulator-based web server (enables `web-server` feature)
+- **`assets`**: Enable static asset serving across all backends
+- **`extend`**: Enable renderer extension system via `ExtendHtmlRenderer` trait
 - **`json`**: Enable JSON content support
-- **`actions`**: Enable action handling (requires `actix`)
-- **`sse`**: Enable Server-Sent Events support (requires `actix`)
+- **`actions`**: Enable action handling (requires `actix` feature)
+- **`sse`**: Enable Server-Sent Events support (requires `actix` feature)
 - **`debug`**: Enable debug features
 - **`fail-on-warnings`**: Treat compiler warnings as errors
+
+**Default features**: `actix`, `assets`, `debug`, `extend`, `json`, `lambda`
 
 ## HTML Output Features
 
@@ -294,14 +348,17 @@ async fn update_handler() -> Content {
 - **hyperchad_renderer**: Core renderer traits and types
 - **hyperchad_router**: Routing and navigation system
 - **hyperchad_transformer**: Element transformation and styling
-- **Maud**: Type-safe HTML template generation
+- **maud**: Type-safe HTML template generation
 - **html-escape**: Safe HTML escaping
 - **uaparser**: User agent parsing for client detection
 - **flume**: Async channel communication
 - **switchy**: HTTP models and utilities
-- **hyperchad_renderer_html_actix**: Actix Web integration (optional)
-- **hyperchad_renderer_html_lambda**: AWS Lambda integration (optional)
-- **hyperchad_renderer_html_web_server**: Generic web server integration (optional)
+- **switchy_http_models**: HTTP model types
+- **qstring**: Query string parsing
+- **bytes**: Efficient byte buffer handling
+- **hyperchad_renderer_html_actix**: Actix Web integration (optional, enabled with `actix` feature)
+- **hyperchad_renderer_html_lambda**: AWS Lambda integration (optional, enabled with `lambda` feature)
+- **hyperchad_renderer_html_web_server**: Generic web server integration (optional, enabled with `web-server` feature)
 
 ## Integration
 
@@ -316,12 +373,13 @@ This renderer is designed for:
 
 The package provides:
 
-1. **`DefaultHtmlTagRenderer`**: Core HTML tag rendering implementation
+1. **`DefaultHtmlTagRenderer`**: Core HTML tag rendering implementation that implements `HtmlTagRenderer` trait
 2. **`HtmlRenderer<T>`**: Generic renderer wrapper for different app types
-3. **`router_to_actix()`**: Helper to create Actix Web-integrated renderers
-4. **`router_to_lambda()`**: Helper to create Lambda-integrated renderers
-5. **`router_to_web_server()`**: Helper to create generic web server renderers (optional)
-6. **Extension System**: Via `ExtendHtmlRenderer` trait for custom rendering logic
+3. **`router_to_actix()`**: Helper to create Actix Web-integrated renderers (requires `actix` feature)
+4. **`router_to_lambda()`**: Helper to create Lambda-integrated renderers (requires `lambda` feature)
+5. **`router_to_web_server()`**: Helper to create generic web server renderers (requires `web-server` feature)
+6. **Extension System**: Via `ExtendHtmlRenderer` trait for custom rendering logic (requires `extend` feature)
+7. **HTML Generation**: Functions in `html` module including `container_element_to_html()` and `container_element_to_html_response()`
 
 ## Performance Considerations
 
