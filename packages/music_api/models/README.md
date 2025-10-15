@@ -101,7 +101,7 @@ let quality = TrackAudioQuality::FlacHiRes;
 
 ```rust
 use moosicbox_music_api_models::TrackSource;
-use moosicbox_music_models::AudioFormat;
+use moosicbox_music_models::{AudioFormat, TrackApiSource};
 
 // Local file source
 let local_source = TrackSource::LocalFilePath {
