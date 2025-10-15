@@ -217,28 +217,45 @@ jobs:
                         ||
                         format('# README Accuracy Review for {0}
 
-                      Review and update the README.md file at `{1}/README.md` to ensure it accurately represents the current state of this package.
+                      ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ERRORS ONLY
 
-                      ## Requirements
+                      You may ONLY make changes for these reasons:
 
-                      1. **Verify Implementation**
-                         - Check that described features exist in the code at `{1}/`
-                         - Compare API examples with actual function signatures in `{1}/src/`
-                         - Verify dependencies match `{1}/Cargo.toml`
+                      **Fundamentally Incorrect:**
+                      - README claims a feature that doesn''t exist in the code at `{1}/`
+                      - Code examples show wrong function signatures (don''t match actual code in `{1}/src/`)
+                      - Dependencies listed don''t match `{1}/Cargo.toml`
+                      - Module/file references don''t match actual structure
+                      - Links are broken or point to wrong locations
 
-                      2. **Feature Classification**
-                         - ✅ Implemented: Use present tense ("provides", "supports", "includes")
-                         - 🔮 Planned/Future: Mark clearly as "Planned:", "Coming soon:", or use future tense
+                      **Fundamentally Incomplete:**
+                      - A major implemented feature is completely missing from README
+                      - Critical usage information is absent (e.g., how to use the main API)
 
-                      3. **Code Alignment**
-                         - Ensure module descriptions match actual file structure
-                         - Update outdated architectural information
-                         - Fix incorrect usage examples
+                      **FORBIDDEN Changes (even if you think they would be "better"):**
+                      - ❌ Rewording for clarity, style, or tone
+                      - ❌ Reorganizing sections or structure
+                      - ❌ Formatting/markdown improvements
+                      - ❌ Adding more examples when basics are already covered
+                      - ❌ Expanding descriptions that are already accurate
+                      - ❌ Minor completeness improvements
+                      - ❌ Changing future tense to present or vice versa (if already marked correctly)
 
-                      4. **Accuracy Focus**
-                         - Be conservative: only claim features that provably exist
-                         - Reference actual code when validating claims
-                         - Preserve valid future-looking statements but mark them clearly
+                      **Decision Rule:**
+                      Before making ANY change, ask yourself: "Would a user be MISLED or UNABLE TO USE this package because of this issue?"
+                      - YES → Fix it (it''s fundamental)
+                      - NO → Leave it alone (it''s stylistic)
+
+                      ## Verification Process
+
+                      1. **Check Claims Against Code**
+                         - Read the code at `{1}/src/` to verify README claims
+                         - Compare API examples with actual function signatures
+                         - Check `{1}/Cargo.toml` for dependency accuracy
+
+                      2. **Identify Only Fundamental Issues**
+                         - Focus on factual errors and critical omissions
+                         - Ignore style, wording, or organizational preferences
 
                       ## Scope
 
@@ -246,7 +263,9 @@ jobs:
 
                       ## Output
 
-                      Make the necessary updates to ensure the README accurately reflects reality. If no changes are needed, do not modify the file.',
+                      - If the README is fundamentally accurate and complete: **Make NO changes**
+                      - If you find fundamental errors: Fix them with minimal edits
+                      - Do not "improve" things that are already correct',
                           matrix.package.name, matrix.package.path)
                       }}
 
@@ -363,39 +382,53 @@ jobs:
                         ||
                         '# Root README Accuracy Review
 
-                      Review and update the root README.md file to ensure it accurately represents the current state of the MoosicBox project.
+                      ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ERRORS ONLY
 
-                      ## Requirements
+                      You may ONLY make changes for these reasons:
 
-                      1. **Feature Status**
-                         - Verify that listed features are actually implemented
-                         - Mark future/planned features clearly with indicators like "Planned:", "Coming soon:", or future tense
-                         - Ensure feature descriptions match current capabilities
+                      **Fundamentally Incorrect:**
+                      - README claims a major feature that doesn''t exist in the codebase
+                      - Installation/setup instructions that are completely wrong
+                      - Technology/platform claims that are false
+                      - Command examples that don''t work
+                      - Broken links to documentation or resources
 
-                      2. **Getting Started Accuracy**
-                         - Verify installation instructions work
-                         - Check that command examples are current
-                         - Ensure prerequisites are up-to-date
+                      **Fundamentally Incomplete:**
+                      - Major implemented features completely missing from README
+                      - Critical setup steps absent
+                      - Essential prerequisites not mentioned
 
-                      3. **Architecture & Technology**
-                         - Confirm listed technologies are in use
-                         - Update platform support based on current state
-                         - Verify database support claims
+                      **FORBIDDEN Changes (even if you think they would be "better"):**
+                      - ❌ Rewording for clarity, style, or tone
+                      - ❌ Reorganizing sections
+                      - ❌ Marketing copy improvements
+                      - ❌ Adding more detail when basics are covered
+                      - ❌ Formatting/markdown changes
+                      - ❌ Expanding package descriptions that are already accurate
+                      - ❌ Minor completeness improvements
 
-                      4. **Package List**
-                         - Ensure the package list in the expandable section is current
-                         - Check package descriptions match their actual purpose
+                      **Decision Rule:**
+                      Before making ANY change, ask: "Would someone reading this be fundamentally MISLED about what this project does or how to use it?"
+                      - YES → Fix it (it''s fundamental)
+                      - NO → Leave it alone (it''s stylistic)
 
-                      ## Guidelines
+                      ## Verification Process
 
-                      - Be conservative: only claim what demonstrably exists
-                      - Preserve the project status warning (development notice)
-                      - Maintain marketing tone while ensuring technical accuracy
-                      - Keep future-looking statements but mark them clearly
+                      1. **Check Major Claims**
+                         - Verify listed features actually exist in the codebase
+                         - Test that installation instructions are accurate
+                         - Confirm technology stack claims
+
+                      2. **Identify Only Fundamental Issues**
+                         - Focus on factual errors and critical omissions
+                         - Ignore wording preferences and organizational choices
 
                       ## Output
 
-                      Update README.md to accurately reflect the current state of the project.'
+                      - If the README is fundamentally accurate and complete: **Make NO changes**
+                      - If you find fundamental errors: Fix them with minimal edits
+                      - Do not "improve" things that are already correct
+                      - Preserve the existing tone and marketing approach'
                       }}
 
                   claude_args: |
