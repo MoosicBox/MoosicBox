@@ -95,7 +95,7 @@ cargo run --features "fltk" --no-default-features
 
 #### Web Interface (HTML + JavaScript)
 ```bash
-cargo run --features "html,vanilla-js"
+cargo run --features "html,vanilla-js" --no-default-features
 ```
 
 The web interface supports additional deployment options:
