@@ -38,7 +38,7 @@ The HyperChad Actions package provides:
 
 ### Action Types
 
-- **Style Actions**: Visibility, display, background, and focus control
+- **Style Actions**: Visibility, display, background, and focus control (background execution requires `handler` feature)
 - **Input Actions**: Element selection and focus management
 - **Navigation**: URL navigation and routing
 - **Logging**: Debug and error logging
@@ -51,7 +51,7 @@ The HyperChad Actions package provides:
 
 - **Visibility**: Show/hide elements with visibility property
 - **Display**: Show/hide elements with display property
-- **Background**: Set/remove background colors (requires `handler` feature)
+- **Background**: Set/remove background colors (execution requires `handler` feature)
 - **Focus**: Set focus state on elements
 - **Flexible Targeting**: Apply styles to various element targets
 
