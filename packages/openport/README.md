@@ -42,6 +42,19 @@ fn main() {
 }
 ```
 
+### Command Line Usage
+
+```bash
+# Find any available port (requires 'rand' feature)
+openport
+
+# Find port in specific range (exclusive)
+openport 15000 16000
+
+# Find port in inclusive range
+openport 8000 9000 --inclusive
+```
+
 ### Random Port Selection (requires `rand` feature)
 
 ```rust
