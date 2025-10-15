@@ -212,7 +212,7 @@ Tags are used to organize endpoints into logical groups in the documentation UI.
 
 ### Nested API Structure
 
-The example includes a `nest_api` function (`src/main.rs:57-67`) that demonstrates how to combine multiple API specifications:
+The example includes a `nest_api` function (`src/main.rs:57-65`) that demonstrates how to combine multiple API specifications:
 
 ```rust
 fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -295,7 +295,7 @@ struct ApiResponse {
 
 ### Nested API Organization ✅ Implemented
 
-The `nest_api` function is implemented in this example (`src/main.rs:57-67`):
+The `nest_api` function is implemented in this example (`src/main.rs:57-65`):
 
 ```rust
 fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -391,7 +391,7 @@ let v2_api = /* build v2 OpenAPI spec */;
 
 ```rust
 // Combine multiple service specs using the nest_api pattern
-// demonstrated in this example (src/main.rs:57-67)
+// demonstrated in this example (src/main.rs:57-65)
 let combined_api = nest_api(
     main_api,
     "/auth",
