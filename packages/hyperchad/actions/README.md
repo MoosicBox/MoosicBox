@@ -51,7 +51,7 @@ The HyperChad Actions package provides:
 
 - **Visibility**: Show/hide elements with visibility property
 - **Display**: Show/hide elements with display property
-- **Background**: Set/remove background colors (requires `handler` feature)
+- **Background**: Set/remove background colors
 - **Focus**: Set focus state on elements
 - **Flexible Targeting**: Apply styles to various element targets
 
