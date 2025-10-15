@@ -53,15 +53,6 @@ Set encoding quality (0-100, default 80):
 aconverter input.wav --output output.mp3 --quality 95
 ```
 
-### Image Dimensions
-
-**Note**: Width and height parameters are parsed but not currently used in the conversion process.
-
-For formats that support embedded images, specify image dimensions:
-```bash
-aconverter input.flac --output output.m4a --width 1024 --height 1024
-```
-
 ### Complete Example
 
 ```bash
@@ -69,9 +60,7 @@ aconverter \
   /path/to/input.flac \
   --output /path/to/output.mp3 \
   --encoding MP3 \
-  --quality 90 \
-  --width 800 \
-  --height 800
+  --quality 90
 ```
 
 ## Command Line Options
@@ -81,8 +70,6 @@ aconverter \
 | `--encoding` | `-e` | Output format (AAC, FLAC, MP3, OPUS) | Auto-detect from extension |
 | `--output` | `-o` | Output file path | Required |
 | `--quality` | `-q` | Encoding quality (0-100) (currently not implemented) | 80 |
-| `--width` | | Image width for embedded artwork (currently not implemented) | - |
-| `--height` | | Image height for embedded artwork (currently not implemented) | - |
 
 ## Supported Formats
 
