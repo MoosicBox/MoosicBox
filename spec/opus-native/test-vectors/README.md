@@ -5,6 +5,7 @@ This directory contains test vectors for RFC 6716 conformance testing.
 ## Sources
 
 Test vectors will be obtained from:
+
 - RFC 6716 reference implementation (if available)
 - Opus test suite (opus-tools test data)
 - libopus test data
@@ -42,26 +43,29 @@ test-vectors/
 Each test vector consists of:
 
 ### Input File (`.opus` or `.bin`)
+
 - Opus packet(s) in binary format
 - Can be single packet or packet sequence
 
 ### Expected Output (`.pcm`)
+
 - Raw PCM samples (signed 16-bit or 32-bit float)
 - Little-endian byte order
 - Interleaved for stereo
 
 ### Metadata File (`.json`)
+
 ```json
 {
-  "name": "Test case name",
-  "description": "What this test validates",
-  "rfc_section": "4.1.2",
-  "sample_rate": 48000,
-  "channels": 2,
-  "frame_size": 960,
-  "mode": "celt",
-  "packet_count": 1,
-  "notes": "Additional information"
+    "name": "Test case name",
+    "description": "What this test validates",
+    "rfc_section": "4.1.2",
+    "sample_rate": 48000,
+    "channels": 2,
+    "frame_size": 960,
+    "mode": "celt",
+    "packet_count": 1,
+    "notes": "Additional information"
 }
 ```
 
@@ -95,6 +99,7 @@ fn test_rfc_vector_range_001() {
 ### From libopus
 
 Use libopus encoder to create reference packets:
+
 ```c
 #include <opus.h>
 
@@ -111,6 +116,7 @@ int len = opus_encode(enc, pcm_input, 960, packet, sizeof(packet));
 ### From Opus Tools
 
 Use `opusenc` and `opusdec` from opus-tools:
+
 ```bash
 # Encode audio file to opus
 opusenc input.wav output.opus
@@ -122,6 +128,7 @@ opusenc input.wav output.opus
 ### Hand-Crafted Edge Cases
 
 For testing specific error conditions:
+
 ```rust
 // Create packet with specific structure
 let mut packet = vec![

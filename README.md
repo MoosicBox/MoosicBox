@@ -377,14 +377,17 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 **Note:** The workspace includes 25+ example packages demonstrating various features across different domains:
 
 #### Async & Concurrency
+
 - **[cancel](packages/async/examples/cancel)** - Async cancellation examples
 - **[simulated](packages/async/examples/simulated)** - Simulated async examples
 
 #### Database & Persistence
+
 - **[turso_basic](packages/database/examples/turso_basic)** - Turso database basic usage
 - **[turso_transactions](packages/database/examples/turso_transactions)** - Turso transaction handling
 
 #### Schema & Migrations
+
 - **[basic_usage](packages/switchy/schema/examples/basic_usage)** - Schema basic usage
 - **[basic_migration_test](packages/switchy/schema/examples/basic_migration_test)** - Database migration testing
 - **[static_migrations](packages/switchy/schema/examples/static_migrations)** - Static migrations
@@ -393,6 +396,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[state_migration_test](packages/switchy/schema/examples/state_migration_test)** - State migrations
 
 #### HTTP & Web Server
+
 - **[simple_get](packages/http/examples/simple_get)** - Simple HTTP GET example
 - **[basic_handler](packages/web_server/examples/basic_handler)** - Basic web server handler example
 - **[basic_handler_standalone](packages/web_server/examples/basic_handler_standalone)** - Standalone basic handler
@@ -405,13 +409,16 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[handler_macro_test](packages/web_server/examples/handler_macro_test)** - Handler macro testing
 
 #### Testing & Simulation
+
 - **[api_testing](packages/simvar/examples/api_testing)** - API testing with simvar
 - **[basic_web_server](packages/simvar/examples/basic_web_server)** - Basic web server with simvar
 
 #### HyperChad UI
+
 - **[basic_web_server](packages/hyperchad/renderer/html/web_server/examples/basic_web_server)** - HyperChad web server
 
 #### Filesystem
+
 - **[temp_dir](packages/fs/examples/temp_dir)** - Temporary directory usage
 
 For a complete list of examples, see the workspace members in `Cargo.toml`.
