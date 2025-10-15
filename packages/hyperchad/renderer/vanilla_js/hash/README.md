@@ -32,7 +32,7 @@ All HyperChad Vanilla JS plugins are included in the hash:
 - **SSE (`plugin-sse`)**: Server-Sent Events
 - **Tauri Event (`plugin-tauri-event`)**: Tauri integration
 - **UUID (`plugin-uuid`)**: Secure UUID generation
-- **UUID Insecure (`plugin-uuid-insecure`)**: Development UUID generation
+- **UUID Insecure (`plugin-uuid-insecure`)**: Development UUID generation (not included in `all-plugins`)
 - **Routing (`plugin-routing`)**: Advanced routing
 - **Event (`plugin-event`)**: Custom events
 - **Canvas (`plugin-canvas`)**: Canvas support
@@ -244,6 +244,14 @@ Raw SHA256 hash bytes:
 pub const RAW_HASH: [u8; 32] = [/* 32 bytes */];
 ```
 
+### `HEX_BUF`
+
+Intermediate buffer used for hexadecimal encoding:
+
+```rust
+pub const HEX_BUF: Buffer<32> = const_encode(&RAW_HASH);
+```
+
 ### `PLUGIN_HASH_HEX`
 
 Hexadecimal string representation of the hash:
@@ -283,7 +291,7 @@ All HyperChad Vanilla JS plugin features are supported:
 - **`plugin-sse`**: Server-Sent Events plugin
 - **`plugin-tauri-event`**: Tauri integration plugin
 - **`plugin-uuid`**: UUID generation plugin
-- **`plugin-uuid-insecure`**: Insecure UUID plugin (development)
+- **`plugin-uuid-insecure`**: Insecure UUID plugin (development, not included in `all-plugins`)
 - **`plugin-routing`**: Advanced routing plugin
 - **`plugin-event`**: Custom events plugin
 - **`plugin-canvas`**: Canvas plugin
@@ -348,9 +356,9 @@ const SCRIPT_HASH: &str = env!("SCRIPT_HASH");
 
 ## Dependencies
 
-- **SHA2 Const Stable**: Compile-time SHA256 hashing
-- **Const Hex**: Compile-time hexadecimal encoding
-- **Const Format**: Compile-time string formatting
+- **sha2-const-stable**: Compile-time SHA256 hashing
+- **const-hex**: Compile-time hexadecimal encoding
+- **const_format**: Compile-time string formatting
 
 ## Performance
 
