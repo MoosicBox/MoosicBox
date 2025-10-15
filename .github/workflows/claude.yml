@@ -196,19 +196,72 @@ jobs:
                       ', steps.thread_context.outputs.thread_history) || '' }}
                       - User's latest message: "${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}"
 
-                      STEP 1 - POST ACKNOWLEDGMENT:
-                      Before doing anything else, immediately post a comment saying you're looking into it.
+                      STEP 1 - POST ACKNOWLEDGMENT WITH INTENT:
+                      Before doing anything else, analyze the request and post an acknowledgment with your understanding.
+
+                      Process:
+                      1. Quickly read and analyze the user's message
+                      2. Determine: Is it a Question or Command? What's the scope?
+                      3. Summarize in 1-2 sentences what you plan to do
+                      4. Post acknowledgment immediately
+
+                      Format your acknowledgment message as:
+                      ```
+                      👀 Looking into this...
+
+                      **My understanding:** [Your 1-2 sentence interpretation]
+
+                      [View workflow run](link)
+                      ```
+
+                      Guidelines for the summary:
+                      - **Questions**: "I'll explain [topic] in the context of [file/code]"
+                      - **Commands**: "I'll [action] by [approach]" (e.g., "I'll format all README files using prettier and commit to this PR branch")
+                      - **Unclear requests**: "I need clarification on [specific aspect]"
+                      - Keep it brief but specific - mention the scope (1 file vs all files, etc.)
+
                       Use the appropriate command based on the comment type:
                       ${{ github.event_name == 'pull_request_review_comment' && format('
                       - Reply to the comment thread using the ROOT comment ID (this ensures proper threading):
-                        `gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -f body="👀 Looking into this...\n\n[View workflow run](https://github.com/{0}/actions/runs/{3})" 2>&1 || echo "Failed to post acknowledgment"`
+                        Save your acknowledgment message to a file first, then post it:
+                        ```
+                        cat > /tmp/ack.txt << ''EOF''
+                        👀 Looking into this...
+
+                        **My understanding:** [your summary here]
+
+                        [View workflow run](https://github.com/{0}/actions/runs/{3})
+                        EOF
+                        gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/ack.txt 2>&1 || echo "Failed to post acknowledgment"
+                        ```
+
                         IMPORTANT: Use the root comment ID {2} for all replies to ensure they appear in the correct thread.
                       ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id, github.run_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
                       - Post a PR comment:
-                        `gh pr comment {0} --repo {1} --body "👀 Looking into this...\n\n[View workflow run](https://github.com/{1}/actions/runs/{2})"`
+                        Save your acknowledgment message to a file first, then post it:
+                        ```
+                        cat > /tmp/ack.txt << ''EOF''
+                        👀 Looking into this...
+
+                        **My understanding:** [your summary here]
+
+                        [View workflow run](https://github.com/{1}/actions/runs/{2})
+                        EOF
+                        gh pr comment {0} --repo {1} --body-file /tmp/ack.txt
+                        ```
                       ', github.event.issue.number, github.repository, github.run_id) || format('
                       - Post an issue comment:
-                        `gh issue comment {0} --repo {1} --body "👀 Looking into this...\n\n[View workflow run](https://github.com/{1}/actions/runs/{2})"`
+                        Save your acknowledgment message to a file first, then post it:
+                        ```
+                        cat > /tmp/ack.txt << ''EOF''
+                        👀 Looking into this...
+
+                        **My understanding:** [your summary here]
+
+                        [View workflow run](https://github.com/{1}/actions/runs/{2})
+                        EOF
+                        gh issue comment {0} --repo {1} --body-file /tmp/ack.txt
+                        ```
                       ', github.event.issue.number, github.repository, github.run_id) }}
 
                       STEP 2 - ANALYZE THE SPECIFIC CONTEXT:
