@@ -49,12 +49,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = HtmlRenderer::new();
 
     let app = AppBuilder::new()
-        .with_title("My App")
-        .with_renderer(renderer)
+        .with_title("My App".to_string())
         .with_router(router)
-        .build()?;
+        .build(renderer)?;
 
-    app.run().await?;
+    app.run()?;
     Ok(())
 }
 ```
@@ -118,11 +117,11 @@ use serde_json::json;
 let state = StateStore::new(InMemoryStatePersistence::new());
 
 // Set values
-state.set("user_id".to_string(), json!("12345"))?;
-state.set("theme".to_string(), json!("dark"))?;
+state.set("user_id", &json!("12345")).await?;
+state.set("theme", &json!("dark")).await?;
 
 // Get values
-if let Some(user_id) = state.get("user_id")? {
+if let Some(user_id) = state.get::<serde_json::Value>("user_id").await? {
     println!("User ID: {}", user_id);
 }
 
@@ -219,16 +218,15 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
 ### Application Builder
 
 ```rust
-pub struct AppBuilder<R: Renderer + /* ... */ + 'static> {
+pub struct AppBuilder {
     // ...
 }
 
-impl<R: Renderer + /* ... */> AppBuilder<R> {
+impl AppBuilder {
     pub fn new() -> Self;
-    pub fn with_title(self, title: impl Into<String>) -> Self;
-    pub fn with_renderer(self, renderer: R) -> Self;
+    pub fn with_title(self, title: String) -> Self;
     pub fn with_router(self, router: Router) -> Self;
-    pub fn build(self) -> Result<App<R>, BuilderError>;
+    pub fn build<R: Renderer + /* ... */ + 'static>(self, renderer: R) -> Result<App<R>, BuilderError>;
 }
 
 pub struct App<R: Renderer + /* ... */> {
@@ -238,10 +236,10 @@ pub struct App<R: Renderer + /* ... */> {
 }
 
 impl<R: Renderer + /* ... */> App<R> {
-    pub async fn run(&self) -> Result<(), Error>;
-    pub async fn serve(&self) -> Result<(), Error>;
-    pub async fn generate(&self) -> Result<(), Error>;
-    pub async fn clean(&self) -> Result<(), Error>;
+    pub fn run(self) -> Result<(), Error>;
+    pub async fn serve(&mut self) -> Result<Box<dyn RenderRunner>, Error>;
+    pub async fn generate(&self, output: Option<String>) -> Result<(), Error>;
+    pub async fn clean(&self, output: Option<String>) -> Result<(), Error>;
 }
 ```
 
@@ -287,12 +285,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = EguiRenderer::new();
 
     let app = AppBuilder::new()
-        .with_title("Desktop App")
-        .with_renderer(renderer)
+        .with_title("Desktop App".to_string())
         .with_router(router)
-        .build()?;
+        .build(renderer)?;
 
-    app.run().await?;
+    app.run()?;
     Ok(())
 }
 ```
@@ -303,17 +300,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use hyperchad::app::{App, AppBuilder};
 use hyperchad::renderer_html_actix::ActixRenderer;
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = ActixRenderer::new();
 
     let app = AppBuilder::new()
-        .with_renderer(renderer)
         .with_router(router)
-        .build()
-        .unwrap();
+        .build(renderer)?;
 
-    app.serve().await.unwrap();
+    app.handle_serve()?;
     Ok(())
 }
 ```
@@ -348,21 +342,21 @@ Each module provides its own error types:
 ```rust
 use hyperchad::app::{Error as AppError, BuilderError};
 use hyperchad::state::Error as StateError;
-use hyperchad::router::{NavigateError, ParseError};
+use hyperchad::router::ParseError;
 
 // App errors
-match app.run().await {
+match app.run() {
     Ok(()) => println!("App completed successfully"),
-    Err(AppError::Router(e)) => eprintln!("Router error: {}", e),
-    Err(AppError::Renderer(e)) => eprintln!("Renderer error: {}", e),
+    Err(AppError::IO(e)) => eprintln!("IO error: {}", e),
+    Err(AppError::Builder(e)) => eprintln!("Builder error: {}", e),
     Err(e) => eprintln!("Error: {}", e),
 }
 
 // State errors
-match state.get("key") {
+match state.get::<serde_json::Value>("key").await {
     Ok(Some(value)) => println!("Value: {}", value),
     Ok(None) => println!("Key not found"),
-    Err(StateError::Persistence(e)) => eprintln!("Persistence error: {}", e),
+    Err(StateError::Serde(e)) => eprintln!("Serialization error: {}", e),
     Err(e) => eprintln!("Error: {}", e),
 }
 ```
