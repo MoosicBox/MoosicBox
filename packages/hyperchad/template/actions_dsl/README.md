@@ -1,32 +1,40 @@
 # HyperChad Actions DSL
 
-A procedural macro for writing interactive actions in HyperChad templates.
+A domain-specific language for writing interactive actions in HyperChad templates.
 
 ## Overview
 
-The Actions DSL is a procedural macro (`actions_dsl!`) that provides a Rust-like syntax for defining user interactions in your HyperChad templates. It supports various action types including visibility toggles, navigation, logging, custom actions, and event handling.
+The Actions DSL provides a Rust-like syntax for defining user interactions in your HyperChad templates through the convenient `fx { ... }` syntax. It supports various action types including visibility toggles, navigation, logging, custom actions, and event handling.
+
+### How It Works
+
+The `fx { ... }` syntax is syntactic sugar that uses the `actions_dsl!` procedural macro behind the scenes:
+
+- **In templates**: Use the readable `fx { ... }` syntax (e.g., `fx-click=fx { show("panel") }`)
+- **Behind the scenes**: The template macro system intercepts `fx` calls and processes them through the `actions_dsl!` procedural macro at compile time
+- **Result**: Zero-runtime overhead action definitions with clean, intuitive syntax
+
+The `fx` function itself is just a marker - all the real work happens at compile time through macro expansion.
 
 ## Basic Usage
 
 ### Simple Actions
 
 ```rust
-use hyperchad_template_actions_dsl::actions_dsl;
-
 // Show an element
-actions_dsl! { show("panel") }
+fx { show("panel") }
 
 // Hide an element
-actions_dsl! { hide("modal") }
+fx { hide("modal") }
 
 // Navigate to a URL
-actions_dsl! { navigate("/dashboard") }
+fx { navigate("/dashboard") }
 
 // Log a message
-actions_dsl! { log("Button clicked") }
+fx { log("Button clicked") }
 
 // Custom action
-actions_dsl! { custom("my-action") }
+fx { custom("my-action") }
 ```
 
 ### Element Reference API
@@ -35,7 +43,7 @@ The DSL supports an element reference API for cleaner element manipulation with 
 
 ```rust
 // Element references support ID and class selectors
-actions_dsl! {
+fx {
     // Using element() with method chaining
     element("#my-id").show();
     element(".my-class").hide();
@@ -43,7 +51,7 @@ actions_dsl! {
 }
 
 // Conditional visibility checks
-actions_dsl! {
+fx {
     if element(".modal").get_visibility() == Visibility::Hidden {
         element(".modal").show();
     }
@@ -63,7 +71,7 @@ actions_dsl! {
 Chain multiple actions together:
 
 ```rust
-actions_dsl! {
+fx {
     hide("modal");
     show("success-message");
     log("Modal closed successfully");
@@ -75,7 +83,7 @@ actions_dsl! {
 Use variables to make your actions more maintainable:
 
 ```rust
-actions_dsl! {
+fx {
     let modal_id = "user-modal";
     let overlay_id = "modal-overlay";
 
@@ -90,7 +98,7 @@ actions_dsl! {
 The DSL supports if/else conditionals with visibility checks:
 
 ```rust
-actions_dsl! {
+fx {
     if get_visibility("panel") == hidden() {
         show("panel");
     } else {
@@ -99,7 +107,7 @@ actions_dsl! {
 }
 
 // With element references
-actions_dsl! {
+fx {
     if element(".panel").get_visibility() == Visibility::Hidden {
         element(".panel").show();
     } else {
@@ -182,7 +190,7 @@ actions_dsl! {
 Handle custom events with closures that transform parameter references to `get_event_value()` calls:
 
 ```rust
-actions_dsl! {
+fx {
     on_event("play-track", |value| {
         if value == get_data_attr_value_self("track-id") {
             set_background_self("#333");
@@ -201,7 +209,7 @@ actions_dsl! {
 Combine multiple functions for sophisticated interactions:
 
 ```rust
-actions_dsl! {
+fx {
     // Seek to track position based on mouse click
     invoke(Action::SeekCurrentTrackPercent, get_mouse_x_self() / get_width_px_self());
 
@@ -215,7 +223,7 @@ actions_dsl! {
 The DSL supports arithmetic operations that are converted to method calls:
 
 ```rust
-actions_dsl! {
+fx {
     invoke(
         Action::SetVolume,
         ((get_height_px_str_id("container") - get_mouse_y_str_id("container")) / get_height_px_str_id("container"))
@@ -235,18 +243,35 @@ actions_dsl! {
 
 ## Integration with HyperChad
 
-The Actions DSL is typically used as a procedural macro within HyperChad templates:
+The Actions DSL is typically used within HyperChad templates using the `fx { ... }` syntax:
 
 ```rust
-use hyperchad_template_actions_dsl::actions_dsl;
+use hyperchad_template::container;
 
-// Generate actions at compile time
-let my_actions = actions_dsl! {
-    if get_event_value() == Key::Escape {
-        hide("search");
-        show("search-button");
+// Use in template event handlers
+let my_template = container! {
+    button fx-click=fx {
+        if get_event_value() == Key::Escape {
+            hide("search");
+            show("search-button");
+        }
+    } {
+        "Toggle Search"
     }
 };
 ```
 
-**Note**: This is a procedural macro that generates `ActionType` code at compile time, providing zero-runtime overhead for action definitions.
+**Note**: The `fx` syntax is processed by the template macro system, which uses the `actions_dsl!` procedural macro behind the scenes. This generates `ActionType` code at compile time, providing zero-runtime overhead for action definitions.
+
+### Using `actions_dsl!` Directly
+
+While the `fx { ... }` syntax is more readable and recommended for templates, you can also use the `actions_dsl!` macro directly:
+
+```rust
+use hyperchad_template_actions_dsl::actions_dsl;
+
+let my_actions = actions_dsl! {
+    show("panel");
+    hide("modal");
+};
+```
