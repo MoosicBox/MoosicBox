@@ -214,7 +214,6 @@ pub enum ParseHexError {
 
 ### Core Dependencies
 
-- **color-hex**: Core hex parsing functionality
 - **thiserror**: Error handling and display
 - **moosicbox_assert**: Assertion utilities
 
