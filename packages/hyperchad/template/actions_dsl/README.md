@@ -199,6 +199,7 @@ div fx-mounted=fx {
         } else {
             remove_background_self();
             set_visibility_child_class(Visibility::Visible, "track-number");
+            set_visibility_child_class(Visibility::Hidden, "track-playing");
         }
     });
 } { /* track content */ }
