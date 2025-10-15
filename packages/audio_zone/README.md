@@ -213,7 +213,7 @@ use moosicbox_audio_zone::events::on_audio_zones_updated_event;
 async fn setup_event_listeners() {
     on_audio_zones_updated_event(|| async {
         println!("Audio zones were updated!");
-        Ok(())
+        Ok::<(), Box<dyn std::error::Error + Send>>(())
     }).await;
 }
 ```
