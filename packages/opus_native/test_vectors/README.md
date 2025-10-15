@@ -93,7 +93,7 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
     - Generates CELT fullband vector
     - Generates integration (hybrid mode) vector
 
-- **`../tests/integration_tests.rs`**: Integration tests using generated vectors
+- **Integration tests** (in parent `opus_native` package): Uses generated vectors for validation
     - `test_decode_silk_vectors` - Tests SILK decoder with all generated vectors
     - `test_sine_stereo_bit_exact` - Focused test for stereo SILK decoding
     - `test_decode_silk_vectors_skip_delay` - Tests with algorithmic delay compensation
