@@ -299,10 +299,20 @@ Core dependencies:
 
 - **symphonia**: Media demuxing and decoding framework
 - **moosicbox_stream_utils**: Streaming utilities (remote bytestream, stalled monitoring)
-- **tokio**: Async runtime
+- **switchy_async**: Async runtime abstraction (tokio-based)
+- **switchy_http**: HTTP client abstraction (reqwest-based)
+- **switchy_time**: Time utilities
 - **bytes**: Byte buffer utilities
 - **flume**: MPSC channels
 - **futures**: Async utilities
+- **thiserror**: Error handling
+- **log**: Logging facade
+
+Optional dependencies:
+
+- **moosicbox_opus**: Opus codec support (enabled via `opus` feature)
+- **profiling**: Performance profiling (enabled via `profiling` feature)
+- **rangemap**: Range-based data structures
 
 ## Limitations
 
