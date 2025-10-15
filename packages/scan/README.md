@@ -165,7 +165,7 @@ When the `api` feature is enabled, the following endpoints are available:
 
 - `POST /run-scan?origins=Local,Tidal` - Run a scan synchronously
 - `POST /start-scan?origins=Local` - Start a scan asynchronously
-- `GET /scan-origins` - Get enabled scan origins
+- `GET /scan-origins` - Get enabled scan origins (requires `local` feature)
 - `POST /scan-origins?origin=Tidal` - Enable a scan origin
 - `DELETE /scan-origins?origin=Tidal` - Disable a scan origin
 - `GET /scan-paths` - Get local scan paths (requires `local` feature)
