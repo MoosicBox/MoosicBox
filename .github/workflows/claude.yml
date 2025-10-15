@@ -322,6 +322,73 @@ jobs:
 
                       Now respond appropriately based on whether this is a question or a command.
 
+            - name: Add co-author to commits
+              if: always()
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  TARGET_BRANCH="${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref_name }}"
+                  COMMITS_AHEAD=$(git rev-list --count origin/$TARGET_BRANCH..HEAD 2>/dev/null || echo "0")
+
+                  if [ "$COMMITS_AHEAD" = "0" ]; then
+                    echo "📭 No commits to add co-author to"
+                    exit 0
+                  fi
+
+                  # Get the triggering commenter's info
+                  COMMENTER_LOGIN="${{ github.event.comment.user.login || github.event.review.user.login || github.event.issue.user.login }}"
+                  COMMENTER_ID="${{ github.event.comment.user.id || github.event.review.user.id || github.event.issue.user.id }}"
+
+                  if [ -z "$COMMENTER_LOGIN" ]; then
+                    echo "⚠️ Could not determine commenter, skipping co-author"
+                    exit 0
+                  fi
+
+                  # Try to get user's public email from GitHub API
+                  echo "🔍 Checking for public email for ${COMMENTER_LOGIN}..."
+                  USER_EMAIL=$(gh api "/users/${COMMENTER_LOGIN}" --jq '.email // empty' 2>/dev/null || echo "")
+
+                  if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "null" ]; then
+                    # User has a public email
+                    COMMENTER_EMAIL="$USER_EMAIL"
+                    echo "✅ Found public email: $COMMENTER_EMAIL"
+                  else
+                    # Fall back to GitHub's noreply email format
+                    COMMENTER_EMAIL="${COMMENTER_ID}+${COMMENTER_LOGIN}@users.noreply.github.com"
+                    echo "📧 Using noreply email: $COMMENTER_EMAIL"
+                  fi
+
+                  # Create co-author line
+                  COAUTHOR_LINE="Co-authored-by: ${COMMENTER_LOGIN} <${COMMENTER_EMAIL}>"
+                  echo "👥 Adding co-author: $COAUTHOR_LINE"
+
+                  # Get the base commit (where we branched from origin)
+                  BASE_COMMIT=$(git merge-base HEAD origin/$TARGET_BRANCH)
+
+                  # Create a temporary script for amending commits
+                  cat > /tmp/add_coauthor.sh << 'SCRIPT'
+                  #!/bin/bash
+                  if ! git log -1 --pretty=%B | grep -qF "$COAUTHOR_LINE"; then
+                    MSG=$(git log -1 --pretty=%B)
+                    if echo "$MSG" | tail -1 | grep -q '^$'; then
+                      printf '%s%s\n' "$MSG" "$COAUTHOR_LINE" | git commit --amend -F -
+                    else
+                      printf '%s\n\n%s\n' "$MSG" "$COAUTHOR_LINE" | git commit --amend -F -
+                    fi
+                  fi
+                  SCRIPT
+
+                  chmod +x /tmp/add_coauthor.sh
+                  export COAUTHOR_LINE
+
+                  # Rebase and amend each commit to add co-author
+                  if GIT_SEQUENCE_EDITOR=true git rebase -i --exec "/tmp/add_coauthor.sh" $BASE_COMMIT; then
+                    echo "✅ Added co-author attribution to $COMMITS_AHEAD commit(s)"
+                  else
+                    echo "⚠️ Failed to add co-author, continuing with push anyway..."
+                    git rebase --abort 2>/dev/null || true
+                  fi
+
             - name: Detect and push changes with conflict handling
               id: push_changes
               if: always()
