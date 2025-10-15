@@ -1,12 +1,12 @@
-# MoosicBox App Config Generator
+# MoosicBox Tauri Config Generator
 
-Configuration file generator for MoosicBox applications.
+Configuration file generator for MoosicBox Tauri applications.
 
 ## Overview
 
-The MoosicBox App Config Generator provides:
+The MoosicBox Tauri Config Generator provides:
 
-- **Build Configuration**: Generate TypeScript configuration files
+- **Build Configuration**: Generate TypeScript configuration for Tauri apps
 - **Feature Flags**: Configure web, app, and bundled features
 - **TypeScript Export**: Export configuration as TypeScript constants
 - **CLI Tool**: Command-line binary for configuration generation
