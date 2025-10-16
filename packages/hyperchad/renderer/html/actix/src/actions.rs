@@ -22,12 +22,10 @@ pub async fn handle_action<
 ) -> impl Responder {
     log::debug!("handle_action: action={action:?}");
     if let Some(tx) = &app.action_tx {
-        let action_name = action
-            .0
-            .action
-            .as_str()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| serde_json::to_string(&action.0.action).unwrap());
+        let action_name = action.0.action.as_str().map_or_else(
+            || serde_json::to_string(&action.0.action).unwrap(),
+            std::string::ToString::to_string,
+        );
         tx.send((action_name, action.0.value))
             .map_err(ErrorInternalServerError)?;
     }
