@@ -246,6 +246,36 @@ jobs:
                       - YES → Fix it (it''s fundamental)
                       - NO → Leave it alone (it''s stylistic)
 
+                      ## 📖 PUBLIC API FOCUS - Do Not Document Internals
+
+                      READMEs are for **users of the package**, not maintainers. Only document the public-facing API.
+
+                      **DO Document:**
+                      - ✅ Public functions, structs, traits (items with `pub` visibility)
+                      - ✅ Cargo features users can enable (e.g., `--features async`)
+                      - ✅ Main entry points and usage patterns
+                      - ✅ Public configuration options
+                      - ✅ Integration examples for users
+
+                      **DO NOT Document:**
+                      - ❌ Internal macros (`macro_rules!` not in public API)
+                      - ❌ Private or crate-private items (`pub(crate)`, `pub(super)`, or non-pub items)
+                      - ❌ Implementation details (caches, thread pools, internal state)
+                      - ❌ Test utilities or `#[cfg(test)]` code
+                      - ❌ Build scripts or internal feature implementations
+                      - ❌ Helper functions only used within the crate
+
+                      **How to identify internal items when reviewing code:**
+                      1. Check visibility: `pub` without qualifiers = Public ✅ | `pub(crate)` or no `pub` = Internal ❌
+                      2. Check if exported in `lib.rs` or module root = Public ✅
+                      3. Internal naming patterns (`_helper`, `internal_*`) = Internal ❌
+                      4. Only called within same crate = Internal ❌
+
+                      **Decision Rule for Documentation:**
+                      When considering whether to document something, ask: "Would a user of this library as a dependency need to know this?"
+                      - YES (it''s a public API they''ll call) → Document it
+                      - NO (it''s internal implementation) → Leave it out or remove it
+
                       ## Verification Process
 
                       1. **Check Claims Against Code**
@@ -430,6 +460,33 @@ jobs:
                       Before making ANY change, ask: "Would someone reading this be fundamentally MISLED about what this project does or how to use it?"
                       - YES → Fix it (it''s fundamental)
                       - NO → Leave it alone (it''s stylistic)
+
+                      ## 📖 USER-FACING FOCUS - Don''t Document Implementation Details
+
+                      The root README is for **users and potential contributors**, not deep implementation details.
+
+                      **DO Document:**
+                      - ✅ What the project does (high-level purpose)
+                      - ✅ How to install and run it
+                      - ✅ Major features users will interact with
+                      - ✅ Public APIs and user-facing interfaces
+                      - ✅ Configuration options for deployment
+                      - ✅ Getting started guide
+
+                      **DO NOT Document:**
+                      - ❌ Internal architecture implementation details
+                      - ❌ Development tooling specifics (save for DEVELOPMENT.md)
+                      - ❌ Internal macros or helper utilities
+                      - ❌ Build system internals
+                      - ❌ Implementation-specific optimizations (caches, thread pools, etc.)
+                      - ❌ Internal module organization (unless relevant to users)
+
+                      **Decision Rule for Documentation:**
+                      Ask: "Does a user evaluating or using MoosicBox need to know this?"
+                      - YES (helps them understand/use the project) → Document it
+                      - NO (only relevant to maintainers/contributors) → Leave it out
+
+                      **Focus on:** What users need to evaluate, install, configure, and use MoosicBox successfully.
 
                       ## Verification Process
 
