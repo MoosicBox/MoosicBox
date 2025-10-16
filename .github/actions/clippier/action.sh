@@ -66,7 +66,18 @@ detect_git_range() {
     echo "🔍 Auto-detecting git range for event: $event_name"
 
     if [[ "$event_name" == "pull_request" ]]; then
-        GIT_BASE="${GITHUB_BASE_REF:-HEAD~1}"
+        local base_ref="${GITHUB_BASE_REF:-master}"
+
+        # Fetch the base branch to ensure we have it locally
+        echo "📥 Fetching base branch: $base_ref"
+        if git fetch origin "$base_ref" 2>/dev/null; then
+            echo "✅ Successfully fetched $base_ref"
+        else
+            echo "⚠️  Failed to fetch $base_ref, may already be up-to-date"
+        fi
+
+        # Use origin/ prefix to compare against remote branch
+        GIT_BASE="origin/$base_ref"
         GIT_HEAD="${GITHUB_SHA:-HEAD}"
         echo "Pull request: comparing $GIT_BASE -> $GIT_HEAD"
 
