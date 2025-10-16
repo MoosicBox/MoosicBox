@@ -10203,6 +10203,7 @@ dependencies = [
 name = "openport"
 version = "0.1.2"
 dependencies = [
+ "clap 4.5.49",
  "switchy_random",
 ]
 

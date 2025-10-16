@@ -3,25 +3,31 @@
 #![allow(clippy::multiple_crate_versions)]
 #![forbid(unsafe_code)]
 
-use std::env;
+use clap::Parser;
 use std::process;
 
-fn print_usage() {
-    eprintln!("Usage: openport [START END] [--inclusive]");
-    eprintln!();
-    eprintln!("Find an available port on the system.");
-    eprintln!();
-    eprintln!("Examples:");
-    eprintln!("  openport              # Find any available port");
-    eprintln!("  openport 15000 16000  # Find port in range 15000..16000");
-    eprintln!("  openport 8000 9000 --inclusive  # Find port in range 8000..=9000");
+/// Find an available port on the system
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Start of the port range
+    #[arg(value_name = "START")]
+    start: Option<u16>,
+
+    /// End of the port range
+    #[arg(value_name = "END", requires = "start")]
+    end: Option<u16>,
+
+    /// Use inclusive range (includes the end port)
+    #[arg(long)]
+    inclusive: bool,
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    match args.len() {
-        1 => {
+    match (cli.start, cli.end) {
+        (None, None) => {
             // No arguments - find any available port using rand feature
             #[cfg(feature = "rand")]
             {
@@ -39,29 +45,13 @@ fn main() {
                 process::exit(1);
             }
         }
-        3 | 4 => {
-            // Parse range arguments
-            let start: u16 = args[1].parse().unwrap_or_else(|_| {
-                eprintln!("Error: Invalid start port '{}'", args[1]);
-                print_usage();
-                process::exit(1);
-            });
-
-            let end: u16 = args[2].parse().unwrap_or_else(|_| {
-                eprintln!("Error: Invalid end port '{}'", args[2]);
-                print_usage();
-                process::exit(1);
-            });
-
+        (Some(start), Some(end)) => {
             if start >= end {
                 eprintln!("Error: Start port must be less than end port");
                 process::exit(1);
             }
 
-            // Check for --inclusive flag
-            let inclusive = args.len() == 4 && args[3] == "--inclusive";
-
-            let port = if inclusive {
+            let port = if cli.inclusive {
                 openport::pick_unused_port(start..=end)
             } else {
                 openport::pick_unused_port(start..end)
@@ -74,10 +64,6 @@ fn main() {
                 process::exit(1);
             }
         }
-        _ => {
-            eprintln!("Error: Invalid arguments");
-            print_usage();
-            process::exit(1);
-        }
+        _ => unreachable!("clap ensures START and END are provided together"),
     }
 }
