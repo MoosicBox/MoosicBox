@@ -20,6 +20,9 @@ path = "src/main.rs"
 [dependencies]
 switchy_random = { workspace = true, features = ["rand"], optional = true }
 
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+clap = { workspace = true, features = ["derive"] }
+
 ### FEATURES #################################################################
 
 [features]
