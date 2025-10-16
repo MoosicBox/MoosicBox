@@ -25,12 +25,11 @@ fn main() {
             // No arguments - find any available port using rand feature
             #[cfg(feature = "rand")]
             {
-                match openport::pick_random_unused_port() {
-                    Some(port) => println!("{port}"),
-                    None => {
-                        eprintln!("Error: No available ports found");
-                        process::exit(1);
-                    }
+                if let Some(port) = openport::pick_random_unused_port() {
+                    println!("{port}");
+                } else {
+                    eprintln!("Error: No available ports found");
+                    process::exit(1);
                 }
             }
             #[cfg(not(feature = "rand"))]
@@ -42,23 +41,17 @@ fn main() {
         }
         3 | 4 => {
             // Parse range arguments
-            let start: u16 = match args[1].parse() {
-                Ok(n) => n,
-                Err(_) => {
-                    eprintln!("Error: Invalid start port '{}'", args[1]);
-                    print_usage();
-                    process::exit(1);
-                }
-            };
+            let start: u16 = args[1].parse().unwrap_or_else(|_| {
+                eprintln!("Error: Invalid start port '{}'", args[1]);
+                print_usage();
+                process::exit(1);
+            });
 
-            let end: u16 = match args[2].parse() {
-                Ok(n) => n,
-                Err(_) => {
-                    eprintln!("Error: Invalid end port '{}'", args[2]);
-                    print_usage();
-                    process::exit(1);
-                }
-            };
+            let end: u16 = args[2].parse().unwrap_or_else(|_| {
+                eprintln!("Error: Invalid end port '{}'", args[2]);
+                print_usage();
+                process::exit(1);
+            });
 
             if start >= end {
                 eprintln!("Error: Start port must be less than end port");
@@ -74,12 +67,11 @@ fn main() {
                 openport::pick_unused_port(start..end)
             };
 
-            match port {
-                Some(port) => println!("{port}"),
-                None => {
-                    eprintln!("Error: No available ports found in range {start}..{end}");
-                    process::exit(1);
-                }
+            if let Some(port) = port {
+                println!("{port}");
+            } else {
+                eprintln!("Error: No available ports found in range {start}..{end}");
+                process::exit(1);
             }
         }
         _ => {
