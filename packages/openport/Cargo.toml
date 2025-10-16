@@ -16,17 +16,19 @@ independent = true
 [[bin]]
 name = "openport"
 path = "src/main.rs"
+required-features = ["cli"]
 
 [dependencies]
+clap = { workspace = true, features = ["derive"], optional = true }
 switchy_random = { workspace = true, features = ["rand"], optional = true }
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-clap = { workspace = true, features = ["derive"] }
 
 ### FEATURES #################################################################
 
 [features]
 default = []
+
+# Enable CLI binary with argument parsing
+cli = ["dep:clap"]
 
 fail-on-warnings = ["switchy_random?/fail-on-warnings"]
 
