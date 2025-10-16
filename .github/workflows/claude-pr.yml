@@ -11,9 +11,16 @@ on:
 jobs:
     claude:
         if: |
-            (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
-            (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-            (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+            ((github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
+             (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+             (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')))
+            &&
+            !contains(github.event.comment.body, '@claude sync') &&
+            !contains(github.event.comment.body, '@claude rebase') &&
+            !contains(github.event.comment.body, '@claude fix-conflicts') &&
+            !contains(github.event.review.body, '@claude sync') &&
+            !contains(github.event.review.body, '@claude rebase') &&
+            !contains(github.event.review.body, '@claude fix-conflicts')
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -474,8 +481,8 @@ jobs:
                   COAUTHOR_LINE="Co-authored-by: ${COMMENTER_LOGIN} <${COMMENTER_EMAIL}>"
                   echo "👥 Adding co-author: $COAUTHOR_LINE"
 
-                  # Get the base commit (where we branched from origin)
-                  BASE_COMMIT=$(git merge-base HEAD origin/$TARGET_BRANCH)
+                  # Use origin branch as base (not merge-base) to only rebase NEW commits
+                  BASE_COMMIT="origin/$TARGET_BRANCH"
 
                   # Create a temporary script for amending commits
                   cat > /tmp/add_coauthor.sh << 'SCRIPT'
