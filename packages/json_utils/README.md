@@ -125,7 +125,7 @@ pub enum ParseError {
     #[error("Failed to convert to type: {0:?}")]
     ConvertType(String),
 
-    #[error("Failed to convert to type: {0:?}")]
+    #[error("Missing required value: {0:?}")]
     MissingValue(String),
 }
 ```
