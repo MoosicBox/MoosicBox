@@ -37,4 +37,4 @@ Licensed under the same terms as the MoosicBox project.
 
 - [MoosicBox Audio Decoder](../audio_decoder/README.md) - Audio decoding framework
 - [RFC 6716](https://tools.ietf.org/html/rfc6716) - Opus codec specification
-- [Symphonia](https://github.com/pdeljanov/symphonia) - Multimedia decoding framework
+- [Symphonia](https://github.com/pdeljanov/Symphonia) - Multimedia decoding framework
