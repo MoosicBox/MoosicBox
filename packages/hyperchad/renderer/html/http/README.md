@@ -334,13 +334,13 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
     tokio::spawn(async move {
         while let Ok((action_name, value)) = action_rx.recv_async().await {
             match action_name.as_str() {
-                "\"submit_contact_form\"" => {
+                "submit_contact_form" => {
                     if let Some(Value::Object(data)) = value {
                         println!("Contact form submitted: {:?}", data);
                         // Send email, save to database, etc.
                     }
                 }
-                "\"user_login\"" => {
+                "user_login" => {
                     if let Some(Value::Object(credentials)) = value {
                         println!("Login attempt: {:?}", credentials);
                         // Authenticate user

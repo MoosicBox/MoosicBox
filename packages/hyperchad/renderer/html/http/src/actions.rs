@@ -26,8 +26,12 @@ pub fn handle_action(
     };
 
     log::debug!("handle_action: action={action:?}");
-    tx.send((serde_json::to_string(&action.action).unwrap(), action.value))
-        .unwrap();
+    let action_name = action
+        .action
+        .as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| serde_json::to_string(&action.action).unwrap());
+    tx.send((action_name, action.value)).unwrap();
 
     Ok(Response::builder().status(204).body(vec![])?)
 }

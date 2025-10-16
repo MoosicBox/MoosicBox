@@ -22,11 +22,14 @@ pub async fn handle_action<
 ) -> impl Responder {
     log::debug!("handle_action: action={action:?}");
     if let Some(tx) = &app.action_tx {
-        tx.send((
-            serde_json::to_string(&action.0.action).unwrap(),
-            action.0.value,
-        ))
-        .map_err(ErrorInternalServerError)?;
+        let action_name = action
+            .0
+            .action
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| serde_json::to_string(&action.0.action).unwrap());
+        tx.send((action_name, action.0.value))
+            .map_err(ErrorInternalServerError)?;
     }
 
     Ok::<_, actix_web::Error>(HttpResponse::NoContent())
