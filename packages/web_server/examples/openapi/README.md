@@ -107,7 +107,7 @@ curl http://localhost:8080/example
 
 ### OpenAPI Specification Setup
 
-**API Definition** (from `src/main.rs:37-49`)
+**API Definition**
 
 ```rust
 pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> =
@@ -132,7 +132,7 @@ struct ApiDoc;
 
 ### Route Documentation
 
-The example uses the `path!` macro to define OpenAPI documentation for the `/example` endpoint (from `src/main.rs:70-115`):
+The example uses the `path!` macro to define OpenAPI documentation for the `/example` endpoint:
 
 **Parameter Documentation**
 
@@ -178,11 +178,11 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 )
 ```
 
-**Important**: This documentation is for demonstration purposes. The actual handler (`src/main.rs:22-29`) is intentionally simple and doesn't validate these parameters or return JSON. This showcases how OpenAPI documentation can be written independently of implementation.
+**Important**: This documentation is for demonstration purposes. The actual handler is intentionally simple and doesn't validate these parameters or return JSON. This showcases how OpenAPI documentation can be written independently of implementation.
 
 ### Documentation Serving
 
-**Automatic Binding** (from `src/main.rs:18-20`)
+**Automatic Binding**
 
 ```rust
 .with_scope(moosicbox_web_server::openapi::bind_services(
@@ -212,7 +212,7 @@ Tags are used to organize endpoints into logical groups in the documentation UI.
 
 ### Nested API Structure
 
-The example includes a `nest_api` function (`src/main.rs:57-65`) that demonstrates how to combine multiple API specifications:
+The example includes a `nest_api` function that demonstrates how to combine multiple API specifications:
 
 ```rust
 fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -295,7 +295,7 @@ struct ApiResponse {
 
 ### Nested API Organization ✅ Implemented
 
-The `nest_api` function is implemented in this example (`src/main.rs:57-65`):
+The `nest_api` function is implemented in this example:
 
 ```rust
 fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -358,7 +358,7 @@ moosicbox_web_server = { workspace = true, features = ["actix", "cors", "openapi
 ### CORS Issues with Documentation
 
 **Problem**: Documentation UI can't access API
-**Solution**: CORS is configured in this example to allow all origins for development (`src/main.rs:8-12`)
+**Solution**: CORS is configured in this example to allow all origins for development
 
 ## Comparison with Other Examples
 
@@ -391,7 +391,7 @@ let v2_api = /* build v2 OpenAPI spec */;
 
 ```rust
 // Combine multiple service specs using the nest_api pattern
-// demonstrated in this example (src/main.rs:57-65)
+// demonstrated in this example
 let combined_api = nest_api(
     main_api,
     "/auth",
