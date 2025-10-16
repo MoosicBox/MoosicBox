@@ -48,12 +48,12 @@ The MoosicBox Library Models package provides:
 - **Serialization**: JSON (via serde) and database compatible
 - **String Parsing**: Implements `FromStr` for parsing from strings (SCREAMING_SNAKE_CASE format)
 
+### API Models (available with `api` feature)
+
 #### ApiLibraryArtist
 
 - API-compatible artist model with ID fields for external sources (Tidal, Qobuz, YT)
 - `contains_cover` flag instead of cover path
-
-### API Models (available with `api` feature)
 
 #### ApiLibraryAlbum
 
