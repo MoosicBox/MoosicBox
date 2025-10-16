@@ -203,6 +203,13 @@ impl Decoder {
             let toc = toc::Toc::parse(packet[0]);
             let config = toc.configuration();
 
+            log::debug!(
+                "Main decode: mode={:?}, sample_rate={}, frame_size={:?}",
+                config.mode,
+                self.sample_rate as u32,
+                config.frame_size
+            );
+
             if toc.channels() != self.channels {
                 return Err(Error::InvalidPacket(format!(
                     "Channel mismatch: packet={:?}, decoder={:?}",
@@ -805,8 +812,10 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        use crate::celt::CELT_NUM_BANDS;
-        use crate::range::RangeDecoder;
+        use crate::{
+            celt::{CELT_NUM_BANDS, fixed_point::sig_to_int16},
+            range::RangeDecoder,
+        };
 
         let mut ec = RangeDecoder::new(frame_data)?;
 
@@ -823,13 +832,56 @@ impl Decoder {
             )));
         }
 
+        log::debug!(
+            "decode_celt_only: frame has {} samples, nonzero={}, first 20: {:?}",
+            decoded_frame.samples.len(),
+            decoded_frame.samples.iter().filter(|&&x| x != 0).count(),
+            &decoded_frame.samples[..20.min(decoded_frame.samples.len())]
+        );
+        if decoded_frame.samples.len() >= 60 {
+            log::debug!(
+                "decode_celt_only[40..60]: {:?}",
+                &decoded_frame.samples[40..60]
+            );
+        }
+
+        // Convert CeltSig (Q12 format) to i16 PCM
         for (i, &sample) in decoded_frame.samples.iter().enumerate() {
             if i < output.len() {
-                #[allow(clippy::cast_possible_truncation)]
-                let sample_i16 = (sample.clamp(-1.0, 1.0) * 32768.0) as i16;
-                output[i] = sample_i16;
+                // sig_to_int16 converts Q12 → i16 with proper rounding and saturation
+                output[i] = sig_to_int16(sample);
             }
         }
+
+        log::debug!(
+            "decode_celt_only: After conversion to PCM, output[0..20]: {:?}",
+            &output[..20]
+        );
+        if output.len() >= 60 {
+            log::debug!("decode_celt_only: output[40..60]: {:?}", &output[40..60]);
+        }
+
+        // DEBUG: For WB, log the Q12 samples before conversion
+        if self.sample_rate == SampleRate::Hz16000 && decoded_frame.samples.len() >= 60 {
+            log::debug!(
+                "CELT decode Q12 samples[40..60]: {:?}",
+                &decoded_frame.samples[40..60]
+            );
+        }
+
+        // TODO: Apply deemphasis + decimation when downsample > 1
+        // Currently CELT always outputs 48kHz samples (480 for 10ms frame).
+        // When self.sample_rate < 48kHz, we should decimate the output.
+        // For example, WB (16kHz) should output 160 samples, not 480.
+        // The downsample factor is set via set_output_rate(), but decimation
+        // is not yet implemented in this decode path.
+        //
+        // RFC 6716 lines 498-501: "decimate the MDCT layer output"
+        // LibOpus: celt_decoder.c applies deemphasis filter + time-domain decimation
+        //
+        // Until decimation is implemented:
+        // - 48kHz output works correctly (bit-exact for NB via downsampling)
+        // - Other rates (8/12/16/24kHz) will fail with sample count mismatch
 
         Ok(decoded_frame.samples.len())
     }
@@ -870,8 +922,7 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        use crate::celt::CELT_NUM_BANDS;
-        use crate::range::RangeDecoder;
+        use crate::{celt::CELT_NUM_BANDS, celt::fixed_point::sig_to_int16, range::RangeDecoder};
 
         const HYBRID_SILK_INTERNAL_RATE: u32 = 16000;
         const HYBRID_START_BAND: usize = 17;
@@ -956,11 +1007,7 @@ impl Decoder {
         let celt_i16: Vec<i16> = decoded_frame
             .samples
             .iter()
-            .map(|&s| {
-                #[allow(clippy::cast_possible_truncation)]
-                let sample_i16 = (s.clamp(-1.0, 1.0) * 32768.0) as i16;
-                sample_i16
-            })
+            .map(|&s| sig_to_int16(s))
             .collect();
 
         let sample_count = target_samples * channels as usize;

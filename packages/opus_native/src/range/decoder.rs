@@ -272,6 +272,7 @@ impl RangeDecoder {
             t = s;
             ret = ret.wrapping_add(1); // Pre-increment (++ret)
             s = r * u32::from(icdf[ret]);
+
             if d >= s {
                 break;
             }

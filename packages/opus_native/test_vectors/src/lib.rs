@@ -97,6 +97,10 @@ pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
         return f64::INFINITY;
     }
 
+    if signal_power < 1e-10 {
+        return 0.0;
+    }
+
     10.0 * (signal_power / noise_power).log10()
 }
 

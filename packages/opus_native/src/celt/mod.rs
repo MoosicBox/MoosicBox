@@ -4,6 +4,7 @@
 
 mod constants;
 mod decoder;
+pub mod fixed_point;
 mod pvq;
 
 pub use constants::CELT_NUM_BANDS;

@@ -1,5 +1,35 @@
 use moosicbox_opus_native_test_vectors::{calculate_snr, test_vectors_dir};
 
+fn detect_algorithmic_delay(expected: &[i16], actual: &[i16], _channels: usize) -> usize {
+    let max_delay = 20;
+
+    for delay in 0..max_delay {
+        if delay >= expected.len() {
+            break;
+        }
+
+        let mut matches = 0;
+        let mut total = 0;
+        let check_samples = 50.min(expected.len() - delay).min(actual.len());
+
+        for i in 0..check_samples {
+            let exp = expected.get(delay + i).copied().unwrap_or(0);
+            let act = actual.get(i).copied().unwrap_or(0);
+
+            if exp == act {
+                matches += 1;
+            }
+            total += 1;
+        }
+
+        if total > 0 && matches * 100 / total > 80 {
+            return delay;
+        }
+    }
+
+    0
+}
+
 #[cfg(feature = "silk")]
 #[test]
 fn test_decode_silk_vectors() {
@@ -93,6 +123,12 @@ fn test_decode_silk_vectors() {
                 &expected[..20.min(expected.len())]
             );
             eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
+
+            eprintln!(
+                "  Expected[40..60]: {:?}",
+                &expected[40..60.min(expected.len())]
+            );
+            eprintln!("  Actual[40..60]: {:?}", &actual[40..60.min(actual.len())]);
 
             let snr = calculate_snr(expected, actual);
             if snr.is_infinite() {
@@ -323,6 +359,229 @@ fn test_decode_silk_vectors_skip_delay() {
             if snr > 20.0 {
                 eprintln!("  ✓ Much better SNR with delay compensation!");
             }
+        }
+    }
+}
+
+#[cfg(feature = "celt")]
+#[test]
+#[ignore = "Ignored until fixed-point is finished"]
+fn test_decode_celt_vectors() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
+    use moosicbox_opus_native_test_vectors::vectors_available;
+
+    if !vectors_available() {
+        eprintln!("Skipping: test vectors not generated");
+        return;
+    }
+
+    for bandwidth in &["nb", "wb", "swb", "fb"] {
+        use moosicbox_opus_native_test_vectors::TestVector;
+
+        let vectors_dir = test_vectors_dir().join("celt").join(bandwidth);
+        if !vectors_dir.exists() {
+            eprintln!(
+                "Skipping {}: directory doesn't exist: {:?}",
+                bandwidth, vectors_dir
+            );
+            continue;
+        }
+
+        eprintln!("Loading {} vectors from {:?}", bandwidth, vectors_dir);
+
+        let vectors = TestVector::load_all(&vectors_dir).unwrap_or_else(|e| {
+            panic!("Failed to load CELT test vectors from {vectors_dir:?}: {e}");
+        });
+
+        for vector in vectors {
+            let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap_or_else(|e| {
+                panic!("Invalid sample rate {}: {e}", vector.sample_rate);
+            });
+            let channels = if vector.channels == 1 {
+                Channels::Mono
+            } else {
+                Channels::Stereo
+            };
+
+            let mut decoder = Decoder::new(sample_rate, channels)
+                .unwrap_or_else(|e| panic!("Failed to create decoder: {e}"));
+
+            let mut output = vec![0i16; vector.expected_pcm.len()];
+            let decoded_samples = decoder
+                .decode(Some(&vector.packet), &mut output, false)
+                .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
+
+            eprintln!("Test: {} ({})", vector.name, bandwidth);
+            eprintln!(
+                "  Sample rate: {} Hz, Decoded {} samples/ch, expected {} output samples",
+                vector.sample_rate,
+                decoded_samples,
+                output.len()
+            );
+
+            let delay = detect_algorithmic_delay(&vector.expected_pcm, &output, channels as usize);
+
+            if delay > 0 {
+                eprintln!(
+                    "  Algorithmic delay: {} samples/ch (libopus includes as zeros, we skip)",
+                    delay
+                );
+            }
+
+            let min_len = (decoded_samples * channels as usize)
+                .min(vector.expected_pcm.len().saturating_sub(delay));
+            let expected_shifted = &vector.expected_pcm[delay..delay + min_len];
+            let actual = &output[..min_len];
+
+            // Check if both expected and actual are silence AFTER delay compensation
+            let expected_nonzero = expected_shifted.iter().any(|&s| s != 0);
+            let actual_nonzero = actual.iter().any(|&s| s != 0);
+
+            if !expected_nonzero && !actual_nonzero {
+                eprintln!(
+                    "  Skipping {}: both reference and decoded are silence (encoder optimization)",
+                    vector.name
+                );
+                continue;
+            }
+
+            eprintln!(
+                "  Expected[0..20]: {:?}",
+                &expected_shifted[..20.min(expected_shifted.len())]
+            );
+            eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
+
+            eprintln!(
+                "  Expected[40..60]: {:?}",
+                &expected_shifted[40..60.min(expected_shifted.len())]
+            );
+            eprintln!("  Actual[40..60]: {:?}", &actual[40..60.min(actual.len())]);
+
+            // Extra debug for WB
+            if *bandwidth == "wb" && vector.name.contains("sine_mono") {
+                eprintln!("  WB EXTRA DEBUG:");
+                eprintln!("    Expected[42..52]: {:?}", &expected_shifted[42..52]);
+                eprintln!("    Actual[42..52]:   {:?}", &actual[42..52]);
+                eprintln!(
+                    "    Expected[60..70]: {:?}",
+                    &expected_shifted[60..70.min(expected_shifted.len())]
+                );
+                eprintln!(
+                    "    Actual[60..70]:   {:?}",
+                    &actual[60..70.min(actual.len())]
+                );
+            }
+
+            let snr = calculate_snr(expected_shifted, actual);
+            if snr.is_infinite() {
+                eprintln!("  SNR: ∞ dB (bit-exact)");
+            } else {
+                eprintln!("  SNR: {} dB", snr);
+            }
+
+            assert!(
+                snr > 40.0 || snr.is_infinite(),
+                "CELT SNR too low for {}: {} dB (expected > 40 dB with delay compensation)",
+                vector.name,
+                snr
+            );
+        }
+    }
+}
+
+#[cfg(all(feature = "silk", feature = "celt"))]
+#[test]
+#[ignore = "Hybrid mode needs CELT decimation fix first (depends on test_decode_celt_vectors)"]
+fn test_decode_hybrid_vectors() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
+    use moosicbox_opus_native_test_vectors::vectors_available;
+
+    if !vectors_available() {
+        eprintln!("Skipping: test vectors not generated");
+        return;
+    }
+
+    for bandwidth in &["swb", "fb"] {
+        use moosicbox_opus_native_test_vectors::TestVector;
+
+        let vectors_dir = test_vectors_dir().join("hybrid").join(bandwidth);
+        if !vectors_dir.exists() {
+            continue;
+        }
+
+        let vectors = TestVector::load_all(&vectors_dir).unwrap_or_else(|e| {
+            panic!("Failed to load Hybrid test vectors from {vectors_dir:?}: {e}");
+        });
+
+        for vector in vectors {
+            let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap_or_else(|e| {
+                panic!("Invalid sample rate {}: {e}", vector.sample_rate);
+            });
+            let channels = if vector.channels == 1 {
+                Channels::Mono
+            } else {
+                Channels::Stereo
+            };
+
+            let mut decoder = Decoder::new(sample_rate, channels)
+                .unwrap_or_else(|e| panic!("Failed to create decoder: {e}"));
+
+            let mut output = vec![0i16; vector.expected_pcm.len()];
+            let decoded_samples = decoder
+                .decode(Some(&vector.packet), &mut output, false)
+                .unwrap_or_else(|e| panic!("Failed to decode {}: {e:?}", vector.name));
+
+            eprintln!("Test: {}", vector.name);
+            eprintln!(
+                "  Decoded {} samples/ch, expected {} output samples",
+                decoded_samples,
+                output.len()
+            );
+
+            let expected_nonzero = vector.expected_pcm.iter().any(|&s| s != 0);
+            let actual_nonzero = output.iter().any(|&s| s != 0);
+
+            if !expected_nonzero && !actual_nonzero {
+                eprintln!(
+                    "  Skipping {}: both reference and decoded are silence (encoder may have chosen SILK-only mode)",
+                    vector.name
+                );
+                continue;
+            }
+
+            let delay = detect_algorithmic_delay(&vector.expected_pcm, &output, channels as usize);
+
+            if delay > 0 {
+                eprintln!(
+                    "  Algorithmic delay: {} samples (libopus includes as zeros, we skip)",
+                    delay
+                );
+            }
+
+            let min_len = (decoded_samples * channels as usize)
+                .min(vector.expected_pcm.len().saturating_sub(delay));
+            let expected_shifted = &vector.expected_pcm[delay..delay + min_len];
+            let actual = &output[..min_len];
+
+            eprintln!(
+                "  Expected[0..20]: {:?}",
+                &expected_shifted[..20.min(expected_shifted.len())]
+            );
+            eprintln!("  Actual[0..20]: {:?}", &actual[..20.min(actual.len())]);
+
+            let snr = calculate_snr(expected_shifted, actual);
+            if snr.is_infinite() {
+                eprintln!("  SNR: ∞ dB (bit-exact)");
+            } else {
+                eprintln!("  SNR: {} dB", snr);
+            }
+
+            assert!(
+                snr > 40.0,
+                "Hybrid SNR too low for {}: {} dB (expected > 40 dB with delay compensation)",
+                vector.name,
+                snr
+            );
         }
     }
 }

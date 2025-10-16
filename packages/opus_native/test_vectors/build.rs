@@ -8,15 +8,8 @@ fn main() {
     let generated_dir = out_dir.join("generated");
 
     generate_all_silk_vectors(&generated_dir).expect("Failed to generate SILK vectors");
-
-    fs::create_dir_all(generated_dir.join("celt/fb/basic_mono"))
-        .expect("Failed to create celt/fb/basic_mono directory");
-    fs::create_dir_all(generated_dir.join("integration/basic_stereo"))
-        .expect("Failed to create integration/basic_stereo directory");
-
-    generate_celt_fb_mono(&generated_dir).expect("Failed to generate CELT FB mono vector");
-    generate_integration_stereo(&generated_dir)
-        .expect("Failed to generate integration stereo vector");
+    generate_all_celt_vectors(&generated_dir).expect("Failed to generate CELT vectors");
+    generate_all_hybrid_vectors(&generated_dir).expect("Failed to generate Hybrid vectors");
 }
 
 fn generate_all_silk_vectors(base: &Path) -> Result<(), OpusError> {
@@ -353,16 +346,165 @@ fn generate_silk_vector(
     Ok(())
 }
 
-fn generate_celt_fb_mono(base: &Path) -> Result<(), OpusError> {
-    let dir = base.join("celt/fb/basic_mono");
+fn generate_all_celt_vectors(base: &Path) -> Result<(), OpusError> {
+    generate_celt_nb_vectors(base)?;
+    generate_celt_wb_vectors(base)?;
+    generate_celt_swb_vectors(base)?;
+    generate_celt_fb_vectors(base)?;
+    Ok(())
+}
+
+fn generate_celt_nb_vectors(base: &Path) -> Result<(), OpusError> {
+    let sample_rate = 8000;
+    let frame_size = 80;
+
+    generate_celt_vector(
+        base,
+        "celt/nb/impulse_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Impulse,
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/nb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 300.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/nb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 250.0 },
+    )?;
+
+    Ok(())
+}
+
+fn generate_celt_wb_vectors(base: &Path) -> Result<(), OpusError> {
+    let sample_rate = 16000;
+    let frame_size = 160;
+
+    generate_celt_vector(
+        base,
+        "celt/wb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 600.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/wb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 500.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/wb/noise_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::WhiteNoise,
+    )?;
+
+    Ok(())
+}
+
+fn generate_celt_swb_vectors(base: &Path) -> Result<(), OpusError> {
+    let sample_rate = 24000;
+    let frame_size = 240;
+
+    generate_celt_vector(
+        base,
+        "celt/swb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 1000.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/swb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 900.0 },
+    )?;
+
+    Ok(())
+}
+
+fn generate_celt_fb_vectors(base: &Path) -> Result<(), OpusError> {
     let sample_rate = 48000;
-    let channels = 1;
     let frame_size = 480;
 
-    let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_AUDIO)?;
-    let mut decoder = Decoder::new(sample_rate, channels)?;
+    generate_celt_vector(
+        base,
+        "celt/fb/silence_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Silence,
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/fb/impulse_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Impulse,
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/fb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 1200.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/fb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 1100.0 },
+    )?;
+    generate_celt_vector(
+        base,
+        "celt/fb/noise_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::WhiteNoise,
+    )?;
 
-    let input_pcm = vec![0i16; frame_size];
+    Ok(())
+}
+
+fn generate_celt_vector(
+    base: &Path,
+    path: &str,
+    sample_rate: i32,
+    channels: i32,
+    frame_size: usize,
+    signal_type: SignalType,
+) -> Result<(), OpusError> {
+    let dir = base.join(path);
+    fs::create_dir_all(&dir).expect("Failed to create directory");
+
+    let mut encoder = Encoder::new(sample_rate as u32, channels as u8, OPUS_APPLICATION_AUDIO)?;
+    let mut decoder = Decoder::new(sample_rate as u32, channels as u8)?;
+
+    let input_pcm = generate_signal(signal_type, sample_rate, frame_size, channels);
     let mut packet = vec![0u8; 4000];
 
     let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;
@@ -370,37 +512,121 @@ fn generate_celt_fb_mono(base: &Path) -> Result<(), OpusError> {
 
     fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
 
-    let mut output_pcm = vec![0i16; frame_size];
+    let mut output_pcm = vec![0i16; frame_size * channels as usize];
     let decoded_samples = decoder.decode(&packet, &mut output_pcm, frame_size, false)?;
 
-    output_pcm.truncate(decoded_samples);
+    output_pcm.truncate(decoded_samples * channels as usize);
     let pcm_bytes: Vec<u8> = output_pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
     fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
 
+    let frame_size_ms = (frame_size * 1000) / sample_rate as usize;
     let meta = format!(
         r#"{{
   "sample_rate": {},
   "channels": {},
-  "frame_size_ms": 10,
+  "frame_size_ms": {},
   "mode": "celt"
 }}"#,
-        sample_rate, channels
+        sample_rate, channels, frame_size_ms
     );
     fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
 
     Ok(())
 }
 
-fn generate_integration_stereo(base: &Path) -> Result<(), OpusError> {
-    let dir = base.join("integration/basic_stereo");
+fn generate_all_hybrid_vectors(base: &Path) -> Result<(), OpusError> {
+    generate_hybrid_swb_vectors(base)?;
+    generate_hybrid_fb_vectors(base)?;
+    Ok(())
+}
+
+fn generate_hybrid_swb_vectors(base: &Path) -> Result<(), OpusError> {
+    let sample_rate = 24000;
+    let frame_size = 480;
+
+    generate_hybrid_vector(
+        base,
+        "hybrid/swb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 1000.0 },
+    )?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/swb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 900.0 },
+    )?;
+
+    Ok(())
+}
+
+fn generate_hybrid_fb_vectors(base: &Path) -> Result<(), OpusError> {
     let sample_rate = 48000;
-    let channels = 2;
     let frame_size = 960;
 
-    let mut encoder = Encoder::new(sample_rate, channels, OPUS_APPLICATION_AUDIO)?;
-    let mut decoder = Decoder::new(sample_rate, channels)?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/fb/silence_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Silence,
+    )?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/fb/silence_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Silence,
+    )?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/fb/sine_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Sine { freq_hz: 1200.0 },
+    )?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/fb/sine_stereo",
+        sample_rate,
+        2,
+        frame_size,
+        SignalType::Sine { freq_hz: 1100.0 },
+    )?;
+    generate_hybrid_vector(
+        base,
+        "hybrid/fb/mixed_mono",
+        sample_rate,
+        1,
+        frame_size,
+        SignalType::Mixed,
+    )?;
 
-    let input_pcm = vec![0i16; frame_size * 2];
+    Ok(())
+}
+
+fn generate_hybrid_vector(
+    base: &Path,
+    path: &str,
+    sample_rate: i32,
+    channels: i32,
+    frame_size: usize,
+    signal_type: SignalType,
+) -> Result<(), OpusError> {
+    let dir = base.join(path);
+    fs::create_dir_all(&dir).expect("Failed to create directory");
+
+    let mut encoder = Encoder::new(sample_rate as u32, channels as u8, OPUS_APPLICATION_AUDIO)?;
+    let mut decoder = Decoder::new(sample_rate as u32, channels as u8)?;
+
+    let input_pcm = generate_signal(signal_type, sample_rate, frame_size, channels);
     let mut packet = vec![0u8; 4000];
 
     let packet_len = encoder.encode(&input_pcm, frame_size, &mut packet)?;
@@ -408,21 +634,22 @@ fn generate_integration_stereo(base: &Path) -> Result<(), OpusError> {
 
     fs::write(dir.join("packet.bin"), &packet).expect("Failed to write packet.bin");
 
-    let mut output_pcm = vec![0i16; frame_size * 2];
+    let mut output_pcm = vec![0i16; frame_size * channels as usize];
     let decoded_samples = decoder.decode(&packet, &mut output_pcm, frame_size, false)?;
 
-    output_pcm.truncate(decoded_samples * 2);
+    output_pcm.truncate(decoded_samples * channels as usize);
     let pcm_bytes: Vec<u8> = output_pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
     fs::write(dir.join("expected.pcm"), &pcm_bytes).expect("Failed to write expected.pcm");
 
+    let frame_size_ms = (frame_size * 1000) / sample_rate as usize;
     let meta = format!(
         r#"{{
   "sample_rate": {},
   "channels": {},
-  "frame_size_ms": 20,
+  "frame_size_ms": {},
   "mode": "hybrid"
 }}"#,
-        sample_rate, channels
+        sample_rate, channels, frame_size_ms
     );
     fs::write(dir.join("meta.json"), meta).expect("Failed to write meta.json");
 
