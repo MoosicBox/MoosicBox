@@ -119,12 +119,29 @@ pub const fn shl32(a: i32, shift: i32) -> i32 {
     ((a as u32) << shift) as i32
 }
 
+/// Variable shift right (handles both left and right shifts)
+///
+/// If shift > 0: right shift, otherwise: left shift
+///
+/// # Reference
+///
+/// `LibOpus` `celt/fixed_generic.h` `VSHR32` macro
+#[must_use]
+#[inline]
+pub const fn vshr32(a: i32, shift: i32) -> i32 {
+    if shift > 0 {
+        shr32(a, shift)
+    } else {
+        shl32(a, -shift)
+    }
+}
+
 /// Arithmetic shift right with rounding-to-nearest
 /// `LibOpus` `fixed_generic.h:121`
 #[must_use]
 #[inline]
 pub const fn pshr32(a: i32, shift: i32) -> i32 {
-    shr32(a + (1 << (shift - 1)), shift)
+    shr32(a.saturating_add(1 << (shift - 1)), shift)
 }
 
 /// Add two 16-bit values
@@ -183,6 +200,19 @@ pub const fn neg32(x: i32) -> i32 {
 #[inline]
 pub const fn mult16_16(a: i16, b: i16) -> i32 {
     (a as i32) * (b as i32)
+}
+
+/// Multiply two Q15 values, result is Q15 (no rounding)
+///
+/// Formula: `(a * b) >> 15`
+///
+/// # Reference
+///
+/// `LibOpus` `celt/fixed_generic.h` `MULT16_16_Q15` macro
+#[must_use]
+#[inline]
+pub const fn mult16_16_q15(a: i16, b: i16) -> i16 {
+    (mult16_16(a, b) >> 15) as i16
 }
 
 /// 16x32 multiplication, followed by 15-bit shift right
@@ -264,11 +294,27 @@ pub fn mult_norm_gain_q15(norm: CeltNorm, gain: i32) -> i32 {
     mult16_32_q15(norm, gain)
 }
 
-/// Normalize i32 pulses to i16 Q15 coefficients
+/// Inner product of two i16 vectors (dot product)
+///
+/// Computes Σ(x[i] * y[i]) in Q0 format (accumulated in i32).
+///
+/// # Reference
+///
+/// `LibOpus` `celt/pitch.h:159-167` `celt_inner_prod_c()`
+#[must_use]
+pub fn celt_inner_prod(x: &[i16], y: &[i16]) -> i32 {
+    debug_assert_eq!(x.len(), y.len());
+    let mut xy = 0_i32;
+    for i in 0..x.len() {
+        xy = xy.saturating_add(mult16_16(x[i], y[i]));
+    }
+    xy
+}
+
+/// Normalize i32 pulses to i16 Q15 coefficients (bit-exact)
 ///
 /// Converts integer pulse vector to normalized coefficients in Q15 format.
-/// This matches `LibOpus`'s approach of normalizing to unit energy in the
-/// normalized domain.
+/// This matches `LibOpus`'s `renormalise_vector()` for PVQ decoding.
 ///
 /// # Arguments
 ///
@@ -277,99 +323,264 @@ pub fn mult_norm_gain_q15(norm: CeltNorm, gain: i32) -> i32 {
 ///
 /// # Algorithm
 ///
-/// 1. Compute sum of squares: Ryy = Σ(pulses[i]²)
-/// 2. Compute g = 1/sqrt(Ryy) × `Q15_ONE`
-/// 3. output[i] = (pulses[i] × g) >> `scale_shift`
+/// 1. Compute E = EPSILON + Σ(pulses[i]²)
+/// 2. k = floor(log2(E)) / 2
+/// 3. t = E >> (2*(k-7))
+/// 4. g = `rsqrt_norm(t)` * gain  (where gain = `Q31_ONE` for unit norm)
+/// 5. output[i] = (g * pulses[i]) >> (k+1)
 ///
-/// This produces unit-norm coefficients in Q15 format.
+/// # Reference
+///
+/// `LibOpus` `celt/vq.c:379-403` `renormalise_vector()`
 ///
 /// # Panics
 ///
 /// * If pulses and output have different lengths
-#[allow(clippy::cast_precision_loss)]
 pub fn normalize_pulses_to_q15(pulses: &[i32], output: &mut [i16]) {
+    const EPSILON: i32 = 1;
+    const Q31_ONE: i32 = 0x7FFF_FFFF;
+
     assert_eq!(pulses.len(), output.len());
 
-    // Compute Ryy = sum of squares
-    let mut ryy: i64 = 0;
+    let mut energy: i64 = i64::from(EPSILON);
     for &p in pulses {
-        ryy += i64::from(p) * i64::from(p);
+        energy += i64::from(p) * i64::from(p);
     }
 
-    if ryy == 0 {
-        output.fill(0);
-        return;
-    }
+    let energy_i32 = energy.min(i64::from(i32::MAX)) as i32;
 
-    // For normalization to unit energy in Q15:
-    // We want: sqrt(Σ output[i]²) = Q15_ONE
-    // So: output[i] = pulses[i] × Q15_ONE / sqrt(Ryy)
-    //
-    // Using floating-point for now for correctness.
-    // TODO: Replace with fixed-point reciprocal sqrt for bit-exact matching
-    let ryy_sqrt = (ryy as f64).sqrt();
-    let scale = f64::from(Q15_ONE) / ryy_sqrt;
+    let k = i32::from(celt_ilog2(energy_i32)) >> 1;
+    let t = vshr32(energy_i32, 2 * (k - 7));
+    let g = mult32_32_q31(i32::from(celt_rsqrt_norm(t)), Q31_ONE) as i16;
 
     for (i, &pulse) in pulses.iter().enumerate() {
-        let normalized = f64::from(pulse) * scale;
-        output[i] = sat16(normalized.round() as i32);
+        let pulse_i16 = if pulse > i32::from(i16::MAX) {
+            i16::MAX
+        } else if pulse < i32::from(i16::MIN) {
+            i16::MIN
+        } else {
+            pulse as i16
+        };
+
+        let scaled = mult16_16(g, pulse_i16);
+        output[i] = pshr32(scaled, k + 1) as i16;
     }
 }
 
-/// Renormalize vector to Q15ONE target
+/// Renormalize vector to Q15ONE target (bit-exact)
 ///
-/// Matches `LibOpus` `renormalise_vector()` behavior
-/// Used after anti-collapse to ensure unit energy
+/// Matches `LibOpus` `renormalise_vector()` behavior.
+/// Used after anti-collapse to ensure unit energy.
+///
+/// # Arguments
+///
+/// * `vec` - Vector to renormalize (modified in place)
+/// * `gain` - Target gain in Q31 format (`Q31_ONE` for unit norm)
 ///
 /// # Reference
 ///
-/// `LibOpus` vq.c:378-403
-#[allow(clippy::cast_precision_loss)]
-pub fn renormalize_vector_i16(vec: &mut [i16]) {
-    // Compute L2 norm in fixed-point
-    let mut norm_sq: i64 = 0;
+/// `LibOpus` `celt/vq.c:379-403` `renormalise_vector()`
+pub fn renormalize_vector_i16(vec: &mut [i16], gain: i32) {
+    const EPSILON: i64 = 1;
+
+    // Compute energy using i64 to avoid overflow
+    let mut energy_i64 = EPSILON;
     for &val in vec.iter() {
-        norm_sq += i64::from(val) * i64::from(val);
+        energy_i64 += i64::from(val) * i64::from(val);
     }
 
-    if norm_sq == 0 {
-        return;
-    }
+    // Compute k from full i64 energy to get correct shift amount
+    // k = ilog2(energy) >> 1, but we need to handle i64
+    let k = if energy_i64 <= i64::from(i32::MAX) {
+        i32::from(celt_ilog2(energy_i64 as i32)) >> 1
+    } else {
+        // For energy > i32::MAX, compute ilog2 from i64
+        ((energy_i64.ilog2()) >> 1) as i32
+    };
 
-    // Compute scaling factor to achieve Q15ONE norm
-    // sqrt(norm_sq) should equal Q15ONE
-    let norm = (norm_sq as f64).sqrt();
-    let scale = f64::from(Q15_ONE) / norm;
+    // Clamp energy to i32 for t computation
+    let energy_i32 = energy_i64.min(i64::from(i32::MAX)) as i32;
+    let t = vshr32(energy_i32, 2 * (k - 7));
+    let rsqrt = celt_rsqrt_norm(t);
+    let g_i32 = mult32_32_q31(i32::from(rsqrt), gain);
+    let g = g_i32 as i16;
+
+    log::debug!(
+        "renormalize: len={}, energy_i64={energy_i64}, k={k}, t={t}, rsqrt={rsqrt}, g_i32={g_i32}, g={g}, shift={}",
+        vec.len(),
+        k + 1
+    );
 
     for val in vec.iter_mut() {
-        let scaled = f64::from(*val) * scale;
-        *val = sat16(scaled.round() as i32);
+        let scaled = mult16_16(g, *val);
+        *val = pshr32(scaled, k + 1) as i16;
     }
+
+    // Debug: check final energy
+    let mut final_energy_i64 = EPSILON;
+    for &val in vec.iter() {
+        final_energy_i64 += i64::from(val) * i64::from(val);
+    }
+    log::debug!("renormalize: final_energy_i64={final_energy_i64}");
 }
 
-/// Fixed-point sqrt approximation using lookup table + Newton-Raphson
+// ============================================================================
+// Integer Logarithm (Bit-Exact)
+// ============================================================================
+
+/// Integer log base 2 (branchless version)
 ///
-/// Matches `LibOpus` `celt_sqrt()` for fixed-point mode.
+/// Returns the position of the highest set bit in the value.
+/// Undefined for zero and negative numbers.
+///
+/// # Reference
+///
+/// `LibOpus` `celt/entcode.c:41-62` `ec_ilog()`
+#[must_use]
+pub fn ec_ilog(v: u32) -> i16 {
+    let mut v = v;
+    let mut ret = i16::from(v != 0);
+
+    let m = if (v & 0xFFFF_0000) != 0 { 16 } else { 0 };
+    v >>= m;
+    ret |= m;
+
+    let m = if (v & 0xFF00) != 0 { 8 } else { 0 };
+    v >>= m;
+    ret |= m;
+
+    let m = if (v & 0xF0) != 0 { 4 } else { 0 };
+    v >>= m;
+    ret |= m;
+
+    let m = if (v & 0xC) != 0 { 2 } else { 0 };
+    v >>= m;
+    ret |= m;
+
+    ret += i16::from((v & 0x2) != 0);
+    ret
+}
+
+/// Integer log base 2
+///
+/// Returns floor(log2(x)). Undefined for zero and negative numbers.
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.h:275-279` `celt_ilog2()`
+#[must_use]
+#[inline]
+pub fn celt_ilog2(x: i32) -> i16 {
+    debug_assert!(x > 0, "celt_ilog2: x must be positive");
+    ec_ilog(x as u32) - 1
+}
+
+/// Integer log base 2 (zero-safe version)
+///
+/// Returns 0 for x <= 0, otherwise floor(log2(x)).
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.h:284-287` `celt_zlog2()`
+#[must_use]
+#[inline]
+pub fn celt_zlog2(x: i32) -> i16 {
+    if x <= 0 { 0 } else { celt_ilog2(x) }
+}
+
+// ============================================================================
+// Fixed-Point Square Root (Bit-Exact)
+// ============================================================================
+
+/// Fixed-point sqrt using polynomial approximation
+///
 /// Input: i32 value (any Q format)
 /// Output: sqrt of input in Q14 format
 ///
+/// Polynomial coefficients optimized in fixed-point to minimize both RMS
+/// and max error of sqrt(x) over .25<x<1 without exceeding 32767.
+/// RMS error: 3.4e-5, max error: 8.2e-5
+///
 /// # Reference
 ///
-/// `LibOpus` `mathops.c:celt_sqrt()`
+/// `LibOpus` `celt/mathops.c:126-146` `celt_sqrt()`
 #[must_use]
-#[allow(clippy::cast_precision_loss)]
 pub fn celt_sqrt(x: i32) -> i32 {
-    if x <= 0 {
+    const C: [i16; 6] = [23171, 11574, -2901, 1592, -1002, 336];
+
+    if x == 0 {
+        return 0;
+    }
+    if x >= 1_073_741_824 {
+        return 32767;
+    }
+
+    let k = i32::from((celt_ilog2(x) >> 1) - 7);
+    let x_norm = vshr32(x, 2 * k);
+    let n = (x_norm - 32768) as i16;
+
+    let term5 = mult16_16_q15(n, C[5]);
+    let term4 = mult16_16_q15(n, C[4].saturating_add(term5));
+    let term3 = mult16_16_q15(n, C[3].saturating_add(term4));
+    let term2 = mult16_16_q15(n, C[2].saturating_add(term3));
+    let term1 = mult16_16_q15(n, C[1].saturating_add(term2));
+    let rt = C[0].saturating_add(term1);
+
+    vshr32(i32::from(rt), 7 - k)
+}
+
+// ============================================================================
+// Fixed-Point Exponential (Bit-Exact)
+// ============================================================================
+
+/// Fractional part of exp2 using polynomial approximation
+///
+/// Computes 2^(x/1024) for fractional part.
+/// Input: x in range [0, 1024) (representing [0, 1))
+/// Output: Q16 format
+///
+/// Polynomial coefficients: D0=16383, D1=22804, D2=14819, D3=10204
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.h:322-327` `celt_exp2_frac()`
+#[must_use]
+fn celt_exp2_frac(x: i16) -> i32 {
+    const D0: i16 = 16383;
+    const D1: i16 = 22804;
+    const D2: i16 = 14819;
+    const D3: i16 = 10204;
+
+    let frac = x << 4;
+    let term3 = mult16_16_q15(D3, frac);
+    let term2 = mult16_16_q15(frac, D2.saturating_add(term3));
+    let term1 = mult16_16_q15(frac, D1.saturating_add(term2));
+
+    i32::from(D0.saturating_add(term1))
+}
+
+/// Base-2 exponential approximation
+///
+/// Computes 2^x in fixed-point.
+/// Input: x in Q10 format (1024 = 1.0)
+/// Output: Q16 format
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.h:335-346` `celt_exp2()`
+#[must_use]
+pub fn celt_exp2(x: i16) -> i32 {
+    let integer = i32::from(x >> 10);
+
+    if integer > 14 {
+        return 0x7F00_0000;
+    }
+    if integer < -15 {
         return 0;
     }
 
-    // Simple approximation using f32 for now
-    // TODO: Replace with LibOpus's table-based fixed-point sqrt
-    let x_f = x as f32;
-    let sqrt_f = x_f.sqrt();
-
-    // Result in Q14 format
-    (sqrt_f * 16384.0) as i32
+    let frac = celt_exp2_frac(x - ((integer as i16) << 10));
+    vshr32(frac, -integer - 2)
 }
 
 /// Fixed-point exp2 approximation for Q8 energy values
@@ -385,13 +596,10 @@ pub fn celt_sqrt(x: i32) -> i32 {
 /// `LibOpus` bands.c uses `celt_exp2()` for denormalization
 #[must_use]
 pub fn celt_exp2_q8(x_q8: i16) -> i32 {
-    // Convert Q8 to exponent: x_q8 / 256.0
-    // Then compute: 2^(x_q8 / 256.0)
-    let exponent = f32::from(x_q8) / 256.0;
-    let result = exponent.exp2();
-
-    // Return in Q14 format
-    (result * 16384.0) as i32
+    let x_q10 =
+        i16::try_from(i32::from(x_q8) * 4).unwrap_or(if x_q8 > 0 { i16::MAX } else { i16::MIN });
+    let result_q16 = celt_exp2(x_q10);
+    result_q16 >> 2
 }
 
 /// Fixed-point exp2 for dB values (anti-collapse)
@@ -407,67 +615,46 @@ pub fn celt_exp2_q8(x_q8: i16) -> i32 {
 /// `LibOpus` bands.c:339: `celt_exp2_db(-Ediff)`
 #[must_use]
 pub fn celt_exp2_db(x_q8: i32) -> i32 {
-    // Clamp to prevent overflow
     if x_q8 >= 16 * 256 {
-        return 0; // 2^(-16) is effectively zero
+        return 0;
     }
 
-    // Convert Q8 to exponent: -x_q8 / 256.0
-    // Then compute: 2^(-x_q8 / 256.0)
-    let exponent = -f64::from(x_q8) / 256.0;
-    let result = exponent.exp2();
-
-    // Return in Q14 format (capped at 16383)
-    let val = (result * 16384.0) as i32;
-    val.min(16383)
+    let neg_x_q8 = -x_q8;
+    let x_q8_i16 =
+        i16::try_from(neg_x_q8).unwrap_or(if neg_x_q8 > 0 { i16::MAX } else { i16::MIN });
+    celt_exp2_q8(x_q8_i16)
 }
 
 /// Fixed-point reciprocal square root (normalized)
 ///
-/// Computes 1/sqrt(x) for normalized input
-/// Input: x in Q(shift*2) format (e.g., Q14 if shift=7)
-/// Output: 1/sqrt(x) in Q15 format
+/// Computes 1/sqrt(x) for normalized input using Householder iteration.
+/// Input: x in Q16 format (normalized to [16384, 65535])
+/// Output: 1/sqrt(x) in Q14 format
+///
+/// Uses quadratic approximation + 2nd-order Householder iteration.
+/// Maximum relative error: 1.04956E-4, RMSE: 2.80979E-5
 ///
 /// # Reference
 ///
-/// `LibOpus` `celt_rsqrt_norm()` in mathops.c
+/// `LibOpus` `celt/mathops.c:98-123` `celt_rsqrt_norm()`
 #[must_use]
-pub fn celt_rsqrt_norm(x: i32) -> i16 {
-    if x <= 0 {
-        return Q15_ONE;
-    }
+pub const fn celt_rsqrt_norm(x: i32) -> i16 {
+    let n = (x - 32768) as i16;
 
-    // Use f64 for intermediate calculation
-    // TODO: Replace with LibOpus's table-based implementation for bit-exact matching
-    let x_f = f64::from(x) / 16384.0; // Assume Q14 input
-    let rsqrt = 1.0 / x_f.sqrt();
+    let term2 = mult16_16_q15(n, 6713);
+    let term1 = mult16_16_q15(n, -13490_i16.saturating_add(term2));
+    let r = 23557_i16.saturating_add(term1);
 
-    // Return in Q15 format
-    qconst16(rsqrt, 15)
-}
+    let r2 = mult16_16_q15(r, r);
+    let y_part = mult16_16_q15(r2, n)
+        .saturating_add(r2)
+        .saturating_sub(16384);
+    let y = y_part << 1;
 
-/// Integer base-2 logarithm (position of highest set bit)
-///
-/// Returns floor(log2(x)) for x > 0, or 0 for x <= 0
-/// This is equivalent to finding the position of the most significant bit.
-///
-/// # Reference
-///
-/// `LibOpus` `mathops.c:celt_ilog2()`
-#[must_use]
-pub const fn celt_ilog2(mut x: i32) -> i32 {
-    if x <= 0 {
-        return 0;
-    }
+    let inner = mult16_16_q15(y, 12288).saturating_sub(16384);
+    let adjustment = mult16_16_q15(r, mult16_16_q15(y, inner));
 
-    // Count leading zeros and subtract from 31
-    // This gives us the position of the highest set bit
-    let mut log = 0;
-    while x > 0 {
-        x >>= 1;
-        log += 1;
-    }
-    log - 1
+    r.saturating_add(adjustment)
 }
 
 /// Denormalize a single i16 coefficient (Q15) by energy gain (Q14)
@@ -502,60 +689,109 @@ pub fn denorm_coeff_q15_q14(coeff: CeltNorm, gain_q14: i32) -> CeltSig {
 // Trigonometric Functions (Fixed-Point)
 // ============================================================================
 
-/// Compute cosine using CORDIC algorithm
+/// Multiply two Q15 values with rounding (P15 = "precision 15")
+///
+/// Formula: `((a * b) + (1<<14)) >> 15`
+///
+/// # Reference
+///
+/// `LibOpus` `celt/arch.h` `MULT16_16_P15` macro
+#[must_use]
+#[inline]
+fn mult16_16_p15(a: i16, b: i16) -> i16 {
+    let product = i32::from(a) * i32::from(b);
+    ((product + (1 << 14)) >> 15) as i16
+}
+
+/// Cosine approximation for [0, π/2] using polynomial
+///
+/// Input: x in Q15 format (where 32768 = π/2)
+/// Output: cos(x) in Q15 format
+///
+/// Polynomial coefficients from `LibOpus`:
+/// * L1 = 32767
+/// * L2 = -7651
+/// * L3 = 8277
+/// * L4 = -626
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.c:153-160` `_celt_cos_pi_2()`
+#[must_use]
+fn celt_cos_pi_2(x: i16) -> i16 {
+    const L1: i16 = 32767;
+    const L2: i16 = -7651;
+    const L3: i16 = 8277;
+    const L4: i16 = -626;
+
+    let x2 = mult16_16_p15(x, x);
+
+    let term4 = mult16_16_p15(L4, x2);
+    let term3 = mult16_16_p15(x2, L3.saturating_add(term4));
+    let term2 = mult16_16_p15(x2, L2.saturating_add(term3));
+
+    1_i16.saturating_add((L1.saturating_sub(x2)).saturating_add(term2).min(32766))
+}
+
+/// Cosine for full range using bit-exact polynomial approximation
+///
+/// Input: x where 65536 = full period (not 2π)
+/// Output: cos(x) in Q15 format
+///
+/// # Reference
+///
+/// `LibOpus` `celt/mathops.c:167-188` `celt_cos_norm()`
+#[must_use]
+pub fn celt_cos_norm(x: i32) -> i16 {
+    let mut x = x & 0x0001_ffff;
+
+    if x > (1 << 16) {
+        x = (1 << 17) - x;
+    }
+
+    if (x & 0x0000_7fff) != 0 {
+        if x < (1 << 15) {
+            celt_cos_pi_2(x as i16)
+        } else {
+            -celt_cos_pi_2((65536 - x) as i16)
+        }
+    } else if (x & 0x0000_ffff) != 0 {
+        0
+    } else if (x & 0x0001_ffff) != 0 {
+        -32767
+    } else {
+        32767
+    }
+}
+
+/// Compute cosine using bit-exact polynomial approximation
 ///
 /// Input: angle in Q15 format (where 32768 = π)
 /// Output: cos(angle) in Q15 format
 ///
-/// `LibOpus` uses table-based interpolation, but CORDIC is simpler and adequate.
-///
 /// # Reference
 ///
-/// `LibOpus` `kiss_fft.c` uses precomputed trig tables
+/// `LibOpus` `celt/mathops.c:167-188`
 #[must_use]
 pub fn celt_cos(x_q15: i16) -> i16 {
-    // Simple CORDIC implementation
-    // For production, should use LibOpus's trig tables
-
-    // Normalize angle to [0, 2π)
-    let mut angle = i32::from(x_q15);
-
-    // cos(x) = sin(x + π/2)
-    // π/2 in Q15 = 16384
-    angle += 16384;
-
-    celt_sin(angle as i16)
+    celt_cos_norm(i32::from(x_q15) << 1)
 }
 
-/// Compute sine using CORDIC algorithm
+/// Compute sine using bit-exact polynomial approximation
 ///
 /// Input: angle in Q15 format (where 32768 = π)
 /// Output: sin(angle) in Q15 format
 ///
+/// Uses identity: sin(x) = cos(x - π/2)
+///
 /// # Reference
 ///
-/// `LibOpus` uses precomputed trig tables in `kiss_fft.c`
+/// `LibOpus` `celt/mathops.c:167-188`
 #[must_use]
 pub fn celt_sin(x_q15: i16) -> i16 {
-    // Simplified CORDIC for now
-    // Production should use LibOpus's celt_cos_norm() approach
-
-    let angle = i32::from(x_q15);
-
-    // Normalize to [-π, π]
-    // 32768 represents π in Q15
-    let normalized = ((angle + 32768) & 0xFFFF) - 32768;
-
-    // Use Taylor series for small angles (good enough for now)
-    // sin(x) ≈ x - x³/6 for small x
-    // This is a placeholder - LibOpus uses tables
-
-    // For production: implement proper CORDIC or use LibOpus trig tables
-    // Temporary: compute using floating point internally but at least
-    // the interface is fixed-point
-    let angle_f = f64::from(normalized) * std::f64::consts::PI / 32768.0;
-    let result = angle_f.sin();
-    qconst16(result, 15)
+    let angle = i32::from(x_q15) << 1;
+    let shifted = angle - 32768;
+    celt_cos_norm(shifted)
 }
 
 #[cfg(test)]
@@ -591,6 +827,53 @@ mod tests {
         // So 32767 * 32768 >> 15 should give ~32768
         let result = mult16_32_q15(Q15_ONE, 32768);
         assert_eq!(result, 32767);
+    }
+
+    #[test]
+    fn test_mult16_16_p15() {
+        assert_eq!(mult16_16_p15(Q15_ONE, Q15_ONE), 32766);
+        assert_eq!(mult16_16_p15(Q15_ONE / 2, Q15_ONE / 2), Q15_ONE / 4);
+        assert_eq!(mult16_16_p15(-Q15_ONE, Q15_ONE), -32766);
+    }
+
+    #[test]
+    fn test_celt_cos_special_angles() {
+        assert_eq!(celt_cos(0), 32767);
+        assert_eq!(celt_cos(16384), 0);
+        assert_eq!(celt_cos(-16384), 0);
+        let cos_32768 = celt_cos(32767);
+        assert!(cos_32768 >= -32768 && cos_32768 <= -32766);
+    }
+
+    #[test]
+    fn test_celt_sin_special_angles() {
+        let sin_0 = celt_sin(0);
+        assert!(sin_0.abs() <= 1);
+        assert_eq!(celt_sin(16384), 32767);
+        assert_eq!(celt_sin(-16384), -32767);
+    }
+
+    #[test]
+    fn test_celt_cos_norm_special_values() {
+        assert_eq!(celt_cos_norm(0), 32767);
+        assert_eq!(celt_cos_norm(32768), 0);
+        assert_eq!(celt_cos_norm(65536), -32767);
+        assert_eq!(celt_cos_norm(98304), 0);
+    }
+
+    #[test]
+    fn test_trig_identity_sin_cos() {
+        for angle in [0_i16, 8192, 16384, 24576, -8192, -16384] {
+            let s = i32::from(celt_sin(angle));
+            let c = i32::from(celt_cos(angle));
+            let sum_sq = s * s + c * c;
+            let expected = i32::from(Q15_ONE) * i32::from(Q15_ONE);
+            let tolerance = expected / 100;
+            assert!(
+                (sum_sq - expected).abs() < tolerance,
+                "sin²+cos² failed for angle {angle}: {sum_sq} vs {expected}"
+            );
+        }
     }
 
     #[test]
