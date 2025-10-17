@@ -365,8 +365,8 @@ async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.8"
-aws-sdk-apigatewaymanagement = "1.86.0"
-aws-sdk-ssm = "1.96.0"
+aws-sdk-apigatewaymanagement = "1.87.0"
+aws-sdk-ssm = "1.97.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -401,7 +401,7 @@ env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
 flate2 = "1.1.4"
-fltk = "1.5.17"
+fltk = "1.5.19"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
 futures = "0.3.31"
@@ -449,7 +449,7 @@ net2 = "0.2.39"
 ogg = "0.9.2"
 oneshot = "0.1.11"
 open = "5.3.2"
-openssl = { version = "0.10.73", features = ["v110"] }
+openssl = { version = "0.10.74", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.31.0", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
