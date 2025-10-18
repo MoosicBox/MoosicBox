@@ -252,7 +252,7 @@ jobs:
                          1. Run `cargo fmt` (format all code - NOT --check)
                          2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
                          3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
-                         4. Run `npx prettier --write "**/*.md"` from workspace root (format all markdown files)
+                         4. Run `npx prettier --write "**/*.{md,yaml,yml}"` from workspace root (format markdown and YAML files)
                          5. Run `~/.cargo/bin/taplo format` from workspace root (format all TOML files)
 
                          ADDITIONAL CHECKS (when applicable):
