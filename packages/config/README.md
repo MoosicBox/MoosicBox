@@ -1,26 +1,30 @@
 # MoosicBox Configuration
 
-Basic configuration utilities for MoosicBox applications.
+Configuration utilities and file-based configuration system for MoosicBox applications.
 
 ## Overview
 
 The MoosicBox Config package provides:
 
-- **Directory Management**: Configuration and cache directory path utilities
+- **File-based Configuration**: JSON5-based configuration files with support for comments and trailing commas
+- **Directory Management**: Configuration and cache directory path utilities following XDG Base Directory specification
 - **Profile Support**: Multi-profile configuration directory management
 - **Database Integration**: Basic profile and server identity management
 - **App Type Support**: Configuration for different application types (app, server, local)
 - **Path Utilities**: Helper functions for creating and managing config directories
+- **Config Merging**: Merge global and profile-specific configurations
 
 ## Features
 
 ### Core Functionality
 
+- **File-based Config**: Load and parse JSON5 configuration files with comments and trailing commas
 - **Path Management**: Get and create configuration directory paths
 - **Profile Directories**: Manage profile-specific configuration directories
 - **Cache Directories**: Handle cache directory creation and access
 - **App Type Support**: Support for app, server, and local application types
 - **Root Directory Configuration**: Configurable root directory for all configs
+- **Automatic File Discovery**: Prefer `.json5` files but fall back to `.json` (both parsed with JSON5)
 
 ### Available Operations
 
@@ -59,7 +63,145 @@ moosicbox_config = {
 }
 ```
 
+## Configuration File Format
+
+MoosicBox uses **JSON5** for configuration files, which allows:
+- **Comments**: Both single-line (`//`) and multi-line (`/* */`) comments
+- **Trailing commas**: In objects and arrays
+- **Unquoted keys**: For valid JavaScript identifiers
+- **Single quotes**: For strings
+
+Configuration files can use either `.json5` or `.json` extensions. The system **prefers `.json5` files** but will also load `.json` files. Both formats are parsed using the JSON5 parser, so you can use JSON5 features even in `.json` files.
+
+### Directory Structure
+
+```
+~/.local/moosicbox/
+├── server/
+│   ├── config.json5          # Global server configuration (preferred)
+│   ├── config.json           # Alternative format (also supported)
+│   └── profiles/
+│       ├── bob/
+│       │   └── config.json5  # Bob's profile configuration
+│       └── larry/
+│           └── config.json5  # Larry's profile configuration
+├── app/
+│   ├── config.json5          # Global app configuration
+│   └── profiles/
+│       └── default/
+│           └── config.json5  # Default app profile
+└── local/
+    └── config.json5          # Local configuration
+```
+
 ## Usage
+
+### File-based Configuration
+
+```rust
+use moosicbox_config::{AppType, file::{load_global_config, load_profile_config, load_merged_config}};
+
+fn load_configurations() -> Result<(), Box<dyn std::error::Error>> {
+    // Load global configuration
+    let global_config = load_global_config(AppType::Server)?;
+
+    if let Some(server) = global_config.server {
+        println!("Server host: {:?}", server.host);
+        println!("Server port: {:?}", server.port);
+    }
+
+    // Load profile-specific configuration
+    let profile_config = load_profile_config(AppType::Server, "bob")?;
+
+    if let Some(paths) = profile_config.library_paths {
+        println!("Library paths: {:?}", paths);
+    }
+
+    // Load merged configuration (global + profile)
+    let merged = load_merged_config(AppType::Server, "bob")?;
+    println!("Default profile: {:?}", merged.global.default_profile);
+
+    Ok(())
+}
+```
+
+### Example Configuration Files
+
+**Global Configuration** (`~/.local/moosicbox/server/config.json5`):
+
+```json5
+{
+  // Server configuration
+  server: {
+    host: "0.0.0.0",
+    port: 8080,
+  },
+
+  // Automatic backup settings
+  backup: {
+    enabled: true,
+    schedule: "0 0 * * *", // Daily at midnight
+    retentionDays: 30,
+  },
+
+  // Logging configuration
+  logging: {
+    level: "info",
+    file: "/var/log/moosicbox/server.log",
+  },
+
+  // Feature flags
+  features: {
+    experimental: false,
+  },
+
+  // Default profile to use
+  defaultProfile: "default",
+}
+```
+
+**Profile Configuration** (`~/.local/moosicbox/server/profiles/bob/config.json5`):
+
+```json5
+{
+  // Music library paths
+  libraryPaths: [
+    "/music/library1",
+    "/music/library2", // Trailing comma is fine!
+  ],
+
+  // Streaming service credentials
+  services: {
+    tidal: {
+      accessToken: "your-tidal-token",
+      refreshToken: "your-refresh-token",
+    },
+    qobuz: {
+      appId: "your-app-id",
+      userAuthToken: "your-auth-token",
+    },
+  },
+
+  // Playback preferences
+  playback: {
+    gapless: true,
+    crossfadeDuration: 2.5,
+  },
+
+  // Audio quality settings
+  audioQuality: {
+    preferredFormat: "FLAC",
+    bitDepth: 24,
+    sampleRate: 96000,
+  },
+
+  // Player settings
+  player: {
+    volume: 0.8,
+    bufferSize: 4096,
+  },
+}
+```
 
 ### Basic Path Management
 
@@ -175,6 +317,15 @@ async fn main() -> std::io::Result<()> {
 ```
 
 ## Programming Interface
+
+### File-based Configuration Functions
+
+```rust
+// Load configuration files (JSON5 format)
+pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError>;
+pub fn load_profile_config(app_type: AppType, profile: &str) -> Result<ProfileConfig, ConfigError>;
+pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConfig, ConfigError>;
+```
 
 ### Core Functions
 
