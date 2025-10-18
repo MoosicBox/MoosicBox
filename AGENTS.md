@@ -2,13 +2,11 @@
 
 ## Build/Test Commands
 
-- **Rust build**: `cargo build` (fastest), `cargo build --profile fast` (optimized for speed)
+- **Rust build**: `cargo build`
 - **Rust test**: `cargo test` (all packages), `cargo test -p <package>` (single package)
-- **Rust lint**: `cargo clippy --all-targets --all-features`
-- **TypeScript lint**: `pnpm lint` (or `npm run lint`)
-- **TypeScript typecheck**: `pnpm typecheck` (or `npm run typecheck`)
-- **Format**: `cargo fmt` (Rust), `pnpm pretty:write` (TypeScript)
-- **Validate all**: `pnpm validate` (runs typecheck, lint, format check)
+- **Rust lint**: `cargo clippy --all-targets`
+- **Rust lint enforce no warnings**: `cargo clippy --all-targets -- -D warnings`
+- **Format**: `cargo fmt` (Rust) for ALL packages in the workspace
 
 ## Code Style Guidelines
 
@@ -18,10 +16,11 @@
 - **Dependencies**: Use `workspace = true`, never path dependencies
 - **Clippy**: Required in every package:
     ```rust
+    #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
     #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
     #![allow(clippy::multiple_crate_versions)]
     ```
-- **Error docs**: Use asterisks (\*) for bullet points, document all error conditions
+- **Rustdoc Error docs**: Use asterisks (\*) for bullet points, document all error conditions
 - **Must use**: Add `#[must_use]` to constructors and getters
 
 ### Package Organization
@@ -32,10 +31,5 @@
 
 ### Documentation
 
-- Use asterisks (\*) not dashes (-) for bullet points
 - Document all public APIs with comprehensive error information
 - Include examples for complex functions
-
-## Cursor Rules Integration
-
-This codebase follows domain-driven design with 120+ packages organized by functionality. Key architectural patterns include deterministic collections, strong ID typing, and comprehensive error handling. See `.cursor/rules/` for detailed patterns.
