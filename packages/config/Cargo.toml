@@ -25,13 +25,16 @@ switchy_database = { workspace = true, optional = true }
 
 # API dependencies
 actix-web = { workspace = true, optional = true }
-serde     = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
+
+# Serialization (used by both file and API modules)
+serde = { workspace = true }
 
 # Test dependencies
 switchy_random = { workspace = true, optional = true, features = ["rand"] }
 
 home      = { workspace = true }
+json5     = { workspace = true }
 log       = { workspace = true }
 thiserror = { workspace = true }
 
@@ -55,5 +58,5 @@ db = [
     "dep:switchy_database",
 ]
 
-api     = ["db", "dep:actix-web", "dep:serde", "switchy_database?/api"]
+api     = ["db", "dep:actix-web", "switchy_database?/api"]
 openapi = ["dep:utoipa"]
