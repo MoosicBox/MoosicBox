@@ -187,8 +187,8 @@ fn load_config_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, Conf
 /// * If the config file cannot be read
 /// * If the config file is malformed
 pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError> {
-    let config_dir = crate::get_app_config_dir_path(app_type)
-        .ok_or(ConfigError::ConfigDirNotFound)?;
+    let config_dir =
+        crate::get_app_config_dir_path(app_type).ok_or(ConfigError::ConfigDirNotFound)?;
 
     if let Some(path) = get_config_file_path(&config_dir, "config") {
         load_config_file(&path)
@@ -206,8 +206,8 @@ pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError
 /// * If the config file cannot be read
 /// * If the config file is malformed
 pub fn load_profile_config(app_type: AppType, profile: &str) -> Result<ProfileConfig, ConfigError> {
-    let profile_dir = crate::get_profile_dir_path(app_type, profile)
-        .ok_or(ConfigError::ConfigDirNotFound)?;
+    let profile_dir =
+        crate::get_profile_dir_path(app_type, profile).ok_or(ConfigError::ConfigDirNotFound)?;
 
     if let Some(path) = get_config_file_path(&profile_dir, "config") {
         load_config_file(&path)
