@@ -3,17 +3,17 @@
 # would not properly export ciToolchains in the matrix output
 
 [[ci-steps]]
-command = "mkdir packages/app/tauri/dist"
+command   = "mkdir packages/app/tauri/dist"
 toolchain = "free_disk_space"
 
 [[ci-steps]]
-command = "pnpm install"
+command   = "pnpm install"
+features  = ["frontend"]
 toolchain = "pnpm"
-features = ["frontend"]
 
 [[ci-steps]]
+features  = ["frontend", "tauri"]
 toolchain = "node"
-features = ["frontend", "tauri"]
 
 [[ci-steps]]
 command = "cargo build"

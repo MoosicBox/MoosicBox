@@ -1,11 +1,11 @@
 [package]
-name = "root"
-version.workspace = true
 edition.workspace = true
+name              = "root"
+version.workspace = true
 
 [features]
 fail-on-warnings = []
-nightly = []
+nightly          = []
 
 [dev-dependencies]
 middle = { path = "../middle" }

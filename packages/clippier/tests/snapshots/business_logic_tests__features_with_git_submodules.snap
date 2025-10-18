@@ -4,6 +4,26 @@ expression: parsed
 ---
 - features:
     - default
+    - feature-1
+    - feature-2
+  gitSubmodules: true
+  name: inherited-submodules
+  nightly: false
+  os: ubuntu
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
+    - feature-1
+    - feature-2
+  gitSubmodules: true
+  name: inherited-submodules
+  nightly: false
+  os: macos
+  path: "[TEMP_PATH]"
+  requiredFeatures: ~
+- features:
+    - default
     - feature-a
     - feature-b
   gitSubmodules: true
@@ -39,25 +59,5 @@ expression: parsed
   name: without-submodules
   nightly: false
   os: ubuntu
-  path: "[TEMP_PATH]"
-  requiredFeatures: ~
-- features:
-    - default
-    - feature-1
-    - feature-2
-  gitSubmodules: true
-  name: inherited-submodules
-  nightly: false
-  os: ubuntu
-  path: "[TEMP_PATH]"
-  requiredFeatures: ~
-- features:
-    - default
-    - feature-1
-    - feature-2
-  gitSubmodules: true
-  name: inherited-submodules
-  nightly: false
-  os: macos
   path: "[TEMP_PATH]"
   requiredFeatures: ~

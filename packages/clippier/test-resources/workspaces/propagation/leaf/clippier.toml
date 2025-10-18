@@ -1,8 +1,8 @@
 git-submodules = true
 
 [env]
-FOO_PATH = "/usr/local/foo"
 BAR_VERSION = "2.0"
+FOO_PATH    = "/usr/local/foo"
 
 [[config]]
 os = "ubuntu"

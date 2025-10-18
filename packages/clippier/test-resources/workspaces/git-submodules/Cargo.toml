@@ -1,8 +1,8 @@
 [workspace]
 members = [
+    "packages/inherited-submodules",
     "packages/with-submodules",
     "packages/without-submodules",
-    "packages/inherited-submodules",
 ]
 
 [workspace.dependencies]

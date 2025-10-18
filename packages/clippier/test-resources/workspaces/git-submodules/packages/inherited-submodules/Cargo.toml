@@ -1,12 +1,12 @@
 [package]
-name = "inherited-submodules"
-version = "0.1.0"
 edition = "2021"
+name    = "inherited-submodules"
+version = "0.1.0"
 
 [dependencies]
 serde = { workspace = true }
 
 [features]
-default = []
+default   = []
 feature-1 = []
 feature-2 = []

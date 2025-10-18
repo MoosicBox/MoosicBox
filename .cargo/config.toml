@@ -1,6 +1,6 @@
 [build]
+rustflags  = ["--cfg", "tokio_unstable"]
 target-dir = "target"
-rustflags = ["--cfg", "tokio_unstable"]
 
 [alias]
 server                      = "server:release"

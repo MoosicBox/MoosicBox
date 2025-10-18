@@ -1,6 +1,6 @@
 [env]
-ROOT_VAR = "root_value"
 FOO_PATH = "/override/foo"
+ROOT_VAR = "root_value"
 
 [[config]]
 os = "ubuntu"

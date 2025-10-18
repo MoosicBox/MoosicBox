@@ -14,12 +14,12 @@ version     = "0.1.2"
 independent = true
 
 [[bin]]
-name = "openport"
-path = "src/main.rs"
+name              = "openport"
+path              = "src/main.rs"
 required-features = ["cli"]
 
 [dependencies]
-clap = { workspace = true, features = ["derive"], optional = true }
+clap           = { workspace = true, features = ["derive"], optional = true }
 switchy_random = { workspace = true, features = ["rand"], optional = true }
 
 ### FEATURES #################################################################

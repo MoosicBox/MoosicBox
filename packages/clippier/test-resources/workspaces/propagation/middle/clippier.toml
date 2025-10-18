@@ -1,6 +1,6 @@
 [env]
-MIDDLE_VAR = "middle_value"
 BAR_VERSION = "3.0"
+MIDDLE_VAR  = "middle_value"
 
 [[config]]
 os = "ubuntu"

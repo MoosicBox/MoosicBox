@@ -1,11 +1,11 @@
 [package]
-name = "middle"
-version.workspace = true
 edition.workspace = true
+name              = "middle"
+version.workspace = true
 
 [features]
 fail-on-warnings = []
-feature-b = []
+feature-b        = []
 
 [build-dependencies]
 leaf = { path = "../leaf" }

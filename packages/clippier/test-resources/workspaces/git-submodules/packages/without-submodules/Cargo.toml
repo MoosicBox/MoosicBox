@@ -1,12 +1,12 @@
 [package]
-name = "without-submodules"
-version = "0.1.0"
 edition = "2021"
+name    = "without-submodules"
+version = "0.1.0"
 
 [dependencies]
 serde = { workspace = true }
 
 [features]
-default = []
+default   = []
 feature-x = []
 feature-y = []
