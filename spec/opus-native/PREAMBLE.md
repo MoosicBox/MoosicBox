@@ -1,9 +1,11 @@
 # Native Opus Decoder Implementation
 
 ## Mission
+
 Implement a 100% safe, native Rust Opus decoder following RFC 6716, providing an alternative to libopus (C library) while maintaining full RFC compliance and memory safety.
 
 ## Goals
+
 - Zero unsafe code (except safe wrappers for SIMD intrinsics if needed)
 - RFC 6716 bit-exact compliance
 - Production-ready audio quality
@@ -14,12 +16,14 @@ Implement a 100% safe, native Rust Opus decoder following RFC 6716, providing an
 - Zero-cost abstraction for backend selection
 
 ## Non-Goals (Initially)
+
 - Encoder implementation (decoder-only focus)
 - Matching libopus performance before correctness is proven
 - Hardware-specific optimizations (portable first)
 - Supporting non-standard sample rates or configurations
 
 ## Constraints
+
 - NO COMPROMISES on RFC 6716 compliance
 - Zero clippy warnings policy
 - All business logic must have tests
@@ -34,6 +38,7 @@ Implement a 100% safe, native Rust Opus decoder following RFC 6716, providing an
 The `moosicbox_opus` crate provides backend selection via zero-cost re-exports:
 
 **Features:**
+
 - `native` (default) - Uses moosicbox_opus_native (pure Rust)
 - `libopus` - Uses audiopus (C library via FFI)
 - Stub backend - Compiles but panics if no backend enabled
@@ -59,6 +64,7 @@ The selected backend's types are **directly re-exported** as the public API, ens
 The native implementation supports feature-gated modes:
 
 **Features:**
+
 - `silk` (default) - Speech/narrowband decoder (RFC 4.2)
 - `celt` (default) - Music/wideband decoder (RFC 4.3)
 - `hybrid` (default) - Combined SILK+CELT mode (RFC 4.5)
@@ -99,6 +105,7 @@ impl Decoder {
 ## Architecture Components
 
 **Reusable from moosicbox_opus package:**
+
 - Packet parser (RFC Section 3)
 - TOC byte parsing
 - Frame length decoding
@@ -109,6 +116,7 @@ impl Decoder {
 - Symphonia integration layer
 
 **Native decoder implementation (moosicbox_opus_native):**
+
 - Range decoder (RFC Section 4.1)
 - SILK decoder (RFC Section 4.2)
 - CELT decoder (RFC Section 4.3)

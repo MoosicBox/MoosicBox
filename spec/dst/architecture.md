@@ -19,22 +19,26 @@ App → Switchy → System     App → Switchy → Controlled State
 MoosicBox, like most real-world applications, contains numerous sources of non-determinism that make testing unreliable:
 
 #### System-Level Non-Determinism
+
 - **System Time Access**: `SystemTime::now()`, `Instant::now()` return different values
 - **Random Number Generation**: `rand::thread_rng()` produces unpredictable sequences
 - **Environment Variables**: `std::env::var()` depends on external configuration
 - **Process Execution**: Child processes have unpredictable timing and output
 
 #### Data Structure Non-Determinism
+
 - **HashMap/HashSet Iteration**: Order depends on hash randomization
 - **Directory Listings**: File system order varies by platform and state
 - **Database Query Results**: Without explicit ordering, results may vary
 
 #### Concurrency Non-Determinism
+
 - **Thread/Task Scheduling**: Race conditions and timing dependencies
 - **Network I/O Timing**: Request/response timing varies by network conditions
 - **File System Operations**: Concurrent access can cause order dependencies
 
 #### Framework-Specific Non-Determinism
+
 - **Actix-Web Internals**: Framework uses non-deterministic collections and timing
 - **Async Runtime Behavior**: Task scheduling order affects execution
 - **Database Connection Pooling**: Connection allocation order varies
@@ -90,6 +94,7 @@ pub fn now() -> SystemTime {
 ### 2. Compile-Time Selection
 
 Mode selection happens at compile time using Rust feature flags:
+
 - **Zero Runtime Cost**: Dead code elimination removes unused implementations
 - **Type Safety**: Impossible to accidentally mix modes
 - **Clear Separation**: Production and simulation code clearly delineated
@@ -115,6 +120,7 @@ switchy_<domain>/
 ### 4. API Compatibility
 
 DST abstractions maintain identical APIs to the original libraries:
+
 - Drop-in replacements where possible
 - Extension traits for enhanced functionality
 - Clear migration path from existing code
@@ -126,61 +132,70 @@ DST abstractions maintain identical APIs to the original libraries:
 #### ✅ Existing Packages (Implemented)
 
 1. **switchy_time** - Time operations and clock control
-   - Production: `SystemTime`, `Instant`
-   - Simulation: Controllable virtual clock
-   - Features: Time travel, fast-forward, pause
+
+    - Production: `SystemTime`, `Instant`
+    - Simulation: Controllable virtual clock
+    - Features: Time travel, fast-forward, pause
 
 2. **switchy_random** - Random number generation
-   - Production: `rand::thread_rng()`
-   - Simulation: Seeded, reproducible RNG
-   - Features: Predictable sequences, reset state
+
+    - Production: `rand::thread_rng()`
+    - Simulation: Seeded, reproducible RNG
+    - Features: Predictable sequences, reset state
 
 3. **switchy_fs** - File system operations
-   - Production: `std::fs` with optimizations
-   - Simulation: In-memory virtual file system
-   - Features: Controlled I/O errors, deterministic ordering
+
+    - Production: `std::fs` with optimizations
+    - Simulation: In-memory virtual file system
+    - Features: Controlled I/O errors, deterministic ordering
 
 4. **switchy_tcp** - TCP networking
-   - Production: `tokio::net::TcpStream`
-   - Simulation: In-memory message passing
-   - Features: Network delays, packet loss simulation
+
+    - Production: `tokio::net::TcpStream`
+    - Simulation: In-memory message passing
+    - Features: Network delays, packet loss simulation
 
 5. **switchy_http** - HTTP client operations
-   - Production: `reqwest` or `hyper`
-   - Simulation: Controllable mock responses
-   - Features: Failure injection, response delays
+
+    - Production: `reqwest` or `hyper`
+    - Simulation: Controllable mock responses
+    - Features: Failure injection, response delays
 
 6. **switchy_async** - Async runtime control
-   - Production: `tokio::runtime`
-   - Simulation: Deterministic task scheduling
-   - Features: Controlled execution order
+
+    - Production: `tokio::runtime`
+    - Simulation: Deterministic task scheduling
+    - Features: Controlled execution order
 
 7. **switchy_database** - Database abstractions
-   - Production: Real database connections
-   - Simulation: In-memory database state
-   - Features: Deterministic query results
+    - Production: Real database connections
+    - Simulation: In-memory database state
+    - Features: Deterministic query results
 
 #### ❌ Required Packages (To Be Created)
 
 1. **switchy_uuid** - UUID generation
-   - Production: `uuid::Uuid::new_v4()`
-   - Simulation: Predictable UUID sequences
-   - Priority: HIGH (affects many packages)
+
+    - Production: `uuid::Uuid::new_v4()`
+    - Simulation: Predictable UUID sequences
+    - Priority: HIGH (affects many packages)
 
 2. **switchy_env** - Environment variable access
-   - Production: `std::env::var()`
-   - Simulation: Controlled environment state
-   - Priority: HIGH (configuration dependent)
+
+    - Production: `std::env::var()`
+    - Simulation: Controlled environment state
+    - Priority: HIGH (configuration dependent)
 
 3. **switchy_process** - Process execution
-   - Production: `std::process::Command`
-   - Simulation: Mock process responses
-   - Priority: MEDIUM (fewer packages affected)
+
+    - Production: `std::process::Command`
+    - Simulation: Mock process responses
+    - Priority: MEDIUM (fewer packages affected)
 
 4. **switchy_web_server** - Web server abstraction
-   - Production: `actix-web` implementation
-   - Simulation: In-memory request/response
-   - Priority: CRITICAL (blocks 50+ packages)
+    - Production: `actix-web` implementation
+    - Simulation: In-memory request/response
+    - Priority: CRITICAL (blocks 50+ packages)
 
 ### Web Server Abstraction (Critical Path)
 
@@ -213,6 +228,7 @@ pub struct SimulatorWebServer {
 ```
 
 Key features required:
+
 - **Request/Response Abstraction**: Unified types for HTTP handling
 - **Routing System**: Path matching and parameter extraction
 - **Middleware Support**: Authentication, CORS, logging
@@ -233,6 +249,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ```
 
 **Migration Strategy:**
+
 - Mechanical replacement in most cases
 - Performance testing for hot paths
 - Custom sorting for complex types
@@ -318,25 +335,26 @@ name: Deterministic Tests
 on: [push, pull_request]
 
 jobs:
-  deterministic-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run tests 10 times
-        run: |
-          for i in {1..10}; do
-            cargo test --features simulation --verbose
-            echo "Run $i completed"
-          done
-      - name: Verify identical output
-        run: |
-          # All test runs should produce identical results
-          # Implementation depends on test framework
+    deterministic-test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: Run tests 10 times
+              run: |
+                  for i in {1..10}; do
+                    cargo test --features simulation --verbose
+                    echo "Run $i completed"
+                  done
+            - name: Verify identical output
+              run: |
+                  # All test runs should produce identical results
+                  # Implementation depends on test framework
 ```
 
 ## Implementation Status
 
 ### ✅ Completed Components
+
 - **Switchy Infrastructure**: Core pattern established with 7 packages
 - **Collection Migration**: BTreeMap/BTreeSet adoption strategy defined
 - **Time Control**: Full time manipulation capabilities
@@ -344,14 +362,16 @@ jobs:
 - **File System**: Virtual filesystem for testing
 
 ### 🔄 In Progress Components
+
 - **Web Server Abstraction**: Phase 5.1-5.4 implementation (67% complete)
-  - ✅ Basic HttpResponse with headers
-  - ✅ Response generation and conversion
-  - 🔄 State management verification
-  - ❌ TestClient abstraction
-  - ❌ ActixTestClient real server integration
+    - ✅ Basic HttpResponse with headers
+    - ✅ Response generation and conversion
+    - 🔄 State management verification
+    - ❌ TestClient abstraction
+    - ❌ ActixTestClient real server integration
 
 ### ❌ Pending Components
+
 - **Missing Switchy Packages**: UUID, environment, process execution
 - **Full Actix Migration**: 50+ packages still using actix-web directly
 - **Comprehensive Testing**: End-to-end determinism validation
@@ -360,16 +380,16 @@ jobs:
 
 ### Package Migration Status
 
-| Package Category | Total | Migrated | In Progress | Remaining |
-|------------------|-------|----------|-------------|-----------|
-| Core Infrastructure | 8 | 6 | 2 | 0 |
-| Web Services | 15 | 2 | 5 | 8 |
-| Audio Processing | 12 | 8 | 2 | 2 |
-| Networking | 8 | 5 | 2 | 1 |
-| Storage | 10 | 7 | 1 | 2 |
-| UI Components | 6 | 3 | 1 | 2 |
-| External Integrations | 12 | 4 | 3 | 5 |
-| **Total** | **71** | **35** | **16** | **20** |
+| Package Category      | Total  | Migrated | In Progress | Remaining |
+| --------------------- | ------ | -------- | ----------- | --------- |
+| Core Infrastructure   | 8      | 6        | 2           | 0         |
+| Web Services          | 15     | 2        | 5           | 8         |
+| Audio Processing      | 12     | 8        | 2           | 2         |
+| Networking            | 8      | 5        | 2           | 1         |
+| Storage               | 10     | 7        | 1           | 2         |
+| UI Components         | 6      | 3        | 1           | 2         |
+| External Integrations | 12     | 4        | 3           | 5         |
+| **Total**             | **71** | **35**   | **16**      | **20**    |
 
 ## Performance Considerations
 
@@ -429,6 +449,7 @@ fn bench_std_time_now(b: &mut Bencher) {
 ### For Package Maintainers
 
 #### 1. Audit Phase
+
 ```bash
 # Find non-deterministic patterns
 grep -r "HashMap\|HashSet" src/
@@ -439,6 +460,7 @@ grep -r "actix_web::" src/
 ```
 
 #### 2. Dependency Updates
+
 ```toml
 # Add to Cargo.toml
 [dependencies]
@@ -450,6 +472,7 @@ switchy_random = { workspace = true }
 ```
 
 #### 3. Code Migration
+
 ```rust
 // Before: Direct system calls
 use std::time::SystemTime;
@@ -471,6 +494,7 @@ let value = Rng::gen::<u32>();
 ```
 
 #### 4. Test Updates
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -494,6 +518,7 @@ mod tests {
 ### Common Migration Patterns
 
 #### Pattern 1: HashMap to BTreeMap
+
 ```rust
 // Simple replacement
 - use std::collections::HashMap;
@@ -504,6 +529,7 @@ mod tests {
 ```
 
 #### Pattern 2: Time Operations
+
 ```rust
 // System time access
 - use std::time::{SystemTime, UNIX_EPOCH};
@@ -517,6 +543,7 @@ mod tests {
 ```
 
 #### Pattern 3: Random Generation
+
 ```rust
 // Random number generation
 - use rand::{thread_rng, Rng};
@@ -527,6 +554,7 @@ mod tests {
 ```
 
 #### Pattern 4: Web Endpoints
+
 ```rust
 // Actix-web handlers
 - use actix_web::{web, HttpResponse};
@@ -543,16 +571,19 @@ mod tests {
 ### Quantitative Metrics
 
 #### Test Reliability
+
 - **100% Deterministic Tests**: All tests produce identical results across runs
 - **Zero Flaky Tests**: No test failures due to timing or race conditions
 - **CI Reliability**: 100% consistent CI/CD pipeline results
 
 #### Performance
+
 - **0% Production Regression**: No measurable performance impact in production builds
 - **Compile Time Impact**: <10% increase in compilation time
 - **Binary Size**: No significant increase in production binary size
 
 #### Migration Progress
+
 - **120+ Packages Migrated**: All packages using DST abstractions
 - **0 Direct System Calls**: No remaining non-deterministic operations
 - **Complete Test Coverage**: All business logic covered by deterministic tests
@@ -560,11 +591,13 @@ mod tests {
 ### Qualitative Metrics
 
 #### Developer Experience
+
 - **Simplified Debugging**: Reproducible bug reports and test failures
 - **Faster Development**: Reliable tests enable confident refactoring
 - **Better Test Quality**: More thorough edge case testing possible
 
 #### System Reliability
+
 - **Predictable Behavior**: System behavior is consistent and explainable
 - **Enhanced Monitoring**: Better observability through controlled execution
 - **Improved Documentation**: Clear behavior specifications
@@ -574,16 +607,19 @@ mod tests {
 ### Planned Features (Next 6-12 months)
 
 #### Advanced Time Control
+
 - **Time Travel Debugging**: Step backwards through execution
 - **Selective Time Acceleration**: Fast-forward specific components
 - **Time-based Breakpoints**: Pause execution at specific timestamps
 
 #### Network Simulation
+
 - **Failure Injection**: Simulate network partitions and timeouts
 - **Latency Simulation**: Add realistic network delays
 - **Bandwidth Limiting**: Test under constrained network conditions
 
 #### Enhanced Debugging
+
 - **Execution Recording**: Record and replay entire test sessions
 - **State Snapshots**: Capture and restore system state at any point
 - **Causal Analysis**: Track cause-and-effect relationships
@@ -591,16 +627,19 @@ mod tests {
 ### Long-term Vision (1-2 years)
 
 #### Full System Simulation
+
 - **Multi-Service Testing**: Test entire distributed system deterministically
 - **Production Mirroring**: Replay production scenarios in test environment
 - **Chaos Engineering**: Systematic failure injection and recovery testing
 
 #### Property-Based Testing
+
 - **Invariant Checking**: Automatically verify system properties
 - **Fuzz Testing**: Generate test cases with controlled randomness
 - **Model Checking**: Formal verification of critical code paths
 
 #### Performance Engineering
+
 - **Deterministic Benchmarking**: Consistent performance measurements
 - **Regression Detection**: Automatic detection of performance changes
 - **Optimization Validation**: Verify optimizations don't break correctness
@@ -610,11 +649,13 @@ mod tests {
 ### Error Categories
 
 #### Migration Errors
+
 - **Missing Dependencies**: Clear messages for required switchy packages
 - **API Incompatibilities**: Guidance for API changes during migration
 - **Feature Flag Issues**: Help with feature configuration problems
 
 #### Runtime Errors
+
 - **Simulation State**: Clear error messages when simulation state is invalid
 - **Time Consistency**: Detect and report time-related inconsistencies
 - **Resource Limits**: Handle simulation resource exhaustion gracefully
@@ -665,6 +706,7 @@ pub fn is_simulation_mode() -> bool {
 ### Data Privacy
 
 Simulation mode handles test data appropriately:
+
 - No real user data in simulation state
 - Clear boundaries between test and production data
 - Sanitization of logs and debug output
@@ -672,16 +714,19 @@ Simulation mode handles test data appropriately:
 ## References and Documentation
 
 ### Core Documentation
+
 - [DST Implementation Plan](./plan.md) - Detailed execution plan and task breakdown
 - [Implementation Roadmap](./dst-implementation-roadmap.md) - Progress tracking and milestones
 - [DST Preamble](./PREAMBLE.md) - Prerequisites and context
 
 ### Package Documentation
+
 - [Switchy Package Overview](../../../packages/switchy/README.md) - Central switchy package
 - [Web Server Abstraction](../../../packages/web_server/README.md) - Web server DST implementation
 - [Time Control](../../../packages/switchy/time/README.md) - Time manipulation utilities
 
 ### External References
+
 - [Rust Feature Flags](https://doc.rust-lang.org/cargo/reference/features.html) - Cargo feature system
 - [Zero-Cost Abstractions](https://blog.rust-lang.org/2015/05/11/traits.html) - Rust abstraction patterns
 - [Deterministic Testing](https://jepsen.io/consistency) - Testing distributed systems
@@ -690,24 +735,24 @@ Simulation mode handles test data appropriately:
 
 ### By Migration Status
 
-| Package | Type | Status | DST Dependencies | Migration Effort | Notes |
-|---------|------|--------|------------------|------------------|-------|
-| `moosicbox_web_server` | Core | 🔄 In Progress | switchy_time, switchy_random | High | Critical path blocker |
-| `moosicbox_auth` | Service | ❌ Pending | web_server, switchy_uuid | Medium | Depends on web_server |
-| `moosicbox_music_api` | Service | ❌ Pending | web_server, switchy_time | Medium | Large API surface |
-| `moosicbox_player` | Service | ❌ Pending | web_server, switchy_async | Medium | Complex async logic |
-| `moosicbox_library` | Service | ✅ Complete | switchy_fs, switchy_time | Low | File scanning logic |
-| `moosicbox_scan` | Utility | ✅ Complete | switchy_fs | Low | Directory operations |
-| `moosicbox_downloader` | Service | 🔄 In Progress | switchy_http, switchy_fs | Medium | Network and file I/O |
+| Package                | Type    | Status         | DST Dependencies             | Migration Effort | Notes                 |
+| ---------------------- | ------- | -------------- | ---------------------------- | ---------------- | --------------------- |
+| `moosicbox_web_server` | Core    | 🔄 In Progress | switchy_time, switchy_random | High             | Critical path blocker |
+| `moosicbox_auth`       | Service | ❌ Pending     | web_server, switchy_uuid     | Medium           | Depends on web_server |
+| `moosicbox_music_api`  | Service | ❌ Pending     | web_server, switchy_time     | Medium           | Large API surface     |
+| `moosicbox_player`     | Service | ❌ Pending     | web_server, switchy_async    | Medium           | Complex async logic   |
+| `moosicbox_library`    | Service | ✅ Complete    | switchy_fs, switchy_time     | Low              | File scanning logic   |
+| `moosicbox_scan`       | Utility | ✅ Complete    | switchy_fs                   | Low              | Directory operations  |
+| `moosicbox_downloader` | Service | 🔄 In Progress | switchy_http, switchy_fs     | Medium           | Network and file I/O  |
 
 ### By Complexity
 
-| Complexity | Count | Examples | Common Issues |
-|------------|-------|----------|---------------|
-| **Low** | 45 | Utilities, models, simple services | HashMap replacements, time calls |
-| **Medium** | 35 | API endpoints, file processors | Actix-web usage, async patterns |
-| **High** | 15 | Main server, complex services | Deep actix integration, state management |
-| **Critical** | 5 | Core infrastructure | Web server, database, networking |
+| Complexity   | Count | Examples                           | Common Issues                            |
+| ------------ | ----- | ---------------------------------- | ---------------------------------------- |
+| **Low**      | 45    | Utilities, models, simple services | HashMap replacements, time calls         |
+| **Medium**   | 35    | API endpoints, file processors     | Actix-web usage, async patterns          |
+| **High**     | 15    | Main server, complex services      | Deep actix integration, state management |
+| **Critical** | 5     | Core infrastructure                | Web server, database, networking         |
 
 ### Migration Dependencies
 

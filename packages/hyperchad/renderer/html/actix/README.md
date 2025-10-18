@@ -283,6 +283,7 @@ async fn handle_htmx_request(req: HttpRequest) -> Result<HttpResponse> {
 Server-Sent Events are automatically available at the `/$sse` endpoint when the `sse` feature is enabled. The SSE endpoint streams `RendererEvent` updates from the renderer event channel to connected clients.
 
 Events include:
+
 - `view`: Full view updates
 - `partial_view`: Partial view updates with target IDs
 - `canvas_update`: Canvas updates for HTML5 canvas elements

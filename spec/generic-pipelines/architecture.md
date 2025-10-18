@@ -43,34 +43,34 @@ Example:
 
 ```yaml
 name: Build and Test
-on: [commit, merge_request]  # Backend-agnostic triggers
+on: [commit, merge_request] # Backend-agnostic triggers
 
 actions:
-  checkout:
-    type: file
-    path: ./actions/checkout.yml
-  setup-node:
-    type: github
-    url: actions/setup-node@v3
+    checkout:
+        type: file
+        path: ./actions/checkout.yml
+    setup-node:
+        type: github
+        url: actions/setup-node@v3
 
 jobs:
-  build:
-    steps:
-      - uses: checkout
-        with:
-          depth: 1
+    build:
+        steps:
+            - uses: checkout
+              with:
+                  depth: 1
 
-      - name: GitHub-specific step
-        if: ${{ backend == 'github' }}
-        uses: setup-node
+            - name: GitHub-specific step
+              if: ${{ backend == 'github' }}
+              uses: setup-node
 
-      - name: Local-specific step
-        if: ${{ backend == 'local' }}
-        run: |
-          nvm use 18
-          echo "node-version=18" >> $PIPELINE_OUTPUT
+            - name: Local-specific step
+              if: ${{ backend == 'local' }}
+              run: |
+                  nvm use 18
+                  echo "node-version=18" >> $PIPELINE_OUTPUT
 
-      - run: npm test
+            - run: npm test
 ```
 
 ### Generic Actions
@@ -79,11 +79,13 @@ User-defined YAML files that describe how to execute an action across different 
 Actions are resolved from the workflow's `actions:` mapping.
 
 **Resolution:** Actions mapped in workflow file with explicit type:
+
 - `type: github` - GitHub action reference with `url` property
 - `type: file` - Local file path with `path` property
 - `type: inline` - Embedded definition with `definition` property
 
 **Translation Rules:**
+
 - Missing backend translation = hard failure (no fallback)
 - Explicit incompatibility can be marked with `unsupported: true`
 

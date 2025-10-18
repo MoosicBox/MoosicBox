@@ -16,6 +16,7 @@ CELT (Constrained Energy Lapped Transform) is the music-optimized component of O
 ### MDCT (Modified Discrete Cosine Transform)
 
 Transform coding like MP3/AAC:
+
 - Converts time-domain signal to frequency domain
 - Overlapping windows with 50% overlap
 - Inverse MDCT reconstructs time-domain signal
@@ -24,6 +25,7 @@ Transform coding like MP3/AAC:
 ### PVQ (Pyramid Vector Quantization)
 
 Quantizes frequency coefficients:
+
 - Allocates pulses across frequency bands
 - Preserves energy per band
 - Efficient encoding of spectral shape
@@ -31,6 +33,7 @@ Quantizes frequency coefficients:
 ### Energy Envelope
 
 Coarse + fine energy quantization:
+
 - Each frequency band has energy level
 - Coarse quantization uses prediction
 - Fine quantization adds precision
@@ -82,6 +85,7 @@ PCM Output
 ### Bit Allocation (RFC 4.3.3)
 
 Most complex part:
+
 - Dynamic allocation based on available bits
 - Considers band importance (psychoacoustic model)
 - Iterative algorithm finds optimal distribution
@@ -103,6 +107,7 @@ Most complex part:
 ## Sample Rates
 
 CELT supports:
+
 - 16 kHz (wideband)
 - 24 kHz (super-wideband)
 - 48 kHz (fullband)
@@ -110,6 +115,7 @@ CELT supports:
 ## Frame Sizes
 
 Multiple frame durations:
+
 - 2.5 ms, 5 ms, 10 ms, 20 ms
 
 Smaller frames = lower latency but less compression efficiency.

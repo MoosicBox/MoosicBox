@@ -1,2 +1,4 @@
+.terraform/
+packages/opus_native/libopus/opus/
 sst-env.d.ts
 app-website/**/*

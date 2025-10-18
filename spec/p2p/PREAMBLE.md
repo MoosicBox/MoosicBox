@@ -18,9 +18,9 @@ The implementation will run alongside the existing tunnel system during migratio
 - Specs use checkboxes (`- [ ]`) to track progress
 - Four-phase workflow: preliminary check → deep analysis → execution → verification
 - NO COMPROMISES - halt on any deviation from spec
-  - Includes comprehensive test coverage for all business logic
-  - Tests must be written alongside implementation, not deferred
-  - Both success and failure paths must be tested
+    - Includes comprehensive test coverage for all business logic
+    - Tests must be written alongside implementation, not deferred
+    - Both success and failure paths must be tested
 - Living documents that evolve during implementation
 - After having completed a checkbox, 'check' it and add details under it regarding the file/location updated as PROOF
 

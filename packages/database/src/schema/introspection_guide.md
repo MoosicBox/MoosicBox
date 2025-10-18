@@ -118,7 +118,7 @@ CREATE TABLE "Users" ("Name" TEXT);
 CREATE TABLE t1 (id SERIAL);
 -- Creates: id INTEGER DEFAULT nextval('t1_id_seq')
 
--- IDENTITY (SQL standard)  
+-- IDENTITY (SQL standard)
 CREATE TABLE t2 (id INTEGER GENERATED ALWAYS AS IDENTITY);
 ```
 
@@ -170,6 +170,7 @@ CREATE TABLE users (id INT);
 **Best Practice**: Always use lowercase table/column names for portability.
 
 **Configuration**: Check `lower_case_table_names` system variable:
+
 - `0` = Case-sensitive (Linux default)
 - `1` = Stored lowercase, comparisons case-insensitive (Windows)
 - `2` = Stored as-is, comparisons lowercase (macOS)
@@ -237,9 +238,9 @@ CREATE TABLE products (
 
 **Issue**: Same DataType enum maps to different native types across backends.
 
-| DataType | SQLite | PostgreSQL | MySQL |
-|----------|--------|------------|-------|
-| `Real` | 64-bit REAL | 32-bit REAL | 32-bit FLOAT |
+| DataType | SQLite             | PostgreSQL              | MySQL         |
+| -------- | ------------------ | ----------------------- | ------------- |
+| `Real`   | 64-bit REAL        | 32-bit REAL             | 32-bit FLOAT  |
 | `Double` | N/A (maps to Real) | 64-bit DOUBLE PRECISION | 64-bit DOUBLE |
 
 **Solution**: Be aware of precision differences when migrating between backends.
@@ -253,7 +254,7 @@ CREATE TABLE products (
 CREATE TABLE test (note TEXT DEFAULT '');
 -- Default: DatabaseValue::String("")
 
--- SQLite  
+-- SQLite
 CREATE TABLE test (note TEXT DEFAULT '');
 -- Default: DatabaseValue::String("")
 
@@ -357,7 +358,7 @@ mod tests {
     use super::*;
 
     // Test introspection behavior on each backend
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_table_introspection_sqlite() {
         let db = create_sqlite_test_db().await;
         test_introspection_behavior(&db).await;
@@ -372,10 +373,10 @@ mod tests {
     async fn test_introspection_behavior(db: &dyn Database) {
         // Shared test logic that should work on all backends
         assert!(db.table_exists("test_table").await.unwrap());
-        
+
         let columns = db.get_table_columns("test_table").await.unwrap();
         assert!(!columns.is_empty());
-        
+
         // Test backend-agnostic expectations
         let id_col = columns.iter().find(|c| c.name == "id").unwrap();
         assert!(id_col.is_primary_key);

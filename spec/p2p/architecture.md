@@ -16,12 +16,14 @@ Client A ←----------→ Client B
 ## Design Goals
 
 ### Primary Objectives
+
 - **Direct Connections**: Enable direct peer-to-peer communication without central infrastructure
 - **NAT Traversal**: Automatic hole-punching and relay fallback for complex network configurations
 - **Performance**: Reduce latency and improve throughput compared to tunnel approach
 - **Zero-Cost Abstractions**: No runtime overhead when using production Iroh backend
 
 ### Secondary Objectives
+
 - **Implementation Flexibility**: Support multiple P2P libraries through trait abstraction
 - **Deterministic Testing**: Provide controllable simulation for reliable automated testing
 - **Migration**: Clean transition path from existing tunnel infrastructure
@@ -135,6 +137,7 @@ pub type DefaultP2P = iroh::IrohP2P;
 **Purpose**: Provide familiar REST-like routing abstraction for MoosicBox integration
 
 **Design**: Mix of HTTP semantics with service modularity
+
 ```rust
 // Service registration
 trait P2PService {
@@ -162,12 +165,14 @@ impl P2PService for AudioService {
 **Purpose**: Deterministic testing with controllable network conditions
 
 **Architecture**:
+
 - Graph-based network topology simulation
 - Controllable time via `switchy_time`
 - In-memory message routing with realistic network effects
 - Environment variable configuration following switchy patterns
 
 **Network Graph Model**:
+
 ```rust
 struct NetworkGraph {
     nodes: BTreeMap<SimulatorNodeId, NodeInfo>,
@@ -183,6 +188,7 @@ struct LinkInfo {
 ```
 
 **Environment Configuration**:
+
 ```bash
 # Time control (via switchy_time)
 SIMULATOR_TIME_MULTIPLIER=1000    # 1000x speed for testing
@@ -199,6 +205,7 @@ SIMULATOR_DNS_TTL_SECONDS=300     # DNS cache TTL
 ```
 
 **Message Routing**:
+
 ```
 Alice wants to send to Bob:
 1. Alice calls connection.send(data)
@@ -210,6 +217,7 @@ Alice wants to send to Bob:
 ```
 
 **Mock Discovery Service**:
+
 ```rust
 // Registration
 simulator.register_peer("alice", alice_addr);
@@ -225,12 +233,14 @@ let connection = simulator.connect(bob_addr).await?;
 **Purpose**: Production P2P networking with automatic NAT traversal
 
 **Architecture**:
+
 - Direct wrapper around Iroh's `Endpoint` and `Connection` types
 - Zero-cost abstraction - no wrapper overhead
 - Automatic NAT traversal and relay fallback
 - Real cryptographic node identity
 
 **Identity Management**:
+
 ```rust
 // Direct use of Iroh types for zero cost
 type IrohNodeId = iroh::NodeId;  // = iroh::PublicKey
@@ -251,6 +261,7 @@ impl P2PNodeId for IrohNodeId {
 ```
 
 **Connection Handling**:
+
 ```rust
 struct IrohConnection {
     connection: iroh::Connection,
@@ -276,7 +287,8 @@ impl P2PConnection for IrohConnection {
 ```
 
 **NAT Traversal Configuration**:
-```rust
+
+````rust
 // Iroh automatically handles:
 // - STUN for discovering external IP/port
 // - ICE for hole punching
@@ -319,9 +331,10 @@ fn simulator_and_iroh_compatibility() {
     // Test that simulator can talk to Iroh and vice versa
     // (when running integration tests)
 }
-```
+````
 
 **Test Categories**:
+
 - **Unit Tests**: Individual component behavior
 - **Property Tests**: Protocol invariants and edge cases
 - **Integration Tests**: End-to-end communication scenarios
@@ -331,6 +344,7 @@ fn simulator_and_iroh_compatibility() {
 ### Deterministic Testing via Simulator
 
 **Controlled Environment**:
+
 ```rust
 // Deterministic test setup
 let simulator = SimulatorP2P::new()
@@ -408,12 +422,14 @@ pub enum P2PError {
 ## Security and Authentication
 
 ### Identity Management
+
 - **Ed25519 Keys**: Cryptographically secure node identity
 - **QUIC Encryption**: Built-in transport encryption via Iroh
 - **No Additional Auth**: Application decides connection acceptance
 - **Key Persistence**: Deterministic keys for testing, secure generation for production
 
 ### Network Security
+
 - **Mandatory Encryption**: All communication encrypted via QUIC
 - **Peer Authentication**: Public key verification during handshake
 - **DoS Protection**: Connection limits and rate limiting at application layer
@@ -422,6 +438,7 @@ pub enum P2PError {
 ## Resource Management
 
 ### Connection Configuration
+
 ```rust
 // Basic configuration without performance targets
 P2PBuilder::new()
@@ -432,6 +449,7 @@ P2PBuilder::new()
 ```
 
 ### Zero-Cost Abstractions
+
 - When using Iroh: Direct type usage, no wrapper overhead
 - When using simulator: Minimal abstraction for testing
 - Compile-time backend selection via features
@@ -501,6 +519,7 @@ let p2p = DefaultP2P::new(config);
 ### Migration from Tunnel Server
 
 **Phase 1**: P2P as Alternative (No Tunnel Fallback)
+
 ```rust
 // Clean separation - choose one at compile time
 match env::var("MOOSICBOX_TRANSPORT") {
@@ -516,12 +535,14 @@ match env::var("MOOSICBOX_TRANSPORT") {
 ```
 
 **Phase 2**: Service-by-Service Migration
+
 - Audio streaming → P2P first
 - Metadata sync → P2P second
 - Control messages → P2P last
 - Independent rollout per service
 
 **Phase 3**: Tunnel Deprecation
+
 - Remove tunnel dependencies
 - P2P becomes default
 - Clean up migration code
@@ -609,6 +630,7 @@ router.route(Method::GET, "/health", |_req| {
 ### Success Criteria Summary
 
 **Functional Requirements**:
+
 - [x] Zero-cost abstraction when using Iroh
 - [x] Deterministic testing via simulator
 - [x] Web-server-like integration API
@@ -616,12 +638,14 @@ router.route(Method::GET, "/health", |_req| {
 - [x] Ed25519 node identity matching Iroh
 
 **Technical Requirements**:
+
 - [ ] Zero-cost abstraction when using Iroh backend
 - [ ] No wrapper overhead in production builds
 - [ ] Deterministic behavior in simulator mode
 - [ ] Resource cleanup prevents leaks
 
 **Quality Requirements**:
+
 - [ ] Zero clippy warnings with fail-on-warnings
 - [ ] Property tests pass on all implementations
 - [ ] Cross-implementation compatibility tests pass
@@ -633,7 +657,9 @@ router.route(Method::GET, "/health", |_req| {
 All design decisions are finalized and documented in [`clarifications.md`](./clarifications.md). This section provides concrete implementation guidance to eliminate ambiguity.
 
 ### Dependency Philosophy
+
 **Just-in-time dependencies**: Add only when immediately used
+
 - **Phase 1**: Zero dependencies (completely empty package)
 - **Phase 2.1**: First dependencies: `switchy_async`, `switchy_time`, `switchy_random`
 - **Phase 4.1**: Add `thiserror` when creating error types
@@ -644,7 +670,9 @@ All design decisions are finalized and documented in [`clarifications.md`](./cla
 **Document reasoning**: Explain why each dependency is needed in commit messages
 
 ### Code Organization Principles
+
 **Start simple**: All code in `lib.rs` initially
+
 - **Phase 1**: Only clippy configuration in `lib.rs`
 - **Phase 2**: Add `mod simulator;` when implementing simulator
 - **Phase 3**: Add `mod traits;` when extracting traits
@@ -654,12 +682,15 @@ All design decisions are finalized and documented in [`clarifications.md`](./cla
 **Feature-based**: Group by feature (`simulator.rs`) not type (`traits.rs`)
 
 ### Testing Philosophy
+
 **Test-driven**: Write tests before implementation
+
 - Four critical test scenarios drive simulator implementation
 - All tests must pass for phase completion
 - Property-based tests for edge cases and invariants
 
 **Property-based**: Use proptest for invariants
+
 ```rust
 proptest! {
     #[test]
@@ -672,12 +703,15 @@ proptest! {
 ```
 
 **Cross-implementation**: Same tests for simulator and Iroh
+
 - Generic test functions work with any `P2PSystem`
 - Ensures simulator and Iroh behave identically
 - Prevents implementation-specific behavior
 
 ### Error Handling Standards
+
 **Single error type**: Flat `P2PError` enum (no nested errors)
+
 ```rust
 #[derive(Debug, Error)]
 pub enum P2PError {
@@ -691,18 +725,23 @@ pub enum P2PError {
 **No panics**: All errors returned as `P2PResult<T>`, never panic in library code
 
 ### Performance Goals
+
 **Zero-cost abstractions**: Associated types, not trait objects
+
 - Use `trait P2PSystem { type NodeId: P2PNodeId; }` not `Box<dyn P2PNodeId>`
 - Direct type aliases: `type IrohNodeId = iroh::NodeId` (no wrapper)
 
 **Predictable performance targets**:
+
 - Connection establishment: < 100ms local, < 500ms remote
 - Message latency: < 10ms local, < 100ms remote
 - Memory efficiency: < 1MB per connection
 - Scalability: Support 1000+ concurrent connections
 
 ### Feature Flag Design
+
 **Mutually exclusive backends**:
+
 ```toml
 [features]
 default = ["simulator"]
@@ -712,6 +751,7 @@ test-utils = ["dep:proptest"]
 ```
 
 **Compile-time selection**:
+
 ```rust
 #[cfg(feature = "simulator")]
 pub type DefaultP2P = simulator::SimulatorP2P;
@@ -721,8 +761,10 @@ pub type DefaultP2P = iroh::IrohP2P;
 ```
 
 ### Documentation Standards
+
 **Every public item** needs rustdoc with working example:
-```rust
+
+````rust
 /// Connect to a remote peer by node ID
 ///
 /// # Examples
@@ -742,39 +784,47 @@ pub type DefaultP2P = iroh::IrohP2P;
 ///
 /// Connection establishment typically completes in < 100ms for local peers.
 pub async fn connect(&self, node_id: NodeId) -> P2PResult<Connection> { ... }
-```
+````
 
 **Include examples** for non-obvious APIs
 **Explain "why"** not just "what" - design rationale and trade-offs
 **Link to relevant** specifications or external documentation
 
 ### Migration Strategy from Tunnel
+
 **Clean separation**: P2P is standalone alternative, not fallback
+
 - No tunnel dependencies in P2P code
 - Feature flags control which transport system is used
 - Same high-level API where possible (compatibility layer)
 
 **Service-by-service migration**:
+
 1. Audio streaming → P2P first (high bandwidth benefit)
 2. Metadata sync → P2P second (reduced latency benefit)
 3. Control messages → P2P last (minimal benefit, but consistency)
 
 **Rollback plan**: Keep tunnel code until P2P proven stable
+
 - Feature flags allow instant rollback without code changes
 - Monitor both systems during transition period
 - Document rollback procedures and triggers
 
 ### Security Considerations
+
 **Identity management**: Peers authenticated via ed25519 public key cryptography
+
 - Application layer decides authorization policies
 - No built-in user management or permissions
 
 **Transport security**: All connections encrypted via QUIC/TLS 1.3
+
 - No unencrypted data transmission ever
 - Perfect forward secrecy where possible
 - No downgrade attacks possible
 
 **DoS protection**: Rate limiting and resource management at application layer
+
 - Connection rate limiting per peer
 - Message rate limiting per connection
 - Resource quotas for memory and bandwidth

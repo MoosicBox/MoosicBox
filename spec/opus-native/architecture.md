@@ -80,6 +80,7 @@ pub use stub_backend::{Channels, SampleRate, Error, Decoder};
 ```
 
 **Performance characteristics:**
+
 - ✅ Zero runtime overhead
 - ✅ Perfect inlining across backend boundary
 - ✅ No trait dispatch
@@ -87,6 +88,7 @@ pub use stub_backend::{Channels, SampleRate, Error, Decoder};
 - ✅ No type conversion costs
 
 **Constraint:**
+
 - ⚠️ Backend APIs must match exactly
 - ⚠️ Type signatures must be identical
 
@@ -94,14 +96,14 @@ pub use stub_backend::{Channels, SampleRate, Error, Decoder};
 
 **Priority order:** libopus > native > stub
 
-| Features Enabled | Backend Used | Dependencies Compiled | Warning | Bloat |
-|------------------|--------------|----------------------|---------|-------|
-| (default) | native | native only | None | None |
-| `native` | native | native only | None | None |
-| `libopus` | libopus | both | Yes | Minor |
-| `--no-default-features --features libopus` | libopus | libopus only | None | None |
-| `native,libopus` | libopus | both | Yes | Minor |
-| `--no-default-features` | stub | none | Yes | None |
+| Features Enabled                           | Backend Used | Dependencies Compiled | Warning | Bloat |
+| ------------------------------------------ | ------------ | --------------------- | ------- | ----- |
+| (default)                                  | native       | native only           | None    | None  |
+| `native`                                   | native       | native only           | None    | None  |
+| `libopus`                                  | libopus      | both                  | Yes     | Minor |
+| `--no-default-features --features libopus` | libopus      | libopus only          | None    | None  |
+| `native,libopus`                           | libopus      | both                  | Yes     | Minor |
+| `--no-default-features`                    | stub         | none                  | Yes     | None  |
 
 ### Stub Backend Behavior
 
@@ -149,6 +151,7 @@ impl Decoder {
 ```
 
 **Purpose:**
+
 - Allows crate to compile in all scenarios
 - Provides clear runtime error if misconfigured
 - Build warnings alert developer at compile time
@@ -159,21 +162,25 @@ impl Decoder {
 ### Component Breakdown
 
 **1. Range Decoder (RFC 4.1)**
+
 - Entropy decoder using range coding
 - Provides symbol extraction from compressed bitstream
 - Used by both SILK and CELT decoders
 
 **Key components:**
+
 - `RangeDecoder` state machine
 - Symbol decoding functions
 - Raw bit extraction
 - Uniformly distributed integer decoding
 
 **2. SILK Decoder (RFC 4.2) [feature: silk]**
+
 - Linear prediction based decoder for speech/narrowband
 - Handles 8/12/16/24 kHz sample rates
 
 **Key components:**
+
 - `SilkDecoder` state machine
 - LP layer organization
 - LSF/LPC coefficient decoding
@@ -182,10 +189,12 @@ impl Decoder {
 - Resampling to output rate
 
 **3. CELT Decoder (RFC 4.3) [feature: celt]**
+
 - MDCT-based decoder for music/wideband
 - Handles 16/24/48 kHz sample rates
 
 **Key components:**
+
 - `CeltDecoder` state machine
 - Energy envelope decoding
 - Dynamic bit allocation
@@ -194,17 +203,20 @@ impl Decoder {
 - Post-filtering
 
 **4. Mode Integration (RFC 4.5) [feature: hybrid]**
+
 - Switches between SILK/CELT/Hybrid based on TOC byte
 - Manages configuration transitions
 - Handles redundancy
 
 **Key components:**
+
 - Mode detection from TOC
 - State management
 - Sample rate conversion
 - Redundancy handling
 
 **5. Packet Loss Concealment (RFC 4.4)**
+
 - Handles missing packets gracefully
 - Clock drift compensation
 
@@ -263,18 +275,21 @@ Opus Packet (bytes)
 Each decoder maintains state across frames:
 
 **SILK State:**
+
 - Previous frame LPC coefficients
 - Pitch lag history
 - Gain smoothing state
 - Resampler state
 
 **CELT State:**
+
 - Previous MDCT coefficients (overlap-add)
 - Energy envelope history
 - Post-filter state
 - De-emphasis filter state
 
 **Mode Switching State:**
+
 - Previous mode configuration
 - Transition smoothing buffers
 - Redundancy frame storage
@@ -282,11 +297,13 @@ Each decoder maintains state across frames:
 ### Memory Management
 
 **Zero-copy strategy:**
+
 - Use `Bytes` crate for packet data
 - Pass slices where possible
 - Pre-allocate output buffers
 
 **Buffer reuse:**
+
 - Decoder maintains internal buffers
 - Resize dynamically as needed
 - Clear/reset for state reset operations
@@ -307,6 +324,7 @@ hybrid = ["silk", "celt"]  # Combined mode
 ### Conditional Compilation
 
 **Module structure:**
+
 ```rust
 // moosicbox_opus_native/src/lib.rs
 
@@ -325,6 +343,7 @@ pub mod plc;  // Always included
 ```
 
 **Decoder implementation:**
+
 ```rust
 impl Decoder {
     pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) -> Result<usize, Error> {
@@ -349,15 +368,16 @@ impl Decoder {
 
 Approximate module sizes (estimated from RFC line counts):
 
-| Feature | Lines of Code | Impact |
-|---------|---------------|--------|
-| Range decoder | ~500 | Always included (core) |
-| SILK decoder | ~4000 | Large (complex DSP) |
-| CELT decoder | ~1000 | Medium (MDCT + PVQ) |
-| Mode integration | ~300 | Small |
-| PLC | ~100 | Small |
+| Feature          | Lines of Code | Impact                 |
+| ---------------- | ------------- | ---------------------- |
+| Range decoder    | ~500          | Always included (core) |
+| SILK decoder     | ~4000         | Large (complex DSP)    |
+| CELT decoder     | ~1000         | Medium (MDCT + PVQ)    |
+| Mode integration | ~300          | Small                  |
+| PLC              | ~100          | Small                  |
 
 **Binary size optimization:**
+
 - Speech-only: `--no-default-features --features silk` (~70% reduction)
 - Music-only: `--no-default-features --features celt` (~60% reduction)
 
@@ -478,33 +498,39 @@ pub enum Error {
 ## Testing Strategy
 
 ### Unit Tests
+
 - Every RFC section gets dedicated tests
 - Test each function with valid/invalid inputs
 - Test boundary conditions
 - Test error paths
 
 ### Integration Tests
+
 - End-to-end decode tests with real packets
 - Mode switching tests
 - State reset tests
 - Packet loss scenarios
 
 ### Conformance Tests
+
 - RFC 6716 test vectors (when available)
 - Opus test suite integration
 - Bit-exact output comparison with libopus
 
 ### Fuzzing
+
 - AFL/libFuzzer on packet inputs
 - Targeted fuzzing for each decoder module
 - Continuous fuzzing in CI
 
 ### Performance Tests
+
 - Benchmark critical paths (MDCT, LPC synthesis, etc.)
 - Compare against libopus baseline
 - Track performance regressions
 
 ### API Compatibility Tests
+
 - Compile-time signature verification
 - Runtime behavior comparison
 - Error type compatibility
@@ -524,6 +550,7 @@ pub enum Error {
 ## Future Optimizations
 
 **Post-correctness optimizations:**
+
 - SIMD acceleration (safe wrappers for vectorization)
 - Memory allocation reduction
 - Algorithmic improvements where allowed by RFC
@@ -531,6 +558,7 @@ pub enum Error {
 - Parallel frame decoding (if applicable)
 
 **Optimization constraints:**
+
 - Must maintain RFC bit-exact compliance
 - Must maintain API compatibility
 - Must maintain zero-cost abstraction

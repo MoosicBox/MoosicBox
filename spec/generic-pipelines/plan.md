@@ -32,40 +32,47 @@ These items need further investigation or decision during implementation:
 ### Resolved Decisions (from requirements gathering)
 
 #### Execution Model
+
 - ✅ **Phase execution**: Sequential - each phase must complete before the next begins
 - ✅ **Local job execution**: Sequential initially, parallel execution as future enhancement
 - ✅ **Matrix execution**: Sequential locally, only current OS supported
 - ✅ **Proof tracking**: Individual proof entries under each checkbox, verification per step
 
 #### Action System
+
 - ✅ **Action resolution**: Top-level `actions:` property maps names to definitions
 - ✅ **Action formats**: `{ type: "github|file|inline", url/path/definition: ... }`
 - ✅ **Translation failures**: Hard fail when backend translation missing (no fallbacks)
 - ✅ **Action distribution**: Standard actions shipped with tool, repo-based actions cached
 
 #### Backend Behavior
+
 - ✅ **Backend detection**: CLI flag `--backend=` with env auto-detection fallback
 - ✅ **Backend conditionals**: Simple conditions stripped, complex ones become false
 - ✅ **Translation strategy**: Runtime translation, preserve structure across backends
 
 #### Data Flow
+
 - ✅ **Step outputs**: Via `$PIPELINE_OUTPUT` file (like GitHub's `$GITHUB_OUTPUT`)
 - ✅ **Output types**: All outputs are strings, no type validation
 - ✅ **Secrets**: Environment variables with `PIPELINE_SECRET_` prefix locally
 - ✅ **Artifacts**: Handled via generic actions with backend-specific implementations
 
 #### Error Handling
+
 - ✅ **Failure model**: Match GitHub's outcome vs conclusion semantics exactly
 - ✅ **Continue-on-error**: Affects conclusion but not outcome
 - ✅ **DAG validation**: Circular dependency check at parse time
 
 #### Triggers and Events
+
 - ✅ **Local triggers**: Ignored initially, stubbed event context
 - ✅ **Generic triggers**: Backend-agnostic names that translate to platform-specific
 
 ### Newly Resolved Decisions (from specification clarification)
 
 #### Workflow Format
+
 - ✅ **Top-level structure**: `version`, `name`, `triggers`, `actions`, `jobs`
 - ✅ **Trigger names**: `push` (not commit), `pull_request`, `schedule`, `manual`
 - ✅ **Trigger format**: Support both simple lists and detailed parameters
@@ -74,6 +81,7 @@ These items need further investigation or decision during implementation:
 - ✅ **File location**: Any location, any YAML file, no special naming required
 
 #### Action System
+
 - ✅ **Action types**: `github` (repo field), `file` (path field), `inline` (runs field)
 - ✅ **GitHub action format**: `repo: actions/checkout@v4` or `repo: owner/name@ref`
 - ✅ **Custom action format**: GitHub-like with name/inputs/outputs/runs structure
@@ -82,6 +90,7 @@ These items need further investigation or decision during implementation:
 - ✅ **Built-in actions**: Implemented as standard custom actions, not special syntax
 
 #### Execution Semantics
+
 - ✅ **Step outputs**: Write to `$PIPELINE_OUTPUT`, same as `$GITHUB_OUTPUT`
 - ✅ **Output storage**: Temp file per step or in-memory representation
 - ✅ **Secrets locally**: `PIPELINE_SECRET_*` env vars OR `--secret KEY=val` CLI args
@@ -91,6 +100,7 @@ These items need further investigation or decision during implementation:
 - ✅ **Matrix locally**: Run only current OS, map ubuntu-latest→linux, etc.
 
 #### Translation Behavior
+
 - ✅ **Backend conditionals**: Replace with constant true/false during translation
 - ✅ **Translation output**: Write to actual .github/workflows/ directory
 - ✅ **Untranslatable actions**: Generate compatible action for target platform
@@ -98,6 +108,7 @@ These items need further investigation or decision during implementation:
 - ✅ **Filename preservation**: Keep original filename when translating
 
 #### CLI Design
+
 - ✅ **Run command**: `gpipe run workflow.yml [options]`
 - ✅ **Run options**: `--backend=local` (default), `--secret`, `--env`, `--dry-run`
 - ✅ **NO run options**: No `--job` or `--matrix-os` selection
@@ -105,6 +116,7 @@ These items need further investigation or decision during implementation:
 - ✅ **Auto-discovery**: No automatic workflow discovery, must specify file
 
 #### Artifact System
+
 - ✅ **Artifact actions**: Built-in `upload-artifact`/`download-artifact` actions
 - ✅ **Implementation**: Standard custom actions that translate to platform-specific
 - ✅ **Local storage**: Persist artifacts in `.pipeline/artifacts/[run-id]/[name]/`
@@ -114,6 +126,7 @@ These items need further investigation or decision during implementation:
 ### Implementation Decisions (from specification refinement)
 
 #### AST Structure
+
 - ✅ **Core node types**: Workflow, Job, Step with defined fields
 - ✅ **Step representation**: Enum variants (UseAction vs RunScript) not optional fields
 - ✅ **Expression storage**: Parsed Expression trees, not raw strings
@@ -121,22 +134,25 @@ These items need further investigation or decision during implementation:
 - ✅ **Collections**: Use BTreeMap for deterministic ordering (MoosicBox convention)
 
 #### Expression Language
+
 - ✅ **MVP functions**: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
 - ✅ **Operators**: `==`, `!=`, `&&`, `||`, `!`, property access with `.`
 - ✅ **No status functions**: Skip `always()`, `success()`, `failure()` for MVP
 - ✅ **Expression AST**: Complete enum with String, Number, Boolean, Null, Variable, BinaryOp, UnaryOp, FunctionCall, Index
 
 #### Package Structure
+
 - ✅ **Umbrella crate**: `packages/gpipe/` following switchy/hyperchad pattern
 - ✅ **Sub-crates**: `gpipe_ast`, `gpipe_parser`, `gpipe_runner`, `gpipe_translator`, `gpipe_actions`, `gpipe_cli`
 - ✅ **Binary name**: `gpipe` (not pipeline)
-- ✅ **Naming convention**: All packages use gpipe_ prefix
+- ✅ **Naming convention**: All packages use gpipe\_ prefix
 
 #### Built-in Actions
+
 - ✅ **No magic**: Regular file-based actions in `.pipeline/actions/` directory
 - ✅ **No embedded actions**: Not compiled into binary, loaded from repo
 - ✅ **Standard format**: Use same YAML format as user-defined actions
-- ✅ **Initial built-ins**: checkout, setup-*, upload-artifact as regular action files
+- ✅ **Initial built-ins**: checkout, setup-\*, upload-artifact as regular action files
 
 ## Phase 1: Generic Workflow Format Definition 🟡
 
@@ -147,135 +163,134 @@ These items need further investigation or decision during implementation:
 ### 1.1 Generic Workflow Syntax ✅ COMPLETE
 
 - [x] Define generic workflow YAML schema 🔴 **CRITICAL**
-  - Proof: packages/gpipe/ast/src/workflow.rs:45-60
-  - Complete Workflow struct with version, name, triggers, actions, jobs fields
-  - Full YAML schema documented in comments at packages/gpipe/ast/src/workflow.rs:5-43
-  - All types use BTreeMap for deterministic ordering per MoosicBox conventions
-  - Structure:
-    ```yaml
-    version: 1.0
-    name: string
-    triggers:
-      push:
-        branches: [string]
-      pull_request:
-        types: [string]
-      schedule:
-        cron: string
-      manual:
-    actions:
-      name:
-        type: github|file|inline
-        repo: string  # for github
-        path: string  # for file
-        # inline has full action definition
-    jobs:
-      job-name:
-        needs: [string]
-        env:
-          KEY: value
-        strategy:
-          matrix:
-            os: [ubuntu-latest, windows-latest, macos-latest]
-            exclude:
-              - os: windows-latest
-        steps:
-          - uses: action-name
-            with:
-              param: value
-          - run: shell command
-            id: step-id
-            if: ${{ expression }}
-            continue-on-error: boolean
-    ```
-
+    - Proof: packages/gpipe/ast/src/workflow.rs:45-60
+    - Complete Workflow struct with version, name, triggers, actions, jobs fields
+    - Full YAML schema documented in comments at packages/gpipe/ast/src/workflow.rs:5-43
+    - All types use BTreeMap for deterministic ordering per MoosicBox conventions
+    - Structure:
+        ```yaml
+        version: 1.0
+        name: string
+        triggers:
+            push:
+                branches: [string]
+            pull_request:
+                types: [string]
+            schedule:
+                cron: string
+            manual:
+        actions:
+            name:
+                type: github|file|inline
+                repo: string # for github
+                path: string # for file
+                # inline has full action definition
+        jobs:
+            job-name:
+                needs: [string]
+                env:
+                    KEY: value
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest, windows-latest, macos-latest]
+                        exclude:
+                            - os: windows-latest
+                steps:
+                    - uses: action-name
+                      with:
+                          param: value
+                    - run: shell command
+                      id: step-id
+                      if: ${{ expression }}
+                      continue-on-error: boolean
+        ```
 
 #### 1.1 Verification
 
 - [x] Run `cargo build -p gpipe_ast` - Package compiles
-  - Proof: packages/gpipe/ast/src/ contains complete AST implementation
-  - Workflow, Job, Step, Expression, Trigger, ActionDef types all defined
+    - Proof: packages/gpipe/ast/src/ contains complete AST implementation
+    - Workflow, Job, Step, Expression, Trigger, ActionDef types all defined
 - [x] Run `cargo test -p gpipe_ast` - All tests pass
-  - Proof: No tests exist yet (package is type definitions only)
+    - Proof: No tests exist yet (package is type definitions only)
 - [x] Run `cargo clippy -p gpipe_ast -- -D warnings` - No clippy warnings
-  - Proof: Clean build with all clippy lints enabled
+    - Proof: Clean build with all clippy lints enabled
 - [x] Run `cargo fmt` - Code formatted
-  - Proof: All workspace files properly formatted
+    - Proof: All workspace files properly formatted
 - [x] Run `cargo machete` - No unused dependencies
-  - Proof: Only serde and serde_yaml used, both required
+    - Proof: Only serde and serde_yaml used, both required
 - [x] Create example workflow files in spec/generic-pipelines/examples/
-  - Proof: spec/generic-pipelines/examples/ contains 5 comprehensive example workflows
-  - basic-workflow.yml - Simple single-job workflow
-  - multi-job.yml - Job dependencies and step outputs demonstration
-  - backend-conditional.yml - Backend-specific conditional execution
-  - matrix-build.yml - Matrix strategy with multiple OS/versions
-  - inline-action.yml - Custom inline action definitions with inputs/outputs
+    - Proof: spec/generic-pipelines/examples/ contains 5 comprehensive example workflows
+    - basic-workflow.yml - Simple single-job workflow
+    - multi-job.yml - Job dependencies and step outputs demonstration
+    - backend-conditional.yml - Backend-specific conditional execution
+    - matrix-build.yml - Matrix strategy with multiple OS/versions
+    - inline-action.yml - Custom inline action definitions with inputs/outputs
 - [x] Document schema in packages/gpipe/README.md
-  - Proof: packages/gpipe/README.md contains complete schema documentation
-  - Comprehensive workflow format specification with examples
-  - All trigger types, action types, and syntax documented
-  - Backend conditional usage and expression language reference
+    - Proof: packages/gpipe/README.md contains complete schema documentation
+    - Comprehensive workflow format specification with examples
+    - All trigger types, action types, and syntax documented
+    - Backend conditional usage and expression language reference
 
 ### 1.2 Generic Action System
 
 - [ ] Define generic action definition format 🔴 **CRITICAL**
-  - GitHub type:
-    ```yaml
-    checkout:
-      type: github
-      repo: actions/checkout@v4  # Format: owner/name@ref
-    ```
-  - File type:
-    ```yaml
-    my-action:
-      type: file
-      path: ./.pipeline/actions/my-action/action.yml
-    ```
-  - Inline type:
-    ```yaml
-    echo-message:
-      type: inline
-      name: Echo Message
-      description: Echoes a message
-      inputs:
-        message:
-          description: Message to echo
-          required: true
-          default: "Hello"
-      outputs:
-        result:
-          description: The result
-      runs:
-        steps:
-          - run: |
-              echo "${{ inputs.message }}"
-              echo "result=done" >> $PIPELINE_OUTPUT
-    ```
+    - GitHub type:
+        ```yaml
+        checkout:
+            type: github
+            repo: actions/checkout@v4 # Format: owner/name@ref
+        ```
+    - File type:
+        ```yaml
+        my-action:
+            type: file
+            path: ./.pipeline/actions/my-action/action.yml
+        ```
+    - Inline type:
+        ```yaml
+        echo-message:
+            type: inline
+            name: Echo Message
+            description: Echoes a message
+            inputs:
+                message:
+                    description: Message to echo
+                    required: true
+                    default: 'Hello'
+            outputs:
+                result:
+                    description: The result
+            runs:
+                steps:
+                    - run: |
+                          echo "${{ inputs.message }}"
+                          echo "result=done" >> $PIPELINE_OUTPUT
+        ```
 - [ ] Action resolution requires explicit declaration 🔴 **CRITICAL**
-  - ALL actions must be in top-level `actions:` mapping
-  - NO implicit search paths or conventions
-  - NO automatic discovery
+    - ALL actions must be in top-level `actions:` mapping
+    - NO implicit search paths or conventions
+    - NO automatic discovery
 - [ ] Custom action file format (GitHub-like) 🔴 **CRITICAL**
-  - Files referenced by `type: file` use this structure:
-    ```yaml
-    name: My Custom Action
-    description: Does something useful
-    inputs:
-      param-name:
-        description: Parameter description
-        required: true|false
-        default: "value"
-    outputs:
-      output-name:
-        description: Output description
-    runs:
-      steps:
-        - run: shell command
-        - uses: another-action  # Can reference other actions
-    ```
+    - Files referenced by `type: file` use this structure:
+        ```yaml
+        name: My Custom Action
+        description: Does something useful
+        inputs:
+            param-name:
+                description: Parameter description
+                required: true|false
+                default: 'value'
+        outputs:
+            output-name:
+                description: Output description
+        runs:
+            steps:
+                - run: shell command
+                - uses: another-action # Can reference other actions
+        ```
 - [ ] Action inputs passed at usage, not definition 🟡 **IMPORTANT**
-  - Use `with:` at step level to pass inputs
-  - Action definition only declares what inputs exist
+    - Use `with:` at step level to pass inputs
+    - Action definition only declares what inputs exist
 
 #### 1.2 Verification
 
@@ -287,22 +302,22 @@ These items need further investigation or decision during implementation:
 ### 1.3 Backend Context System
 
 - [ ] Define `backend` context variable concept 🔴 **CRITICAL**
-  - **Specification**: Will be available as `${{ backend }}` in expressions
-  - **Planned values**: `'local'`, `'github'`, `'gitlab'`, `'jenkins'`, etc.
-  - **Design decision**: Value will come from CLI flag `--backend=name` (default: `local`)
-  - **Usage**: For conditional execution and translation
-  - NOTE: This is definition only - implementation in Phase 3.2 and 4.3
+    - **Specification**: Will be available as `${{ backend }}` in expressions
+    - **Planned values**: `'local'`, `'github'`, `'gitlab'`, `'jenkins'`, etc.
+    - **Design decision**: Value will come from CLI flag `--backend=name` (default: `local`)
+    - **Usage**: For conditional execution and translation
+    - NOTE: This is definition only - implementation in Phase 3.2 and 4.3
 - [ ] Define supported backend identifiers 🔴 **CRITICAL**
-  - Document what each backend identifier represents:
-    - `local`: Direct command execution without containers
-    - `github`: GitHub Actions environment
-    - `gitlab`: GitLab CI environment
-    - `jenkins`: Jenkins pipeline (future)
+    - Document what each backend identifier represents:
+        - `local`: Direct command execution without containers
+        - `github`: GitHub Actions environment
+        - `gitlab`: GitLab CI environment
+        - `jenkins`: Jenkins pipeline (future)
 - [ ] Document backend detection strategy 🔴 **CRITICAL**
-  - **Design**: How backend will be determined (not implementation)
-  - Primary: CLI flag `--backend=name`
-  - Fallback: Environment detection (CI env vars)
-  - Default: `local` when no CI detected
+    - **Design**: How backend will be determined (not implementation)
+    - Primary: CLI flag `--backend=name`
+    - Fallback: Environment detection (CI env vars)
+    - Default: `local` when no CI detected
 
 #### 1.3 Verification
 
@@ -313,15 +328,15 @@ These items need further investigation or decision during implementation:
 ### 1.4 Backend Conditional Syntax Definition
 
 - [ ] Define backend conditional expression format 🔴 **CRITICAL**
-  - Syntax: `if: ${{ backend == 'name' }}`
-  - Uses backend context defined in 1.3
-  - Translation semantics:
-    - When translating to GitHub: `backend == 'github'` → `true`
-    - When translating to GitLab: `backend == 'gitlab'` → `true`
-    - Complex: `${{ backend == 'github' && matrix.os == 'ubuntu' }}` → `${{ true && matrix.os == 'ubuntu' }}`
-  - Runtime semantics:
-    - Backend value from context (see 1.3)
-    - Steps with false conditions skipped entirely
+    - Syntax: `if: ${{ backend == 'name' }}`
+    - Uses backend context defined in 1.3
+    - Translation semantics:
+        - When translating to GitHub: `backend == 'github'` → `true`
+        - When translating to GitLab: `backend == 'gitlab'` → `true`
+        - Complex: `${{ backend == 'github' && matrix.os == 'ubuntu' }}` → `${{ true && matrix.os == 'ubuntu' }}`
+    - Runtime semantics:
+        - Backend value from context (see 1.3)
+        - Steps with false conditions skipped entirely
 
 #### 1.4 Verification
 
@@ -332,20 +347,20 @@ These items need further investigation or decision during implementation:
 ### 1.5 Output Variable Syntax Definition
 
 - [ ] Define step output capture mechanism 🔴 **CRITICAL**
-  - Environment variable: `$PIPELINE_OUTPUT`
-  - Write format: `echo "name=value" >> $PIPELINE_OUTPUT`
-  - Multi-line format:
-    ```bash
-    echo "content<<EOF" >> $PIPELINE_OUTPUT
-    echo "line 1" >> $PIPELINE_OUTPUT
-    echo "line 2" >> $PIPELINE_OUTPUT
-    echo "EOF" >> $PIPELINE_OUTPUT
-    ```
-  - Access syntax: `${{ steps.<step-id>.outputs.<name> }}`
-  - Translation mappings:
-    - GitHub: `$PIPELINE_OUTPUT` → `$GITHUB_OUTPUT`
-    - GitLab: Use artifacts or CI variables
-    - Local: Temp file per step
+    - Environment variable: `$PIPELINE_OUTPUT`
+    - Write format: `echo "name=value" >> $PIPELINE_OUTPUT`
+    - Multi-line format:
+        ```bash
+        echo "content<<EOF" >> $PIPELINE_OUTPUT
+        echo "line 1" >> $PIPELINE_OUTPUT
+        echo "line 2" >> $PIPELINE_OUTPUT
+        echo "EOF" >> $PIPELINE_OUTPUT
+        ```
+    - Access syntax: `${{ steps.<step-id>.outputs.<name> }}`
+    - Translation mappings:
+        - GitHub: `$PIPELINE_OUTPUT` → `$GITHUB_OUTPUT`
+        - GitLab: Use artifacts or CI variables
+        - Local: Temp file per step
 
 #### 1.5 Verification
 
@@ -356,35 +371,33 @@ These items need further investigation or decision during implementation:
 ### 1.6 Trigger Mapping Definition
 
 - [ ] Define generic trigger vocabulary 🔴 **CRITICAL**
-  - Generic trigger types:
-    ```yaml
-    push:
-      branches: [main, develop]
-    pull_request:
-      types: [opened, synchronize]
-    schedule:
-      cron: "0 0 * * *"
-    manual:
-    ```
-  - Backend mappings:
-    | Generic | GitHub | GitLab |
-    |---------|---------|---------|
-    | `push` | `push` | `push` |
-    | `pull_request` | `pull_request` | `merge_request` |
-    | `schedule` | `schedule` | `schedule` |
-    | `manual` | `workflow_dispatch` | `web` |
-  - Configuration translation rules:
-    - Branch filters translate directly
-    - PR types map to platform-specific events
-    - Cron syntax is universal
+    - Generic trigger types:
+        ```yaml
+        push:
+            branches: [main, develop]
+        pull_request:
+            types: [opened, synchronize]
+        schedule:
+            cron: '0 0 * * *'
+        manual:
+        ```
+    - Backend mappings:
+      | Generic | GitHub | GitLab |
+      |---------|---------|---------|
+      | `push` | `push` | `push` |
+      | `pull_request` | `pull_request` | `merge_request` |
+      | `schedule` | `schedule` | `schedule` |
+      | `manual` | `workflow_dispatch` | `web` |
+    - Configuration translation rules:
+        - Branch filters translate directly
+        - PR types map to platform-specific events
+        - Cron syntax is universal
 
 #### 1.6 Verification
 
 - [ ] Document complete trigger mapping table
 - [ ] Create examples for each trigger type
 - [ ] Define unsupported trigger handling
-
-
 
 ## Phase 2: Core AST and Workflow Model 🟡
 
@@ -395,69 +408,71 @@ These items need further investigation or decision during implementation:
 ### 2.1 AST Definition
 
 - [ ] Define workflow node types 🔴 **CRITICAL**
-  ```rust
-  pub struct Workflow {
-      pub version: String,
-      pub name: String,
-      pub triggers: Vec<Trigger>,
-      pub actions: BTreeMap<String, ActionDef>,
-      pub jobs: BTreeMap<String, Job>,
-  }
 
-  pub struct Job {
-      pub needs: Vec<String>,
-      pub strategy: Option<MatrixStrategy>,
-      pub env: BTreeMap<String, String>,
-      pub steps: Vec<Step>,
-      pub if_condition: Option<Expression>,
-  }
+    ```rust
+    pub struct Workflow {
+        pub version: String,
+        pub name: String,
+        pub triggers: Vec<Trigger>,
+        pub actions: BTreeMap<String, ActionDef>,
+        pub jobs: BTreeMap<String, Job>,
+    }
 
-  pub enum Step {
-      UseAction {
-          id: Option<String>,
-          uses: String,
-          with: BTreeMap<String, String>,
-          env: BTreeMap<String, String>,
-          if_condition: Option<Expression>,
-          continue_on_error: bool,
-      },
-      RunScript {
-          id: Option<String>,
-          run: String,
-          env: BTreeMap<String, String>,
-          if_condition: Option<Expression>,
-          continue_on_error: bool,
-          working_directory: Option<String>,
-      },
-  }
-  ```
+    pub struct Job {
+        pub needs: Vec<String>,
+        pub strategy: Option<MatrixStrategy>,
+        pub env: BTreeMap<String, String>,
+        pub steps: Vec<Step>,
+        pub if_condition: Option<Expression>,
+    }
+
+    pub enum Step {
+        UseAction {
+            id: Option<String>,
+            uses: String,
+            with: BTreeMap<String, String>,
+            env: BTreeMap<String, String>,
+            if_condition: Option<Expression>,
+            continue_on_error: bool,
+        },
+        RunScript {
+            id: Option<String>,
+            run: String,
+            env: BTreeMap<String, String>,
+            if_condition: Option<Expression>,
+            continue_on_error: bool,
+            working_directory: Option<String>,
+        },
+    }
+    ```
+
 - [ ] Create expression language AST 🔴 **CRITICAL**
-  ```rust
-  pub enum Expression {
-      String(String),
-      Number(f64),
-      Boolean(bool),
-      Null,
-      Variable(Vec<String>),  // e.g., ["github", "sha"]
-      BinaryOp {
-          left: Box<Expression>,
-          op: BinaryOperator,
-          right: Box<Expression>,
-      },
-      UnaryOp {
-          op: UnaryOperator,
-          expr: Box<Expression>,
-      },
-      FunctionCall {
-          name: String,
-          args: Vec<Expression>,
-      },
-      Index {
-          expr: Box<Expression>,
-          index: Box<Expression>,
-      },
-  }
-  ```
+    ```rust
+    pub enum Expression {
+        String(String),
+        Number(f64),
+        Boolean(bool),
+        Null,
+        Variable(Vec<String>),  // e.g., ["github", "sha"]
+        BinaryOp {
+            left: Box<Expression>,
+            op: BinaryOperator,
+            right: Box<Expression>,
+        },
+        UnaryOp {
+            op: UnaryOperator,
+            expr: Box<Expression>,
+        },
+        FunctionCall {
+            name: String,
+            args: Vec<Expression>,
+        },
+        Index {
+            expr: Box<Expression>,
+            index: Box<Expression>,
+        },
+    }
+    ```
 - [ ] Define matrix strategy representation 🔴 **CRITICAL**
 - [ ] Support for artifacts and caching abstractions 🟡 **IMPORTANT**
 - [ ] Define secret/credential abstraction 🔴 **CRITICAL**
@@ -473,28 +488,28 @@ These items need further investigation or decision during implementation:
 ### 2.2 Workflow Model
 
 - [ ] Create Workflow struct with metadata and jobs 🔴 **CRITICAL**
-  - Fields: version, name, triggers, actions map, jobs map
+    - Fields: version, name, triggers, actions map, jobs map
 - [ ] Define Job struct with dependencies and steps 🔴 **CRITICAL**
-  - Sequential execution locally (definition order when ready)
-  - DAG validation for circular dependencies at parse time
-  - `needs:` array for dependencies (GitHub syntax)
-  - Failed jobs block dependents from running
+    - Sequential execution locally (definition order when ready)
+    - DAG validation for circular dependencies at parse time
+    - `needs:` array for dependencies (GitHub syntax)
+    - Failed jobs block dependents from running
 - [ ] Create Step variants 🔴 **CRITICAL**
-  - UseAction: references action from `actions:` map with `with:` params
-  - RunScript: shell command with working dir
-  - Both support: `id`, `if`, `continue-on-error`, `env`
+    - UseAction: references action from `actions:` map with `with:` params
+    - RunScript: shell command with working dir
+    - Both support: `id`, `if`, `continue-on-error`, `env`
 - [ ] Implement Context struct for variables and state 🔴 **CRITICAL**
-  - `$PIPELINE_OUTPUT` file for step outputs (or in-memory map)
-  - `PIPELINE_SECRET_*` env vars for secrets
-  - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
+    - `$PIPELINE_OUTPUT` file for step outputs (or in-memory map)
+    - `PIPELINE_SECRET_*` env vars for secrets
+    - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
 - [ ] Add support for job/step outputs 🟡 **IMPORTANT**
-  - All outputs are strings (no type validation)
-  - GitHub-compatible: outcome vs conclusion semantics
-  - Step outputs via `echo "key=value" >> $PIPELINE_OUTPUT`
+    - All outputs are strings (no type validation)
+    - GitHub-compatible: outcome vs conclusion semantics
+    - Step outputs via `echo "key=value" >> $PIPELINE_OUTPUT`
 - [ ] Error handling semantics 🟡 **IMPORTANT**
-  - `continue-on-error: true`: Sets conclusion=failure, outcome=success
-  - Without flag: Both conclusion and outcome = failure
-  - Failed job continues other non-dependent jobs
+    - `continue-on-error: true`: Sets conclusion=failure, outcome=success
+    - Without flag: Both conclusion and outcome = failure
+    - Failed job continues other non-dependent jobs
 
 #### 2.2 Verification
 
@@ -506,15 +521,15 @@ These items need further investigation or decision during implementation:
 ### 2.3 Package Structure
 
 - [ ] Create packages/gpipe umbrella package 🔴 **CRITICAL**
-  - Main Cargo.toml re-exports all sub-crates with features
-  - Follow switchy/hyperchad pattern for organization
+    - Main Cargo.toml re-exports all sub-crates with features
+    - Follow switchy/hyperchad pattern for organization
 - [ ] Create sub-packages with consistent naming 🔴 **CRITICAL**
-  - `gpipe_ast` - Core AST types and structures
-  - `gpipe_parser` - Parsers for Generic/GitHub/GitLab formats
-  - `gpipe_runner` - Local execution engine
-  - `gpipe_translator` - Format translation logic
-  - `gpipe_actions` - Action loading and resolution
-  - `gpipe_cli` - CLI binary named 'gpipe'
+    - `gpipe_ast` - Core AST types and structures
+    - `gpipe_parser` - Parsers for Generic/GitHub/GitLab formats
+    - `gpipe_runner` - Local execution engine
+    - `gpipe_translator` - Format translation logic
+    - `gpipe_actions` - Action loading and resolution
+    - `gpipe_cli` - CLI binary named 'gpipe'
 - [ ] Implement Serialize/Deserialize for all AST nodes 🔴 **CRITICAL**
 - [ ] Add validation methods for workflow correctness 🟡 **IMPORTANT**
 - [ ] Include builder patterns for ergonomic construction 🟡 **IMPORTANT**
@@ -532,12 +547,12 @@ These items need further investigation or decision during implementation:
 ### 2.4 Parser Package Setup
 
 - [ ] Create packages/gpipe/parser directory structure 🔴 **CRITICAL**
-  - Create src/lib.rs with module exports
-  - Create src/generic.rs for generic format parser
-  - Create src/expression.rs for expression parser
+    - Create src/lib.rs with module exports
+    - Create src/generic.rs for generic format parser
+    - Create src/expression.rs for expression parser
 - [ ] Set up gpipe_parser Cargo.toml 🔴 **CRITICAL**
-  - Dependencies: gpipe_ast, serde, serde_yaml, nom/pest
-  - Features: fail-on-warnings
+    - Dependencies: gpipe_ast, serde, serde_yaml, nom/pest
+    - Features: fail-on-warnings
 - [ ] Add to workspace Cargo.toml 🔴 **CRITICAL**
 - [ ] Create README.md with package description
 
@@ -550,12 +565,12 @@ These items need further investigation or decision during implementation:
 ### 2.5 Runner Package Setup
 
 - [ ] Create packages/gpipe/runner directory structure 🔴 **CRITICAL**
-  - Create src/lib.rs with module exports
-  - Create src/local.rs for local execution
-  - Create src/context.rs for execution context
+    - Create src/lib.rs with module exports
+    - Create src/local.rs for local execution
+    - Create src/context.rs for execution context
 - [ ] Set up gpipe_runner Cargo.toml 🔴 **CRITICAL**
-  - Dependencies: gpipe_ast, gpipe_parser, tokio, tempfile
-  - Features: fail-on-warnings
+    - Dependencies: gpipe_ast, gpipe_parser, tokio, tempfile
+    - Features: fail-on-warnings
 - [ ] Add to workspace Cargo.toml 🔴 **CRITICAL**
 - [ ] Create README.md with package description
 
@@ -568,12 +583,12 @@ These items need further investigation or decision during implementation:
 ### 2.6 Translator Package Setup
 
 - [ ] Create packages/gpipe/translator directory structure 🔴 **CRITICAL**
-  - Create src/lib.rs with module exports
-  - Create src/github.rs for GitHub Actions translation
-  - Create src/gitlab.rs for GitLab CI translation
+    - Create src/lib.rs with module exports
+    - Create src/github.rs for GitHub Actions translation
+    - Create src/gitlab.rs for GitLab CI translation
 - [ ] Set up gpipe_translator Cargo.toml 🔴 **CRITICAL**
-  - Dependencies: gpipe_ast, serde, serde_yaml
-  - Features: fail-on-warnings
+    - Dependencies: gpipe_ast, serde, serde_yaml
+    - Features: fail-on-warnings
 - [ ] Add to workspace Cargo.toml 🔴 **CRITICAL**
 - [ ] Create README.md with package description
 
@@ -612,18 +627,18 @@ These items need further investigation or decision during implementation:
 ### 3.2 Backend Conditional Parser
 
 - [ ] Parse backend conditional expressions 🔴 **CRITICAL**
-  - Recognize `backend` as special variable in expressions
-  - Parse into `Expression::Variable(vec!["backend"])`
-  - Support comparisons: `backend == 'local'`, `backend != 'github'`
-  - Handle in complex expressions: `backend == 'local' && os == 'linux'`
+    - Recognize `backend` as special variable in expressions
+    - Parse into `Expression::Variable(vec!["backend"])`
+    - Support comparisons: `backend == 'local'`, `backend != 'github'`
+    - Handle in complex expressions: `backend == 'local' && os == 'linux'`
 - [ ] Extend expression parser for backend context 🔴 **CRITICAL**
-  - Add backend to known context variables
-  - Validate backend values are strings
-  - Parse quoted backend names correctly
+    - Add backend to known context variables
+    - Validate backend values are strings
+    - Parse quoted backend names correctly
 - [ ] Test backend conditional parsing 🟡 **IMPORTANT**
-  - Unit tests for various backend expressions
-  - Test invalid backend names produce errors
-  - Verify AST structure is correct
+    - Unit tests for various backend expressions
+    - Test invalid backend names produce errors
+    - Verify AST structure is correct
 
 #### 3.2 Verification
 
@@ -639,15 +654,15 @@ These items need further investigation or decision during implementation:
 
 - [ ] Implement GitHub Actions expression syntax parser 🔴 **CRITICAL**
 - [ ] Support MVP function set 🔴 **CRITICAL**
-  - String functions: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
-  - No status functions initially (not used in MoosicBox workflows)
+    - String functions: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
+    - No status functions initially (not used in MoosicBox workflows)
 - [ ] Support context variables 🔴 **CRITICAL**
-  - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
-  - Property access with `.` notation (e.g., `github.sha`, `matrix.os`)
+    - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
+    - Property access with `.` notation (e.g., `github.sha`, `matrix.os`)
 - [ ] Implement operators 🔴 **CRITICAL**
-  - Comparison: `==`, `!=`
-  - Logical: `&&`, `||`, `!`
-  - Property access: `.` for nested objects
+    - Comparison: `==`, `!=`
+    - Logical: `&&`, `||`, `!`
+    - Property access: `.` for nested objects
 - [ ] Handle string interpolation and type coercion 🟡 **IMPORTANT**
 
 #### 3.3 Verification
@@ -685,26 +700,26 @@ These items need further investigation or decision during implementation:
 
 - [ ] Create LocalRunner struct implementing WorkflowBackend trait 🔴 **CRITICAL**
 - [ ] Implement job scheduler with dependency resolution 🔴 **CRITICAL**
-  - Sequential execution (no parallelism initially)
-  - Definition order when multiple jobs ready
-  - Failed jobs prevent dependents from starting
-  - Non-dependent jobs continue despite failures
+    - Sequential execution (no parallelism initially)
+    - Definition order when multiple jobs ready
+    - Failed jobs prevent dependents from starting
+    - Non-dependent jobs continue despite failures
 - [ ] Execute shell commands via std::process::Command 🔴 **CRITICAL**
-  - Direct AST execution, no script generation
-  - Create temp `$PIPELINE_OUTPUT` file per step
-  - Pass outputs between steps via context
+    - Direct AST execution, no script generation
+    - Create temp `$PIPELINE_OUTPUT` file per step
+    - Pass outputs between steps via context
 - [ ] Manage working directories and environment variables 🔴 **CRITICAL**
-  - Map `PIPELINE_SECRET_*` env vars to `${{ secrets.* }}`
-  - Support `--secret KEY=value` CLI arguments
-  - Support `--env KEY=value` CLI overrides
+    - Map `PIPELINE_SECRET_*` env vars to `${{ secrets.* }}`
+    - Support `--secret KEY=value` CLI arguments
+    - Support `--env KEY=value` CLI overrides
 - [ ] Handle step conditions and continue-on-error 🟡 **IMPORTANT**
-  - Evaluate `if:` expressions before running step
-  - Match GitHub's outcome/conclusion model exactly
-  - Skip steps with false conditions
+    - Evaluate `if:` expressions before running step
+    - Match GitHub's outcome/conclusion model exactly
+    - Skip steps with false conditions
 - [ ] Matrix execution for local runner 🟡 **IMPORTANT**
-  - Only run current OS combinations
-  - Map OS values: ubuntu-latest→linux, windows-latest→windows, macos-latest→macos
-  - Skip non-matching OS matrix entries
+    - Only run current OS combinations
+    - Map OS values: ubuntu-latest→linux, windows-latest→windows, macos-latest→macos
+    - Skip non-matching OS matrix entries
 
 #### 4.1 Verification
 
@@ -718,21 +733,21 @@ These items need further investigation or decision during implementation:
 ### 4.2 Output Management
 
 - [ ] Implement `$PIPELINE_OUTPUT` file creation 🔴 **CRITICAL**
-  - Create temp file in `.pipeline/runs/[run-id]/outputs/`
-  - Set `PIPELINE_OUTPUT` env var to file path
-  - Clean up file after step completion
+    - Create temp file in `.pipeline/runs/[run-id]/outputs/`
+    - Set `PIPELINE_OUTPUT` env var to file path
+    - Clean up file after step completion
 - [ ] Parse output file format 🔴 **CRITICAL**
-  - Parse `key=value` lines
-  - Handle multi-line values with heredoc syntax
-  - Store in context as `steps.<id>.outputs.<key>`
+    - Parse `key=value` lines
+    - Handle multi-line values with heredoc syntax
+    - Store in context as `steps.<id>.outputs.<key>`
 - [ ] Make outputs available to expressions 🔴 **CRITICAL**
-  - Add to expression evaluation context
-  - Support `${{ steps.build.outputs.binary }}` syntax
-  - Pass outputs between dependent jobs
+    - Add to expression evaluation context
+    - Support `${{ steps.build.outputs.binary }}` syntax
+    - Pass outputs between dependent jobs
 - [ ] Handle output edge cases 🟡 **IMPORTANT**
-  - Empty output files
-  - Invalid format lines (warn and skip)
-  - Very large outputs (size limits)
+    - Empty output files
+    - Invalid format lines (warn and skip)
+    - Very large outputs (size limits)
 
 #### 4.2 Verification
 
@@ -748,17 +763,17 @@ These items need further investigation or decision during implementation:
 ### 4.3 Backend Context Evaluation
 
 - [ ] Add backend to execution context 🔴 **CRITICAL**
-  - Set from `--backend` CLI flag (default: 'local')
-  - Make available in expression context
-  - Pass to all expression evaluations
+    - Set from `--backend` CLI flag (default: 'local')
+    - Make available in expression context
+    - Pass to all expression evaluations
 - [ ] Evaluate backend conditionals at runtime 🔴 **CRITICAL**
-  - Check `if` conditions before executing steps
-  - Skip steps where backend condition is false
-  - Log skipped steps in verbose mode
+    - Check `if` conditions before executing steps
+    - Skip steps where backend condition is false
+    - Log skipped steps in verbose mode
 - [ ] Handle complex backend expressions 🟡 **IMPORTANT**
-  - Combine with other conditions: `backend == 'local' && matrix.os == 'linux'`
-  - Short-circuit evaluation for performance
-  - Cache evaluation results per step
+    - Combine with other conditions: `backend == 'local' && matrix.os == 'linux'`
+    - Short-circuit evaluation for performance
+    - Cache evaluation results per step
 
 #### 4.3 Verification
 
@@ -798,26 +813,26 @@ These items need further investigation or decision during implementation:
 
 - [ ] Define ActionTranslator trait 🔴 **CRITICAL**
 - [ ] Load built-in actions from `.pipeline/actions/` 🔴 **CRITICAL**
-  - No embedded actions in binary
-  - Load from repo directory at runtime
-  - Use standard file-based action format
+    - No embedded actions in binary
+    - Load from repo directory at runtime
+    - Use standard file-based action format
 - [ ] Implement built-in actions as standard YAML files:
-  - [ ] `.pipeline/actions/checkout.yml` 🔴 **CRITICAL**
-    ```yaml
-    name: Checkout
-    description: Checkout repository
-    runs:
-      steps:
-        - if: ${{ backend == 'github' }}
-          uses: actions/checkout@v4
-        - if: ${{ backend == 'local' }}
-          run: |
-            git fetch --depth=1
-            git checkout ${{ github.sha || 'HEAD' }}
-    ```
-  - [ ] `.pipeline/actions/setup-node.yml` 🔴 **CRITICAL**
-  - [ ] `.pipeline/actions/upload-artifact.yml` 🟡 **IMPORTANT** (Later feature)
-  - [ ] `.pipeline/actions/cache.yml` 🟡 **IMPORTANT**
+    - [ ] `.pipeline/actions/checkout.yml` 🔴 **CRITICAL**
+        ```yaml
+        name: Checkout
+        description: Checkout repository
+        runs:
+            steps:
+                - if: ${{ backend == 'github' }}
+                  uses: actions/checkout@v4
+                - if: ${{ backend == 'local' }}
+                  run: |
+                      git fetch --depth=1
+                      git checkout ${{ github.sha || 'HEAD' }}
+        ```
+    - [ ] `.pipeline/actions/setup-node.yml` 🔴 **CRITICAL**
+    - [ ] `.pipeline/actions/upload-artifact.yml` 🟡 **IMPORTANT** (Later feature)
+    - [ ] `.pipeline/actions/cache.yml` 🟡 **IMPORTANT**
 - [ ] Generate compatible action for untranslatable actions 🔴 **CRITICAL**
 
 #### 5.1 Verification
@@ -880,22 +895,22 @@ These items need further investigation or decision during implementation:
 ### 6.2 Backend Translation Rules
 
 - [ ] Implement backend conditional simplification 🔴 **CRITICAL**
-  - During translation to target backend:
-    - Replace `backend == 'target'` with `true`
-    - Replace `backend != 'target'` with `false`
-    - Replace `backend == 'other'` with `false`
-  - Preserve rest of expression structure
-  - Simplify resulting expressions when possible
+    - During translation to target backend:
+        - Replace `backend == 'target'` with `true`
+        - Replace `backend != 'target'` with `false`
+        - Replace `backend == 'other'` with `false`
+    - Preserve rest of expression structure
+    - Simplify resulting expressions when possible
 - [ ] Implement output variable translation 🔴 **CRITICAL**
-  - Map `$PIPELINE_OUTPUT` to backend-specific:
-    - GitHub: `$GITHUB_OUTPUT`
-    - GitLab: Artifact or variable approach
-    - Jenkins: Environment variable
-  - Update all `echo` statements that write to output
+    - Map `$PIPELINE_OUTPUT` to backend-specific:
+        - GitHub: `$GITHUB_OUTPUT`
+        - GitLab: Artifact or variable approach
+        - Jenkins: Environment variable
+    - Update all `echo` statements that write to output
 - [ ] Handle untranslatable features 🟡 **IMPORTANT**
-  - Warn when features have no backend equivalent
-  - Provide best-effort fallback
-  - Document limitations in generated file
+    - Warn when features have no backend equivalent
+    - Provide best-effort fallback
+    - Document limitations in generated file
 
 #### 6.2 Verification
 
@@ -911,23 +926,23 @@ These items need further investigation or decision during implementation:
 ### 6.3 Trigger Translation
 
 - [ ] Implement trigger mapping tables 🔴 **CRITICAL**
-  - Create mapping for each backend:
-    ```rust
-    match (generic_trigger, target_backend) {
-        (TriggerType::Push, Backend::Github) => "push",
-        (TriggerType::PullRequest, Backend::Github) => "pull_request",
-        (TriggerType::PullRequest, Backend::Gitlab) => "merge_request",
-        // ...
-    }
-    ```
+    - Create mapping for each backend:
+        ```rust
+        match (generic_trigger, target_backend) {
+            (TriggerType::Push, Backend::Github) => "push",
+            (TriggerType::PullRequest, Backend::Github) => "pull_request",
+            (TriggerType::PullRequest, Backend::Gitlab) => "merge_request",
+            // ...
+        }
+        ```
 - [ ] Translate trigger configurations 🔴 **CRITICAL**
-  - Map branch filters appropriately
-  - Convert event types to platform format
-  - Handle cron schedules (mostly universal)
+    - Map branch filters appropriately
+    - Convert event types to platform format
+    - Handle cron schedules (mostly universal)
 - [ ] Handle unsupported triggers 🟡 **IMPORTANT**
-  - Warn when trigger has no equivalent
-  - Skip trigger or provide documentation
-  - Add comment in generated file explaining limitation
+    - Warn when trigger has no equivalent
+    - Skip trigger or provide documentation
+    - Add comment in generated file explaining limitation
 
 #### 6.3 Verification
 
@@ -982,29 +997,31 @@ These items need further investigation or decision during implementation:
 ### 7.1 Core Commands
 
 - [ ] `run` - Execute workflow locally 🔴 **CRITICAL**
-  ```bash
-  gpipe run workflow.yml
-  gpipe run workflow.yml --backend=local  # Default
-  gpipe run workflow.yml --secret API_KEY=xxx --secret TOKEN=yyy
-  gpipe run workflow.yml --env NODE_ENV=test --env DEBUG=true
-  gpipe run workflow.yml --dry-run  # Show execution plan
-  ```
+    ```bash
+    gpipe run workflow.yml
+    gpipe run workflow.yml --backend=local  # Default
+    gpipe run workflow.yml --secret API_KEY=xxx --secret TOKEN=yyy
+    gpipe run workflow.yml --env NODE_ENV=test --env DEBUG=true
+    gpipe run workflow.yml --dry-run  # Show execution plan
+    ```
 - [ ] `translate` - Convert between formats 🟡 **IMPORTANT**
-  ```bash
-  gpipe translate workflow.yml --target=github
-  # Writes to .github/workflows/workflow.yml by default
 
-  gpipe translate workflow.yml --target=github --output=custom.yml
-  # Writes to specified path
+    ```bash
+    gpipe translate workflow.yml --target=github
+    # Writes to .github/workflows/workflow.yml by default
 
-  gpipe translate workflow.yml --target=gitlab
-  # Writes to .gitlab-ci.yml by default
-  ```
+    gpipe translate workflow.yml --target=github --output=custom.yml
+    # Writes to specified path
+
+    gpipe translate workflow.yml --target=gitlab
+    # Writes to .gitlab-ci.yml by default
+    ```
+
 - [ ] `validate` - Check workflow syntax 🟡 **IMPORTANT**
-  ```bash
-  gpipe validate workflow.yml
-  # Validates syntax and references
-  ```
+    ```bash
+    gpipe validate workflow.yml
+    # Validates syntax and references
+    ```
 - [ ] NO `cache-action` command initially 🟢 **MINOR**
 - [ ] NO auto-discovery of workflows
 - [ ] NO `--job` or `--matrix-os` selection options
@@ -1111,7 +1128,7 @@ The following criteria must be met for the project to be considered successful:
 - [ ] Continue-on-error matches GitHub semantics (outcome vs conclusion)
 - [ ] CLI supports --secret and --env flags as specified
 - [ ] Actions must be explicitly declared in workflow `actions:` mapping
-- [ ] Built-in actions (checkout, setup-*, upload-artifact) work across backends
+- [ ] Built-in actions (checkout, setup-\*, upload-artifact) work across backends
 - [ ] File locations are flexible (any path, any name, any YAML extension)
 - [ ] Translation preserves filenames and writes to correct directories
 - [ ] Can parse and execute existing MoosicBox GitHub Actions workflows locally
@@ -1130,76 +1147,76 @@ The following criteria must be met for the project to be considered successful:
 version: 1.0
 name: build-and-test
 triggers:
-  push:
-    branches: [main, develop]
-  pull_request:
-  manual:
+    push:
+        branches: [main, develop]
+    pull_request:
+    manual:
 
 actions:
-  checkout:
-    type: github
-    repo: actions/checkout@v4
+    checkout:
+        type: github
+        repo: actions/checkout@v4
 
-  setup-rust:
-    type: file
-    path: ./.pipeline/actions/setup-rust.yml
+    setup-rust:
+        type: file
+        path: ./.pipeline/actions/setup-rust.yml
 
-  notify:
-    type: inline
-    name: Send Notification
-    inputs:
-      message:
-        required: true
-    runs:
-      steps:
-        - run: |
-            echo "Notification: ${{ inputs.message }}"
-            echo "status=sent" >> $PIPELINE_OUTPUT
+    notify:
+        type: inline
+        name: Send Notification
+        inputs:
+            message:
+                required: true
+        runs:
+            steps:
+                - run: |
+                      echo "Notification: ${{ inputs.message }}"
+                      echo "status=sent" >> $PIPELINE_OUTPUT
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    env:
-      CARGO_TERM_COLOR: always
-    steps:
-      - uses: checkout
+    build:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        env:
+            CARGO_TERM_COLOR: always
+        steps:
+            - uses: checkout
 
-      - uses: setup-rust
-        with:
-          version: stable
+            - uses: setup-rust
+              with:
+                  version: stable
 
-      - id: build
-        run: |
-          cargo build --release
-          echo "binary=target/release/app" >> $PIPELINE_OUTPUT
+            - id: build
+              run: |
+                  cargo build --release
+                  echo "binary=target/release/app" >> $PIPELINE_OUTPUT
 
-      - uses: upload-artifact
+            - uses: upload-artifact
+              if: ${{ backend == 'github' }}
+              with:
+                  name: binary-${{ matrix.os }}
+                  path: ${{ steps.build.outputs.binary }}
+
+    test:
+        needs: [build]
+        steps:
+            - uses: checkout
+
+            - run: cargo test
+              continue-on-error: true
+              id: test
+
+            - if: ${{ steps.test.outcome == 'failure' }}
+              uses: notify
+              with:
+                  message: 'Tests failed but continuing'
+
+    deploy:
+        needs: [build, test]
         if: ${{ backend == 'github' }}
-        with:
-          name: binary-${{ matrix.os }}
-          path: ${{ steps.build.outputs.binary }}
-
-  test:
-    needs: [build]
-    steps:
-      - uses: checkout
-
-      - run: cargo test
-        continue-on-error: true
-        id: test
-
-      - if: ${{ steps.test.outcome == 'failure' }}
-        uses: notify
-        with:
-          message: "Tests failed but continuing"
-
-  deploy:
-    needs: [build, test]
-    if: ${{ backend == 'github' }}
-    steps:
-      - run: echo "Deploying..."
+        steps:
+            - run: echo "Deploying..."
 ```
 
 ### Translation to GitHub Actions
@@ -1210,58 +1227,58 @@ The above Generic workflow translates to:
 # .github/workflows/build-and-test.yml
 name: build-and-test
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-  workflow_dispatch:
+    push:
+        branches: [main, develop]
+    pull_request:
+    workflow_dispatch:
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      CARGO_TERM_COLOR: always
-    steps:
-      - uses: actions/checkout@v4
+    build:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        env:
+            CARGO_TERM_COLOR: always
+        steps:
+            - uses: actions/checkout@v4
 
-      - uses: ./.pipeline/actions/setup-rust.yml
-        with:
-          version: stable
+            - uses: ./.pipeline/actions/setup-rust.yml
+              with:
+                  version: stable
 
-      - id: build
-        run: |
-          cargo build --release
-          echo "binary=target/release/app" >> $GITHUB_OUTPUT
+            - id: build
+              run: |
+                  cargo build --release
+                  echo "binary=target/release/app" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v3
-        if: ${{ true }}  # backend == 'github' evaluated to true
-        with:
-          name: binary-${{ matrix.os }}
-          path: ${{ steps.build.outputs.binary }}
+            - uses: actions/upload-artifact@v3
+              if: ${{ true }} # backend == 'github' evaluated to true
+              with:
+                  name: binary-${{ matrix.os }}
+                  path: ${{ steps.build.outputs.binary }}
 
-  test:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    test:
+        needs: [build]
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
 
-      - run: cargo test
-        continue-on-error: true
-        id: test
+            - run: cargo test
+              continue-on-error: true
+              id: test
 
-      - if: ${{ steps.test.outcome == 'failure' }}
-        run: |
-          echo "Notification: Tests failed but continuing"
-          echo "status=sent" >> $GITHUB_OUTPUT
+            - if: ${{ steps.test.outcome == 'failure' }}
+              run: |
+                  echo "Notification: Tests failed but continuing"
+                  echo "status=sent" >> $GITHUB_OUTPUT
 
-  deploy:
-    needs: [build, test]
-    runs-on: ubuntu-latest
-    if: ${{ true }}  # backend == 'github' evaluated to true
-    steps:
-      - run: echo "Deploying..."
+    deploy:
+        needs: [build, test]
+        runs-on: ubuntu-latest
+        if: ${{ true }} # backend == 'github' evaluated to true
+        steps:
+            - run: echo "Deploying..."
 ```
 
 ### Translation to GitLab CI
@@ -1271,58 +1288,58 @@ The same Generic workflow translates to:
 ```yaml
 # .gitlab-ci.yml
 stages:
-  - build
-  - test
-  - deploy
+    - build
+    - test
+    - deploy
 
 variables:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 .setup_rust: &setup_rust
-  - # Setup Rust commands translated from action
+    -  # Setup Rust commands translated from action
 
 build:
-  stage: build
-  parallel:
-    matrix:
-      - OS: [ubuntu-latest, windows-latest, macos-latest]
-  script:
-    - git clone $CI_REPOSITORY_URL .  # checkout translation
-    - *setup_rust
-    - cargo build --release
-    - echo "binary=target/release/app" > build.env
-  artifacts:
-    reports:
-      dotenv: build.env
-    paths:
-      - target/release/app
-    name: binary-$OS
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    stage: build
+    parallel:
+        matrix:
+            - OS: [ubuntu-latest, windows-latest, macos-latest]
+    script:
+        - git clone $CI_REPOSITORY_URL . # checkout translation
+        - *setup_rust
+        - cargo build --release
+        - echo "binary=target/release/app" > build.env
+    artifacts:
+        reports:
+            dotenv: build.env
+        paths:
+            - target/release/app
+        name: binary-$OS
+    rules:
+        - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        - if: '$CI_PIPELINE_SOURCE == "web"'
 
 test:
-  stage: test
-  needs: [build]
-  script:
-    - git clone $CI_REPOSITORY_URL .
-    - cargo test
-    - |
-      if [ $? -ne 0 ]; then
-        echo "Notification: Tests failed but continuing"
-      fi
-  allow_failure: true
+    stage: test
+    needs: [build]
+    script:
+        - git clone $CI_REPOSITORY_URL .
+        - cargo test
+        - |
+            if [ $? -ne 0 ]; then
+              echo "Notification: Tests failed but continuing"
+            fi
+    allow_failure: true
 
 deploy:
-  stage: deploy
-  needs: [build, test]
-  script:
-    - echo "Deploying..."
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    stage: deploy
+    needs: [build, test]
+    script:
+        - echo "Deploying..."
+    rules:
+        - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        - if: '$CI_PIPELINE_SOURCE == "web"'
 ```
 
 ### Local Execution Behavior
@@ -1333,9 +1350,9 @@ When running `gpipe run build-and-test.yml --backend=local`:
 2. **Backend conditionals**: `backend == 'github'` evaluates to `false`, so upload-artifact and deploy steps are skipped
 3. **Step outputs**: Creates temporary files for `$PIPELINE_OUTPUT`
 4. **Action resolution**:
-   - `checkout` → `git checkout` commands
-   - `setup-rust` → Reads `./.pipeline/actions/setup-rust.yml` and executes
-   - `notify` → Executes inline script
+    - `checkout` → `git checkout` commands
+    - `setup-rust` → Reads `./.pipeline/actions/setup-rust.yml` and executes
+    - `notify` → Executes inline script
 5. **Job execution**: Sequential in definition order (build → test → deploy), with dependency respect
 
 ## Technical Decisions

@@ -29,18 +29,21 @@ x[n] = Σ(k=0 to N-1) X[k] * cos(π/N * (n + 0.5 + N/2) * (k + 0.5))
 ```
 
 Where:
+
 - n: time index (0 to N-1)
 - k: frequency index (0 to N-1)
 
 ### Windowing
 
 After IMDCT, apply window function:
+
 - Sine window for smooth overlap
 - Formula: `w[n] = sin(π/N * (n + 0.5))`
 
 ### Overlap-Add
 
 Current frame output overlaps with previous frame:
+
 ```
 output[n] = current_frame[n] * window[n] + previous_frame[n + N/2] * window[n + N/2]
 ```
@@ -66,6 +69,7 @@ for n in 0..N {
 ### 2. FFT-Based (Efficient)
 
 MDCT can be computed using FFT:
+
 1. Pre-rotation of input
 2. N-point FFT
 3. Post-rotation of output
@@ -76,6 +80,7 @@ MDCT can be computed using FFT:
 ### 3. Library-Based
 
 Use existing FFT library (e.g., rustfft):
+
 - Wrap in MDCT interface
 - Handle pre/post-rotation
 - Ensure bit-exact results
@@ -97,6 +102,7 @@ Use existing FFT library (e.g., rustfft):
 ### Window Function
 
 Pre-compute and store:
+
 ```rust
 const WINDOW_120: [f32; 120] = [/* precomputed values */];
 const WINDOW_240: [f32; 240] = [/* precomputed values */];
@@ -108,6 +114,7 @@ const WINDOW_240: [f32; 240] = [/* precomputed values */];
 ### Overlap Buffer
 
 Decoder must maintain:
+
 ```rust
 struct CeltDecoder {
     overlap_buffer: Vec<f32>,  // Size: N/2
@@ -118,12 +125,14 @@ struct CeltDecoder {
 ### Initialization
 
 First frame:
+
 - No previous frame to overlap with
 - Use silence or fade-in
 
 ### Reset
 
 On `reset_state()`:
+
 - Clear overlap buffer to zeros
 - Reset any filter state
 

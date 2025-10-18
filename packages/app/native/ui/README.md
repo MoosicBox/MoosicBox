@@ -129,7 +129,7 @@ let action = Action::PlayAlbum {
 
 ### Layout Constants
 
-- `FOOTER_HEIGHT`: Footer component height (calculated from 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE)
+- `FOOTER_HEIGHT`: Footer component height (calculated from 100 + VIZ_HEIGHT + VIZ_PADDING \* 2 + FOOTER_BORDER_SIZE)
 - `FOOTER_ICON_SIZE`: Icon sizes in footer (25px)
 - `FOOTER_BORDER_SIZE`: Footer border size (3px)
 - `CURRENT_ALBUM_SIZE`: Current album artwork size (70px)

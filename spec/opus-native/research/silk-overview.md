@@ -16,6 +16,7 @@ SILK (Skype Low-Complexity Internet Codec) is the speech-optimized component of 
 ### Linear Prediction (LP)
 
 SILK uses Linear Predictive Coding (LPC) to model the vocal tract:
+
 - Predicts current sample from previous samples
 - Residual (difference) is encoded efficiently
 - Filters are represented as Line Spectral Frequencies (LSF)
@@ -23,6 +24,7 @@ SILK uses Linear Predictive Coding (LPC) to model the vocal tract:
 ### Long-Term Prediction (LTP)
 
 Models pitch/voicing:
+
 - Predicts current sample from samples ~one pitch period ago
 - Reduces bitrate for voiced speech significantly
 - Pitch lag and filter coefficients encoded
@@ -30,6 +32,7 @@ Models pitch/voicing:
 ### Sample Rates
 
 SILK supports:
+
 - 8 kHz (narrowband)
 - 12 kHz (mediumband)
 - 16 kHz (wideband)
@@ -68,6 +71,7 @@ PCM Output
 ### LSF/LPC Decoding (RFC 4.2.7.5)
 
 Most complex part:
+
 - Two-stage vector quantization
 - Large codebooks (~2000 lines of tables)
 - Interpolation between frames

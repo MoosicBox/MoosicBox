@@ -16,6 +16,7 @@ Range coding is an entropy coding method used in Opus for compressing the bitstr
 ### State Machine
 
 The range decoder maintains:
+
 - `value`: Current position in the range (u32)
 - `range`: Size of the current range (u32)
 - `position`: Current byte position in input buffer
@@ -24,6 +25,7 @@ The range decoder maintains:
 ### Symbol Decoding
 
 Symbols are decoded using probability models (frequency tables). The decoder:
+
 1. Computes a scaled value within the current range
 2. Looks up which symbol corresponds to that value
 3. Updates the range to the symbol's probability range
@@ -32,6 +34,7 @@ Symbols are decoded using probability models (frequency tables). The decoder:
 ### Renormalization
 
 When the range becomes smaller than a threshold (128), the decoder:
+
 1. Shifts the range left by 8 bits
 2. Reads the next byte from the input buffer
 3. Updates the value accordingly
@@ -39,15 +42,18 @@ When the range becomes smaller than a threshold (128), the decoder:
 ## Implementation Notes
 
 ### Initialization
+
 - Range starts at 128
 - First bytes are loaded into value
 - Buffer must have at least 2 bytes
 
 ### Binary Symbols
+
 - RFC 4.1.3.1 provides optimized path for binary (0/1) symbols
 - Uses simple threshold comparison
 
 ### Raw Bits
+
 - RFC 4.1.4 provides method to extract raw bits
 - Used when data is already uniform (no compression benefit)
 

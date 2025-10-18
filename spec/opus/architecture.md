@@ -65,6 +65,7 @@ pub struct OpusDecoder {
 ```
 
 **Responsibilities**:
+
 - Opus packet parsing via `OpusPacket::parse()`
 - Frame-by-frame decoding through libopus
 - Audio buffer management with proper channel mapping
@@ -72,6 +73,7 @@ pub struct OpusDecoder {
 - DTX (discontinuous transmission) handling
 
 **Key Methods**:
+
 - `try_new()`: Initialize decoder with codec parameters
 - `decode()`: Process Opus packet → PCM audio samples
 - `reset()`: Reset decoder state (post-seek)
@@ -90,12 +92,14 @@ pub struct OpusPacket {
 ```
 
 **Frame Packing Support**:
+
 - **Code 0**: Single frame (most common)
 - **Code 1**: Two frames, equal size
 - **Code 2**: Two frames, different sizes
 - **Code 3**: 1-48 frames with explicit count
 
 **Validation Rules [R1-R7]**:
+
 - [R1] Minimum packet size (1 byte)
 - [R2] Maximum frame size (1275 bytes)
 - [R3] Code 1 odd total length constraint
@@ -117,6 +121,7 @@ pub struct TocByte {
 ```
 
 **Configuration Mapping** (RFC Table 2):
+
 - **0-3**: SILK NB (10/20/40/60ms)
 - **4-7**: SILK MB (10/20/40/60ms)
 - **8-11**: SILK WB (10/20/40/60ms)
@@ -130,11 +135,13 @@ pub struct TocByte {
 ### 4. Frame Processing (`frame.rs`)
 
 **Frame Length Encoding** (RFC Section 3.2.1):
+
 - **0**: DTX/silence frame
 - **1-251**: Direct byte length
 - **252-255**: Two-byte encoding (max 1275 bytes)
 
 **Multi-frame Handling**:
+
 - CBR: Equal-sized frames
 - VBR: Length-prefixed frames
 - Padding: Optional trailing bytes
@@ -174,13 +181,14 @@ let mut decoder = codec_registry.make(&track.codec_params, &decode_opts)?;
 
 ### Container Format Support
 
-| Container | Status | Notes |
-|-----------|--------|-------|
-| **Ogg** | Primary | Native Opus container format |
-| **WebM** | Secondary | Web streaming compatibility |
-| **Matroska** | Secondary | MKV/MKA file support |
+| Container    | Status    | Notes                        |
+| ------------ | --------- | ---------------------------- |
+| **Ogg**      | Primary   | Native Opus container format |
+| **WebM**     | Secondary | Web streaming compatibility  |
+| **Matroska** | Secondary | MKV/MKA file support         |
 
 **Codec Parameters**: Extracted by Symphonia demuxers
+
 - Sample rate detection (8-48 kHz)
 - Channel count (1-255 channels)
 - Opus-specific headers (OpusHead)
@@ -210,16 +218,19 @@ Frame → Decode → libopus Error?
 ## Performance Characteristics
 
 ### Memory Management
+
 - **Pre-allocated buffers**: Minimize allocation overhead
 - **Zero-copy parsing**: Direct slice references where possible
 - **Reusable structures**: Frame data structure pooling
 
 ### CPU Optimization
+
 - **libopus acceleration**: SIMD optimizations in reference implementation
 - **Minimal validation overhead**: Cached configuration lookups
 - **Efficient channel mapping**: Optimized interleaving/deinterleaving
 
 ### Benchmarking Targets
+
 - **Packet parsing**: <1μs per packet
 - **Frame decoding**: Real-time factor <0.1
 - **Memory usage**: <1MB steady state
@@ -227,23 +238,27 @@ Frame → Decode → libopus Error?
 ## Testing Strategy
 
 ### Unit Testing (95% Coverage Target)
+
 - **Packet parsing**: All RFC test vectors + malformed inputs
 - **TOC byte handling**: All 32 configurations
 - **Frame length encoding**: Boundary conditions (0, 251, 1275)
 - **Validation rules**: Each RFC constraint [R1-R7]
 
 ### Integration Testing
+
 - **Container formats**: Real Ogg/WebM/MKV files
 - **Codec modes**: SILK/CELT/Hybrid samples
 - **Error scenarios**: Corrupted packets, PLC testing
 - **Memory profiling**: Leak detection, allocation patterns
 
 ### RFC Compliance Testing
+
 - **Appendix A vectors**: Reference decoder output comparison
 - **Interoperability**: opus-tools compatibility verification
 - **Bit-exact validation**: Sample-level output matching
 
 ### Performance Testing
+
 - **Criterion benchmarks**: Decode speed measurement
 - **Memory profiling**: Peak usage analysis
 - **Stress testing**: Extended playback scenarios
@@ -251,11 +266,13 @@ Frame → Decode → libopus Error?
 ## Security Considerations
 
 ### Input Validation
+
 - **Packet size limits**: Prevent buffer overflow
 - **Frame count bounds**: Limit memory allocation
 - **Length validation**: Prevent integer overflow
 
 ### Memory Safety
+
 - **Safe Rust patterns**: No unsafe code blocks
 - **Bounds checking**: All array/slice access validated
 - **Error propagation**: Graceful failure handling
@@ -263,12 +280,14 @@ Frame → Decode → libopus Error?
 ## Monitoring and Observability
 
 ### Logging Strategy
+
 - **Debug**: Packet structure details
 - **Info**: Decoder state changes
 - **Warn**: Recoverable errors (PLC activation)
 - **Error**: Unrecoverable failures
 
 ### Metrics Collection
+
 - **Decode performance**: Frame processing time
 - **Error rates**: Packet loss/corruption frequency
 - **Resource usage**: Memory/CPU utilization

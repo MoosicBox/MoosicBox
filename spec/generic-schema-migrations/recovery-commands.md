@@ -20,12 +20,14 @@ switchy-migrate status --show-failed --database-url <DATABASE_URL>
 ```
 
 **Features:**
+
 - Colored status indicators: ✓ Completed (green), ✗ Failed (red), ⚠ In Progress (yellow), - Pending
 - Displays timestamps (started/finished) for applied migrations
 - Shows failure reasons for failed migrations
 - Warns about in-progress migrations that may indicate interrupted operations
 
 **Example Output:**
+
 ```
 Migration Status
 ================
@@ -66,12 +68,14 @@ switchy-migrate retry <migration_id> --database-url <DATABASE_URL>
 **Purpose:** Retry a failed migration after fixing the underlying issue.
 
 **Behavior:**
+
 1. Validates the migration is in failed state
 2. Removes the failed migration record
 3. Re-executes the migration
 4. Updates status to completed or failed
 
 **Example:**
+
 ```bash
 $ switchy-migrate retry 20240102_add_users_table --database-url sqlite://app.db
 
@@ -82,6 +86,7 @@ Migrations directory: ./migrations
 ```
 
 **Error Cases:**
+
 - Migration not found: Clear error with available migrations context
 - Migration not in failed state: Shows current status
 - Migration exists but not in source: Indicates missing migration file
@@ -95,10 +100,12 @@ switchy-migrate mark-completed <migration_id> [--force] --database-url <DATABASE
 **Purpose:** Manually mark a migration as completed without running it (dangerous operation).
 
 **Behavior:**
+
 - **Without --force**: Shows warning and interactive Y/n confirmation
 - **With --force**: Bypasses confirmation dialog
 
 **Interactive Mode Example:**
+
 ```bash
 $ switchy-migrate mark-completed 20240103_problematic_migration --database-url sqlite://app.db
 
@@ -117,6 +124,7 @@ Are you sure you want to mark this migration as completed? [y/N]: y
 ```
 
 **Force Mode Example:**
+
 ```bash
 $ switchy-migrate mark-completed 20240103_problematic_migration --force --database-url sqlite://app.db
 
@@ -140,6 +148,7 @@ switchy-migrate mark-all-completed [OPTIONS] --database-url <DATABASE_URL>
 #### Available Scopes
 
 **Default: Pending Only (Safest)**
+
 ```bash
 switchy-migrate mark-all-completed --database-url <DATABASE_URL>
 ```
@@ -147,6 +156,7 @@ switchy-migrate mark-all-completed --database-url <DATABASE_URL>
 Only marks untracked migrations as completed. This is the safest option and recommended for initialization scenarios.
 
 **Include Failed Migrations**
+
 ```bash
 switchy-migrate mark-all-completed --include-failed --database-url <DATABASE_URL>
 ```
@@ -154,6 +164,7 @@ switchy-migrate mark-all-completed --include-failed --database-url <DATABASE_URL
 Marks both untracked and failed migrations as completed. Use when failed migrations were manually fixed.
 
 **Include In-Progress Migrations**
+
 ```bash
 switchy-migrate mark-all-completed --include-in-progress --database-url <DATABASE_URL>
 ```
@@ -161,6 +172,7 @@ switchy-migrate mark-all-completed --include-in-progress --database-url <DATABAS
 Marks both untracked and in-progress migrations as completed. Use when migration process crashed but migrations actually completed.
 
 **All Migrations (Most Dangerous)**
+
 ```bash
 switchy-migrate mark-all-completed --all --database-url <DATABASE_URL>
 ```
@@ -168,6 +180,7 @@ switchy-migrate mark-all-completed --all --database-url <DATABASE_URL>
 Marks all migrations as completed regardless of state. Use for complete tracking table reset/sync.
 
 **Drop and Recreate Table (CRITICAL)**
+
 ```bash
 switchy-migrate mark-all-completed --drop --database-url <DATABASE_URL>
 ```
@@ -175,23 +188,27 @@ switchy-migrate mark-all-completed --drop --database-url <DATABASE_URL>
 **CRITICAL OPERATION** - Drops the entire migration tracking table before marking. This permanently deletes all migration history.
 
 **What happens:**
+
 1. Drops `__switchy_migrations` table
 2. Recreates fresh table with current schema
 3. Marks all source migrations as completed with new checksums
 
 **What you lose:**
+
 - All migration execution timestamps
 - Failure reasons and error messages
 - Old checksums for validation
 - All status history (completed/failed/in-progress)
 
 **Use when:**
+
 - ✅ Migration tracking table is corrupted
 - ✅ Table schema is incompatible with code
 - ✅ Need complete history reset
 - ❌ **NOT** for normal recovery (use scopes instead)
 
 **Can be combined with scopes:**
+
 ```bash
 # Drop table, then mark only pending migrations
 switchy-migrate mark-all-completed --drop --database-url <DATABASE_URL>
@@ -202,44 +219,50 @@ switchy-migrate mark-all-completed --drop --include-failed --database-url <DATAB
 
 #### Behavior Matrix
 
-| Scope | Untracked | Completed | Failed | InProgress | Special |
-|-------|-----------|-----------|--------|------------|---------|
-| **Default** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | - |
-| **--include-failed** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged) | - |
-| **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | - |
-| **--all** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⚠️ Update → Completed | - |
-| **--drop** | ✅ Mark → Completed | N/A (table dropped) | N/A (table dropped) | N/A (table dropped) | 🗑️ Deletes all history first |
+| Scope                     | Untracked           | Completed           | Failed                | InProgress            | Special                      |
+| ------------------------- | ------------------- | ------------------- | --------------------- | --------------------- | ---------------------------- |
+| **Default**               | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged)   | ⏭️ Skip (unchanged)   | -                            |
+| **--include-failed**      | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged)   | -                            |
+| **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged)   | ⚠️ Update → Completed | -                            |
+| **--all**                 | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⚠️ Update → Completed | -                            |
+| **--drop**                | ✅ Mark → Completed | N/A (table dropped) | N/A (table dropped)   | N/A (table dropped)   | 🗑️ Deletes all history first |
 
 #### Interactive Confirmation
 
 The confirmation process adapts to the danger level:
 
 **Default Scope:**
+
 - Moderate danger warning
 - Single confirmation required
 - Shows what will be marked vs preserved
 
 **Dangerous Scopes (--include-failed, --include-in-progress):**
+
 - High danger warning
 - Double confirmation required
 - Detailed breakdown of state changes
 
 **All Scope (--all):**
+
 - Extreme danger warning
 - Double confirmation required
 - Comprehensive warnings about consequences
 
 **Drop Flag (--drop):**
+
 - CRITICAL danger warning
 - Triple confirmation required
 - Explicit warnings about permanent data loss
 - Lists exactly what will be deleted
 
 **Force Mode:**
+
 ```bash
 switchy-migrate mark-all-completed --all --force --database-url <DATABASE_URL>
 switchy-migrate mark-all-completed --drop --force --database-url <DATABASE_URL>
 ```
+
 Bypasses all confirmations. Use with extreme caution, especially with `--drop`.
 
 #### Example: Default Scope (Pending Only)
@@ -481,6 +504,7 @@ pub struct MarkAllCompletedSummary {
 ```
 
 The summary provides detailed statistics showing:
+
 - What was marked as completed
 - What was updated from a different state
 - What was explicitly skipped due to scope constraints
@@ -489,23 +513,25 @@ The summary provides detailed statistics showing:
 
 **When to use each scope:**
 
-| Scenario | Recommended Scope | Reasoning |
-|----------|-------------------|-----------|
-| Initialize tracking for existing database | Default (no flags) | Only marks new migrations, preserves any existing state |
-| Multiple failed migrations manually fixed | `--include-failed` | Marks failed migrations as complete after manual fixes |
-| Migration process crashed mid-execution | `--include-in-progress` | Marks stuck in-progress migrations as complete |
-| Complete tracking table rebuild | `--all` | Nuclear option - marks everything as complete |
-| Read-only deployment initialization | Use env var instead | `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` |
+| Scenario                                  | Recommended Scope       | Reasoning                                               |
+| ----------------------------------------- | ----------------------- | ------------------------------------------------------- |
+| Initialize tracking for existing database | Default (no flags)      | Only marks new migrations, preserves any existing state |
+| Multiple failed migrations manually fixed | `--include-failed`      | Marks failed migrations as complete after manual fixes  |
+| Migration process crashed mid-execution   | `--include-in-progress` | Marks stuck in-progress migrations as complete          |
+| Complete tracking table rebuild           | `--all`                 | Nuclear option - marks everything as complete           |
+| Read-only deployment initialization       | Use env var instead     | `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1`                  |
 
 **When NOT to use:**
 
 ❌ **Don't use `--all` if:**
+
 - You're unsure about the current schema state
 - Migrations haven't been applied
 - You're trying to "skip" migrations during development
 - Any migrations are legitimately failed (fix them first!)
 
 ✅ **Instead:**
+
 - Use default scope for initialization
 - Fix failed migrations and retry them
 - Use `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` for read-only deployments
@@ -531,11 +557,13 @@ The summary provides detailed statistics showing:
 🚨 **CRITICAL SAFETY NOTICE** 🚨
 
 **Default scope (no flags):**
+
 - ✅ Safe for initialization
 - ✅ Preserves failed/in-progress states
 - ⚠️ Still dangerous if schema doesn't match
 
 **With flags:**
+
 - ⚠️ Dangerous: Changes migration states
 - ⚠️ Information loss: Failure reasons remain but state changes
 - ⚠️ May hide real problems: Failed migrations marked as complete
@@ -552,11 +580,13 @@ switchy-migrate migrate --force --database-url <DATABASE_URL>
 **Purpose:** Run migrations even when there are migrations in "in_progress" or "failed" state (dirty state).
 
 **Behavior:**
+
 1. Shows warning about potential data corruption
 2. Bypasses dirty state check
 3. Proceeds with normal migration execution
 
 **Example:**
+
 ```bash
 $ switchy-migrate migrate --force --database-url sqlite://app.db
 
@@ -576,37 +606,39 @@ Successfully applied 1 migration(s).
 ### Scenario 1: Failed Migration
 
 1. **Identify the issue:**
-   ```bash
-   switchy-migrate status --show-failed --database-url <DATABASE_URL>
-   ```
+
+    ```bash
+    switchy-migrate status --show-failed --database-url <DATABASE_URL>
+    ```
 
 2. **Fix the underlying problem** (e.g., fix SQL syntax, resolve conflicts)
 
 3. **Retry the migration:**
-   ```bash
-   switchy-migrate retry <migration_id> --database-url <DATABASE_URL>
-   ```
+    ```bash
+    switchy-migrate retry <migration_id> --database-url <DATABASE_URL>
+    ```
 
 ### Scenario 2: Stuck In-Progress Migration
 
 1. **Verify the migration is truly stuck** (not just taking a long time)
 
 2. **Choose recovery approach:**
-   - **If migration can be safely retried:** Use `retry` command
-   - **If migration partially completed:** Use `mark-completed` to skip it
-   - **If you want to continue with new migrations:** Use `migrate --force`
+    - **If migration can be safely retried:** Use `retry` command
+    - **If migration partially completed:** Use `mark-completed` to skip it
+    - **If you want to continue with new migrations:** Use `migrate --force`
 
 ### Scenario 3: Migration Applied Outside System
 
 1. **Manually applied migration needs to be recorded:**
-   ```bash
-   switchy-migrate mark-completed <migration_id> --database-url <DATABASE_URL>
-   ```
+
+    ```bash
+    switchy-migrate mark-completed <migration_id> --database-url <DATABASE_URL>
+    ```
 
 2. **Verify system state:**
-   ```bash
-   switchy-migrate status --database-url <DATABASE_URL>
-   ```
+    ```bash
+    switchy-migrate status --database-url <DATABASE_URL>
+    ```
 
 ## Best Practices
 
@@ -636,22 +668,26 @@ Successfully applied 1 migration(s).
 ### Common Error Messages
 
 **Migration Not Found:**
+
 ```
 ❌ Migration '20240999_missing' not found in migration source
 ```
 
 **Migration Wrong State:**
+
 ```
 ❌ Migration '20240101_initial' is in Completed state, not failed
 ```
 
 **Migration Not Tracked:**
+
 ```
 ℹ Migration '20240102_new' has not been run yet
 Use 'migrate' command to run it for the first time.
 ```
 
 **Migration In Progress:**
+
 ```
 ⚠ Migration '20240103_running' is currently in progress
 Wait for it to complete or fail before retrying.
@@ -670,16 +706,19 @@ The CLI provides context-aware suggestions based on the error:
 ## Safety Features
 
 ### Confirmations
+
 - Interactive prompts for dangerous operations
 - Clear warnings about potential consequences
 - Ability to cancel operations with Ctrl+C
 
 ### Validation
+
 - Checks migration exists in source before operations
 - Validates current migration state
 - Prevents operations on migrations in wrong state
 
 ### Logging
+
 - Clear success/failure messages
 - Detailed error information with context
 - Timestamps for all operations
@@ -695,19 +734,24 @@ All commands support the standard environment variables:
 ## Troubleshooting
 
 ### Command Not Found
+
 Ensure `switchy-migrate` is built and in your PATH:
+
 ```bash
 cargo build -p switchy_schema_cli
 export PATH="$PATH:target/debug"
 ```
 
 ### Permission Denied
+
 Check database connection permissions and file system access to migrations directory.
 
 ### Migration Files Missing
+
 Ensure migration files exist in the migrations directory and have correct naming format.
 
 ### Database Connection Issues
+
 Verify database URL format and connection parameters. Test with a simple query tool first.
 
 ## Related Documentation
