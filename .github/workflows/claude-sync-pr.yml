@@ -168,6 +168,8 @@ jobs:
                   prompt: |
                       You are helping resolve merge conflicts on a GitHub Pull Request.
 
+                      IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
+
                       CONTEXT:
                       - PR Number: ${{ steps.pr_details.outputs.pr_number }}
                       - PR Branch: ${{ steps.pr_details.outputs.head_ref }}

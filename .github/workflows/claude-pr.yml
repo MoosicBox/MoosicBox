@@ -193,6 +193,8 @@ jobs:
                   prompt: |
                       You are helping with a GitHub repository. A user has mentioned @claude in a comment.
 
+                      IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
+
                       IMPORTANT: You MUST post TWO comments:
                       1. FIRST - An acknowledgment that you're working on it
                       2. SECOND - Your actual response/findings
