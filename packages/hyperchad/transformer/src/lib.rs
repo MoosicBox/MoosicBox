@@ -34,13 +34,13 @@ pub mod parse;
 #[strum_discriminants(name(CalculationType))]
 pub enum Calculation {
     Number(Box<Number>),
-    Add(Box<Calculation>, Box<Calculation>),
-    Subtract(Box<Calculation>, Box<Calculation>),
-    Multiply(Box<Calculation>, Box<Calculation>),
-    Divide(Box<Calculation>, Box<Calculation>),
-    Grouping(Box<Calculation>),
-    Min(Box<Calculation>, Box<Calculation>),
-    Max(Box<Calculation>, Box<Calculation>),
+    Add(Box<Self>, Box<Self>),
+    Subtract(Box<Self>, Box<Self>),
+    Multiply(Box<Self>, Box<Self>),
+    Divide(Box<Self>, Box<Self>),
+    Grouping(Box<Self>),
+    Min(Box<Self>, Box<Self>),
+    Max(Box<Self>, Box<Self>),
 }
 
 impl Calculation {
@@ -1278,7 +1278,7 @@ pub struct Container {
     pub classes: Vec<String>,
     pub data: BTreeMap<String, String>,
     pub element: Element,
-    pub children: Vec<Container>,
+    pub children: Vec<Self>,
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,

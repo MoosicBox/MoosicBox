@@ -440,13 +440,13 @@ pub enum ActionType {
     },
     Event {
         name: String,
-        action: Box<ActionType>,
+        action: Box<Self>,
     },
-    Multi(Vec<ActionType>),
+    Multi(Vec<Self>),
     MultiEffect(Vec<ActionEffect>),
     #[cfg(feature = "logic")]
     Parameterized {
-        action: Box<ActionType>,
+        action: Box<Self>,
         value: logic::Value,
     },
     #[cfg(feature = "logic")]

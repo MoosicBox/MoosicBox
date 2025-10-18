@@ -324,7 +324,7 @@ pub enum Arithmetic {
     Divide(Value, Value),
     Min(Value, Value),
     Max(Value, Value),
-    Grouping(Box<Arithmetic>),
+    Grouping(Box<Self>),
 }
 
 impl Arithmetic {

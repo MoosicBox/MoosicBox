@@ -69,7 +69,7 @@ pub enum Pattern {
     Variant {
         enum_name: String,
         variant: String,
-        fields: Vec<Pattern>,
+        fields: Vec<Self>,
     },
 }
 
@@ -151,61 +151,55 @@ pub enum Expression {
     /// Variable reference
     Variable(String),
     /// Element reference for object-oriented API
-    ElementRef(Box<Expression>),
+    ElementRef(Box<Self>),
     /// Function call
-    Call {
-        function: String,
-        args: Vec<Expression>,
-    },
+    Call { function: String, args: Vec<Self> },
     /// Method call (e.g., `expr.method(args)`)
     MethodCall {
-        receiver: Box<Expression>,
+        receiver: Box<Self>,
         method: String,
-        args: Vec<Expression>,
+        args: Vec<Self>,
     },
     /// Field access (e.g., `obj.field`)
-    Field {
-        object: Box<Expression>,
-        field: String,
-    },
+    Field { object: Box<Self>, field: String },
     /// Binary operation
     Binary {
-        left: Box<Expression>,
+        left: Box<Self>,
         op: BinaryOp,
-        right: Box<Expression>,
+        right: Box<Self>,
     },
     /// Unary operation
-    Unary { op: UnaryOp, expr: Box<Expression> },
+    Unary { op: UnaryOp, expr: Box<Self> },
     /// Conditional expression (e.g., `if condition { a } else { b }`)
     If {
-        condition: Box<Expression>,
-        then_branch: Box<Expression>,
-        else_branch: Option<Box<Expression>>,
+        condition: Box<Self>,
+        then_branch: Box<Self>,
+        else_branch: Option<Box<Self>>,
     },
     /// Match expression
     Match {
-        expr: Box<Expression>,
+        expr: Box<Self>,
         arms: Vec<MatchArm>,
     },
     /// Block expression
     Block(Block),
     /// Array/collection literal
-    Array(Vec<Expression>),
+    Array(Vec<Self>),
     /// Tuple literal
-    Tuple(Vec<Expression>),
+    Tuple(Vec<Self>),
     /// Range expression (e.g., `1..10`)
     Range {
-        start: Option<Box<Expression>>,
-        end: Option<Box<Expression>>,
+        start: Option<Box<Self>>,
+        end: Option<Box<Self>>,
         inclusive: bool,
     },
     /// Closure expression (e.g., `|param| { ... }`)
     Closure {
         params: Vec<String>,
-        body: Box<Expression>,
+        body: Box<Self>,
     },
     /// Parenthesized expression for explicit grouping
-    Grouping(Box<Expression>),
+    Grouping(Box<Self>),
     /// Raw Rust code that couldn't be parsed by the DSL
     /// This is a fallback for complex expressions
     RawRust(String),
@@ -467,7 +461,7 @@ pub enum DslValue {
     /// Action effect
     Action(ActionEffect),
     /// List of values
-    List(Vec<DslValue>),
+    List(Vec<Self>),
     /// Unit value
     Unit,
 }
