@@ -20,7 +20,12 @@ jobs:
             !contains(github.event.comment.body, '@claude fix-conflicts') &&
             !contains(github.event.review.body, '@claude sync') &&
             !contains(github.event.review.body, '@claude rebase') &&
-            !contains(github.event.review.body, '@claude fix-conflicts')
+            !contains(github.event.review.body, '@claude fix-conflicts') &&
+            (
+                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER', github.event.review.author_association))
+            )
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -55,33 +60,6 @@ jobs:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   ref: ${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref }}
                   fetch-depth: 0
-
-            - name: Check organization membership
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-              run: |
-                  ACTOR="${{ github.event.comment.user.login || github.event.review.user.login || github.event.issue.user.login }}"
-
-                  echo "Checking if $ACTOR is an organization member..."
-
-                  if gh api "/orgs/${{ github.repository_owner }}/members/$ACTOR" --silent 2>/dev/null; then
-                    echo "✅ $ACTOR is an organization member"
-                  else
-                    echo "❌ $ACTOR is NOT an organization member - terminating workflow"
-
-                    cat > /tmp/denied.txt << 'EOF'
-                  🚫 **Access Denied**
-
-                  Only organization members can trigger Claude workflows for security reasons.
-                  EOF
-
-                    if [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
-                      gh api -X POST "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/replies" -F body=@/tmp/denied.txt
-                    elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-                      gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file /tmp/denied.txt
-                    fi
-                    exit 1
-                  fi
 
             - name: Setup Rust toolchain
               uses: dtolnay/rust-toolchain@stable
