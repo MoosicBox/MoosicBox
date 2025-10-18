@@ -83,6 +83,21 @@ jobs:
                     exit 1
                   fi
 
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-latest-binary
+                  cache-key-prefix: cargo-machete-claude
+                  make-executable: true
+                  verify-command: --version
+
             - name: Setup git configuration
               run: |
                   git config user.name "MoosicBoxBot"
@@ -309,6 +324,25 @@ jobs:
 
                          - If it's phrased as a COMMAND/STATEMENT (imperative, declarative, "please fix", "update X", etc.):
                            → Implement changes to the SPECIFIC code mentioned
+                           → **CRITICAL - MANDATORY VERIFICATION BEFORE ANY COMMIT:**
+
+                           Before creating ANY commit, you MUST run the following verification checklist from AGENTS.md:
+
+                           MANDATORY CHECKS (ALWAYS REQUIRED):
+                           1. Run `cargo fmt` (format all code - NOT --check)
+                           2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
+                           3. Run `~/.cargo/bin/cargo-machete` (detect unused dependencies)
+
+                           ADDITIONAL CHECKS (when applicable):
+                           4. Run `cargo build -p [package]` if changes affect specific package
+                           5. Run `cargo test -p [package]` if test coverage exists
+                           6. Run package-specific build/test commands if documented in AGENTS.md
+
+                           If ANY verification check fails, you MUST fix the issues before committing.
+                           NEVER commit code that doesn't pass all verification checks.
+
+                           This is a NON-NEGOTIABLE requirement - no exceptions.
+
                            → Create commits with descriptive messages
                            → **DO NOT push commits - the workflow will handle pushing safely**
                            → After committing, your work is done - the workflow will automatically push for you

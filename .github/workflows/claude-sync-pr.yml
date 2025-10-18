@@ -84,6 +84,21 @@ jobs:
                     exit 1
                   fi
 
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-latest-binary
+                  cache-key-prefix: cargo-machete-claude
+                  make-executable: true
+                  verify-command: --version
+
             - name: Setup git configuration
               run: |
                   git config user.name "MoosicBoxBot"
@@ -217,6 +232,25 @@ jobs:
                          - Follow existing code style and patterns
                          - If unsure about a resolution, mention it in your comment
                          - Test that the code compiles/is syntactically valid after resolution
+
+                      6. **CRITICAL - MANDATORY VERIFICATION BEFORE COMPLETING REBASE:**
+
+                         After resolving all conflicts but BEFORE completing the rebase, you MUST run:
+
+                         MANDATORY CHECKS (ALWAYS REQUIRED):
+                         1. Run `cargo fmt` (format all code - NOT --check)
+                         2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
+                         3. Run `~/.cargo/bin/cargo-machete` (detect unused dependencies)
+
+                         ADDITIONAL CHECKS (when applicable):
+                         4. Run `cargo build -p [package]` if changes affect specific package
+                         5. Run `cargo test -p [package]` if test coverage exists
+                         6. Run package-specific build/test commands if documented in AGENTS.md
+
+                         If ANY verification check fails, you MUST fix the issues before continuing the rebase.
+                         NEVER complete a rebase with code that doesn't pass all verification checks.
+
+                         This is a NON-NEGOTIABLE requirement - no exceptions.
 
                       Now proceed with the rebase and conflict resolution.
 
