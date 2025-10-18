@@ -68,6 +68,17 @@ jobs:
                   make-executable: true
                   verify-command: --version
 
+            - name: Setup taplo
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  command: cargo install taplo-cli --locked
+                  shell: bash
+                  output-path: ~/.cargo/bin/taplo
+                  artifact-name: taplo-ubuntu-latest-binary
+                  cache-key-prefix: taplo-claude
+                  make-executable: true
+                  verify-command: --version
+
             - name: Setup git configuration
               run: |
                   git config user.name "MoosicBoxBot"
@@ -173,7 +184,9 @@ jobs:
                            MANDATORY CHECKS (ALWAYS REQUIRED):
                            1. Run `cargo fmt` (format all code - NOT --check)
                            2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
-                           3. Run `~/.cargo/bin/cargo-machete` (detect unused dependencies)
+                           3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
+                           4. Run `npx prettier --write "**/*.md"` from workspace root (format all markdown files)
+                           5. Run `~/.cargo/bin/taplo format` from workspace root (format all TOML files)
 
                            ADDITIONAL CHECKS (when applicable):
                            4. Run `cargo build -p [package]` if changes affect specific package
