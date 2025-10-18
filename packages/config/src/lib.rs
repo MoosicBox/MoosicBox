@@ -11,6 +11,7 @@ use std::{
 pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
+#[cfg(feature = "file")]
 pub mod file;
 
 #[derive(Copy, Clone, Debug)]

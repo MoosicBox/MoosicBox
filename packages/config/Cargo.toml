@@ -39,7 +39,7 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
-default = ["api", "db", "openapi"]
+default = ["api", "db", "file", "openapi"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
@@ -57,6 +57,8 @@ db = [
     "dep:nanoid",
     "dep:switchy_database",
 ]
+
+file = []
 
 api     = ["db", "dep:actix-web", "switchy_database?/api"]
 openapi = ["dep:utoipa"]
