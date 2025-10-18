@@ -190,12 +190,10 @@ pub fn load_global_config(app_type: AppType) -> Result<GlobalConfig, ConfigError
     let config_dir =
         crate::get_app_config_dir_path(app_type).ok_or(ConfigError::ConfigDirNotFound)?;
 
-    if let Some(path) = get_config_file_path(&config_dir, "config") {
-        load_config_file(&path)
-    } else {
-        // Return default config if file doesn't exist
-        Ok(GlobalConfig::default())
-    }
+    get_config_file_path(&config_dir, "config").map_or_else(
+        || Ok(GlobalConfig::default()),
+        |path| load_config_file(&path),
+    )
 }
 
 /// Load profile-specific configuration
@@ -209,12 +207,10 @@ pub fn load_profile_config(app_type: AppType, profile: &str) -> Result<ProfileCo
     let profile_dir =
         crate::get_profile_dir_path(app_type, profile).ok_or(ConfigError::ConfigDirNotFound)?;
 
-    if let Some(path) = get_config_file_path(&profile_dir, "config") {
-        load_config_file(&path)
-    } else {
-        // Return default config if file doesn't exist
-        Ok(ProfileConfig::default())
-    }
+    get_config_file_path(&profile_dir, "config").map_or_else(
+        || Ok(ProfileConfig::default()),
+        |path| load_config_file(&path),
+    )
 }
 
 /// Merged configuration combining global and profile-specific settings
