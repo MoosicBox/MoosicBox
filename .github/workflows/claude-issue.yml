@@ -55,6 +55,7 @@ jobs:
             - name: Setup taplo
               uses: BSteffaniak/cache-artifact@master
               with:
+                  repo: https://github.com/tamasfe/taplo
                   command: cargo install taplo-cli --locked
                   shell: bash
                   output-path: ~/.cargo/bin/taplo
