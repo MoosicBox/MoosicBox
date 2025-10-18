@@ -185,11 +185,11 @@ MoosicBox supports multiple database backends with some behavior differences to 
 
 ### Transaction Error Handling
 
-| Database   | Savepoint After Error | Recovery Method |
-|------------|----------------------|-----------------|
-| SQLite     | ✅ Supported         | Create savepoint after error |
-| MySQL      | ✅ Supported         | Create savepoint after error |
-| PostgreSQL | ❌ Not Supported     | Must use savepoint BEFORE error, then rollback |
+| Database   | Savepoint After Error | Recovery Method                                |
+| ---------- | --------------------- | ---------------------------------------------- |
+| SQLite     | ✅ Supported          | Create savepoint after error                   |
+| MySQL      | ✅ Supported          | Create savepoint after error                   |
+| PostgreSQL | ❌ Not Supported      | Must use savepoint BEFORE error, then rollback |
 
 ### PostgreSQL Transaction Semantics
 
@@ -230,6 +230,7 @@ let sp = tx.savepoint("recovery").await?; // Works in SQLite/MySQL
 ### Testing Implications
 
 Some tests are backend-specific due to these differences:
+
 - `test_savepoint_after_failed_operation` - Excluded from PostgreSQL test suites
 - Use `nix develop --command cargo test -p switchy_database --test savepoint_integration` to run backend-specific tests
 
