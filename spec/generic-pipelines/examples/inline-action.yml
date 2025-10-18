@@ -5,138 +5,138 @@ version: 1.0
 name: custom-action-demo
 
 triggers:
-  manual:
-  push:
-    branches: [main]
+    manual:
+    push:
+        branches: [main]
 
 actions:
-  checkout:
-    type: github
-    repo: actions/checkout@v4
-  
-  # Inline action for sending notifications
-  notify:
-    type: inline
-    name: Send Notification
-    description: Sends a custom notification with configurable message and channel
-    inputs:
-      message:
-        description: Notification message to send
-        required: true
-      channel:
-        description: Notification channel
-        required: false
-        default: "general"
-      priority:
-        description: Notification priority level
-        required: false
-        default: "normal"
-    outputs:
-      status:
-        description: Notification delivery status
-      timestamp:
-        description: When the notification was sent
-    runs:
-      steps:
-        - run: |
-            echo "📢 Sending notification:"
-            echo "  Channel: ${{ inputs.channel }}"
-            echo "  Priority: ${{ inputs.priority }}"
-            echo "  Message: ${{ inputs.message }}"
-            
-            # Simulate notification sending
-            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            echo "✅ Notification sent at $timestamp"
-            
-            # Set outputs
-            echo "status=sent" >> $PIPELINE_OUTPUT
-            echo "timestamp=$timestamp" >> $PIPELINE_OUTPUT
-  
-  # Inline action for building and testing
-  build-and-test:
-    type: inline
-    name: Build and Test
-    description: Builds the project and runs tests with optional features
-    inputs:
-      features:
-        description: Cargo features to enable
-        required: false
-        default: ""
-      release:
-        description: Build in release mode
-        required: false
-        default: "false"
-    outputs:
-      binary_path:
-        description: Path to the built binary
-      test_results:
-        description: Test execution summary
-    runs:
-      steps:
-        - run: |
-            echo "🔨 Building project..."
-            
-            # Build command based on inputs
-            if [ "${{ inputs.release }}" = "true" ]; then
-              build_flag="--release"
-              target_dir="target/release"
-            else
-              build_flag=""
-              target_dir="target/debug"
-            fi
-            
-            features_flag=""
-            if [ -n "${{ inputs.features }}" ]; then
-              features_flag="--features ${{ inputs.features }}"
-            fi
-            
-            cargo build $build_flag $features_flag
-            
-            echo "🧪 Running tests..."
-            cargo test $features_flag --verbose
-            
-            # Set outputs
-            echo "binary_path=$target_dir/app" >> $PIPELINE_OUTPUT
-            echo "test_results=passed" >> $PIPELINE_OUTPUT
+    checkout:
+        type: github
+        repo: actions/checkout@v4
+
+    # Inline action for sending notifications
+    notify:
+        type: inline
+        name: Send Notification
+        description: Sends a custom notification with configurable message and channel
+        inputs:
+            message:
+                description: Notification message to send
+                required: true
+            channel:
+                description: Notification channel
+                required: false
+                default: 'general'
+            priority:
+                description: Notification priority level
+                required: false
+                default: 'normal'
+        outputs:
+            status:
+                description: Notification delivery status
+            timestamp:
+                description: When the notification was sent
+        runs:
+            steps:
+                - run: |
+                      echo "📢 Sending notification:"
+                      echo "  Channel: ${{ inputs.channel }}"
+                      echo "  Priority: ${{ inputs.priority }}"
+                      echo "  Message: ${{ inputs.message }}"
+
+                      # Simulate notification sending
+                      timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                      echo "✅ Notification sent at $timestamp"
+
+                      # Set outputs
+                      echo "status=sent" >> $PIPELINE_OUTPUT
+                      echo "timestamp=$timestamp" >> $PIPELINE_OUTPUT
+
+    # Inline action for building and testing
+    build-and-test:
+        type: inline
+        name: Build and Test
+        description: Builds the project and runs tests with optional features
+        inputs:
+            features:
+                description: Cargo features to enable
+                required: false
+                default: ''
+            release:
+                description: Build in release mode
+                required: false
+                default: 'false'
+        outputs:
+            binary_path:
+                description: Path to the built binary
+            test_results:
+                description: Test execution summary
+        runs:
+            steps:
+                - run: |
+                      echo "🔨 Building project..."
+
+                      # Build command based on inputs
+                      if [ "${{ inputs.release }}" = "true" ]; then
+                        build_flag="--release"
+                        target_dir="target/release"
+                      else
+                        build_flag=""
+                        target_dir="target/debug"
+                      fi
+
+                      features_flag=""
+                      if [ -n "${{ inputs.features }}" ]; then
+                        features_flag="--features ${{ inputs.features }}"
+                      fi
+
+                      cargo build $build_flag $features_flag
+
+                      echo "🧪 Running tests..."
+                      cargo test $features_flag --verbose
+
+                      # Set outputs
+                      echo "binary_path=$target_dir/app" >> $PIPELINE_OUTPUT
+                      echo "test_results=passed" >> $PIPELINE_OUTPUT
 
 jobs:
-  notification-demo:
-    steps:
-      - uses: notify
-        with:
-          message: "Pipeline started"
-          channel: "ci-cd"
-          priority: "high"
-      
-      - run: |
-          echo "Notification status: ${{ steps.notify.outputs.status }}"
-          echo "Sent at: ${{ steps.notify.outputs.timestamp }}"
+    notification-demo:
+        steps:
+            - uses: notify
+              with:
+                  message: 'Pipeline started'
+                  channel: 'ci-cd'
+                  priority: 'high'
 
-  build-demo:
-    steps:
-      - uses: checkout
-      
-      - uses: build-and-test
-        with:
-          features: "default"
-          release: "true"
-        id: build
-      
-      - run: |
-          echo "Binary built at: ${{ steps.build.outputs.binary_path }}"
-          echo "Test results: ${{ steps.build.outputs.test_results }}"
-      
-      - uses: notify
-        with:
-          message: "Build completed successfully! Binary: ${{ steps.build.outputs.binary_path }}"
-          channel: "builds"
-        id: success-notification
+            - run: |
+                  echo "Notification status: ${{ steps.notify.outputs.status }}"
+                  echo "Sent at: ${{ steps.notify.outputs.timestamp }}"
 
-  final-notification:
-    needs: [notification-demo, build-demo]
-    steps:
-      - uses: notify
-        with:
-          message: "All jobs completed successfully!"
-          channel: "general"
-          priority: "low"
+    build-demo:
+        steps:
+            - uses: checkout
+
+            - uses: build-and-test
+              with:
+                  features: 'default'
+                  release: 'true'
+              id: build
+
+            - run: |
+                  echo "Binary built at: ${{ steps.build.outputs.binary_path }}"
+                  echo "Test results: ${{ steps.build.outputs.test_results }}"
+
+            - uses: notify
+              with:
+                  message: 'Build completed successfully! Binary: ${{ steps.build.outputs.binary_path }}'
+                  channel: 'builds'
+              id: success-notification
+
+    final-notification:
+        needs: [notification-demo, build-demo]
+        steps:
+            - uses: notify
+              with:
+                  message: 'All jobs completed successfully!'
+                  channel: 'general'
+                  priority: 'low'

@@ -18,7 +18,7 @@ spec:
                 kompose.cmd: kompose convert -f compose.yaml
                 kompose.version: 1.32.0 (765fde254)
             labels:
-                io.kompose.network/moosicboxserver-default: "true"
+                io.kompose.network/moosicboxserver-default: 'true'
                 io.kompose.service: moosicbox-server
                 run: moosicbox-service
         spec:

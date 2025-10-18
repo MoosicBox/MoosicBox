@@ -5,78 +5,78 @@ version: 1.0
 name: matrix-cross-platform
 
 triggers:
-  push:
-    branches: [main, develop]
-  pull_request:
-    types: [opened, synchronize]
+    push:
+        branches: [main, develop]
+    pull_request:
+        types: [opened, synchronize]
 
 actions:
-  checkout:
-    type: github
-    repo: actions/checkout@v4
+    checkout:
+        type: github
+        repo: actions/checkout@v4
 
 jobs:
-  test-matrix:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust-version: [stable, nightly]
-        exclude:
-          # Skip nightly on Windows for performance
-          - os: windows-latest
-            rust-version: nightly
-          # Skip nightly on macOS for cost optimization  
-          - os: macos-latest
-            rust-version: nightly
-    
-    env:
-      RUST_VERSION: ${{ matrix.rust-version }}
-      TARGET_OS: ${{ matrix.os }}
-      CARGO_TERM_COLOR: always
-    
-    steps:
-      - uses: checkout
-      
-      - run: |
-          echo "Building on ${{ matrix.os }} with Rust ${{ matrix.rust-version }}"
-          echo "Environment: $TARGET_OS / $RUST_VERSION"
-      
-      # OS-specific setup commands
-      - if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-      
-      - if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          echo "Setting up Windows build environment"
-          # Windows-specific setup would go here
-      
-      - if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          echo "Setting up macOS build environment"
-          # macOS-specific setup would go here
-      
-      # Rust version specific steps
-      - if: ${{ matrix.rust-version == 'nightly' }}
-        run: |
-          echo "Using nightly Rust features"
-          # Enable nightly features
-      
-      - run: |
-          cargo build --verbose
-          cargo test --verbose
-        id: build-and-test
-      
-      - run: |
-          echo "Matrix job completed successfully"
-          echo "OS: ${{ matrix.os }}, Rust: ${{ matrix.rust-version }}"
-          echo "build_status=success" >> $PIPELINE_OUTPUT
+    test-matrix:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+                rust-version: [stable, nightly]
+                exclude:
+                    # Skip nightly on Windows for performance
+                    - os: windows-latest
+                      rust-version: nightly
+                    # Skip nightly on macOS for cost optimization
+                    - os: macos-latest
+                      rust-version: nightly
 
-  # Job that runs after all matrix jobs complete
-  aggregate-results:
-    needs: [test-matrix]
-    steps:
-      - run: |
-          echo "All matrix jobs completed"
-          echo "Cross-platform testing successful"
+        env:
+            RUST_VERSION: ${{ matrix.rust-version }}
+            TARGET_OS: ${{ matrix.os }}
+            CARGO_TERM_COLOR: always
+
+        steps:
+            - uses: checkout
+
+            - run: |
+                  echo "Building on ${{ matrix.os }} with Rust ${{ matrix.rust-version }}"
+                  echo "Environment: $TARGET_OS / $RUST_VERSION"
+
+            # OS-specific setup commands
+            - if: ${{ matrix.os == 'ubuntu-latest' }}
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential
+
+            - if: ${{ matrix.os == 'windows-latest' }}
+              run: |
+                  echo "Setting up Windows build environment"
+                  # Windows-specific setup would go here
+
+            - if: ${{ matrix.os == 'macos-latest' }}
+              run: |
+                  echo "Setting up macOS build environment"
+                  # macOS-specific setup would go here
+
+            # Rust version specific steps
+            - if: ${{ matrix.rust-version == 'nightly' }}
+              run: |
+                  echo "Using nightly Rust features"
+                  # Enable nightly features
+
+            - run: |
+                  cargo build --verbose
+                  cargo test --verbose
+              id: build-and-test
+
+            - run: |
+                  echo "Matrix job completed successfully"
+                  echo "OS: ${{ matrix.os }}, Rust: ${{ matrix.rust-version }}"
+                  echo "build_status=success" >> $PIPELINE_OUTPUT
+
+    # Job that runs after all matrix jobs complete
+    aggregate-results:
+        needs: [test-matrix]
+        steps:
+            - run: |
+                  echo "All matrix jobs completed"
+                  echo "Cross-platform testing successful"
