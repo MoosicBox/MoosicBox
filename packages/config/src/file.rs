@@ -62,7 +62,7 @@ pub struct ProfileConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerConfig {
     pub host: Option<String>,
@@ -117,7 +117,7 @@ pub struct QobuzCredentials {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackConfig {
     pub gapless: Option<bool>,
@@ -224,6 +224,10 @@ pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConf
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    // Test lock to ensure tests that modify ROOT_DIR run serially
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn test_parse_global_config_json5() {
@@ -282,5 +286,405 @@ mod tests {
         assert_eq!(config.library_paths.as_ref().unwrap().len(), 2);
         assert_eq!(config.playback.as_ref().unwrap().gapless, Some(true));
         assert_eq!(config.audio_quality.as_ref().unwrap().bit_depth, Some(24));
+    }
+
+    // Tests for get_config_file_path()
+    #[test]
+    fn test_get_config_file_path_prefers_json5() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_json5_preference");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create both .json5 and .json files
+        let json5_path = temp_dir.join("config.json5");
+        let json_path = temp_dir.join("config.json");
+        fs::write(&json5_path, "{}").unwrap();
+        fs::write(&json_path, "{}").unwrap();
+
+        let result = get_config_file_path(&temp_dir, "config");
+        assert_eq!(result, Some(json5_path));
+    }
+
+    #[test]
+    fn test_get_config_file_path_falls_back_to_json() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_json_fallback");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create only .json file
+        let json_path = temp_dir.join("config.json");
+        fs::write(&json_path, "{}").unwrap();
+
+        let result = get_config_file_path(&temp_dir, "config");
+        assert_eq!(result, Some(json_path));
+    }
+
+    #[test]
+    fn test_get_config_file_path_returns_none_when_missing() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_no_config");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let result = get_config_file_path(&temp_dir, "config");
+        assert_eq!(result, None);
+    }
+
+    // Tests for load_config_file()
+    #[test]
+    fn test_load_config_file_success() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_load_success");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let config_path = temp_dir.join("config.json5");
+        fs::write(
+            &config_path,
+            r#"{
+            // Test global config
+            defaultProfile: "test",
+        }"#,
+        )
+        .unwrap();
+
+        let result: Result<GlobalConfig, ConfigError> = load_config_file(&config_path);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().default_profile, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_load_config_file_read_error() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_read_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let config_path = temp_dir.join("nonexistent.json5");
+
+        let result: Result<GlobalConfig, ConfigError> = load_config_file(&config_path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ReadError(_)));
+    }
+
+    #[test]
+    fn test_load_config_file_parse_error() {
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_parse_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let config_path = temp_dir.join("malformed.json5");
+        fs::write(&config_path, "{ invalid json5: ").unwrap();
+
+        let result: Result<GlobalConfig, ConfigError> = load_config_file(&config_path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    // Tests for load_global_config()
+    #[test]
+    fn test_load_global_config_with_json5_file() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_global_json5");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        fs::create_dir_all(&app_dir).unwrap();
+
+        let config_path = app_dir.join("config.json5");
+        fs::write(
+            &config_path,
+            r#"{
+            server: {
+                host: "127.0.0.1",
+                port: 9090,
+            },
+            defaultProfile: "production",
+        }"#,
+        )
+        .unwrap();
+
+        // Set root directory to temp directory
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_global_config(AppType::Server);
+        // Reset root directory
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.default_profile, Some("production".to_string()));
+        assert_eq!(config.server.as_ref().unwrap().port, Some(9090));
+    }
+
+    #[test]
+    fn test_load_global_config_with_json_file() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_global_json");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        fs::create_dir_all(&app_dir).unwrap();
+
+        let config_path = app_dir.join("config.json");
+        fs::write(
+            &config_path,
+            r#"{
+            "defaultProfile": "staging"
+        }"#,
+        )
+        .unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_global_config(AppType::Server);
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().default_profile, Some("staging".to_string()));
+    }
+
+    #[test]
+    fn test_load_global_config_returns_default_when_file_missing() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_global_missing");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        fs::create_dir_all(&app_dir).unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_global_config(AppType::Server);
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.default_profile, None);
+        assert_eq!(config.server, None);
+    }
+
+    #[test]
+    fn test_load_global_config_parse_error() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_global_parse_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        fs::create_dir_all(&app_dir).unwrap();
+
+        let config_path = app_dir.join("config.json5");
+        fs::write(&config_path, "{ malformed: ").unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_global_config(AppType::Server);
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    // Tests for load_profile_config()
+    #[test]
+    fn test_load_profile_config_with_json5_file() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_profile_json5");
+        let _cleanup = CleanupDir(&temp_dir);
+        let profiles_dir = temp_dir
+            .join("server")
+            .join("profiles")
+            .join("test_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        let config_path = profiles_dir.join("config.json5");
+        fs::write(
+            &config_path,
+            r#"{
+            libraryPaths: ["/music"],
+            playback: {
+                gapless: true,
+            },
+        }"#,
+        )
+        .unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_profile_config(AppType::Server, "test_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.library_paths.as_ref().unwrap().len(), 1);
+        assert_eq!(config.playback.as_ref().unwrap().gapless, Some(true));
+    }
+
+    #[test]
+    fn test_load_profile_config_returns_default_when_file_missing() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_profile_missing");
+        let _cleanup = CleanupDir(&temp_dir);
+        let profiles_dir = temp_dir
+            .join("server")
+            .join("profiles")
+            .join("empty_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_profile_config(AppType::Server, "empty_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.library_paths, None);
+        assert_eq!(config.playback, None);
+    }
+
+    #[test]
+    fn test_load_profile_config_parse_error() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_profile_parse_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        let profiles_dir = temp_dir.join("server").join("profiles").join("bad_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        let config_path = profiles_dir.join("config.json5");
+        fs::write(&config_path, "{ invalid: ").unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_profile_config(AppType::Server, "bad_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    // Tests for load_merged_config()
+    #[test]
+    fn test_load_merged_config_combines_global_and_profile() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_merged");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        let profiles_dir = app_dir.join("profiles").join("merged_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        // Write global config
+        let global_config_path = app_dir.join("config.json5");
+        fs::write(
+            &global_config_path,
+            r#"{
+            server: {
+                host: "0.0.0.0",
+                port: 8080,
+            },
+            defaultProfile: "merged_profile",
+        }"#,
+        )
+        .unwrap();
+
+        // Write profile config
+        let profile_config_path = profiles_dir.join("config.json5");
+        fs::write(
+            &profile_config_path,
+            r#"{
+            libraryPaths: ["/music/flac", "/music/mp3"],
+            playback: {
+                gapless: true,
+                crossfadeDuration: 3.0,
+            },
+        }"#,
+        )
+        .unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_merged_config(AppType::Server, "merged_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let merged = result.unwrap();
+
+        // Verify global config
+        assert_eq!(
+            merged.global.default_profile,
+            Some("merged_profile".to_string())
+        );
+        assert_eq!(merged.global.server.as_ref().unwrap().port, Some(8080));
+
+        // Verify profile config
+        assert_eq!(merged.profile.library_paths.as_ref().unwrap().len(), 2);
+        assert_eq!(
+            merged.profile.playback.as_ref().unwrap().gapless,
+            Some(true)
+        );
+        assert_eq!(
+            merged.profile.playback.as_ref().unwrap().crossfade_duration,
+            Some(3.0)
+        );
+    }
+
+    #[test]
+    fn test_load_merged_config_with_missing_files() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_merged_missing");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        let profiles_dir = app_dir.join("profiles").join("sparse_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_merged_config(AppType::Server, "sparse_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_ok());
+        let merged = result.unwrap();
+
+        // Both should be defaults
+        assert_eq!(merged.global.default_profile, None);
+        assert_eq!(merged.profile.library_paths, None);
+    }
+
+    #[test]
+    fn test_load_merged_config_global_parse_error_propagates() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_merged_global_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        let profiles_dir = app_dir.join("profiles").join("test_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        // Write malformed global config
+        let global_config_path = app_dir.join("config.json5");
+        fs::write(&global_config_path, "{ bad: ").unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_merged_config(AppType::Server, "test_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    #[test]
+    fn test_load_merged_config_profile_parse_error_propagates() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let temp_dir = std::env::temp_dir().join("moosicbox_test_merged_profile_error");
+        let _cleanup = CleanupDir(&temp_dir);
+        let app_dir = temp_dir.join("server");
+        let profiles_dir = app_dir.join("profiles").join("test_profile");
+        fs::create_dir_all(&profiles_dir).unwrap();
+
+        // Write valid global config
+        let global_config_path = app_dir.join("config.json5");
+        fs::write(&global_config_path, "{ defaultProfile: \"test\" }").unwrap();
+
+        // Write malformed profile config
+        let profile_config_path = profiles_dir.join("config.json5");
+        fs::write(&profile_config_path, "{ bad: ").unwrap();
+
+        crate::set_root_dir(temp_dir.clone());
+        let result = load_merged_config(AppType::Server, "test_profile");
+        crate::set_root_dir(home::home_dir().unwrap().join(".local").join("moosicbox"));
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::ParseError(_)));
+    }
+
+    // Helper struct for cleanup
+    struct CleanupDir<'a>(&'a Path);
+
+    impl Drop for CleanupDir<'_> {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(self.0);
+        }
     }
 }
