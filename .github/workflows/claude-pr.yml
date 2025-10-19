@@ -98,6 +98,24 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
+            - name: Install inotify-tools
+              run: sudo apt-get install -y inotify-tools
+
+            - name: Start stream watcher
+              run: |
+                  ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
+                    "${{ runner.temp }}/claude-stream.jsonl" \
+                    "${{ github.repository }}" \
+                    "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
+                    > /tmp/stream-watcher.log 2>&1 &
+
+                  WATCHER_PID=$!
+                  echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+
+                  echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
+                  echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
+                  echo "📋 Logs: /tmp/stream-watcher.log"
+
             - name: Get comment thread context
               id: thread_context
               if: github.event_name == 'pull_request_review_comment'
@@ -189,9 +207,11 @@ jobs:
 
             - name: Run Claude Code
               id: claude
-              uses: anthropics/claude-code-action@v1
+              uses: BSteffaniak/claude-code-action@main
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+                  stream_output_file: ${{ runner.temp }}/claude-stream.jsonl
 
                   # This is an optional setting that allows Claude to read CI results on PRs
                   additional_permissions: |
@@ -255,6 +275,8 @@ jobs:
                       - **Unclear requests**: "I need clarification on [specific aspect]"
                       - Keep it brief but specific - mention the scope (1 file vs all files, etc.)
 
+                      CRITICAL: After posting your acknowledgment, save the comment ID to /tmp/claude_ack_comment_id.txt for the stream watcher.
+
                       Use the appropriate command based on the comment type:
                       ${{ github.event_name == 'pull_request_review_comment' && format('
                       - Reply to the comment thread using the ROOT comment ID (this ensures proper threading):
@@ -267,7 +289,9 @@ jobs:
 
                         [View workflow run](https://github.com/{0}/actions/runs/{3})
                         EOF
-                        gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/ack.txt 2>&1 || echo "Failed to post acknowledgment"
+
+                        # Save comment ID for stream watcher
+                        gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
                         ```
 
                         IMPORTANT: Use the root comment ID {2} for all replies to ensure they appear in the correct thread.
@@ -282,7 +306,9 @@ jobs:
 
                         [View workflow run](https://github.com/{1}/actions/runs/{2})
                         EOF
-                        gh pr comment {0} --repo {1} --body-file /tmp/ack.txt
+
+                        # Save comment ID for stream watcher
+                        gh api -X POST "/repos/{1}/issues/{0}/comments" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
                         ```
                       ', github.event.issue.number, github.repository, github.run_id) || format('
                       - Post an issue comment:
@@ -295,7 +321,9 @@ jobs:
 
                         [View workflow run](https://github.com/{1}/actions/runs/{2})
                         EOF
-                        gh issue comment {0} --repo {1} --body-file /tmp/ack.txt
+
+                        # Save comment ID for stream watcher
+                        gh api -X POST "/repos/{1}/issues/{0}/comments" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
                         ```
                       ', github.event.issue.number, github.repository, github.run_id) }}
 
@@ -371,7 +399,7 @@ jobs:
                         your detailed response here
                         EOF
                         RESPONSE=$(gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/response.txt 2>&1)
-                        echo "$RESPONSE" | jq -r ''.id'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        echo "$RESPONSE" | jq -r ".id" > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
                         ```
 
                         IMPORTANT: Use the root comment ID {2} for all replies.
@@ -382,7 +410,7 @@ jobs:
                         your detailed response here
                         EOF
                         RESPONSE=$(gh pr comment {0} --repo {1} --body-file /tmp/response.txt 2>&1)
-                        echo "$RESPONSE" | grep -oP ''#issuecomment-\K\d+'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        echo "$RESPONSE" | grep -oP "#issuecomment-\K\d+" > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
                         ```
                       ', github.event.issue.number, github.repository) || format('
                       - Post an issue comment:
@@ -391,13 +419,79 @@ jobs:
                         your detailed response here
                         EOF
                         RESPONSE=$(gh issue comment {0} --repo {1} --body-file /tmp/response.txt 2>&1)
-                        echo "$RESPONSE" | grep -oP ''#issuecomment-\K\d+'' > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
+                        echo "$RESPONSE" | grep -oP "#issuecomment-\K\d+" > /tmp/claude_final_comment_id.txt 2>/dev/null || echo "Failed to save comment ID"
                         ```
                       ', github.event.issue.number, github.repository) }}
 
                       Now respond appropriately based on whether this is a question or a command.
 
-            - name: Append execution details to Claude's response
+            - name: Wait for stream watcher completion
+              if: always()
+              run: |
+                  if [ -f /tmp/stream_watcher_pid.txt ]; then
+                    WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
+
+                    echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
+
+                    for i in {1..30}; do
+                      if ! kill -0 $WATCHER_PID 2>/dev/null; then
+                        echo "✅ Stream watcher completed"
+                        break
+                      fi
+                      sleep 1
+                    done
+
+                    if kill -0 $WATCHER_PID 2>/dev/null; then
+                      echo "⚠️ Stream watcher still running, sending SIGTERM..."
+                      kill -TERM $WATCHER_PID 2>/dev/null || true
+                      sleep 2
+
+                      if kill -0 $WATCHER_PID 2>/dev/null; then
+                        echo "⚠️ Forcing stream watcher to stop..."
+                        kill -9 $WATCHER_PID 2>/dev/null || true
+                      fi
+                    fi
+
+                    if [ -f /tmp/stream-watcher.log ]; then
+                      echo ""
+                      echo "📋 Stream watcher logs:"
+                      cat /tmp/stream-watcher.log
+                    fi
+                  else
+                    echo "⚠️ No stream watcher PID found"
+                  fi
+
+                  # Debug: Show comment ID file status
+                  echo ""
+                  echo "📂 Debug: Comment ID file status:"
+                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
+                    FILE_SIZE=$(wc -c < /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "unknown")
+                    FILE_CONTENT=$(cat /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "")
+                    echo "  File exists: YES"
+                    echo "  File size: $FILE_SIZE bytes"
+                    echo "  File content: '$FILE_CONTENT'"
+                    if command -v xxd >/dev/null 2>&1; then
+                      echo "  Hex dump: $(xxd -p /tmp/claude_ack_comment_id.txt 2>/dev/null | head -c 100 || echo 'error')"
+                    fi
+                  else
+                    echo "  File exists: NO"
+                  fi
+
+                  # Debug: Show stream file status
+                  echo ""
+                  echo "📂 Debug: Stream file status:"
+                  STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
+                  if [ -f "$STREAM_FILE" ]; then
+                    FILE_SIZE=$(wc -c < "$STREAM_FILE" 2>/dev/null || echo "unknown")
+                    LINE_COUNT=$(wc -l < "$STREAM_FILE" 2>/dev/null || echo "unknown")
+                    echo "  File exists: YES"
+                    echo "  File size: $FILE_SIZE bytes"
+                    echo "  Line count: $LINE_COUNT lines"
+                  else
+                    echo "  File exists: NO"
+                  fi
+
+            - name: Append execution details to Claude's response (Fallback)
               if: always() && steps.claude.outputs.execution_file != ''
               env:
                   GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
@@ -405,10 +499,35 @@ jobs:
                   EXECUTION_FILE="${{ steps.claude.outputs.execution_file }}"
 
                   if [ ! -f "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
-                      echo "⚠️ Execution file not found or empty, skipping details"
+                      echo "⚠️ Execution file not found or empty, skipping"
                       exit 0
                   fi
 
+                  # Check if stream watcher already updated the comment
+                  COMMENT_ID=""
+                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
+                    COMMENT_ID=$(cat /tmp/claude_ack_comment_id.txt)
+                  fi
+
+                  if [ -n "$COMMENT_ID" ]; then
+                    # Determine API endpoint based on event type
+                    if [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+                      API_ENDPOINT="/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID"
+                    else
+                      API_ENDPOINT="/repos/${{ github.repository }}/issues/comments/$COMMENT_ID"
+                    fi
+
+                    CURRENT_BODY=$(gh api "$API_ENDPOINT" --jq '.body' 2>&1)
+
+                    # Check if "How I worked on this" section already exists
+                    if echo "$CURRENT_BODY" | grep -q "How I worked on this"; then
+                      echo "✅ Stream watcher already added progress section, skipping fallback"
+                      exit 0
+                    fi
+                  fi
+
+                  # If we get here, stream watcher didn't work - use original logic
+                  echo "⚠️ Stream watcher didn't update comment, using fallback..."
                   echo "📋 Generating execution details from $EXECUTION_FILE..."
                   "$GITHUB_WORKSPACE/.github/scripts/format-execution-details.sh" "$EXECUTION_FILE" /tmp/execution_details.md
 

@@ -170,7 +170,7 @@ jobs:
             - name: Run Claude for conflict resolution
               if: steps.check_conflicts.outputs.needs_rebase == 'true' && steps.check_conflicts.outputs.has_conflicts == 'true'
               id: claude
-              uses: anthropics/claude-code-action@v1
+              uses: BSteffaniak/claude-code-action@main
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   claude_args: '--allowedTools "Edit,Read,Write,Bash"'

@@ -87,11 +87,31 @@ jobs:
                   echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
                   echo "issue_number=$ISSUE_NUM" >> $GITHUB_OUTPUT
 
+            - name: Install inotify-tools
+              run: sudo apt-get install -y inotify-tools
+
+            - name: Start stream watcher
+              run: |
+                  ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
+                    "${{ runner.temp }}/claude-stream.jsonl" \
+                    "${{ github.repository }}" \
+                    "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
+                    > /tmp/stream-watcher.log 2>&1 &
+
+                  WATCHER_PID=$!
+                  echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+
+                  echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
+                  echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
+                  echo "📋 Logs: /tmp/stream-watcher.log"
+
             - name: Run Claude Code
               id: claude
-              uses: anthropics/claude-code-action@v1
+              uses: BSteffaniak/claude-code-action@main
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+                  stream_output_file: ${{ runner.temp }}/claude-stream.jsonl
 
                   additional_permissions: |
                       actions: read
@@ -141,6 +161,8 @@ jobs:
                       - **Commands**: "I'll [action] by [approach]"
                       - **Unclear requests**: "I need clarification on [specific aspect]"
 
+                      CRITICAL: After posting your acknowledgment, save the comment ID to /tmp/claude_ack_comment_id.txt for the stream watcher.
+
                       Post acknowledgment:
                       ```
                       cat > /tmp/ack.txt << 'EOF'
@@ -150,7 +172,9 @@ jobs:
 
                       [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
                       EOF
-                      gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file /tmp/ack.txt
+
+                      # Save comment ID for stream watcher
+                      gh api -X POST "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@/tmp/ack.txt --jq '.id' > /tmp/claude_ack_comment_id.txt
                       ```
 
                       STEP 2 - ANALYZE THE ISSUE:
@@ -217,7 +241,76 @@ jobs:
 
                       Now respond appropriately based on whether this is a question or a command.
 
-            - name: Append execution details to Claude's response
+            - name: Wait for stream watcher completion
+              if: always()
+              run: |
+                  if [ -f /tmp/stream_watcher_pid.txt ]; then
+                    WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
+
+                    echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
+
+                    # Wait up to 30 seconds for graceful completion
+                    for i in {1..30}; do
+                      if ! kill -0 $WATCHER_PID 2>/dev/null; then
+                        echo "✅ Stream watcher completed gracefully"
+                        break
+                      fi
+                      sleep 1
+                    done
+
+                    # Force kill if still running
+                    if kill -0 $WATCHER_PID 2>/dev/null; then
+                      echo "⚠️ Stream watcher still running, sending SIGTERM..."
+                      kill -TERM $WATCHER_PID 2>/dev/null || true
+                      sleep 2
+
+                      if kill -0 $WATCHER_PID 2>/dev/null; then
+                        echo "⚠️ Forcing stream watcher to stop..."
+                        kill -9 $WATCHER_PID 2>/dev/null || true
+                      fi
+                    fi
+
+                    # Show logs for debugging
+                    if [ -f /tmp/stream-watcher.log ]; then
+                      echo ""
+                      echo "📋 Stream watcher logs:"
+                      cat /tmp/stream-watcher.log
+                    fi
+                  else
+                    echo "⚠️ No stream watcher PID found"
+                  fi
+
+                  # Debug: Show comment ID file status
+                  echo ""
+                  echo "📂 Debug: Comment ID file status:"
+                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
+                    FILE_SIZE=$(wc -c < /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "unknown")
+                    FILE_CONTENT=$(cat /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "")
+                    echo "  File exists: YES"
+                    echo "  File size: $FILE_SIZE bytes"
+                    echo "  File content: '$FILE_CONTENT'"
+                    if command -v xxd >/dev/null 2>&1; then
+                      echo "  Hex dump: $(xxd -p /tmp/claude_ack_comment_id.txt 2>/dev/null | head -c 100 || echo 'error')"
+                    fi
+                  else
+                    echo "  File exists: NO"
+                  fi
+
+                  # Debug: Show stream file status
+                  echo ""
+                  echo "📂 Debug: Stream file status:"
+                  STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
+                  if [ -f "$STREAM_FILE" ]; then
+                    FILE_SIZE=$(wc -c < "$STREAM_FILE" 2>/dev/null || echo "unknown")
+                    LINE_COUNT=$(wc -l < "$STREAM_FILE" 2>/dev/null || echo "unknown")
+                    echo "  File exists: YES"
+                    echo "  File size: $FILE_SIZE bytes"
+                    echo "  Line count: $LINE_COUNT lines"
+                  else
+                    echo "  File exists: NO"
+                  fi
+
+            - name: Append execution details to Claude's response (Fallback)
               if: always() && steps.claude.outputs.execution_file != ''
               env:
                   GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
@@ -225,10 +318,29 @@ jobs:
                   EXECUTION_FILE="${{ steps.claude.outputs.execution_file }}"
 
                   if [ ! -f "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
-                      echo "⚠️ Execution file not found or empty, skipping details"
+                      echo "⚠️ Execution file not found or empty, skipping"
                       exit 0
                   fi
 
+                  # Check if stream watcher already updated the comment
+                  COMMENT_ID=""
+                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
+                    COMMENT_ID=$(cat /tmp/claude_ack_comment_id.txt)
+                  fi
+
+                  if [ -n "$COMMENT_ID" ]; then
+                    API_ENDPOINT="/repos/${{ github.repository }}/issues/comments/$COMMENT_ID"
+                    CURRENT_BODY=$(gh api "$API_ENDPOINT" --jq '.body' 2>&1)
+
+                    # Check if "How I worked on this" section already exists
+                    if echo "$CURRENT_BODY" | grep -q "How I worked on this"; then
+                      echo "✅ Stream watcher already added progress section, skipping fallback"
+                      exit 0
+                    fi
+                  fi
+
+                  # If we get here, stream watcher didn't work - use original logic
+                  echo "⚠️ Stream watcher didn't update comment, using fallback..."
                   echo "📋 Generating execution details from $EXECUTION_FILE..."
                   "$GITHUB_WORKSPACE/.github/scripts/format-execution-details.sh" "$EXECUTION_FILE" /tmp/execution_details.md
 
