@@ -221,10 +221,9 @@ pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConf
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        fs,
-        sync::{LazyLock, Mutex},
-    };
+    use std::sync::{LazyLock, Mutex};
+
+    #[cfg(feature = "test")]
     use switchy_fs::sync;
 
     // Test lock to ensure tests that modify ROOT_DIR run serially
@@ -291,6 +290,7 @@ mod tests {
 
     // Tests for get_config_file_path()
     #[test]
+    #[cfg(feature = "test")]
     fn test_get_config_file_path_prefers_json5() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -298,27 +298,29 @@ mod tests {
         // Create both .json5 and .json files
         let json5_path = temp_path.join("config.json5");
         let json_path = temp_path.join("config.json");
-        fs::write(&json5_path, "{}").unwrap();
-        fs::write(&json_path, "{}").unwrap();
+        std::fs::write(&json5_path, "{}").unwrap();
+        std::fs::write(&json_path, "{}").unwrap();
 
         let result = get_config_file_path(temp_path, "config");
         assert_eq!(result, Some(json5_path));
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_get_config_file_path_falls_back_to_json() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         // Create only .json file
         let json_path = temp_path.join("config.json");
-        fs::write(&json_path, "{}").unwrap();
+        std::fs::write(&json_path, "{}").unwrap();
 
         let result = get_config_file_path(temp_path, "config");
         assert_eq!(result, Some(json_path));
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_get_config_file_path_returns_none_when_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -329,12 +331,13 @@ mod tests {
 
     // Tests for load_config_file()
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_config_file_success() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let config_path = temp_path.join("config.json5");
-        fs::write(
+        std::fs::write(
             &config_path,
             r#"{
             // Test global config
@@ -349,6 +352,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_config_file_read_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -361,12 +365,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_config_file_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
         let config_path = temp_path.join("malformed.json5");
-        fs::write(&config_path, "{ invalid json5: ").unwrap();
+        std::fs::write(&config_path, "{ invalid json5: ").unwrap();
 
         let result: Result<GlobalConfig, ConfigError> = load_config_file(&config_path);
         assert!(result.is_err());
@@ -375,6 +380,7 @@ mod tests {
 
     // Tests for load_global_config()
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_global_config_with_json5_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -383,7 +389,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json5");
-        fs::write(
+        std::fs::write(
             &config_path,
             r#"{
             server: {
@@ -408,6 +414,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_global_config_with_json_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -416,7 +423,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json");
-        fs::write(
+        std::fs::write(
             &config_path,
             r#"{
             "defaultProfile": "staging"
@@ -433,6 +440,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_global_config_returns_default_when_file_missing() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -451,6 +459,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_global_config_parse_error() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -459,7 +468,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json5");
-        fs::write(&config_path, "{ malformed: ").unwrap();
+        std::fs::write(&config_path, "{ malformed: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_global_config(AppType::Server);
@@ -471,6 +480,7 @@ mod tests {
 
     // Tests for load_profile_config()
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_profile_config_with_json5_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -482,7 +492,7 @@ mod tests {
         sync::create_dir_all(&profiles_dir).unwrap();
 
         let config_path = profiles_dir.join("config.json5");
-        fs::write(
+        std::fs::write(
             &config_path,
             r#"{
             libraryPaths: ["/music"],
@@ -504,6 +514,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_profile_config_returns_default_when_file_missing() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -525,6 +536,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_profile_config_parse_error() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -536,7 +548,7 @@ mod tests {
         sync::create_dir_all(&profiles_dir).unwrap();
 
         let config_path = profiles_dir.join("config.json5");
-        fs::write(&config_path, "{ invalid: ").unwrap();
+        std::fs::write(&config_path, "{ invalid: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_profile_config(AppType::Server, "bad_profile");
@@ -548,6 +560,7 @@ mod tests {
 
     // Tests for load_merged_config()
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_merged_config_combines_global_and_profile() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -558,7 +571,7 @@ mod tests {
 
         // Write global config
         let global_config_path = app_dir.join("config.json5");
-        fs::write(
+        std::fs::write(
             &global_config_path,
             r#"{
             server: {
@@ -572,7 +585,7 @@ mod tests {
 
         // Write profile config
         let profile_config_path = profiles_dir.join("config.json5");
-        fs::write(
+        std::fs::write(
             &profile_config_path,
             r#"{
             libraryPaths: ["/music/flac", "/music/mp3"],
@@ -611,6 +624,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_merged_config_with_missing_files() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -632,6 +646,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_merged_config_global_parse_error_propagates() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -642,7 +657,7 @@ mod tests {
 
         // Write malformed global config
         let global_config_path = app_dir.join("config.json5");
-        fs::write(&global_config_path, "{ bad: ").unwrap();
+        std::fs::write(&global_config_path, "{ bad: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_merged_config(AppType::Server, "test_profile");
@@ -653,6 +668,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test")]
     fn test_load_merged_config_profile_parse_error_propagates() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -663,11 +679,11 @@ mod tests {
 
         // Write valid global config
         let global_config_path = app_dir.join("config.json5");
-        fs::write(&global_config_path, "{ defaultProfile: \"test\" }").unwrap();
+        std::fs::write(&global_config_path, "{ defaultProfile: \"test\" }").unwrap();
 
         // Write malformed profile config
         let profile_config_path = profiles_dir.join("config.json5");
-        fs::write(&profile_config_path, "{ bad: ").unwrap();
+        std::fs::write(&profile_config_path, "{ bad: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_merged_config(AppType::Server, "test_profile");
