@@ -42,6 +42,25 @@ jobs:
                   ref: ${{ github.event.repository.default_branch }}
                   fetch-depth: 0
 
+            - name: Create acknowledgment comment
+              id: create_ack
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  COMMENT_ID=$(${{ github.workspace }}/.github/scripts/create-ack-comment.sh \
+                    "issue" \
+                    "${{ github.repository }}" \
+                    "${{ github.run_id }}" \
+                    "${{ github.event.issue.number }}")
+
+                  if [ -z "$COMMENT_ID" ]; then
+                    echo "❌ Failed to create acknowledgment comment"
+                    exit 1
+                  fi
+
+                  echo "✅ Created acknowledgment comment: $COMMENT_ID"
+                  echo "comment_id=$COMMENT_ID" >> $GITHUB_OUTPUT
+
             - name: Setup Rust toolchain
               uses: dtolnay/rust-toolchain@stable
 
@@ -92,10 +111,14 @@ jobs:
 
             - name: Start stream watcher
               run: |
+                  COMMENT_TYPE="issue"
+
                   ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
                     "${{ runner.temp }}/claude-stream.jsonl" \
                     "${{ github.repository }}" \
                     "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
+                    "${{ steps.create_ack.outputs.comment_id }}" \
+                    "$COMMENT_TYPE" \
                     > /tmp/stream-watcher.log 2>&1 &
 
                   WATCHER_PID=$!
@@ -103,6 +126,8 @@ jobs:
 
                   echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
                   echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
+                  echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
+                  echo "📋 Comment type: $COMMENT_TYPE"
                   echo "📋 Logs: /tmp/stream-watcher.log"
 
             - name: Run Claude Code
@@ -123,10 +148,6 @@ jobs:
 
                       IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
 
-                      IMPORTANT: You MUST post TWO comments:
-                      1. FIRST - An acknowledgment that you're working on it
-                      2. SECOND - Your actual response/findings
-
                       Context:
                       - REPO: ${{ github.repository }}
                       - ISSUE NUMBER: ${{ github.event.issue.number }}
@@ -138,43 +159,24 @@ jobs:
 
                       Latest Comment: "${{ github.event.comment.body || github.event.issue.body }}"
 
-                      STEP 1 - POST ACKNOWLEDGMENT WITH INTENT:
-                      Before doing anything else, analyze the request and post an acknowledgment with your understanding.
+                      STEP 1 - WRITE YOUR UNDERSTANDING:
+                      Before doing anything else, analyze the request and write your understanding to a file.
 
                       Process:
                       1. Quickly read and analyze the user's message
                       2. Determine: Is it a Question or Command? What's the scope?
                       3. Summarize in 1-2 sentences what you plan to do
-                      4. Post acknowledgment immediately
-
-                      Format your acknowledgment message as:
-                      ```
-                      👀 Looking into this...
-
-                      **My understanding:** [Your 1-2 sentence interpretation]
-
-                      [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-                      ```
+                      4. Write to /tmp/claude_understanding.txt immediately
 
                       Guidelines for the summary:
                       - **Questions**: "I'll explain [topic] in the context of [file/code]"
                       - **Commands**: "I'll [action] by [approach]"
                       - **Unclear requests**: "I need clarification on [specific aspect]"
+                      - Write ONLY the understanding text (no markdown formatting, no prefix)
 
-                      CRITICAL: After posting your acknowledgment, save the comment ID to /tmp/claude_ack_comment_id.txt for the stream watcher.
-
-                      Post acknowledgment:
-                      ```
-                      cat > /tmp/ack.txt << 'EOF'
-                      👀 Looking into this...
-
-                      **My understanding:** [your summary here]
-
-                      [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-                      EOF
-
-                      # Save comment ID for stream watcher
-                      gh api -X POST "/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@/tmp/ack.txt --jq '.id' > /tmp/claude_ack_comment_id.txt
+                      Example:
+                      ```bash
+                      echo "I'll investigate the issue and implement a fix for the reported bug." > /tmp/claude_understanding.txt
                       ```
 
                       STEP 2 - ANALYZE THE ISSUE:
@@ -280,22 +282,6 @@ jobs:
                     echo "⚠️ No stream watcher PID found"
                   fi
 
-                  # Debug: Show comment ID file status
-                  echo ""
-                  echo "📂 Debug: Comment ID file status:"
-                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
-                    FILE_SIZE=$(wc -c < /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "unknown")
-                    FILE_CONTENT=$(cat /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "")
-                    echo "  File exists: YES"
-                    echo "  File size: $FILE_SIZE bytes"
-                    echo "  File content: '$FILE_CONTENT'"
-                    if command -v xxd >/dev/null 2>&1; then
-                      echo "  Hex dump: $(xxd -p /tmp/claude_ack_comment_id.txt 2>/dev/null | head -c 100 || echo 'error')"
-                    fi
-                  else
-                    echo "  File exists: NO"
-                  fi
-
                   # Debug: Show stream file status
                   echo ""
                   echo "📂 Debug: Stream file status:"
@@ -322,11 +308,8 @@ jobs:
                       exit 0
                   fi
 
-                  # Check if stream watcher already updated the comment
-                  COMMENT_ID=""
-                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
-                    COMMENT_ID=$(cat /tmp/claude_ack_comment_id.txt)
-                  fi
+                  # Use the acknowledgment comment ID from the step output
+                  COMMENT_ID="${{ steps.create_ack.outputs.comment_id }}"
 
                   # Generate detailed execution summary
                   echo "📋 Generating detailed execution summary from $EXECUTION_FILE..."

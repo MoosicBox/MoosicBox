@@ -59,63 +59,6 @@ jobs:
                   echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
                   echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
 
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  ref: ${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref }}
-                  fetch-depth: 0
-
-            - name: Setup Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-
-            - name: Setup cargo-machete
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  repo: https://github.com/BSteffaniak/cargo-machete
-                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
-                  shell: bash
-                  output-path: ~/.cargo/bin/cargo-machete
-                  artifact-name: cargo-machete-ubuntu-latest-binary
-                  cache-key-prefix: cargo-machete-claude
-                  make-executable: true
-                  verify-command: --version
-
-            - name: Setup taplo
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  repo: https://github.com/tamasfe/taplo
-                  command: cargo install taplo-cli --locked
-                  shell: bash
-                  output-path: ~/.cargo/bin/taplo
-                  artifact-name: taplo-ubuntu-latest-binary
-                  cache-key-prefix: taplo-claude
-                  make-executable: true
-                  verify-command: --version
-
-            - name: Setup git configuration
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-
-            - name: Install inotify-tools
-              run: sudo apt-get install -y inotify-tools
-
-            - name: Start stream watcher
-              run: |
-                  ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
-                    "${{ runner.temp }}/claude-stream.jsonl" \
-                    "${{ github.repository }}" \
-                    "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
-                    > /tmp/stream-watcher.log 2>&1 &
-
-                  WATCHER_PID=$!
-                  echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
-
-                  echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
-                  echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
-                  echo "📋 Logs: /tmp/stream-watcher.log"
-
             - name: Get comment thread context
               id: thread_context
               if: github.event_name == 'pull_request_review_comment'
@@ -205,6 +148,103 @@ jobs:
                     echo "thread_history=" >> $GITHUB_OUTPUT
                   fi
 
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  ref: ${{ steps.pr_details.outputs.head_ref || github.event.pull_request.head.ref || github.ref }}
+                  fetch-depth: 0
+
+            - name: Create acknowledgment comment
+              id: create_ack
+              env:
+                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+              run: |
+                  ${{ github.event_name == 'pull_request_review_comment' && format('
+                  COMMENT_ID=$({0}/.github/scripts/create-ack-comment.sh \
+                    "pr_review_comment" \
+                    "{1}" \
+                    "{2}" \
+                    "{3}" \
+                    "{4}")
+                  ', github.workspace, github.repository, github.run_id, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
+                  COMMENT_ID=$({0}/.github/scripts/create-ack-comment.sh \
+                    "pr_issue_comment" \
+                    "{1}" \
+                    "{2}" \
+                    "{3}")
+                  ', github.workspace, github.repository, github.run_id, github.event.issue.number) || format('
+                  COMMENT_ID=$({0}/.github/scripts/create-ack-comment.sh \
+                    "issue" \
+                    "{1}" \
+                    "{2}" \
+                    "{3}")
+                  ', github.workspace, github.repository, github.run_id, github.event.issue.number) }}
+
+                  if [ -z "$COMMENT_ID" ]; then
+                    echo "❌ Failed to create acknowledgment comment"
+                    exit 1
+                  fi
+
+                  echo "✅ Created acknowledgment comment: $COMMENT_ID"
+                  echo "comment_id=$COMMENT_ID" >> $GITHUB_OUTPUT
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-latest-binary
+                  cache-key-prefix: cargo-machete-claude
+                  make-executable: true
+                  verify-command: --version
+
+            - name: Setup taplo
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/tamasfe/taplo
+                  command: cargo install taplo-cli --locked
+                  shell: bash
+                  output-path: ~/.cargo/bin/taplo
+                  artifact-name: taplo-ubuntu-latest-binary
+                  cache-key-prefix: taplo-claude
+                  make-executable: true
+                  verify-command: --version
+
+            - name: Setup git configuration
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Install inotify-tools
+              run: sudo apt-get install -y inotify-tools
+
+            - name: Start stream watcher
+              run: |
+                  COMMENT_TYPE="${{ github.event_name == 'pull_request_review_comment' && 'pr_review_comment' || github.event_name == 'issue_comment' && github.event.issue.pull_request && 'pr_issue_comment' || 'issue' }}"
+
+                  ${GITHUB_WORKSPACE}/.github/scripts/stream-watcher.sh \
+                    "${{ runner.temp }}/claude-stream.jsonl" \
+                    "${{ github.repository }}" \
+                    "${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}" \
+                    "${{ steps.create_ack.outputs.comment_id }}" \
+                    "$COMMENT_TYPE" \
+                    > /tmp/stream-watcher.log 2>&1 &
+
+                  WATCHER_PID=$!
+                  echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+
+                  echo "🔄 Started stream watcher (PID: $WATCHER_PID)"
+                  echo "📋 Stream file: ${{ runner.temp }}/claude-stream.jsonl"
+                  echo "📋 Comment ID: ${{ steps.create_ack.outputs.comment_id }}"
+                  echo "📋 Comment type: $COMMENT_TYPE"
+                  echo "📋 Logs: /tmp/stream-watcher.log"
+
             - name: Run Claude Code
               id: claude
               uses: BSteffaniak/claude-code-action@main
@@ -224,10 +264,6 @@ jobs:
                       You are helping with a GitHub repository. A user has mentioned @claude in a comment.
 
                       IMPORTANT: Follow the repository's AGENTS.md for guidance on build/test commands and code style conventions.
-
-                      IMPORTANT: You MUST post TWO comments:
-                      1. FIRST - An acknowledgment that you're working on it
-                      2. SECOND - Your actual response/findings
 
                       Context:
                       - REPO: ${{ github.repository }}
@@ -251,81 +287,26 @@ jobs:
                       ', steps.thread_context.outputs.thread_history) || '' }}
                       - User's latest message: "${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}"
 
-                      STEP 1 - POST ACKNOWLEDGMENT WITH INTENT:
-                      Before doing anything else, analyze the request and post an acknowledgment with your understanding.
+                      STEP 1 - WRITE YOUR UNDERSTANDING:
+                      Before doing anything else, analyze the request and write your understanding to a file.
 
                       Process:
                       1. Quickly read and analyze the user's message
                       2. Determine: Is it a Question or Command? What's the scope?
                       3. Summarize in 1-2 sentences what you plan to do
-                      4. Post acknowledgment immediately
-
-                      Format your acknowledgment message as:
-                      ```
-                      👀 Looking into this...
-
-                      **My understanding:** [Your 1-2 sentence interpretation]
-
-                      [View workflow run](link)
-                      ```
+                      4. Write to /tmp/claude_understanding.txt immediately
 
                       Guidelines for the summary:
                       - **Questions**: "I'll explain [topic] in the context of [file/code]"
                       - **Commands**: "I'll [action] by [approach]" (e.g., "I'll format all README files using prettier and commit to this PR branch")
                       - **Unclear requests**: "I need clarification on [specific aspect]"
                       - Keep it brief but specific - mention the scope (1 file vs all files, etc.)
+                      - Write ONLY the understanding text (no markdown formatting, no prefix)
 
-                      CRITICAL: After posting your acknowledgment, save the comment ID to /tmp/claude_ack_comment_id.txt for the stream watcher.
-
-                      Use the appropriate command based on the comment type:
-                      ${{ github.event_name == 'pull_request_review_comment' && format('
-                      - Reply to the comment thread using the ROOT comment ID (this ensures proper threading):
-                        Save your acknowledgment message to a file first, then post it:
-                        ```
-                        cat > /tmp/ack.txt << ''EOF''
-                        👀 Looking into this...
-
-                        **My understanding:** [your summary here]
-
-                        [View workflow run](https://github.com/{0}/actions/runs/{3})
-                        EOF
-
-                        # Save comment ID for stream watcher
-                        gh api -X POST "/repos/{0}/pulls/{1}/comments/{2}/replies" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
-                        ```
-
-                        IMPORTANT: Use the root comment ID {2} for all replies to ensure they appear in the correct thread.
-                      ', github.repository, github.event.pull_request.number, steps.thread_context.outputs.root_comment_id, github.run_id) || github.event_name == 'issue_comment' && github.event.issue.pull_request && format('
-                      - Post a PR comment:
-                        Save your acknowledgment message to a file first, then post it:
-                        ```
-                        cat > /tmp/ack.txt << ''EOF''
-                        👀 Looking into this...
-
-                        **My understanding:** [your summary here]
-
-                        [View workflow run](https://github.com/{1}/actions/runs/{2})
-                        EOF
-
-                        # Save comment ID for stream watcher
-                        gh api -X POST "/repos/{1}/issues/{0}/comments" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
-                        ```
-                      ', github.event.issue.number, github.repository, github.run_id) || format('
-                      - Post an issue comment:
-                        Save your acknowledgment message to a file first, then post it:
-                        ```
-                        cat > /tmp/ack.txt << ''EOF''
-                        👀 Looking into this...
-
-                        **My understanding:** [your summary here]
-
-                        [View workflow run](https://github.com/{1}/actions/runs/{2})
-                        EOF
-
-                        # Save comment ID for stream watcher
-                        gh api -X POST "/repos/{1}/issues/{0}/comments" -F body=@/tmp/ack.txt --jq ".id" > /tmp/claude_ack_comment_id.txt
-                        ```
-                      ', github.event.issue.number, github.repository, github.run_id) }}
+                      Example:
+                      ```bash
+                      echo "I'll explain the purpose of PR #164 by examining its title, description, and changes." > /tmp/claude_understanding.txt
+                      ```
 
                       STEP 2 - ANALYZE THE SPECIFIC CONTEXT:
 
@@ -461,22 +442,6 @@ jobs:
                     echo "⚠️ No stream watcher PID found"
                   fi
 
-                  # Debug: Show comment ID file status
-                  echo ""
-                  echo "📂 Debug: Comment ID file status:"
-                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
-                    FILE_SIZE=$(wc -c < /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "unknown")
-                    FILE_CONTENT=$(cat /tmp/claude_ack_comment_id.txt 2>/dev/null || echo "")
-                    echo "  File exists: YES"
-                    echo "  File size: $FILE_SIZE bytes"
-                    echo "  File content: '$FILE_CONTENT'"
-                    if command -v xxd >/dev/null 2>&1; then
-                      echo "  Hex dump: $(xxd -p /tmp/claude_ack_comment_id.txt 2>/dev/null | head -c 100 || echo 'error')"
-                    fi
-                  else
-                    echo "  File exists: NO"
-                  fi
-
                   # Debug: Show stream file status
                   echo ""
                   echo "📂 Debug: Stream file status:"
@@ -503,11 +468,8 @@ jobs:
                       exit 0
                   fi
 
-                  # Check if stream watcher already updated the comment
-                  COMMENT_ID=""
-                  if [ -f /tmp/claude_ack_comment_id.txt ]; then
-                    COMMENT_ID=$(cat /tmp/claude_ack_comment_id.txt)
-                  fi
+                  # Use the acknowledgment comment ID from the step output
+                  COMMENT_ID="${{ steps.create_ack.outputs.comment_id }}"
 
                   # Generate detailed execution summary
                   echo "📋 Generating detailed execution summary from $EXECUTION_FILE..."

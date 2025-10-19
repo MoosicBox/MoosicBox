@@ -2,16 +2,17 @@
 set -euo pipefail
 
 # Configuration
-COMMENT_ID_FILE="/tmp/claude_ack_comment_id.txt"
 STREAM_FILE="$1"
 REPO="$2"
 export GH_TOKEN="$3"
+COMMENT_ID="$4"
+COMMENT_TYPE="${5:-auto}"  # Optional: issue, pr_issue_comment, pr_review_comment, or auto
 
 UPDATE_INTERVAL=3  # seconds between comment updates
-MAX_WAIT_TIME=300  # max 5 minutes to wait for comment ID
-IDLE_THRESHOLD=10  # Consider stream complete after 10s idle
 PROCESSED_LINES=0
 PROGRESS_FILE="/tmp/progress_content.md"
+UNDERSTANDING_FILE="/tmp/claude_understanding.txt"
+UNDERSTANDING_INSERTED=false
 
 log() {
     echo "[stream-watcher] $*" >&2
@@ -107,75 +108,51 @@ process_json_line() {
     done
 }
 
-# Wait for comment ID file using inotify
-wait_for_comment_id() {
-    local watch_dir=$(dirname "$COMMENT_ID_FILE")
-    local watch_file=$(basename "$COMMENT_ID_FILE")
+# Detect correct API endpoint for comment
+detect_api_endpoint() {
+    local comment_id="$1"
+    local comment_type="$2"
 
-    log "Using inotify to watch for: $COMMENT_ID_FILE"
+    case "$comment_type" in
+        pr_review_comment)
+            echo "/repos/${REPO}/pulls/comments/${comment_id}"
+            ;;
+        issue|pr_issue_comment)
+            echo "/repos/${REPO}/issues/comments/${comment_id}"
+            ;;
+        auto)
+            # Try pulls endpoint first, fall back to issues
+            if gh api "/repos/${REPO}/pulls/comments/${comment_id}" --jq '.id' >/dev/null 2>&1; then
+                log "Auto-detected PR review comment"
+                echo "/repos/${REPO}/pulls/comments/${comment_id}"
+            else
+                log "Auto-detected issue/PR issue comment"
+                echo "/repos/${REPO}/issues/comments/${comment_id}"
+            fi
+            ;;
+        *)
+            log "⚠️ Unknown comment type '$comment_type', defaulting to issues endpoint"
+            echo "/repos/${REPO}/issues/comments/${comment_id}"
+            ;;
+    esac
+}
 
-    mkdir -p "$watch_dir"
-
-    # If file already exists, return immediately
-    if [ -f "$COMMENT_ID_FILE" ]; then
-        local content=$(cat "$COMMENT_ID_FILE" | tr -d '[:space:]')
-        log "File already exists with content: '$content'"
-        echo "$content"
-        return 0
+# Check for understanding file and insert if found
+insert_understanding_if_available() {
+    if [ "$UNDERSTANDING_INSERTED" = true ]; then
+        return
     fi
 
-    # Start inotifywait in background (without subshell)
-    # Redirect BOTH stdout and stderr to prevent output pollution
-    log "Starting inotifywait in background..."
-    timeout $MAX_WAIT_TIME inotifywait -q -m -e create,modify,close_write "$watch_dir" >/dev/null 2>&1 &
-    local inotify_pid=$!
-    log "inotifywait PID: $inotify_pid"
-
-    # Poll for file existence AND content (file is created empty, then written to)
-    local elapsed=0
-    while [ $elapsed -lt $((MAX_WAIT_TIME * 10)) ]; do
-        if [ -f "$COMMENT_ID_FILE" ] && [ -s "$COMMENT_ID_FILE" ]; then
-            log "✅ Detected $watch_file with content"
-            kill $inotify_pid 2>/dev/null || true
-            sleep 0.1
-            break
-        fi
-
-        # Check if inotifywait is still running
-        if ! kill -0 $inotify_pid 2>/dev/null; then
-            log "inotifywait process died unexpectedly"
-            break
-        fi
-
-        sleep 0.1
-        elapsed=$((elapsed + 1))
-    done
-
-    # Clean up inotifywait if still running
-    if kill -0 $inotify_pid 2>/dev/null; then
-        log "Killing inotifywait process $inotify_pid"
-        kill $inotify_pid 2>/dev/null || true
-        wait $inotify_pid 2>/dev/null || true
+    if [ ! -f "$UNDERSTANDING_FILE" ] || [ ! -s "$UNDERSTANDING_FILE" ]; then
+        return
     fi
 
-    # Read and return the file content
-    if [ -f "$COMMENT_ID_FILE" ]; then
-        log "Comment ID file exists, reading content..."
-        local content=$(cat "$COMMENT_ID_FILE" | tr -d '[:space:]')
-        log "File content length: ${#content}"
-        log "File content (raw): '$content'"
-        if [ ${#content} -gt 0 ]; then
-            log "File content (hex): $(cat "$COMMENT_ID_FILE" | xxd -p 2>/dev/null | head -c 100 || echo 'xxd not available')"
-        else
-            log "⚠️ File is EMPTY!"
-            log "File size: $(wc -c < "$COMMENT_ID_FILE" 2>/dev/null || echo 'unknown') bytes"
-        fi
-        echo "$content"
-        return 0
-    else
-        log "Timeout waiting for comment ID file after ${MAX_WAIT_TIME}s"
-        return 1
-    fi
+    log "📝 Found understanding file, inserting into comment..."
+
+    local understanding_text=$(cat "$UNDERSTANDING_FILE")
+
+    UNDERSTANDING_INSERTED=true
+    log "✅ Understanding will be inserted in next comment update"
 }
 
 # Backfill existing events from stream file
@@ -226,12 +203,14 @@ process_new_events() {
 # Update GitHub comment with current progress
 update_comment() {
     local comment_id="$1"
-    local api_endpoint="/repos/${REPO}/issues/comments/${comment_id}"
+    local api_endpoint=$(detect_api_endpoint "$comment_id" "$COMMENT_TYPE")
+
+    log "Using API endpoint: $api_endpoint"
 
     local original_body=$(gh api "$api_endpoint" --jq '.body' 2>/dev/null || echo "")
 
     if [ -z "$original_body" ]; then
-        log "⚠️ Failed to fetch original comment body"
+        log "⚠️ Failed to fetch original comment body from $api_endpoint"
         return 1
     fi
 
@@ -244,6 +223,15 @@ update_comment() {
     log "Base body length after stripping: ${#base_body} chars"
     # Strip trailing blank lines
     base_body=$(echo "$base_body" | awk '{lines[++n]=$0} END {for(i=1;i<=n;i++){if(i==n){gsub(/^[[:space:]]*$/,"",lines[i])} if(lines[i]!="")print lines[i]; else if(i<n)print ""}}')
+
+    # Insert understanding if available and not already in comment
+    if [ "$UNDERSTANDING_INSERTED" = true ] && [ -f "$UNDERSTANDING_FILE" ]; then
+        if ! echo "$base_body" | grep -q '\*\*My understanding:\*\*'; then
+            local understanding_text=$(cat "$UNDERSTANDING_FILE")
+            base_body=$(printf '%s\n\n**My understanding:** %s' "$base_body" "$understanding_text")
+            log "📝 Inserted understanding into comment"
+        fi
+    fi
 
     # Build new body with progress section (add closing tag here, not to file)
     local progress_content=$(cat "$PROGRESS_FILE")
@@ -287,7 +275,6 @@ watch_stream() {
     update_comment "$comment_id"
 
     local last_update=$(date +%s)
-    local last_event=$(date +%s)
     local last_modification=$(stat -c %Y "$STREAM_FILE" 2>/dev/null || echo "0")
 
     # Start inotifywait in background (without subshell pipe)
@@ -296,14 +283,16 @@ watch_stream() {
     local inotify_pid=$!
     log "Stream inotifywait PID: $inotify_pid"
 
-    # Poll for changes
+    # Poll for changes indefinitely until killed by workflow
     while kill -0 $inotify_pid 2>/dev/null; do
+        # Check for understanding file
+        insert_understanding_if_available
+
         # Check if stream file was modified
         local current_modification=$(stat -c %Y "$STREAM_FILE" 2>/dev/null || echo "0")
 
         if [ "$current_modification" != "$last_modification" ]; then
             local now=$(date +%s)
-            last_event=$now
             last_modification=$current_modification
 
             log "Stream file modified, processing new events..."
@@ -316,29 +305,6 @@ watch_stream() {
                     update_comment "$comment_id"
                     last_update=$now
                 fi
-            fi
-        fi
-
-        # Check for idle timeout (no modifications for IDLE_THRESHOLD seconds)
-        local now=$(date +%s)
-        local idle_time=$((now - last_event))
-
-        if [ $idle_time -ge $IDLE_THRESHOLD ]; then
-            log "Stream idle for ${idle_time}s, checking if complete..."
-
-            # Final processing
-            process_new_events
-
-            # If no new events for IDLE_THRESHOLD, consider stream complete
-            if [ $((now - last_event)) -ge $IDLE_THRESHOLD ]; then
-                log "Stream complete (idle for ${idle_time}s)"
-
-                # Final update (don't finalize - let workflow fallback enhance with details)
-                process_new_events
-                update_comment "$comment_id"
-
-                kill $inotify_pid 2>/dev/null || true
-                return 0
             fi
         fi
 
@@ -357,34 +323,18 @@ main() {
     log "Starting stream watcher"
     log "Stream file: $STREAM_FILE"
     log "Repository: $REPO"
+    log "Comment ID: $COMMENT_ID"
 
-    # Wait for comment ID
-    log "Waiting for comment ID file..."
-    local comment_id=""
-    comment_id=$(wait_for_comment_id)
-    local wait_result=$?
-
-    log "wait_for_comment_id returned with code: $wait_result"
-    log "Received comment_id: '$comment_id'"
-    log "Comment ID length: ${#comment_id}"
-
-    if [ $wait_result -ne 0 ]; then
-        log "⚠️ wait_for_comment_id failed with exit code $wait_result"
-        exit 0
+    if [ -z "$COMMENT_ID" ]; then
+        log "⚠️ No comment ID provided, exiting"
+        exit 1
     fi
-
-    if [ -z "$comment_id" ]; then
-        log "⚠️ No comment ID found (empty string), exiting gracefully"
-        exit 0
-    fi
-
-    log "✅ Watching comment ID: $comment_id"
 
     # Initialize progress section
     init_progress_section
 
     # Watch stream file
-    watch_stream "$comment_id"
+    watch_stream "$COMMENT_ID"
 
     log "✅ Stream watching complete"
     exit 0
