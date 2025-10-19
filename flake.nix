@@ -208,10 +208,16 @@
             packages ? [ ],
           }:
           pkgs.mkShell {
-            buildInputs = [ rustToolchain ] ++ baseBuildTools ++ packages;
+            buildInputs = [
+              rustToolchain
+              pkgs.fish
+            ]
+            ++ baseBuildTools
+            ++ packages;
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment"
               echo "Rust: $(rustc --version)"
+              exec fish
             '';
           };
 
@@ -224,6 +230,7 @@
           pkgs.mkShell {
             buildInputs = [
               rustToolchain
+              pkgs.fish
             ]
             ++ baseBuildTools
             ++ audioPackages
@@ -247,6 +254,7 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
+              exec fish
             '';
           };
 
@@ -259,6 +267,7 @@
           pkgs.mkShell {
             buildInputs = [
               rustToolchain
+              pkgs.fish
             ]
             ++ baseBuildTools
             ++ audioPackages
@@ -278,6 +287,7 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
+              exec fish
             '';
           };
 
@@ -290,6 +300,7 @@
           pkgs.mkShell {
             buildInputs = [
               rustToolchain
+              pkgs.fish
             ]
             ++ baseBuildTools
             ++ audioPackages
@@ -314,6 +325,7 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
+              exec fish
             '';
           };
 
@@ -344,6 +356,7 @@
             # Kitchen sink environment with everything
             buildInputs = [
               rustToolchain
+              pkgs.fish
             ]
             ++ baseBuildTools
             ++ audioPackages
@@ -387,6 +400,7 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
+              exec fish
             '';
           };
 
@@ -399,6 +413,7 @@
             name = "Coverage Testing";
             buildInputs = [
               rustToolchainNightly # Nightly for llvm-tools-preview
+              pkgs.fish
             ]
             ++ baseBuildTools
             ++ audioPackages
@@ -438,6 +453,7 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
+              exec fish
             '';
           };
 
@@ -568,6 +584,7 @@
               androidPackages.androidsdk
               pkgs.jdk17
               pkgs.gradle
+              pkgs.fish
             ];
 
             shellHook = ''
@@ -594,6 +611,7 @@
               echo "Then in a separate terminal for Tauri:"
               echo "  nix develop .#tauri-solidjs"
               echo "Or create a combined shell for your specific use case."
+              exec fish
             '';
           };
 
