@@ -310,7 +310,7 @@ jobs:
                     echo "  File exists: NO"
                   fi
 
-            - name: Append execution details to Claude's response (Fallback)
+            - name: Append execution details to Claude's response
               if: always() && steps.claude.outputs.execution_file != ''
               env:
                   GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
@@ -328,21 +328,46 @@ jobs:
                     COMMENT_ID=$(cat /tmp/claude_ack_comment_id.txt)
                   fi
 
+                  # Generate detailed execution summary
+                  echo "📋 Generating detailed execution summary from $EXECUTION_FILE..."
+                  "$GITHUB_WORKSPACE/.github/scripts/format-execution-details.sh" "$EXECUTION_FILE" /tmp/execution_details.md
+
                   if [ -n "$COMMENT_ID" ]; then
                     API_ENDPOINT="/repos/${{ github.repository }}/issues/comments/$COMMENT_ID"
                     CURRENT_BODY=$(gh api "$API_ENDPOINT" --jq '.body' 2>&1)
 
-                    # Check if "How I worked on this" section already exists
-                    if echo "$CURRENT_BODY" | grep -q "How I worked on this"; then
-                      echo "✅ Stream watcher already added progress section, skipping fallback"
+                    # Check if acknowledgment comment has live progress that needs enhancing
+                    if echo "$CURRENT_BODY" | grep -q "🔄 Live Progress"; then
+                      echo "📋 Enhancing live progress with detailed execution summary..."
+
+                      # Replace simple progress with detailed summary
+                      # Strip everything from --- onwards, handling any whitespace
+                      ACK_BASE=$(echo "$CURRENT_BODY" | sed '/^[[:space:]]*---[[:space:]]*$/,$d')
+
+                      # Build enhanced comment with detailed execution summary
+                      ENHANCED_BODY=$(cat <<EOF
+                  $ACK_BASE
+
+                  $(cat /tmp/execution_details.md)
+                  EOF
+                  )
+
+                      echo "$ENHANCED_BODY" | gh api -X PATCH "$API_ENDPOINT" -F body=@- > /dev/null 2>&1
+
+                      if [ $? -eq 0 ]; then
+                        echo "✅ Enhanced acknowledgment comment with detailed execution summary"
+                        exit 0
+                      else
+                        echo "⚠️ Failed to enhance acknowledgment comment, will try final comment instead"
+                      fi
+                    elif echo "$CURRENT_BODY" | grep -q "💭 How I worked on this"; then
+                      echo "✅ Detailed summary already added to acknowledgment, skipping"
                       exit 0
                     fi
                   fi
 
-                  # If we get here, stream watcher didn't work - use original logic
-                  echo "⚠️ Stream watcher didn't update comment, using fallback..."
-                  echo "📋 Generating execution details from $EXECUTION_FILE..."
-                  "$GITHUB_WORKSPACE/.github/scripts/format-execution-details.sh" "$EXECUTION_FILE" /tmp/execution_details.md
+                  # If we get here, use original fallback logic (add to final response comment)
+                  echo "⚠️ Adding execution details to final response comment..."
 
                   COMMENT_ID=""
                   if [ -f /tmp/claude_final_comment_id.txt ]; then

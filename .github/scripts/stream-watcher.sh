@@ -333,8 +333,8 @@ watch_stream() {
             if [ $((now - last_event)) -ge $IDLE_THRESHOLD ]; then
                 log "Stream complete (idle for ${idle_time}s)"
 
-                # Final update
-                finalize_progress_section
+                # Final update (don't finalize - let workflow fallback enhance with details)
+                process_new_events
                 update_comment "$comment_id"
 
                 kill $inotify_pid 2>/dev/null || true
@@ -347,9 +347,8 @@ watch_stream() {
 
     log "inotifywait process ended, finishing up..."
 
-    # Final update
+    # Final update (don't finalize - let workflow fallback enhance with details)
     process_new_events
-    finalize_progress_section
     update_comment "$comment_id"
 }
 
