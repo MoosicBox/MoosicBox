@@ -24,10 +24,10 @@ jobs:
             )
             &&
             !(
-                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
-                (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
-                (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER', github.event.review.author_association)) ||
-                (github.event_name == 'issues' && contains('MEMBER,OWNER', github.event.issue.author_association))
+                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER,COLLABORATOR', github.event.review.author_association)) ||
+                (github.event_name == 'issues' && contains('MEMBER,OWNER,COLLABORATOR', github.event.issue.author_association))
             )
 
         runs-on: ubuntu-latest
@@ -61,10 +61,10 @@ jobs:
                   cat > /tmp/denied.txt << 'EOF'
                   🚫 **Access Denied**
 
-                  Only organization members can trigger Claude workflows for security reasons.
+                  Only users with write access can trigger Claude workflows for security reasons.
 
                   **Your association:** `ASSOCIATION_PLACEHOLDER`
-                  **Required:** `MEMBER` or `OWNER`
+                  **Required:** `MEMBER`, `OWNER`, or `COLLABORATOR` (write access)
 
                   If you believe this is an error, please contact a repository maintainer.
                   EOF

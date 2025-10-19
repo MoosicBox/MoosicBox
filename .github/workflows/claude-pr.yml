@@ -22,9 +22,9 @@ jobs:
             !contains(github.event.review.body, '@claude rebase') &&
             !contains(github.event.review.body, '@claude fix-conflicts') &&
             (
-                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
-                (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER', github.event.comment.author_association)) ||
-                (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER', github.event.review.author_association))
+                (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
+                (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER,COLLABORATOR', github.event.review.author_association))
             )
         runs-on: ubuntu-latest
         permissions:
