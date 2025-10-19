@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use thiserror::Error;
 
 use crate::AppType;
@@ -19,105 +20,92 @@ pub enum ConfigError {
 }
 
 /// Global configuration that applies to all profiles
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalConfig {
     /// Server settings (host, port, etc.)
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerConfig>,
 
     /// Backup configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup: Option<BackupConfig>,
 
     /// Logging configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub logging: Option<LoggingConfig>,
 
     /// Feature flags
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub features: Option<FeatureFlags>,
 
     /// Default profile selection
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_profile: Option<String>,
 }
 
 /// Profile-specific configuration
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileConfig {
     /// Music library paths
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub library_paths: Option<Vec<String>>,
 
     /// Streaming service credentials
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub services: Option<ServiceCredentials>,
 
     /// Playback preferences
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub playback: Option<PlaybackConfig>,
 
     /// Audio quality settings
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_quality: Option<AudioQualityConfig>,
 
     /// Player-specific settings
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerConfig>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub schedule: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub retention_days: Option<u32>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureFlags {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental: Option<bool>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceCredentials {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tidal: Option<TidalCredentials>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub qobuz: Option<QobuzCredentials>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalCredentials {
     pub access_token: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
 }
 
@@ -128,32 +116,28 @@ pub struct QobuzCredentials {
     pub user_auth_token: String,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub gapless: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub crossfade_duration: Option<f32>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioQualityConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_format: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub bit_depth: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub sample_rate: Option<u32>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub buffer_size: Option<u32>,
 }
 

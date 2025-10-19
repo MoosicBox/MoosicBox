@@ -8146,6 +8146,7 @@ dependencies = [
  "moosicbox_profiles",
  "nanoid",
  "serde",
+ "serde_with",
  "switchy_database",
  "switchy_random",
  "thiserror 2.0.17",
