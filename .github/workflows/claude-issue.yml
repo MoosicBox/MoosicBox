@@ -19,6 +19,11 @@ jobs:
             )
             &&
             (
+                (github.event_name == 'issue_comment' && github.event.comment.user.type != 'Bot') ||
+                (github.event_name == 'issues')
+            )
+            &&
+            (
                 (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
                 (github.event_name == 'issues' && contains('MEMBER,OWNER,COLLABORATOR', github.event.issue.author_association))
             )

@@ -22,6 +22,11 @@ jobs:
             !contains(github.event.review.body, '@claude rebase') &&
             !contains(github.event.review.body, '@claude fix-conflicts') &&
             (
+                (github.event_name == 'issue_comment' && github.event.comment.user.type != 'Bot') ||
+                (github.event_name == 'pull_request_review_comment' && github.event.comment.user.type != 'Bot') ||
+                (github.event_name == 'pull_request_review' && github.event.review.user.type != 'Bot')
+            ) &&
+            (
                 (github.event_name == 'issue_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
                 (github.event_name == 'pull_request_review_comment' && contains('MEMBER,OWNER,COLLABORATOR', github.event.comment.author_association)) ||
                 (github.event_name == 'pull_request_review' && contains('MEMBER,OWNER,COLLABORATOR', github.event.review.author_association))
