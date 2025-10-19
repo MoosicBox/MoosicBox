@@ -365,8 +365,8 @@ async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.8"
-aws-sdk-apigatewaymanagement = "1.86.0"
-aws-sdk-ssm = "1.96.0"
+aws-sdk-apigatewaymanagement = "1.87.0"
+aws-sdk-ssm = "1.97.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -401,7 +401,7 @@ env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
 flate2 = "1.1.4"
-fltk = "1.5.17"
+fltk = "1.5.19"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
 futures = "0.3.31"
@@ -449,7 +449,7 @@ net2 = "0.2.39"
 ogg = "0.9.2"
 oneshot = "0.1.11"
 open = "5.3.2"
-openssl = { version = "0.10.73", features = ["v110"] }
+openssl = { version = "0.10.74", features = ["v110"] }
 opentelemetry = { version = "0.31.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.31.0", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
@@ -493,7 +493,7 @@ roxmltree = "0.21.1"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
-rust-embed = "8.7.2"
+rust-embed = "8.8.0"
 rust_decimal = { version = "1.39.0", default-features = false }
 rust_decimal_macros = { version = "1.39.0", default-features = false }
 ryu = "1.0.20"
@@ -532,7 +532,7 @@ swc_ecma_transforms_base = "27.0.0"
 swc_ecma_transforms_typescript = "30.0.1"
 swc_ecma_visit = "15.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
-syn = "2.0.106"
+syn = "2.0.107"
 syntect = "5.3.0"
 tantivy = "0.25.0"
 tauri = { version = "2.8.5", features = ["protocol-asset"] }
