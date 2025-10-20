@@ -83,7 +83,7 @@ switchy_database_connection = {
 ### Basic Database Initialization
 
 ```rust
-use database_connection::{init, Credentials};
+use switchy_database_connection::{init, Credentials};
 use std::path::Path;
 
 #[tokio::main]
@@ -106,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### SQLite Database
 
 ```rust
-use database_connection::init;
+use switchy_database_connection::init;
 use std::path::Path;
 
 #[tokio::main]
@@ -126,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Credential Management
 
 ```rust
-use database_connection::Credentials;
+use switchy_database_connection::Credentials;
 
 // Create credentials manually
 let creds = Credentials::new(
@@ -140,7 +140,7 @@ let creds = Credentials::new(
 let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
 
 // Use with database initialization
-let db = database_connection::init(None, Some(creds)).await?;
+let db = switchy_database_connection::init(None, Some(creds)).await?;
 ```
 
 ### Environment Variables
@@ -178,18 +178,18 @@ switchy_database_connection = {
 ```
 
 ```rust
-use database_connection::creds::get_db_creds;
+use switchy_database_connection::creds::get_db_creds;
 
 // Automatically fetches from DATABASE_URL, env vars, or AWS SSM
 let creds = get_db_creds().await?;
-let db = database_connection::init(None, Some(creds)).await?;
+let db = switchy_database_connection::init(None, Some(creds)).await?;
 ```
 
 ### PostgreSQL with TLS
 
 ```rust
 // Feature: postgres-raw + postgres-native-tls
-use database_connection::{init_postgres_raw_native_tls, Credentials};
+use switchy_database_connection::{init_postgres_raw_native_tls, Credentials};
 
 let creds = Credentials::new(
     "secure-db.example.com".to_string(),
@@ -205,7 +205,7 @@ let db = init_postgres_raw_native_tls(creds).await?;
 
 ```rust
 // Feature: postgres-raw + postgres-openssl
-use database_connection::{init_postgres_raw_openssl, Credentials};
+use switchy_database_connection::{init_postgres_raw_openssl, Credentials};
 
 let creds = Credentials::new(
     "ssl-db.example.com".to_string(),
@@ -221,7 +221,7 @@ let db = init_postgres_raw_openssl(creds).await?;
 
 ```rust
 // Feature: postgres-raw
-use database_connection::{init_postgres_raw_no_tls, Credentials};
+use switchy_database_connection::{init_postgres_raw_no_tls, Credentials};
 
 let creds = Credentials::new(
     "local-db".to_string(),
@@ -237,7 +237,7 @@ let db = init_postgres_raw_no_tls(creds).await?;
 
 ```rust
 // Feature: postgres-sqlx
-use database_connection::{init_postgres_sqlx, Credentials};
+use switchy_database_connection::{init_postgres_sqlx, Credentials};
 
 let creds = Credentials::new(
     "localhost".to_string(),
@@ -253,7 +253,7 @@ let db = init_postgres_sqlx(creds).await?;
 
 ```rust
 // Feature: sqlite-rusqlite
-use database_connection::init_sqlite_rusqlite;
+use switchy_database_connection::init_sqlite_rusqlite;
 use std::path::Path;
 
 // File-based database
@@ -268,7 +268,7 @@ let db = init_sqlite_rusqlite(None)?;
 
 ```rust
 // Feature: sqlite-sqlx
-use database_connection::init_sqlite_sqlx;
+use switchy_database_connection::init_sqlite_sqlx;
 use std::path::Path;
 
 // File-based database
@@ -283,7 +283,7 @@ let db = init_sqlite_sqlx(None).await?;
 
 ```rust
 // Feature: turso
-use database_connection::init_turso_local;
+use switchy_database_connection::init_turso_local;
 use std::path::Path;
 
 // File-based Turso database
@@ -297,7 +297,7 @@ let db = init_turso_local(None).await?;
 ### Non-SQLite Initialization
 
 ```rust
-use database_connection::{init_default_non_sqlite, Credentials};
+use switchy_database_connection::{init_default_non_sqlite, Credentials};
 
 // Initialize any non-SQLite database based on features
 let creds = Some(Credentials::new(
@@ -314,7 +314,7 @@ let db = init_default_non_sqlite(creds).await?;
 
 ```rust
 // Feature: simulator
-use database_connection::init;
+use switchy_database_connection::init;
 
 // Always returns a mock database for testing
 let db = init(None, None).await?;
@@ -330,7 +330,7 @@ async fn test_database_operations() {
 ## Error Handling
 
 ```rust
-use database_connection::{init, InitDbError, Credentials};
+use switchy_database_connection::{init, InitDbError, Credentials};
 
 match init(None, None).await {
     Ok(db) => {
