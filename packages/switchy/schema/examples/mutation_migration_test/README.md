@@ -7,13 +7,13 @@ This example demonstrates how to use `switchy_schema` with the `verify_migration
 - Creating migrations that handle complex data scenarios
 - Using `verify_migrations_with_mutations` for comprehensive testing
 - Inserting data between migrations to simulate real-world scenarios
-- Testing migrations with foreign key relationships and indexes
+- Testing migrations with related tables and indexes
 
 ## Key Features
 
 - **Mutation Testing**: Tests migrations with data being inserted between migration steps
 - **Interleaved Data Changes**: Simulates data modifications during migration sequences
-- **Foreign Key Testing**: Validates relationships between users, posts, and analytics tables
+- **Related Table Testing**: Tests migrations with related tables (users, posts, and analytics)
 - **Index Creation on Populated Tables**: Tests adding indexes after data is already present
 
 ## Running the Example
@@ -51,7 +51,7 @@ Data is inserted between migrations using `Executable` implementations:
 This pattern is ideal for:
 
 - Testing migrations with realistic data patterns
-- Ensuring foreign key constraints work correctly
+- Ensuring relationships between tables work correctly
 - Validating that indexes can be created on populated tables
 - Testing rollback behavior with complex data relationships
 - Simulating production scenarios where data exists between migration steps
