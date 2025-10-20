@@ -283,7 +283,7 @@ async fn manage_locations(db: &LibraryDatabase) -> Result<(), Box<dyn std::error
     println!("Created location: {}", new_location.id);
 
     // Delete download location
-    delete_download_location(db, new_location.id).await?;
+    delete_download_location(db, "/path/to/downloads").await?;
 
     // Get download path (from location or default)
     let path = get_download_path(db, Some(1)).await?;
@@ -507,8 +507,8 @@ pub async fn create_download_location(
 
 pub async fn delete_download_location(
     db: &LibraryDatabase,
-    id: u64
-) -> Result<(), DatabaseFetchError>
+    path: &str
+) -> Result<Option<DownloadLocation>, DatabaseFetchError>
 ```
 
 ## Implementation Details
