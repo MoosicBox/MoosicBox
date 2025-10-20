@@ -157,6 +157,8 @@ pub trait MusicApi: Send + Sync {
     // Album operations
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error>;
+    async fn album_versions(&self, album_id: &Id, offset: Option<u32>, limit: Option<u32>)
+                           -> PagingResult<AlbumVersion, Error>;
     async fn artist_albums(&self, artist_id: &Id, album_type: Option<AlbumType>,
                           offset: Option<u32>, limit: Option<u32>,
                           order: Option<AlbumOrder>, order_direction: Option<AlbumOrderDirection>)
