@@ -29,10 +29,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_simvar = { path = "../simvar" }
+simvar = { path = "../simvar" }
 
 # Or with specific features
-moosicbox_simvar = {
+simvar = {
     path = "../simvar",
     features = ["async", "tcp", "time"]
 }
@@ -43,7 +43,7 @@ moosicbox_simvar = {
 ### Basic Simulation
 
 ```rust
-use moosicbox_simvar::*;
+use simvar::*;
 
 struct MySimBootstrap;
 
@@ -69,7 +69,7 @@ fn main() {
 
 ```rust
 #[cfg(feature = "utils")]
-use moosicbox_simvar::utils;
+use simvar::utils;
 ```
 
 ## Feature Flags
