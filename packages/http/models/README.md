@@ -24,7 +24,7 @@ The HTTP Models package provides:
 ### HTTP Status Codes
 
 - **Common Status Codes**: Standard HTTP status codes including informational (1xx), success (2xx), redirection (3xx), client error (4xx), and server error (5xx)
-- **Category Helpers**: Check if status is success, error, redirect, etc.
+- **Category Helpers**: Check if status is informational, success, redirection, client error, or server error
 - **Numeric Conversion**: Convert to/from u16 values
 - **MDN Documentation**: Based on Mozilla Developer Network reference
 
