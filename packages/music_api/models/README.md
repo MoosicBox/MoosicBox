@@ -37,6 +37,7 @@ The MoosicBox Music API Models package provides:
 - **TrackSource**: Local file paths and remote URLs for tracks
 - **ImageCoverSource**: Local and remote image sources
 - **ImageCoverSize**: Cover art size specifications
+- **FromId**: Trait for ID type conversions between strings and numeric IDs
 
 ### Search Integration
 
@@ -139,6 +140,19 @@ let remote_cover = ImageCoverSource::RemoteUrl {
 
 // Size specifications
 let size = ImageCoverSize::Large; // Max, Large, Medium, Small, Thumbnail
+```
+
+### ID Conversions
+
+```rust
+use moosicbox_music_api_models::FromId;
+
+// Convert ID to string
+let id: u64 = 12345;
+let id_string = id.as_string();
+
+// Convert string to ID
+let parsed_id = u64::into_id("12345");
 ```
 
 ## Feature Flags
