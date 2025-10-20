@@ -160,7 +160,6 @@ cargo fmt
 
 - **`packages/`** - Modular Rust packages (audio, networking, UI, etc.)
 - **`app-website/`** - Marketing website source
-- **`infra/`** - Infrastructure and deployment configurations
 - **`kubernetes/`** - Kubernetes deployment manifests
 - **`terraform/`** - Infrastructure as code
 
