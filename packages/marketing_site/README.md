@@ -131,8 +131,8 @@ The marketing site supports various feature combinations:
 # Build for production
 cargo build --release --bin moosicbox_marketing_site
 
-# Run with custom configuration
-BIND_ADDRESS=0.0.0.0:8080 ./target/release/moosicbox_marketing_site
+# Run the binary
+./target/release/moosicbox_marketing_site
 ```
 
 ### Docker Deployment
