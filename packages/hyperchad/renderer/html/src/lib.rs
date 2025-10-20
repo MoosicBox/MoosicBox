@@ -16,7 +16,7 @@ use hyperchad_renderer::{
 use hyperchad_router::Container;
 use hyperchad_transformer::{
     OverrideCondition, OverrideItem, ResponsiveTrigger,
-    models::{AlignItems, LayoutDirection, TextAlign, Visibility},
+    models::{AlignItems, LayoutDirection, TextAlign, Visibility, WhiteSpace},
 };
 use maud::{DOCTYPE, PreEscaped, html};
 
@@ -188,6 +188,16 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             },
                         )?;
                     }
+                    OverrideItem::WhiteSpace(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            match x {
+                                WhiteSpace::Normal => b"normal",
+                                WhiteSpace::Preserve => b"pre",
+                            },
+                        )?;
+                    }
                     OverrideItem::MarginLeft(x)
                     | OverrideItem::MarginRight(x)
                     | OverrideItem::MarginTop(x)
@@ -332,6 +342,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::JustifyContent(..) => b"justify-content",
         OverrideItem::AlignItems(..) => b"align-items",
         OverrideItem::TextAlign(..) => b"text-align",
+        OverrideItem::WhiteSpace(..) => b"white-space",
         OverrideItem::TextDecoration(..) => b"text-decoration",
         OverrideItem::FontFamily(..) => b"font-family",
         OverrideItem::FontWeight(..) => b"font-weight",

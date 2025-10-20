@@ -5,7 +5,7 @@ use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
-    TextDecorationStyle, Visibility,
+    TextDecorationStyle, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -345,7 +345,17 @@ fn parse_text_align(value: &str) -> Result<TextAlign, ParseAttrError> {
         "center" => TextAlign::Center,
         "end" => TextAlign::End,
         "justify" => TextAlign::Justify,
-        value => {
+        _ => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_white_space(value: &str) -> Result<WhiteSpace, ParseAttrError> {
+    Ok(match value {
+        "normal" => WhiteSpace::Normal,
+        "preserve" | "pre" => WhiteSpace::Preserve,
+        _ => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
@@ -1340,6 +1350,13 @@ fn parse_element(
             &mut overrides,
             parse_text_align,
             iter_once!(OverrideItem::TextAlign),
+        )?,
+        white_space: pmrv(
+            tag,
+            once("sx-white-space"),
+            &mut overrides,
+            parse_white_space,
+            iter_once!(OverrideItem::WhiteSpace),
         )?,
         text_decoration,
         font_family: pmrv(

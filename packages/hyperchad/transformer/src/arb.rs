@@ -240,6 +240,7 @@ fn override_item_of_type(g: &mut Gen, value: OverrideItemType) -> OverrideItem {
         OverrideItemType::JustifyContent => OverrideItem::JustifyContent(Arbitrary::arbitrary(g)),
         OverrideItemType::AlignItems => OverrideItem::AlignItems(Arbitrary::arbitrary(g)),
         OverrideItemType::TextAlign => OverrideItem::TextAlign(Arbitrary::arbitrary(g)),
+        OverrideItemType::WhiteSpace => OverrideItem::WhiteSpace(Arbitrary::arbitrary(g)),
         OverrideItemType::TextDecoration => OverrideItem::TextDecoration(Arbitrary::arbitrary(g)),
         OverrideItemType::FontFamily => OverrideItem::FontFamily(
             Vec::<XmlString>::arbitrary(g)
@@ -501,6 +502,13 @@ impl Arbitrary for Container {
             }),
             text_align: opt_default_value_or_arbitrary(g, &overrides, |x| {
                 if let OverrideItem::TextAlign(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            }),
+            white_space: opt_default_value_or_arbitrary(g, &overrides, |x| {
+                if let OverrideItem::WhiteSpace(x) = x {
                     Some(x)
                 } else {
                     None

@@ -1083,7 +1083,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
+                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, white-space, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
                 );
                 return Err(error_msg);
             }
@@ -1503,6 +1503,7 @@ impl Generator {
                     Some(Self::enum_attr("justify_content", "JustifyContent", value))
                 }
                 "text-align" => Some(Self::enum_attr("text_align", "TextAlign", value)),
+                "white-space" => Some(Self::enum_attr("white_space", "WhiteSpace", value)),
                 "text-decoration" => Some(Self::text_decoration_attr("text_decoration", value)),
                 "direction" => Some(Self::direct_enum_attr(
                     "direction",

@@ -9,7 +9,7 @@ use hyperchad_transformer::{
     models::{
         AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
         LayoutOverflow, LinkTarget, Position, TextAlign, TextDecorationLine, TextDecorationStyle,
-        Visibility,
+        Visibility, WhiteSpace,
     },
 };
 
@@ -615,6 +615,16 @@ pub fn element_style_to_html(
                 TextAlign::Center => b"center",
                 TextAlign::End => b"end",
                 TextAlign::Justify => b"justify",
+            }
+        );
+    }
+
+    if let Some(white_space) = &container.white_space {
+        write_css_attr!(
+            b"white-space",
+            match white_space {
+                WhiteSpace::Normal => b"normal",
+                WhiteSpace::Preserve => b"pre",
             }
         );
     }

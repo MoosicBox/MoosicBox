@@ -493,6 +493,24 @@ impl std::fmt::Display for FontWeight {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum WhiteSpace {
+    #[default]
+    Normal,
+    Preserve,
+}
+
+impl std::fmt::Display for WhiteSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => f.write_str("normal"),
+            Self::Preserve => f.write_str("preserve"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -517,5 +535,16 @@ mod tests {
     #[test]
     fn test_font_weight_default() {
         assert_eq!(FontWeight::default(), FontWeight::Normal);
+    }
+
+    #[test]
+    fn test_white_space_display() {
+        assert_eq!(WhiteSpace::Normal.to_string(), "normal");
+        assert_eq!(WhiteSpace::Preserve.to_string(), "preserve");
+    }
+
+    #[test]
+    fn test_white_space_default() {
+        assert_eq!(WhiteSpace::default(), WhiteSpace::Normal);
     }
 }

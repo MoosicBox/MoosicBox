@@ -11,7 +11,7 @@ use hyperchad_color::Color;
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, Position, Route, TextAlign, TextDecorationLine,
-    TextDecorationStyle, Visibility,
+    TextDecorationStyle, Visibility, WhiteSpace,
 };
 use parse::parse_number;
 use serde::{Deserialize, Serialize, de::Error};
@@ -764,6 +764,7 @@ pub enum OverrideItem {
     JustifyContent(JustifyContent),
     AlignItems(AlignItems),
     TextAlign(TextAlign),
+    WhiteSpace(WhiteSpace),
     TextDecoration(TextDecoration),
     FontFamily(Vec<String>),
     FontWeight(FontWeight),
@@ -820,6 +821,7 @@ impl OverrideItem {
             Self::JustifyContent(x) => serde_json::to_string(x),
             Self::AlignItems(x) => serde_json::to_string(x),
             Self::TextAlign(x) => serde_json::to_string(x),
+            Self::WhiteSpace(x) => serde_json::to_string(x),
             Self::TextDecoration(x) => serde_json::to_string(x),
             Self::Classes(x) | Self::FontFamily(x) => serde_json::to_string(x),
             Self::FontWeight(x) => serde_json::to_string(x),
@@ -876,6 +878,7 @@ impl OverrideItem {
             Self::JustifyContent(x) => serde_json::to_value(x),
             Self::AlignItems(x) => serde_json::to_value(x),
             Self::TextAlign(x) => serde_json::to_value(x),
+            Self::WhiteSpace(x) => serde_json::to_value(x),
             Self::TextDecoration(x) => serde_json::to_value(x),
             Self::Classes(x) | Self::FontFamily(x) => serde_json::to_value(x),
             Self::FontWeight(x) => serde_json::to_value(x),
@@ -933,6 +936,7 @@ impl OverrideItem {
             Self::JustifyContent(x) => Box::new(x),
             Self::AlignItems(x) => Box::new(x),
             Self::TextAlign(x) => Box::new(x),
+            Self::WhiteSpace(x) => Box::new(x),
             Self::TextDecoration(x) => Box::new(x),
             Self::Classes(x) | Self::FontFamily(x) => Box::new(x),
             Self::FontWeight(x) => Box::new(x),
@@ -1038,6 +1042,15 @@ impl OverrideItem {
                 let mut expr = responsive.then::<&TextAlign>(x);
 
                 if let Some(Self::TextAlign(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::WhiteSpace(x) => {
+                let mut expr = responsive.then::<&WhiteSpace>(x);
+
+                if let Some(Self::WhiteSpace(default)) = default {
                     expr = expr.or_else(default);
                 }
 
@@ -1225,6 +1238,7 @@ macro_rules! override_item {
             OverrideItem::JustifyContent($name) => $action,
             OverrideItem::AlignItems($name) => $action,
             OverrideItem::TextAlign($name) => $action,
+            OverrideItem::WhiteSpace($name) => $action,
             OverrideItem::TextDecoration($name) => $action,
             OverrideItem::Classes($name) | OverrideItem::FontFamily($name) => $action,
             OverrideItem::FontWeight($name) => $action,
@@ -1286,6 +1300,7 @@ pub struct Container {
     pub justify_content: Option<JustifyContent>,
     pub align_items: Option<AlignItems>,
     pub text_align: Option<TextAlign>,
+    pub white_space: Option<WhiteSpace>,
     pub text_decoration: Option<TextDecoration>,
     pub font_family: Option<Vec<String>>,
     pub font_weight: Option<FontWeight>,
@@ -2622,6 +2637,7 @@ impl Container {
         attrs.add_opt("sx-align-items", self.align_items.as_ref());
 
         attrs.add_opt("sx-text-align", self.text_align.as_ref());
+        attrs.add_opt("sx-white-space", self.white_space.as_ref());
 
         if let Some(text_decoration) = &self.text_decoration {
             attrs.add_opt("sx-text-decoration-color", text_decoration.color);
@@ -3369,6 +3385,7 @@ const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
         OverrideItem::JustifyContent(..) => "sx-justify-content",
         OverrideItem::AlignItems(..) => "sx-align-items",
         OverrideItem::TextAlign(..) => "sx-text-align",
+        OverrideItem::WhiteSpace(..) => "sx-white-space",
         OverrideItem::TextDecoration(..) => "sx-text-decoration",
         OverrideItem::FontFamily(..) => "sx-font-family",
         OverrideItem::FontWeight(..) => "sx-font-weight",
