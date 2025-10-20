@@ -64,6 +64,41 @@ let try_now_page = try_now();
 let not_found_page = not_found();
 ```
 
+### Download Releases
+
+```rust
+use moosicbox_marketing_site_ui::download::{releases, Os, OsRelease, OsAsset, FileAsset};
+use chrono::NaiveDateTime;
+
+// Define OS information
+let os = Os {
+    lower_name: "linux",
+    name: "Linux",
+    header: "Linux",
+};
+
+// Create release data
+let release = OsRelease {
+    version: "v1.0.0",
+    published_at: NaiveDateTime::from_timestamp_opt(1234567890, 0).unwrap(),
+    url: "https://github.com/example/repo/releases/tag/v1.0.0",
+    assets: vec![
+        OsAsset {
+            name: "linux",
+            asset: Some(FileAsset {
+                browser_download_url: "https://example.com/file.tar.gz",
+                name: "file.tar.gz",
+                size: 1024000,
+            }),
+            other_formats: vec![],
+        },
+    ],
+};
+
+// Generate releases HTML
+let releases_html = releases(&[release], &os);
+```
+
 ### Layout Components
 
 ```rust
