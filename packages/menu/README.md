@@ -84,7 +84,7 @@ let album = refavorite_album(&api, &library_api, &db, &album_id).await?;
 With the `api` feature enabled, bind the API endpoints to your Actix-web application:
 
 ```rust
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use moosicbox_menu::api::bind_services;
 
 HttpServer::new(|| {
