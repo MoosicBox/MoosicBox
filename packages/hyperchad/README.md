@@ -29,14 +29,13 @@ hyperchad = "0.1.0"
 
 ```rust
 use hyperchad::app::{App, AppBuilder};
-use hyperchad::router::{Router, RoutePath};
+use hyperchad::router::{Router, RoutePath, RouteRequest};
 use hyperchad::template::container;
-use hyperchad::renderer_html::HtmlRenderer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
-        .with_route(RoutePath::Literal("/"), |_| async move {
+        .with_route(RoutePath::Literal("/"), |_req: RouteRequest| async move {
             let content = container! {
                 div {
                     h1 { "Welcome to HyperChad" }
@@ -46,12 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(content)
         });
 
-    let renderer = HtmlRenderer::new();
-
     let app = AppBuilder::new()
         .with_title("My App".to_string())
         .with_router(router)
-        .build(renderer)?;
+        .build_default()?;
 
     app.run()?;
     Ok(())
@@ -79,23 +76,23 @@ let ui = container! {
 ### Routing
 
 ```rust
-use hyperchad::router::{Router, RoutePath, Navigation};
+use hyperchad::router::{Router, RoutePath, RouteRequest};
 
 let router = Router::new()
-    .with_route(RoutePath::Literal("/"), |_| async move {
+    .with_route(RoutePath::Literal("/"), |_req| async move {
         let content = container! {
             div { "Home Page" }
         };
         Ok(content)
     })
-    .with_route(RoutePath::Literal("/about"), |_| async move {
+    .with_route(RoutePath::Literal("/about"), |_req| async move {
         let content = container! {
             div { "About Page" }
         };
         Ok(content)
     })
-    .with_route(RoutePath::LiteralPrefix("/user/"), |nav| async move {
-        let user_id = nav.path.strip_prefix("/user/").unwrap_or("");
+    .with_route(RoutePath::LiteralPrefix("/user/"), |req| async move {
+        let user_id = req.path.strip_prefix("/user/").unwrap_or("");
         let content = container! {
             div {
                 h1 { "User Profile" }
@@ -274,52 +271,22 @@ debug = ["renderer-egui-debug", "renderer-fltk-debug"]
 
 ## Renderer-Specific Usage
 
-### Egui Desktop Application
+HyperChad supports multiple renderers through the `AppBuilder`. Use `build_default()` to automatically select the appropriate renderer based on enabled features, or use renderer-specific build methods:
 
 ```rust
-use hyperchad::app::{App, AppBuilder};
-use hyperchad::renderer_egui::EguiRenderer;
+use hyperchad::app::AppBuilder;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let renderer = EguiRenderer::new();
+// Build with default renderer (based on features)
+let app = AppBuilder::new()
+    .with_title("My App".to_string())
+    .with_router(router)
+    .build_default()?;
 
-    let app = AppBuilder::new()
-        .with_title("Desktop App".to_string())
-        .with_router(router)
-        .build(renderer)?;
-
-    app.run()?;
-    Ok(())
-}
-```
-
-### Web Application with Actix
-
-```rust
-use hyperchad::app::{App, AppBuilder};
-use hyperchad::renderer_html_actix::ActixRenderer;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let renderer = ActixRenderer::new();
-
-    let app = AppBuilder::new()
-        .with_router(router)
-        .build(renderer)?;
-
-    app.handle_serve()?;
-    Ok(())
-}
-```
-
-### Server-Side Rendering with HTML
-
-```rust
-use hyperchad::renderer_html::HtmlRenderer;
-
-let renderer = HtmlRenderer::new();
-let view = /* ... create view from routing ... */;
-renderer.render(view).await?;
+// Or use renderer-specific methods when available:
+// - build_egui(renderer) for Egui desktop apps
+// - build_fltk(renderer) for FLTK desktop apps
+// - build_html(renderer) for HTML rendering
+// See the renderer module documentation for specific usage
 ```
 
 ## Testing
