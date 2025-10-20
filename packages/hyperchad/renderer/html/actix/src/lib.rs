@@ -264,6 +264,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                 let catchall = move |req: HttpRequest,
                                      app: web::Data<ActixApp<T, R>>,
                                      body: Option<web::Bytes>| async move {
+                    log::trace!("catchall: req={req:?} body={body:?}");
                     let data = app.processor.prepare_request(req, body.map(Arc::new))?;
                     app.processor.to_response(data).await
                 };
