@@ -537,6 +537,9 @@ pub mod html {
         /// * If the `AppBuilder` is missing a router
         pub fn build_default_html(self) -> Result<App<HtmlStubRenderer>, BuilderError> {
             log::debug!("build_default_html");
+            log::debug!(
+                "this returns a stub app. to get a real app, use a proper backend such as build_default_html_vanilla_js_actix or build_default_html_vanilla_js_lambda, or enable the actix/lambda backend features"
+            );
 
             let renderer = hyperchad_renderer_html::HtmlRenderer::new(
                 hyperchad_renderer_html::stub::StubApp::new(
@@ -782,6 +785,9 @@ pub mod html {
                 self,
             ) -> Result<App<HtmlVanillaJsRenderer>, BuilderError> {
                 log::debug!("build_default_html_vanilla_js");
+                log::debug!(
+                    "this returns a stub app. to get a real app, use a proper backend such as build_default_html_vanilla_js_actix or build_default_html_vanilla_js_lambda, or enable the actix/lambda backend features"
+                );
 
                 let renderer = hyperchad_renderer_html::HtmlRenderer::new(
                     hyperchad_renderer_html::stub::StubApp::new(
