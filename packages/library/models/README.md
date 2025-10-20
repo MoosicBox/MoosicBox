@@ -48,20 +48,20 @@ The MoosicBox Library Models package provides:
 - **Serialization**: JSON (via serde) and database compatible
 - **String Parsing**: Implements `FromStr` for parsing from strings (SCREAMING_SNAKE_CASE format)
 
-### API Models (available with `api` feature)
+### API Models
 
 #### ApiLibraryArtist
 
 - API-compatible artist model with ID fields for external sources (Tidal, Qobuz, YT)
 - `contains_cover` flag instead of cover path
 
-#### ApiLibraryAlbum
+#### ApiLibraryAlbum (available with `api` feature)
 
 - API-compatible album model with `ApiAlbumVersionQuality` for versions
 - `contains_cover` flag instead of artwork path
 - Converts to/from `LibraryAlbum` and `ApiAlbum`
 
-#### ApiLibraryTrack
+#### ApiLibraryTrack (available with `api` feature)
 
 - API-compatible track model without file path information
 - Includes all metadata and source tracking
