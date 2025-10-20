@@ -45,13 +45,13 @@ fn main() {
 ### Command Line Usage
 
 ```bash
-# Find any available port (requires 'rand' feature)
+# Find any available port (requires 'cli' and 'rand' features)
 openport
 
-# Find port in specific range (exclusive)
+# Find port in specific range (exclusive) (requires 'cli' feature)
 openport 15000 16000
 
-# Find port in inclusive range
+# Find port in inclusive range (requires 'cli' feature)
 openport 8000 9000 --inclusive
 ```
 
@@ -169,6 +169,7 @@ pub trait PortRange {
 
 ## Features
 
+- **`cli`**: Enables the command-line binary for finding available ports
 - **`rand`**: Enables `pick_random_unused_port()` function for finding random ports in the 15000-25000 range
 - **`fail-on-warnings`**: Treats compiler warnings as errors (for development)
 
