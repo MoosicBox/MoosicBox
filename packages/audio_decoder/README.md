@@ -168,17 +168,17 @@ let handler = AudioDecodeHandler::new()
     .with_output(/* ... */);
 ```
 
-### Decoding with Media Source Stream
+### Async Decoding with Media Source Stream
 
-For more control over the input source, use `decode_media_source()`:
+For more control over the input source, use `decode_media_source_async()`:
 
 ```rust
-use moosicbox_audio_decoder::{decode_media_source, AudioDecodeHandler};
+use moosicbox_audio_decoder::{decode_media_source_async, AudioDecodeHandler};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::probe::Hint;
 use std::fs::File;
 
-fn decode_with_media_source() -> Result<(), Box<dyn std::error::Error>> {
+async fn decode_with_media_source() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open("audio.flac")?;
     let mss = MediaSourceStream::new(
         Box::new(file),
@@ -188,18 +188,19 @@ fn decode_with_media_source() -> Result<(), Box<dyn std::error::Error>> {
     let mut hint = Hint::new();
     hint.with_extension("flac");
 
-    let mut handler = AudioDecodeHandler::new()
-        .with_output(/* ... */);
-
-    decode_media_source(
+    decode_media_source_async(
         mss,
         &hint,
-        &mut handler,
+        || {
+            let mut handler = AudioDecodeHandler::new()
+                .with_output(/* ... */);
+            Ok(handler)
+        },
         true,  // enable_gapless
         false, // verify
         None,  // track_num
         None,  // seek position
-    )?;
+    ).await?;
 
     Ok(())
 }
