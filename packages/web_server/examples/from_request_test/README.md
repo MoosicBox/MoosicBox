@@ -173,7 +173,7 @@ assert_eq!(data.method, Method::Get);
 assert_eq!(data.path, "/test");
 
 // Async extraction
-let data = RequestData::from_request_async(&req).await?;
+let data = RequestData::from_request_async(req).await?;
 assert_eq!(data.method, Method::Get);
 ```
 
