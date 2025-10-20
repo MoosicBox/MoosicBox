@@ -26,8 +26,7 @@ moosicbox_json_utils = "0.1.4"
 ### Basic Type Conversion
 
 ```rust
-use moosicbox_json_utils::serde_json::ToValueType;
-use moosicbox_json_utils::ParseError;
+use moosicbox_json_utils::{ToValueType, ParseError};
 
 fn main() -> Result<(), ParseError> {
     // Convert JSON number to i32
