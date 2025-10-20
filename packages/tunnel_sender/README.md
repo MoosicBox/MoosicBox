@@ -61,7 +61,7 @@ match send_result {
 
 ### Sender Operations
 
-The library provides `TunnelSender` for establishing and managing tunnel connections, handling message routing, and processing tunnel requests. These are internal types used by the MoosicBox server infrastructure for WebSocket-based tunneling.
+The library provides `TunnelSender` for establishing and managing tunnel connections, handling message routing, and processing tunnel requests.
 
 ## Error Types
 
