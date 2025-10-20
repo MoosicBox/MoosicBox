@@ -71,7 +71,7 @@ async fn query_examples(db: &dyn Database) -> Result<(), DatabaseError> {
 
     // UPDATE
     db.update("tracks")
-        .set("artist", "The Beatles (Remastered)")
+        .value("artist", "The Beatles (Remastered)")
         .where_eq("id", 42)
         .execute(db)
         .await?;
