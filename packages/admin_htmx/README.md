@@ -21,7 +21,6 @@ The MoosicBox Admin HTMX package provides:
 - **Info**: Server identity and system information display
 - **Qobuz**: Qobuz service authentication and settings (optional, enabled with `qobuz` feature)
 - **Tidal**: Tidal service authentication and settings (optional, enabled with `tidal` feature)
-- **Utilities**: Common helper functions for HTMX interactions
 
 ### Features
 
