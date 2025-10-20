@@ -129,6 +129,7 @@ async fn handle_tunnel_stream() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum TunnelRequest {
     Http(TunnelHttpRequest),
