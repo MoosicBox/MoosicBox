@@ -522,15 +522,15 @@ static_init = "1.0.4"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 swc_bundler = "32.0.0"
-swc_common = { version = "14.0.4", features = ["tty-emitter"] }
-swc_ecma_ast = "15.0.0"
+swc_common = { version = "15.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "16.0.0"
 swc_ecma_codegen = "17.0.2"
-swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
+swc_ecma_loader = { version = "15.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "33.0.0"
-swc_ecma_parser = "24.0.3"
+swc_ecma_parser = "25.0.0"
 swc_ecma_transforms_base = "27.0.0"
 swc_ecma_transforms_typescript = "30.0.1"
-swc_ecma_visit = "15.0.0"
+swc_ecma_visit = "16.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
 syn = "2.0.107"
 syntect = "5.3.0"
