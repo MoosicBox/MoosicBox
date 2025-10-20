@@ -154,6 +154,26 @@ async fn manage_server_identity(db: &ConfigDatabase) -> Result<(), Box<dyn std::
 }
 ```
 
+### API Integration (with api feature)
+
+```rust
+use actix_web::{App, HttpServer};
+use moosicbox_config::api;
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .service(api::bind_services(
+                actix_web::web::scope("/config")
+            ))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
+}
+```
+
 ## Programming Interface
 
 ### Core Functions
@@ -185,6 +205,13 @@ pub async fn get_profiles(db: &ConfigDatabase) -> Result<Vec<models::Profile>, D
 // Server identity
 pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, DatabaseError>;
 pub async fn get_or_init_server_identity(db: &ConfigDatabase) -> Result<String, GetOrInitServerIdentityError>;
+```
+
+### API Functions (with api feature)
+
+```rust
+// Service binding
+pub fn bind_services<T>(scope: Scope<T>) -> Scope<T>;
 ```
 
 ## Data Types
