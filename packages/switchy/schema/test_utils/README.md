@@ -10,6 +10,7 @@ This package provides testing utilities for validating database migrations:
 - `verify_migrations_with_state` - Migration testing with pre-seeded state
 - `verify_migrations_with_mutations` - Testing with data mutations between migration steps
 - `MigrationTestBuilder` - Builder pattern for complex migration scenarios with breakpoints (requires `sqlite` feature)
+- `assertions` module - Database schema and state assertion helpers (requires `sqlite` feature)
 
 ## Features
 
@@ -111,6 +112,31 @@ async fn test_data_migration() {
         .run(db)
         .await
         .unwrap();
+}
+```
+
+### Schema and State Assertions (requires `sqlite` feature)
+
+```rust
+use switchy_schema_test_utils::assertions::*;
+
+#[tokio::test]
+async fn test_migration_schema() {
+    let db = /* your database connection */;
+
+    // Verify table existence
+    assert_table_exists(db, "users").await.unwrap();
+    assert_table_not_exists(db, "old_table").await.unwrap();
+
+    // Verify columns
+    assert_column_exists(db, "users", "email", "TEXT").await.unwrap();
+
+    // Verify data state
+    assert_row_count(db, "users", 5).await.unwrap();
+    assert_row_count_min(db, "posts", 10).await.unwrap();
+
+    // Verify migrations applied
+    assert_migrations_applied(db, &["001_initial", "002_add_users"]).await.unwrap();
 }
 ```
 
