@@ -865,7 +865,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         meta name="viewport" content=(content);
                     }
                 }
-                body style="height:100%" {
+                body style="height:100%;overflow:auto;" {
                     (PreEscaped(content))
                 }
             }

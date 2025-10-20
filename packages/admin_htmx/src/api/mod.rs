@@ -129,7 +129,7 @@ pub async fn index_endpoint(
                         "#))
                     }
                 }
-                body style="height:100%" {
+                body style="height:100%;overflow:auto;" {
                     (main)
                 }
             }
