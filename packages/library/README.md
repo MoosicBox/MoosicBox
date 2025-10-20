@@ -74,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for album in albums_result.page.items() {
         println!("Album: {} by {}", album.title, album.artist);
-        println!("  Date: {:?}, Duration: {}s", album.date_released, album.duration);
+        println!("  Date: {:?}", album.date_released);
 
         // Get album details
         let album_id = Id::Number(album.id);
