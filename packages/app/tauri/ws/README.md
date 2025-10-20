@@ -20,9 +20,65 @@ Add this to your `Cargo.toml`:
 moosicbox_app_ws = { path = "../app/tauri/ws" }
 ```
 
-## Dependencies
+## Usage
 
-- **tokio-tungstenite**: WebSocket protocol implementation
-- **Tokio**: Async runtime
-- **futures**: Async stream and channel utilities
-- **bytes**: Efficient byte buffer handling
+### Creating a WebSocket Client
+
+```rust
+use moosicbox_app_ws::{WsClient, WsMessage};
+use tokio::sync::mpsc;
+
+let (client, handle) = WsClient::new("ws://localhost:8080".to_string());
+let (tx, mut rx) = mpsc::channel::<WsMessage>(100);
+
+// Start the WebSocket connection
+client.start(
+    None,                    // client_id
+    None,                    // signature_token
+    "default".to_string(),   // profile
+    || println!("Connected"),
+    tx,
+).await?;
+```
+
+### Sending Messages
+
+```rust
+use moosicbox_app_ws::WebsocketSender;
+
+// Send text message
+handle.send("Hello, server!").await?;
+
+// Send ping
+handle.ping().await?;
+```
+
+### Closing the Connection
+
+```rust
+handle.close();
+```
+
+## API
+
+### `WsClient`
+
+- `new(url: String) -> (Self, WsHandle)`: Creates a new WebSocket client and handle
+- `with_cancellation_token(token: CancellationToken) -> Self`: Sets a custom cancellation token
+- `start(...)`: Starts the WebSocket connection with automatic reconnection
+
+### `WsHandle`
+
+- `close()`: Closes the WebSocket connection
+- Implements `WebsocketSender` trait
+
+### `WebsocketSender` trait
+
+- `send(&self, data: &str) -> Result<(), WebsocketSendError>`: Sends a text message
+- `ping(&self) -> Result<(), WebsocketSendError>`: Sends a ping message
+
+### `WsMessage` enum
+
+- `TextMessage(String)`: Text message
+- `Message(Bytes)`: Binary message
+- `Ping`: Ping message
