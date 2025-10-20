@@ -217,7 +217,13 @@
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment"
               echo "Rust: $(rustc --version)"
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -254,7 +260,13 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -287,7 +299,13 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -325,7 +343,13 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -400,7 +424,13 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -453,7 +483,13 @@
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
@@ -611,7 +647,13 @@
               echo "Then in a separate terminal for Tauri:"
               echo "  nix develop .#tauri-solidjs"
               echo "Or create a combined shell for your specific use case."
-              exec fish
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
             '';
           };
 
