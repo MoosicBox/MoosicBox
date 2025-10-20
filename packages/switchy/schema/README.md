@@ -628,10 +628,10 @@ The package supports optional features for different capabilities:
 
 ```toml
 [dependencies]
-switchy_schema = { version = "0.1.0", features = ["embedded", "directory", "code", "cli"] }
+switchy_schema = { version = "0.1.0", features = ["embedded", "directory", "code"] }
 
-# Or use all features
-switchy_schema = { version = "0.1.0", features = ["all-discovery", "cli"] }
+# Or use all discovery methods
+switchy_schema = { version = "0.1.0", features = ["all-discovery"] }
 
 # Minimal (just core traits)
 switchy_schema = { version = "0.1.0", default-features = false }
@@ -643,7 +643,7 @@ Available features:
 - `directory` - Runtime directory-based migrations
 - `code` - Programmatic code-based migrations
 - `all-discovery` - All discovery methods
-- `cli` - Command-line interface
+- `auto-reverse` - Auto-reversible migrations support
 - `validation` - Migration validation utilities
 - `test-utils` - Testing utilities
 
