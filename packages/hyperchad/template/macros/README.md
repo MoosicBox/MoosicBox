@@ -139,8 +139,6 @@ div fx-click=(ActionEffect {
 }
 ```
 
-See also the `actions_dsl!` macro for building action sequences programmatically.
-
 ### Control Flow
 
 - **Conditionals**: `@if`, `@else`, `@if let`
