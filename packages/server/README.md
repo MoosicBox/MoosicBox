@@ -124,7 +124,6 @@ The server supports various feature flags for customization:
 ### Audio Outputs
 
 - `cpal` - Cross-platform audio library
-- `pulseaudio` - PulseAudio support
 - `jack` - JACK audio support
 - `asio` - ASIO audio support (Windows)
 
