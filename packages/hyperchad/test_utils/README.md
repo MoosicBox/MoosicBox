@@ -10,7 +10,7 @@ Test workflow builders and utilities for HyperChad application testing.
 - **Wait Conditions**: Element existence, URL patterns, and timing control
 - **Control Flow**: Loops, parallel execution, retry logic, try/catch patterns
 - **Data-Driven Testing**: Parameterized test scenarios with `ForEach` loops
-- **Reusable Fragments**: Pre-built test patterns for common scenarios
+- **Reusable Fragments**: Pre-built test patterns in `fragments` module (login, logout, navigation, form validation, accessibility tests)
 
 ## Usage
 
@@ -25,9 +25,6 @@ let plan = TestPlan::new()
     .click("#login-button")
     .wait_for_url("/dashboard")
     .wait_for_element("#welcome-message");
-
-// Execute the test plan with your test executor
-let result = executor.run_test_plan(plan).await?;
 ```
 
 ## Test Step Types
