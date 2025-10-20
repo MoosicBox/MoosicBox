@@ -2385,6 +2385,13 @@ pub enum Element {
     TD,
     #[cfg(feature = "canvas")]
     Canvas,
+    Textarea {
+        value: String,
+        placeholder: Option<String>,
+        name: Option<String>,
+        rows: Option<Number>,
+        cols: Option<Number>,
+    },
 }
 
 #[derive(Default)]
@@ -2545,6 +2552,18 @@ impl Container {
             } => {
                 attrs.add_opt("name", name.as_ref());
                 attrs.add_opt("autofocus", autofocus.as_ref());
+            }
+            Element::Textarea {
+                name,
+                placeholder,
+                rows,
+                cols,
+                ..
+            } => {
+                attrs.add_opt("name", name.as_ref());
+                attrs.add_opt("placeholder", placeholder.as_ref());
+                attrs.add_opt("rows", rows.as_ref());
+                attrs.add_opt("cols", cols.as_ref());
             }
             Element::Button { r#type } => {
                 attrs.add_opt("type", r#type.as_ref());
@@ -3116,6 +3135,13 @@ impl Container {
             Element::Input { input, .. } => {
                 input.display(f, self.attrs(with_debug_attrs))?;
             }
+            Element::Textarea { value, .. } => {
+                f.write_fmt(format_args!(
+                    "<textarea{attrs}>{value}</textarea>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs),
+                    value = html_escape::encode_text(value)
+                ))?;
+            }
             Element::Button { .. } => {
                 f.write_fmt(format_args!(
                     "<button{attrs}>",
@@ -3496,7 +3522,9 @@ impl Element {
             | Self::TBody
             | Self::TR
             | Self::TD => true,
-            Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } => false,
+            Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } | Self::Textarea { .. } => {
+                false
+            }
             #[cfg(feature = "canvas")]
             Self::Canvas => false,
         }
@@ -3530,6 +3558,7 @@ impl Element {
             Self::TD { .. } => "TD",
             #[cfg(feature = "canvas")]
             Self::Canvas { .. } => "Canvas",
+            Self::Textarea { .. } => "Textarea",
         }
     }
 }

@@ -203,6 +203,7 @@ pub fn element_style_to_html(
         | Element::Form
         | Element::Span
         | Element::Input { .. }
+        | Element::Textarea { .. }
         | Element::Button { .. }
         | Element::Anchor { .. }
         | Element::Heading { .. }
@@ -955,6 +956,53 @@ pub fn element_to_html(
 
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b"></")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
+        Element::Textarea {
+            name,
+            placeholder,
+            rows,
+            cols,
+            value,
+        } => {
+            const TAG_NAME: &[u8] = b"textarea";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(name) = name {
+                f.write_all(b" name=\"")?;
+                f.write_all(name.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(placeholder) = placeholder {
+                f.write_all(b" placeholder=\"")?;
+                f.write_all(placeholder.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(rows) = rows {
+                f.write_all(b" rows=\"")?;
+                write!(f, "{rows}")?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(cols) = cols {
+                f.write_all(b" cols=\"")?;
+                write!(f, "{cols}")?;
+                f.write_all(b"\"")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+            f.write_all(value.as_bytes())?;
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
             f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
             return Ok(());

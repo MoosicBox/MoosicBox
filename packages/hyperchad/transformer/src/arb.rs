@@ -131,9 +131,9 @@ impl Arbitrary for Input {
 impl Arbitrary for Element {
     fn arbitrary(g: &mut Gen) -> Self {
         #[cfg(feature = "canvas")]
-        let max = 23;
+        let max = 24;
         #[cfg(not(feature = "canvas"))]
-        let max = 22;
+        let max = 23;
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
             0 => Self::Div,
             1 => Self::Raw {
@@ -178,8 +178,15 @@ impl Arbitrary for Element {
             20 => Self::TBody,
             21 => Self::TR,
             22 => Self::TD,
+            23 => Self::Textarea {
+                value: XmlString::arbitrary(g).0,
+                placeholder: Option::arbitrary(g).map(|x: XmlString| x.0),
+                name: Option::arbitrary(g).map(|x: XmlString| x.0),
+                rows: Option::arbitrary(g),
+                cols: Option::arbitrary(g),
+            },
             #[cfg(feature = "canvas")]
-            23 => Self::Canvas,
+            24 => Self::Canvas,
             _ => unreachable!(),
         }
     }

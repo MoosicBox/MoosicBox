@@ -865,6 +865,7 @@ impl FltkRenderer {
             | Element::TBody
             | Element::TR
             | Element::TD
+            | Element::Textarea { .. }
             | Element::Button { .. }
             | Element::OrderedList
             | Element::UnorderedList

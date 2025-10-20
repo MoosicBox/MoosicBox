@@ -1591,6 +1591,45 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                         return None;
                     }
                 },
+                "textarea" => {
+                    // Extract text content from child Raw nodes (textarea value is text content, not an attribute)
+                    let raw_value = node
+                        .children()
+                        .map(|children| {
+                            children
+                                .top()
+                                .iter()
+                                .filter_map(|child| {
+                                    child.get(parser).and_then(|node| match node {
+                                        Node::Raw(x) => Some(x.as_utf8_str().to_string()),
+                                        _ => None,
+                                    })
+                                })
+                                .collect::<String>()
+                        })
+                        .unwrap_or_default();
+
+                    // Decode HTML entities in the textarea value
+                    let value = html_escape::decode_html_entities(&raw_value).to_string();
+
+                    container.element = crate::Element::Textarea {
+                        name: get_tag_attr_value_owned(tag, "name"),
+                        placeholder: get_tag_attr_value_owned(tag, "placeholder"),
+                        value,
+                        rows: get_tag_attr_value_decoded(tag, "rows")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                        cols: get_tag_attr_value_decoded(tag, "cols")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                    };
+                }
                 "main" => container.element = crate::Element::Main,
                 "header" => container.element = crate::Element::Header,
                 "footer" => container.element = crate::Element::Footer,
@@ -1738,6 +1777,11 @@ mod test {
             .overrides
             .sort_by(|a, b| format!("{:?}", a.condition).cmp(&format!("{:?}", b.condition)));
 
+        // Clear children for elements that don't allow them
+        if !container.element.allows_children() {
+            container.children.clear();
+        }
+
         for child in &mut container.children {
             clean_up_container(child);
         }
@@ -1821,5 +1865,81 @@ mod test {
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
         assert_eq!(child.font_weight, Some(FontWeight::Lighter));
+    }
+
+    #[test]
+    fn test_textarea_value_from_text_content() {
+        let html = r#"<textarea name="message">Hello World</textarea>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Textarea { value, name, .. } = &child.element {
+            assert_eq!(value, "Hello World");
+            assert_eq!(name.as_deref(), Some("message"));
+        } else {
+            panic!("Expected Textarea element");
+        }
+
+        let html = r#"<textarea placeholder="Enter text"></textarea>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Textarea {
+            value, placeholder, ..
+        } = &child.element
+        {
+            assert_eq!(value, "");
+            assert_eq!(placeholder.as_deref(), Some("Enter text"));
+        } else {
+            panic!("Expected Textarea element");
+        }
+
+        let html = r#"<textarea rows="10" cols="50">Line 1
+Line 2
+Line 3</textarea>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+
+        if let crate::Element::Textarea { value, .. } = &child.element {
+            assert_eq!(value, "Line 1\nLine 2\nLine 3");
+        } else {
+            panic!("Expected Textarea element");
+        }
+    }
+
+    #[test]
+    fn test_textarea_html_escaping() {
+        let textarea = Container {
+            element: crate::Element::Textarea {
+                value: "Test < > & \" value".to_string(),
+                placeholder: None,
+                name: None,
+                rows: None,
+                cols: None,
+            },
+            ..Default::default()
+        };
+
+        let html = textarea
+            .display_to_string(
+                false,
+                false,
+                #[cfg(feature = "format")]
+                false,
+                #[cfg(feature = "syntax-highlighting")]
+                false,
+            )
+            .unwrap();
+        assert!(html.contains("&lt;"));
+        assert!(html.contains("&gt;"));
+        assert!(html.contains("&amp;"));
+
+        let parsed: Container = html.as_str().try_into().unwrap();
+        let child = &parsed.children[0];
+        if let crate::Element::Textarea { value, .. } = &child.element {
+            assert_eq!(value, "Test < > & \" value");
+        } else {
+            panic!("Expected Textarea element, got: {:?}", child.element);
+        }
     }
 }

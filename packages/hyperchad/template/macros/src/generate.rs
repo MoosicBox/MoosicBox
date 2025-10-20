@@ -212,28 +212,48 @@ impl Generator {
         let (element_attrs, container_attrs) =
             Self::separate_element_and_container_attributes(&element_name, filtered_named_attrs);
 
-        // Generate the element type with element-specific attributes
-        let element_type =
-            Self::element_name_to_type_with_attributes(&element_name, element_attrs)?;
+        // Special handling for textarea: extract value from children before generating element
+        let element_name_str = element_name.name.to_string();
+        let (element_type, children) = if element_name_str == "textarea" {
+            // For textarea, children become the value field
+            let value_tokens = if let ElementBody::Block(ref block) = element.body {
+                Self::element_markups_to_string_tokens(block.markups.clone())
+            } else {
+                quote! { String::new() }
+            };
+
+            // Generate textarea element with value from children
+            let element_type =
+                Self::generate_textarea_element_with_value(element_attrs, &value_tokens);
+
+            // Textarea has no children
+            (element_type, quote! { children: Vec::new() })
+        } else {
+            // Generate the element type with element-specific attributes
+            let element_type =
+                Self::element_name_to_type_with_attributes(&element_name, element_attrs)?;
+
+            // Generate children
+            let children = if let ElementBody::Block(block) = element.body {
+                // Create a unique identifier for children to avoid borrowing conflicts
+                let children_ident = format_ident!("__children_{}", self.output_ident);
+                let child_generator = Self::new(children_ident.clone());
+                let mut child_build = child_generator.builder();
+                child_generator.markups(block.markups, &mut child_build)?;
+                let children_tokens = child_build.finish();
+                quote! { children: { let mut #children_ident = Vec::new(); #children_tokens #children_ident } }
+            } else {
+                quote! { children: Vec::new() }
+            };
+
+            (element_type, children)
+        };
 
         // Process container-level attributes (styling, layout, etc.)
         let processed_attrs = Self::process_attributes(container_attrs)?;
         for assignment in processed_attrs {
             attr_assignments.push(assignment);
         }
-
-        // Generate children
-        let children = if let ElementBody::Block(block) = element.body {
-            // Create a unique identifier for children to avoid borrowing conflicts
-            let children_ident = format_ident!("__children_{}", self.output_ident);
-            let child_generator = Self::new(children_ident.clone());
-            let mut child_build = child_generator.builder();
-            child_generator.markups(block.markups, &mut child_build)?;
-            let children_tokens = child_build.finish();
-            quote! { children: { let mut #children_ident = Vec::new(); #children_tokens #children_ident } }
-        } else {
-            quote! { children: Vec::new() }
-        };
 
         // Generate the complete container
         build.push_container(quote! {
@@ -280,6 +300,7 @@ impl Generator {
 
             // Determine if this attribute belongs to the element or container
             let is_element_attr = match element_name_str.as_str() {
+                "textarea" => matches!(name_str.as_str(), "placeholder" | "name" | "rows" | "cols"),
                 "input" => matches!(
                     name_str.as_str(),
                     "value"
@@ -320,6 +341,7 @@ impl Generator {
 
         Ok(match name_str.as_str() {
             "input" => Self::generate_input_element(element_attrs)?,
+            "textarea" => Self::generate_textarea_element(element_attrs),
             "button" => Self::generate_button_element(element_attrs),
             "anchor" => Self::generate_anchor_element(element_attrs),
             "image" => Self::generate_image_element(element_attrs),
@@ -463,6 +485,164 @@ impl Generator {
                 autofocus: #autofocus_field
             }
         })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn generate_textarea_element_with_value(
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+        value_tokens: &TokenStream,
+    ) -> TokenStream {
+        let mut placeholder = None;
+        let mut name = None;
+        let mut rows = None;
+        let mut cols = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "placeholder" => {
+                        let placeholder_tokens = Self::markup_to_string_tokens(attr_value);
+                        placeholder = Some(quote! { Some(#placeholder_tokens) });
+                    }
+                    "name" => {
+                        let name_tokens = Self::markup_to_string_tokens(attr_value);
+                        name = Some(quote! { Some(#name_tokens) });
+                    }
+                    "rows" => {
+                        let rows_tokens = Self::markup_to_number_tokens(attr_value);
+                        rows = Some(quote! { Some(#rows_tokens) });
+                    }
+                    "cols" => {
+                        let cols_tokens = Self::markup_to_number_tokens(attr_value);
+                        cols = Some(quote! { Some(#cols_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "placeholder" => {
+                            placeholder = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "name" => {
+                            name = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "rows" => {
+                            rows = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        "cols" => {
+                            cols = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {}
+            }
+        }
+
+        let placeholder_field = placeholder.unwrap_or_else(|| quote! { None });
+        let name_field = name.unwrap_or_else(|| quote! { None });
+        let rows_field = rows.unwrap_or_else(|| quote! { None });
+        let cols_field = cols.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Textarea {
+                value: #value_tokens,
+                placeholder: #placeholder_field,
+                name: #name_field,
+                rows: #rows_field,
+                cols: #cols_field,
+            }
+        }
+    }
+
+    fn generate_textarea_element(
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let mut placeholder = None;
+        let mut name = None;
+        let mut rows = None;
+        let mut cols = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "placeholder" => {
+                        let placeholder_tokens = Self::markup_to_string_tokens(attr_value);
+                        placeholder = Some(quote! { Some(#placeholder_tokens) });
+                    }
+                    "name" => {
+                        let name_tokens = Self::markup_to_string_tokens(attr_value);
+                        name = Some(quote! { Some(#name_tokens) });
+                    }
+                    "rows" => {
+                        let rows_tokens = Self::markup_to_number_tokens(attr_value);
+                        rows = Some(quote! { Some(#rows_tokens) });
+                    }
+                    "cols" => {
+                        let cols_tokens = Self::markup_to_number_tokens(attr_value);
+                        cols = Some(quote! { Some(#cols_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "placeholder" => {
+                            placeholder = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "name" => {
+                            name = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "rows" => {
+                            rows = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        "cols" => {
+                            cols = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {}
+            }
+        }
+
+        let placeholder_field = placeholder.unwrap_or_else(|| quote! { None });
+        let name_field = name.unwrap_or_else(|| quote! { None });
+        let rows_field = rows.unwrap_or_else(|| quote! { None });
+        let cols_field = cols.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Textarea {
+                value: String::new(),
+                placeholder: #placeholder_field,
+                name: #name_field,
+                rows: #rows_field,
+                cols: #cols_field,
+            }
+        }
     }
 
     fn generate_button_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
@@ -987,6 +1167,58 @@ impl Generator {
         }
     }
 
+    #[allow(dead_code)]
+    fn markups_to_string_tokens(markups: Markups<NoElement>) -> TokenStream {
+        if markups.markups.is_empty() {
+            quote! { String::new() }
+        } else if markups.markups.len() == 1 {
+            Self::markup_to_string_tokens(markups.markups.into_iter().next().unwrap())
+        } else {
+            let tokens: Vec<_> = markups
+                .markups
+                .into_iter()
+                .map(Self::markup_to_string_tokens)
+                .collect();
+            quote! { vec![#(#tokens),*].join("") }
+        }
+    }
+
+    fn element_markups_to_string_tokens(markups: Markups<Element>) -> TokenStream {
+        if markups.markups.is_empty() {
+            quote! { String::new() }
+        } else {
+            let tokens: Vec<_> = markups
+                .markups
+                .into_iter()
+                .filter_map(|markup| match markup {
+                    Markup::Lit(lit) => {
+                        if let syn::Lit::Str(lit_str) = &lit.lit {
+                            let value_str = lit_str.value();
+                            Some(quote! { #value_str.to_string() })
+                        } else {
+                            let lit = &lit.lit;
+                            Some(quote! { #lit.to_string() })
+                        }
+                    }
+                    Markup::NumericLit(numeric_lit) => {
+                        let value = &numeric_lit.value;
+                        Some(quote! { #value.to_string() })
+                    }
+                    Markup::Splice { expr, .. } => Some(quote! { (#expr).to_string() }),
+                    _ => None,
+                })
+                .collect();
+
+            if tokens.is_empty() {
+                quote! { String::new() }
+            } else if tokens.len() == 1 {
+                tokens.into_iter().next().unwrap()
+            } else {
+                quote! { vec![#(#tokens),*].join("") }
+            }
+        }
+    }
+
     fn markup_to_swap_target_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
@@ -1437,9 +1669,16 @@ impl Generator {
             "tr" => quote! { hyperchad_transformer::Element::TR },
             "td" => quote! { hyperchad_transformer::Element::TD },
             "canvas" => quote! { hyperchad_transformer::Element::Canvas },
+            "textarea" => quote! { hyperchad_transformer::Element::Textarea {
+                value: None,
+                placeholder: None,
+                name: None,
+                rows: None,
+                cols: None,
+            } },
             _ => {
                 let error_msg = format!(
-                    "Unknown element type '{name_str}'. Supported elements are: div, section, aside, main, header, footer, form, span, button, anchor, image, input, h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, th, tbody, tr, td, canvas",
+                    "Unknown element type '{name_str}'. Supported elements are: div, section, aside, main, header, footer, form, span, button, anchor, image, input, textarea, h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, th, tbody, tr, td, canvas",
                 );
                 quote! { compile_error!(#error_msg) }
             }
