@@ -48,6 +48,10 @@ cd packages/async/cargo
 cargo build --release
 ```
 
+## Cargo Features
+
+- **`fail-on-warnings`**: Enables strict compilation mode with warnings treated as errors
+
 ## Usage
 
 ### Command Line
