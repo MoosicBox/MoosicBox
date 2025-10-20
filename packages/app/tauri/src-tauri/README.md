@@ -11,7 +11,7 @@ The MoosicBox Tauri Application provides:
 - **Music Streaming**: Full MoosicBox music streaming functionality
 - **Player Integration**: Native media player controls and system integration
 - **File Management**: Local file access and management
-- **System Integration**: System notifications, tray integration, and OS-specific features
+- **System Notifications**: System notification support
 - **HTTP Proxy**: Built-in HTTP proxy for API communication
 - **WebSocket Support**: Real-time communication with MoosicBox servers
 
@@ -21,7 +21,7 @@ The MoosicBox Tauri Application provides:
 
 - **Cross-platform**: Runs on Windows, macOS, and Linux
 - **Native Performance**: Rust backend with web frontend
-- **System Integration**: Media keys, notifications, and system tray
+- **System Integration**: Media keys and notifications
 - **File Access**: Local file system access and management
 - **Window Management**: Multiple windows and advanced window controls
 
@@ -182,13 +182,17 @@ async fn get_current_playback() -> Result<Option<Playback>, String> {
 }
 
 // Handle media events from the player plugin
-async fn handle_media_event(event: MediaEvent) -> Result<(), String> {
-    match event {
-        MediaEvent::Play => println!("Playback started"),
-        MediaEvent::Pause => println!("Playback paused"),
-        MediaEvent::Stop => println!("Playback stopped"),
-        MediaEvent::Next => println!("Next track"),
-        MediaEvent::Previous => println!("Previous track"),
+async fn handle_media_event(event: app_tauri_plugin_player::MediaEvent) -> Result<(), String> {
+    if let Some(true) = event.play {
+        println!("Playback started");
+    } else if let Some(false) = event.play {
+        println!("Playback paused");
+    }
+    if let Some(true) = event.next_track {
+        println!("Next track");
+    }
+    if let Some(true) = event.prev_track {
+        println!("Previous track");
     }
     Ok(())
 }
@@ -253,15 +257,16 @@ async fn handle_ws_message(message: OutboundPayload) {
 use std::path::PathBuf;
 
 #[tauri::command]
-async fn get_data_dir() -> Result<PathBuf, String> {
+async fn get_data_dir(app: tauri::AppHandle) -> Result<PathBuf, String> {
     // Get application data directory
-    tauri::api::path::app_data_dir(&tauri::Config::default())
-        .ok_or_else(|| "Failed to get data directory".to_string())
+    app.path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn read_config_file() -> Result<String, String> {
-    let data_dir = get_data_dir().await?;
+async fn read_config_file(app: tauri::AppHandle) -> Result<String, String> {
+    let data_dir = get_data_dir(app).await?;
     let config_path = data_dir.join("config.json");
 
     std::fs::read_to_string(config_path)
@@ -269,8 +274,8 @@ async fn read_config_file() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn write_config_file(content: String) -> Result<(), String> {
-    let data_dir = get_data_dir().await?;
+async fn write_config_file(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let data_dir = get_data_dir(app).await?;
     let config_path = data_dir.join("config.json");
 
     std::fs::write(config_path, content)
@@ -311,56 +316,6 @@ async fn handle_http_request(request: HttpRequest) -> Result<HttpResponse, Strin
 }
 ```
 
-### System Integration
-
-```rust
-use tauri::{SystemTray, SystemTrayMenu, SystemTrayMenuItem, SystemTrayEvent};
-
-fn create_system_tray() -> SystemTray {
-    let menu = SystemTrayMenu::new()
-        .add_item(SystemTrayMenuItem::new("Show", "show"))
-        .add_item(SystemTrayMenuItem::new("Hide", "hide"))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(SystemTrayMenuItem::new("Play/Pause", "play_pause"))
-        .add_item(SystemTrayMenuItem::new("Next", "next"))
-        .add_item(SystemTrayMenuItem::new("Previous", "previous"))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(SystemTrayMenuItem::new("Quit", "quit"));
-
-    SystemTray::new().with_menu(menu)
-}
-
-fn handle_system_tray_event(app: &AppHandle, event: SystemTrayEvent) {
-    match event {
-        SystemTrayEvent::LeftClick { .. } => {
-            let window = app.get_window("main").unwrap();
-            window.show().unwrap();
-            window.set_focus().unwrap();
-        }
-        SystemTrayEvent::MenuItemClick { id, .. } => {
-            match id.as_str() {
-                "show" => {
-                    let window = app.get_window("main").unwrap();
-                    window.show().unwrap();
-                }
-                "hide" => {
-                    let window = app.get_window("main").unwrap();
-                    window.hide().unwrap();
-                }
-                "play_pause" => {
-                    // Toggle playback
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
-}
-```
-
 ### Configuration
 
 ```rust
@@ -390,8 +345,8 @@ impl Default for AppConfig {
 }
 
 #[tauri::command]
-async fn load_config() -> Result<AppConfig, String> {
-    let config_path = get_data_dir().await?.join("config.json");
+async fn load_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
+    let config_path = get_data_dir(app).await?.join("config.json");
 
     if config_path.exists() {
         let content = std::fs::read_to_string(config_path)
@@ -404,8 +359,8 @@ async fn load_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-async fn save_config(config: AppConfig) -> Result<(), String> {
-    let config_path = get_data_dir().await?.join("config.json");
+async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> {
+    let config_path = get_data_dir(app).await?.join("config.json");
     let content = serde_json::to_string_pretty(&config)
         .map_err(|e| e.to_string())?;
 
