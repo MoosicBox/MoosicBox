@@ -51,7 +51,7 @@ The server starts with multiple endpoints:
 
 - **API Endpoint**: `/example` - The actual API
 - **Documentation**: `/openapi/swagger-ui/` - Interactive Swagger UI
-- **Specification**: `/openapi/openapi.json` - Raw OpenAPI spec
+- **Specification**: `/openapi/swagger-ui/api-docs/openapi.json` - Raw OpenAPI spec
 - **Alternative UIs**: `/openapi/redoc/`, `/openapi/rapidoc/`, `/openapi/scalar/`
 
 ## Testing the API and Documentation
@@ -82,7 +82,7 @@ http://localhost:8080/openapi/scalar/    # Scalar - Modern, beautiful UI
 **JSON Format**
 
 ```bash
-curl http://localhost:8080/openapi/openapi.json
+curl http://localhost:8080/openapi/swagger-ui/api-docs/openapi.json
 ```
 
 **YAML Format** (if enabled)
@@ -193,7 +193,7 @@ The example uses the `path!` macro to define OpenAPI documentation for the `/exa
 This automatically creates:
 
 - `/openapi/swagger-ui/` - Swagger UI interface
-- `/openapi/openapi.json` - OpenAPI specification
+- `/openapi/swagger-ui/api-docs/openapi.json` - OpenAPI specification
 - `/openapi/redoc/` - ReDoc interface
 - `/openapi/rapidoc/` - RapiDoc interface
 - `/openapi/scalar/` - Scalar interface
@@ -347,7 +347,7 @@ moosicbox_web_server = { workspace = true, features = ["actix", "cors", "openapi
 **Solution**:
 
 - Verify the server is running and accessible at `http://localhost:8080`
-- Check that the OpenAPI spec is available at `http://localhost:8080/openapi/openapi.json`
+- Check that the OpenAPI spec is available at `http://localhost:8080/openapi/swagger-ui/api-docs/openapi.json`
 - Look for any error messages in the server console
 
 ### Missing Documentation
@@ -406,13 +406,13 @@ Once you have your OpenAPI specification running, you can generate client SDKs:
 ```bash
 # Generate TypeScript client
 openapi-generator-cli generate \
-  -i http://localhost:8080/openapi/openapi.json \
+  -i http://localhost:8080/openapi/swagger-ui/api-docs/openapi.json \
   -g typescript-axios \
   -o ./client-sdk
 
 # Generate Python client
 openapi-generator-cli generate \
-  -i http://localhost:8080/openapi/openapi.json \
+  -i http://localhost:8080/openapi/swagger-ui/api-docs/openapi.json \
   -g python \
   -o ./python-client
 ```
