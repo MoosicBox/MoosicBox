@@ -112,10 +112,10 @@ impl LambdaResponseProcessor<String> for MyLambdaProcessor {
 
     async fn to_body(
         &self,
-        content: hyperchad_renderer::Content,
+        _content: hyperchad_renderer::Content,
         _data: String,
     ) -> Result<Content, lambda_runtime::Error> {
-        Ok(Content::Html(content.to_string()))
+        unimplemented!("to_body is not used by the Lambda runtime")
     }
 }
 
@@ -274,10 +274,10 @@ mod api_example {
 
         async fn to_body(
             &self,
-            content: hyperchad_renderer::Content,
+            _content: hyperchad_renderer::Content,
             _data: (String, String, Option<String>),
         ) -> Result<Content, lambda_runtime::Error> {
-            Ok(Content::Html(content.to_string()))
+            unimplemented!("to_body is not used by the Lambda runtime")
         }
     }
 
@@ -366,10 +366,10 @@ mod asset_example {
 
         async fn to_body(
             &self,
-            content: hyperchad_renderer::Content,
+            _content: hyperchad_renderer::Content,
             _data: String,
         ) -> Result<Content, lambda_runtime::Error> {
-            Ok(Content::Html(content.to_string()))
+            unimplemented!("to_body is not used by the Lambda runtime")
         }
     }
 
@@ -487,10 +487,10 @@ impl LambdaResponseProcessor<String> for ConfigurableProcessor {
 
     async fn to_body(
         &self,
-        content: hyperchad_renderer::Content,
+        _content: hyperchad_renderer::Content,
         _data: String,
     ) -> Result<Content, lambda_runtime::Error> {
-        Ok(Content::Html(content.to_string()))
+        unimplemented!("to_body is not used by the Lambda runtime")
     }
 }
 ```
