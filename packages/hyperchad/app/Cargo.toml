@@ -27,7 +27,9 @@ hyperchad_router = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 switchy = { workspace = true, features = [
+    "async-net",
     "async-rt-multi-thread",
+    "async-time",
     "async-tokio",
     "http-models",
 ] }
