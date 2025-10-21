@@ -858,6 +858,12 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                             cursor: pointer;
                             outline: inherit;
                         }}
+                        table.remove-table-styles {{
+                            border-collapse: collapse;
+                        }}
+                        table.remove-table-styles td {{
+                            padding: 0;
+                        }}
                     "))}
                     (script)
                     (PreEscaped(responsive_css))

@@ -760,12 +760,22 @@ pub fn element_classes_to_html(
 ) -> Result<(), std::io::Error> {
     let mut printed_start = false;
 
-    if matches!(container.element, Element::Button { .. }) {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" class=\"")?;
+    match container.element {
+        Element::Button { .. } => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" class=\"")?;
+            }
+            f.write_all(b"remove-button-styles")?;
         }
-        f.write_all(b"remove-button-styles")?;
+        Element::Table => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" class=\"")?;
+            }
+            f.write_all(b"remove-table-styles")?;
+        }
+        _ => {}
     }
 
     if !container.classes.is_empty() {
