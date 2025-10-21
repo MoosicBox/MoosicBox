@@ -8,8 +8,8 @@ use hyperchad_transformer::{
     Calculation, Element, HeaderSize, Input, Number,
     models::{
         AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-        LayoutOverflow, LinkTarget, Position, TextAlign, TextDecorationLine, TextDecorationStyle,
-        UserSelect, Visibility, WhiteSpace,
+        LayoutOverflow, LinkTarget, OverflowWrap, Position, TextAlign, TextDecorationLine,
+        TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
     },
 };
 
@@ -727,6 +727,17 @@ pub fn element_style_to_html(
                 UserSelect::None => b"none",
                 UserSelect::Text => b"text",
                 UserSelect::All => b"all",
+            }
+        );
+    }
+
+    if let Some(overflow_wrap) = &container.overflow_wrap {
+        write_css_attr!(
+            b"overflow-wrap",
+            match overflow_wrap {
+                OverflowWrap::Normal => b"normal",
+                OverflowWrap::BreakWord => b"break-word",
+                OverflowWrap::Anywhere => b"anywhere",
             }
         );
     }

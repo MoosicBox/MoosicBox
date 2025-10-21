@@ -3,8 +3,8 @@ use quickcheck::{Arbitrary, Gen};
 
 use crate::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-    LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
-    TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
+    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapTarget, TextAlign,
+    TextDecorationLine, TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
 };
 
 impl Arbitrary for LayoutDirection {
@@ -63,6 +63,13 @@ impl Arbitrary for WhiteSpace {
 impl Arbitrary for UserSelect {
     fn arbitrary(g: &mut Gen) -> Self {
         *g.choose(&[Self::Auto, Self::None, Self::Text, Self::All])
+            .unwrap()
+    }
+}
+
+impl Arbitrary for OverflowWrap {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[Self::Normal, Self::BreakWord, Self::Anywhere])
             .unwrap()
     }
 }

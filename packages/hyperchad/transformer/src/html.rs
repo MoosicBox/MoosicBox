@@ -4,8 +4,8 @@ use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-    LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
-    TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
+    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapTarget, TextAlign,
+    TextDecorationLine, TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -368,6 +368,17 @@ fn parse_user_select(value: &str) -> Result<UserSelect, ParseAttrError> {
         "none" => UserSelect::None,
         "text" => UserSelect::Text,
         "all" => UserSelect::All,
+        _ => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_overflow_wrap(value: &str) -> Result<OverflowWrap, ParseAttrError> {
+    Ok(match value {
+        "normal" => OverflowWrap::Normal,
+        "break-word" => OverflowWrap::BreakWord,
+        "anywhere" => OverflowWrap::Anywhere,
         _ => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
@@ -1524,6 +1535,13 @@ fn parse_element(
             &mut overrides,
             parse_user_select,
             iter_once!(OverrideItem::UserSelect),
+        )?,
+        overflow_wrap: pmrv(
+            tag,
+            once("sx-overflow-wrap"),
+            &mut overrides,
+            parse_overflow_wrap,
+            iter_once!(OverrideItem::OverflowWrap),
         )?,
         position: pmrv(
             tag,

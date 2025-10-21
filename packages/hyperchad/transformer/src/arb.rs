@@ -276,6 +276,7 @@ fn override_item_of_type(g: &mut Gen, value: OverrideItemType) -> OverrideItem {
         OverrideItemType::TranslateY => OverrideItem::TranslateY(Arbitrary::arbitrary(g)),
         OverrideItemType::Cursor => OverrideItem::Cursor(Arbitrary::arbitrary(g)),
         OverrideItemType::UserSelect => OverrideItem::UserSelect(Arbitrary::arbitrary(g)),
+        OverrideItemType::OverflowWrap => OverrideItem::OverflowWrap(Arbitrary::arbitrary(g)),
         OverrideItemType::Position => OverrideItem::Position(Arbitrary::arbitrary(g)),
         OverrideItemType::Background => OverrideItem::Background(Arbitrary::arbitrary(g)),
         OverrideItemType::BorderTop => OverrideItem::BorderTop(Arbitrary::arbitrary(g)),
@@ -650,6 +651,13 @@ impl Arbitrary for Container {
             }),
             user_select: opt_default_value_or_arbitrary(g, &overrides, |x| {
                 if let OverrideItem::UserSelect(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            }),
+            overflow_wrap: opt_default_value_or_arbitrary(g, &overrides, |x| {
+                if let OverrideItem::OverflowWrap(x) = x {
                     Some(x)
                 } else {
                     None

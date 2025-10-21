@@ -535,6 +535,26 @@ impl std::fmt::Display for UserSelect {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum OverflowWrap {
+    #[default]
+    Normal,
+    BreakWord,
+    Anywhere,
+}
+
+impl std::fmt::Display for OverflowWrap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => f.write_str("normal"),
+            Self::BreakWord => f.write_str("break-word"),
+            Self::Anywhere => f.write_str("anywhere"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,5 +603,17 @@ mod tests {
     #[test]
     fn test_user_select_default() {
         assert_eq!(UserSelect::default(), UserSelect::Auto);
+    }
+
+    #[test]
+    fn test_overflow_wrap_display() {
+        assert_eq!(OverflowWrap::Normal.to_string(), "normal");
+        assert_eq!(OverflowWrap::BreakWord.to_string(), "break-word");
+        assert_eq!(OverflowWrap::Anywhere.to_string(), "anywhere");
+    }
+
+    #[test]
+    fn test_overflow_wrap_default() {
+        assert_eq!(OverflowWrap::default(), OverflowWrap::Normal);
     }
 }
