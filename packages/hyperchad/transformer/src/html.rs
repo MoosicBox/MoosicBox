@@ -1746,7 +1746,22 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "li" => container.element = crate::Element::ListItem,
                 "table" => container.element = crate::Element::Table,
                 "thead" => container.element = crate::Element::THead,
-                "th" => container.element = crate::Element::TH,
+                "th" => {
+                    container.element = crate::Element::TH {
+                        rows: get_tag_attr_value_decoded(tag, "rows")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                        columns: get_tag_attr_value_decoded(tag, "columns")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                    };
+                }
                 "tbody" => container.element = crate::Element::TBody,
                 "tr" => {
                     container.element = crate::Element::TR;
@@ -1754,7 +1769,22 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                         container.direction = LayoutDirection::Row;
                     }
                 }
-                "td" => container.element = crate::Element::TD,
+                "td" => {
+                    container.element = crate::Element::TD {
+                        rows: get_tag_attr_value_decoded(tag, "rows")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                        columns: get_tag_attr_value_decoded(tag, "columns")
+                            .as_deref()
+                            .map(parse_number)
+                            .transpose()
+                            .ok()
+                            .flatten(),
+                    };
+                }
                 #[cfg(feature = "canvas")]
                 "canvas" => container.element = crate::Element::Canvas,
                 _ => {

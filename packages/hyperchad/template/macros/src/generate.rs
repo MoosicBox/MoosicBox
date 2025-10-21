@@ -301,6 +301,7 @@ impl Generator {
             // Determine if this attribute belongs to the element or container
             let is_element_attr = match element_name_str.as_str() {
                 "textarea" => matches!(name_str.as_str(), "placeholder" | "name" | "rows" | "cols"),
+                "td" | "th" => matches!(name_str.as_str(), "rows" | "columns"),
                 "input" => matches!(
                     name_str.as_str(),
                     "value"
@@ -345,6 +346,8 @@ impl Generator {
             "button" => Self::generate_button_element(element_attrs),
             "anchor" => Self::generate_anchor_element(element_attrs),
             "image" => Self::generate_image_element(element_attrs),
+            "td" => Self::generate_td_element(element_attrs),
+            "th" => Self::generate_th_element(element_attrs),
             _ => Self::element_name_to_type(name), // Fallback to simple element generation
         })
     }
@@ -641,6 +644,108 @@ impl Generator {
                 name: #name_field,
                 rows: #rows_field,
                 cols: #cols_field,
+            }
+        }
+    }
+
+    fn generate_td_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut rows = None;
+        let mut columns = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "rows" => {
+                        let rows_tokens = Self::markup_to_number_tokens(attr_value);
+                        rows = Some(quote! { Some(#rows_tokens) });
+                    }
+                    "columns" => {
+                        let columns_tokens = Self::markup_to_number_tokens(attr_value);
+                        columns = Some(quote! { Some(#columns_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "rows" => {
+                            rows = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        "columns" => {
+                            columns = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {}
+            }
+        }
+
+        let rows_field = rows.unwrap_or_else(|| quote! { None });
+        let columns_field = columns.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::TD {
+                rows: #rows_field,
+                columns: #columns_field,
+            }
+        }
+    }
+
+    fn generate_th_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut rows = None;
+        let mut columns = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "rows" => {
+                        let rows_tokens = Self::markup_to_number_tokens(attr_value);
+                        rows = Some(quote! { Some(#rows_tokens) });
+                    }
+                    "columns" => {
+                        let columns_tokens = Self::markup_to_number_tokens(attr_value);
+                        columns = Some(quote! { Some(#columns_tokens) });
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "rows" => {
+                            rows = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        "columns" => {
+                            columns = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.into()) } else { None } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {}
+            }
+        }
+
+        let rows_field = rows.unwrap_or_else(|| quote! { None });
+        let columns_field = columns.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::TH {
+                rows: #rows_field,
+                columns: #columns_field,
             }
         }
     }
@@ -1664,10 +1769,16 @@ impl Generator {
             "li" => quote! { hyperchad_transformer::Element::ListItem },
             "table" => quote! { hyperchad_transformer::Element::Table },
             "thead" => quote! { hyperchad_transformer::Element::THead },
-            "th" => quote! { hyperchad_transformer::Element::TH },
+            "th" => quote! { hyperchad_transformer::Element::TH {
+                rows: None,
+                columns: None,
+            } },
             "tbody" => quote! { hyperchad_transformer::Element::TBody },
             "tr" => quote! { hyperchad_transformer::Element::TR },
-            "td" => quote! { hyperchad_transformer::Element::TD },
+            "td" => quote! { hyperchad_transformer::Element::TD {
+                rows: None,
+                columns: None,
+            } },
             "canvas" => quote! { hyperchad_transformer::Element::Canvas },
             "textarea" => quote! { hyperchad_transformer::Element::Textarea {
                 value: None,

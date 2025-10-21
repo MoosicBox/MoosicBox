@@ -212,10 +212,10 @@ pub fn element_style_to_html(
         | Element::ListItem
         | Element::Table
         | Element::THead
-        | Element::TH
+        | Element::TH { .. }
         | Element::TBody
         | Element::TR
-        | Element::TD
+        | Element::TD { .. }
         | Element::Canvas => {}
     }
 
@@ -1055,6 +1055,68 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
+        Element::TH { rows, columns } => {
+            const TAG_NAME: &[u8] = b"th";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(rows) = rows {
+                f.write_all(b" rowspan=\"")?;
+                write!(f, "{rows}")?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(columns) = columns {
+                f.write_all(b" colspan=\"")?;
+                write!(f, "{columns}")?;
+                f.write_all(b"\"")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
+        Element::TD { rows, columns } => {
+            const TAG_NAME: &[u8] = b"td";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(rows) = rows {
+                f.write_all(b" rowspan=\"")?;
+                write!(f, "{rows}")?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(columns) = columns {
+                f.write_all(b" colspan=\"")?;
+                write!(f, "{columns}")?;
+                f.write_all(b"\"")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
         _ => {}
     }
 
@@ -1072,10 +1134,8 @@ pub fn element_to_html(
         Element::ListItem => Some("li"),
         Element::Table => Some("table"),
         Element::THead => Some("thead"),
-        Element::TH => Some("th"),
         Element::TBody => Some("tbody"),
         Element::TR => Some("tr"),
-        Element::TD => Some("td"),
         Element::Canvas => Some("canvas"),
         _ => None,
     };

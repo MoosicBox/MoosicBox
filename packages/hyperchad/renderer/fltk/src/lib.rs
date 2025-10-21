@@ -861,10 +861,10 @@ impl FltkRenderer {
             | Element::Span
             | Element::Table
             | Element::THead
-            | Element::TH
+            | Element::TH { .. }
             | Element::TBody
             | Element::TR
-            | Element::TD
+            | Element::TD { .. }
             | Element::Textarea { .. }
             | Element::Button { .. }
             | Element::OrderedList

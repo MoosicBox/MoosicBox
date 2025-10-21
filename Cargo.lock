@@ -6018,6 +6018,7 @@ version = "0.1.4"
 dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
+ "hyperchad_renderer_html",
  "hyperchad_template",
  "hyperchad_template_actions_dsl",
  "hyperchad_template_macros",

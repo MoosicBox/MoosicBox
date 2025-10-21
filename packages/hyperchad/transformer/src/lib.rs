@@ -2409,10 +2409,16 @@ pub enum Element {
     ListItem,
     Table,
     THead,
-    TH,
+    TH {
+        rows: Option<Number>,
+        columns: Option<Number>,
+    },
     TBody,
     TR,
-    TD,
+    TD {
+        rows: Option<Number>,
+        columns: Option<Number>,
+    },
     #[cfg(feature = "canvas")]
     Canvas,
     Textarea {
@@ -2595,6 +2601,14 @@ impl Container {
                 attrs.add_opt("rows", rows.as_ref());
                 attrs.add_opt("cols", cols.as_ref());
             }
+            Element::TH { rows, columns } => {
+                attrs.add_opt("rows", rows.as_ref());
+                attrs.add_opt("columns", columns.as_ref());
+            }
+            Element::TD { rows, columns } => {
+                attrs.add_opt("rows", rows.as_ref());
+                attrs.add_opt("columns", columns.as_ref());
+            }
             Element::Button { r#type } => {
                 attrs.add_opt("type", r#type.as_ref());
             }
@@ -2613,10 +2627,8 @@ impl Container {
             | Element::ListItem
             | Element::Table
             | Element::THead
-            | Element::TH
             | Element::TBody
-            | Element::TR
-            | Element::TD => {}
+            | Element::TR => {}
             #[cfg(feature = "canvas")]
             Element::Canvas => {}
         }
@@ -3250,7 +3262,7 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</thead>"))?;
             }
-            Element::TH => {
+            Element::TH { .. } => {
                 f.write_fmt(format_args!(
                     "<th{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
@@ -3274,7 +3286,7 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</tr>"))?;
             }
-            Element::TD => {
+            Element::TD { .. } => {
                 f.write_fmt(format_args!(
                     "<td{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
@@ -3552,10 +3564,10 @@ impl Element {
             | Self::ListItem
             | Self::Table
             | Self::THead
-            | Self::TH
+            | Self::TH { .. }
             | Self::TBody
             | Self::TR
-            | Self::TD => true,
+            | Self::TD { .. } => true,
             Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } | Self::Textarea { .. } => {
                 false
             }

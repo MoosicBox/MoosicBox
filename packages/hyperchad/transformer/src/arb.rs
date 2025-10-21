@@ -174,10 +174,16 @@ impl Arbitrary for Element {
             16 => Self::ListItem,
             17 => Self::Table,
             18 => Self::THead,
-            19 => Self::TH,
+            19 => Self::TH {
+                rows: Option::arbitrary(g),
+                columns: Option::arbitrary(g),
+            },
             20 => Self::TBody,
             21 => Self::TR,
-            22 => Self::TD,
+            22 => Self::TD {
+                rows: Option::arbitrary(g),
+                columns: Option::arbitrary(g),
+            },
             23 => Self::Textarea {
                 value: XmlString::arbitrary(g).0,
                 placeholder: Option::arbitrary(g).map(|x: XmlString| x.0),

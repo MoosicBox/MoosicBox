@@ -2066,7 +2066,10 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         element: Element::Div,
                                         width: Some(Number::Integer(40)),
@@ -2076,7 +2079,10 @@ mod test {
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         element: Element::Div,
                                         width: Some(Number::Integer(30)),
@@ -2093,7 +2099,10 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         element: Element::Div,
                                         width: Some(Number::Integer(10)),
@@ -2103,7 +2112,10 @@ mod test {
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         element: Element::Div,
                                         width: Some(Number::Integer(20)),
@@ -2214,7 +2226,10 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(40)),
                                         height: Some(Number::Integer(10)),
@@ -2223,7 +2238,10 @@ mod test {
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(30)),
                                         height: Some(Number::Integer(20)),
@@ -2239,7 +2257,10 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(10)),
                                         height: Some(Number::Integer(40)),
@@ -2248,7 +2269,10 @@ mod test {
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(20)),
                                         height: Some(Number::Integer(30)),
@@ -2358,7 +2382,10 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(40)),
                                         height: Some(Number::Integer(10)),
@@ -2367,7 +2394,10 @@ mod test {
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
@@ -2379,12 +2409,18 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container {
                                         width: Some(Number::Integer(20)),
                                         height: Some(Number::Integer(30)),
@@ -2481,12 +2517,18 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
@@ -2498,12 +2540,18 @@ mod test {
                             direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
                                 Container {
-                                    element: Element::TD,
+                                    element: Element::TD {
+                                        rows: None,
+                                        columns: None,
+                                    },
                                     children: vec![Container::default()],
                                     ..Container::default()
                                 },
@@ -2697,7 +2745,10 @@ mod test {
                                 direction: LayoutDirection::Row,
                                 children: vec![
                                     Container {
-                                        element: Element::TD,
+                                        element: Element::TD {
+                                            rows: None,
+                                            columns: None,
+                                        },
                                         children: vec![Container {
                                             element: Element::Raw {
                                                 value: "test".to_string(),
@@ -2707,7 +2758,10 @@ mod test {
                                         ..Container::default()
                                     },
                                     Container {
-                                        element: Element::TD,
+                                        element: Element::TD {
+                                            rows: None,
+                                            columns: None,
+                                        },
                                         children: vec![Container {
                                             element: Element::Raw {
                                                 value: "test".to_string(),
@@ -2724,7 +2778,10 @@ mod test {
                                 direction: LayoutDirection::Row,
                                 children: vec![
                                     Container {
-                                        element: Element::TD,
+                                        element: Element::TD {
+                                            rows: None,
+                                            columns: None,
+                                        },
                                         children: vec![Container {
                                             element: Element::Raw {
                                                 value: "test".to_string(),
@@ -2734,7 +2791,10 @@ mod test {
                                         ..Container::default()
                                     },
                                     Container {
-                                        element: Element::TD,
+                                        element: Element::TD {
+                                            rows: None,
+                                            columns: None,
+                                        },
                                         children: vec![Container {
                                             element: Element::Raw {
                                                 value: "test".to_string(),
