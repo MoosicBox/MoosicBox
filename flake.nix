@@ -218,6 +218,9 @@
               echo "🎵 MoosicBox ${name} Environment"
               echo "Rust: $(rustc --version)"
 
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
+
               # Only exec fish if we're in an interactive shell (not running a command)
               if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
                 case "$-" in
@@ -248,6 +251,9 @@
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (GTK Backend)"
               echo "Rust: $(rustc --version)"
+
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
 
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
@@ -291,6 +297,9 @@
               echo "🎵 MoosicBox ${name} Environment (FLTK Backend)"
               echo "Rust: $(rustc --version)"
 
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
+
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath fltkPackages}"
               ''}
@@ -333,6 +342,9 @@
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (Egui/WGPU Backend)"
               echo "Rust: $(rustc --version)"
+
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
 
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath eguiPackages}"
@@ -413,6 +425,9 @@
               echo "  Android: .#android (compose with Tauri shells)"
               echo "  Full: .#tauri-full (all Tauri variants)"
 
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
+
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
                   pkgs.lib.makeLibraryPath (gtkPackages ++ fltkPackages ++ eguiPackages ++ displayServerPackages)
@@ -471,6 +486,9 @@
               echo ""
               echo "Run coverage with: cargo llvm-cov"
               echo "Generate HTML report: cargo llvm-cov --html"
+
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
 
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
@@ -626,6 +644,9 @@
             shellHook = ''
               echo "📱 Android SDK Environment"
               echo "Java: $(java --version | head -1)"
+
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
 
               export ANDROID_HOME="${androidPackages.androidsdk}/libexec/android-sdk"
               export ANDROID_SDK_ROOT="$ANDROID_HOME"
