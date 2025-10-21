@@ -474,6 +474,16 @@ pub const fn visible() -> Value {
     Value::Visibility(Visibility::Visible)
 }
 
+#[must_use]
+pub const fn displayed() -> Value {
+    Value::Display(true)
+}
+
+#[must_use]
+pub const fn not_displayed() -> Value {
+    Value::Display(false)
+}
+
 pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
     Condition::Eq(a.into(), b.into())
 }
@@ -524,6 +534,27 @@ pub const fn get_display_id(id: usize) -> CalcValue {
 pub const fn get_display_self() -> CalcValue {
     CalcValue::Display {
         target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub fn get_display_class(class_name: impl Into<Target>) -> CalcValue {
+    CalcValue::Display {
+        target: ElementTarget::Class(class_name.into()),
+    }
+}
+
+#[must_use]
+pub fn get_display_child_class(class_name: impl Into<Target>) -> CalcValue {
+    CalcValue::Display {
+        target: ElementTarget::ChildClass(class_name.into()),
+    }
+}
+
+#[must_use]
+pub const fn get_display_last_child() -> CalcValue {
+    CalcValue::Display {
+        target: ElementTarget::LastChild,
     }
 }
 

@@ -112,6 +112,33 @@ impl ElementVariable {
         crate::logic::get_visibility_str_id(Target::reference(self.name))
     }
 
+    #[must_use]
+    pub fn display(self) -> ActionType {
+        ActionType::display_str_id(Target::reference(self.name))
+    }
+
+    #[must_use]
+    pub fn no_display(self) -> ActionType {
+        ActionType::no_display_str_id(Target::reference(self.name))
+    }
+
+    #[must_use]
+    pub fn set_display(self, display: bool) -> ActionType {
+        ActionType::set_display_str_id(display, Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display(self) -> ActionType {
+        ActionType::toggle_display_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn get_display(self) -> crate::logic::CalcValue {
+        crate::logic::get_display_str_id(Target::reference(self.name))
+    }
+
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_width_px(self) -> crate::logic::CalcValue {

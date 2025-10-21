@@ -743,6 +743,189 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn set_display_child_class(display: bool, class: impl Into<Target>) -> Self {
+        Self::Style {
+            target: ElementTarget::ChildClass(class.into()),
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[must_use]
+    pub fn no_display_child_class(class: impl Into<Target>) -> Self {
+        Self::set_display_child_class(false, class)
+    }
+
+    #[must_use]
+    pub fn display_child_class(class: impl Into<Target>) -> Self {
+        Self::set_display_child_class(true, class)
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_str_id(target: impl Into<Target>) -> Self {
+        let target = target.into();
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::get_display_str_id(&target).into(),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::str_id(&target),
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                ..Default::default()
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::str_id(&target),
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                ..Default::default()
+            }],
+        })
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_str_class(target: impl Into<Target>) -> Self {
+        let target = target.into();
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::get_display_class(&target).into(),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::class(&target),
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                ..Default::default()
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::class(&target),
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                ..Default::default()
+            }],
+        })
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_child_class(target: impl Into<Target>) -> Self {
+        let target = target.into();
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::get_display_child_class(&target).into(),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::child_class(&target),
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                ..Default::default()
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::child_class(&target),
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                ..Default::default()
+            }],
+        })
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_id(target: usize) -> Self {
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::Value::Calc(crate::logic::get_display_id(target)),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::Id(target),
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::Id(target),
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        })
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_self() -> Self {
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::Value::Calc(crate::logic::get_display_self()),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::SelfTarget,
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::SelfTarget,
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        })
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_display_last_child() -> Self {
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::Value::Calc(crate::logic::get_display_last_child()),
+                crate::logic::Value::Display(true),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::LastChild,
+                    action: crate::StyleAction::SetDisplay(false),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::LastChild,
+                    action: crate::StyleAction::SetDisplay(true),
+                },
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            }],
+        })
+    }
+
+    #[must_use]
     pub fn set_background_str_id(background: impl Into<String>, target: impl Into<Target>) -> Self {
         Self::Style {
             target: ElementTarget::StrId(target.into()),

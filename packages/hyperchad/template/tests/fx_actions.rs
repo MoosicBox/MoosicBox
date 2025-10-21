@@ -2087,3 +2087,167 @@ fn test_selector_parsing_unit() {
         ParsedSelector::Id("plain-id".to_string())
     );
 }
+
+#[test]
+fn test_display_in_template() {
+    let containers = container! {
+        div {
+            button fx-click=fx { display("panel") } { "Show" }
+            button fx-click=fx { no_display("modal") } { "Hide" }
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].children.len(), 2);
+
+    match &containers[0].children[0].actions[0].effect.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::str_id("panel"));
+            assert_eq!(*action, StyleAction::SetDisplay(true));
+        }
+        other => panic!("Expected SetDisplay(true), got: {other:?}"),
+    }
+
+    match &containers[0].children[1].actions[0].effect.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::str_id("modal"));
+            assert_eq!(*action, StyleAction::SetDisplay(false));
+        }
+        other => panic!("Expected SetDisplay(false), got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_toggle_display_in_template() {
+    let containers = container! {
+        button fx-click=fx { toggle_display("modal") } { "Toggle" }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+
+    match &containers[0].actions[0].effect.action {
+        ActionType::Logic(logic) => {
+            assert!(
+                !logic.actions.is_empty(),
+                "toggle_display should have if actions"
+            );
+            assert!(
+                !logic.else_actions.is_empty(),
+                "toggle_display should have else actions"
+            );
+
+            match &logic.actions[0].action {
+                ActionType::Style {
+                    action: StyleAction::SetDisplay(false),
+                    ..
+                } => {}
+                other => panic!("Expected SetDisplay(false) in if branch, got: {other:?}"),
+            }
+
+            match &logic.else_actions[0].action {
+                ActionType::Style {
+                    action: StyleAction::SetDisplay(true),
+                    ..
+                } => {}
+                other => panic!("Expected SetDisplay(true) in else branch, got: {other:?}"),
+            }
+        }
+        other => panic!("toggle_display should generate Logic, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_element_api_display_methods() {
+    let containers = container! {
+        div {
+            div fx-click=fx {
+                element("#panel").display();
+            } { "Show Panel" }
+
+            div fx-click=fx {
+                element(".modal").no_display();
+            } { "Hide Modal" }
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].children.len(), 2);
+
+    match &containers[0].children[0].actions[0].effect.action {
+        ActionType::Style { target, action } => {
+            match target {
+                ElementTarget::StrId(id) => assert_eq!(id, &Target::literal("panel")),
+                _ => panic!("Expected StrId target"),
+            }
+            assert_eq!(*action, StyleAction::SetDisplay(true));
+        }
+        other => panic!("Expected display action, got: {other:?}"),
+    }
+
+    match &containers[0].children[1].actions[0].effect.action {
+        ActionType::Style { target, action } => {
+            match target {
+                ElementTarget::Class(class) => assert_eq!(class, &Target::literal("modal")),
+                _ => panic!("Expected Class target"),
+            }
+            assert_eq!(*action, StyleAction::SetDisplay(false));
+        }
+        other => panic!("Expected no_display action, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_display_in_conditionals() {
+    let action = actions_dsl! {
+        if get_display("sidebar") == displayed() {
+            no_display("sidebar")
+        } else {
+            display("sidebar")
+        }
+    };
+
+    match &action.action {
+        ActionType::Logic(logic) => {
+            assert_eq!(logic.actions.len(), 1);
+            assert_eq!(logic.else_actions.len(), 1);
+
+            match &logic.actions[0].action {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::str_id("sidebar"));
+                    assert_eq!(*action, StyleAction::SetDisplay(false));
+                }
+                other => panic!("Expected no_display in if branch, got: {other:?}"),
+            }
+
+            match &logic.else_actions[0].action {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::str_id("sidebar"));
+                    assert_eq!(*action, StyleAction::SetDisplay(true));
+                }
+                other => panic!("Expected display in else branch, got: {other:?}"),
+            }
+        }
+        other => panic!("Expected Logic from conditional, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_toggle_display_class_selector() {
+    let containers = container! {
+        div fx-click=fx {
+            element(".modal").toggle_display();
+        } { "Toggle Modal" }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+
+    match &containers[0].actions[0].effect.action {
+        ActionType::Logic(logic) => {
+            assert!(!logic.actions.is_empty());
+            assert!(!logic.else_actions.is_empty());
+        }
+        other => panic!("toggle_display on class selector should work, got: {other:?}"),
+    }
+}

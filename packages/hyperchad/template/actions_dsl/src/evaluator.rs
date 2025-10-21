@@ -844,6 +844,39 @@ fn generate_action_for_id(
                 hyperchad_actions::ActionType::select_str_id(hyperchad_actions::Target::literal(#id))
             }
         }
+        "display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::display_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "no_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.no_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::no_display_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "toggle_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_display_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "set_display" => {
+            if args.len() != 1 {
+                return Err("ElementReference.set_display() expects exactly 1 argument".to_string());
+            }
+            let display = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::set_display_str_id(#display, hyperchad_actions::Target::literal(#id))
+            }
+        }
         unknown => {
             return Err(format!("Unknown method: {unknown}"));
         }
@@ -914,6 +947,39 @@ fn generate_action_for_class(
             }
             quote! {
                 hyperchad_actions::ActionType::select_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::display_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "no_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.no_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::no_display_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "toggle_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_display() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_display_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "set_display" => {
+            if args.len() != 1 {
+                return Err("ElementReference.set_display() expects exactly 1 argument".to_string());
+            }
+            let display = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::set_display_class(#display, hyperchad_actions::Target::literal(#class))
             }
         }
         unknown => {
@@ -1079,6 +1145,30 @@ fn generate_function_call_code(
         }
 
         // Display functions
+        "display" => {
+            if args.len() != 1 {
+                return Err("display() expects exactly 1 argument".to_string());
+            }
+            let target = target_to_expr(context, &args[0], true)?;
+            Ok(quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(true),
+                }
+            })
+        }
+        "no_display" => {
+            if args.len() != 1 {
+                return Err("no_display() expects exactly 1 argument".to_string());
+            }
+            let target = target_to_expr(context, &args[0], true)?;
+            Ok(quote! {
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(false),
+                }
+            })
+        }
         "set_display" => {
             if args.len() != 2 {
                 return Err("set_display() expects exactly 2 arguments".to_string());
@@ -1090,6 +1180,15 @@ fn generate_function_call_code(
                     target: hyperchad_actions::ElementTarget::StrId(#target),
                     action: hyperchad_actions::StyleAction::SetDisplay(#display),
                 }
+            })
+        }
+        "toggle_display" => {
+            if args.len() != 1 {
+                return Err("toggle_display() expects exactly 1 argument".to_string());
+            }
+            let target = target_to_expr(context, &args[0], true)?;
+            Ok(quote! {
+                hyperchad_actions::ActionType::toggle_display_str_id(#target)
             })
         }
 
@@ -1325,6 +1424,12 @@ fn generate_function_call_code(
         }),
         "hidden" => Ok(quote! {
             hyperchad_actions::logic::hidden()
+        }),
+        "displayed" => Ok(quote! {
+            hyperchad_actions::logic::displayed()
+        }),
+        "not_displayed" => Ok(quote! {
+            hyperchad_actions::logic::not_displayed()
         }),
         "eq" => {
             if args.len() != 2 {
@@ -2008,6 +2113,52 @@ fn generate_method_call_code(
             }
             Ok(quote! {
                 #receiver.get_mouse_y()
+            })
+        }
+
+        "display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.display() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.display()
+            })
+        }
+
+        "no_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.no_display() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.no_display()
+            })
+        }
+
+        "toggle_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_display() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.toggle_display()
+            })
+        }
+
+        "set_display" => {
+            if args.len() != 1 {
+                return Err("ElementReference.set_display() expects exactly 1 argument".to_string());
+            }
+            let display = generate_expression_code(context, &args[0])?;
+            Ok(quote! {
+                #receiver.set_display(#display)
+            })
+        }
+
+        "get_display" => {
+            if !args.is_empty() {
+                return Err("ElementReference.get_display() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_display()
             })
         }
 
