@@ -24,7 +24,7 @@
     "type": "module",
     "license": "MIT",
     "dependencies": {
-        "@astrojs/check": "^0.9.4",
+        "@astrojs/check": "^0.9.5",
         "@astrojs/node": "^9.5.0",
         "@astrojs/solid-js": "^5.1.1",
         "@free-log/node-client": "^0.2.0",
@@ -34,9 +34,9 @@
         "@solid-primitives/scheduled": "^1.5.2",
         "@solid-primitives/storage": "^2.1.4",
         "@solid-primitives/utils": "^6.3.2",
-        "@tauri-apps/api": "^2.8.0",
+        "@tauri-apps/api": "^2.9.0",
         "@tauri-apps/plugin-dialog": "^2.4.0",
-        "astro": "^5.14.6",
+        "astro": "^5.14.7",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "htmx.org": "^2.0.7",
@@ -46,7 +46,7 @@
     "devDependencies": {
         "@solidjs/meta": "^0.29.4",
         "@solidjs/testing-library": "^0.8.10",
-        "@tauri-apps/cli": "^2.8.4",
+        "@tauri-apps/cli": "^2.9.0",
         "@testing-library/jest-dom": "^5.17.0",
         "@tsconfig/node18": "18.2.2",
         "@types/howler": "^2.2.12",
@@ -65,7 +65,7 @@
         "prettier": "^3.6.2",
         "prettier-plugin-astro": "^0.14.1",
         "typescript": "^5.9.3",
-        "vite": "^5.4.20",
+        "vite": "^5.4.21",
         "vitest": "^1.6.1"
     }
 }
