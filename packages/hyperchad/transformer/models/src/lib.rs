@@ -513,6 +513,28 @@ impl std::fmt::Display for WhiteSpace {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum UserSelect {
+    #[default]
+    Auto,
+    None,
+    Text,
+    All,
+}
+
+impl std::fmt::Display for UserSelect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Auto => f.write_str("auto"),
+            Self::None => f.write_str("none"),
+            Self::Text => f.write_str("text"),
+            Self::All => f.write_str("all"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,5 +570,18 @@ mod tests {
     #[test]
     fn test_white_space_default() {
         assert_eq!(WhiteSpace::default(), WhiteSpace::Normal);
+    }
+
+    #[test]
+    fn test_user_select_display() {
+        assert_eq!(UserSelect::Auto.to_string(), "auto");
+        assert_eq!(UserSelect::None.to_string(), "none");
+        assert_eq!(UserSelect::Text.to_string(), "text");
+        assert_eq!(UserSelect::All.to_string(), "all");
+    }
+
+    #[test]
+    fn test_user_select_default() {
+        assert_eq!(UserSelect::default(), UserSelect::Auto);
     }
 }

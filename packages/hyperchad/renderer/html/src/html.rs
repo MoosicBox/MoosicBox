@@ -9,7 +9,7 @@ use hyperchad_transformer::{
     models::{
         AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
         LayoutOverflow, LinkTarget, Position, TextAlign, TextDecorationLine, TextDecorationStyle,
-        Visibility, WhiteSpace,
+        UserSelect, Visibility, WhiteSpace,
     },
 };
 
@@ -715,6 +715,18 @@ pub fn element_style_to_html(
                 Cursor::NeswResize => b"nesw-resize",
                 Cursor::ZoomIn => b"zoom-in",
                 Cursor::ZoomOut => b"zoom-out",
+            }
+        );
+    }
+
+    if let Some(user_select) = &container.user_select {
+        write_css_attr!(
+            b"user-select",
+            match user_select {
+                UserSelect::Auto => b"auto",
+                UserSelect::None => b"none",
+                UserSelect::Text => b"text",
+                UserSelect::All => b"all",
             }
         );
     }

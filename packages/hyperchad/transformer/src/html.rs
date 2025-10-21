@@ -5,7 +5,7 @@ use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
-    TextDecorationStyle, Visibility, WhiteSpace,
+    TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -356,6 +356,18 @@ fn parse_white_space(value: &str) -> Result<WhiteSpace, ParseAttrError> {
         "normal" => WhiteSpace::Normal,
         "preserve" | "pre" => WhiteSpace::Preserve,
         "preserve-wrap" | "pre-wrap" => WhiteSpace::PreserveWrap,
+        _ => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_user_select(value: &str) -> Result<UserSelect, ParseAttrError> {
+    Ok(match value {
+        "auto" => UserSelect::Auto,
+        "none" => UserSelect::None,
+        "text" => UserSelect::Text,
+        "all" => UserSelect::All,
         _ => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
@@ -1505,6 +1517,13 @@ fn parse_element(
             &mut overrides,
             parse_cursor,
             iter_once!(OverrideItem::Cursor),
+        )?,
+        user_select: pmrv(
+            tag,
+            once("sx-user-select"),
+            &mut overrides,
+            parse_user_select,
+            iter_once!(OverrideItem::UserSelect),
         )?,
         position: pmrv(
             tag,

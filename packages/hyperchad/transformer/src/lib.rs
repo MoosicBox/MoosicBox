@@ -11,7 +11,7 @@ use hyperchad_color::Color;
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, Position, Route, TextAlign, TextDecorationLine,
-    TextDecorationStyle, Visibility, WhiteSpace,
+    TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
 };
 use parse::parse_number;
 use serde::{Deserialize, Serialize, de::Error};
@@ -785,6 +785,7 @@ pub enum OverrideItem {
     TranslateX(Number),
     TranslateY(Number),
     Cursor(Cursor),
+    UserSelect(UserSelect),
     Position(Position),
     Background(Color),
     BorderTop((Color, Number)),
@@ -856,6 +857,7 @@ impl OverrideItem {
             | Self::FontSize(x)
             | Self::GridCellSize(x) => serde_json::to_string(x),
             Self::Cursor(x) => serde_json::to_string(x),
+            Self::UserSelect(x) => serde_json::to_string(x),
             Self::Position(x) => serde_json::to_string(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -913,6 +915,7 @@ impl OverrideItem {
             | Self::FontSize(x)
             | Self::GridCellSize(x) => serde_json::to_value(x),
             Self::Cursor(x) => serde_json::to_value(x),
+            Self::UserSelect(x) => serde_json::to_value(x),
             Self::Position(x) => serde_json::to_value(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -971,6 +974,7 @@ impl OverrideItem {
             | Self::FontSize(x)
             | Self::GridCellSize(x) => Box::new(x),
             Self::Cursor(x) => Box::new(x),
+            Self::UserSelect(x) => Box::new(x),
             Self::Position(x) => Box::new(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -1169,6 +1173,15 @@ impl OverrideItem {
 
                 serde_json::to_string(&expr)
             }
+            Self::UserSelect(x) => {
+                let mut expr = responsive.then::<&UserSelect>(x);
+
+                if let Some(Self::UserSelect(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
             Self::Position(x) => {
                 let mut expr = responsive.then::<&Position>(x);
 
@@ -1273,6 +1286,7 @@ macro_rules! override_item {
             | OverrideItem::FontSize($name)
             | OverrideItem::GridCellSize($name) => $action,
             OverrideItem::Cursor($name) => $action,
+            OverrideItem::UserSelect($name) => $action,
             OverrideItem::Position($name) => $action,
             OverrideItem::BorderTop($name)
             | OverrideItem::BorderRight($name)
@@ -1321,6 +1335,7 @@ pub struct Container {
     pub translate_x: Option<Number>,
     pub translate_y: Option<Number>,
     pub cursor: Option<Cursor>,
+    pub user_select: Option<UserSelect>,
     pub position: Option<Position>,
     pub background: Option<Color>,
     pub border_top: Option<(Color, Number)>,
@@ -2727,6 +2742,7 @@ impl Container {
         attrs.add_opt("sx-translate-y", self.translate_y.as_ref());
 
         attrs.add_opt("sx-cursor", self.cursor.as_ref());
+        attrs.add_opt("sx-user-select", self.user_select.as_ref());
 
         attrs.add_opt("sx-padding-left", self.padding_left.as_ref());
         attrs.add_opt("sx-padding-right", self.padding_right.as_ref());
@@ -3432,6 +3448,7 @@ const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
         OverrideItem::TranslateX(..) => "sx-translate-x",
         OverrideItem::TranslateY(..) => "sx-translate-y",
         OverrideItem::Cursor(..) => "sx-cursor",
+        OverrideItem::UserSelect(..) => "sx-user-select",
         OverrideItem::Position(..) => "sx-position",
         OverrideItem::Background(..) => "sx-background",
         OverrideItem::BorderTop(..) => "sx-border-top",

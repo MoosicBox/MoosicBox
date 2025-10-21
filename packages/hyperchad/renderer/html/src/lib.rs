@@ -16,7 +16,7 @@ use hyperchad_renderer::{
 use hyperchad_router::Container;
 use hyperchad_transformer::{
     OverrideCondition, OverrideItem, ResponsiveTrigger,
-    models::{AlignItems, LayoutDirection, TextAlign, Visibility, WhiteSpace},
+    models::{AlignItems, LayoutDirection, TextAlign, UserSelect, Visibility, WhiteSpace},
 };
 use maud::{DOCTYPE, PreEscaped, html};
 
@@ -155,6 +155,18 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             match x {
                                 Visibility::Visible => b"visible",
                                 Visibility::Hidden => b"hidden",
+                            },
+                        )?;
+                    }
+                    OverrideItem::UserSelect(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            match x {
+                                UserSelect::Auto => b"auto",
+                                UserSelect::None => b"none",
+                                UserSelect::Text => b"text",
+                                UserSelect::All => b"all",
                             },
                         )?;
                     }
@@ -363,6 +375,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::Bottom(..) => b"bottom",
         OverrideItem::TranslateX(..) | OverrideItem::TranslateY(..) => b"transform",
         OverrideItem::Cursor(..) => b"cursor",
+        OverrideItem::UserSelect(..) => b"user-select",
         OverrideItem::Position(..) => b"position",
         OverrideItem::Background(..) => b"background",
         OverrideItem::BorderTop(..) => b"border-top",
