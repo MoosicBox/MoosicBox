@@ -355,6 +355,7 @@ fn parse_white_space(value: &str) -> Result<WhiteSpace, ParseAttrError> {
     Ok(match value {
         "normal" => WhiteSpace::Normal,
         "preserve" | "pre" => WhiteSpace::Preserve,
+        "preserve-wrap" | "pre-wrap" => WhiteSpace::PreserveWrap,
         _ => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }

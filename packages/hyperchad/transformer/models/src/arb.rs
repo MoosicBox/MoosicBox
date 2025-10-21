@@ -55,7 +55,8 @@ impl Arbitrary for TextAlign {
 
 impl Arbitrary for WhiteSpace {
     fn arbitrary(g: &mut Gen) -> Self {
-        *g.choose(&[Self::Normal, Self::Preserve]).unwrap()
+        *g.choose(&[Self::Normal, Self::Preserve, Self::PreserveWrap])
+            .unwrap()
     }
 }
 

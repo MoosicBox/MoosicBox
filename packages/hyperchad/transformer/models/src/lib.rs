@@ -500,6 +500,7 @@ pub enum WhiteSpace {
     #[default]
     Normal,
     Preserve,
+    PreserveWrap,
 }
 
 impl std::fmt::Display for WhiteSpace {
@@ -507,6 +508,7 @@ impl std::fmt::Display for WhiteSpace {
         match self {
             Self::Normal => f.write_str("normal"),
             Self::Preserve => f.write_str("preserve"),
+            Self::PreserveWrap => f.write_str("preserve-wrap"),
         }
     }
 }

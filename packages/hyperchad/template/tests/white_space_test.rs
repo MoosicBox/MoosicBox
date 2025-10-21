@@ -12,6 +12,11 @@ fn test_white_space_with_quoted_string_literals() {
         div white-space="preserve" { "Preserved text" }
     };
     assert_eq!(containers[0].white_space, Some(WhiteSpace::Preserve));
+
+    let containers = container! {
+        div white-space="preserve-wrap" { "Preserve-wrap text" }
+    };
+    assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
 #[test]
@@ -25,6 +30,11 @@ fn test_white_space_with_unquoted_identifiers() {
         div white-space=preserve { "Preserved text" }
     };
     assert_eq!(containers[0].white_space, Some(WhiteSpace::Preserve));
+
+    let containers = container! {
+        div white-space=preserve-wrap { "Preserve-wrap text" }
+    };
+    assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
 #[test]
@@ -38,6 +48,11 @@ fn test_white_space_with_expressions() {
         div white-space=(WhiteSpace::Preserve) { "Preserve with expression" }
     };
     assert_eq!(containers[0].white_space, Some(WhiteSpace::Preserve));
+
+    let containers = container! {
+        div white-space=(WhiteSpace::PreserveWrap) { "PreserveWrap with expression" }
+    };
+    assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
 #[test]
@@ -71,6 +86,15 @@ fn test_white_space_html_output() {
         .unwrap();
     assert!(html.contains("white-space"));
     assert!(html.contains("pre"));
+
+    let containers = container! {
+        div white-space=preserve-wrap { "PreserveWrap" }
+    };
+    let html = containers[0]
+        .display_to_string_default(false, false)
+        .unwrap();
+    assert!(html.contains("white-space"));
+    assert!(html.contains("preserve-wrap"));
 }
 
 #[test]
@@ -136,6 +160,7 @@ fn test_white_space_with_conditional() {
 fn test_white_space_display_trait() {
     assert_eq!(WhiteSpace::Normal.to_string(), "normal");
     assert_eq!(WhiteSpace::Preserve.to_string(), "preserve");
+    assert_eq!(WhiteSpace::PreserveWrap.to_string(), "preserve-wrap");
 }
 
 #[test]

@@ -626,6 +626,7 @@ pub fn element_style_to_html(
             match white_space {
                 WhiteSpace::Normal => b"normal",
                 WhiteSpace::Preserve => b"pre",
+                WhiteSpace::PreserveWrap => b"pre-wrap",
             }
         );
     }

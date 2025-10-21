@@ -195,6 +195,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             match x {
                                 WhiteSpace::Normal => b"normal",
                                 WhiteSpace::Preserve => b"pre",
+                                WhiteSpace::PreserveWrap => b"pre-wrap",
                             },
                         )?;
                     }
