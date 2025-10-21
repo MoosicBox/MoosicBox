@@ -1926,7 +1926,7 @@ dependencies = [
  "anyhow",
  "bytesize",
  "cargo_metadata 0.23.0",
- "clap 4.5.49",
+ "clap 4.5.50",
  "glob",
  "log 0.4.28",
  "pretty_env_logger",
@@ -2539,9 +2539,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.49"
+version = "4.5.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4512b90fa68d3a9932cea5184017c5d200f5921df706d45e853537dea51508f"
+checksum = "0c2cfd7bf8a6017ddaa4e32ffe7403d547790db06bd171c1c53926faab501623"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.49",
@@ -2549,9 +2549,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.49"
+version = "4.5.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0025e98baa12e766c67ba13ff4695a887a1eba19569aad00a472546795bd6730"
+checksum = "0a4c05b9e80c5ccd3a7ef080ad7b6ba7d6fc00a985b8b157197075677c82c7a0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2613,7 +2613,7 @@ name = "clippier"
 version = "0.1.1"
 dependencies = [
  "anyhow",
- "clap 4.5.49",
+ "clap 4.5.50",
  "clippier_test_utilities",
  "git2",
  "insta",
@@ -4296,23 +4296,23 @@ dependencies = [
 
 [[package]]
 name = "fltk"
-version = "1.5.19"
+version = "1.5.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7429b2b1ba9acbcae0baed7299ef790315a599672689197aee8c03ed044fb504"
+checksum = "797fbbc1b5577e3f218cf6e735f15651adc67182ab4c3cbf3bdf2dea048e608d"
 dependencies = [
  "bitflags 2.10.0",
  "crossbeam-channel",
  "fltk-sys",
+ "minipaste",
  "once_cell",
- "paste",
  "ttf-parser",
 ]
 
 [[package]]
 name = "fltk-sys"
-version = "1.5.18"
+version = "1.5.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "385fb24ba98b69a068c934f953b6b73970ab034db76090c61e12157baf7fb675"
+checksum = "8159438fccdfcf1dcf002e02b24dc7f530ec8616db2ef00513a8b9698bd5bc20"
 dependencies = [
  "cmake",
  "cmk",
@@ -5709,7 +5709,7 @@ name = "hyperchad_app"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "clap 4.5.49",
+ "clap 4.5.50",
  "flume",
  "hyperchad_actions",
  "hyperchad_renderer",
@@ -7596,6 +7596,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "minipaste"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bbcafc6544efab7decec8e8e63d6e7cbaac0a699a4adead308a80f9c302d6ae"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7670,7 +7679,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.49",
+ "clap 4.5.50",
  "futures",
  "log 0.4.28",
  "moosicbox_assert",
@@ -7762,7 +7771,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.49",
+ "clap 4.5.50",
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -8225,7 +8234,7 @@ name = "moosicbox_image"
 version = "0.1.4"
 dependencies = [
  "bytes",
- "clap 4.5.49",
+ "clap 4.5.50",
  "image",
  "libvips",
  "log 0.4.28",
@@ -10203,7 +10212,7 @@ dependencies = [
 name = "openport"
 version = "0.1.2"
 dependencies = [
- "clap 4.5.49",
+ "clap 4.5.50",
  "switchy_random",
 ]
 
@@ -10241,9 +10250,9 @@ checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-src"
-version = "300.5.3+3.5.4"
+version = "300.5.4+3.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc6bad8cd0233b63971e232cc9c5e83039375b8586d2312f31fda85db8f888c2"
+checksum = "a507b3792995dae9b0df8a1c1e3771e8418b7c2d9f0baeba32e6fe8b06c7cb72"
 dependencies = [
  "cc",
 ]
@@ -14589,7 +14598,7 @@ dependencies = [
 name = "switchy_async_cargo"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.49",
+ "clap 4.5.50",
  "log 0.4.28",
  "pretty_env_logger",
  "syn 2.0.107",
@@ -14778,7 +14787,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
- "clap 4.5.49",
+ "clap 4.5.50",
  "colored",
  "dialoguer",
  "insta",
@@ -15328,9 +15337,9 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.34.4"
+version = "0.34.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6121216ff67fe4bcfe64508ea1700bc15f74937d835a07b4a209cc00a8926a84"
+checksum = "f3a753bdc39c07b192151523a3f77cd0394aa75413802c883a0f6f6a0e5ee2e7"
 dependencies = [
  "bitflags 2.10.0",
  "block2 0.6.2",
@@ -15397,9 +15406,9 @@ checksum = "1ac9aa371f599d22256307c24a9d748c041e548cbf599f35d890f9d365361790"
 
 [[package]]
 name = "tauri"
-version = "2.8.5"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4d1d3b3dc4c101ac989fd7db77e045cc6d91a25349cd410455cb5c57d510c1c"
+checksum = "7f07c6590706b2fc0ab287b041cf5ce9c435b3850bdae5571e19d9d27584e89d"
 dependencies = [
  "anyhow",
  "bytes",
@@ -15450,9 +15459,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-build"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c432ccc9ff661803dab74c6cd78de11026a578a9307610bbc39d3c55be7943f"
+checksum = "f71be1f494b683ac439e6d61c16ab5c472c6f9c6ee78995b29556d9067c021a1"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -15472,9 +15481,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-codegen"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ab3a62cf2e6253936a8b267c2e95839674e7439f104fa96ad0025e149d54d8a"
+checksum = "6c1fe64c74cc40f90848281a90058a6db931eb400b60205840e09801ee30f190"
 dependencies = [
  "base64 0.22.1",
  "brotli 8.0.2",
@@ -15499,9 +15508,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-macros"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4368ea8094e7045217edb690f493b55b30caf9f3e61f79b4c24b6db91f07995e"
+checksum = "260c5d2eb036b76206b9fca20b7be3614cfd21046c5396f7959e0e64a4b07f2f"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -15513,9 +15522,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9946a3cede302eac0c6eb6c6070ac47b1768e326092d32efbb91f21ed58d978f"
+checksum = "3d7ce9aab979296b2f91e6fbf154207c2e3512b12ddca0b24bfa0e0cde6b2976"
 dependencies = [
  "anyhow",
  "glob",
@@ -15611,9 +15620,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4cfc9ad45b487d3fded5a4731a567872a4812e9552e3964161b08edabf93846"
+checksum = "3367f0b47df90e9195cd9f04a56b0055a2cba45aa11923c6c253d748778176fc"
 dependencies = [
  "cookie 0.18.1",
  "dpi",
@@ -15636,9 +15645,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime-wry"
-version = "2.8.1"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1fe9d48bd122ff002064e88cfcd7027090d789c4302714e68fcccba0f4b7807"
+checksum = "80d91d29ca680c545364cf75ba2f2e3c7ea2ab6376bfa3be26b56fa2463a5b5e"
 dependencies = [
  "gtk",
  "http 1.3.1",
@@ -15663,9 +15672,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-utils"
-version = "2.7.0"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41a3852fdf9a4f8fbeaa63dc3e9a85284dd6ef7200751f0bd66ceee30c93f212"
+checksum = "f6b8bbe426abdbf52d050e52ed693130dbd68375b9ad82a3fb17efb4c8d85673"
 dependencies = [
  "anyhow",
  "brotli 8.0.2",
@@ -16551,9 +16560,9 @@ dependencies = [
 
 [[package]]
 name = "tray-icon"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0d92153331e7d02ec09137538996a7786fe679c629c279e82a6be762b7e6fe2"
+checksum = "e3d5572781bee8e3f994d7467084e1b1fd7a93ce66bd480f8156ba89dee55a2b"
 dependencies = [
  "crossbeam-channel",
  "dirs",
@@ -16568,7 +16577,7 @@ dependencies = [
  "png 0.17.16",
  "serde",
  "thiserror 2.0.17",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
