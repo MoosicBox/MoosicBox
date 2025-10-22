@@ -52,6 +52,7 @@ members = [
     "packages/hyperchad/actions",
     "packages/hyperchad/app",
     "packages/hyperchad/color",
+    "packages/hyperchad/examples/http_events",
     "packages/hyperchad/js_bundler",
     "packages/hyperchad/renderer",
     "packages/hyperchad/renderer/egui",
