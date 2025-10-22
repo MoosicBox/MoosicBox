@@ -183,9 +183,13 @@ Each module has additional sub-features for fine-grained control:
 
 **Async**: `async-fs`, `async-io`, `async-net`, `async-rt-multi-thread`, `async-sync`, `async-time`, `async-tokio`, `async-util`
 
-**Database**: `database-api`, `database-mysql`, `database-mysql-sqlx`, `database-postgres`, `database-postgres-raw`, `database-postgres-sqlx`, `database-schema`, `database-simulator`, `database-sqlite`, `database-sqlite-rusqlite`, `database-sqlite-sqlx`, `database-sqlx`, `database-tls`, `database-turso`
+**Database**: `database-api`, `database-mysql`, `database-mysql-sqlx`, `database-postgres`, `database-postgres-raw`, `database-postgres-sqlx`, `database-schema`, `database-simulator`, `database-sqlite`, `database-sqlite-rusqlite`, `database-sqlite-sqlx`, `database-sqlx`, `database-tls`
 
-**Database Connection**: `database-connection-creds`, `database-connection-mysql`, `database-connection-mysql-sqlx`, `database-connection-postgres`, `database-connection-postgres-native-tls`, `database-connection-postgres-openssl`, `database-connection-postgres-raw`, `database-connection-postgres-sqlx`, `database-connection-simulator`, `database-connection-sqlite`, `database-connection-sqlite-rusqlite`, `database-connection-sqlite-sqlx`, `database-connection-sqlx`, `database-connection-tls`, `database-connection-turso`
+Note: `database-turso` exists but is not included in `all-database`
+
+**Database Connection**: `database-connection-creds`, `database-connection-mysql`, `database-connection-mysql-sqlx`, `database-connection-postgres`, `database-connection-postgres-native-tls`, `database-connection-postgres-openssl`, `database-connection-postgres-raw`, `database-connection-postgres-sqlx`, `database-connection-simulator`, `database-connection-sqlite`, `database-connection-sqlite-rusqlite`, `database-connection-sqlite-sqlx`, `database-connection-sqlx`, `database-connection-tls`
+
+Note: `database-connection-turso` exists but is not included in `all-database-connection`
 
 **Filesystem**: `fs-async`, `fs-simulator`, `fs-simulator-real-fs`, `fs-std`, `fs-sync`, `fs-tokio`
 
