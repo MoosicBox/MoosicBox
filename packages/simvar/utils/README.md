@@ -8,7 +8,7 @@ The MoosicBox Simulation Utilities package provides:
 
 - **Thread Management**: Worker thread ID tracking and management
 - **Cancellation Tokens**: Local and global simulation cancellation
-- **Async Utilities**: Future cancellation and timeout support
+- **Async Utilities**: Future cancellation support
 - **Testing Support**: Simulation state management for testing
 
 ## Features
