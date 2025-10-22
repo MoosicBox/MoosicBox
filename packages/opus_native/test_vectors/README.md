@@ -19,8 +19,13 @@ $OUT_DIR/generated/
 │   ├── wb/    # Wideband (16 kHz) - 4 test cases
 │   └── swb/   # Super-wideband (24 kHz) - 2 test cases
 ├── celt/
-│   └── fb/    # Fullband (48 kHz) - 1 test case
-└── integration/  # Hybrid mode - 1 test case
+│   ├── nb/    # Narrowband (8 kHz) - 3 test cases
+│   ├── wb/    # Wideband (16 kHz) - 3 test cases
+│   ├── swb/   # Super-wideband (24 kHz) - 2 test cases
+│   └── fb/    # Fullband (48 kHz) - 5 test cases
+└── hybrid/
+    ├── swb/   # Super-wideband (24 kHz) - 2 test cases
+    └── fb/    # Fullband (48 kHz) - 5 test cases
 ```
 
 ## Test Vector Format
@@ -80,7 +85,6 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
 ## Package Components
 
 - **`src/lib.rs`**: Test vector loader and SNR calculation utilities
-
     - `TestVector::load()` - Load a single test vector from a directory
     - `TestVector::load_all()` - Load all test vectors from a directory
     - `calculate_snr()` - Calculate signal-to-noise ratio between reference and decoded PCM
@@ -88,12 +92,11 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
     - `vectors_available()` - Check if test vectors have been generated
 
 - **`build.rs`**: Automatic test vector generation at build time
-
     - Uses `moosicbox_opus_native_libopus` encoder to create raw Opus packets
     - Uses `moosicbox_opus_native_libopus` decoder to create reference PCM output
     - Generates SILK vectors for NB/MB/WB/SWB bandwidths
-    - Generates CELT fullband vector
-    - Generates integration (hybrid mode) vector
+    - Generates CELT vectors for NB/WB/SWB/FB bandwidths
+    - Generates hybrid vectors for SWB/FB bandwidths
 
 - **Integration tests** (in parent `opus_native` package): Uses generated vectors for validation
     - `test_decode_silk_vectors` - Tests SILK decoder with all generated vectors
