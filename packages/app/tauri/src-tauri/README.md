@@ -180,22 +180,6 @@ async fn get_current_playback() -> Result<Option<Playback>, String> {
     // Get current playback state
     Ok(None)
 }
-
-// Handle media events from the player plugin
-async fn handle_media_event(event: app_tauri_plugin_player::MediaEvent) -> Result<(), String> {
-    if let Some(true) = event.play {
-        println!("Playback started");
-    } else if let Some(false) = event.play {
-        println!("Playback paused");
-    }
-    if let Some(true) = event.next_track {
-        println!("Next track");
-    }
-    if let Some(true) = event.prev_track {
-        println!("Previous track");
-    }
-    Ok(())
-}
 ```
 
 ### API Integration
@@ -280,39 +264,6 @@ async fn write_config_file(app: tauri::AppHandle, content: String) -> Result<(),
 
     std::fs::write(config_path, content)
         .map_err(|e| e.to_string())
-}
-```
-
-### Native UI Integration
-
-```rust
-// With moosicbox-app-native feature
-use hyperchad_renderer_vanilla_js::VanillaJsTagRenderer;
-use hyperchad_renderer_html_http::HttpApp;
-use hyperchad_template::container;
-
-async fn handle_http_request(request: HttpRequest) -> Result<HttpResponse, String> {
-    // Handle HTTP requests for native UI
-    let view = container! {
-        div class="app" {
-            h1 { "MoosicBox Native UI" }
-
-            div class="player-controls" {
-                button onclick=tauri_invoke("play_track", 123) { "Play" }
-                button onclick=tauri_invoke("pause_track", null) { "Pause" }
-                button onclick=tauri_invoke("next_track", null) { "Next" }
-            }
-
-            div class="library" {
-                h2 { "Music Library" }
-                // Library content
-            }
-        }
-    };
-
-    Ok(HttpResponse::Ok()
-        .content_type("text/html")
-        .body(view.to_string()))
 }
 ```
 
@@ -430,7 +381,7 @@ cargo tauri build --bundles rpm  # Linux RPM
 ### Development Features
 
 - **`fail-on-warnings`**: Treat warnings as errors
-- **`debug`**: Enable debug features
+- **`devtools`**: Enable Tauri devtools
 
 ## Configuration Files
 
