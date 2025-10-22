@@ -24,9 +24,8 @@ The HyperChad Renderer package provides:
 
 ### Content System
 
-- **View**: Full page view with immediate and future content
-- **PartialView**: Targeted partial content updates
-- **Content Enum**: Unified content representation (View, PartialView, Raw)
+- **View**: View with primary content and optional fragments
+- **Content Enum**: Unified content representation (View, Raw, Json)
 - **JSON Support**: Optional JSON content handling (with `json` feature)
 
 ### Event Handling
@@ -90,12 +89,7 @@ impl Renderer for MyRenderer {
     }
 
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        // Render full view
-        Ok(())
-    }
-
-    async fn render_partial(&self, partial: PartialView) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        // Render partial content update
+        // Render view
         Ok(())
     }
 
@@ -113,20 +107,16 @@ impl Renderer for MyRenderer {
 ### Content Creation
 
 ```rust
-use hyperchad_renderer::{Content, View, PartialView};
+use hyperchad_renderer::{Content, View};
 use hyperchad_transformer::Container;
 
-// Create view content
-let view_content = Content::view(View {
-    future: None,
-    immediate: Container::default(),
-});
+// Create view content with primary container
+let view_content = Content::view(Container::default()).build();
 
-// Create partial view content
-let partial_content = Content::partial_view(
-    "#content",
-    Container::default()
-);
+// Create view with primary and fragments
+let view_with_fragments = Content::view(Container::default())
+    .fragment(Container::default())
+    .build();
 
 // From string (as raw HTML)
 let string_content: Content = "<div>Hello World</div>".try_into()?;
@@ -222,10 +212,7 @@ use hyperchad_renderer::RendererEvent;
 // Handle renderer events
 match event {
     RendererEvent::View(view) => {
-        // Handle full view update
-    }
-    RendererEvent::Partial(partial) => {
-        // Handle partial content update
+        // Handle view update
     }
     RendererEvent::Event { name, value } => {
         // Handle custom event
@@ -273,19 +260,12 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 
 ### View
 
-- **immediate**: Content available immediately
-- **future**: Content that will be available asynchronously
-- **Container**: HyperChad container structure
-
-### PartialView
-
-- **target**: CSS selector for target element
-- **container**: Content to insert/replace
+- **primary**: Optional primary container content (swaps to triggering element)
+- **fragments**: Additional containers to swap by ID (each must have an `id` attribute)
 
 ### Content Enum
 
-- **View**: Full page content
-- **PartialView**: Partial content update
+- **View**: View with primary content and optional fragments
 - **Raw**: Raw data with content type
 - **Json**: JSON response (with `json` feature)
 
