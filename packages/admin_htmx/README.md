@@ -56,9 +56,7 @@ use moosicbox_admin_htmx::api;
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
-            .service(web::scope("/admin").configure(|cfg| {
-                api::bind_services(cfg);
-            }))
+            .service(api::bind_services(web::scope("/admin")))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
