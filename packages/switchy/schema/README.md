@@ -575,15 +575,15 @@ let migrations: Vec<Box<dyn Migration<'a> + 'a>> = source.migrations().await?;
 
 The system creates a `__switchy_migrations` table to track migration state:
 
-| Column           | Type      | Description                           |
-| ---------------- | --------- | ------------------------------------- |
-| `id`             | TEXT      | Unique migration identifier           |
-| `checksum`       | TEXT      | Content hash for validation           |
-| `status`         | TEXT      | Current state (pending/completed/etc) |
-| `failure_reason` | TEXT      | Error message if failed               |
-| `run_on`         | TIMESTAMP | When migration started                |
-| `finished_on`    | TIMESTAMP | When migration completed              |
-| `executed_at`    | TIMESTAMP | Legacy timestamp field                |
+| Column           | Type        | Description                           |
+| ---------------- | ----------- | ------------------------------------- |
+| `id`             | TEXT        | Unique migration identifier           |
+| `run_on`         | DATETIME    | When migration started                |
+| `finished_on`    | DATETIME    | When migration completed              |
+| `up_checksum`    | VARCHAR(64) | Content hash for up migration         |
+| `down_checksum`  | VARCHAR(64) | Content hash for down migration       |
+| `status`         | TEXT        | Current state (pending/completed/etc) |
+| `failure_reason` | TEXT        | Error message if failed               |
 
 ## Error Handling & Recovery
 
@@ -823,7 +823,6 @@ cargo run
 #### Example Projects
 
 - **`examples/static_migrations/`** - Complete project demonstrating:
-
     - Custom migration implementations with `'static` lifetimes
     - All three discovery methods (embedded, directory, code)
     - Query builder integration
