@@ -498,7 +498,7 @@ jobs:
                   fi
 
     create-tauri-app-release:
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == true }}
+        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == 'true' }}
 
         runs-on: ubuntu-latest
 
