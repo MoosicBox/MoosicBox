@@ -142,18 +142,63 @@ let remote_cover = ImageCoverSource::RemoteUrl {
 let size = ImageCoverSize::Large; // Max, Large, Medium, Small, Thumbnail
 ```
 
-### ID Conversions
+### ID Types and Conversions
+
+MoosicBox supports flexible ID handling for different API sources. The primary ID type is the `Id` enum from `moosicbox_music_models::id::Id`, which can represent both numeric and string identifiers.
+
+#### Using the Id Enum (Recommended)
+
+The `Id` enum is the main ID type used throughout the codebase. It automatically handles both numeric IDs (for local library items) and string IDs (for external API sources).
+
+```rust
+use moosicbox_music_models::id::Id;
+
+// Create IDs from different types
+let numeric_id: Id = 12345u64.into();
+let string_id: Id = "abc123".into();
+
+// Pattern match to check ID type
+match numeric_id {
+    Id::Number(n) => println!("Numeric ID: {}", n),
+    Id::String(s) => println!("String ID: {}", s),
+}
+
+// Extract values safely
+if let Some(num) = numeric_id.as_number() {
+    println!("ID as u64: {}", num);
+}
+
+if let Some(s) = string_id.as_str() {
+    println!("ID as string: {}", s);
+}
+
+// Convert to string for display
+println!("ID: {}", numeric_id); // Uses Display trait
+
+// Parse from string with API source context
+use moosicbox_music_models::ApiSource;
+let parsed_id = Id::from_str("12345", &ApiSource::library());
+```
+
+#### FromId Trait (Low-level Helper)
+
+The `FromId` trait provides generic conversion methods between ID representations and strings. This is a helper trait mainly used internally for type-agnostic ID handling.
 
 ```rust
 use moosicbox_music_api_models::FromId;
 
-// Convert ID to string
+// For numeric types (u64)
 let id: u64 = 12345;
-let id_string = id.as_string();
+let id_string = id.as_string();      // "12345"
+let parsed: u64 = u64::into_id("12345");
 
-// Convert string to ID
-let parsed_id = u64::into_id("12345");
+// For string types
+let str_id = String::from("abc123");
+let id_string = str_id.as_string();  // "abc123"
+let parsed = String::into_id("abc123");
 ```
+
+**Note**: While `FromId` provides useful conversion methods, prefer using the `Id` enum for most use cases as it provides better type safety and integrates seamlessly with the rest of the MoosicBox API.
 
 ## Feature Flags
 
