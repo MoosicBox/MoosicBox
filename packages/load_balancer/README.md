@@ -213,7 +213,7 @@ Increase system file descriptor limits for high-traffic scenarios:
 
 The load balancer uses Pingora's built-in connection pooling and management features. Key configuration points:
 
-- **Health Check Frequency**: Currently set to 10 seconds in the code (see `src/server.rs:62`)
+- **Health Check Frequency**: Currently set to 10 seconds in the code (see `src/server.rs`)
 - **Load Balancing**: Uses round-robin selection across healthy backends
 - **Backend Selection**: Automatically excludes unhealthy backends from rotation
 
