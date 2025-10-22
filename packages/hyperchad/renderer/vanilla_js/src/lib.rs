@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, io::Write, sync::LazyLock};
 
 use async_trait::async_trait;
 use const_format::concatcp;
-use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, RendererEvent, View, canvas};
+use hyperchad_renderer::{Color, HtmlTagRenderer, RendererEvent, View, canvas};
 use hyperchad_renderer_html::{
     DefaultHtmlTagRenderer,
     extend::{ExtendHtmlRenderer, HtmlRendererEventPub},
@@ -958,23 +958,7 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         let () = *INSECURE_WARNING;
 
         publisher
-            .publish(RendererEvent::View(view))
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if `VanillaJsRenderer` fails to render the partial elements.
-    async fn render_partial(
-        &self,
-        publisher: HtmlRendererEventPub,
-        partial: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        let () = *INSECURE_WARNING;
-
-        publisher
-            .publish(RendererEvent::Partial(partial))
+            .publish(RendererEvent::View(Box::new(view)))
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         Ok(())
     }

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::LazyLock};
 
 use http::Response;
 use hyperchad_color::Color;
-use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
+use hyperchad_renderer::{Content, HtmlTagRenderer};
 use hyperchad_renderer_html::html::container_element_to_html;
 use hyperchad_router::{RouteRequest, Router};
 
@@ -209,43 +209,35 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         };
 
         let html = match content {
-            Content::View(View {
-                immediate: view, ..
-            }) => {
-                let content = container_element_to_html(&view, &self.renderer)?;
+            Content::View(boxed_view) => {
+                let view = boxed_view.primary.as_ref();
 
-                if req.headers.contains_key("hx-request") {
-                    self.renderer.partial_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                    )
+                if let Some(view) = view {
+                    let content = container_element_to_html(view, &self.renderer)?;
+
+                    if req.headers.contains_key("hx-request") {
+                        self.renderer.partial_html(
+                            &HEADERS,
+                            view,
+                            content,
+                            self.viewport.as_deref(),
+                            self.background,
+                        )
+                    } else {
+                        self.renderer.root_html(
+                            &HEADERS,
+                            view,
+                            content,
+                            self.viewport.as_deref(),
+                            self.background,
+                            self.title.as_deref(),
+                            self.description.as_deref(),
+                        )
+                    }
                 } else {
-                    self.renderer.root_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                        self.title.as_deref(),
-                        self.description.as_deref(),
-                    )
+                    // Fragments-only response
+                    String::new()
                 }
-            }
-            Content::PartialView(PartialView {
-                container: view, ..
-            }) => {
-                let content = container_element_to_html(&view, &self.renderer)?;
-
-                self.renderer.partial_html(
-                    &HEADERS,
-                    &view,
-                    content,
-                    self.viewport.as_deref(),
-                    self.background,
-                )
             }
             Content::Raw { data, content_type } => {
                 return Ok(Response::builder()

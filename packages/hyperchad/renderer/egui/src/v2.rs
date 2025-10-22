@@ -28,7 +28,6 @@ pub use hyperchad_renderer::*;
 
 pub enum RenderView {
     View(Container),
-    PartialView(hyperchad_renderer::PartialView),
 }
 
 #[derive(Debug)]
@@ -705,6 +704,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::debug!("EguiRenderer: render called");
 
+        let Some(primary) = view.primary else {
+            return Ok(());
+        };
+
         // Check if context is ready
         if self.app.ctx.read().unwrap().is_none() {
             log::debug!("EguiRenderer: context not ready, queuing render");
@@ -714,11 +717,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
                 .unwrap()
                 .as_mut()
                 .unwrap()
-                .push_back(RenderView::View(view.immediate));
+                .push_back(RenderView::View(primary));
             return Ok(());
         }
 
-        let mut container = view.immediate;
+        let mut container = primary;
 
         // Set container size
         container.calculated_width = self.app.width.read().unwrap().or(self.width);
@@ -729,53 +732,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
         // Store container
         *self.app.container.write().unwrap() = Some(container);
-
-        // Request repaint
-        if let Some(ctx) = &*self.app.ctx.read().unwrap() {
-            ctx.request_repaint();
-        }
-
-        Ok(())
-    }
-
-    async fn render_partial(
-        &self,
-        view: hyperchad_renderer::PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::debug!(
-            "EguiRenderer: render_partial called for target: {}",
-            view.target
-        );
-
-        // Check if context is ready
-        if self.app.ctx.read().unwrap().is_none() {
-            log::debug!("EguiRenderer: context not ready, queuing render_partial");
-            self.app
-                .render_queue
-                .write()
-                .unwrap()
-                .as_mut()
-                .unwrap()
-                .push_back(RenderView::PartialView(view));
-            return Ok(());
-        }
-
-        // Simplified partial rendering - replace element with matching ID
-        if let Some(container) = self.app.container.write().unwrap().as_mut() {
-            let value = container.replace_str_id_with_elements_calc(
-                &*self.app.calculator.read().unwrap(),
-                view.container.children,
-                &view.target,
-            );
-            if value.is_some() {
-                log::debug!("EguiRenderer: replaced element with ID: {}", view.target);
-            } else {
-                log::warn!(
-                    "EguiRenderer: could not find element with ID: {}",
-                    view.target
-                );
-            }
-        }
 
         // Request repaint
         if let Some(ctx) = &*self.app.ctx.read().unwrap() {
@@ -814,27 +770,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
 
                         // Store container
                         *self.container.write().unwrap() = Some(container);
-                    }
-                    RenderView::PartialView(view) => {
-                        // Process partial view
-                        if let Some(container) = self.container.write().unwrap().as_mut() {
-                            let value = container.replace_str_id_with_elements_calc(
-                                &*self.calculator.read().unwrap(),
-                                view.container.children,
-                                &view.target,
-                            );
-                            if value.is_some() {
-                                log::debug!(
-                                    "EguiRenderer: replaced element with ID: {}",
-                                    view.target
-                                );
-                            } else {
-                                log::warn!(
-                                    "EguiRenderer: could not find element with ID: {}",
-                                    view.target
-                                );
-                            }
-                        }
                     }
                 }
             }

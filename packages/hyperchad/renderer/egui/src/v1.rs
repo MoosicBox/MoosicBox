@@ -13,7 +13,7 @@ use hyperchad_actions::{
     logic::Value,
 };
 use hyperchad_renderer::{
-    Color, Content, Handle, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
+    Color, Content, Handle, RenderRunner, Renderer, ToRenderRunner, View,
     canvas::{self, CanvasAction, CanvasUpdate},
     viewport::immediate::{Pos, Viewport, ViewportListener},
 };
@@ -29,7 +29,6 @@ use itertools::Itertools;
 
 pub enum RenderView {
     View(Container),
-    PartialView(PartialView),
 }
 
 #[cfg(feature = "debug")]
@@ -400,15 +399,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
                     RenderView::View(x) => {
                         let _ = renderer
                             .render(View {
-                                immediate: x,
-                                future: None,
+                                primary: Some(x),
+                                fragments: vec![],
                             })
-                            .await
-                            .inspect_err(|e| log::error!("Failed to render: {e:?}"));
-                    }
-                    RenderView::PartialView(x) => {
-                        let _ = renderer
-                            .render_partial(x)
                             .await
                             .inspect_err(|e| log::error!("Failed to render: {e:?}"));
                     }
@@ -505,6 +498,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
     ///
     /// Will panic if elements `Mutex` is poisoned.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let Some(primary) = view.primary else {
+            return Ok(());
+        };
+
         if self.app.ctx.read().unwrap().is_none() {
             self.app
                 .render_queue
@@ -512,7 +509,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
                 .unwrap()
                 .as_mut()
                 .unwrap()
-                .push_back(RenderView::View(view.immediate));
+                .push_back(RenderView::View(primary));
             return Ok(());
         }
 
@@ -524,9 +521,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
             .spawn_blocking_with_name("egui render", move || {
                 moosicbox_logging::debug_or_trace!(
                     ("render: start"),
-                    ("render: start {:?}", view.immediate)
+                    ("render: start {primary:?}")
                 );
-                let mut element = view.immediate;
+                let mut element = primary;
 
                 element.calculated_width = app.width.read().unwrap().or(width);
                 element.calculated_height = app.height.read().unwrap().or(height);
@@ -556,77 +553,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
                     ctx.request_repaint();
                 }
-
-                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-            })
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
-
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if egui fails to render the partial view.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if elements `Mutex` is poisoned.
-    async fn render_partial(
-        &self,
-        view: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        if self.app.ctx.read().unwrap().is_none() {
-            // FIXME: queue the views to process after `ctx` is loaded
-            return Ok(());
-        }
-
-        let app = self.app.clone();
-
-        switchy_async::runtime::Handle::current()
-            .spawn_blocking_with_name("egui render_partial", move || {
-                moosicbox_logging::debug_or_trace!(
-                    ("render_partial: start"),
-                    ("render_partial: start {:?}", view)
-                );
-
-                let mut binding = app.container.write().unwrap();
-                let Some(page) = binding.as_mut() else {
-                    return Ok(());
-                };
-                let calculator = app.calculator.read().unwrap();
-
-                if page
-                    .replace_str_id_with_elements_calc(
-                        &*calculator,
-                        view.container.children,
-                        &view.target,
-                    )
-                    .is_some()
-                {
-                    drop(calculator);
-                    let mut watch_positions = app.watch_positions.write().unwrap();
-                    watch_positions.clear();
-                    add_watch_pos(page, page, &mut watch_positions);
-                    drop(watch_positions);
-
-                    // TODO: Handle style transfer with shared action handler
-                    // For now, clear the action handler to reset state
-                    // Removed: action_handler field was removed
-
-                    drop(binding);
-                    if let Some(ctx) = &*app.ctx.read().unwrap() {
-                        ctx.request_repaint();
-                    }
-                } else {
-                    drop(calculator);
-                    log::warn!("Unable to find element with id {}", view.target);
-                }
-
-                moosicbox_logging::debug_or_trace!(
-                    ("render_partial: end"),
-                    ("render_partial: end")
-                );
 
                 Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
             })
@@ -1178,23 +1104,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                                 #[allow(clippy::match_wildcard_for_single_variants)]
                                                 match content {
                                                     Content::View(view) => {
-                                                        Self::swap_elements(
-                                                            &swap,
-                                                            &ctx,
-                                                            &container,
-                                                            &calculator.read().unwrap(),
-                                                            container_id,
-                                                            view.immediate,
-                                                        );
-                                                        if let Some(future) = view.future {
-                                                            let view = future.await;
+                                                        if let Some(primary) = view.primary {
                                                             Self::swap_elements(
                                                                 &swap,
                                                                 &ctx,
                                                                 &container,
                                                                 &calculator.read().unwrap(),
                                                                 container_id,
-                                                                view,
+                                                                primary,
                                                             );
                                                         }
                                                     }

@@ -10,7 +10,7 @@ use html::{
     element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
 };
 use hyperchad_renderer::{
-    Color, Handle, HtmlTagRenderer, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
+    Color, Handle, HtmlTagRenderer, RenderRunner, Renderer, ToRenderRunner, View,
     canvas::CanvasUpdate,
 };
 use hyperchad_router::Container;
@@ -640,7 +640,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         moosicbox_logging::debug_or_trace!(
             ("render: start"),
-            ("render: start {:?}", elements.immediate)
+            ("render: start {:?}", elements.primary)
         );
 
         #[cfg(feature = "extend")]
@@ -649,32 +649,6 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         }
 
         log::debug!("render: finished");
-
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if html fails to render the partial view.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if elements `Mutex` is poisoned.
-    async fn render_partial(
-        &self,
-        view: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(
-            ("render_partial: start"),
-            ("render_partial: start {:?}", view)
-        );
-
-        #[cfg(feature = "extend")]
-        if let (Some(extend), Some(publisher)) = (self.extend.as_ref(), self.publisher.as_ref()) {
-            extend.render_partial(publisher.clone(), view).await?;
-        }
-
-        log::debug!("render_partial: finished");
 
         Ok(())
     }

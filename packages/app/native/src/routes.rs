@@ -1,15 +1,14 @@
 use std::{collections::BTreeMap, num::ParseIntError, str::FromStr, sync::LazyLock};
 
 use hyperchad::{
-    renderer::{Content, PartialView, View},
+    renderer::{Content, View},
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
 use moosicbox_app_models::{Connection, DownloadSettings, MusicApiSettings, ScanSettings};
 use moosicbox_app_native_ui::{
     downloads::DownloadTab,
-    formatting::classify_name,
-    search::{results_content, results_content_id},
+    search::results_content,
     settings::{AuthState, download_settings_content, scan_settings_content},
     state::State,
 };
@@ -586,12 +585,13 @@ pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> 
     switchy::unsync::task::spawn({
         let state = state.clone();
         async move {
-            let container = settings_music_api_settings_markup(&state).await.unwrap();
+            let mut container = settings_music_api_settings_markup(&state).await.unwrap();
+            container.str_id = Some("settings-music-api-settings-section".to_string());
             let renderer = RENDERER.get().unwrap();
             renderer
-                .render_partial(PartialView {
-                    target: "settings-music-api-settings-section".to_string(),
-                    container,
+                .render(View {
+                    primary: None,
+                    fragments: vec![container],
                 })
                 .await?;
 
@@ -759,10 +759,9 @@ pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Cont
 
     let state = convert_state(&STATE).await;
 
-    Ok(Content::partial_view(
-        "settings-music-api-settings-section",
-        settings_music_api_settings_markup(&state).await?,
-    ))
+    Ok(Content::fragments_only()
+        .fragment(settings_music_api_settings_markup(&state).await?)
+        .build())
 }
 
 async fn settings_music_api_settings_markup(state: &State) -> Result<Container, RouteError> {
@@ -833,13 +832,16 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
                 &settings,
                 AuthState::Initial,
             ),
-        ));
+        )
+        .build());
     }
 
-    Ok(Content::partial_view(
-        format!("settings-scan-error-{}", classify_name(&api_source)),
-        moosicbox_app_native_ui::settings::scan_error_message(&api_source, Some("Failed to scan")),
-    ))
+    Ok(Content::fragments_only()
+        .fragment(moosicbox_app_native_ui::settings::scan_error_message(
+            &api_source,
+            Some("Failed to scan"),
+        ))
+        .build())
 }
 
 pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -877,16 +879,16 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
                 &settings,
                 AuthState::Initial,
             ),
-        ));
+        )
+        .build());
     }
 
-    Ok(Content::partial_view(
-        format!("settings-scan-error-{}", classify_name(&api_source)),
-        moosicbox_app_native_ui::settings::scan_error_message(
+    Ok(Content::fragments_only()
+        .fragment(moosicbox_app_native_ui::settings::scan_error_message(
             &api_source,
             Some("Failed to enable scan origin"),
-        ),
-    ))
+        ))
+        .build())
 }
 
 pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -933,16 +935,16 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
 
         return Ok(Content::view(
             moosicbox_app_native_ui::settings::music_api_settings_content(&settings, auth_state),
-        ));
+        )
+        .build());
     }
 
-    Ok(Content::partial_view(
-        format!("settings-auth-error-{}", classify_name(&api_source)),
-        moosicbox_app_native_ui::settings::auth_error_message(
+    Ok(Content::fragments_only()
+        .fragment(moosicbox_app_native_ui::settings::auth_error_message(
             &api_source,
             Some("Failed to authenticate"),
-        ),
-    ))
+        ))
+        .build())
 }
 
 #[derive(Deserialize)]
@@ -1001,9 +1003,9 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
 
             let renderer = RENDERER.get().unwrap();
             renderer
-                .render_partial(PartialView {
-                    target: results_content_id(&api_source),
-                    container: markup.into(),
+                .render(View {
+                    primary: None,
+                    fragments: markup,
                 })
                 .await
                 .unwrap();
@@ -1135,10 +1137,7 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
 
     let markup = download_settings_content(&settings);
 
-    Ok(Content::partial_view(
-        "settings-download-settings-section",
-        markup,
-    ))
+    Ok(Content::fragments_only().fragment(markup).build())
 }
 
 #[derive(Deserialize)]
@@ -1230,10 +1229,7 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
 
     let markup = scan_settings_content(&settings);
 
-    Ok(Content::partial_view(
-        "settings-scan-settings-section",
-        markup,
-    ))
+    Ok(Content::fragments_only().fragment(markup).build())
 }
 
 #[derive(Deserialize)]

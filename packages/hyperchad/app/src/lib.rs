@@ -617,11 +617,10 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
                 while let Some(content) = router.wait_for_navigation().await {
                     log::debug!("app_native_lib::start: router received content");
                     match content {
-                        hyperchad_renderer::Content::View(view) => {
-                            renderer.render(view).await?;
+                        hyperchad_renderer::Content::View(boxed_view) => {
+                            renderer.render(*boxed_view).await?;
                         }
-                        hyperchad_renderer::Content::PartialView(..)
-                        | hyperchad_renderer::Content::Raw { .. } => {
+                        hyperchad_renderer::Content::Raw { .. } => {
                             moosicbox_assert::die_or_warn!("Received invalid content type");
                         }
                         #[cfg(feature = "json")]

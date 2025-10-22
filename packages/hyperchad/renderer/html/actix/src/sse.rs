@@ -140,26 +140,9 @@ pub async fn handle_sse<
 
                         crate::sse::EventData::new(body).event("view")
                     }
-                    RendererEvent::Partial(partial_view) => {
-                        moosicbox_logging::debug_or_trace!(
-                            (
-                                "handle_sse: SSE sending partial_view target={}",
-                                partial_view.target
-                            ),
-                            ("handle_sse: SSE sending partial_view={partial_view:?}")
-                        );
-                        let id = partial_view.target.to_string();
-                        let (body, _content_type) = app
-                            .processor
-                            .to_body(Content::PartialView(partial_view), data)
-                            .await?;
-
-                        let body = str::from_utf8(&body).map_err(ErrorInternalServerError)?;
-
-                        crate::sse::EventData::new(body)
-                            .id(id)
-                            .event("partial_view")
-                    }
+                    // Note: RendererEvent::Partial was removed
+                    // Partial views are now just View with fragments
+                    // SSE events should send View events instead
                     RendererEvent::CanvasUpdate(canvas_update) => {
                         moosicbox_logging::debug_or_trace!(
                             ("handle_sse: SSE sending canvas_update"),

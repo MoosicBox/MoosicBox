@@ -9,8 +9,6 @@ pub mod canvas;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 
-use std::{future::Future, pin::Pin};
-
 use async_trait::async_trait;
 use bytes::Bytes;
 pub use hyperchad_color::Color;
@@ -21,8 +19,7 @@ pub use hyperchad_transformer as transformer;
 
 #[derive(Debug)]
 pub enum RendererEvent {
-    View(View),
-    Partial(PartialView),
+    View(Box<View>),
     #[cfg(feature = "canvas")]
     CanvasUpdate(canvas::CanvasUpdate),
     Event {
@@ -32,8 +29,7 @@ pub enum RendererEvent {
 }
 
 pub enum Content {
-    View(View),
-    PartialView(PartialView),
+    View(Box<View>),
     #[cfg(feature = "json")]
     Json(serde_json::Value),
     Raw {
@@ -43,58 +39,79 @@ pub enum Content {
 }
 
 impl Content {
+    /// Create a view with primary content
     #[must_use]
-    pub fn view(view: impl Into<View>) -> Self {
-        Self::View(view.into())
+    pub fn view(primary: impl Into<Container>) -> ViewBuilder {
+        ViewBuilder {
+            primary: Some(primary.into()),
+            fragments: vec![],
+        }
+    }
+
+    /// Create a fragments-only view (no primary content)
+    #[must_use]
+    pub const fn fragments_only() -> ViewBuilder {
+        ViewBuilder {
+            primary: None,
+            fragments: vec![],
+        }
     }
 
     /// # Errors
     ///
     /// * If the `view` fails to convert to a `View`
     pub fn try_view<T: TryInto<View>>(view: T) -> Result<Self, T::Error> {
-        Ok(Self::View(view.try_into()?))
+        Ok(Self::View(Box::new(view.try_into()?)))
     }
+}
 
+/// Unified view structure - handles full pages, partials, and composite responses
+#[derive(Debug, Clone, Default)]
+pub struct View {
+    /// Primary content (swaps to triggering element)
+    /// None = fragments-only response
+    pub primary: Option<Container>,
+
+    /// Additional containers to swap by ID
+    /// Each container MUST have an `id` attribute
+    /// Client finds DOM elements with matching IDs and swaps them
+    pub fragments: Vec<Container>,
+}
+
+pub struct ViewBuilder {
+    primary: Option<Container>,
+    fragments: Vec<Container>,
+}
+
+impl ViewBuilder {
+    /// Add a fragment container (must have an ID)
     #[must_use]
-    pub fn partial_view(target: impl Into<String>, container: impl Into<Container>) -> Self {
-        Self::PartialView(PartialView {
-            target: target.into(),
-            container: container.into(),
-        })
+    pub fn fragment(mut self, container: impl Into<Container>) -> Self {
+        self.fragments.push(container.into());
+        self
     }
 
-    /// # Errors
-    ///
-    /// * If the `container` fails to convert to a `Container`
-    pub fn try_partial_view<T: TryInto<Container>>(
-        target: impl Into<String>,
-        container: T,
-    ) -> Result<Self, T::Error> {
-        Ok(Self::PartialView(PartialView {
-            target: target.into(),
-            container: container.try_into()?,
+    /// Add multiple fragment containers
+    #[must_use]
+    pub fn fragments(mut self, containers: impl IntoIterator<Item = impl Into<Container>>) -> Self {
+        self.fragments
+            .extend(containers.into_iter().map(Into::into));
+        self
+    }
+
+    /// Build the View
+    #[must_use]
+    pub fn build(self) -> Content {
+        Content::View(Box::new(View {
+            primary: self.primary,
+            fragments: self.fragments,
         }))
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct PartialView {
-    pub target: String,
-    pub container: Container,
-}
-
-#[derive(Default)]
-pub struct View {
-    pub future: Option<Pin<Box<dyn Future<Output = Container> + Send>>>,
-    pub immediate: Container,
-}
-
-impl std::fmt::Debug for View {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("View")
-            .field("future", &self.future.is_some())
-            .field("immediate", &self.immediate)
-            .finish()
+impl From<ViewBuilder> for Content {
+    fn from(builder: ViewBuilder) -> Self {
+        builder.build()
     }
 }
 
@@ -128,10 +145,10 @@ impl TryFrom<String> for Content {
 
 impl From<Container> for Content {
     fn from(value: Container) -> Self {
-        Self::View(View {
-            future: None,
-            immediate: value,
-        })
+        Self::View(Box::new(View {
+            primary: Some(value),
+            fragments: vec![],
+        }))
     }
 }
 
@@ -147,13 +164,7 @@ impl From<Vec<Container>> for Content {
 
 impl From<View> for Content {
     fn from(value: View) -> Self {
-        Self::View(value)
-    }
-}
-
-impl From<PartialView> for Content {
-    fn from(value: PartialView) -> Self {
-        Self::PartialView(value)
+        Self::View(Box::new(value))
     }
 }
 
@@ -162,8 +173,8 @@ impl<'a> TryFrom<&'a str> for View {
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         Ok(Self {
-            future: None,
-            immediate: value.try_into()?,
+            primary: Some(value.try_into()?),
+            fragments: vec![],
         })
     }
 }
@@ -173,8 +184,8 @@ impl TryFrom<String> for View {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Ok(Self {
-            future: None,
-            immediate: value.try_into()?,
+            primary: Some(value.try_into()?),
+            fragments: vec![],
         })
     }
 }
@@ -182,8 +193,8 @@ impl TryFrom<String> for View {
 impl From<Container> for View {
     fn from(value: Container) -> Self {
         Self {
-            future: None,
-            immediate: value,
+            primary: Some(value),
+            fragments: vec![],
         }
     }
 }
@@ -191,8 +202,8 @@ impl From<Container> for View {
 impl From<Vec<Container>> for View {
     fn from(value: Vec<Container>) -> Self {
         Self {
-            future: None,
-            immediate: value.into(),
+            primary: Some(value.into()),
+            fragments: vec![],
         }
     }
 }
@@ -247,14 +258,6 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     ///
     /// Will error if `Renderer` implementation fails to render the view.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
-
-    /// # Errors
-    ///
-    /// Will error if `Renderer` implementation fails to render the partial elements.
-    async fn render_partial(
-        &self,
-        partial: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors
     ///

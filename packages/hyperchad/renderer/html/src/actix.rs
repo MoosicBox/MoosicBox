@@ -8,7 +8,7 @@ use actix_web::HttpResponse;
 use async_trait::async_trait;
 use bytes::Bytes;
 use flume::Receiver;
-use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
+use hyperchad_renderer::{Color, Content, HtmlTagRenderer, RendererEvent};
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
@@ -229,32 +229,44 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .map_err(ErrorInternalServerError)?;
 
         match content {
-            Some(content) => match &content {
-                hyperchad_renderer::Content::View(..) => {
-                    let (body, content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::Ok()
-                        .content_type(content_type.as_str())
-                        .body(body))
+            Some(content) => {
+                let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
+
+                match content {
+                    hyperchad_renderer::Content::View(view) => {
+                        let (body, content_type) = self
+                            .to_body(hyperchad_renderer::Content::View(view), req)
+                            .await?;
+
+                        let response = if has_fragments {
+                            HttpResponse::Ok()
+                                .content_type(content_type.as_str())
+                                .append_header(("X-HyperChad-Fragments", "true"))
+                                .body(body)
+                        } else {
+                            HttpResponse::Ok()
+                                .content_type(content_type.as_str())
+                                .body(body)
+                        };
+
+                        Ok(response)
+                    }
+                    hyperchad_renderer::Content::Raw { data, content_type } => {
+                        Ok(HttpResponse::Ok()
+                            .content_type(content_type.as_str())
+                            .body(data.to_vec()))
+                    }
+                    #[cfg(feature = "json")]
+                    hyperchad_renderer::Content::Json(json) => {
+                        let (body, content_type) = self
+                            .to_body(hyperchad_renderer::Content::Json(json), req)
+                            .await?;
+                        Ok(HttpResponse::Ok()
+                            .content_type(content_type.as_str())
+                            .body(body))
+                    }
                 }
-                hyperchad_renderer::Content::PartialView(PartialView { target, .. }) => {
-                    let target = format!("#{target}");
-                    let (body, content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::Ok()
-                        .append_header(("v-fragment", target))
-                        .content_type(content_type.as_str())
-                        .body(body))
-                }
-                hyperchad_renderer::Content::Raw { data, content_type } => Ok(HttpResponse::Ok()
-                    .content_type(content_type.as_str())
-                    .body(data.to_vec())),
-                #[cfg(feature = "json")]
-                hyperchad_renderer::Content::Json(..) => {
-                    let (body, content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::Ok()
-                        .content_type(content_type.as_str())
-                        .body(body))
-                }
-            },
+            }
             None => Ok(HttpResponse::NoContent().finish()),
         }
     }
@@ -267,41 +279,64 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
         Ok(match content {
-            hyperchad_renderer::Content::View(View {
-                immediate: view, ..
-            })
-            | hyperchad_renderer::Content::PartialView(PartialView {
-                container: view, ..
-            }) => {
-                let content = container_element_to_html(&view, &self.tag_renderer)
-                    .map_err(ErrorInternalServerError)?;
+            hyperchad_renderer::Content::View(view) => {
+                let mut parts = Vec::new();
 
-                let content = if req.full {
-                    self.tag_renderer.root_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                        self.title.as_deref(),
-                        self.description.as_deref(),
-                    )
-                } else {
-                    self.tag_renderer.partial_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                    )
+                // Render primary content
+                if let Some(primary) = &view.primary {
+                    let html = container_element_to_html(primary, &self.tag_renderer)
+                        .map_err(ErrorInternalServerError)?;
+
+                    let html = if req.full {
+                        self.tag_renderer.root_html(
+                            &HEADERS,
+                            primary,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                            self.title.as_deref(),
+                            self.description.as_deref(),
+                        )
+                    } else {
+                        self.tag_renderer.partial_html(
+                            &HEADERS,
+                            primary,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                        )
+                    };
+
+                    parts.push(html);
                 }
-                .as_bytes()
-                .to_vec()
-                .into();
 
+                // Render fragments
+                if !view.fragments.is_empty() {
+                    parts.push("\n<!--hyperchad-fragments-->\n".to_string());
+
+                    for fragment in &view.fragments {
+                        let html = container_element_to_html(fragment, &self.tag_renderer)
+                            .map_err(ErrorInternalServerError)?;
+
+                        let html = self.tag_renderer.partial_html(
+                            &HEADERS,
+                            fragment,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                        );
+
+                        parts.push(html);
+                        parts.push("\n".to_string());
+                    }
+
+                    parts.push("<!--hyperchad-fragments-end-->\n".to_string());
+                }
+
+                let body = parts.join("");
                 let content_type = "text/html; charset=utf-8".to_string();
 
-                (content, content_type)
+                (Bytes::from(body), content_type)
             }
             #[cfg(feature = "json")]
             hyperchad_renderer::Content::Json(x) => {

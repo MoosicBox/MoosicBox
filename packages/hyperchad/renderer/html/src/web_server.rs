@@ -6,7 +6,7 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use flume::Receiver;
-use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
+use hyperchad_renderer::{Color, Content, HtmlTagRenderer, RendererEvent};
 use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RouteRequest, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use switchy::http::models::Method;
@@ -199,28 +199,29 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
         })?;
 
         match content {
-            Some(content) => match &content {
-                hyperchad_renderer::Content::View(..) => {
-                    // FIXME: This needs to attach the content type to the response headers
-                    let (body, _content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
+            Some(content) => {
+                let _has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
+
+                match content {
+                    hyperchad_renderer::Content::View(view) => {
+                        let (body, _content_type) = self
+                            .to_body(hyperchad_renderer::Content::View(view), req)
+                            .await?;
+                        Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
+                    }
+                    hyperchad_renderer::Content::Raw {
+                        data,
+                        content_type: _,
+                    } => Ok(HttpResponse::new(StatusCode::Ok).with_body(data.to_vec())),
+                    #[cfg(feature = "json")]
+                    hyperchad_renderer::Content::Json(json) => {
+                        let (body, _content_type) = self
+                            .to_body(hyperchad_renderer::Content::Json(json), req)
+                            .await?;
+                        Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
+                    }
                 }
-                hyperchad_renderer::Content::PartialView(PartialView { target, .. }) => {
-                    let _target = format!("#{target}");
-                    // FIXME: This needs to attach the content type to the response headers
-                    let (body, _content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
-                }
-                hyperchad_renderer::Content::Raw {
-                    data,
-                    content_type: _,
-                } => Ok(HttpResponse::new(StatusCode::Ok).with_body(data.to_vec())),
-                #[cfg(feature = "json")]
-                hyperchad_renderer::Content::Json(..) => {
-                    let (body, _content_type) = self.to_body(content, req).await?;
-                    Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
-                }
-            },
+            }
             None => Ok(HttpResponse::new(StatusCode::NoContent)),
         }
     }
@@ -233,46 +234,74 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
         static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
         Ok(match content {
-            hyperchad_renderer::Content::View(View {
-                immediate: view, ..
-            })
-            | hyperchad_renderer::Content::PartialView(PartialView {
-                container: view, ..
-            }) => {
-                let content =
-                    container_element_to_html(&view, &self.tag_renderer).map_err(|e| {
-                        hyperchad_renderer_html_web_server::WebServerError::Http {
-                            status_code: StatusCode::InternalServerError,
-                            source: Box::new(e),
-                        }
-                    })?;
+            hyperchad_renderer::Content::View(view) => {
+                let mut parts = Vec::new();
 
-                let content = if req.full {
-                    self.tag_renderer.root_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                        self.title.as_deref(),
-                        self.description.as_deref(),
-                    )
-                } else {
-                    self.tag_renderer.partial_html(
-                        &HEADERS,
-                        &view,
-                        content,
-                        self.viewport.as_deref(),
-                        self.background,
-                    )
+                // Render primary content
+                if let Some(primary) = &view.primary {
+                    let html =
+                        container_element_to_html(primary, &self.tag_renderer).map_err(|e| {
+                            hyperchad_renderer_html_web_server::WebServerError::Http {
+                                status_code: StatusCode::InternalServerError,
+                                source: Box::new(e),
+                            }
+                        })?;
+
+                    let html = if req.full {
+                        self.tag_renderer.root_html(
+                            &HEADERS,
+                            primary,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                            self.title.as_deref(),
+                            self.description.as_deref(),
+                        )
+                    } else {
+                        self.tag_renderer.partial_html(
+                            &HEADERS,
+                            primary,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                        )
+                    };
+
+                    parts.push(html);
                 }
-                .as_bytes()
-                .to_vec()
-                .into();
 
+                // Render fragments
+                if !view.fragments.is_empty() {
+                    parts.push("\n<!--hyperchad-fragments-->\n".to_string());
+
+                    for fragment in &view.fragments {
+                        let html = container_element_to_html(fragment, &self.tag_renderer)
+                            .map_err(|e| {
+                                hyperchad_renderer_html_web_server::WebServerError::Http {
+                                    status_code: StatusCode::InternalServerError,
+                                    source: Box::new(e),
+                                }
+                            })?;
+
+                        let html = self.tag_renderer.partial_html(
+                            &HEADERS,
+                            fragment,
+                            html,
+                            self.viewport.as_deref(),
+                            self.background,
+                        );
+
+                        parts.push(html);
+                        parts.push("\n".to_string());
+                    }
+
+                    parts.push("<!--hyperchad-fragments-end-->\n".to_string());
+                }
+
+                let body = parts.join("").as_bytes().to_vec().into();
                 let content_type = "text/html; charset=utf-8".to_string();
 
-                (content, content_type)
+                (body, content_type)
             }
             #[cfg(feature = "json")]
             hyperchad_renderer::Content::Json(x) => {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use hyperchad_renderer::{
-    PartialView, RendererEvent, View,
+    RendererEvent, View,
     canvas::{self},
 };
 use thiserror::Error;
@@ -61,14 +61,6 @@ pub trait ExtendHtmlRenderer {
     /// # Errors
     ///
     /// Will error if `ExtendHtmlRenderer` implementation fails to render the partial elements.
-    async fn render_partial(
-        &self,
-        _pub: HtmlRendererEventPub,
-        _partial: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        Ok(())
-    }
-
     /// # Errors
     ///
     /// Will error if `ExtendHtmlRenderer` implementation fails to render the canvas update.

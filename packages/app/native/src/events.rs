@@ -1,5 +1,5 @@
-use hyperchad::renderer::PartialView;
-use moosicbox_app_native_ui::{AUDIO_ZONES_CONTENT_ID, PLAYBACK_SESSIONS_CONTENT_ID, state::State};
+use hyperchad::renderer::View;
+use moosicbox_app_native_ui::state::State;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_music_models::api::ApiTrack;
 use moosicbox_player::Playback;
@@ -70,13 +70,14 @@ async fn refresh_audio_zone_with_sessions() {
 }
 
 async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) {
-    let view = PartialView {
-        target: AUDIO_ZONES_CONTENT_ID.to_string(),
-        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections).into(),
+    let container = moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections);
+    let view = View {
+        primary: None,
+        fragments: container,
     };
-    let response = RENDERER.get().unwrap().render_partial(view).await;
+    let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {
-        log::error!("Failed to render_partial: {e:?}");
+        log::error!("Failed to render: {e:?}");
     }
 }
 
@@ -150,15 +151,14 @@ async fn set_current_session(session: ApiSession) {
 async fn handle_session_update(state: &State, update: &ApiUpdateSession, session: &ApiSession) {
     let renderer = RENDERER.get().unwrap();
 
-    for (id, markup) in moosicbox_app_native_ui::session_updated(state, update, session) {
-        let view = PartialView {
-            target: id,
-            container: markup.into(),
-        };
-        let response = renderer.render_partial(view).await;
-        if let Err(e) = response {
-            log::error!("Failed to render_partial: {e:?}");
-        }
+    let markup = moosicbox_app_native_ui::session_updated(state, update, session);
+    let view = View {
+        primary: None,
+        fragments: markup,
+    };
+    let response = renderer.render(view).await;
+    if let Err(e) = response {
+        log::error!("Failed to render: {e:?}");
     }
 
     if update.position.is_some() || update.playlist.is_some() {
@@ -190,16 +190,16 @@ async fn update_playlist_sessions() {
         return;
     };
 
-    let view = PartialView {
-        target: PLAYBACK_SESSIONS_CONTENT_ID.to_string(),
-        container: moosicbox_app_native_ui::playback_sessions::playback_sessions(
-            &connection.api_url,
-            &STATE.current_sessions.read().await,
-        )
-        .into(),
+    let container = moosicbox_app_native_ui::playback_sessions::playback_sessions(
+        &connection.api_url,
+        &STATE.current_sessions.read().await,
+    );
+    let view = View {
+        primary: None,
+        fragments: container,
     };
-    let response = RENDERER.get().unwrap().render_partial(view).await;
+    let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {
-        log::error!("Failed to render_partial: {e:?}");
+        log::error!("Failed to render: {e:?}");
     }
 }

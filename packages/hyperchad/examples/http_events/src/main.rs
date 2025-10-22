@@ -4,6 +4,7 @@
 
 use hyperchad::{
     app::AppBuilder,
+    renderer::Content,
     router::{Container, RouteRequest, Router},
     template::{self as hyperchad_template, Containers, container},
 };
@@ -143,6 +144,20 @@ fn create_slow_button() -> Containers {
     }
 }
 
+fn task_input() -> Containers {
+    container! {
+        input
+            id="task-input"
+            type=text
+            name="task"
+            placeholder="Enter task name"
+            padding=8
+            width=100%
+            border-radius=4
+            value="";
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn create_main_page() -> Container {
     container! {
@@ -228,14 +243,7 @@ fn create_main_page() -> Container {
                                 {
                                     "Task Name:"
                                 }
-                                input
-                                    type=text
-                                    name="task"
-                                    id="task-input"
-                                    placeholder="Enter task name"
-                                    padding=8
-                                    width=100%
-                                    border-radius=4;
+                                (task_input())
                             }
 
                             div class="button-group" direction=row gap=8 {
@@ -334,7 +342,11 @@ fn create_router() -> Router {
     // Normal task creation (500ms delay)
     router.add_route_result("/api/tasks", |_req: RouteRequest| async move {
         switchy::unsync::time::sleep(std::time::Duration::from_millis(500)).await;
-        Ok(create_add_task_button().into()) as Result<Container, Box<dyn std::error::Error>>
+
+        // Return button + clear input using fragments
+        Ok(Content::view(create_add_task_button())
+            .fragment(task_input())
+            .into()) as Result<Content, Box<dyn std::error::Error>>
     });
 
     // Error endpoint (always fails)
@@ -347,7 +359,12 @@ fn create_router() -> Router {
     // Slow endpoint (3 second delay)
     router.add_route_result("/api/tasks/slow", |_req: RouteRequest| async move {
         switchy::unsync::time::sleep(std::time::Duration::from_secs(3)).await;
-        Ok(create_slow_button().into()) as Result<Container, Box<dyn std::error::Error>>
+
+        // Return button + clear input using fragments
+        Ok(Content::view(create_slow_button())
+            .fragment(task_input())
+            .into()) as Result<Content, Box<dyn std::error::Error>>
+            as Result<Content, Box<dyn std::error::Error>>
     });
 
     router

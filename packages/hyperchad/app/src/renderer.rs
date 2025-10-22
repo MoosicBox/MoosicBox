@@ -309,7 +309,7 @@ pub mod html {
         async fn generate(&self, router: &Router, output: Option<String>) -> Result<(), Error> {
             use std::io::Write as _;
 
-            use hyperchad_renderer::{Color, Content, PartialView, View};
+            use hyperchad_renderer::{Color, Content};
             use hyperchad_renderer_html::html::container_element_to_html_response;
             use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RoutePath, RouteRequest};
 
@@ -387,15 +387,11 @@ pub mod html {
                             .open(&output_path)?;
 
                         match content {
-                            Content::View(View {
-                                immediate: view, ..
-                            })
-                            | Content::PartialView(PartialView {
-                                container: view, ..
-                            }) => {
+                            Content::View(boxed_view) if boxed_view.primary.is_some() => {
+                                let view = boxed_view.primary.as_ref().unwrap();
                                 let html = container_element_to_html_response(
                                     &std::collections::BTreeMap::new(),
-                                    &view,
+                                    view,
                                     Some(&*VIEWPORT),
                                     Some(*BACKGROUND_COLOR),
                                     Some("MoosicBox"),
@@ -410,6 +406,9 @@ pub mod html {
 
                                 file.write_all(html.as_bytes())
                                     .expect("Failed to write file");
+                            }
+                            Content::View(_) => {
+                                // Fragments-only view - skip for static generation
                             }
                             Content::Raw { data, .. } => {
                                 log::debug!(
@@ -807,8 +806,7 @@ pub mod html {
 pub mod stub {
     use async_trait::async_trait;
     use hyperchad_renderer::{
-        Color, Handle, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
-        transformer::ResponsiveTrigger,
+        Color, Handle, RenderRunner, Renderer, ToRenderRunner, View, transformer::ResponsiveTrigger,
     };
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
@@ -855,16 +853,6 @@ pub mod stub {
         async fn render(
             &self,
             _view: View,
-        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-            Ok(())
-        }
-
-        /// # Errors
-        ///
-        /// Will error if `Renderer` implementation fails to render the partial elements.
-        async fn render_partial(
-            &self,
-            _partial: PartialView,
         ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
             Ok(())
         }

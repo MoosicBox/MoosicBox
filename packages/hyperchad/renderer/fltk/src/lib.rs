@@ -1358,9 +1358,9 @@ impl Renderer for FltkRenderer {
         &self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::debug!("render: {:?}", elements.immediate);
+        log::debug!("render: {:?}", elements.primary.as_ref());
 
-        *self.elements.write().unwrap() = elements.immediate;
+        *self.elements.write().unwrap() = elements.primary.unwrap();
 
         let renderer = self.clone();
 
@@ -1369,25 +1369,6 @@ impl Renderer for FltkRenderer {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
-
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if FLTK fails to render the partial view.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if elements `Mutex` is poisoned.
-    async fn render_partial(
-        &self,
-        view: PartialView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(
-            ("render_partial: start"),
-            ("render_partial: start {:?}", view)
-        );
 
         Ok(())
     }

@@ -40,6 +40,61 @@ function raise(message: string): never {
     throw new Error(message);
 }
 
+interface ParsedResponse {
+    primary: string | null;
+    fragments: HTMLElement[];
+}
+
+function parseResponse(responseText: string, headers: Headers): ParsedResponse {
+    const hasFragments = headers.get('X-HyperChad-Fragments') === 'true';
+
+    if (!hasFragments) {
+        // Simple response - just primary content
+        return {
+            primary: responseText,
+            fragments: [],
+        };
+    }
+
+    // Split by fragment marker
+    const fragmentStart = responseText.indexOf('<!--hyperchad-fragments-->');
+    const fragmentEnd = responseText.indexOf('<!--hyperchad-fragments-end-->');
+
+    let primary: string | null = null;
+    let fragmentsHtml = '';
+
+    if (fragmentStart > 0) {
+        primary = responseText.substring(0, fragmentStart).trim();
+    }
+
+    if (fragmentStart >= 0 && fragmentEnd > fragmentStart) {
+        fragmentsHtml = responseText
+            .substring(
+                fragmentStart + '<!--hyperchad-fragments-->'.length,
+                fragmentEnd,
+            )
+            .trim();
+    }
+
+    // Parse fragment elements
+    const fragments: HTMLElement[] = [];
+    if (fragmentsHtml) {
+        const temp = document.createElement('div');
+        temp.innerHTML = fragmentsHtml;
+
+        // Get all top-level elements with IDs
+        for (const child of Array.from(temp.children)) {
+            if (child instanceof HTMLElement && child.id) {
+                fragments.push(child);
+            } else if (child instanceof HTMLElement) {
+                console.warn('Fragment element missing ID attribute:', child);
+            }
+        }
+    }
+
+    return { primary, fragments };
+}
+
 async function handleHtmlResponse(
     element: HTMLElement,
     response: Promise<Response>,
@@ -52,17 +107,36 @@ async function handleHtmlResponse(
         return;
     }
 
-    let target = element;
+    const responseText = await resp.text();
+    const { primary, fragments } = parseResponse(responseText, resp.headers);
 
-    const fragment = resp.headers.get('v-fragment');
-
-    if (fragment) {
-        target =
-            document.querySelector(fragment) ??
-            raise(`Could not find element for fragment ${fragment}`);
+    // Handle primary swap (to triggering element)
+    if (primary) {
+        handleResponse(element, primary);
     }
 
-    handleResponse(target, await resp.text());
+    // Handle fragment swaps (by ID)
+    for (const fragment of fragments) {
+        const targetId = fragment.id;
+        const target = document.getElementById(targetId);
+
+        if (!target) {
+            console.warn(`Fragment target not found: #${targetId}`);
+            continue;
+        }
+
+        const { html, style } = splitHtml(fragment.outerHTML);
+
+        if (style && targetId) {
+            triggerHandlers('swapStyle', { id: targetId, style });
+        }
+
+        triggerHandlers('swapHtml', {
+            target,
+            html,
+            inner: false, // Always outerHTML for fragments
+        });
+    }
 }
 
 /**

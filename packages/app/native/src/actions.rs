@@ -1,6 +1,6 @@
 use hyperchad::{
     actions::{self, logic::Value},
-    renderer::PartialView,
+    renderer::View,
 };
 use moosicbox_app_native_ui::{Action, albums::load_albums};
 use moosicbox_app_state::AppStateError;
@@ -428,11 +428,12 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
 
             let size: u16 = 200;
 
-            let view = PartialView {
-                target: "albums".to_string(),
-                container: load_albums(size, *sort, filtered_sources, filter).into(),
+            let container = load_albums(size, *sort, filtered_sources, filter);
+            let view = View {
+                primary: None,
+                fragments: container,
             };
-            let response = RENDERER.get().unwrap().render_partial(view).await;
+            let response = RENDERER.get().unwrap().render(view).await;
             if let Err(e) = response {
                 log::error!("Failed to render_partial: {e:?}");
             }

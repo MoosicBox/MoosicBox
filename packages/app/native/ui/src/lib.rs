@@ -512,7 +512,7 @@ pub fn session_updated(
     state: &State,
     update: &ApiUpdateSession,
     session: &ApiSession,
-) -> Vec<(String, Containers)> {
+) -> Containers {
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
@@ -526,20 +526,18 @@ pub fn session_updated(
             && let Some(track) = track
         {
             log::debug!("session_updated: rendering current playing");
-            partials.push((
-                "player-current-playing".to_string(),
-                player_current_album(&connection.api_url, track, CURRENT_ALBUM_SIZE),
+            partials.extend(player_current_album(
+                &connection.api_url,
+                track,
+                CURRENT_ALBUM_SIZE,
             ));
         }
 
-        partials.push(("play-queue".to_string(), play_queue(state)));
+        partials.extend(play_queue(state));
     }
     if let Some(playing) = update.playing {
         log::debug!("session_updated: rendering play button");
-        partials.push((
-            "player-play-button".to_string(),
-            player_play_button(playing),
-        ));
+        partials.extend(player_play_button(playing));
     }
     if let Some(seek) = update.seek {
         let track: Option<&ApiTrack> = session
@@ -549,18 +547,12 @@ pub fn session_updated(
 
         if let Some(track) = track {
             log::debug!("session_updated: rendering current progress");
-            partials.push((
-                "player-current-progress".to_string(),
-                player_current_progress(seek, track.duration),
-            ));
+            partials.extend(player_current_progress(seek, track.duration));
         }
     }
     if let Some(volume) = update.volume {
         log::debug!("session_updated: rendering volume");
-        partials.push((
-            VOLUME_SLIDER_VALUE_ID.to_string(),
-            volume_slider_value(FOOTER_ICON_SIZE, volume),
-        ));
+        partials.extend(volume_slider_value(FOOTER_ICON_SIZE, volume));
     }
 
     partials

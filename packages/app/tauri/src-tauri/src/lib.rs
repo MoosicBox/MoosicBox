@@ -1214,7 +1214,7 @@ mod native_app {
 
     use async_trait::async_trait;
     use hyperchad::{
-        renderer::{Color, Handle, HtmlTagRenderer, PartialView, ToRenderRunner, View},
+        renderer::{Color, Handle, HtmlTagRenderer, ToRenderRunner, View},
         renderer_html::html::container_element_to_html,
         renderer_vanilla_js::VanillaJsTagRenderer,
         transformer::{Container, ResponsiveTrigger},
@@ -1385,48 +1385,42 @@ mod native_app {
             view: View,
         ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
             log::trace!("render");
-            let container = view.immediate;
-            let tag_renderer = self.tag_renderer.lock().unwrap();
-            let content = container_element_to_html(&container, &*tag_renderer)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-            let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
-            drop(tag_renderer);
 
-            let event_value = EventData {
-                id: None,
-                event: "view".to_string(),
-                data: content,
-            };
-            self.app_handle
-                .emit("sse-event", event_value)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            // Handle primary content
+            if let Some(container) = view.primary {
+                let tag_renderer = self.tag_renderer.lock().unwrap();
+                let content = container_element_to_html(&container, &*tag_renderer)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
+                drop(tag_renderer);
 
-            Ok(())
-        }
+                let event_value = EventData {
+                    id: None,
+                    event: "view".to_string(),
+                    data: content,
+                };
+                self.app_handle
+                    .emit("sse-event", event_value)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            }
 
-        /// # Errors
-        ///
-        /// Will error if `Renderer` implementation fails to render the partial elements.
-        async fn render_partial(
-            &self,
-            partial: PartialView,
-        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-            log::trace!("render_partial");
-            let container = partial.container;
-            let tag_renderer = self.tag_renderer.lock().unwrap();
-            let content = container_element_to_html(&container, &*tag_renderer)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-            let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
-            drop(tag_renderer);
+            // Handle fragments
+            for container in view.fragments {
+                let tag_renderer = self.tag_renderer.lock().unwrap();
+                let content = container_element_to_html(&container, &*tag_renderer)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
+                drop(tag_renderer);
 
-            let event_value = EventData {
-                id: Some(partial.target),
-                event: "partial_view".to_string(),
-                data: content,
-            };
-            self.app_handle
-                .emit("sse-event", event_value)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                let event_value = EventData {
+                    id: container.str_id.clone(),
+                    event: "fragment".to_string(),
+                    data: content,
+                };
+                self.app_handle
+                    .emit("sse-event", event_value)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            }
 
             Ok(())
         }
