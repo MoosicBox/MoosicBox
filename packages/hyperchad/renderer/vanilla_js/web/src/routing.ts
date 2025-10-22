@@ -46,6 +46,12 @@ async function handleHtmlResponse(
 ): Promise<void> {
     const resp = await response;
     if (resp.status === 204) return;
+
+    const contentType = resp.headers.get('content-type');
+    if (!contentType || !contentType.includes('text/html')) {
+        return;
+    }
+
     let target = element;
 
     const fragment = resp.headers.get('v-fragment');
