@@ -123,6 +123,13 @@ jobs:
                   include-reasoning: true
                   transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
                   git-strategy: workflow-history
+                  ignore: |
+                      **/*.md
+                      **/*.txt
+                      **/Dockerfile
+                      **/*.Dockerfile
+                      **/*.dockerignore
+                      **/*.nix
                   inject-reasoning: |
                       ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.packages && format('Manual workflow dispatch - selected packages: {0}', github.event.inputs.packages) || '' }}
                       ${{ github.event_name == 'workflow_dispatch' && !github.event.inputs.packages && 'Manual workflow dispatch - all packages included' || '' }}

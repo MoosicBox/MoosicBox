@@ -113,6 +113,10 @@ inputs:
         required: false
         default: 'false'
 
+    ignore:
+        description: 'Glob patterns to ignore when detecting affected packages (newline or comma-separated, e.g., "**/*.md")'
+        required: false
+
     target-package:
         description: 'Package to check if affected (for affected-packages command)'
         required: false
@@ -392,6 +396,7 @@ runs:
               INPUT_GITHUB_REPOSITORY: ${{ inputs.github-repository }}
               INPUT_GITHUB_REF_NAME: ${{ inputs.github-ref-name }}
               INPUT_INCLUDE_REASONING: ${{ inputs.include-reasoning }}
+              INPUT_IGNORE_PATTERNS: ${{ inputs.ignore }}
               INPUT_TARGET_PACKAGE: ${{ inputs.target-package }}
               INPUT_PACKAGE: ${{ inputs.package }}
               INPUT_ALL_POTENTIAL_DEPS: ${{ inputs.all-potential-deps }}

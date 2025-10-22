@@ -275,6 +275,15 @@ build_clippier_command() {
         fi
 
         [[ "$INPUT_INCLUDE_REASONING" == "true" ]] && cmd="$cmd --include-reasoning"
+
+        # Handle ignore patterns - can be newline or comma-separated
+        if [[ -n "$INPUT_IGNORE_PATTERNS" ]]; then
+            while IFS= read -r pattern; do
+                # Skip empty lines
+                [[ -n "$pattern" ]] && cmd="$cmd --ignore \"$pattern\""
+            done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
+        fi
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "affected-packages" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"
@@ -283,6 +292,15 @@ build_clippier_command() {
         [[ -n "$GIT_BASE" ]] && cmd="$cmd --git-base \"$GIT_BASE\""
         [[ -n "$GIT_HEAD" ]] && cmd="$cmd --git-head \"$GIT_HEAD\""
         [[ "$INPUT_INCLUDE_REASONING" == "true" ]] && cmd="$cmd --include-reasoning"
+
+        # Handle ignore patterns - can be newline or comma-separated
+        if [[ -n "$INPUT_IGNORE_PATTERNS" ]]; then
+            while IFS= read -r pattern; do
+                # Skip empty lines
+                [[ -n "$pattern" ]] && cmd="$cmd --ignore \"$pattern\""
+            done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
+        fi
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "packages" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"
@@ -297,6 +315,15 @@ build_clippier_command() {
         fi
 
         [[ "$INPUT_INCLUDE_REASONING" == "true" ]] && cmd="$cmd --include-reasoning"
+
+        # Handle ignore patterns - can be newline or comma-separated
+        if [[ -n "$INPUT_IGNORE_PATTERNS" ]]; then
+            while IFS= read -r pattern; do
+                # Skip empty lines
+                [[ -n "$pattern" ]] && cmd="$cmd --ignore \"$pattern\""
+            done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
+        fi
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "workspace-deps" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"
