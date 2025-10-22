@@ -132,6 +132,7 @@ fn test_basic_chunking_respects_limit() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -170,6 +171,7 @@ fn test_basic_chunking_respects_limit() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -214,6 +216,7 @@ fn test_basic_spreading_distributes_features() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -261,6 +264,7 @@ fn test_chunking_and_spreading_combination() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -311,6 +315,7 @@ fn test_max_parallel_with_chunking() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -360,6 +365,7 @@ fn test_changed_files_respects_chunking_and_spreading() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -416,6 +422,7 @@ fn test_chunking_with_small_limit() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -460,6 +467,7 @@ fn test_empty_workspace_with_chunking_spreading() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -546,6 +554,7 @@ serde = "1.0"
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -595,6 +604,7 @@ fn test_complex_scenario_all_flags() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -642,6 +652,7 @@ fn test_chunking_without_spreading() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -693,6 +704,7 @@ fn test_spreading_without_chunking() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 

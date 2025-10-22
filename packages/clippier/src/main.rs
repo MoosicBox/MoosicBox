@@ -122,6 +122,11 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         packages: Option<Vec<String>>,
 
+        /// Glob patterns to ignore when detecting affected packages (e.g., "**/*.md", "*.txt")
+        /// Can be specified multiple times. Use "!" prefix for negation (e.g., "!important.md")
+        #[arg(long, action = clap::ArgAction::Append)]
+        ignore: Vec<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -202,6 +207,10 @@ enum Commands {
         /// Include reasoning for why each package is affected in the JSON output
         #[arg(long)]
         include_reasoning: bool,
+        /// Glob patterns to ignore when detecting affected packages (e.g., "**/*.md", "*.txt")
+        /// Can be specified multiple times. Use "!" prefix for negation (e.g., "!important.md")
+        #[arg(long, action = clap::ArgAction::Append)]
+        ignore: Vec<String>,
         /// Output format
         #[arg(long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
@@ -261,6 +270,11 @@ enum Commands {
         #[arg(long)]
         max_parallel: Option<u16>,
 
+        /// Glob patterns to ignore when detecting affected packages (e.g., "**/*.md", "*.txt")
+        /// Can be specified multiple times. Use "!" prefix for negation (e.g., "!important.md")
+        #[arg(long, action = clap::ArgAction::Append)]
+        ignore: Vec<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
@@ -311,6 +325,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_head,
             include_reasoning,
             packages,
+            ignore,
             output,
         } => handle_features_command(
             &file,
@@ -332,6 +347,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "git-diff")]
             git_head.as_deref(),
             include_reasoning,
+            if ignore.is_empty() {
+                None
+            } else {
+                Some(&ignore)
+            },
             output,
         )?,
         Commands::WorkspaceDeps {
@@ -387,6 +407,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "git-diff")]
             git_head,
             include_reasoning,
+            ignore,
             output,
         } => handle_affected_packages_command(
             &workspace_root,
@@ -397,6 +418,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "git-diff")]
             git_head.as_deref(),
             include_reasoning,
+            if ignore.is_empty() {
+                None
+            } else {
+                Some(&ignore)
+            },
             output,
         )?,
         Commands::ValidateFeaturePropagation {
@@ -435,6 +461,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_head,
             include_reasoning,
             max_parallel,
+            ignore,
             output,
         } => handle_packages_command(
             &file,
@@ -447,6 +474,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_head.as_deref(),
             include_reasoning,
             max_parallel,
+            if ignore.is_empty() {
+                None
+            } else {
+                Some(&ignore)
+            },
             output,
         )?,
     };

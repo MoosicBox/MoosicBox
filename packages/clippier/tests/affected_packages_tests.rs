@@ -121,7 +121,7 @@ fn test_find_affected_packages_direct_change() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -133,7 +133,7 @@ fn test_find_affected_packages_leaf_change() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/web/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -148,7 +148,7 @@ fn test_find_affected_packages_multiple_files() {
         "packages/shared-utils/src/lib.rs".to_string(),
     ];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -160,7 +160,8 @@ fn test_find_affected_packages_with_reasoning() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files);
+    let result =
+        clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -180,7 +181,7 @@ fn test_find_affected_packages_cargo_toml_change() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/Cargo.toml".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -192,7 +193,7 @@ fn test_find_affected_packages_nested_path() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/api/src/handlers/mod.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -204,7 +205,7 @@ fn test_affected_packages_complex_dependency_chain() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -220,7 +221,7 @@ fn test_find_affected_packages_mixed_changes() {
         "packages/web/src/components/mod.rs".to_string(),
     ];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let packages = result.unwrap();
@@ -232,7 +233,7 @@ fn test_single_package_affected_check() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/api/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 
     let all_affected = result.unwrap();
@@ -245,7 +246,7 @@ fn test_find_affected_packages_no_changes() {
 
     let changed_files = vec!["README.md".to_string(), "docs/guide.md".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // No packages should be affected by non-package files
@@ -258,7 +259,7 @@ fn test_find_affected_packages_workspace_root_change() {
 
     let changed_files = vec!["Cargo.toml".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Workspace root changes typically don't affect individual packages
@@ -277,7 +278,7 @@ fn test_find_affected_packages_partial_path_match() {
 
     let changed_files = vec!["packages-backup/core-backup.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Should not affect any packages since the file is not in a package directory
@@ -290,7 +291,7 @@ fn test_find_affected_packages_case_sensitivity() {
 
     let changed_files = vec!["PACKAGES/core/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Should not match due to case sensitivity (PACKAGES vs packages)
@@ -310,7 +311,7 @@ fn test_find_affected_packages_with_external_deps() {
 
     // For now, just test that basic affected packages functionality works
     let changed_files = vec!["packages/api/src/lib.rs".to_string()];
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
 
     assert!(result.is_ok());
     let packages = result.unwrap();
@@ -325,7 +326,7 @@ fn test_empty_changed_files() {
 
     let changed_files: Vec<String> = vec![];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // No files changed, no packages affected
@@ -337,7 +338,7 @@ fn test_direct_file_changes() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/api/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -346,7 +347,7 @@ fn test_transitive_impact_analysis() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/core/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -358,7 +359,7 @@ fn test_multiple_file_changes() {
         "packages/shared-utils/src/lib.rs".to_string(),
     ];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -367,7 +368,7 @@ fn test_complex_dependency_chains() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/api/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -376,7 +377,8 @@ fn test_affected_with_reasoning() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/models/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files);
+    let result =
+        clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -388,7 +390,7 @@ fn test_nested_path_edge_cases() {
         "packages/api/tests/integration.rs".to_string(),
     ];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -397,7 +399,7 @@ fn test_partial_path_matches() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/ap/file.rs".to_string()]; // Partial match
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -406,7 +408,7 @@ fn test_case_sensitivity() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["PACKAGES/API/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -415,7 +417,7 @@ fn test_cargo_toml_vs_source_changes() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["packages/api/Cargo.toml".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -424,7 +426,7 @@ fn test_empty_change_sets() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files: Vec<String> = vec![];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -433,7 +435,7 @@ fn test_workspace_root_changes() {
     let (temp_dir, _) = load_test_workspace("complex");
     let changed_files = vec!["Cargo.toml".to_string(), "Cargo.lock".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files);
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[]);
     assert!(result.is_ok());
 }
 
@@ -679,7 +681,7 @@ fn test_nested_package_change_does_not_affect_parent() {
     // Change a file in the nested package
     let changed_files = vec!["packages/parent/nested/README.md".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Only the nested package should be affected, not the parent
@@ -694,7 +696,7 @@ fn test_nested_package_source_change_does_not_affect_parent() {
     // Change a source file in the nested package
     let changed_files = vec!["packages/parent/nested/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Only the nested package should be affected, not the parent
@@ -709,7 +711,7 @@ fn test_parent_package_change_affects_dependent_nested() {
     // Change a file in the parent package (but not in nested directory)
     let changed_files = vec!["packages/parent/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Both parent and nested should be affected because nested depends on parent
@@ -725,8 +727,9 @@ fn test_nested_package_with_reasoning() {
     // Change a file in the nested package
     let changed_files = vec!["packages/parent/nested/README.md".to_string()];
 
-    let result = clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files)
-        .expect("Failed to find affected packages with reasoning");
+    let result =
+        clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files, &[])
+            .expect("Failed to find affected packages with reasoning");
 
     // Should only affect the nested package with proper reasoning
     assert_eq!(result.len(), 1);
@@ -749,7 +752,7 @@ fn test_multiple_nested_changes() {
         "packages/parent/nested/src/lib.rs".to_string(),
     ];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Both packages should be affected, but each only by their own files
@@ -816,7 +819,7 @@ edition = "2021"
     // Test that changing the deepest level only affects that package
     let changed_files = vec!["packages/level1/level2/level3/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Only the deepest package should be affected
@@ -879,7 +882,7 @@ fn test_independent_nested_package_does_not_affect_parent() {
     // Change a file in the independent nested package
     let changed_files = vec!["packages/parent/independent_nested/README.md".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Only the nested package should be affected, not the parent
@@ -894,7 +897,7 @@ fn test_independent_parent_package_does_not_affect_nested() {
     // Change a file in the parent package (but not in nested directory)
     let changed_files = vec!["packages/parent/src/lib.rs".to_string()];
 
-    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files, &[])
         .expect("Failed to find affected packages");
 
     // Only the parent package should be affected, not the nested

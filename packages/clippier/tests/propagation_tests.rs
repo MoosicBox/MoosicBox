@@ -24,6 +24,7 @@ fn test_git_submodules_propagates_through_build_deps() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -67,6 +68,7 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -110,6 +112,7 @@ fn test_dependencies_propagate_and_merge() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -165,6 +168,7 @@ fn test_dependencies_propagate_to_root() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -220,6 +224,7 @@ fn test_ci_steps_propagate_and_preserve_order() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -279,6 +284,7 @@ fn test_env_vars_propagate_with_overlay() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -339,6 +345,7 @@ fn test_nightly_does_not_propagate() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -379,6 +386,7 @@ fn test_propagation_with_all_workspace_packages() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -422,6 +430,7 @@ fn test_external_deps_dont_break_propagation() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 

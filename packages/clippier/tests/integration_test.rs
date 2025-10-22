@@ -214,6 +214,7 @@ fn test_git_submodules_with_chunking_and_spreading() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     )
     .unwrap();

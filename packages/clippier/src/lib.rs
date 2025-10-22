@@ -2175,16 +2175,50 @@ pub fn generate_dockerignore_content(
     Ok(content)
 }
 
+/// Checks if a file should be ignored based on glob patterns
+///
+/// Handles negation patterns (!) similar to GitHub Actions path filters.
+/// Patterns are evaluated in order, with later patterns overriding earlier ones.
+///
+/// # Errors
+///
+/// * If glob pattern compilation fails
+fn should_ignore_file(
+    file_path: &str,
+    ignore_patterns: &[String],
+) -> Result<bool, Box<dyn std::error::Error>> {
+    if ignore_patterns.is_empty() {
+        return Ok(false);
+    }
+
+    let mut ignored = false;
+
+    for pattern in ignore_patterns {
+        let (is_negation, pattern_str) = pattern
+            .strip_prefix('!')
+            .map_or((false, pattern.as_str()), |p| (true, p));
+
+        let glob = globset::Glob::new(pattern_str)?;
+        if glob.compile_matcher().is_match(file_path) {
+            ignored = !is_negation;
+        }
+    }
+
+    Ok(ignored)
+}
+
 /// Finds packages that are affected by changed files
 ///
 /// # Errors
 ///
 /// * If IO error occurs
 /// * If no workspace members are found
+/// * If ignore pattern compilation fails
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn find_affected_packages(
     workspace_root: &Path,
     changed_files: &[String],
+    ignore_patterns: &[String],
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     log::trace!("🔍 Finding affected packages for changed files: {changed_files:?}");
 
@@ -2270,6 +2304,11 @@ pub fn find_affected_packages(
     let mut directly_affected_packages = BTreeSet::new();
 
     for changed_file in changed_files {
+        if should_ignore_file(changed_file, ignore_patterns)? {
+            log::trace!("🚫 Ignoring file (matched pattern): {changed_file}");
+            continue;
+        }
+
         let changed_path = std::path::PathBuf::from(changed_file);
 
         // Find the most specific (longest) matching package path for this changed file
@@ -2351,10 +2390,12 @@ pub fn find_affected_packages(
 ///
 /// * If IO error occurs
 /// * If no workspace members are found
+/// * If ignore pattern compilation fails
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn find_affected_packages_with_reasoning(
     workspace_root: &Path,
     changed_files: &[String],
+    ignore_patterns: &[String],
 ) -> Result<Vec<AffectedPackageInfo>, Box<dyn std::error::Error>> {
     log::trace!("🔍 Finding affected packages with reasoning for changed files: {changed_files:?}");
 
@@ -2441,6 +2482,11 @@ pub fn find_affected_packages_with_reasoning(
     let mut reasoning_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     for changed_file in changed_files {
+        if should_ignore_file(changed_file, ignore_patterns)? {
+            log::trace!("🚫 Ignoring file (matched pattern): {changed_file}");
+            continue;
+        }
+
         let changed_path = std::path::PathBuf::from(changed_file);
 
         // Find the most specific (longest) matching package path for this changed file
@@ -2898,6 +2944,7 @@ pub fn handle_features_command(
     #[cfg(feature = "git-diff")] git_base: Option<&str>,
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
     include_reasoning: bool,
+    ignore_patterns: Option<&[String]>,
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3113,12 +3160,20 @@ pub fn handle_features_command(
         }
 
         // First find affected packages from file changes
+        let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
         let (mut affected_packages, affected_with_reasoning) = if include_reasoning {
-            let with_reasoning = find_affected_packages_with_reasoning(&path, &all_changed_files)?;
+            let with_reasoning = find_affected_packages_with_reasoning(
+                &path,
+                &all_changed_files,
+                &ignore_patterns_vec,
+            )?;
             let packages: Vec<String> = with_reasoning.iter().map(|pkg| pkg.name.clone()).collect();
             (packages, Some(with_reasoning))
         } else {
-            (find_affected_packages(&path, &all_changed_files)?, None)
+            (
+                find_affected_packages(&path, &all_changed_files, &ignore_patterns_vec)?,
+                None,
+            )
         };
 
         // Add packages affected by external dependency changes and update reasoning if needed
@@ -3410,6 +3465,7 @@ pub fn handle_affected_packages_command(
     #[cfg(feature = "git-diff")] git_base: Option<&str>,
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
     include_reasoning: bool,
+    ignore_patterns: Option<&[String]>,
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     #[cfg(feature = "git-diff")]
@@ -3475,10 +3531,15 @@ pub fn handle_affected_packages_command(
     all_changed_files.dedup();
 
     // Find affected packages from file changes
+    let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
     let mut affected = if include_reasoning {
-        find_affected_packages_with_reasoning(workspace_root, &all_changed_files)?
+        find_affected_packages_with_reasoning(
+            workspace_root,
+            &all_changed_files,
+            &ignore_patterns_vec,
+        )?
     } else {
-        find_affected_packages(workspace_root, &all_changed_files)?
+        find_affected_packages(workspace_root, &all_changed_files, &ignore_patterns_vec)?
             .into_iter()
             .map(|name| AffectedPackageInfo {
                 name,
@@ -3687,6 +3748,7 @@ pub fn handle_packages_command(
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
     include_reasoning: bool,
     max_parallel: Option<u16>,
+    ignore_patterns: Option<&[String]>,
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3811,17 +3873,21 @@ pub fn handle_packages_command(
         }
 
         // Find packages affected by file changes
+        let ignore_patterns_vec = ignore_patterns.unwrap_or(&[]).to_vec();
         let mut file_affected_packages = if all_changed_files.is_empty() {
             Vec::new()
         } else {
             #[cfg(feature = "git-diff")]
             {
                 if include_reasoning {
-                    let with_reasoning =
-                        find_affected_packages_with_reasoning(&path, &all_changed_files)?;
+                    let with_reasoning = find_affected_packages_with_reasoning(
+                        &path,
+                        &all_changed_files,
+                        &ignore_patterns_vec,
+                    )?;
                     with_reasoning.iter().map(|pkg| pkg.name.clone()).collect()
                 } else {
-                    find_affected_packages(&path, &all_changed_files)?
+                    find_affected_packages(&path, &all_changed_files, &ignore_patterns_vec)?
                 }
             }
             #[cfg(not(feature = "git-diff"))]

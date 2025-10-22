@@ -251,6 +251,7 @@ fn test_ci_steps_with_command_and_toolchain() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -319,6 +320,7 @@ fn test_ci_steps_mixed_entries() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,            // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -378,6 +380,7 @@ fn test_ci_steps_with_features() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,         // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -428,6 +431,7 @@ fn test_ci_steps_json_output_structure() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -521,6 +525,7 @@ fn test_handle_features_command_basic() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false, // include_reasoning
+        None,
         OutputType::Raw,
     );
 
@@ -704,6 +709,7 @@ fn test_handle_features_command_comprehensive() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,                // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -834,6 +840,7 @@ serde = "1.0"
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,    // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -878,6 +885,7 @@ serde = "1.0"
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,   // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -1079,6 +1087,7 @@ fn test_handle_features_command_with_git_submodules() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -1217,6 +1226,7 @@ fn test_handle_packages_command_basic() {
         None,
         false,
         None,
+        None,
         OutputType::Json,
     );
 
@@ -1253,6 +1263,7 @@ fn test_handle_packages_command_json_output() {
         None,
         false,
         None,
+        None,
         OutputType::Json,
     );
 
@@ -1279,6 +1290,7 @@ fn test_handle_packages_command_raw_output() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Raw,
     );
@@ -1311,6 +1323,7 @@ fn test_handle_packages_command_with_specific_packages() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );
@@ -1348,6 +1361,7 @@ fn test_handle_packages_command_with_max_parallel() {
         None,
         false,
         Some(3),
+        None,
         OutputType::Json,
     );
 
@@ -1375,6 +1389,7 @@ fn test_handle_packages_command_no_os_filter() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );
@@ -1409,6 +1424,7 @@ fn test_handle_packages_command_nonexistent_package() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );
@@ -1445,6 +1461,7 @@ members = []
         None,
         false,
         None,
+        None,
         OutputType::Json,
     );
 
@@ -1480,6 +1497,7 @@ fn test_handle_packages_command_with_changed_files() {
         None,
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );
@@ -1521,6 +1539,7 @@ fn test_handle_packages_command_changed_files_with_dependencies() {
         None,
         false,
         None,
+        None,
         OutputType::Json,
     );
 
@@ -1558,6 +1577,7 @@ fn test_handle_packages_command_with_include_reasoning() {
         None,
         true,
         None,
+        None,
         OutputType::Json,
     );
 
@@ -1589,6 +1609,7 @@ fn test_handle_packages_command_mixed_valid_invalid() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );
@@ -1626,6 +1647,7 @@ fn test_handle_packages_command_all_packages() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         None,
         OutputType::Json,
     );

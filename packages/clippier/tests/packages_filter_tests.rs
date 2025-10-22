@@ -26,6 +26,7 @@ fn test_packages_filter_single_package() {
         #[cfg(feature = "git-diff")]
         None, // git_head
         false,                      // include_reasoning
+        None,
         OutputType::Json,
     );
 
@@ -66,6 +67,7 @@ fn test_packages_filter_multiple_packages() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -113,6 +115,7 @@ fn test_packages_filter_empty_list() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -136,6 +139,7 @@ fn test_packages_filter_empty_list() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -181,6 +185,7 @@ fn test_packages_with_os_filter() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -219,6 +224,7 @@ fn test_packages_with_chunking() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -266,6 +272,7 @@ fn test_packages_with_features_filter() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -310,6 +317,7 @@ fn test_packages_nonexistent_package() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -349,6 +357,7 @@ fn test_packages_mixed_valid_invalid() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -392,6 +401,7 @@ fn test_packages_case_sensitivity() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Json,
     );
 
@@ -426,6 +436,7 @@ fn test_packages_raw_output_format() {
         #[cfg(feature = "git-diff")]
         None,
         false,
+        None,
         OutputType::Raw,
     );
 
