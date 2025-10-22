@@ -26,6 +26,12 @@ The HyperChad Actions package provides:
 - **Resize**: Window/element resize events
 - **Custom Events**: User-defined event triggers
 - **Immediate**: Execute immediately without trigger
+- **HttpBeforeRequest**: Before HTTP request is sent
+- **HttpAfterRequest**: After HTTP request completes
+- **HttpRequestSuccess**: When HTTP request succeeds
+- **HttpRequestError**: When HTTP request fails
+- **HttpRequestAbort**: When HTTP request is aborted
+- **HttpRequestTimeout**: When HTTP request times out
 
 ### Element Targeting
 
@@ -243,6 +249,7 @@ let clamped = mouse_x.clamp(0.0, 100.0);
 - **Resize**: Window resize events
 - **Event(String)**: Custom named events
 - **Immediate**: Execute immediately without waiting for a trigger
+- **HttpBeforeRequest/HttpAfterRequest/HttpRequestSuccess/HttpRequestError/HttpRequestAbort/HttpRequestTimeout**: HTTP lifecycle events
 
 ## Feature Flags
 
