@@ -240,11 +240,20 @@ jobs:
                       - ❌ Expanding descriptions that are already accurate
                       - ❌ Minor completeness improvements
                       - ❌ Changing future tense to present or vice versa (if already marked correctly)
+                      - ❌ Removing features that are configured/enabled even if not fully implemented
+                      - ❌ Nitpicking wording differences when the meaning is substantially the same
 
                       **Decision Rule:**
-                      Before making ANY change, ask yourself: "Would a user be MISLED or UNABLE TO USE this package because of this issue?"
-                      - YES → Fix it (it''s fundamental)
-                      - NO → Leave it alone (it''s stylistic)
+                      Before making ANY change, ask yourself:
+                      1. "Would a user be MISLED or UNABLE TO USE this package because of this issue?"
+                      2. "Am I removing information that is technically accurate based on configuration/capabilities?"
+                      - If either is NO → Leave it alone
+                      - If both are YES → Fix it (it''s fundamental)
+
+                      **Examples of FORBIDDEN changes:**
+                      - Changing "System notifications, tray integration, and OS-specific features" to just "System notification support" (removing configured capabilities)
+                      - Changing "Media keys, notifications, and system tray" to "Media keys and notifications" (removing tray mention when capability exists)
+                      - Simplifying feature lists that accurately describe configured functionality
 
                       ## 📖 PUBLIC API FOCUS - Do Not Document Internals
 
@@ -455,11 +464,20 @@ jobs:
                       - ❌ Formatting/markdown changes
                       - ❌ Expanding package descriptions that are already accurate
                       - ❌ Minor completeness improvements
+                      - ❌ Removing features that are configured/enabled even if not fully implemented
+                      - ❌ Nitpicking wording differences when the meaning is substantially the same
 
                       **Decision Rule:**
-                      Before making ANY change, ask: "Would someone reading this be fundamentally MISLED about what this project does or how to use it?"
-                      - YES → Fix it (it''s fundamental)
-                      - NO → Leave it alone (it''s stylistic)
+                      Before making ANY change, ask:
+                      1. "Would someone reading this be fundamentally MISLED about what this project does or how to use it?"
+                      2. "Am I removing information that is technically accurate based on configuration/capabilities?"
+                      - If either is NO → Leave it alone
+                      - If both are YES → Fix it (it''s fundamental)
+
+                      **Examples of FORBIDDEN changes:**
+                      - Changing "System notifications, tray integration, and OS-specific features" to just "System notification support" (removing configured capabilities)
+                      - Changing "Media keys, notifications, and system tray" to "Media keys and notifications" (removing tray mention when capability exists)
+                      - Simplifying feature lists that accurately describe configured functionality
 
                       ## 📖 USER-FACING FOCUS - Don''t Document Implementation Details
 
