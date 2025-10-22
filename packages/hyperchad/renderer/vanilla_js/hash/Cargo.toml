@@ -28,6 +28,7 @@ all-plugins = [
     "plugin-canvas",
     "plugin-event",
     "plugin-form",
+    "plugin-http-events",
     "plugin-idiomorph",
     "plugin-nav",
     "plugin-routing",
@@ -67,6 +68,7 @@ plugin-actions-resize = ["_actions"]
 plugin-canvas        = []
 plugin-event         = []
 plugin-form          = []
+plugin-http-events   = []
 plugin-idiomorph     = []
 plugin-nav           = []
 plugin-routing       = []

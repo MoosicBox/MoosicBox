@@ -55,6 +55,7 @@ all-plugins = [
     "plugin-canvas",
     "plugin-event",
     "plugin-form",
+    "plugin-http-events",
     "plugin-idiomorph",
     "plugin-nav",
     "plugin-routing",
@@ -130,6 +131,7 @@ plugin-actions-resize = [
 plugin-canvas = ["hyperchad_renderer_vanilla_js_hash/plugin-canvas"]
 plugin-event = ["hyperchad_renderer_vanilla_js_hash/plugin-event"]
 plugin-form = ["hyperchad_renderer_vanilla_js_hash/plugin-form"]
+plugin-http-events = ["hyperchad_renderer_vanilla_js_hash/plugin-http-events"]
 plugin-idiomorph = ["hyperchad_renderer_vanilla_js_hash/plugin-idiomorph"]
 plugin-nav = ["hyperchad_renderer_vanilla_js_hash/plugin-nav"]
 plugin-routing = ["hyperchad_renderer_vanilla_js_hash/plugin-routing"]

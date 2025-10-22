@@ -19,6 +19,12 @@ impl Arbitrary for ActionTrigger {
             Self::Hover,
             Self::Change,
             Self::Immediate,
+            Self::HttpBeforeRequest,
+            Self::HttpAfterRequest,
+            Self::HttpRequestSuccess,
+            Self::HttpRequestError,
+            Self::HttpRequestAbort,
+            Self::HttpRequestTimeout,
             Self::Event(XmlString::arbitrary(half_g).0),
         ])
         .unwrap()

@@ -2,6 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+use std::collections::BTreeMap;
+
 use hyperchad_transformer_models::Visibility;
 
 #[cfg(feature = "logic")]
@@ -271,6 +273,17 @@ impl std::fmt::Display for Key {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct HttpEventContext {
+    pub url: String,
+    pub method: String,
+    pub status: Option<u16>,
+    pub headers: Option<BTreeMap<String, String>>,
+    pub duration_ms: Option<u64>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionTrigger {
@@ -284,6 +297,12 @@ pub enum ActionTrigger {
     Event(String),
     #[default]
     Immediate,
+    HttpBeforeRequest,
+    HttpAfterRequest,
+    HttpRequestSuccess,
+    HttpRequestError,
+    HttpRequestAbort,
+    HttpRequestTimeout,
 }
 
 impl ActionTrigger {
@@ -299,6 +318,12 @@ impl ActionTrigger {
             Self::Resize => "Resize",
             Self::Event(_) => "Event",
             Self::Immediate => "Immediate",
+            Self::HttpBeforeRequest => "HttpBeforeRequest",
+            Self::HttpAfterRequest => "HttpAfterRequest",
+            Self::HttpRequestSuccess => "HttpRequestSuccess",
+            Self::HttpRequestError => "HttpRequestError",
+            Self::HttpRequestAbort => "HttpRequestAbort",
+            Self::HttpRequestTimeout => "HttpRequestTimeout",
         }
     }
 }

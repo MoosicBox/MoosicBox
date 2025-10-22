@@ -60,6 +60,8 @@ fn main() {
         "canvas",
         #[cfg(feature = "plugin-form")]
         "form",
+        #[cfg(feature = "plugin-http-events")]
+        "actions-http-events",
         #[cfg(feature = "_actions")]
         "actions",
         #[cfg(feature = "plugin-actions-change")]

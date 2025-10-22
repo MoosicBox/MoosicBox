@@ -51,6 +51,11 @@ const PLUGIN_FORM_HASH: &str = "-form";
 #[cfg(not(feature = "plugin-form"))]
 const PLUGIN_FORM_HASH: &str = "";
 
+#[cfg(feature = "plugin-http-events")]
+const PLUGIN_HTTP_EVENTS_HASH: &str = "-http-events";
+#[cfg(not(feature = "plugin-http-events"))]
+const PLUGIN_HTTP_EVENTS_HASH: &str = "";
+
 #[cfg(feature = "plugin-actions-change")]
 const PLUGIN_ACTIONS_CHANGE_HASH: &str = "-actions-change";
 #[cfg(not(feature = "plugin-actions-change"))]
@@ -135,6 +140,7 @@ pub const PLUGIN_HASH: &str = const_format::concatcp!(
     PLUGIN_ACTIONS_RESIZE_HASH,
     PLUGIN_CANVAS_HASH,
     PLUGIN_FORM_HASH,
+    PLUGIN_HTTP_EVENTS_HASH,
 );
 
 pub const RAW_HASH: [u8; Sha256::DIGEST_SIZE] =

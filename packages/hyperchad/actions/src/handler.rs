@@ -758,6 +758,12 @@ pub fn should_trigger_action(trigger: &ActionTrigger, event_type: &str) -> bool 
         ActionTrigger::Resize => event_type == "resize",
         ActionTrigger::Event(name) => event_type == name,
         ActionTrigger::Immediate => event_type == "immediate",
+        ActionTrigger::HttpBeforeRequest => event_type == "http_before_request",
+        ActionTrigger::HttpAfterRequest => event_type == "http_after_request",
+        ActionTrigger::HttpRequestSuccess => event_type == "http_request_success",
+        ActionTrigger::HttpRequestError => event_type == "http_request_error",
+        ActionTrigger::HttpRequestAbort => event_type == "http_request_abort",
+        ActionTrigger::HttpRequestTimeout => event_type == "http_request_timeout",
     }
 }
 

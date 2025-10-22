@@ -481,7 +481,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         // Convert action trigger to style trigger
         let style_trigger = match action.trigger {
-            ActionTrigger::Event(_) => StyleTrigger::CustomEvent,
+            ActionTrigger::Event(_)
+            | ActionTrigger::HttpBeforeRequest
+            | ActionTrigger::HttpAfterRequest
+            | ActionTrigger::HttpRequestSuccess
+            | ActionTrigger::HttpRequestError
+            | ActionTrigger::HttpRequestAbort
+            | ActionTrigger::HttpRequestTimeout => StyleTrigger::CustomEvent,
             ActionTrigger::Click
             | ActionTrigger::Hover
             | ActionTrigger::Change

@@ -2875,6 +2875,24 @@ impl Container {
                 hyperchad_actions::ActionTrigger::Immediate => {
                     attrs.add("fx-immediate", action.effect.to_string());
                 }
+                hyperchad_actions::ActionTrigger::HttpBeforeRequest => {
+                    attrs.add("fx-http-before-request", action.effect.to_string());
+                }
+                hyperchad_actions::ActionTrigger::HttpAfterRequest => {
+                    attrs.add("fx-http-after-request", action.effect.to_string());
+                }
+                hyperchad_actions::ActionTrigger::HttpRequestSuccess => {
+                    attrs.add("fx-http-success", action.effect.to_string());
+                }
+                hyperchad_actions::ActionTrigger::HttpRequestError => {
+                    attrs.add("fx-http-error", action.effect.to_string());
+                }
+                hyperchad_actions::ActionTrigger::HttpRequestAbort => {
+                    attrs.add("fx-http-abort", action.effect.to_string());
+                }
+                hyperchad_actions::ActionTrigger::HttpRequestTimeout => {
+                    attrs.add("fx-http-timeout", action.effect.to_string());
+                }
                 hyperchad_actions::ActionTrigger::Event(..) => {
                     attrs.add("fx-event", action.effect.to_string());
                 }

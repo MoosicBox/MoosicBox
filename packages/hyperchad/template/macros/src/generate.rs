@@ -1162,6 +1162,12 @@ impl Generator {
             "change" => quote! { hyperchad_actions::ActionTrigger::Change },
             "mouse-down" => quote! { hyperchad_actions::ActionTrigger::MouseDown },
             "key-down" => quote! { hyperchad_actions::ActionTrigger::KeyDown },
+            "http-before-request" => quote! { hyperchad_actions::ActionTrigger::HttpBeforeRequest },
+            "http-after-request" => quote! { hyperchad_actions::ActionTrigger::HttpAfterRequest },
+            "http-success" => quote! { hyperchad_actions::ActionTrigger::HttpRequestSuccess },
+            "http-error" => quote! { hyperchad_actions::ActionTrigger::HttpRequestError },
+            "http-abort" => quote! { hyperchad_actions::ActionTrigger::HttpRequestAbort },
+            "http-timeout" => quote! { hyperchad_actions::ActionTrigger::HttpRequestTimeout },
             // TODO: Return error in this case. Just be strict about unknown events.
             // For all other triggers, use the Event variant
             _ => {
@@ -1420,7 +1426,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, white-space, text-decoration, direction, position, cursor, user-select, overflow-wrap, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
+                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, white-space, text-decoration, direction, position, cursor, user-select, overflow-wrap, text-overflow, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, fx-http-before-request, fx-http-after-request, fx-http-success, fx-http-error, fx-http-abort, fx-http-timeout, and any other fx-* event)"
                 );
                 return Err(error_msg);
             }

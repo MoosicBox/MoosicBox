@@ -2758,7 +2758,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             true
                         });
                     }
-                    ActionTrigger::Event(..) => {}
+                    ActionTrigger::Event(..)
+                    | ActionTrigger::HttpBeforeRequest
+                    | ActionTrigger::HttpAfterRequest
+                    | ActionTrigger::HttpRequestSuccess
+                    | ActionTrigger::HttpRequestError
+                    | ActionTrigger::HttpRequestAbort
+                    | ActionTrigger::HttpRequestTimeout => {}
                 }
             }
         }

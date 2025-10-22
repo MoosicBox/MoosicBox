@@ -721,6 +721,42 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
             effect: parse_effect(action),
         });
     }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-before-request") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpBeforeRequest,
+            effect: parse_effect(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-after-request") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpAfterRequest,
+            effect: parse_effect(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-success") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpRequestSuccess,
+            effect: parse_effect(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-error") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpRequestError,
+            effect: parse_effect(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-abort") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpRequestAbort,
+            effect: parse_effect(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-http-timeout") {
+        actions.push(Action {
+            trigger: ActionTrigger::HttpRequestTimeout,
+            effect: parse_effect(action),
+        });
+    }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-event") {
         let (name, action) = parse_event_action(&action);
         actions.push(Action {

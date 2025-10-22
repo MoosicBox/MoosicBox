@@ -105,6 +105,8 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"actions-key-up");
     #[cfg(feature = "plugin-actions-resize")]
     bytes.extend(b"actions-resize");
+    #[cfg(feature = "plugin-http-events")]
+    bytes.extend(b"http-events");
 
     let digest = md5::compute(&bytes);
     let digest = format!("{digest:x}");
@@ -783,6 +785,48 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     write_attr(
                         f,
                         b"v-onload",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpBeforeRequest => {
+                    write_attr(
+                        f,
+                        b"v-http-before-request",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpAfterRequest => {
+                    write_attr(
+                        f,
+                        b"v-http-after-request",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpRequestSuccess => {
+                    write_attr(
+                        f,
+                        b"v-http-success",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpRequestError => {
+                    write_attr(
+                        f,
+                        b"v-http-error",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpRequestAbort => {
+                    write_attr(
+                        f,
+                        b"v-http-abort",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::HttpRequestTimeout => {
+                    write_attr(
+                        f,
+                        b"v-http-timeout",
                         action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
