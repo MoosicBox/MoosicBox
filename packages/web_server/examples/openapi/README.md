@@ -79,16 +79,8 @@ http://localhost:8080/openapi/scalar/    # Scalar - Modern, beautiful UI
 
 ### API Specification
 
-**JSON Format**
-
 ```bash
 curl http://localhost:8080/openapi/swagger-ui/api-docs/openapi.json
-```
-
-**YAML Format** (if enabled)
-
-```bash
-curl http://localhost:8080/openapi/openapi.yaml
 ```
 
 ### Testing the Actual API
@@ -234,7 +226,7 @@ This pattern supports hierarchical API organization for complex applications wit
 
 - **Always Current**: Documentation generated directly from code
 - **Standard Format**: OpenAPI 3.0 specification compliance
-- **Multiple Formats**: JSON, YAML, and interactive HTML interfaces
+- **Multiple Formats**: JSON specification and interactive HTML interfaces
 - **Zero Maintenance**: No separate documentation to maintain
 
 ### Interactive Testing
@@ -422,22 +414,21 @@ openapi-generator-cli generate \
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────┐
-│           HTTP Request              │
-├─────────────────────────────────────┤
-│            CORS Layer               │
-├─────────────────────────────────────┤
-│         OpenAPI Routes              │
-│  /openapi/swagger-ui/    (Swagger)  │
-│  /openapi/redoc/         (ReDoc)    │
-│  /openapi/rapidoc/       (RapiDoc)  │
-│  /openapi/scalar/        (Scalar)   │
-│  /openapi/openapi.json   (Spec)     │
-├─────────────────────────────────────┤
-│          API Routes                 │
-│  /example               (Documented)│
-│  /health                (Regular)   │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    HTTP Request                         │
+├─────────────────────────────────────────────────────────┤
+│                     CORS Layer                          │
+├─────────────────────────────────────────────────────────┤
+│                  OpenAPI Routes                         │
+│  /openapi/swagger-ui/                        (Swagger)  │
+│  /openapi/redoc/                             (ReDoc)    │
+│  /openapi/rapidoc/                           (RapiDoc)  │
+│  /openapi/scalar/                            (Scalar)   │
+│  /openapi/swagger-ui/api-docs/openapi.json   (Spec)     │
+├─────────────────────────────────────────────────────────┤
+│                   API Routes                            │
+│  /example                                   (Documented)│
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Related Examples
