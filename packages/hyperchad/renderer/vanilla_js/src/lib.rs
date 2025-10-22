@@ -697,7 +697,6 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                             write_attr(f, b"hx-swap", format!("#{id}").as_bytes())?;
                         }
                     }
-                    write_attr(f, b"hx-swap", b"outerHTML")?;
                     match route {
                         Route::Get { .. } => {
                             write_attr(f, b"hx-get", path.as_bytes())?;
