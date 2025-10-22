@@ -32,7 +32,6 @@ fn create_add_task_button() -> Containers {
     container! {
         button
             hx-post="/api/tasks"
-            hx-swap="none"
             type=button
             padding-y=12
             padding-x=24
@@ -81,7 +80,6 @@ fn create_error_button() -> Containers {
     container! {
         button
             hx-post="/api/tasks/error"
-            hx-swap="none"
             type=button
             padding-y=12
             padding-x=24
@@ -115,7 +113,6 @@ fn create_slow_button() -> Containers {
     container! {
         button
             hx-post="/api/tasks/slow"
-            hx-swap="none"
             type=button
             padding-y=12
             padding-x=24
