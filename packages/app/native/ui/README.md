@@ -170,15 +170,17 @@ The package is organized into the following modules:
 
 ## Dependencies
 
-- **HyperChad**: UI framework and templating with actions, logic, color, and renderer features
-- **MoosicBox App Models**: Application-level models
+- **HyperChad**: UI framework and templating with actions, actions-logic, actions-serde, color, renderer-canvas, serde, template, and transformer features
+- **MoosicBox App Models**: Application-level models with music-api-api support
 - **MoosicBox Audio Zone Models**: Audio zone data structures
+- **MoosicBox Date Utils**: Date formatting utilities with chrono support
 - **MoosicBox Downloader**: Download management with API support
 - **MoosicBox Menu Models**: Menu data structures with API support
-- **MoosicBox Music API Models**: Music API data structures with search support
+- **MoosicBox Music API Models**: Music API data structures with api-search support
 - **MoosicBox Music Models**: Music data structures with API support
 - **MoosicBox Paging**: Pagination utilities
 - **MoosicBox Session Models**: Session management data structures
-- **Serde**: Serialization for actions and state
+- **switchy_env**: Environment variable utilities with std support
 - **bytesize**: Byte size formatting
 - **rust_decimal**: Decimal number handling
+- **serde**: Serialization for actions and state
