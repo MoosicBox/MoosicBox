@@ -174,10 +174,10 @@ The server supports various feature flags for customization:
 
 When running with the `openapi` feature, API documentation is available at:
 
-- Swagger UI: `http://localhost:8001/swagger-ui/`
-- ReDoc: `http://localhost:8001/redoc/`
-- Scalar: `http://localhost:8001/scalar/`
-- OpenAPI JSON: `http://localhost:8001/openapi.json`
+- Swagger UI: `http://localhost:8001/openapi/swagger-ui/`
+- ReDoc: `http://localhost:8001/openapi/redoc/`
+- Scalar: `http://localhost:8001/openapi/scalar/`
+- OpenAPI JSON: `http://localhost:8001/openapi/api-docs/openapi.json`
 
 ## Library Scanning
 
