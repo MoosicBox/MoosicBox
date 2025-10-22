@@ -111,7 +111,7 @@ async function handleHtmlResponse(
     const { primary, fragments } = parseResponse(responseText, resp.headers);
 
     // Handle primary swap (to triggering element)
-    if (primary) {
+    if (primary !== null) {
         handleResponse(element, primary);
     }
 
