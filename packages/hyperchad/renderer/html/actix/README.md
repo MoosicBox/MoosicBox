@@ -284,8 +284,7 @@ Server-Sent Events are automatically available at the `/$sse` endpoint when the 
 
 Events include:
 
-- `view`: Full view updates
-- `partial_view`: Partial view updates with target IDs
+- `view`: View updates (including partial updates with fragments)
 - `canvas_update`: Canvas updates for HTML5 canvas elements
 - `event`: Custom events with name and value
 
