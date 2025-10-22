@@ -5,7 +5,7 @@ use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapTarget, TextAlign,
-    TextDecorationLine, TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
+    TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -379,6 +379,16 @@ fn parse_overflow_wrap(value: &str) -> Result<OverflowWrap, ParseAttrError> {
         "normal" => OverflowWrap::Normal,
         "break-word" => OverflowWrap::BreakWord,
         "anywhere" => OverflowWrap::Anywhere,
+        _ => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_text_overflow(value: &str) -> Result<TextOverflow, ParseAttrError> {
+    Ok(match value {
+        "clip" => TextOverflow::Clip,
+        "ellipsis" => TextOverflow::Ellipsis,
         _ => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
@@ -1542,6 +1552,13 @@ fn parse_element(
             &mut overrides,
             parse_overflow_wrap,
             iter_once!(OverrideItem::OverflowWrap),
+        )?,
+        text_overflow: pmrv(
+            tag,
+            once("sx-text-overflow"),
+            &mut overrides,
+            parse_text_overflow,
+            iter_once!(OverrideItem::TextOverflow),
         )?,
         position: pmrv(
             tag,

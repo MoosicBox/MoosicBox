@@ -17,7 +17,8 @@ use hyperchad_router::Container;
 use hyperchad_transformer::{
     OverrideCondition, OverrideItem, ResponsiveTrigger,
     models::{
-        AlignItems, LayoutDirection, OverflowWrap, TextAlign, UserSelect, Visibility, WhiteSpace,
+        AlignItems, LayoutDirection, OverflowWrap, TextAlign, TextOverflow, UserSelect, Visibility,
+        WhiteSpace,
     },
 };
 use maud::{DOCTYPE, PreEscaped, html};
@@ -180,6 +181,16 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                                 OverflowWrap::Normal => b"normal",
                                 OverflowWrap::BreakWord => b"break-word",
                                 OverflowWrap::Anywhere => b"anywhere",
+                            },
+                        )?;
+                    }
+                    OverrideItem::TextOverflow(x) => {
+                        write_css_attr_important(
+                            f,
+                            override_item_to_css_name(o),
+                            match x {
+                                TextOverflow::Clip => b"clip",
+                                TextOverflow::Ellipsis => b"ellipsis",
                             },
                         )?;
                     }
@@ -396,6 +407,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::Cursor(..) => b"cursor",
         OverrideItem::UserSelect(..) => b"user-select",
         OverrideItem::OverflowWrap(..) => b"overflow-wrap",
+        OverrideItem::TextOverflow(..) => b"text-overflow",
         OverrideItem::Position(..) => b"position",
         OverrideItem::Background(..) => b"background",
         OverrideItem::BorderTop(..) => b"border-top",

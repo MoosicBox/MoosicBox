@@ -11,7 +11,7 @@ use hyperchad_color::Color;
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
     LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, TextAlign, TextDecorationLine,
-    TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
+    TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
 };
 use parse::parse_number;
 use serde::{Deserialize, Serialize, de::Error};
@@ -787,6 +787,7 @@ pub enum OverrideItem {
     Cursor(Cursor),
     UserSelect(UserSelect),
     OverflowWrap(OverflowWrap),
+    TextOverflow(TextOverflow),
     Position(Position),
     Background(Color),
     BorderTop((Color, Number)),
@@ -860,6 +861,7 @@ impl OverrideItem {
             Self::Cursor(x) => serde_json::to_string(x),
             Self::UserSelect(x) => serde_json::to_string(x),
             Self::OverflowWrap(x) => serde_json::to_string(x),
+            Self::TextOverflow(x) => serde_json::to_string(x),
             Self::Position(x) => serde_json::to_string(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -919,6 +921,7 @@ impl OverrideItem {
             Self::Cursor(x) => serde_json::to_value(x),
             Self::UserSelect(x) => serde_json::to_value(x),
             Self::OverflowWrap(x) => serde_json::to_value(x),
+            Self::TextOverflow(x) => serde_json::to_value(x),
             Self::Position(x) => serde_json::to_value(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -979,6 +982,7 @@ impl OverrideItem {
             Self::Cursor(x) => Box::new(x),
             Self::UserSelect(x) => Box::new(x),
             Self::OverflowWrap(x) => Box::new(x),
+            Self::TextOverflow(x) => Box::new(x),
             Self::Position(x) => Box::new(x),
             Self::BorderTop(x)
             | Self::BorderRight(x)
@@ -1195,6 +1199,15 @@ impl OverrideItem {
 
                 serde_json::to_string(&expr)
             }
+            Self::TextOverflow(x) => {
+                let mut expr = responsive.then::<&TextOverflow>(x);
+
+                if let Some(Self::TextOverflow(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
             Self::Position(x) => {
                 let mut expr = responsive.then::<&Position>(x);
 
@@ -1301,6 +1314,7 @@ macro_rules! override_item {
             OverrideItem::Cursor($name) => $action,
             OverrideItem::UserSelect($name) => $action,
             OverrideItem::OverflowWrap($name) => $action,
+            OverrideItem::TextOverflow($name) => $action,
             OverrideItem::Position($name) => $action,
             OverrideItem::BorderTop($name)
             | OverrideItem::BorderRight($name)
@@ -1351,6 +1365,7 @@ pub struct Container {
     pub cursor: Option<Cursor>,
     pub user_select: Option<UserSelect>,
     pub overflow_wrap: Option<OverflowWrap>,
+    pub text_overflow: Option<TextOverflow>,
     pub position: Option<Position>,
     pub background: Option<Color>,
     pub border_top: Option<(Color, Number)>,
@@ -2771,6 +2786,7 @@ impl Container {
         attrs.add_opt("sx-cursor", self.cursor.as_ref());
         attrs.add_opt("sx-user-select", self.user_select.as_ref());
         attrs.add_opt("sx-overflow-wrap", self.overflow_wrap.as_ref());
+        attrs.add_opt("sx-text-overflow", self.text_overflow.as_ref());
 
         attrs.add_opt("sx-padding-left", self.padding_left.as_ref());
         attrs.add_opt("sx-padding-right", self.padding_right.as_ref());
@@ -3478,6 +3494,7 @@ const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
         OverrideItem::Cursor(..) => "sx-cursor",
         OverrideItem::UserSelect(..) => "sx-user-select",
         OverrideItem::OverflowWrap(..) => "sx-overflow-wrap",
+        OverrideItem::TextOverflow(..) => "sx-text-overflow",
         OverrideItem::Position(..) => "sx-position",
         OverrideItem::Background(..) => "sx-background",
         OverrideItem::BorderTop(..) => "sx-border-top",

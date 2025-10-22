@@ -555,6 +555,24 @@ impl std::fmt::Display for OverflowWrap {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum TextOverflow {
+    #[default]
+    Clip,
+    Ellipsis,
+}
+
+impl std::fmt::Display for TextOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Clip => f.write_str("clip"),
+            Self::Ellipsis => f.write_str("ellipsis"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -615,5 +633,16 @@ mod tests {
     #[test]
     fn test_overflow_wrap_default() {
         assert_eq!(OverflowWrap::default(), OverflowWrap::Normal);
+    }
+
+    #[test]
+    fn test_text_overflow_display() {
+        assert_eq!(TextOverflow::Clip.to_string(), "clip");
+        assert_eq!(TextOverflow::Ellipsis.to_string(), "ellipsis");
+    }
+
+    #[test]
+    fn test_text_overflow_default() {
+        assert_eq!(TextOverflow::default(), TextOverflow::Clip);
     }
 }

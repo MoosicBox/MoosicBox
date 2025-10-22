@@ -1864,6 +1864,7 @@ impl Generator {
                 "cursor" => Some(Self::enum_attr("cursor", "Cursor", value)),
                 "user-select" => Some(Self::enum_attr("user_select", "UserSelect", value)),
                 "overflow-wrap" => Some(Self::enum_attr("overflow_wrap", "OverflowWrap", value)),
+                "text-overflow" => Some(Self::enum_attr("text_overflow", "TextOverflow", value)),
                 "visibility" => Some(Self::enum_attr("visibility", "Visibility", value)),
                 "overflow-x" => Some(Self::direct_enum_attr(
                     "overflow_x",

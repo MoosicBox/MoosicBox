@@ -22,7 +22,7 @@ use hyperchad_transformer::{
     Container, Element, Input, ResponsiveTrigger, TableIter, float_eq,
     models::{
         Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapTarget,
-        Visibility,
+        TextOverflow, Visibility,
     },
 };
 use itertools::Itertools;
@@ -2956,15 +2956,18 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             Element::Input { input, .. } => {
                 Self::render_input(element, ui, ctx, input, render_context.checkboxes)
             }
-            Element::Raw { value } => Some(
-                ui.label(
-                    egui::RichText::new(value).size(
-                        element
-                            .calculated_font_size
-                            .expect("Missing calculated_font_size"),
-                    ),
-                ),
-            ),
+            Element::Raw { value } => {
+                let font_size = element
+                    .calculated_font_size
+                    .expect("Missing calculated_font_size");
+                let mut label = egui::Label::new(egui::RichText::new(value).size(font_size));
+
+                if matches!(element.text_overflow, Some(TextOverflow::Ellipsis)) {
+                    label = label.truncate();
+                }
+
+                Some(label.ui(ui))
+            }
             Element::Image { source, .. } => source
                 .as_ref()
                 .map(|source| Self::render_image(render_context, ui, source, element)),

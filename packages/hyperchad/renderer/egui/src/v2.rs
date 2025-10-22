@@ -18,7 +18,10 @@ use hyperchad_actions::handler::{
 use hyperchad_actions::{ActionTrigger, logic::Value};
 use hyperchad_renderer::canvas::CanvasUpdate;
 use hyperchad_router::{ClientInfo, Router};
-use hyperchad_transformer::{Container, Element, Input, models::Visibility};
+use hyperchad_transformer::{
+    Container, Element, Input,
+    models::{TextOverflow, Visibility},
+};
 
 pub use eframe;
 pub use hyperchad_renderer::*;
@@ -264,7 +267,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         match &container.element {
             Element::Raw { value } => {
                 let font_size = container.calculated_font_size.unwrap_or(14.0);
-                return Some(ui.label(egui::RichText::new(value).size(font_size)));
+                let mut label = egui::Label::new(egui::RichText::new(value).size(font_size));
+
+                if matches!(container.text_overflow, Some(TextOverflow::Ellipsis)) {
+                    label = label.truncate();
+                }
+
+                return Some(label.ui(ui));
             }
             Element::Input { input, .. } => {
                 return self.render_input(ui, input, container);
@@ -278,7 +287,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             Element::Anchor { href, .. } => {
                 if let Some(text) = Self::get_container_text(container) {
                     let font_size = container.calculated_font_size.unwrap_or(14.0);
-                    let response = ui.link(egui::RichText::new(text).size(font_size));
+                    let mut label = egui::Label::new(egui::RichText::new(text).size(font_size))
+                        .sense(egui::Sense::click());
+
+                    if matches!(container.text_overflow, Some(TextOverflow::Ellipsis)) {
+                        label = label.truncate();
+                    }
+
+                    let response = label.ui(ui);
 
                     if response.clicked()
                         && let Some(href) = href

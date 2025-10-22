@@ -9,7 +9,7 @@ use hyperchad_transformer::{
     models::{
         AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
         LayoutOverflow, LinkTarget, OverflowWrap, Position, TextAlign, TextDecorationLine,
-        TextDecorationStyle, UserSelect, Visibility, WhiteSpace,
+        TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
     },
 };
 
@@ -738,6 +738,16 @@ pub fn element_style_to_html(
                 OverflowWrap::Normal => b"normal",
                 OverflowWrap::BreakWord => b"break-word",
                 OverflowWrap::Anywhere => b"anywhere",
+            }
+        );
+    }
+
+    if let Some(text_overflow) = &container.text_overflow {
+        write_css_attr!(
+            b"text-overflow",
+            match text_overflow {
+                TextOverflow::Clip => b"clip",
+                TextOverflow::Ellipsis => b"ellipsis",
             }
         );
     }
