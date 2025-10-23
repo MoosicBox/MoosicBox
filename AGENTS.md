@@ -33,3 +33,4 @@
 
 - Document all public APIs with comprehensive error information
 - Include examples for complex functions
+- **Version numbers**: Always specify full version numbers including patch version (e.g., `0.1.4` not `0.1`) in README installation examples
