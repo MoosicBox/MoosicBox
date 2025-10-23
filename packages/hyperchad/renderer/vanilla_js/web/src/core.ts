@@ -45,6 +45,20 @@ export type EventPayloads = {
     };
 };
 
+export type ElementFetch = (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    element?: HTMLElement,
+) => Promise<Response>;
+
+export function elementFetch(
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    element?: HTMLElement,
+): Promise<Response> {
+    return (fetch as ElementFetch)(input, init, element);
+}
+
 export type EventType = keyof typeof EVENT;
 export type EventPayloadType = keyof EventPayloads;
 export type Handler<T extends EventPayloadType> = (

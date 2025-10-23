@@ -30,9 +30,10 @@ const pendingRequests = new Map<
     }
 >();
 
-window.fetch = function (
+window.fetch = async function (
     input: RequestInfo | URL,
     init?: RequestInit,
+    element?: HTMLElement,
 ): Promise<Response> {
     const url =
         typeof input === 'string'
@@ -40,6 +41,7 @@ window.fetch = function (
             : input instanceof URL
               ? input.toString()
               : input.url;
+
     const method = init?.method?.toUpperCase() ?? 'GET';
     const startTime = Date.now();
 
@@ -50,17 +52,21 @@ window.fetch = function (
         method,
     };
 
-    dispatchHttpEvent('http-before-request', detail);
+    dispatchHttpEvent('http-before-request', detail, element);
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     if (controller) {
         timeoutId = setTimeout(() => {
             controller.abort();
-            dispatchHttpEvent('http-timeout', {
-                ...detail,
-                duration_ms: Date.now() - startTime,
-                error: 'Request timeout',
-            });
+            dispatchHttpEvent(
+                'http-timeout',
+                {
+                    ...detail,
+                    duration_ms: Date.now() - startTime,
+                    error: 'Request timeout',
+                },
+                element,
+            );
         }, 30000);
     }
 
@@ -90,15 +96,19 @@ window.fetch = function (
                 duration_ms,
             };
 
-            dispatchHttpEvent('http-after-request', eventDetail);
+            dispatchHttpEvent('http-after-request', eventDetail, element);
 
             if (response.ok) {
-                dispatchHttpEvent('http-success', eventDetail);
+                dispatchHttpEvent('http-success', eventDetail, element);
             } else {
-                dispatchHttpEvent('http-error', {
-                    ...eventDetail,
-                    error: `HTTP ${response.status} ${response.statusText}`,
-                });
+                dispatchHttpEvent(
+                    'http-error',
+                    {
+                        ...eventDetail,
+                        error: `HTTP ${response.status} ${response.statusText}`,
+                    },
+                    element,
+                );
             }
 
             pendingRequests.delete(promise);
@@ -115,12 +125,12 @@ window.fetch = function (
             };
 
             if (error.name === 'AbortError') {
-                dispatchHttpEvent('http-abort', eventDetail);
+                dispatchHttpEvent('http-abort', eventDetail, element);
             } else {
-                dispatchHttpEvent('http-error', eventDetail);
+                dispatchHttpEvent('http-error', eventDetail, element);
             }
 
-            dispatchHttpEvent('http-after-request', eventDetail);
+            dispatchHttpEvent('http-after-request', eventDetail, element);
 
             pendingRequests.delete(promise);
         });
@@ -128,26 +138,37 @@ window.fetch = function (
     return promise;
 };
 
-function dispatchHttpEvent(eventType: string, detail: HttpEventDetail): void {
+function dispatchHttpEvent(
+    eventType: string,
+    detail: HttpEventDetail,
+    element?: HTMLElement,
+): void {
     const event = new CustomEvent(`hyperchad:${eventType}`, {
         detail,
         bubbles: true,
         cancelable: false,
     });
-    document.dispatchEvent(event);
+
+    if (element) {
+        element.dispatchEvent(event);
+    } else {
+        document.dispatchEvent(event);
+    }
 }
 
-onElement(({ element }) => {
-    for (const attr of HTTP_TRIGGER_ATTRS) {
-        const action = element.getAttribute(attr);
-        if (!action) continue;
+for (const attr of HTTP_TRIGGER_ATTRS) {
+    const eventType = attr.replace('v-', '');
+    document.addEventListener(`hyperchad:${eventType}`, (event: Event) => {
+        const element = event.target as HTMLElement | undefined;
+        if (!element) return;
+        const customEvent = event as CustomEvent<HttpEventDetail>;
+        const context = customEvent.detail;
 
-        const eventType = attr.replace('v-', '');
-        const decodedAction = decodeURIComponent(action);
-
-        document.addEventListener(`hyperchad:${eventType}`, (event: Event) => {
-            const customEvent = event as CustomEvent<HttpEventDetail>;
-            const context = customEvent.detail;
+        const handler = (element: Element) => {
+            if (!(element instanceof HTMLElement)) return;
+            const action = element.getAttribute(attr);
+            if (!action) return;
+            const decodedAction = decodeURIComponent(action);
 
             handleError(`http-event:${attr}`, () =>
                 evaluate(decodedAction, {
@@ -156,6 +177,9 @@ onElement(({ element }) => {
                     value: context,
                 }),
             );
-        });
-    }
-});
+        };
+
+        handler(element);
+        element.querySelectorAll(`[${attr}]`).forEach(handler);
+    });
+}

@@ -1,5 +1,6 @@
 import {
     SwapStrategy,
+    elementFetch,
     methods,
     onAttr,
     onElement,
@@ -154,7 +155,7 @@ export function processRoute(
         const route = element.getAttribute(`hx-${method}`);
         if (route) {
             options.method = method;
-            handleHtmlResponse(element, fetch(route, options));
+            handleHtmlResponse(element, elementFetch(route, options, element));
         }
     }
 
