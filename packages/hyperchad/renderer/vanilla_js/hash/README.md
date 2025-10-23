@@ -37,6 +37,7 @@ All HyperChad Vanilla JS plugins are included in the hash:
 - **Event (`plugin-event`)**: Custom events
 - **Canvas (`plugin-canvas`)**: Canvas support
 - **Form (`plugin-form`)**: Form handling
+- **HTTP Events (`plugin-http-events`)**: HTTP event handling
 
 #### Action Plugins
 
@@ -288,6 +289,7 @@ All HyperChad Vanilla JS plugin features are supported:
 - **`plugin-event`**: Custom events plugin
 - **`plugin-canvas`**: Canvas plugin
 - **`plugin-form`**: Form handling plugin
+- **`plugin-http-events`**: HTTP events plugin
 
 ### Action Plugins
 

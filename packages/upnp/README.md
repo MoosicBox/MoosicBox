@@ -47,10 +47,11 @@ let device = get_device("uuid:device-udn")?;
 ### Media Transport Control
 
 ```rust
-use switchy_upnp::{play, pause, stop, seek, get_service};
+use switchy_upnp::{play, pause, stop, seek, get_device, get_service};
 
-// Get the AVTransport service
-let service = get_service("device-udn", "urn:upnp-org:serviceId:AVTransport")?;
+// Get the device and AVTransport service
+let device = get_device("uuid:device-udn")?;
+let service = get_service("uuid:device-udn", "urn:upnp-org:serviceId:AVTransport")?;
 let device_url = device.url();
 
 // Control playback
@@ -63,7 +64,12 @@ seek(&service, device_url, 0, "REL_TIME", 120).await?; // Seek to 2 minutes
 ### Setting Media URI
 
 ```rust
-use switchy_upnp::set_av_transport_uri;
+use switchy_upnp::{get_device, get_service, set_av_transport_uri};
+
+// Get the device and AVTransport service
+let device = get_device("uuid:device-udn")?;
+let service = get_service("uuid:device-udn", "urn:upnp-org:serviceId:AVTransport")?;
+let device_url = device.url();
 
 // Set the media to play
 set_av_transport_uri(
@@ -85,7 +91,12 @@ set_av_transport_uri(
 ### Volume Control
 
 ```rust
-use switchy_upnp::{get_volume, set_volume};
+use switchy_upnp::{get_device, get_service, get_volume, set_volume};
+
+// Get the device and RenderingControl service
+let device = get_device("uuid:device-udn")?;
+let service = get_service("uuid:device-udn", "urn:upnp-org:serviceId:RenderingControl")?;
+let device_url = device.url();
 
 // Get current volume
 let volume_info = get_volume(&service, device_url, 0, "Master").await?;
@@ -98,7 +109,12 @@ set_volume(&service, device_url, 0, "Master", 75).await?;
 ### Getting Device Information
 
 ```rust
-use switchy_upnp::{get_transport_info, get_position_info, get_media_info};
+use switchy_upnp::{get_device, get_service, get_transport_info, get_position_info, get_media_info};
+
+// Get the device and AVTransport service
+let device = get_device("uuid:device-udn")?;
+let service = get_service("uuid:device-udn", "urn:upnp-org:serviceId:AVTransport")?;
+let device_url = device.url();
 
 // Get transport state
 let transport = get_transport_info(&service, device_url, 0).await?;
@@ -119,8 +135,13 @@ println!("Media duration: {}s", media.media_duration);
 ### Event Subscriptions
 
 ```rust
-use switchy_upnp::subscribe_events;
+use switchy_upnp::{get_device, get_service, subscribe_events};
 use futures::StreamExt;
+
+// Get the device and service
+let device = get_device("uuid:device-udn")?;
+let service = get_service("uuid:device-udn", "urn:upnp-org:serviceId:AVTransport")?;
+let device_url = device.url();
 
 // Subscribe to device events
 let (subscription_id, mut event_stream) = subscribe_events(&service, device_url).await?;

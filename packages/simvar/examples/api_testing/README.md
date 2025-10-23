@@ -53,7 +53,7 @@ The server implements these REST endpoints:
 - `PUT /api/v1/users/{id}` - Update user (placeholder: returns success message without updating)
 - `DELETE /api/v1/users/{id}` - Delete user (placeholder: returns success message without deleting)
 
-**Implementation Note**: This is a simplified demonstration. Path parameter extraction, request body parsing, and actual update/delete operations are marked as "in a real implementation" in the code (see `src/main.rs:252-327`).
+**Implementation Note**: This is a simplified demonstration. Path parameter extraction, request body parsing, and actual update/delete operations are marked as "in a real implementation" in the code.
 
 ## Data Models
 
@@ -77,7 +77,7 @@ The server implements these REST endpoints:
 }
 ```
 
-**Note**: The current implementation does not parse this request body. The POST endpoint creates users with hardcoded values (see `src/main.rs:268-277`).
+**Note**: The current implementation does not parse this request body. The POST endpoint creates users with hardcoded values.
 
 ## Running the Example
 
@@ -134,7 +134,7 @@ Test Details:
   ...
 ```
 
-**Note**: The test count reflects the actual implemented tests. Concurrency tests are currently simplified and do not perform actual API requests (see `src/main.rs:350-354`).
+**Note**: The test count reflects the actual implemented tests. Concurrency tests are currently simplified and do not perform actual API requests.
 
 ## Key Features
 

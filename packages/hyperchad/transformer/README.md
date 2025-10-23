@@ -259,7 +259,7 @@ use hyperchad_transformer::layout::Calc;
 ### Table Operations
 
 ```rust
-use hyperchad_transformer::Container;
+use hyperchad_transformer::{Container, Element};
 
 let mut table = Container {
     element: Element::Table,

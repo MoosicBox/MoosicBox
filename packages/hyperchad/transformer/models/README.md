@@ -30,6 +30,10 @@ The HyperChad Transformer Models package provides:
 - **TextDecorationLine**: Inherit, None, Underline, Overline, LineThrough
 - **TextDecorationStyle**: Inherit, Solid, Double, Dotted, Dashed, Wavy
 - **FontWeight**: Thin, ExtraLight, Light, Normal, Medium, SemiBold, Bold, ExtraBold, Black, Lighter, Bolder, and numeric weights (100-900)
+- **WhiteSpace**: Normal, Preserve, PreserveWrap
+- **UserSelect**: Auto, None, Text, All
+- **OverflowWrap**: Normal, BreakWord, Anywhere
+- **TextOverflow**: Clip, Ellipsis
 
 ### Visual Properties
 
@@ -208,6 +212,10 @@ use hyperchad_transformer_models::LayoutPosition;
 - **TextDecorationLine**: Text decoration types
 - **TextDecorationStyle**: Decoration styling
 - **FontWeight**: Font weight variants (semantic and numeric)
+- **WhiteSpace**: Whitespace handling
+- **UserSelect**: Text selection behavior
+- **OverflowWrap**: Word wrapping behavior
+- **TextOverflow**: Text overflow handling
 
 ### Visual Models
 
@@ -238,6 +246,10 @@ assert_eq!(TextAlign::Center.to_string(), "center");
 assert_eq!(Cursor::Pointer.to_string(), "pointer");
 assert_eq!(FontWeight::Bold.to_string(), "bold");
 assert_eq!(FontWeight::Weight700.to_string(), "700");
+assert_eq!(WhiteSpace::Preserve.to_string(), "preserve");
+assert_eq!(UserSelect::None.to_string(), "none");
+assert_eq!(OverflowWrap::BreakWord.to_string(), "break-word");
+assert_eq!(TextOverflow::Ellipsis.to_string(), "ellipsis");
 ```
 
 ## Feature Flags

@@ -7,6 +7,7 @@ Pure Rust implementation of the Opus audio decoder (RFC 6716).
 - `silk` (default): SILK decoder for speech/narrowband content
 - `celt` (default): CELT decoder for music/wideband content
 - `hybrid` (default): Combined SILK+CELT decoder mode
+- `resampling`: SILK resampling support (requires moosicbox_resampler and symphonia)
 
 ## Reference Implementation
 

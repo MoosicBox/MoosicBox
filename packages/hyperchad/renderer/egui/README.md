@@ -355,29 +355,6 @@ tokio::spawn(async move {
 });
 ```
 
-### Partial Rendering
-
-```rust
-use hyperchad_renderer::PartialView;
-use hyperchad_template::container;
-
-// Update specific parts of the UI
-let partial_update = PartialView {
-    target: "message".to_string(),
-    container: container! {
-        div
-            background="green"
-            color="white"
-            padding=10
-        {
-            "Updated message!"
-        }
-    },
-};
-
-renderer.render_partial(partial_update).await?;
-```
-
 ### Canvas Rendering
 
 **Note**: Canvas rendering is implemented in the v1 renderer only. The v2 renderer has canvas

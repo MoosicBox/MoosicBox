@@ -1,10 +1,10 @@
 # MoosicBox Image Helper
 
-A command-line image processing tool for resizing, converting, and optimizing images with support for multiple formats.
+Image processing library and command-line tool for resizing, converting, and optimizing images with support for multiple formats.
 
 ## Overview
 
-The Image Helper (`image_helper`) is a utility for image processing operations including:
+MoosicBox Image provides both a library API and CLI tool (`image_helper`) for image processing operations including:
 
 - **Image Resizing**: Resize images while maintaining aspect ratio
 - **Format Conversion**: Convert between JPEG and WebP formats
@@ -13,6 +13,24 @@ The Image Helper (`image_helper`) is a utility for image processing operations i
 - **libvips Integration**: High-performance image processing (Linux/macOS only; Rust bindings unavailable on Windows)
 
 ## Installation
+
+### As a Library Dependency
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+moosicbox_image = "0.1.4"
+
+# Or with specific features:
+moosicbox_image = { version = "0.1.4", features = ["image", "libvips"] }
+```
+
+Available features:
+
+- `image` - Pure Rust image processing (default, cross-platform)
+- `libvips` - High-performance libvips backend (default, Linux/macOS only)
+- `build-binary` - Build the `image_helper` CLI tool
 
 ### From Source
 
@@ -33,7 +51,50 @@ System dependencies for optimal performance:
     - macOS: `brew install vips`
     - Windows: See [libvips Windows installation](https://www.libvips.org/install.html)
 
-## Usage
+## Library Usage
+
+The package provides both a library API and a CLI tool.
+
+### Using the Image Module
+
+The `image` module provides pure Rust image processing:
+
+```rust
+use moosicbox_image::{Encoding, image::try_resize_local_file_async};
+
+// Async resize
+let bytes = try_resize_local_file_async(
+    800,  // width
+    600,  // height
+    "input.jpg",
+    Encoding::Jpeg,
+    85    // quality
+).await?;
+```
+
+### Using the libvips Module
+
+The `libvips` module provides high-performance processing (Linux/macOS only):
+
+```rust
+use moosicbox_image::libvips::{resize_local_file, resize_bytes};
+
+// Resize from file path
+let bytes = resize_local_file(800, 600, "input.jpg")?;
+
+// Resize from bytes
+let resized = resize_bytes(800, 600, &image_bytes)?;
+```
+
+### Encoding Types
+
+```rust
+use moosicbox_image::Encoding;
+
+let encoding = Encoding::Jpeg;  // or Encoding::Webp
+```
+
+## CLI Usage
 
 ### Basic Usage
 

@@ -31,11 +31,9 @@ The MoosicBox Async package provides:
 
 - **Thread ID**: Unique thread identification
 - **Task Management**: Task spawning and joining
-- **File System**: Async file system operations (feature-gated)
 - **IO Operations**: Async I/O primitives (feature-gated)
 - **Synchronization**: Async synchronization primitives (feature-gated)
 - **Timers**: Async timing utilities (feature-gated)
-- **Networking**: Async networking primitives (feature-gated)
 
 ## Installation
 
@@ -48,7 +46,7 @@ switchy_async = { path = "../async" }
 # Enable specific features
 switchy_async = {
     path = "../async",
-    features = ["tokio", "rt-multi-thread", "fs", "io", "net", "sync", "time", "macros"]
+    features = ["tokio", "rt-multi-thread", "io", "sync", "time", "macros"]
 }
 
 # For testing with simulation
@@ -222,9 +220,7 @@ match handle.await {
 ### Tokio Features
 
 - **`rt-multi-thread`**: Multi-threaded Tokio runtime
-- **`fs`**: Async file system operations
 - **`io`**: Async I/O operations
-- **`net`**: Async networking operations
 - **`sync`**: Synchronization primitives (includes channels)
 - **`time`**: Timing utilities
 - **`util`**: Additional utilities

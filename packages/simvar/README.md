@@ -22,6 +22,7 @@ The package re-exports from `simvar_harness`:
 - **Configuration types**: `SimConfig`, `SimProperties`, `SimResult`, `SimRunProperties`
 - **Modules**: `client`, `host`, `plan`
 - **`utils` module**: Re-exports `simvar_utils` functionality
+- **`switchy`**: Underlying simulation and switching framework
 
 ## Installation
 

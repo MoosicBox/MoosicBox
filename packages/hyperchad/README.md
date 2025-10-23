@@ -172,9 +172,8 @@ let ui = container! {
 // Container - the fundamental building block
 pub struct Container {
     pub element: Element,
-    pub style: Style,
     pub children: Vec<Container>,
-    // ... other fields
+    // ... styling and layout fields
 }
 
 // Element - defines HTML/UI element types
@@ -201,9 +200,6 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         -> Result<(), Box<dyn std::error::Error>>;
 
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error>>;
-
-    async fn render_partial(&self, partial: PartialView)
-        -> Result<(), Box<dyn std::error::Error>>;
 
     async fn emit_event(&self, event_name: String, event_value: Option<String>)
         -> Result<(), Box<dyn std::error::Error>>;
