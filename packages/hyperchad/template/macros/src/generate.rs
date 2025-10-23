@@ -1041,7 +1041,7 @@ impl Generator {
                 |trigger| quote! { trigger: Some(#trigger) },
             );
             let target_field = target.map_or_else(
-                || quote! { target: hyperchad_transformer_models::SwapTarget::default() },
+                || quote! { target: hyperchad_transformer_models::Selector::default() },
                 |target| quote! { target: #target },
             );
             let strategy_field = strategy.map_or_else(
@@ -1347,13 +1347,13 @@ impl Generator {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
                         "this" => {
-                            quote! { hyperchad_transformer_models::SwapTarget::This }
+                            quote! { hyperchad_transformer_models::Selector::SelfTarget }
                         }
                         value if value.starts_with('#') => {
                             let id = &value[1..];
-                            quote! { hyperchad_transformer_models::SwapTarget::Id(#id.to_string()) }
+                            quote! { hyperchad_transformer_models::Selector::Id(#id.to_string()) }
                         }
-                        _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
+                        _ => quote! { hyperchad_transformer_models::Selector::default() },
                     }
                 } else {
                     let lit = &lit.lit;
@@ -1377,7 +1377,7 @@ impl Generator {
                     }
                 }
             }
-            _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
+            _ => quote! { hyperchad_transformer_models::Selector::default() },
         }
     }
 

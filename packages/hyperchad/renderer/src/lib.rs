@@ -45,6 +45,7 @@ impl Content {
         ViewBuilder {
             primary: Some(primary.into()),
             fragments: vec![],
+            delete_selectors: vec![],
         }
     }
 
@@ -54,6 +55,7 @@ impl Content {
         ViewBuilder {
             primary: None,
             fragments: vec![],
+            delete_selectors: vec![],
         }
     }
 
@@ -76,11 +78,24 @@ pub struct View {
     /// Each container MUST have an `id` attribute
     /// Client finds DOM elements with matching IDs and swaps them
     pub fragments: Vec<Container>,
+
+    /// Element selectors to delete from the DOM
+    /// Client finds DOM elements with matching selectors and removes them
+    pub delete_selectors: Vec<hyperchad_transformer::models::Selector>,
 }
 
+impl View {
+    #[must_use]
+    pub fn builder() -> ViewBuilder {
+        ViewBuilder::default()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct ViewBuilder {
     primary: Option<Container>,
     fragments: Vec<Container>,
+    delete_selectors: Vec<hyperchad_transformer::models::Selector>,
 }
 
 impl ViewBuilder {
@@ -99,12 +114,30 @@ impl ViewBuilder {
         self
     }
 
+    /// Add a delete selector
+    #[must_use]
+    pub fn delete_selector(mut self, selector: hyperchad_transformer::models::Selector) -> Self {
+        self.delete_selectors.push(selector);
+        self
+    }
+
+    /// Add multiple delete selectors
+    #[must_use]
+    pub fn delete_selectors(
+        mut self,
+        selectors: impl IntoIterator<Item = hyperchad_transformer::models::Selector>,
+    ) -> Self {
+        self.delete_selectors.extend(selectors);
+        self
+    }
+
     /// Build the View
     #[must_use]
     pub fn build(self) -> Content {
         Content::View(Box::new(View {
             primary: self.primary,
             fragments: self.fragments,
+            delete_selectors: self.delete_selectors,
         }))
     }
 }
@@ -148,6 +181,7 @@ impl From<Container> for Content {
         Self::View(Box::new(View {
             primary: Some(value),
             fragments: vec![],
+            delete_selectors: vec![],
         }))
     }
 }
@@ -175,6 +209,7 @@ impl<'a> TryFrom<&'a str> for View {
         Ok(Self {
             primary: Some(value.try_into()?),
             fragments: vec![],
+            delete_selectors: vec![],
         })
     }
 }
@@ -186,6 +221,7 @@ impl TryFrom<String> for View {
         Ok(Self {
             primary: Some(value.try_into()?),
             fragments: vec![],
+            delete_selectors: vec![],
         })
     }
 }
@@ -195,6 +231,7 @@ impl From<Container> for View {
         Self {
             primary: Some(value),
             fragments: vec![],
+            delete_selectors: vec![],
         }
     }
 }
@@ -204,6 +241,7 @@ impl From<Vec<Container>> for View {
         Self {
             primary: Some(value.into()),
             fragments: vec![],
+            delete_selectors: vec![],
         }
     }
 }

@@ -4,7 +4,7 @@ use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapStrategy, SwapTarget, TextAlign,
+    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, Selector, SwapStrategy, TextAlign,
     TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
@@ -169,12 +169,16 @@ fn parse_visibility(value: &str) -> Result<Visibility, ParseAttrError> {
     })
 }
 
-fn parse_target(value: &str) -> Result<SwapTarget, ParseAttrError> {
+fn parse_target(value: &str) -> Result<Selector, ParseAttrError> {
     Ok(match value {
-        "this" => SwapTarget::This,
+        "this" => Selector::SelfTarget,
         value => {
             if let Some(value) = value.strip_prefix('#') {
-                SwapTarget::Id(value.to_string())
+                Selector::Id(value.to_string())
+            } else if let Some(value) = value.strip_prefix('.') {
+                Selector::Class(value.to_string())
+            } else if let Some(value) = value.strip_prefix("> .") {
+                Selector::ChildClass(value.to_string())
             } else {
                 return Err(ParseAttrError::InvalidValue(value.to_string()));
             }

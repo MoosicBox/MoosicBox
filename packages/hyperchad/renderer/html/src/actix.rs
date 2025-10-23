@@ -231,6 +231,15 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         match content {
             Some(content) => {
                 let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
+                let delete_selectors = if let hyperchad_renderer::Content::View(v) = &content {
+                    if v.delete_selectors.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_string(&v.delete_selectors).ok()
+                    }
+                } else {
+                    None
+                };
 
                 match content {
                     hyperchad_renderer::Content::View(view) => {
@@ -238,18 +247,18 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                             .to_body(hyperchad_renderer::Content::View(view), req)
                             .await?;
 
-                        let response = if has_fragments {
-                            HttpResponse::Ok()
-                                .content_type(content_type.as_str())
-                                .append_header(("X-HyperChad-Fragments", "true"))
-                                .body(body)
-                        } else {
-                            HttpResponse::Ok()
-                                .content_type(content_type.as_str())
-                                .body(body)
-                        };
+                        let mut response = HttpResponse::Ok();
+                        response.content_type(content_type.as_str());
 
-                        Ok(response)
+                        if has_fragments {
+                            response.append_header(("X-HyperChad-Fragments", "true"));
+                        }
+
+                        if let Some(selectors) = delete_selectors {
+                            response.append_header(("X-HyperChad-Delete-Selectors", selectors));
+                        }
+
+                        Ok(response.body(body))
                     }
                     hyperchad_renderer::Content::Raw { data, content_type } => {
                         Ok(HttpResponse::Ok()

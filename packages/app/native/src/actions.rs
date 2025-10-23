@@ -432,6 +432,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
             let view = View {
                 primary: None,
                 fragments: container,
+                delete_selectors: vec![],
             };
             let response = RENDERER.get().unwrap().render(view).await;
             if let Err(e) = response {

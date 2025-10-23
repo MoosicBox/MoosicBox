@@ -693,13 +693,13 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     target,
                     strategy,
                 } => {
-                    // Output hx-target (WHERE) if not This
+                    // Output hx-target (WHERE) if not SelfTarget
                     match target {
-                        hyperchad_transformer::models::SwapTarget::This => {
+                        hyperchad_transformer::models::Selector::SelfTarget => {
                             // No hx-target attribute needed
                         }
-                        hyperchad_transformer::models::SwapTarget::Id(id) => {
-                            write_attr(f, b"hx-target", format!("#{id}").as_bytes())?;
+                        target => {
+                            write_attr(f, b"hx-target", target.to_string().as_bytes())?;
                         }
                     }
 

@@ -592,6 +592,7 @@ pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> 
                 .render(View {
                     primary: None,
                     fragments: vec![container],
+                    delete_selectors: vec![],
                 })
                 .await?;
 
@@ -1006,6 +1007,7 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
                 .render(View {
                     primary: None,
                     fragments: markup,
+                    delete_selectors: vec![],
                 })
                 .await
                 .unwrap();

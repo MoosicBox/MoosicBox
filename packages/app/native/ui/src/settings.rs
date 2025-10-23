@@ -2,7 +2,7 @@
 
 use hyperchad::{
     template::{self as hyperchad_template, Containers, container},
-    transformer::models::SwapTarget,
+    transformer::models::Selector,
 };
 use moosicbox_app_models::{
     AuthMethod, Connection, DownloadSettings, MusicApiSettings, ScanSettings,
@@ -207,7 +207,7 @@ pub fn music_api_settings_content(
                             button
                                 type=button
                                 hx-post={"/music-api/scan?apiSource="(settings.id)}
-                                hx-target=(SwapTarget::Id(id))
+                                hx-target=(Selector::Id(id))
                                 #run-scan-button
                                 border-radius=5
                                 background=#111
@@ -221,7 +221,7 @@ pub fn music_api_settings_content(
                             button
                                 type=button
                                 hx-post={"/music-api/enable-scan-origin?apiSource="(settings.id)}
-                                hx-target=(SwapTarget::Id(id))
+                                hx-target=(Selector::Id(id))
                                 #run-scan-button
                                 border-radius=5
                                 background=#111
@@ -238,7 +238,7 @@ pub fn music_api_settings_content(
             } @else if let Some(auth_method) = &settings.auth_method {
                 form
                     hx-post={"/music-api/auth?apiSource="(settings.id)}
-                    hx-target=(SwapTarget::Id(id))
+                    hx-target=(Selector::Id(id))
                 {
                     @match auth_method {
                         AuthMethod::UsernamePassword => {
@@ -321,7 +321,7 @@ pub fn connections_content(
 
                 form
                     hx-patch={"/settings/connections?name="(connection.name)}
-                    hx-target=(SwapTarget::Id("settings-connections".to_string()))
+                    hx-target=(Selector::Id("settings-connections".to_string()))
                     width=100%
                     gap=5
                 {

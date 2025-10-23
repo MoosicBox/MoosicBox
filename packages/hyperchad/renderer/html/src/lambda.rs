@@ -237,13 +237,22 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
         match content {
             hyperchad_renderer::Content::View(view) => {
-                if view.fragments.is_empty() {
+                let mut headers = Vec::new();
+
+                if !view.fragments.is_empty() {
+                    headers.push(("X-HyperChad-Fragments".to_string(), "true".to_string()));
+                }
+
+                if !view.delete_selectors.is_empty()
+                    && let Ok(selectors_json) = serde_json::to_string(&view.delete_selectors)
+                {
+                    headers.push(("X-HyperChad-Delete-Selectors".to_string(), selectors_json));
+                }
+
+                if headers.is_empty() {
                     None
                 } else {
-                    Some(vec![(
-                        "X-HyperChad-Fragments".to_string(),
-                        "true".to_string(),
-                    )])
+                    Some(headers)
                 }
             }
             hyperchad_renderer::Content::Raw { .. } => None,

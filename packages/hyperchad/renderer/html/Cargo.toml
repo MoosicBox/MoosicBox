@@ -33,7 +33,7 @@ html-escape = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true }
 qstring     = { workspace = true }
-serde_json  = { workspace = true, optional = true }
+serde_json  = { workspace = true }
 thiserror   = { workspace = true, optional = true }
 uaparser    = { workspace = true }
 
@@ -67,7 +67,6 @@ web-server-simulator = [
 ]
 
 json = [
-    "dep:serde_json",
     "hyperchad_renderer/json",
     "hyperchad_renderer_html_lambda?/json",
     "hyperchad_router/json",

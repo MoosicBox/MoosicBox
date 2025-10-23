@@ -152,22 +152,150 @@ impl LayoutPosition {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SwapTarget {
-    #[default]
-    This,
-    Id(String),
+pub enum Target {
+    Literal(String),
+    Ref(String),
 }
 
-impl std::fmt::Display for SwapTarget {
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Selector {
+    Id(String),
+    Class(String),
+    ChildClass(String),
+    #[default]
+    SelfTarget,
+}
+
+impl Selector {
+    #[must_use]
+    pub fn id(id: impl Into<String>) -> Self {
+        Self::Id(id.into())
+    }
+
+    #[must_use]
+    pub fn class(class: impl Into<String>) -> Self {
+        Self::Class(class.into())
+    }
+
+    #[must_use]
+    pub fn child_class(class: impl Into<String>) -> Self {
+        Self::ChildClass(class.into())
+    }
+}
+
+impl std::fmt::Display for Selector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::This => f.write_str("this"),
-            Self::Id(id) => {
-                f.write_str("#")?;
-                f.write_str(id)
+            Self::Id(id) => write!(f, "#{id}"),
+            Self::Class(class) => write!(f, ".{class}"),
+            Self::ChildClass(class) => write!(f, "> .{class}"),
+            Self::SelfTarget => f.write_str("this"),
+        }
+    }
+}
+
+impl From<String> for Target {
+    fn from(value: String) -> Self {
+        Self::Literal(value)
+    }
+}
+
+impl From<&str> for Target {
+    fn from(value: &str) -> Self {
+        Self::Literal(value.to_string())
+    }
+}
+
+impl From<&String> for Target {
+    fn from(value: &String) -> Self {
+        Self::Literal(value.clone())
+    }
+}
+
+impl From<&Self> for Target {
+    fn from(value: &Self) -> Self {
+        value.clone()
+    }
+}
+
+impl Target {
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Literal(x) | Self::Ref(x) => Some(x),
+        }
+    }
+
+    #[must_use]
+    pub fn literal(str: impl Into<String>) -> Self {
+        Self::Literal(str.into())
+    }
+
+    #[must_use]
+    pub fn reference(str: impl Into<String>) -> Self {
+        Self::Ref(str.into())
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ElementTarget {
+    StrId(Target),
+    Class(Target),
+    ChildClass(Target),
+    Id(usize),
+    #[default]
+    SelfTarget,
+    LastChild,
+}
+
+impl ElementTarget {
+    #[must_use]
+    pub fn str_id(target: impl Into<Target>) -> Self {
+        Self::StrId(target.into())
+    }
+
+    #[must_use]
+    pub fn class(target: impl Into<Target>) -> Self {
+        Self::Class(target.into())
+    }
+
+    #[must_use]
+    pub fn child_class(target: impl Into<Target>) -> Self {
+        Self::ChildClass(target.into())
+    }
+}
+
+impl std::fmt::Display for ElementTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StrId(target) => {
+                if let Some(s) = target.as_str() {
+                    write!(f, "#{s}")
+                } else {
+                    f.write_str("#")
+                }
             }
+            Self::Class(target) => {
+                if let Some(s) = target.as_str() {
+                    write!(f, ".{s}")
+                } else {
+                    f.write_str(".")
+                }
+            }
+            Self::ChildClass(target) => {
+                if let Some(s) = target.as_str() {
+                    write!(f, "> .{s}")
+                } else {
+                    f.write_str("> .")
+                }
+            }
+            Self::Id(_) => f.write_str("[internal-id]"),
+            Self::SelfTarget => f.write_str("this"),
+            Self::LastChild => f.write_str(":last-child"),
         }
     }
 }
@@ -209,31 +337,31 @@ pub enum Route {
     Get {
         route: String,
         trigger: Option<String>,
-        target: SwapTarget,
+        target: Selector,
         strategy: SwapStrategy,
     },
     Post {
         route: String,
         trigger: Option<String>,
-        target: SwapTarget,
+        target: Selector,
         strategy: SwapStrategy,
     },
     Put {
         route: String,
         trigger: Option<String>,
-        target: SwapTarget,
+        target: Selector,
         strategy: SwapStrategy,
     },
     Delete {
         route: String,
         trigger: Option<String>,
-        target: SwapTarget,
+        target: Selector,
         strategy: SwapStrategy,
     },
     Patch {
         route: String,
         trigger: Option<String>,
-        target: SwapTarget,
+        target: Selector,
         strategy: SwapStrategy,
     },
 }

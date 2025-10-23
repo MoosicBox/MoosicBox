@@ -2,9 +2,10 @@ use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
-    AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapTarget, TextAlign,
-    TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
+    AlignItems, Cursor, ElementTarget, FontWeight, ImageFit, ImageLoading, JustifyContent,
+    LayoutDirection, LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, Selector, Target,
+    TextAlign, TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect, Visibility,
+    WhiteSpace,
 };
 
 impl Arbitrary for LayoutDirection {
@@ -154,10 +155,43 @@ impl Arbitrary for Visibility {
     }
 }
 
-impl Arbitrary for SwapTarget {
+impl Arbitrary for Target {
     fn arbitrary(g: &mut Gen) -> Self {
+        let s = XmlString::arbitrary(g).0;
+        g.choose(&[Self::Literal(s.clone()), Self::Ref(s)])
+            .unwrap()
+            .clone()
+    }
+}
+
+impl Arbitrary for ElementTarget {
+    fn arbitrary(g: &mut Gen) -> Self {
+        let target = Target::arbitrary(g);
         let id = Arbitrary::arbitrary(g);
-        g.choose(&[Self::This, Self::Id(id)]).unwrap().clone()
+        g.choose(&[
+            Self::StrId(target.clone()),
+            Self::Class(target.clone()),
+            Self::ChildClass(target),
+            Self::Id(id),
+            Self::SelfTarget,
+            Self::LastChild,
+        ])
+        .unwrap()
+        .clone()
+    }
+}
+
+impl Arbitrary for Selector {
+    fn arbitrary(g: &mut Gen) -> Self {
+        let s = XmlString::arbitrary(g).0;
+        g.choose(&[
+            Self::Id(s.clone()),
+            Self::Class(s.clone()),
+            Self::ChildClass(s),
+            Self::SelfTarget,
+        ])
+        .unwrap()
+        .clone()
     }
 }
 
@@ -184,31 +218,31 @@ impl Arbitrary for Route {
             0 => Self::Get {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                target: SwapTarget::arbitrary(g),
+                target: Selector::arbitrary(g),
                 strategy: crate::SwapStrategy::arbitrary(g),
             },
             1 => Self::Post {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                target: SwapTarget::arbitrary(g),
+                target: Selector::arbitrary(g),
                 strategy: crate::SwapStrategy::arbitrary(g),
             },
             2 => Self::Put {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                target: SwapTarget::arbitrary(g),
+                target: Selector::arbitrary(g),
                 strategy: crate::SwapStrategy::arbitrary(g),
             },
             3 => Self::Delete {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                target: SwapTarget::arbitrary(g),
+                target: Selector::arbitrary(g),
                 strategy: crate::SwapStrategy::arbitrary(g),
             },
             4 => Self::Patch {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                target: SwapTarget::arbitrary(g),
+                target: Selector::arbitrary(g),
                 strategy: crate::SwapStrategy::arbitrary(g),
             },
             _ => unreachable!(),

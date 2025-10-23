@@ -74,6 +74,7 @@ async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[Ap
     let view = View {
         primary: None,
         fragments: container,
+        delete_selectors: vec![],
     };
     let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {
@@ -155,6 +156,7 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
     let view = View {
         primary: None,
         fragments: markup,
+        delete_selectors: vec![],
     };
     let response = renderer.render(view).await;
     if let Err(e) = response {
@@ -197,6 +199,7 @@ async fn update_playlist_sessions() {
     let view = View {
         primary: None,
         fragments: container,
+        delete_selectors: vec![],
     };
     let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {

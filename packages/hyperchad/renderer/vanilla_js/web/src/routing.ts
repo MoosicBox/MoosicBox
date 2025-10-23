@@ -38,23 +38,25 @@ function handleResponse(element: HTMLElement, text: string): boolean {
     return true;
 }
 
-function raise(message: string): never {
-    throw new Error(message);
-}
-
 interface ParsedResponse {
     primary: string | null;
     fragments: HTMLElement[];
+    deleteSelectors: string[];
 }
 
 function parseResponse(responseText: string, headers: Headers): ParsedResponse {
     const hasFragments = headers.get('X-HyperChad-Fragments') === 'true';
+    const deleteSelectorsHeader = headers.get('X-HyperChad-Delete-Selectors');
+    const deleteSelectors: string[] = deleteSelectorsHeader
+        ? JSON.parse(deleteSelectorsHeader)
+        : [];
 
     if (!hasFragments) {
         // Simple response - just primary content
         return {
             primary: responseText,
             fragments: [],
+            deleteSelectors,
         };
     }
 
@@ -101,7 +103,7 @@ function parseResponse(responseText: string, headers: Headers): ParsedResponse {
         }
     }
 
-    return { primary, fragments };
+    return { primary, fragments, deleteSelectors };
 }
 
 async function handleHtmlResponse(
@@ -117,7 +119,10 @@ async function handleHtmlResponse(
     }
 
     const responseText = await resp.text();
-    const { primary, fragments } = parseResponse(responseText, resp.headers);
+    const { primary, fragments, deleteSelectors } = parseResponse(
+        responseText,
+        resp.headers,
+    );
 
     // Handle primary swap (to triggering element)
     if (primary !== null) {
@@ -135,6 +140,14 @@ async function handleHtmlResponse(
             html: fragment.outerHTML,
             strategy: 'this', // Always this for fragments
         });
+    }
+
+    // Handle delete selectors
+    for (const selector of deleteSelectors) {
+        if (selector === '') element.remove();
+        if (!selector) continue;
+
+        document.querySelectorAll(selector).forEach((el) => el.remove());
     }
 }
 

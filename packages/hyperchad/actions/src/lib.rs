@@ -17,84 +17,10 @@ pub mod handler;
 
 pub mod dsl;
 
+pub use hyperchad_transformer_models::{ElementTarget, Target};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Target {
-    Literal(String),
-    Ref(String),
-}
-
-impl From<String> for Target {
-    fn from(value: String) -> Self {
-        Self::Literal(value)
-    }
-}
-
-impl From<&str> for Target {
-    fn from(value: &str) -> Self {
-        Self::Literal(value.to_string())
-    }
-}
-
-impl From<&String> for Target {
-    fn from(value: &String) -> Self {
-        Self::Literal(value.clone())
-    }
-}
-
-impl From<&Self> for Target {
-    fn from(value: &Self) -> Self {
-        value.clone()
-    }
-}
-
-impl Target {
-    #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::Literal(x) | Self::Ref(x) => Some(x),
-        }
-    }
-
-    pub fn literal(str: impl Into<String>) -> Self {
-        Self::Literal(str.into())
-    }
-
-    pub fn reference(str: impl Into<String>) -> Self {
-        Self::Ref(str.into())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ElementTarget {
-    StrId(Target),
-    Class(Target),
-    ChildClass(Target),
-    Id(usize),
-    SelfTarget,
-    LastChild,
-}
-
-impl ElementTarget {
-    #[must_use]
-    pub fn str_id(target: impl Into<Target>) -> Self {
-        Self::StrId(target.into())
-    }
-
-    #[must_use]
-    pub fn class(target: impl Into<Target>) -> Self {
-        Self::Class(target.into())
-    }
-
-    #[must_use]
-    pub fn child_class(target: impl Into<Target>) -> Self {
-        Self::ChildClass(target.into())
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

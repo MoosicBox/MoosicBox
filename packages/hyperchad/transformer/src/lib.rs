@@ -2669,7 +2669,7 @@ impl Container {
                 } => {
                     attrs.add("hx-get", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                    if !matches!(target, hyperchad_transformer_models::Selector::SelfTarget) {
                         attrs.add("hx-target", target);
                     }
                     attrs.add("hx-swap", strategy);
@@ -2682,7 +2682,7 @@ impl Container {
                 } => {
                     attrs.add("hx-post", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                    if !matches!(target, hyperchad_transformer_models::Selector::SelfTarget) {
                         attrs.add("hx-target", target);
                     }
                     attrs.add("hx-swap", strategy);
@@ -2695,7 +2695,7 @@ impl Container {
                 } => {
                     attrs.add("hx-put", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                    if !matches!(target, hyperchad_transformer_models::Selector::SelfTarget) {
                         attrs.add("hx-target", target);
                     }
                     attrs.add("hx-swap", strategy);
@@ -2708,7 +2708,7 @@ impl Container {
                 } => {
                     attrs.add("hx-delete", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                    if !matches!(target, hyperchad_transformer_models::Selector::SelfTarget) {
                         attrs.add("hx-target", target);
                     }
                     attrs.add("hx-swap", strategy);
@@ -2721,7 +2721,7 @@ impl Container {
                 } => {
                     attrs.add("hx-patch", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                    if !matches!(target, hyperchad_transformer_models::Selector::SelfTarget) {
                         attrs.add("hx-target", target);
                     }
                     attrs.add("hx-swap", strategy);

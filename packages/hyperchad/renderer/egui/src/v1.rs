@@ -22,7 +22,7 @@ use hyperchad_transformer::{
     Container, Element, Input, ResponsiveTrigger, TableIter, float_eq,
     models::{
         Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapStrategy,
-        SwapTarget, TextOverflow, Visibility,
+        TextOverflow, Visibility,
     },
 };
 use itertools::Itertools;
@@ -401,6 +401,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
                             .render(View {
                                 primary: Some(x),
                                 fragments: vec![],
+                                delete_selectors: vec![],
                             })
                             .await
                             .inspect_err(|e| log::error!("Failed to render: {e:?}"));
@@ -1110,8 +1111,22 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                                 match content {
                                                     Content::View(view) => {
                                                         if let Some(primary) = view.primary {
+                                                            let element_target = match target {
+                                                                hyperchad_transformer::models::Selector::Id(id) => {
+                                                                    ElementTarget::StrId(Target::Literal(id))
+                                                                }
+                                                                hyperchad_transformer::models::Selector::Class(class) => {
+                                                                    ElementTarget::Class(Target::Literal(class))
+                                                                }
+                                                                hyperchad_transformer::models::Selector::ChildClass(class) => {
+                                                                    ElementTarget::ChildClass(Target::Literal(class))
+                                                                }
+                                                                hyperchad_transformer::models::Selector::SelfTarget => {
+                                                                    ElementTarget::SelfTarget
+                                                                }
+                                                            };
                                                             Self::swap_elements(
-                                                                &target,
+                                                                &element_target,
                                                                 &strategy,
                                                                 &ctx,
                                                                 &container,
@@ -1144,7 +1159,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn swap_elements(
-        target: &SwapTarget,
+        target: &ElementTarget,
         strategy: &SwapStrategy,
         ctx: &egui::Context,
         container: &RwLock<Option<Container>>,
@@ -1162,8 +1177,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         };
 
         let target_id = match target {
-            SwapTarget::This => Some(container_id),
-            SwapTarget::Id(str_id) => page.find_element_by_str_id(str_id).map(|el| el.id),
+            ElementTarget::SelfTarget => Some(container_id),
+            ElementTarget::StrId(Target::Literal(str_id) | Target::Ref(str_id)) => {
+                page.find_element_by_str_id(str_id).map(|el| el.id)
+            }
+            _ => {
+                log::warn!("Unsupported target type for egui: {target:?}");
+                None
+            }
         };
 
         let Some(target_id) = target_id else {

@@ -208,6 +208,17 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             return Ok(Response::builder().status(204).body(vec![])?);
         };
 
+        let has_fragments = matches!(&content, Content::View(v) if !v.fragments.is_empty());
+        let delete_selectors = if let Content::View(v) = &content {
+            if v.delete_selectors.is_empty() {
+                None
+            } else {
+                serde_json::to_string(&v.delete_selectors).ok()
+            }
+        } else {
+            None
+        };
+
         let html = match content {
             Content::View(boxed_view) => {
                 let view = boxed_view.primary.as_ref();
@@ -256,10 +267,19 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             }
         };
 
-        Ok(Response::builder()
+        let mut response = Response::builder()
             .status(200)
-            .header("Content-Type", "text/html; charset=utf-8")
-            .body(html.into_bytes())?)
+            .header("Content-Type", "text/html; charset=utf-8");
+
+        if has_fragments {
+            response = response.header("X-HyperChad-Fragments", "true");
+        }
+
+        if let Some(selectors) = delete_selectors {
+            response = response.header("X-HyperChad-Delete-Selectors", selectors);
+        }
+
+        Ok(response.body(html.into_bytes())?)
     }
 }
 

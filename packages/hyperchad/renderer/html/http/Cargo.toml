@@ -28,7 +28,7 @@ http       = { workspace = true }
 log        = { workspace = true }
 mime_guess = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [features]
@@ -54,7 +54,7 @@ assets = [
     "hyperchad_renderer/assets",
 ]
 
-_json = ["dep:serde_json"]
+_json = []
 
 actions = [
     "_json",

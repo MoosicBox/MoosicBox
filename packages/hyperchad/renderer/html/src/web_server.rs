@@ -200,14 +200,38 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
 
         match content {
             Some(content) => {
-                let _has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
+                let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
+                let delete_selectors = if let hyperchad_renderer::Content::View(v) = &content {
+                    if v.delete_selectors.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_string(&v.delete_selectors).ok()
+                    }
+                } else {
+                    None
+                };
 
                 match content {
                     hyperchad_renderer::Content::View(view) => {
                         let (body, _content_type) = self
                             .to_body(hyperchad_renderer::Content::View(view), req)
                             .await?;
-                        Ok(HttpResponse::new(StatusCode::Ok).with_body(body.to_vec()))
+                        let mut response =
+                            HttpResponse::new(StatusCode::Ok).with_body(body.to_vec());
+
+                        if has_fragments {
+                            response
+                                .headers
+                                .insert("X-HyperChad-Fragments".to_string(), "true".to_string());
+                        }
+
+                        if let Some(selectors) = delete_selectors {
+                            response
+                                .headers
+                                .insert("X-HyperChad-Delete-Selectors".to_string(), selectors);
+                        }
+
+                        Ok(response)
                     }
                     hyperchad_renderer::Content::Raw {
                         data,

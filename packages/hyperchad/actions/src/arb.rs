@@ -3,7 +3,7 @@ use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
-    Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction, Target,
+    Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
 };
 
 fn half_g_max(g: &Gen, max: usize) -> Gen {
@@ -29,30 +29,6 @@ impl Arbitrary for ActionTrigger {
         ])
         .unwrap()
         .clone()
-    }
-}
-
-impl Arbitrary for Target {
-    fn arbitrary(g: &mut Gen) -> Self {
-        let max = 1;
-        match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
-            0 => Self::Literal(XmlString::arbitrary(g).0),
-            1 => Self::Ref(XmlString::arbitrary(g).0),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl Arbitrary for ElementTarget {
-    fn arbitrary(g: &mut Gen) -> Self {
-        let max = 3;
-        match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
-            0 => Self::StrId(Arbitrary::arbitrary(g)),
-            1 => Self::SelfTarget,
-            2 => Self::LastChild,
-            3 => Self::Id(usize::arbitrary(g)),
-            _ => unreachable!(),
-        }
     }
 }
 

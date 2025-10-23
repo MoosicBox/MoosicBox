@@ -52,7 +52,7 @@ fn test_htmx_post_route_with_swap() {
             } => {
                 assert_eq!(route, "/submit");
                 assert_eq!(*trigger, None);
-                assert_eq!(*target, hyperchad_transformer_models::SwapTarget::This);
+                assert_eq!(*target, hyperchad_transformer_models::Selector::SelfTarget);
                 assert_eq!(
                     *strategy,
                     hyperchad_transformer_models::SwapStrategy::Children
@@ -88,7 +88,7 @@ fn test_htmx_delete_route_with_id_target() {
                 assert_eq!(*trigger, None);
                 assert_eq!(
                     *target,
-                    hyperchad_transformer_models::SwapTarget::Id("item-list".to_string())
+                    hyperchad_transformer_models::Selector::Id("item-list".to_string())
                 );
                 assert_eq!(
                     *strategy,
@@ -160,7 +160,7 @@ fn test_mixed_attributes() {
             } => {
                 assert_eq!(route, "/submit");
                 assert_eq!(trigger.as_deref(), Some("submit"));
-                assert_eq!(*target, hyperchad_transformer_models::SwapTarget::This);
+                assert_eq!(*target, hyperchad_transformer_models::Selector::SelfTarget);
                 assert_eq!(*strategy, hyperchad_transformer_models::SwapStrategy::This);
             }
             _ => panic!("Expected Route::Post variant"),
