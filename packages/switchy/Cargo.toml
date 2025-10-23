@@ -132,6 +132,7 @@ all-database = [
     "database-sqlite-sqlx",
     "database-sqlx",
     "database-tls",
+    "database-turso",
 ]
 
 database                 = ["dep:switchy_database"]
@@ -166,6 +167,7 @@ all-database-connection = [
     "database-connection-sqlite-sqlx",
     "database-connection-sqlx",
     "database-connection-tls",
+    "database-connection-turso",
 ]
 
 database-connection = ["dep:switchy_database_connection"]
