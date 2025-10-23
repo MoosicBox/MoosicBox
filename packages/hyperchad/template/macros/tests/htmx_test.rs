@@ -18,7 +18,8 @@ fn test_htmx_get_route() {
             hyperchad_transformer_models::Route::Get {
                 route,
                 trigger,
-                swap: _,
+                target: _,
+                strategy: _,
             } => {
                 assert_eq!(route, "/test-route");
                 assert_eq!(trigger.as_deref(), Some("load"));
@@ -46,11 +47,16 @@ fn test_htmx_post_route_with_swap() {
             hyperchad_transformer_models::Route::Post {
                 route,
                 trigger,
-                swap,
+                target,
+                strategy,
             } => {
                 assert_eq!(route, "/submit");
                 assert_eq!(*trigger, None);
-                assert_eq!(*swap, hyperchad_transformer_models::SwapTarget::Children);
+                assert_eq!(*target, hyperchad_transformer_models::SwapTarget::This);
+                assert_eq!(
+                    *strategy,
+                    hyperchad_transformer_models::SwapStrategy::Children
+                );
             }
             _ => panic!("Expected Route::Post variant"),
         }
@@ -58,9 +64,9 @@ fn test_htmx_post_route_with_swap() {
 }
 
 #[test]
-fn test_htmx_delete_route_with_id_swap() {
+fn test_htmx_delete_route_with_id_target() {
     let containers = container! {
-        button hx-delete="/delete/item" hx-swap="#item-list" {
+        button hx-delete="/delete/item" hx-target="#item-list" hx-swap="delete" {
             "Delete"
         }
     };
@@ -75,13 +81,18 @@ fn test_htmx_delete_route_with_id_swap() {
             hyperchad_transformer_models::Route::Delete {
                 route,
                 trigger,
-                swap,
+                target,
+                strategy,
             } => {
                 assert_eq!(route, "/delete/item");
                 assert_eq!(*trigger, None);
                 assert_eq!(
-                    *swap,
+                    *target,
                     hyperchad_transformer_models::SwapTarget::Id("item-list".to_string())
+                );
+                assert_eq!(
+                    *strategy,
+                    hyperchad_transformer_models::SwapStrategy::Delete
                 );
             }
             _ => panic!("Expected Route::Delete variant"),
@@ -110,7 +121,8 @@ fn test_htmx_expression_route() {
             hyperchad_transformer_models::Route::Get {
                 route,
                 trigger,
-                swap: _,
+                target: _,
+                strategy: _,
             } => {
                 assert_eq!(route, "/api/items/123");
                 assert_eq!(trigger.as_deref(), Some("click"));
@@ -143,11 +155,13 @@ fn test_mixed_attributes() {
             hyperchad_transformer_models::Route::Post {
                 route,
                 trigger,
-                swap,
+                target,
+                strategy,
             } => {
                 assert_eq!(route, "/submit");
                 assert_eq!(trigger.as_deref(), Some("submit"));
-                assert_eq!(*swap, hyperchad_transformer_models::SwapTarget::This);
+                assert_eq!(*target, hyperchad_transformer_models::SwapTarget::This);
+                assert_eq!(*strategy, hyperchad_transformer_models::SwapStrategy::This);
             }
             _ => panic!("Expected Route::Post variant"),
         }

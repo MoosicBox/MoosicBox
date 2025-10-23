@@ -291,6 +291,7 @@ impl Generator {
                     | "hx-delete"
                     | "hx-patch"
                     | "hx-trigger"
+                    | "hx-target"
                     | "hx-swap"
             ) || name_str.starts_with("fx-")
                 || name_str.starts_with("data-")
@@ -990,7 +991,8 @@ impl Generator {
         let mut route_method = None;
         let mut route_url = None;
         let mut trigger = None;
-        let mut swap = None;
+        let mut target = None;
+        let mut strategy = None;
 
         // Find HTMX attributes
         for (name, attr_type) in named_attrs {
@@ -1020,8 +1022,11 @@ impl Generator {
                     "hx-trigger" => {
                         trigger = Some(Self::markup_to_string_tokens(value.clone()));
                     }
+                    "hx-target" => {
+                        target = Some(Self::markup_to_swap_target_tokens(value.clone()));
+                    }
                     "hx-swap" => {
-                        swap = Some(Self::markup_to_swap_target_tokens(value.clone()));
+                        strategy = Some(Self::markup_to_swap_strategy_tokens(value.clone()));
                     }
                     _ => {}
                 }
@@ -1035,16 +1040,21 @@ impl Generator {
                 || quote! { trigger: None },
                 |trigger| quote! { trigger: Some(#trigger) },
             );
-            let swap_field = swap.map_or_else(
-                || quote! { swap: hyperchad_transformer_models::SwapTarget::default() },
-                |swap| quote! { swap: #swap },
+            let target_field = target.map_or_else(
+                || quote! { target: hyperchad_transformer_models::SwapTarget::default() },
+                |target| quote! { target: #target },
+            );
+            let strategy_field = strategy.map_or_else(
+                || quote! { strategy: hyperchad_transformer_models::SwapStrategy::default() },
+                |strategy| quote! { strategy: #strategy },
             );
 
             Some(quote! {
                 route: Some(hyperchad_transformer_models::Route::#method_ident {
                     route: #url,
                     #trigger_field,
-                    #swap_field,
+                    #target_field,
+                    #strategy_field,
                 })
             })
         } else {
@@ -1336,10 +1346,9 @@ impl Generator {
                 if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
-                        "this" | "self" => {
+                        "this" => {
                             quote! { hyperchad_transformer_models::SwapTarget::This }
                         }
-                        "children" => quote! { hyperchad_transformer_models::SwapTarget::Children },
                         value if value.starts_with('#') => {
                             let id = &value[1..];
                             quote! { hyperchad_transformer_models::SwapTarget::Id(#id.to_string()) }
@@ -1369,6 +1378,64 @@ impl Generator {
                 }
             }
             _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
+        }
+    }
+
+    fn markup_to_swap_strategy_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    match value_str.to_lowercase().as_str() {
+                        "children" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::Children }
+                        }
+                        "this" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::This }
+                        }
+                        "beforebegin" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::BeforeBegin }
+                        }
+                        "afterbegin" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::AfterBegin }
+                        }
+                        "beforeend" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::BeforeEnd }
+                        }
+                        "afterend" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::AfterEnd }
+                        }
+                        "delete" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::Delete }
+                        }
+                        "none" => {
+                            quote! { hyperchad_transformer_models::SwapStrategy::None }
+                        }
+                        _ => quote! { hyperchad_transformer_models::SwapStrategy::default() },
+                    }
+                } else {
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_swap_strategy_tokens(items[0].clone())
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
+                }
+            }
+            _ => quote! { hyperchad_transformer_models::SwapStrategy::default() },
         }
     }
 
@@ -1426,7 +1493,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, white-space, text-decoration, direction, position, cursor, user-select, overflow-wrap, text-overflow, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, fx-http-before-request, fx-http-after-request, fx-http-success, fx-http-error, fx-http-abort, fx-http-timeout, and any other fx-* event)"
+                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, white-space, text-decoration, direction, position, cursor, user-select, overflow-wrap, text-overflow, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-target, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, fx-http-before-request, fx-http-after-request, fx-http-success, fx-http-error, fx-http-abort, fx-http-timeout, and any other fx-* event)"
                 );
                 return Err(error_msg);
             }

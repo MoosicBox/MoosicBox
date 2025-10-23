@@ -157,9 +157,24 @@ impl Arbitrary for Visibility {
 impl Arbitrary for SwapTarget {
     fn arbitrary(g: &mut Gen) -> Self {
         let id = Arbitrary::arbitrary(g);
-        g.choose(&[Self::This, Self::Children, Self::Id(id)])
-            .unwrap()
-            .clone()
+        g.choose(&[Self::This, Self::Id(id)]).unwrap().clone()
+    }
+}
+
+impl Arbitrary for crate::SwapStrategy {
+    fn arbitrary(g: &mut Gen) -> Self {
+        g.choose(&[
+            Self::This,
+            Self::Children,
+            Self::BeforeBegin,
+            Self::AfterBegin,
+            Self::BeforeEnd,
+            Self::AfterEnd,
+            Self::Delete,
+            Self::None,
+        ])
+        .unwrap()
+        .clone()
     }
 }
 
@@ -169,27 +184,32 @@ impl Arbitrary for Route {
             0 => Self::Get {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                swap: SwapTarget::arbitrary(g),
+                target: SwapTarget::arbitrary(g),
+                strategy: crate::SwapStrategy::arbitrary(g),
             },
             1 => Self::Post {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                swap: SwapTarget::arbitrary(g),
+                target: SwapTarget::arbitrary(g),
+                strategy: crate::SwapStrategy::arbitrary(g),
             },
             2 => Self::Put {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                swap: SwapTarget::arbitrary(g),
+                target: SwapTarget::arbitrary(g),
+                strategy: crate::SwapStrategy::arbitrary(g),
             },
             3 => Self::Delete {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                swap: SwapTarget::arbitrary(g),
+                target: SwapTarget::arbitrary(g),
+                strategy: crate::SwapStrategy::arbitrary(g),
             },
             4 => Self::Patch {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
-                swap: SwapTarget::arbitrary(g),
+                target: SwapTarget::arbitrary(g),
+                strategy: crate::SwapStrategy::arbitrary(g),
             },
             _ => unreachable!(),
         }

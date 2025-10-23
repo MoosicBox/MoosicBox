@@ -1,11 +1,16 @@
-import { methods, onAttr, onElement, splitHtml, triggerHandlers } from './core';
+import {
+    SwapStrategy,
+    methods,
+    onAttr,
+    onElement,
+    splitHtml,
+    triggerHandlers,
+} from './core';
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
 
 function handleResponse(element: HTMLElement, text: string): boolean {
     const { html, style } = splitHtml(text);
-    const swap = element.getAttribute('hx-swap');
-    const swapLower = swap?.toLowerCase();
 
     if (style && element.id) {
         triggerHandlers('swapStyle', {
@@ -14,23 +19,19 @@ function handleResponse(element: HTMLElement, text: string): boolean {
         });
     }
 
-    let inner = false;
-    let target: string | HTMLElement = element;
+    // Read WHERE to swap
+    const targetAttr = element.getAttribute('hx-target');
+    const target: string | HTMLElement = targetAttr || element;
 
-    switch (swapLower) {
-        case 'outerhtml':
-            break;
-        case 'innerhtml':
-            inner = true;
-            break;
-        default:
-            if (swap) target = swap;
-    }
+    // Read HOW to swap (default: outerHTML)
+    const swapAttr =
+        element.getAttribute('hx-swap')?.toLowerCase() || 'outerhtml';
+    const strategy = swapAttr as SwapStrategy;
 
     triggerHandlers('swapHtml', {
         target,
         html,
-        inner,
+        strategy,
     });
 
     return true;
@@ -134,7 +135,7 @@ async function handleHtmlResponse(
         triggerHandlers('swapHtml', {
             target,
             html,
-            inner: false, // Always outerHTML for fragments
+            strategy: 'this', // Always this for fragments
         });
     }
 }

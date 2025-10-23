@@ -2570,7 +2570,7 @@ impl Attrs {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn attrs(&self, #[allow(unused)] with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
@@ -2664,47 +2664,67 @@ impl Container {
                 Route::Get {
                     route,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
                     attrs.add("hx-get", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    attrs.add("hx-swap", swap);
+                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                        attrs.add("hx-target", target);
+                    }
+                    attrs.add("hx-swap", strategy);
                 }
                 Route::Post {
                     route,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
                     attrs.add("hx-post", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    attrs.add("hx-swap", swap);
+                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                        attrs.add("hx-target", target);
+                    }
+                    attrs.add("hx-swap", strategy);
                 }
                 Route::Put {
                     route,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
                     attrs.add("hx-put", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    attrs.add("hx-swap", swap);
+                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                        attrs.add("hx-target", target);
+                    }
+                    attrs.add("hx-swap", strategy);
                 }
                 Route::Delete {
                     route,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
                     attrs.add("hx-delete", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    attrs.add("hx-swap", swap);
+                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                        attrs.add("hx-target", target);
+                    }
+                    attrs.add("hx-swap", strategy);
                 }
                 Route::Patch {
                     route,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
                     attrs.add("hx-patch", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
-                    attrs.add("hx-swap", swap);
+                    if !matches!(target, hyperchad_transformer_models::SwapTarget::This) {
+                        attrs.add("hx-target", target);
+                    }
+                    attrs.add("hx-swap", strategy);
                 }
             }
         }

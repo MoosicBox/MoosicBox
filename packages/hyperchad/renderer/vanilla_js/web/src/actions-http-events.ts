@@ -10,8 +10,6 @@ const HTTP_TRIGGER_ATTRS = [
     'v-http-timeout',
 ] as const;
 
-type HttpTriggerAttr = (typeof HTTP_TRIGGER_ATTRS)[number];
-
 interface HttpEventDetail {
     url: string;
     method: string;
@@ -24,20 +22,28 @@ interface HttpEventDetail {
 const originalFetch = window.fetch;
 const pendingRequests = new Map<
     Promise<Response>,
-    { startTime: number; url: string; method: string; controller?: AbortController }
+    {
+        startTime: number;
+        url: string;
+        method: string;
+        controller?: AbortController;
+    }
 >();
 
 window.fetch = function (
     input: RequestInfo | URL,
     init?: RequestInit,
 ): Promise<Response> {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const url =
+        typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
     const method = init?.method?.toUpperCase() ?? 'GET';
     const startTime = Date.now();
 
-    const controller = init?.signal
-        ? undefined
-        : new AbortController();
+    const controller = init?.signal ? undefined : new AbortController();
 
     const detail: HttpEventDetail = {
         url,

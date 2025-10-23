@@ -157,19 +157,47 @@ impl LayoutPosition {
 pub enum SwapTarget {
     #[default]
     This,
-    Children,
     Id(String),
 }
 
 impl std::fmt::Display for SwapTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::This => f.write_str("self"),
-            Self::Children => f.write_str("children"),
+            Self::This => f.write_str("this"),
             Self::Id(id) => {
                 f.write_str("#")?;
                 f.write_str(id)
             }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+pub enum SwapStrategy {
+    #[default]
+    This,
+    Children,
+    BeforeBegin,
+    AfterBegin,
+    BeforeEnd,
+    AfterEnd,
+    Delete,
+    None,
+}
+
+impl std::fmt::Display for SwapStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::This => f.write_str("this"),
+            Self::Children => f.write_str("children"),
+            Self::BeforeBegin => f.write_str("beforebegin"),
+            Self::AfterBegin => f.write_str("afterbegin"),
+            Self::BeforeEnd => f.write_str("beforeend"),
+            Self::AfterEnd => f.write_str("afterend"),
+            Self::Delete => f.write_str("delete"),
+            Self::None => f.write_str("none"),
         }
     }
 }
@@ -181,27 +209,32 @@ pub enum Route {
     Get {
         route: String,
         trigger: Option<String>,
-        swap: SwapTarget,
+        target: SwapTarget,
+        strategy: SwapStrategy,
     },
     Post {
         route: String,
         trigger: Option<String>,
-        swap: SwapTarget,
+        target: SwapTarget,
+        strategy: SwapStrategy,
     },
     Put {
         route: String,
         trigger: Option<String>,
-        swap: SwapTarget,
+        target: SwapTarget,
+        strategy: SwapStrategy,
     },
     Delete {
         route: String,
         trigger: Option<String>,
-        swap: SwapTarget,
+        target: SwapTarget,
+        strategy: SwapStrategy,
     },
     Patch {
         route: String,
         trigger: Option<String>,
-        swap: SwapTarget,
+        target: SwapTarget,
+        strategy: SwapStrategy,
     },
 }
 
@@ -323,7 +356,7 @@ impl std::fmt::Display for Visibility {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum ImageLoading {
     #[default]
     Eager,

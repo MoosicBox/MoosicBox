@@ -60,7 +60,7 @@ pub fn settings_page_content(
                             padding-x=10
                             padding-y=5
                             hx-post="/settings/new-connection"
-                            hx-swap="#settings-connections"
+                            hx-target="#settings-connections"
                         {
                             "New Connection"
                         }
@@ -207,7 +207,7 @@ pub fn music_api_settings_content(
                             button
                                 type=button
                                 hx-post={"/music-api/scan?apiSource="(settings.id)}
-                                hx-swap=(SwapTarget::Id(id))
+                                hx-target=(SwapTarget::Id(id))
                                 #run-scan-button
                                 border-radius=5
                                 background=#111
@@ -221,7 +221,7 @@ pub fn music_api_settings_content(
                             button
                                 type=button
                                 hx-post={"/music-api/enable-scan-origin?apiSource="(settings.id)}
-                                hx-swap=(SwapTarget::Id(id))
+                                hx-target=(SwapTarget::Id(id))
                                 #run-scan-button
                                 border-radius=5
                                 background=#111
@@ -238,7 +238,7 @@ pub fn music_api_settings_content(
             } @else if let Some(auth_method) = &settings.auth_method {
                 form
                     hx-post={"/music-api/auth?apiSource="(settings.id)}
-                    hx-swap=(SwapTarget::Id(id))
+                    hx-target=(SwapTarget::Id(id))
                 {
                     @match auth_method {
                         AuthMethod::UsernamePassword => {
@@ -321,7 +321,7 @@ pub fn connections_content(
 
                 form
                     hx-patch={"/settings/connections?name="(connection.name)}
-                    hx-swap=(SwapTarget::Id("settings-connections".to_string()))
+                    hx-target=(SwapTarget::Id("settings-connections".to_string()))
                     width=100%
                     gap=5
                 {
@@ -346,7 +346,7 @@ pub fn connections_content(
                                 padding-x=10
                                 padding-y=5
                                 hx-post={"/settings/select-connection?name="(connection.name)}
-                                hx-swap="#settings-connections"
+                                hx-target="#settings-connections"
                             {
                                 "Select"
                             }
@@ -358,7 +358,7 @@ pub fn connections_content(
                             padding-x=10
                             padding-y=5
                             hx-delete={"/settings/connections?name="(connection.name)}
-                            hx-swap="#settings-connections"
+                            hx-target="#settings-connections"
                         {
                             "Delete"
                         }

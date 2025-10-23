@@ -92,6 +92,12 @@ export function swapDom(html: string | HTMLElement, url?: string | undefined) {
 }
 
 on('swapDom', ({ html, url }) => swapDom(html, url));
-on('swapHtml', ({ target, html, inner }) =>
-    inner ? swapInnerHtml(target, html) : swapOuterHtml(target, html),
-);
+on('swapHtml', ({ target, html, strategy }) => {
+    // For replace.ts, we only support children and this
+    // Other strategies are handled by idiomorph.ts
+    if (strategy === 'children') {
+        swapInnerHtml(target, html);
+    } else {
+        swapOuterHtml(target, html);
+    }
+});

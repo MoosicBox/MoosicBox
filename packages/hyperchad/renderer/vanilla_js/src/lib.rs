@@ -666,39 +666,47 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                 Route::Get {
                     route: path,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 }
                 | Route::Post {
                     route: path,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 }
                 | Route::Put {
                     route: path,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 }
                 | Route::Delete {
                     route: path,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 }
                 | Route::Patch {
                     route: path,
                     trigger,
-                    swap,
+                    target,
+                    strategy,
                 } => {
-                    match swap {
+                    // Output hx-target (WHERE) if not This
+                    match target {
                         hyperchad_transformer::models::SwapTarget::This => {
-                            write_attr(f, b"hx-swap", b"outerHTML")?;
-                        }
-                        hyperchad_transformer::models::SwapTarget::Children => {
-                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                            // No hx-target attribute needed
                         }
                         hyperchad_transformer::models::SwapTarget::Id(id) => {
-                            write_attr(f, b"hx-swap", format!("#{id}").as_bytes())?;
+                            write_attr(f, b"hx-target", format!("#{id}").as_bytes())?;
                         }
                     }
+
+                    // Always output hx-swap (HOW)
+                    write_attr(f, b"hx-swap", strategy.to_string().as_bytes())?;
+
+                    // Output HTTP method
                     match route {
                         Route::Get { .. } => {
                             write_attr(f, b"hx-get", path.as_bytes())?;

@@ -24,18 +24,59 @@ on('swapDom', ({ html, url }) => {
         elements: [document.documentElement],
     });
 });
-on('swapHtml', ({ target, html, inner }) => {
+on('swapHtml', ({ target, html, strategy }) => {
+    // Resolve target to element
     if (typeof target === 'string') {
         const element = document.querySelector(target);
-        if (!element) return;
+        if (!element) {
+            console.warn(`Swap target not found: ${target}`);
+            return;
+        }
         target = element as HTMLElement;
     }
 
     const addedElements: HTMLElement[] = [];
-    const morphedElements: HTMLElement[] = [];
 
+    // Handle delete
+    if (strategy === 'delete') {
+        target.remove();
+        return;
+    }
+
+    // Handle none
+    if (strategy === 'none') {
+        return;
+    }
+
+    // Handle positional insertions using native DOM API
+    if (
+        ['beforebegin', 'afterbegin', 'beforeend', 'afterend'].includes(
+            strategy,
+        )
+    ) {
+        const htmlString = typeof html === 'string' ? html : html.outerHTML;
+        const position = strategy as InsertPosition;
+
+        target.insertAdjacentHTML(position, htmlString);
+
+        // Collect newly inserted elements
+        const newElements = getInsertedElements(target, position);
+        addedElements.push(...newElements);
+
+        if (addedElements.length > 0) {
+            triggerHandlers('domLoad', {
+                initial: false,
+                navigation: false,
+                elements: addedElements,
+            });
+        }
+        return;
+    }
+
+    // Handle morph strategies (children, this) using Idiomorph
+    // Map to idiomorph's innerHTML/outerHTML terminology
     Idiomorph.morph(target, html, {
-        morphStyle: inner ? 'innerHTML' : 'outerHTML',
+        morphStyle: strategy === 'children' ? 'innerHTML' : 'outerHTML',
         callbacks: {
             afterNodeAdded(node: Node) {
                 if (node instanceof HTMLElement) {
@@ -47,7 +88,7 @@ on('swapHtml', ({ target, html, inner }) => {
                     oldNode instanceof HTMLElement &&
                     newNode instanceof HTMLElement
                 ) {
-                    morphedElements.push(oldNode);
+                    // Could track morphed elements if needed
                 }
             },
         },
@@ -61,3 +102,35 @@ on('swapHtml', ({ target, html, inner }) => {
         });
     }
 });
+
+function getInsertedElements(
+    target: HTMLElement,
+    position: InsertPosition,
+): HTMLElement[] {
+    const elements: HTMLElement[] = [];
+
+    switch (position) {
+        case 'beforebegin':
+            if (target.previousElementSibling instanceof HTMLElement) {
+                elements.push(target.previousElementSibling);
+            }
+            break;
+        case 'afterbegin':
+            if (target.firstElementChild instanceof HTMLElement) {
+                elements.push(target.firstElementChild);
+            }
+            break;
+        case 'beforeend':
+            if (target.lastElementChild instanceof HTMLElement) {
+                elements.push(target.lastElementChild);
+            }
+            break;
+        case 'afterend':
+            if (target.nextElementSibling instanceof HTMLElement) {
+                elements.push(target.nextElementSibling);
+            }
+            break;
+    }
+
+    return elements;
+}

@@ -7,6 +7,16 @@ export const EVENT = {
 
 export const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
+export type SwapStrategy =
+    | 'children'
+    | 'this'
+    | 'beforebegin'
+    | 'afterbegin'
+    | 'beforeend'
+    | 'afterend'
+    | 'delete'
+    | 'none';
+
 export type EventPayloads = {
     domLoad: {
         initial: boolean;
@@ -20,7 +30,7 @@ export type EventPayloads = {
     swapHtml: {
         target: string | HTMLElement;
         html: string | HTMLElement;
-        inner: boolean;
+        strategy: SwapStrategy;
     };
     swapStyle: {
         id: string;
@@ -240,7 +250,7 @@ onMessage('partial_view', (data, id) => {
         triggerHandlers('swapStyle', { style, id });
     }
 
-    triggerHandlers('swapHtml', { html, inner: false, target: `#${id}` });
+    triggerHandlers('swapHtml', { html, strategy: 'this', target: `#${id}` });
 });
 
 type V = { genUuid: () => string };

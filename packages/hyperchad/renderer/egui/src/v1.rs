@@ -21,8 +21,8 @@ use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
     Container, Element, Input, ResponsiveTrigger, TableIter, float_eq,
     models::{
-        Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapTarget,
-        TextOverflow, Visibility,
+        Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapStrategy,
+        SwapTarget, TextOverflow, Visibility,
     },
 };
 use itertools::Itertools;
@@ -1069,27 +1069,32 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 Route::Get {
                                     route,
                                     trigger,
-                                    swap,
+                                    target,
+                                    strategy,
                                 }
                                 | Route::Post {
                                     route,
                                     trigger,
-                                    swap,
+                                    target,
+                                    strategy,
                                 }
                                 | Route::Put {
                                     route,
                                     trigger,
-                                    swap,
+                                    target,
+                                    strategy,
                                 }
                                 | Route::Delete {
                                     route,
                                     trigger,
-                                    swap,
+                                    target,
+                                    strategy,
                                 }
                                 | Route::Patch {
                                     route,
                                     trigger,
-                                    swap,
+                                    target,
+                                    strategy,
                                 } => {
                                     if trigger.as_deref() == Some("load") {
                                         let info = RequestInfo { client };
@@ -1106,7 +1111,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                                     Content::View(view) => {
                                                         if let Some(primary) = view.primary {
                                                             Self::swap_elements(
-                                                                &swap,
+                                                                &target,
+                                                                &strategy,
                                                                 &ctx,
                                                                 &container,
                                                                 &calculator.read().unwrap(),
@@ -1138,7 +1144,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn swap_elements(
-        swap: &SwapTarget,
+        target: &SwapTarget,
+        strategy: &SwapStrategy,
         ctx: &egui::Context,
         container: &RwLock<Option<Container>>,
         calculator: &C,
@@ -1146,43 +1153,59 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         result: Container,
     ) {
         log::debug!(
-            "ProcessRoute: replacing container_id={container_id} with {} elements",
+            "ProcessRoute: applying {strategy:?} to target {target:?} for container_id={container_id} with {} elements",
             result.children.len()
         );
         let mut binding = container.write().unwrap();
         let Some(page) = binding.as_mut() else {
             return;
         };
-        match swap {
-            SwapTarget::This => {
-                if page.replace_id_with_elements_calc(calculator, result.children, container_id) {
-                    drop(binding);
-                    ctx.request_repaint();
-                } else {
-                    log::warn!("Unable to find element with id {container_id}");
-                }
+
+        let target_id = match target {
+            SwapTarget::This => Some(container_id),
+            SwapTarget::Id(str_id) => page.find_element_by_str_id(str_id).map(|el| el.id),
+        };
+
+        let Some(target_id) = target_id else {
+            log::warn!("Unable to find target element: {target:?}");
+            return;
+        };
+
+        let success = match strategy {
+            SwapStrategy::This => {
+                page.replace_id_with_elements_calc(calculator, result.children, target_id)
             }
-            SwapTarget::Children => {
-                if page.replace_id_children_with_elements_calc(
-                    calculator,
-                    result.children,
-                    container_id,
-                ) {
-                    drop(binding);
-                    ctx.request_repaint();
-                } else {
-                    log::warn!("Unable to find element with id {container_id}");
-                }
+            SwapStrategy::Children => {
+                page.replace_id_children_with_elements_calc(calculator, result.children, target_id)
             }
-            SwapTarget::Id(id) => {
-                if page.replace_str_id_children_with_elements_calc(calculator, result.children, id)
-                {
-                    drop(binding);
-                    ctx.request_repaint();
-                } else {
-                    log::warn!("Unable to find element with id {container_id}");
-                }
+            SwapStrategy::BeforeBegin => {
+                log::warn!("BeforeBegin swap strategy not yet implemented for egui renderer");
+                false
             }
+            SwapStrategy::AfterBegin => {
+                log::warn!("AfterBegin swap strategy not yet implemented for egui renderer");
+                false
+            }
+            SwapStrategy::BeforeEnd => {
+                log::warn!("BeforeEnd swap strategy not yet implemented for egui renderer");
+                false
+            }
+            SwapStrategy::AfterEnd => {
+                log::warn!("AfterEnd swap strategy not yet implemented for egui renderer");
+                false
+            }
+            SwapStrategy::Delete => {
+                log::warn!("Delete swap strategy not yet implemented for egui renderer");
+                false
+            }
+            SwapStrategy::None => true,
+        };
+
+        if success {
+            drop(binding);
+            ctx.request_repaint();
+        } else {
+            log::warn!("Unable to apply swap strategy {strategy:?} to element with id {target_id}");
         }
     }
 

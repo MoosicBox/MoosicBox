@@ -4,7 +4,7 @@ use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
     AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
-    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapTarget, TextAlign,
+    LayoutOverflow, LinkTarget, OverflowWrap, Position, Route, SwapStrategy, SwapTarget, TextAlign,
     TextDecorationLine, TextDecorationStyle, TextOverflow, UserSelect, Visibility, WhiteSpace,
 };
 use serde::Deserialize;
@@ -169,16 +169,31 @@ fn parse_visibility(value: &str) -> Result<Visibility, ParseAttrError> {
     })
 }
 
-fn parse_swap(value: &str) -> Result<SwapTarget, ParseAttrError> {
+fn parse_target(value: &str) -> Result<SwapTarget, ParseAttrError> {
     Ok(match value {
-        "this" | "self" => SwapTarget::This,
-        "children" => SwapTarget::Children,
+        "this" => SwapTarget::This,
         value => {
             if let Some(value) = value.strip_prefix('#') {
                 SwapTarget::Id(value.to_string())
             } else {
                 return Err(ParseAttrError::InvalidValue(value.to_string()));
             }
+        }
+    })
+}
+
+fn parse_strategy(value: &str) -> Result<SwapStrategy, ParseAttrError> {
+    Ok(match value.to_lowercase().as_str() {
+        "children" => SwapStrategy::Children,
+        "this" => SwapStrategy::This,
+        "beforebegin" => SwapStrategy::BeforeBegin,
+        "afterbegin" => SwapStrategy::AfterBegin,
+        "beforeend" => SwapStrategy::BeforeEnd,
+        "afterend" => SwapStrategy::AfterEnd,
+        "delete" => SwapStrategy::Delete,
+        "none" => SwapStrategy::None,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
 }
@@ -240,9 +255,14 @@ fn parse_get_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> 
     Ok(Route::Get {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+        target: get_tag_attr_value_decoded(tag, "hx-target")
             .as_deref()
-            .map(parse_swap)
+            .map(parse_target)
+            .transpose()?
+            .unwrap_or_default(),
+        strategy: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_strategy)
             .transpose()?
             .unwrap_or_default(),
     })
@@ -253,9 +273,14 @@ fn parse_post_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError>
     Ok(Route::Post {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+        target: get_tag_attr_value_decoded(tag, "hx-target")
             .as_deref()
-            .map(parse_swap)
+            .map(parse_target)
+            .transpose()?
+            .unwrap_or_default(),
+        strategy: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_strategy)
             .transpose()?
             .unwrap_or_default(),
     })
@@ -266,9 +291,14 @@ fn parse_put_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> 
     Ok(Route::Put {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+        target: get_tag_attr_value_decoded(tag, "hx-target")
             .as_deref()
-            .map(parse_swap)
+            .map(parse_target)
+            .transpose()?
+            .unwrap_or_default(),
+        strategy: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_strategy)
             .transpose()?
             .unwrap_or_default(),
     })
@@ -279,9 +309,14 @@ fn parse_delete_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrErro
     Ok(Route::Delete {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+        target: get_tag_attr_value_decoded(tag, "hx-target")
             .as_deref()
-            .map(parse_swap)
+            .map(parse_target)
+            .transpose()?
+            .unwrap_or_default(),
+        strategy: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_strategy)
             .transpose()?
             .unwrap_or_default(),
     })
@@ -292,9 +327,14 @@ fn parse_patch_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError
     Ok(Route::Patch {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+        target: get_tag_attr_value_decoded(tag, "hx-target")
             .as_deref()
-            .map(parse_swap)
+            .map(parse_target)
+            .transpose()?
+            .unwrap_or_default(),
+        strategy: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_strategy)
             .transpose()?
             .unwrap_or_default(),
     })
