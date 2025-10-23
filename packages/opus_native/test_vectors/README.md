@@ -14,18 +14,18 @@ Test vectors are generated at build time in `$OUT_DIR/generated/`:
 ```
 $OUT_DIR/generated/
 ├── silk/
-│   ├── nb/    # Narrowband (8 kHz) - 8 test cases
-│   ├── mb/    # Mediumband (12 kHz) - 4 test cases
-│   ├── wb/    # Wideband (16 kHz) - 4 test cases
-│   └── swb/   # Super-wideband (24 kHz) - 2 test cases
+│   ├── nb/    # Narrowband (8 kHz)
+│   ├── mb/    # Mediumband (12 kHz)
+│   ├── wb/    # Wideband (16 kHz)
+│   └── swb/   # Super-wideband (24 kHz)
 ├── celt/
-│   ├── nb/    # Narrowband (8 kHz) - 3 test cases
-│   ├── wb/    # Wideband (16 kHz) - 3 test cases
-│   ├── swb/   # Super-wideband (24 kHz) - 2 test cases
-│   └── fb/    # Fullband (48 kHz) - 5 test cases
+│   ├── nb/    # Narrowband (8 kHz)
+│   ├── wb/    # Wideband (16 kHz)
+│   ├── swb/   # Super-wideband (24 kHz)
+│   └── fb/    # Fullband (48 kHz)
 └── hybrid/
-    ├── swb/   # Super-wideband (24 kHz) - 2 test cases
-    └── fb/    # Fullband (48 kHz) - 5 test cases
+    ├── swb/   # Super-wideband (24 kHz)
+    └── fb/    # Fullband (48 kHz)
 ```
 
 ## Test Vector Format
