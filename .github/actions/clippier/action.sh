@@ -588,7 +588,7 @@ generate_summary() {
 
         if [[ "$INPUT_SUMMARY_SHOW_JOBS_DETAILS" == "true" && -n "$reasoning" && "$reasoning" != "null" ]]; then
             # Complex JQ transformation that creates collapsible sections with full job details
-            jq -r --argjson reasoning "$reasoning" '
+            printf '%s' "$matrix" | jq -r --argjson reasoning "$reasoning" '
                 # Group packages and collect all job details
                 group_by(.name) |
                 map({
@@ -629,10 +629,10 @@ generate_summary() {
                     end
                 ) |
                 join("\n")
-            ' <<< "$matrix" >> $GITHUB_STEP_SUMMARY
+            ' >> $GITHUB_STEP_SUMMARY
         else
             # Fallback to simple list without reasoning
-            jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' <<< "$matrix" >> $GITHUB_STEP_SUMMARY
+            printf '%s' "$matrix" | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
         fi
 
         echo "</details>" >> $GITHUB_STEP_SUMMARY
