@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/command_tests.rs
+assertion_line: 200
+expression: packages
+---
+- api
+- cli
+- core
+- models
+- shared-utils
+- web
