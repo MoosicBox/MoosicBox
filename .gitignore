@@ -23,3 +23,5 @@ node_modules
 */Cargo.lock
 .aider*
 .env
+
+.direnv/
