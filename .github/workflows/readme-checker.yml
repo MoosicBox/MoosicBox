@@ -243,6 +243,7 @@ jobs:
                       - ❌ Removing features that are configured/enabled even if not fully implemented
                       - ❌ Nitpicking wording differences when the meaning is substantially the same
                       - ❌ Including specific line numbers in code references (e.g., `src/file.rs:123`) - line numbers change frequently and should be omitted
+                      - ❌ Including specific counts of tests/test cases (e.g., "5 test cases", "10 tests") - test counts change frequently and should be omitted
 
                       **Decision Rule:**
                       Before making ANY change, ask yourself:
@@ -468,6 +469,7 @@ jobs:
                       - ❌ Removing features that are configured/enabled even if not fully implemented
                       - ❌ Nitpicking wording differences when the meaning is substantially the same
                       - ❌ Including specific line numbers in code references (e.g., `src/file.rs:123`) - line numbers change frequently and should be omitted
+                      - ❌ Including specific counts of tests/test cases (e.g., "5 test cases", "10 tests") - test counts change frequently and should be omitted
 
                       **Decision Rule:**
                       Before making ANY change, ask:
