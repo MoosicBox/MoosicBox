@@ -167,36 +167,36 @@ onAttr('hx-trigger', ({ element, attr }) => {
     }
 });
 
+const supportedTags: Record<string, boolean> = {
+    BUTTON: true,
+    A: true,
+} as const;
+
 onElement(({ element }) => {
-    if (!(element instanceof HTMLButtonElement)) return;
+    if (!supportedTags[element.tagName]) return;
 
-    let route: string | undefined = undefined;
-    let method: string | undefined = undefined;
+    for (const method of methods) {
+        const route = element.getAttribute(`hx-${method}`);
+        if (!route) continue;
 
-    for (const m of methods) {
-        const r = element.getAttribute(`hx-${m}`);
-        if (r) {
-            route = r;
-            method = m;
-            break;
-        }
+        element.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            handleHtmlResponse(
+                element,
+                elementFetch(
+                    route,
+                    {
+                        method,
+                        headers: {
+                            'hx-request': 'true',
+                        },
+                    },
+                    element,
+                ),
+            );
+
+            return false;
+        });
     }
-
-    if (!route) return;
-
-    element.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        handleHtmlResponse(
-            element,
-            fetch(route, {
-                method,
-                headers: {
-                    'hx-request': 'true',
-                },
-            }),
-        );
-
-        return false;
-    });
 });
