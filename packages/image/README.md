@@ -20,10 +20,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_image = "0.1"
+moosicbox_image = "0.1.4"
 
 # Or with specific features:
-moosicbox_image = { version = "0.1", features = ["image", "libvips"] }
+moosicbox_image = { version = "0.1.4", features = ["image", "libvips"] }
 ```
 
 Available features:
