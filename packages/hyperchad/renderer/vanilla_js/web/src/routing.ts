@@ -80,16 +80,23 @@ function parseResponse(responseText: string, headers: Headers): ParsedResponse {
     // Parse fragment elements
     const fragments: HTMLElement[] = [];
     if (fragmentsHtml) {
-        const temp = document.createElement('div');
-        temp.innerHTML = fragmentsHtml;
+        const temp = document.createElement('template');
+        const { html, style } = splitHtml(fragmentsHtml);
+
+        temp.innerHTML = html;
 
         // Get all top-level elements with IDs
-        for (const child of Array.from(temp.children)) {
-            if (child instanceof HTMLElement && child.id) {
-                fragments.push(child);
-            } else if (child instanceof HTMLElement) {
+        for (const child of Array.from(temp.content.children)) {
+            if (!(child instanceof HTMLElement)) continue;
+            if (!child.id) {
                 console.warn('Fragment element missing ID attribute:', child);
+                continue;
             }
+
+            if (style) {
+                triggerHandlers('swapStyle', { id: child.id, style });
+            }
+            fragments.push(child);
         }
     }
 
@@ -120,21 +127,11 @@ async function handleHtmlResponse(
     for (const fragment of fragments) {
         const targetId = fragment.id;
         const target = document.getElementById(targetId);
-
-        if (!target) {
-            console.warn(`Fragment target not found: #${targetId}`);
-            continue;
-        }
-
-        const { html, style } = splitHtml(fragment.outerHTML);
-
-        if (style && targetId) {
-            triggerHandlers('swapStyle', { id: targetId, style });
-        }
+        if (!target) continue;
 
         triggerHandlers('swapHtml', {
             target,
-            html,
+            html: fragment.outerHTML,
             strategy: 'this', // Always this for fragments
         });
     }
