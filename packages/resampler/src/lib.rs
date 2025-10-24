@@ -6,12 +6,16 @@ use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 use symphonia::core::conv::{IntoSample, ReversibleSample};
 use symphonia::core::sample::Sample;
 
+/// Audio resampler for converting between sample rates.
+///
+/// Uses FFT-based resampling to convert audio from one sample rate to another.
 pub struct Resampler<T> {
     resampler: rubato::FftFixedIn<f32>,
     input: Vec<Vec<f32>>,
     output: Vec<Vec<f32>>,
     interleaved: Vec<T>,
     duration: usize,
+    /// Signal specification for the output audio.
     pub spec: SignalSpec,
 }
 
@@ -64,6 +68,8 @@ impl<T> Resampler<T>
 where
     T: Sample + ReversibleSample<f32>,
 {
+    /// Creates a new resampler.
+    ///
     /// # Panics
     ///
     /// * If the `duration` cannot be converted to a `usize`
@@ -113,6 +119,9 @@ where
         Some(self.resample_inner())
     }
 
+    /// Resamples a planar/non-interleaved input and returns an `AudioBuffer`.
+    ///
+    /// Returns the resampled samples as an `AudioBuffer`.
     pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
@@ -153,6 +162,7 @@ where
     }
 }
 
+/// Converts interleaved samples to an `AudioBuffer`.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
 where
