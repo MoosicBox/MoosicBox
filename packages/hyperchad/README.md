@@ -108,10 +108,10 @@ let router = Router::new()
 HyperChad provides a simple key-value state store:
 
 ```rust
-use hyperchad::state::{StateStore, InMemoryStatePersistence};
+use hyperchad::state::{StateStore, SqlitePersistence};
 use serde_json::json;
 
-let state = StateStore::new(InMemoryStatePersistence::new());
+let state = StateStore::new(SqlitePersistence::new_in_memory().await?);
 
 // Set values
 state.set("user_id", &json!("12345")).await?;
@@ -122,18 +122,18 @@ if let Some(user_id) = state.get::<serde_json::Value>("user_id").await? {
     println!("User ID: {}", user_id);
 }
 
-// With SQLite persistence (requires "state-sqlite" feature)
+// With SQLite file persistence (requires "state-sqlite" feature)
 #[cfg(feature = "state-sqlite")]
 {
-    use hyperchad::state::SqliteStatePersistence;
-    let state = StateStore::new(SqliteStatePersistence::new("app.db").await?);
+    use hyperchad::state::SqlitePersistence;
+    let state = StateStore::new(SqlitePersistence::new("app.db").await?);
 }
 ```
 
 ### Action System
 
 ```rust
-use hyperchad::actions::{Action, ActionContext};
+use hyperchad::actions::Action;
 
 // Define actions in templates
 let ui = container! {
