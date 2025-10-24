@@ -7,70 +7,122 @@ use moosicbox_music_models::{
 use serde::{Deserialize, Serialize};
 use tantivy::schema::NamedFieldDocument;
 
+/// Artist search result from a global search query.
+///
+/// Contains essential artist information returned from search operations.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalArtistSearchResult {
+    /// Unique identifier for the artist
     pub artist_id: Id,
+    /// Artist name/title
     pub title: String,
+    /// Whether the artist has associated cover art
     pub contains_cover: bool,
+    /// Whether the cover image should be blurred (e.g., explicit content)
     pub blur: bool,
+    /// API source that provided this result
     pub api_source: ApiSource,
 }
 
+/// Album search result from a global search query.
+///
+/// Contains comprehensive album information including artist details and available versions.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalAlbumSearchResult {
+    /// Unique identifier for the artist
     pub artist_id: Id,
+    /// Artist name
     pub artist: String,
+    /// Unique identifier for the album
     pub album_id: Id,
+    /// Album title
     pub title: String,
+    /// Whether the album has associated cover art
     pub contains_cover: bool,
+    /// Whether the cover image should be blurred (e.g., explicit content)
     pub blur: bool,
+    /// Date the album was released
     pub date_released: Option<String>,
+    /// Date the album was added to the library
     pub date_added: Option<String>,
+    /// Available quality versions of the album
     pub versions: Vec<ApiAlbumVersionQuality>,
+    /// API source that provided this result
     pub api_source: ApiSource,
 }
 
+/// Track search result from a global search query.
+///
+/// Contains detailed track information including parent album/artist and audio quality metadata.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiGlobalTrackSearchResult {
+    /// Unique identifier for the artist
     pub artist_id: Id,
+    /// Artist name
     pub artist: String,
+    /// Unique identifier for the album
     pub album_id: Id,
+    /// Album title
     pub album: String,
+    /// Unique identifier for the track
     pub track_id: Id,
+    /// Track title
     pub title: String,
+    /// Whether the track has associated cover art
     pub contains_cover: bool,
+    /// Whether the cover image should be blurred (e.g., explicit content)
     pub blur: bool,
+    /// Date the track was released
     pub date_released: Option<String>,
+    /// Date the track was added to the library
     pub date_added: Option<String>,
+    /// Audio format of the track
     pub format: Option<AudioFormat>,
+    /// Audio bit depth in bits (e.g., 16, 24)
     pub bit_depth: Option<u8>,
+    /// Audio sample rate in Hz (e.g., 44100, 96000)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels (e.g., 2 for stereo)
     pub channels: Option<u8>,
+    /// Track API source identifier
     pub source: TrackApiSource,
+    /// API source that provided this result
     pub api_source: ApiSource,
 }
 
+/// A search result that can be an artist, album, or track.
+///
+/// Tagged enum representing different types of music entities that can be returned
+/// from a global search operation.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiGlobalSearchResult {
+    /// An artist search result
     Artist(ApiGlobalArtistSearchResult),
+    /// An album search result
     Album(ApiGlobalAlbumSearchResult),
+    /// A track search result
     Track(ApiGlobalTrackSearchResult),
 }
 
+/// Response containing search results with pagination information.
+///
+/// Wraps a collection of search results along with the current position for pagination.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSearchResultsResponse {
+    /// Current position in the result set (for pagination)
     pub position: u32,
+    /// Collection of search results
     pub results: Vec<ApiGlobalSearchResult>,
 }
 
@@ -83,14 +135,26 @@ impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
     }
 }
 
+/// Raw search results response containing unparsed Tantivy documents.
+///
+/// Internal representation of search results before conversion to typed result structures.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiRawSearchResultsResponse {
+    /// Current position in the result set (for pagination)
     pub position: u32,
+    /// Raw Tantivy document results
     pub results: Vec<NamedFieldDocument>,
 }
 
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
+    /// Converts a Tantivy document to an artist search result.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if:
+    /// * Required fields are missing from the document
+    /// * Field values cannot be converted to the expected types
     fn to_value_type(self) -> std::result::Result<ApiGlobalArtistSearchResult, ParseError> {
         Ok(ApiGlobalArtistSearchResult {
             artist_id: self.to_value("artist_id")?,
@@ -105,6 +169,14 @@ impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
 }
 
 impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
+    /// Converts a Tantivy document to an album search result.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if:
+    /// * Required fields are missing from the document
+    /// * Field values cannot be converted to the expected types
+    /// * Audio format or track source strings cannot be parsed
     fn to_value_type(self) -> std::result::Result<ApiGlobalAlbumSearchResult, ParseError> {
         Ok(ApiGlobalAlbumSearchResult {
             artist_id: self.to_value("artist_id")?,
@@ -153,6 +225,14 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
 }
 
 impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
+    /// Converts a Tantivy document to a track search result.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if:
+    /// * Required fields are missing from the document
+    /// * Field values cannot be converted to the expected types
+    /// * Audio format or track source strings cannot be parsed
     fn to_value_type(self) -> std::result::Result<ApiGlobalTrackSearchResult, ParseError> {
         Ok(ApiGlobalTrackSearchResult {
             artist_id: self.to_value("artist_id")?,
@@ -185,6 +265,15 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
 }
 
 impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
+    /// Converts a Tantivy document to a typed global search result.
+    ///
+    /// Determines the result type based on the `document_type` field and converts accordingly.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if:
+    /// * The `document_type` field is missing or contains an unrecognized value
+    /// * The document cannot be converted to the appropriate result type
     fn to_value_type(self) -> std::result::Result<ApiGlobalSearchResult, ParseError> {
         Ok(match self.to_value("document_type")? {
             "artists" => ApiGlobalSearchResult::Artist(self.to_value_type()?),
@@ -198,6 +287,10 @@ impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
 }
 
 impl ApiGlobalSearchResult {
+    /// Generates a unique string key for this search result.
+    ///
+    /// Creates a composite key combining the result type with relevant identifying fields,
+    /// useful for deduplication or keying in maps.
     #[must_use]
     pub fn to_key(&self) -> String {
         match self {
