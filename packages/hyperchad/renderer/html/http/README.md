@@ -219,7 +219,7 @@ fn render_user(user_id: &str) -> String {
 }
 
 async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
-    match req.method.as_str() {
+    match req.method.as_ref() {
         "GET" => {
             let users = serde_json::json!([
                 {"id": 1, "name": "Alice", "email": "alice@example.com"},
