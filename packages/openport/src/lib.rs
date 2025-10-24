@@ -28,6 +28,7 @@ use std::{
     ops::{Range, RangeInclusive},
 };
 
+/// A network port number
 pub type Port = u16;
 
 // Try to bind to a socket using UDP
@@ -103,7 +104,12 @@ pub fn pick_random_unused_port() -> Option<Port> {
     None
 }
 
+/// Trait for types that can be converted into an iterator of port numbers
+///
+/// This trait is implemented for [`Range<u16>`] and [`RangeInclusive<u16>`], allowing
+/// [`pick_unused_port`] to accept both exclusive and inclusive port ranges.
 pub trait PortRange {
+    /// Converts the range into an iterator of port numbers
     fn into_iter(self) -> impl Iterator<Item = u16>;
 }
 
