@@ -1,6 +1,6 @@
 error: Failed to parse container! template.
 
-       Error: expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+       Error: expected one of: curly braces, literal, parentheses, identifier, `.`, `#`, `@`, `;`, integer literal, floating point literal, `#`, identifier
 
        Common issues:
        - Element names must be lowercase (div, button, etc.)
@@ -9,11 +9,14 @@ error: Failed to parse container! template.
        - Control flow needs @ prefix: @if, @for, @match
        - Variables need @let: @let name = value;
        - Check for missing semicolons after Input elements
- --> tests/warnings/dynamic-attribute-names.rs:5:5
+ --> tests/warnings/unknown-element.rs:4:23
   |
-5 | /     container! {
-6 | |         div (name)="about:blank" {}
-7 | |     };
+4 |       let _containers = container! {
+  |  _______________________^
+5 | |         <UnknownElement>
+6 | |             "Test"
+7 | |         </UnknownElement>
+8 | |     };
   | |_____^
   |
   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

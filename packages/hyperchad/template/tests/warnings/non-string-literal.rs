@@ -10,7 +10,7 @@ fn main() {
         b'a'
 
         // `true` and `false` are only considered literals in attribute values
-        input disabled=true;
-        input disabled=false;
+        input type=text disabled=true;
+        input type=text disabled=false;
     };
 }

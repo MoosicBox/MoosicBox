@@ -1,47 +1,120 @@
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
- --> tests/warnings/elements-in-attributes.rs:5:18
+error: Failed to parse container! template.
+
+       Error: expected one of: curly braces, literal, parentheses, `@`, `;`, integer literal, floating point literal, `#`, identifier
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+  --> tests/warnings/elements-in-attributes.rs:8:5
+   |
+ 8 | /     container! {
+ 9 | |         anchor href=.pinkie-pie {} {}
+10 | |     };
+   | |_____^
+   |
+   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: Failed to parse container! template.
+
+       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+  --> tests/warnings/elements-in-attributes.rs:20:5
+   |
+20 | /     container! {
+21 | |         @if true {
+22 | |         } @else if true {
+23 | |         } @else {
+...  |
+26 | |     };
+   | |_____^
+   |
+   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: Failed to parse container! template.
+
+       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+  --> tests/warnings/elements-in-attributes.rs:28:5
+   |
+28 | /     container! {
+29 | |         @for _ in 0..10 {
+30 | |             anchor href={ div #for {} } {}
+31 | |         }
+32 | |     };
+   | |_____^
+   |
+   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: Failed to parse container! template.
+
+       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+  --> tests/warnings/elements-in-attributes.rs:34:5
+   |
+34 | /     container! {
+35 | |         @while false {
+36 | |             anchor href={ div #while {} } {}
+37 | |         }
+38 | |     };
+   | |_____^
+   |
+   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: Failed to parse container! template.
+
+       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+  --> tests/warnings/elements-in-attributes.rs:40:5
+   |
+40 | /     container! {
+41 | |         @match () {
+42 | |             () => anchor href={ div #match {} } {}
+43 | |         }
+44 | |     };
+   | |_____^
+   |
+   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0422]: cannot find struct, variant or union type `div` in this scope
+ --> tests/warnings/elements-in-attributes.rs:5:23
   |
-5 |         a href={ b {} } {}
-  |                  ^
+5 |         anchor href={ div {} } {}
+  |                       ^^^ not found in this scope
 
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
- --> tests/warnings/elements-in-attributes.rs:9:16
-  |
-9 |         a href=.pinkie-pie {} {}
-  |                ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:13:14
+error[E0422]: cannot find struct, variant or union type `div` in this scope
+  --> tests/warnings/elements-in-attributes.rs:17:19
    |
-13 |         a .{ b {} } {}
-   |              ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:17:14
-   |
-17 |         a #{ b {} } {}
-   |              ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:24:22
-   |
-24 |             a href={ b #if-else {} } {}
-   |                      ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:30:22
-   |
-30 |             a href={ b #for {} } {}
-   |                      ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:36:22
-   |
-36 |             a href={ b #while {} } {}
-   |                      ^
-
-error: expected one of: curly braces, literal, parentheses, `@`, `;`
-  --> tests/warnings/elements-in-attributes.rs:42:28
-   |
-42 |             () => a href={ b #match {} } {}
-   |                            ^
+17 |         anchor #{ div {} } {}
+   |                   ^^^ not found in this scope

@@ -1,5 +1,18 @@
 error: `@let` bindings are only allowed inside blocks
- --> tests/warnings/let-without-block.rs:5:11
+ --> tests/warnings/let-without-block.rs:5:14
   |
-5 |         p.@let x = 1; {
-  |           ^^^^^^^^^^^
+5 |         span.@let x = 1; {
+  |              ^
+
+error[E0425]: cannot find value `x` in this scope
+ --> tests/warnings/let-without-block.rs:6:14
+  |
+6 |               (x)
+  |                ^ help: a function with a similar name exists: `fx`
+  |
+ ::: src/lib.rs
+  |
+  | / pub fn fx<T>(content: T) -> actions::ActionEffect
+  | | where
+  | |     T: IntoActionEffect,
+  | |________________________- similarly named function `fx` defined here

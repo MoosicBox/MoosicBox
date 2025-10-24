@@ -1,8 +1,18 @@
-error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
- --> $DIR/non-closed-element.rs:4:5
+error: Failed to parse container! template.
+
+       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
+
+       Common issues:
+       - Element names must be lowercase (div, button, etc.)
+       - Check attribute formatting: key="value" or key=(expression)
+       - Ensure braces {} are balanced
+       - Control flow needs @ prefix: @if, @for, @match
+       - Variables need @let: @let name = value;
+       - Check for missing semicolons after Input elements
+ --> tests/warnings/non-closed-element.rs:4:5
   |
 4 | /     container! {
-5 | |         p
+5 | |         div
 6 | |     };
   | |_____^
   |

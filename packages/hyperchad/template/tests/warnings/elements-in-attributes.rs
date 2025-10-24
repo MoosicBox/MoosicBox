@@ -2,44 +2,44 @@ use hyperchad_template::container;
 
 fn main() {
     container! {
-        a href={ b {} } {}
+        anchor href={ div {} } {}
     };
 
     container! {
-        a href=.pinkie-pie {} {}
+        anchor href=.pinkie-pie {} {}
     };
 
     container! {
-        a .{ b {} } {}
+        anchor .{ div {} } {}
     };
 
     container! {
-        a #{ b {} } {}
+        anchor #{ div {} } {}
     };
 
     container! {
         @if true {
         } @else if true {
         } @else {
-            a href={ b #if-else {} } {}
+            anchor href={ div #if-else {} } {}
         }
     };
 
     container! {
         @for _ in 0..10 {
-            a href={ b #for {} } {}
+            anchor href={ div #for {} } {}
         }
     };
 
     container! {
         @while false {
-            a href={ b #while {} } {}
+            anchor href={ div #while {} } {}
         }
     };
 
     container! {
         @match () {
-            () => a href={ b #match {} } {}
+            () => anchor href={ div #match {} } {}
         }
     };
 }
