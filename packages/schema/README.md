@@ -35,7 +35,8 @@ use switchy_database::Database;
 #[tokio::main]
 async fn main() -> Result<(), MigrateError> {
     // Initialize your database connection
-    let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+    // (use your preferred database connection method)
+    let db: Box<dyn Database> = todo!("Initialize your database connection");
 
     // Run all library migrations
     migrate_library(&*db).await?;
@@ -50,6 +51,9 @@ async fn main() -> Result<(), MigrateError> {
 ```rust
 use moosicbox_schema::migrate_config;
 
+// Initialize your database connection
+let db: Box<dyn Database> = todo!("Initialize your database connection");
+
 // Run configuration-related migrations
 migrate_config(&*db).await?;
 ```
@@ -58,6 +62,9 @@ migrate_config(&*db).await?;
 
 ```rust
 use moosicbox_schema::migrate_library_until;
+
+// Initialize your database connection
+let db: Box<dyn Database> = todo!("Initialize your database connection");
 
 // Run migrations up to a specific version
 migrate_library_until(&*db, Some("2023-10-14-031701_create_tracks")).await?;
@@ -97,6 +104,9 @@ use moosicbox_schema::migrate_library;
 // Set environment variable
 std::env::set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
 
+// Initialize your database connection
+let db: Box<dyn Database> = todo!("Initialize your database connection");
+
 // This will populate the table without executing SQL
 migrate_library(&*db).await?;
 // Logs: "marked 45 migrations as completed (45 newly marked, 0 failed skipped, 0 in-progress skipped)"
@@ -128,7 +138,8 @@ use switchy_schema_test_utils::MigrationTestBuilder;
 
 #[tokio::test]
 async fn test_library_migrations() {
-    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+    // Initialize test database connection
+    let db: Box<dyn Database> = todo!("Initialize test database connection");
     let migrations = get_sqlite_library_migrations().await.unwrap();
 
     // Run all migrations and verify they work
@@ -146,6 +157,9 @@ For more advanced migration testing patterns, see the [Migration Testing Guide](
 
 ```rust
 use moosicbox_schema::MigrateError;
+
+// Initialize your database connection
+let db: Box<dyn Database> = todo!("Initialize your database connection");
 
 match migrate_library(&*db).await {
     Ok(()) => println!("Migrations completed successfully"),
@@ -205,7 +219,8 @@ use switchy_schema_test_utils::MigrationTestBuilder;
 
 #[tokio::test]
 async fn test_all_migrations() {
-    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+    // Initialize test database connection
+    let db: Box<dyn Database> = todo!("Initialize test database connection");
 
     MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
         .with_table_name("__moosicbox_schema_migrations")
@@ -222,7 +237,8 @@ Test migrations that transform existing data:
 ```rust
 #[tokio::test]
 async fn test_data_migration() {
-    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+    // Initialize test database connection
+    let db: Box<dyn Database> = todo!("Initialize test database connection");
 
     MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
         .with_table_name("__moosicbox_schema_migrations")
@@ -250,7 +266,8 @@ Test migration rollback functionality:
 ```rust
 #[tokio::test]
 async fn test_migration_rollback() {
-    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+    // Initialize test database connection
+    let db: Box<dyn Database> = todo!("Initialize test database connection");
 
     MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
         .with_table_name("__moosicbox_schema_migrations")
