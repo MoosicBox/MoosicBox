@@ -8,6 +8,11 @@ use futures::Future;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+/// A page of items from a paginated result.
+///
+/// This enum represents two types of pagination:
+/// * `WithTotal` - When the total number of items is known
+/// * `WithHasMore` - When only whether there are more items is known
 #[derive(Debug)]
 pub enum Page<T> {
     WithTotal {
@@ -25,6 +30,7 @@ pub enum Page<T> {
 }
 
 impl<T> Page<T> {
+    /// Creates an empty page with zero items, offset, limit, and total.
     #[must_use]
     pub const fn empty() -> Self {
         Self::WithTotal {
@@ -181,6 +187,7 @@ impl<T, E> Page<Result<T, E>> {
 }
 
 impl<T> Page<T> {
+    /// Returns the offset of this page.
     #[must_use]
     pub const fn offset(&self) -> u32 {
         match self {
@@ -188,6 +195,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Returns the limit of this page.
     #[must_use]
     pub const fn limit(&self) -> u32 {
         match self {
@@ -211,6 +219,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Returns the total number of items across all pages, if known.
     #[must_use]
     pub const fn total(&self) -> Option<u32> {
         match self {
@@ -219,6 +228,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Returns the number of remaining items after this page, if the total is known.
     #[must_use]
     pub const fn remaining(&self) -> Option<u32> {
         match self {
@@ -232,6 +242,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Returns a slice of the items in this page.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn items(&self) -> &[T] {
@@ -240,6 +251,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Consumes this page and returns the items as a `Vec`.
     #[must_use]
     pub fn into_items(self) -> Vec<T> {
         match self {
@@ -247,6 +259,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Maps the items in this page using the provided function.
     pub fn map<U, F>(self, mut f: F) -> Page<U>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
@@ -278,6 +291,7 @@ impl<T> Page<T> {
         }
     }
 
+    /// Converts the items in this page into a different type using `Into`.
     pub fn into<TU>(self) -> Page<TU>
     where
         T: Into<TU> + 'static,
@@ -348,6 +362,7 @@ impl<T> Page<T> {
     }
 }
 
+/// A request for a specific page of results.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PagingRequest {
@@ -358,6 +373,7 @@ pub struct PagingRequest {
 type FuturePagingResponse<T, E> = Pin<Box<dyn Future<Output = PagingResult<T, E>> + Send>>;
 type FetchPagingResponse<T, E> = Box<dyn FnMut(u32, u32) -> FuturePagingResponse<T, E> + Send>;
 
+/// A paginated response containing a page of items and a function to fetch additional pages.
 pub struct PagingResponse<T, E> {
     pub page: Page<T>,
     pub fetch: Arc<Mutex<FetchPagingResponse<T, E>>>,
@@ -401,6 +417,7 @@ impl<T: Send, E: Send> PagingResponse<Result<T, E>, E> {
 }
 
 impl<T: Send, E: Send> PagingResponse<T, E> {
+    /// Creates a new `PagingResponse` with the given page and fetch function.
     #[must_use]
     pub fn new(
         page: Page<T>,
@@ -412,6 +429,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Creates an empty `PagingResponse` with zero items.
     #[must_use]
     pub fn empty() -> Self {
         Self {
@@ -573,36 +591,43 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
             .collect::<Vec<_>>())
     }
 
+    /// Returns the offset of the current page.
     #[must_use]
     pub const fn offset(&self) -> u32 {
         self.page.offset()
     }
 
+    /// Returns the limit of the current page.
     #[must_use]
     pub const fn limit(&self) -> u32 {
         self.page.limit()
     }
 
+    /// Returns whether there are more items available.
     #[must_use]
     pub fn has_more(&self) -> bool {
         self.page.has_more()
     }
 
+    /// Returns the total number of items across all pages, if known.
     #[must_use]
     pub const fn total(&self) -> Option<u32> {
         self.page.total()
     }
 
+    /// Returns a slice of the items in the current page.
     #[must_use]
     pub fn items(&self) -> &[T] {
         self.page.items()
     }
 
+    /// Consumes this response and returns the items from the current page as a `Vec`.
     #[must_use]
     pub fn into_items(self) -> Vec<T> {
         self.page.into_items()
     }
 
+    /// Maps the items in this response and all future pages using the provided function.
     pub fn map<U, F>(self, f: F) -> PagingResponse<U, E>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
@@ -629,6 +654,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Maps the error type in this response and all future pages using the provided function.
     pub fn map_err<U, F>(self, f: F) -> PagingResponse<T, U>
     where
         F: FnMut(E) -> U + Send + Clone + 'static,
@@ -661,6 +687,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Converts both the item and error types using `Into`.
     #[must_use]
     pub fn inner_into<TU: Send + 'static, EU: Send + 'static>(self) -> PagingResponse<TU, EU>
     where
@@ -798,6 +825,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         })
     }
 
+    /// Converts the item type using `Into`, leaving the error type unchanged.
     #[must_use]
     pub fn ok_into<TU: Send + 'static>(self) -> PagingResponse<TU, E>
     where
@@ -909,6 +937,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         })
     }
 
+    /// Converts the error type using `Into`, leaving the item type unchanged.
     #[must_use]
     pub fn err_into<EU: 'static>(self) -> PagingResponse<T, EU>
     where
@@ -970,4 +999,5 @@ impl<T> From<Page<T>> for Vec<T> {
     }
 }
 
+/// A result type for paging operations.
 pub type PagingResult<T, E> = Result<PagingResponse<T, E>, E>;
