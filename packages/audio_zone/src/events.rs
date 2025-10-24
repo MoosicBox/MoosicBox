@@ -17,6 +17,9 @@ static AUDIO_ZONES_UPDATED_EVENT_LISTENERS: LazyLock<
     Arc<RwLock<Vec<AudioZonesUpdatedSubscriptionAction>>>,
 > = LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
+/// Registers a listener to be called when audio zones are updated.
+///
+/// The listener will be invoked whenever an audio zone is created, updated, or deleted.
 pub async fn on_audio_zones_updated_event<
     F: Send + Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + 'static,
 >(
