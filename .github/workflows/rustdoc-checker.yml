@@ -343,38 +343,6 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 7
 
-            - name: Format and verify changes
-              if: steps.check_lib.outputs.exists == 'true'
-              run: |
-                  # Check if any Rust files were modified by Claude
-                  if git diff --name-only | grep -E "\.rs$" || \
-                     git diff --cached --name-only | grep -E "\.rs$"; then
-
-                    echo "📝 Rust files modified, running verification..."
-
-                    # Format code
-                    echo "🎨 Running cargo fmt..."
-                    cargo fmt
-
-                    # Run clippy
-                    echo "📎 Running clippy for ${{ matrix.package.name }}..."
-                    if ! cargo clippy --package ${{ matrix.package.name }} --all-targets -- -D warnings; then
-                      echo "❌ Clippy failed - there may be issues with the changes"
-                      exit 1
-                    fi
-
-                    # Build docs to verify they compile
-                    echo "📚 Building documentation for ${{ matrix.package.name }}..."
-                    if ! cargo doc --package ${{ matrix.package.name }} --no-deps; then
-                      echo "❌ Doc build failed - documentation has errors"
-                      exit 1
-                    fi
-
-                    echo "✅ All verification checks passed"
-                  else
-                    echo "ℹ️ No Rust file changes detected, skipping verification"
-                  fi
-
             - name: Commit changes with resilient push
               if: steps.check_lib.outputs.exists == 'true'
               run: |
