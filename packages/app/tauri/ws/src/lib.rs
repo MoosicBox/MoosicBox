@@ -22,39 +22,59 @@ use tokio_tungstenite::{
     tungstenite::{Error, Message},
 };
 
+/// Error type for sending bytes over a websocket connection.
 #[derive(Debug, Error)]
 pub enum SendBytesError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// Error type for sending messages over a websocket connection.
 #[derive(Debug, Error)]
 pub enum SendMessageError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// Error type for websocket connection failures.
 #[derive(Debug, Error)]
 pub enum ConnectWsError {
     #[error("Unauthorized")]
     Unauthorized,
 }
 
+/// Messages that can be sent or received over a websocket connection.
 pub enum WsMessage {
+    /// A text message.
     TextMessage(String),
+    /// A binary message.
     Message(Bytes),
+    /// A ping message.
     Ping,
 }
 
+/// Error type for websocket send operations.
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
     #[error("Unknown: {0}")]
     Unknown(String),
 }
 
+/// Trait for types that can send messages over a websocket connection.
 #[async_trait]
 pub trait WebsocketSender: Send + Sync {
+    /// Sends a text message over the websocket connection.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WebsocketSendError::Unknown`] if the send operation fails
     async fn send(&self, data: &str) -> Result<(), WebsocketSendError>;
+
+    /// Sends a ping message over the websocket connection.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WebsocketSendError::Unknown`] if the send operation fails
     async fn ping(&self) -> Result<(), WebsocketSendError>;
 }
 
@@ -64,12 +84,14 @@ impl core::fmt::Debug for dyn WebsocketSender {
     }
 }
 
+/// Error type for closing websocket connections.
 #[derive(Debug, Error)]
 pub enum CloseError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// A handle to a websocket connection that allows sending messages and closing the connection.
 #[derive(Clone)]
 pub struct WsHandle {
     sender: Arc<RwLock<Option<UnboundedSender<WsMessage>>>>,
@@ -77,6 +99,7 @@ pub struct WsHandle {
 }
 
 impl WsHandle {
+    /// Closes the websocket connection.
     pub fn close(&self) {
         self.cancellation_token.cancel();
     }
@@ -103,6 +126,7 @@ impl WebsocketSender for WsHandle {
     }
 }
 
+/// A websocket client that manages connections and message handling.
 #[derive(Clone)]
 pub struct WsClient {
     url: String,
@@ -111,6 +135,9 @@ pub struct WsClient {
 }
 
 impl WsClient {
+    /// Creates a new websocket client for the given URL.
+    ///
+    /// Returns a tuple containing the client and a handle to control the connection.
     #[must_use]
     pub fn new(url: String) -> (Self, WsHandle) {
         let sender = Arc::new(RwLock::new(None));
@@ -130,6 +157,9 @@ impl WsClient {
         )
     }
 
+    /// Sets a custom cancellation token for the websocket client.
+    ///
+    /// This allows external cancellation of the websocket connection.
     #[must_use]
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
@@ -155,9 +185,11 @@ impl WsClient {
         .await
     }
 
+    /// Starts the websocket connection with automatic reconnection on failure.
+    ///
     /// # Errors
     ///
-    /// * If the ws connection is `UNAUTHORIZED`
+    /// * Returns [`ConnectWsError::Unauthorized`] if the websocket connection is unauthorized
     pub async fn start(
         &self,
         client_id: Option<String>,
