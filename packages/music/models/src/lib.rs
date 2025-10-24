@@ -101,7 +101,6 @@ impl ApiSource {
     }
 
     /// Returns the library API source (same as [`library()`](Self::library)).
-    #[must_use]
     pub fn register_library() -> Self {
         LIBRARY_API_SOURCE.clone()
     }
