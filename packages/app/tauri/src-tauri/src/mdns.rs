@@ -5,10 +5,10 @@ use tokio::sync::RwLock;
 
 use crate::TauriPlayerError;
 
-/// Information about a discovered MoosicBox server on the network.
+/// Information about a discovered `MoosicBox` server on the network.
 ///
 /// This structure is returned by mDNS service discovery and contains
-/// the connection details for a MoosicBox server.
+/// the connection details for a `MoosicBox` server.
 #[derive(Debug, Clone, Serialize)]
 pub struct MoosicBox {
     /// Unique identifier for this server.
@@ -35,9 +35,9 @@ impl From<switchy::mdns::scanner::MoosicBox> for MoosicBox {
 static MOOSICBOX_SERVERS: LazyLock<Arc<RwLock<Vec<MoosicBox>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(vec![])));
 
-/// Fetches the list of MoosicBox servers discovered via mDNS.
+/// Fetches the list of `MoosicBox` servers discovered via mDNS.
 ///
-/// This Tauri command returns all MoosicBox servers that have been discovered
+/// This Tauri command returns all `MoosicBox` servers that have been discovered
 /// on the local network through mDNS/Zeroconf service discovery.
 ///
 /// # Errors
@@ -51,10 +51,10 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
     Ok(MOOSICBOX_SERVERS.read().await.clone())
 }
 
-/// Spawns the mDNS scanner service for discovering MoosicBox servers.
+/// Spawns the mDNS scanner service for discovering `MoosicBox` servers.
 ///
 /// This function starts a background service that continuously scans for
-/// MoosicBox servers on the local network using mDNS/Zeroconf. Discovered
+/// `MoosicBox` servers on the local network using mDNS/Zeroconf. Discovered
 /// servers are automatically added to the internal server list.
 ///
 /// Returns a tuple containing the service handle for controlling the scanner
