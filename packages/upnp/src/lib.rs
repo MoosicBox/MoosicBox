@@ -199,7 +199,7 @@ pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanEr
     cache::get_service(device_udn, service_id)
 }
 
-/// Retrieves both a cached `UPnP` device and service by device UDN and service ID.
+/// Retrieves a cached `UPnP` device and service by device UDN and service ID.
 ///
 /// # Errors
 ///
@@ -220,7 +220,7 @@ pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
     cache::get_device_from_url(url)
 }
 
-/// Retrieves both a cached `UPnP` device and service by device URL and service ID.
+/// Retrieves a cached `UPnP` device and service by device URL and service ID.
 ///
 /// # Errors
 ///
@@ -292,7 +292,7 @@ static UPNP_NS: &str = "urn:schemas-upnp-org:metadata-1-0/upnp/";
 static DC_NS: &str = "http://purl.org/dc/elements/1.1/";
 static SEC_NS: &str = "http://www.sec.co.kr/";
 
-/// Sets the AV transport URI for a UPnP device with metadata.
+/// Sets the AV transport URI for a `UPnP` device with metadata.
 ///
 /// # Errors
 ///
@@ -501,7 +501,7 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
     Ok(TrackMetadata { items: items? })
 }
 
-/// UPnP `AVTransport` service transport information.
+/// `UPnP` `AVTransport` service transport information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -511,7 +511,7 @@ pub struct TransportInfo {
     current_speed: String,
 }
 
-/// Retrieves transport information from a UPnP `AVTransport` service.
+/// Retrieves transport information from a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -548,7 +548,7 @@ pub async fn get_transport_info(
     })
 }
 
-/// UPnP `AVTransport` service position information.
+/// `UPnP` `AVTransport` service position information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -563,7 +563,7 @@ pub struct PositionInfo {
     track_duration: u32,
 }
 
-/// Retrieves position information from a UPnP `AVTransport` service.
+/// Retrieves position information from a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -621,7 +621,7 @@ pub async fn get_position_info(
     })
 }
 
-/// Seeks to a specific position in the current media on a UPnP `AVTransport` service.
+/// Seeks to a specific position in the current media on a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -653,7 +653,7 @@ pub async fn seek(
         .collect())
 }
 
-/// Retrieves the volume from a UPnP `RenderingControl` service.
+/// Retrieves the volume from a `UPnP` `RenderingControl` service.
 ///
 /// # Errors
 ///
@@ -675,7 +675,7 @@ pub async fn get_volume(
         .collect())
 }
 
-/// Sets the volume on a UPnP `RenderingControl` service.
+/// Sets the volume on a `UPnP` `RenderingControl` service.
 ///
 /// # Errors
 ///
@@ -697,7 +697,7 @@ pub async fn set_volume(
         .collect())
 }
 
-/// UPnP `AVTransport` service media information.
+/// `UPnP` `AVTransport` service media information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -711,7 +711,7 @@ pub struct MediaInfo {
     current_uri: String,
 }
 
-/// Retrieves media information from a UPnP `AVTransport` service.
+/// Retrieves media information from a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -783,7 +783,7 @@ pub async fn subscribe_events(
     Ok((url, stream.map(|x| x.map(|x| x.into_iter().collect()))))
 }
 
-/// Starts playback on a UPnP `AVTransport` service.
+/// Starts playback on a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -805,7 +805,7 @@ pub async fn play(
         .collect())
 }
 
-/// Pauses playback on a UPnP `AVTransport` service.
+/// Pauses playback on a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -826,7 +826,7 @@ pub async fn pause(
         .collect())
 }
 
-/// Stops playback on a UPnP `AVTransport` service.
+/// Stops playback on a `UPnP` `AVTransport` service.
 ///
 /// # Errors
 ///
@@ -882,7 +882,7 @@ pub async fn scan_service(
     Ok(service.into())
 }
 
-/// Scans a UPnP device and its sub-devices, returning information about all discovered devices.
+/// Scans a `UPnP` device and its sub-devices, returning information about all discovered devices.
 ///
 /// # Errors
 ///
