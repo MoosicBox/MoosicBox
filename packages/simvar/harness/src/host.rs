@@ -17,6 +17,10 @@ scoped_thread_local! {
     static HANDLE: Handle
 }
 
+/// Returns the name of the currently executing host, if any.
+///
+/// This function is only meaningful when called from within a host's action
+/// future. Returns `None` if called from outside a host context.
 #[allow(unused)]
 #[must_use]
 pub fn current_host() -> Option<String> {
@@ -32,6 +36,9 @@ fn with_host<T>(name: String, f: impl FnOnce(&str) -> T) -> T {
     HANDLE.set(&host, || f(&host.name))
 }
 
+/// Result type for host actions.
+///
+/// Hosts return `Ok(())` on success or an error on failure.
 pub type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
 pub struct Host {
