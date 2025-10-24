@@ -89,11 +89,7 @@ use moosicbox_menu::api::bind_services;
 
 HttpServer::new(|| {
     App::new().service(
-        web::scope("/menu")
-            .wrap(/* your middleware */)
-            .configure(|cfg| {
-                bind_services(cfg);
-            })
+        bind_services(web::scope("/menu"))
     )
 })
 ```
