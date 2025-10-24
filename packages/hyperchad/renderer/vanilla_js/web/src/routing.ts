@@ -116,7 +116,10 @@ async function handleHtmlResponse(
 
     // Handle fragment swaps (by ID)
     for (const fragment of fragments) {
-        const targets = document.querySelectorAll(fragment.selector);
+        const targets =
+            fragment.selector === 'this'
+                ? [element]
+                : document.querySelectorAll(fragment.selector);
 
         for (const target of targets) {
             if (!(target instanceof HTMLElement)) continue;
