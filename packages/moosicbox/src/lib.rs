@@ -1,3 +1,16 @@
+//! `MoosicBox` unified package.
+//!
+//! This crate serves as a facade that re-exports all `MoosicBox` components based on feature flags.
+//! Each module corresponds to a separate `MoosicBox` crate that can be enabled via Cargo features.
+//!
+//! # Features
+//!
+//! * `all` - Enable all available components
+//! * `all-default` - Enable all components with their default features
+//! * `all-sources` - Enable all streaming sources (Qobuz, Tidal, `YouTube`)
+//!
+//! Individual components can be enabled through their respective feature flags (e.g., `player`, `auth`, `library`).
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
