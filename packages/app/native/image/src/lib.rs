@@ -7,6 +7,10 @@ use std::{borrow::Cow, sync::Arc};
 use bytes::Bytes;
 use rust_embed::{Embed, EmbeddedFile};
 
+/// Embedded static assets from the `public/` directory.
+///
+/// This struct provides access to files embedded at compile time using `rust_embed`.
+/// Assets are prefixed with `/public/` in their paths.
 #[derive(Embed)]
 #[folder = "$CARGO_MANIFEST_DIR/../public/"]
 #[prefix = "/public/"]
@@ -19,6 +23,10 @@ fn cow_to_arc_bytes(cow: Cow<'_, [u8]>) -> Arc<Bytes> {
     })
 }
 
+/// Converts an embedded asset file into an `Arc<Bytes>`.
+///
+/// This function takes an `EmbeddedFile` and converts its data into a reference-counted
+/// byte buffer for efficient sharing across threads.
 #[must_use]
 pub fn get_asset_arc_bytes(asset: EmbeddedFile) -> Arc<Bytes> {
     cow_to_arc_bytes(asset.data)
