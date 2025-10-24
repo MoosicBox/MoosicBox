@@ -8,21 +8,44 @@ use pingora_core::{Result, upstreams::peer::HttpPeer};
 use pingora_load_balancing::{LoadBalancer, selection::RoundRobin};
 use pingora_proxy::{ProxyHttp, Session};
 
+/// HTTP port for the load balancer.
+///
+/// Defaults to 6188, can be overridden via the `PORT` environment variable.
 pub static PORT: LazyLock<u16> = LazyLock::new(|| switchy_env::var_parse_or("PORT", 6188));
 
+/// HTTPS/TLS port for the load balancer.
+///
+/// Defaults to 6189, can be overridden via the `SSL_PORT` environment variable.
 pub static SSL_PORT: LazyLock<u16> = LazyLock::new(|| switchy_env::var_parse_or("SSL_PORT", 6189));
 
+/// Path to the TLS certificate file.
+///
+/// Defaults to `/etc/pingora/ssl/tls.crt`, can be overridden via the `SSL_CRT_PATH` environment variable.
 pub static SSL_CRT_PATH: LazyLock<String> =
     LazyLock::new(|| switchy_env::var_or("SSL_CRT_PATH", "/etc/pingora/ssl/tls.crt"));
 
+/// Path to the TLS private key file.
+///
+/// Defaults to `/etc/pingora/ssl/tls.key`, can be overridden via the `SSL_KEY_PATH` environment variable.
 pub static SSL_KEY_PATH: LazyLock<String> =
     LazyLock::new(|| switchy_env::var_or("SSL_KEY_PATH", "/etc/pingora/ssl/tls.key"));
 
 static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_PORT));
 
+/// HTTP proxy router that routes requests to upstream servers based on hostname.
+///
+/// The router maps hostnames to load balancers, which distribute requests across
+/// multiple upstream servers using round-robin selection. Special handling is provided
+/// for ACME challenge requests (`.well-known/acme-challenge/` paths) and a fallback
+/// wildcard (`*`) hostname for unmatched hosts.
 pub struct Router(BTreeMap<String, Arc<LoadBalancer<RoundRobin>>>);
 
 impl Router {
+    /// Creates a new router with the specified upstream load balancers.
+    ///
+    /// # Arguments
+    ///
+    /// * `upstreams` - Map of hostnames to their corresponding load balancers
     #[must_use]
     pub const fn new(upstreams: BTreeMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
         Self(upstreams)
@@ -50,6 +73,17 @@ impl ProxyHttp for Router {
         Ok(false)
     }
 
+    /// Selects the upstream peer for the current session.
+    ///
+    /// Routes requests based on hostname matching or ACME challenge paths. Falls back
+    /// to the wildcard (`*`) cluster if no hostname match is found.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * The request path contains invalid UTF-8
+    /// * No matching cluster is found for the hostname (and no wildcard fallback exists)
+    /// * The selected load balancer has no available upstream servers
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
         let raw_path = std::str::from_utf8(session.req_header().raw_path()).map_err(|e| {
             log::error!("upstream_peer: Failed to parse path: {e:?}");
@@ -112,6 +146,14 @@ impl ProxyHttp for Router {
         Ok(Box::new(HttpPeer::new(upstream, false, SNI.to_string())))
     }
 
+    /// Modifies the upstream request before forwarding.
+    ///
+    /// Sets the `Host` header to the SNI hostname for non-challenge requests.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * The upstream request path contains invalid UTF-8
     async fn upstream_request_filter(
         &self,
         session: &mut Session,
