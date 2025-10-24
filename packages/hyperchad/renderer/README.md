@@ -7,7 +7,7 @@ Core rendering abstractions and traits for HyperChad UI frameworks.
 The HyperChad Renderer package provides:
 
 - **Renderer Traits**: Abstract interfaces for different rendering backends
-- **Content Types**: Structured content representation (View, PartialView, JSON)
+- **Content Types**: Structured content representation (View, JSON, Raw)
 - **Event System**: Renderer event handling and processing
 - **HTML Generation**: HTML tag rendering and CSS generation
 - **Asset Management**: Optional static asset handling
@@ -64,7 +64,7 @@ hyperchad_renderer = {
 ### Implementing a Renderer
 
 ```rust
-use hyperchad_renderer::{Renderer, View, PartialView, Color, Handle};
+use hyperchad_renderer::{Renderer, View, Color, Handle};
 use async_trait::async_trait;
 
 struct MyRenderer {
@@ -111,11 +111,14 @@ use hyperchad_renderer::{Content, View};
 use hyperchad_transformer::Container;
 
 // Create view content with primary container
-let view_content = Content::view(Container::default()).build();
+let view_content = Content::builder()
+    .with_primary(Container::default())
+    .build();
 
 // Create view with primary and fragments
-let view_with_fragments = Content::view(Container::default())
-    .fragment(Container::default())
+let view_with_fragments = Content::builder()
+    .with_primary(Container::default())
+    .with_fragment(Container::default())
     .build();
 
 // From string (as raw HTML)
@@ -262,6 +265,7 @@ use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
 
 - **primary**: Optional primary container content (swaps to triggering element)
 - **fragments**: Additional containers to swap by ID (each must have an `id` attribute)
+- **delete_selectors**: Element selectors to delete from the DOM
 
 ### Content Enum
 
