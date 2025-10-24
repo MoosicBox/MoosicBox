@@ -5,14 +5,20 @@ use moosicbox_async_service::{Arc, CancellationToken, JoinError, JoinHandle, syn
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
+/// Represents a discovered `MoosicBox` server on the network.
 #[derive(Debug, Clone)]
 pub struct MoosicBox {
+    /// Unique identifier for the server instance.
     pub id: String,
+    /// Human-readable name of the server.
     pub name: String,
+    /// Network address and port of the server.
     pub host: SocketAddr,
+    /// DNS name for the server.
     pub dns: String,
 }
 
+/// Errors that can occur during mDNS scanning operations.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -23,6 +29,9 @@ pub enum Error {
     Join(#[from] JoinError),
 }
 
+/// Commands that can be sent to the scanner service.
+///
+/// Currently no commands are defined for the scanner service.
 #[derive(Debug, AsRefStr)]
 pub enum Command {}
 
@@ -32,6 +41,9 @@ impl std::fmt::Display for Command {
     }
 }
 
+/// Context for the mDNS scanner service.
+///
+/// Contains the cancellation token, task handle, and channel sender for discovered servers.
 pub struct Context {
     token: CancellationToken,
     handle: Option<JoinHandle<Result<(), Error>>>,
@@ -39,6 +51,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Creates a new scanner context with the given channel sender.
     #[must_use]
     pub fn new(sender: kanal::AsyncSender<MoosicBox>) -> Self {
         Self {
@@ -49,6 +62,7 @@ impl Context {
     }
 }
 
+/// Async service implementation for the mDNS scanner.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context, super::Error);
 }
