@@ -8,6 +8,10 @@ pub struct SimulatorEnv {
 }
 
 impl SimulatorEnv {
+    /// Creates a new simulator environment provider with default values
+    ///
+    /// Initializes the environment with real environment variables and adds
+    /// simulator-specific defaults for testing and deterministic behavior.
     #[must_use]
     pub fn new() -> Self {
         let mut vars = BTreeMap::new();
