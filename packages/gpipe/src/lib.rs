@@ -3,10 +3,16 @@
 
 //! # Generic Pipelines (gpipe)
 //!
-//! Universal CI/CD workflow tool that can execute and translate between different workflow formats.
-//! This crate provides a unified interface for working with generic workflow definitions.
+//! Universal CI/CD workflow orchestration tool. Currently provides type definitions and AST.
+//! Planned: execution and translation across multiple backends.
 //!
 //! ## Features
+//!
+//! ### Implemented
+//! * Workflow AST - Complete abstract syntax tree types for workflow definitions
+//! * Type Safety - Fully typed Rust data structures with serde support
+//!
+//! ### Planned
 //! * Parse and execute generic workflow formats
 //! * Translate workflows between different CI/CD platforms
 //! * Local execution without containerization
