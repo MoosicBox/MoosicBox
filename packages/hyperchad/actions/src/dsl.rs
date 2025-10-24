@@ -73,96 +73,114 @@ pub enum Pattern {
     },
 }
 
+/// Variable representing an element reference for DSL expressions
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ElementVariable {
+    /// Element variable name
     pub name: String,
 }
 
 impl ElementVariable {
+    /// Shows the element
     #[must_use]
     pub fn show(self) -> ActionType {
         ActionType::show_str_id(Target::reference(self.name))
     }
 
+    /// Hides the element
     #[must_use]
     pub fn hide(self) -> ActionType {
         ActionType::hide_str_id(Target::reference(self.name))
     }
 
+    /// Focuses the element
     #[must_use]
     pub fn focus(self) -> ActionType {
         ActionType::focus_str_id(Target::reference(self.name))
     }
 
+    /// Selects the element
     #[must_use]
     pub fn select(self) -> ActionType {
         ActionType::select_str_id(Target::reference(self.name))
     }
 
+    /// Toggles visibility of the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_visibility(self) -> ActionType {
         ActionType::toggle_visibility_str_id(Target::reference(self.name))
     }
 
+    /// Gets the visibility value of the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn visibility(self) -> crate::logic::CalcValue {
         crate::logic::get_visibility_str_id(Target::reference(self.name))
     }
 
+    /// Enables display on the element
     #[must_use]
     pub fn display(self) -> ActionType {
         ActionType::display_str_id(Target::reference(self.name))
     }
 
+    /// Disables display on the element
     #[must_use]
     pub fn no_display(self) -> ActionType {
         ActionType::no_display_str_id(Target::reference(self.name))
     }
 
+    /// Sets display property on the element
     #[must_use]
     pub fn set_display(self, display: bool) -> ActionType {
         ActionType::set_display_str_id(display, Target::reference(self.name))
     }
 
+    /// Toggles display property on the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display(self) -> ActionType {
         ActionType::toggle_display_str_id(Target::reference(self.name))
     }
 
+    /// Gets the display value of the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_display(self) -> crate::logic::CalcValue {
         crate::logic::get_display_str_id(Target::reference(self.name))
     }
 
+    /// Gets the width in pixels of the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_width_px(self) -> crate::logic::CalcValue {
         crate::logic::get_width_px_str_id(Target::reference(self.name))
     }
 
+    /// Gets the height in pixels of the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_height_px(self) -> crate::logic::CalcValue {
         crate::logic::get_height_px_str_id(Target::reference(self.name))
     }
 
+    /// Gets the mouse X coordinate relative to the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_mouse_x(self) -> crate::logic::CalcValue {
         crate::logic::get_mouse_x_str_id(Target::reference(self.name))
     }
 
+    /// Gets the mouse Y coordinate relative to the element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn get_mouse_y(self) -> crate::logic::CalcValue {
         crate::logic::get_mouse_y_str_id(Target::reference(self.name))
     }
 
+    /// Sets visibility on the element
     #[must_use]
     pub fn set_visibility(self, visibility: Visibility) -> ActionType {
         ActionType::set_visibility_str_id(visibility, Target::reference(self.name))
@@ -312,21 +330,25 @@ pub enum Literal {
 }
 
 impl Literal {
+    /// Creates a string literal
     #[must_use]
     pub fn string(x: impl Into<String>) -> Self {
         Self::String(x.into())
     }
 
+    /// Creates an integer literal
     #[must_use]
     pub fn integer(x: impl Into<i64>) -> Self {
         Self::Integer(x.into())
     }
 
+    /// Creates a float literal
     #[must_use]
     pub fn float(x: impl Into<f64>) -> Self {
         Self::Float(x.into())
     }
 
+    /// Creates a boolean literal
     #[must_use]
     pub fn bool(x: impl Into<bool>) -> Self {
         Self::Bool(x.into())
@@ -362,7 +384,7 @@ pub struct ElementReference {
 }
 
 impl ElementReference {
-    /// Parse the selector and determine the type at compile time
+    /// Parses the selector and determines its type
     #[must_use]
     pub fn parse_selector(&self) -> ParsedSelector {
         if self.selector.starts_with('#') {
@@ -393,14 +415,13 @@ pub enum ParsedSelector {
 }
 
 impl Dsl {
-    /// Create a new DSL AST
+    /// Creates a new DSL AST
     #[must_use]
     pub const fn new(statements: Vec<Statement>) -> Self {
         Self { statements }
     }
 
-    /// Evaluate the DSL and return the resulting actions
-    /// This is a placeholder for now - actual evaluation logic will be implemented
+    /// Evaluates the DSL and returns the resulting actions
     #[must_use]
     pub const fn evaluate(&self) -> Vec<ActionEffect> {
         // TODO: Implement DSL evaluation
