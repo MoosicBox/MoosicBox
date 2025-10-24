@@ -251,6 +251,7 @@ fn another_condition() -> bool { false }
 ```rust
 #[cfg(feature = "openapi")]
 use moosicbox_web_server::{utoipa, openapi};
+#[cfg(feature = "openapi")]
 use utoipa::openapi::OpenApi;
 
 #[cfg(feature = "openapi")]
