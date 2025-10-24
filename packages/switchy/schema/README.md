@@ -823,6 +823,7 @@ cargo run
 #### Example Projects
 
 - **`examples/static_migrations/`** - Complete project demonstrating:
+
     - Custom migration implementations with `'static` lifetimes
     - All three discovery methods (embedded, directory, code)
     - Query builder integration
