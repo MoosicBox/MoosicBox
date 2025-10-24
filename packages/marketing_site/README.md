@@ -269,7 +269,8 @@ packages/marketing_site/
 │   ├── lambda.rs            # Lambda runtime wrapper
 │   ├── lambda_vanilla_js.rs # Lambda binary entry point
 │   └── download.rs          # Download page route handler
-├── ui/
+├── ui/                      # Separate workspace package (moosicbox_marketing_site_ui)
+│   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs           # UI components (header, pages, layouts)
 │       └── download.rs      # Download page UI
