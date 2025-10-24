@@ -176,7 +176,7 @@ Core dependencies (always included):
 
 Feature-gated dependencies:
 
-- **SWC feature**: Includes swc*bundler, swc_common, swc_ecma*\* crates, and anyhow
+- **SWC feature**: Includes swc_bundler, swc_common, swc_ecma_ast, swc_ecma_codegen, swc_ecma_loader, swc_ecma_minifier, swc_ecma_parser, swc_ecma_transforms_base, swc_ecma_transforms_typescript, swc_ecma_visit, and anyhow
 - **ESBuild feature**: No Rust dependencies (uses external binary)
 - **Node feature**: No additional dependencies (command execution only)
 
