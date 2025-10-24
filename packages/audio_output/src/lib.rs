@@ -40,6 +40,10 @@ pub mod cpal;
 
 pub mod progress_tracker;
 
+/// An audio output that writes decoded audio samples to an underlying audio device or stream.
+///
+/// This struct handles audio resampling when the decoded sample rate doesn't match the output
+/// specification, and delegates the actual writing to an `AudioWrite` implementation.
 pub struct AudioOutput {
     pub id: String,
     pub name: String,
@@ -59,6 +63,13 @@ impl std::fmt::Debug for AudioOutput {
 }
 
 impl AudioOutput {
+    /// Creates a new `AudioOutput` with the specified configuration.
+    ///
+    /// # Arguments
+    /// * `id` - Unique identifier for this audio output
+    /// * `name` - Human-readable name for this audio output
+    /// * `spec` - Audio signal specification (sample rate, channels, etc.)
+    /// * `writer` - The underlying audio writer implementation
     #[must_use]
     pub fn new(id: String, name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
         Self {
@@ -183,6 +194,10 @@ impl AudioDecode for AudioOutput {
 type InnerType = Box<dyn AudioWrite>;
 pub type GetWriter = Box<dyn Fn() -> Result<InnerType, AudioOutputError> + Send>;
 
+/// A factory for creating `AudioOutput` instances.
+///
+/// This allows deferring the creation of the underlying `AudioWrite` implementation
+/// until the output is actually needed, which is useful for managing audio device resources.
 #[derive(Clone)]
 pub struct AudioOutputFactory {
     pub id: String,
@@ -203,6 +218,13 @@ impl std::fmt::Debug for AudioOutputFactory {
 }
 
 impl AudioOutputFactory {
+    /// Creates a new `AudioOutputFactory` with a writer function.
+    ///
+    /// # Arguments
+    /// * `id` - Unique identifier for this audio output factory
+    /// * `name` - Human-readable name for this audio output
+    /// * `spec` - Audio signal specification (sample rate, channels, etc.)
+    /// * `writer` - Function that creates the underlying audio writer when called
     pub fn new(
         id: String,
         name: String,
@@ -217,6 +239,13 @@ impl AudioOutputFactory {
         }
     }
 
+    /// Creates a new `AudioOutputFactory` with a boxed writer function.
+    ///
+    /// # Arguments
+    /// * `id` - Unique identifier for this audio output factory
+    /// * `name` - Human-readable name for this audio output
+    /// * `spec` - Audio signal specification (sample rate, channels, etc.)
+    /// * `writer` - Boxed function that creates the underlying audio writer when called
     #[must_use]
     pub fn new_box(id: String, name: String, spec: SignalSpec, writer: GetWriter) -> Self {
         Self {
@@ -263,12 +292,22 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
     }
 }
 
+/// Trait for writing decoded audio samples to an output destination.
+///
+/// Implementors of this trait handle the low-level details of writing audio data
+/// to hardware devices, encoders, or other output streams.
 pub trait AudioWrite {
+    /// Writes decoded audio samples to the output.
+    ///
+    /// Returns the number of samples written.
+    ///
     /// # Errors
     ///
     /// * If fails to write the `AudioBuffer`
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
 
+    /// Flushes any buffered audio data to the output.
+    ///
     /// # Errors
     ///
     /// * If fails to flush the `AudioWrite`
@@ -307,7 +346,10 @@ pub trait AudioWrite {
     ) {
     }
 
-    /// Get a communication handle for sending commands to this audio output
+    /// Get a communication handle for sending commands to this audio output.
+    ///
+    /// The handle can be used to control playback (pause, resume, seek, etc.)
+    /// from other threads or async contexts.
     fn handle(&self) -> AudioHandle;
 }
 
@@ -355,6 +397,7 @@ impl From<Box<dyn AudioWrite>> for Box<dyn AudioDecode> {
     }
 }
 
+/// Errors that can occur during audio output operations.
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
@@ -410,10 +453,18 @@ pub async fn scan_outputs() -> Result<(), AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.scan().await
 }
 
+/// Returns all available audio output factories.
+///
+/// The list is populated by calling [`scan_outputs()`] first.
+#[must_use]
 pub async fn output_factories() -> Vec<AudioOutputFactory> {
     AUDIO_OUTPUT_SCANNER.lock().await.outputs.clone()
 }
 
+/// Returns the default audio output factory, if available.
+///
+/// The default output is determined by calling [`scan_outputs()`] first.
+#[must_use]
 pub async fn default_output_factory() -> Option<AudioOutputFactory> {
     AUDIO_OUTPUT_SCANNER
         .lock()
@@ -429,11 +480,13 @@ pub async fn default_output() -> Result<AudioOutput, AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.default_output()
 }
 
+/// Scans and manages available audio output devices.
 pub struct AudioOutputScanner {
     pub outputs: Vec<AudioOutputFactory>,
     pub default_output: Option<AudioOutputFactory>,
 }
 
+/// Errors that can occur during audio output scanning operations.
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]

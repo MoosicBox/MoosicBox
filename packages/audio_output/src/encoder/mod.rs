@@ -15,9 +15,13 @@ pub mod mp3;
 pub mod opus;
 
 pub trait AudioEncoder: Send + Sync {
+    /// Encodes decoded audio samples into a compressed format.
+    ///
     /// # Errors
     ///
     /// * If the audio fails to encode
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
+
+    /// Returns the audio signal specification for this encoder.
     fn spec(&self) -> SignalSpec;
 }
