@@ -190,7 +190,13 @@ impl MissingValue<&str> for &Row<'_> {}
 impl MissingValue<f32> for &Row<'_> {}
 impl MissingValue<f64> for &Row<'_> {}
 
+/// Trait for extracting typed values from rusqlite database rows.
+///
+/// This trait provides methods to get values by column name from rusqlite rows
+/// and convert them to the desired Rust type.
 pub trait ToValue<Type> {
+    /// Extracts a value from a database column and converts it to type `T`.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse
@@ -199,6 +205,8 @@ pub trait ToValue<Type> {
         Type: ToValueType<T>,
         for<'a> &'a Row<'a>: MissingValue<T>;
 
+    /// Handles the case when a column value is missing.
+    ///
     /// # Errors
     ///
     /// * If the missing value failed to parse
