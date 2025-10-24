@@ -4,6 +4,7 @@ use switchy_async::futures::FutureExt as _;
 
 use super::Auth;
 
+/// Poll-based authentication configuration.
 #[derive(Debug, Clone)]
 pub struct PollAuth {
     timeout: Duration,
@@ -22,6 +23,7 @@ impl Default for PollAuth {
 }
 
 impl PollAuth {
+    /// Creates a new poll authentication with default timeout (60 seconds).
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -71,9 +73,11 @@ impl PollAuth {
         self
     }
 
+    /// Polls for authentication status.
+    ///
     /// # Errors
     ///
-    /// * If the poll fails
+    /// * If the poll operation fails
     #[allow(clippy::unused_async)]
     pub async fn poll(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         Ok(false)
@@ -81,9 +85,11 @@ impl PollAuth {
 }
 
 impl PollAuth {
+    /// Attempts to log in by polling until success or timeout.
+    ///
     /// # Errors
     ///
-    /// * If the poll auth fails
+    /// * If the poll authentication fails
     pub async fn login(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         switchy_async::select! {
             success = self.poll().fuse() => {
