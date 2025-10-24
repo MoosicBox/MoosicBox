@@ -417,13 +417,13 @@ The renderer automatically includes the appropriate JavaScript:
 
 ```html
 <!-- Development -->
-<script src="/hyperchad.js"></script>
+<script src="/js/hyperchad.js"></script>
 
 <!-- Production (minified) -->
-<script src="/hyperchad.min.js"></script>
+<script src="/js/hyperchad.min.js"></script>
 
 <!-- With hash (cache busting) -->
-<script src="/hyperchad-a1b2c3d4e5.min.js"></script>
+<script src="/js/hyperchad-a1b2c3d4e5.min.js"></script>
 ```
 
 ## Feature Flags
@@ -445,6 +445,7 @@ The renderer automatically includes the appropriate JavaScript:
 - **`plugin-event`**: Custom events
 - **`plugin-canvas`**: Canvas support
 - **`plugin-form`**: Form handling
+- **`plugin-http-events`**: HTTP request lifecycle events
 
 ### Action Plugins
 
