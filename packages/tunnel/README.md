@@ -24,7 +24,7 @@ moosicbox_tunnel = "0.1.4"
 ### Tunnel Request Types
 
 ```rust
-use moosicbox_tunnel::{TunnelRequest, TunnelHttpRequest, TunnelWsRequest, TunnelAbortRequest};
+use moosicbox_tunnel::{TunnelRequest, TunnelHttpRequest, TunnelWsRequest, TunnelAbortRequest, TunnelEncoding};
 use switchy_http::models::Method;
 use serde_json::json;
 
