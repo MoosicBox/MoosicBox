@@ -67,15 +67,20 @@ hyperchad_app = {
 ```rust
 use hyperchad_app::{AppBuilder, Error};
 use hyperchad_router::Router;
-use hyperchad_renderer::Color;
+use hyperchad_renderer::{Color, Content};
+use hyperchad_template::container;
 
 // Create router
 let router = Router::new()
     .with_route("/", |_req| async {
-        "<h1>Home</h1>"
+        Content::try_view(container! {
+            h1 { "Home" }
+        })
     })
     .with_route("/about", |_req| async {
-        "<h1>About</h1>"
+        Content::try_view(container! {
+            h1 { "About" }
+        })
     });
 
 // Build application
