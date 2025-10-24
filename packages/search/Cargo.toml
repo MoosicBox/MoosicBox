@@ -31,7 +31,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
-moosicbox_config = { workspace = true, features = ["test"] }
+moosicbox_config = { workspace = true }
 switchy_async    = { workspace = true, features = ["macros"] }
 switchy_fs       = { workspace = true, features = ["simulator-real-fs"] }
 
