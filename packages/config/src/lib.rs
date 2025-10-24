@@ -14,10 +14,16 @@ pub mod db;
 #[cfg(feature = "file")]
 pub mod file;
 
+/// Represents the type of `MoosicBox` application.
+///
+/// Used to determine the appropriate configuration directory structure.
 #[derive(Copy, Clone, Debug)]
 pub enum AppType {
+    /// Mobile or desktop application
     App,
+    /// Server application
     Server,
+    /// Local development instance
     Local,
 }
 
@@ -39,6 +45,11 @@ impl std::fmt::Display for AppType {
 
 static ROOT_DIR: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
+/// Sets the root directory for `MoosicBox` configuration.
+///
+/// By default, the root directory is `~/.local/moosicbox`. This function allows
+/// overriding that default location.
+///
 /// # Panics
 ///
 /// * If the `ROOT_DIR` `Mutex` is poisoned
@@ -59,31 +70,50 @@ fn get_root_dir() -> Option<PathBuf> {
     root_dir.clone()
 }
 
+/// Returns the path to the `MoosicBox` configuration directory.
+///
+/// Defaults to `~/.local/moosicbox` unless overridden with [`set_root_dir`].
 #[must_use]
 pub fn get_config_dir_path() -> Option<PathBuf> {
     get_root_dir()
 }
 
+/// Returns the path to the application-specific configuration directory.
+///
+/// For example, for `AppType::Server`, this returns `~/.local/moosicbox/server`.
 #[must_use]
 pub fn get_app_config_dir_path(app_type: AppType) -> Option<PathBuf> {
     get_config_dir_path().map(|x| x.join(app_type.to_string()))
 }
 
+/// Returns the path to the profiles directory for the specified application type.
+///
+/// For example, for `AppType::Server`, this returns `~/.local/moosicbox/server/profiles`.
 #[must_use]
 pub fn get_profiles_dir_path(app_type: AppType) -> Option<PathBuf> {
     get_app_config_dir_path(app_type).map(|x| x.join("profiles"))
 }
 
+/// Returns the path to a specific profile's directory.
+///
+/// For example, for `AppType::Server` and profile name `"default"`, this returns
+/// `~/.local/moosicbox/server/profiles/default`.
 #[must_use]
 pub fn get_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
     get_profiles_dir_path(app_type).map(|x| x.join(profile))
 }
 
+/// Returns the path to the cache directory.
+///
+/// Defaults to `~/.local/moosicbox/cache`.
 #[must_use]
 pub fn get_cache_dir_path() -> Option<PathBuf> {
     get_config_dir_path().map(|config| config.join("cache"))
 }
 
+/// Returns the path to the configuration directory, creating it if it doesn't exist.
+///
+/// Returns `None` if the directory cannot be created or the path cannot be determined.
 #[must_use]
 pub fn make_config_dir_path() -> Option<PathBuf> {
     if let Some(path) = get_config_dir_path()
@@ -95,6 +125,9 @@ pub fn make_config_dir_path() -> Option<PathBuf> {
     None
 }
 
+/// Returns the path to a profile's directory, creating it if it doesn't exist.
+///
+/// Returns `None` if the directory cannot be created or the path cannot be determined.
 #[must_use]
 pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
     if let Some(path) = get_profile_dir_path(app_type, profile)
@@ -106,6 +139,9 @@ pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf
     None
 }
 
+/// Returns the path to the cache directory, creating it if it doesn't exist.
+///
+/// Returns `None` if the directory cannot be created or the path cannot be determined.
 #[must_use]
 pub fn make_cache_dir_path() -> Option<PathBuf> {
     if let Some(path) = get_cache_dir_path()
