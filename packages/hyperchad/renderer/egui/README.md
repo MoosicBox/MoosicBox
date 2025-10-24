@@ -328,10 +328,8 @@ tokio::spawn(async move {
     while let Ok((action_name, value)) = action_rx.recv_async().await {
         match action_name.as_str() {
             "submit_form" => {
-                if let Some(Value::Object(data)) = value {
-                    println!("Form submitted: {:?}", data);
-                    // Process form data
-                }
+                println!("Form submitted: {:?}", value);
+                // Process form data
             }
             "navigate" => {
                 if let Some(Value::String(url)) = value {
@@ -365,10 +363,10 @@ use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction};
 use hyperchad_renderer::Color;
 
 let canvas_update = CanvasUpdate {
-    id: "my-canvas".to_string(),
-    actions: vec![
+    target: "my-canvas".to_string(),
+    canvas_actions: vec![
         CanvasAction::Clear,
-        CanvasAction::StrokeColor(Color::new(255, 0, 0, 255)),
+        CanvasAction::StrokeColor(Color { r: 255, g: 0, b: 0, a: Some(255) }),
         CanvasAction::StrokeSize(2.0),
         CanvasAction::Line((10.0, 10.0), (110.0, 10.0)),
         CanvasAction::FillRect((10.0, 20.0), (110.0, 70.0)),
