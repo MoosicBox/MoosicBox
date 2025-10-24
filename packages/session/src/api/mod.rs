@@ -21,6 +21,7 @@ use crate::{
 
 pub mod models;
 
+/// Binds session-related API endpoints to an Actix-Web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -37,6 +38,7 @@ pub fn bind_services<
         .service(register_connection_endpoint)
 }
 
+/// `OpenAPI` documentation structure for session-related endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
