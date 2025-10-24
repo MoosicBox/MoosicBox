@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Get album details
         let album_id = Id::Number(album.id);
         if let Some(album_detail) = album(&db, &album_id).await? {
-            println!("  Detailed info: {} tracks", album_detail.versions.len());
+            println!("  Detailed info: {} versions", album_detail.versions.len());
         }
 
         // Get album tracks
