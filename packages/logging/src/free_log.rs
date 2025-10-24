@@ -7,6 +7,7 @@ use thiserror::Error;
 
 pub use free_log_client;
 
+/// Error type for logging initialization failures.
 #[derive(Debug, Error)]
 pub enum InitError {
     #[error(transparent)]
@@ -17,6 +18,8 @@ pub enum InitError {
     BuildFileWriterConfig(#[from] free_log_client::BuildFileWriterConfigError),
 }
 
+/// Initializes the logging system with optional file output and custom layers.
+///
 /// # Errors
 ///
 /// * If the logs failed to initialize
