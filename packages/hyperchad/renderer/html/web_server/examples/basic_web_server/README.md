@@ -127,7 +127,7 @@ let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
 The `container!` macro supports these HTML elements:
 
 - `div`, `section`, `aside`, `main`, `header`, `footer`
-- `form`, `span`, `button`, `anchor`, `image`, `input`
+- `form`, `span`, `button`, `anchor`, `image`, `input`, `textarea`
 - `h1`, `h2`, `h3`, `h4`, `h5`, `h6`
 - `ul`, `ol`, `li`
 - `table`, `thead`, `th`, `tbody`, `tr`, `td`
