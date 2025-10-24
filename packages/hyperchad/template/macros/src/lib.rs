@@ -1,6 +1,25 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+//! Procedural macros for the `HyperChad` template system.
+//!
+//! This crate provides the [`container!`] macro for writing HTML-like templates with Rust syntax.
+//! The macro generates `Vec<Container>` structures that can be rendered to HTML or other formats.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use hyperchad_template_macros::container;
+//!
+//! let html = container! {
+//!     div.container {
+//!         h1 { "Hello, World!" }
+//!         button hx-post="/submit" { "Click me" }
+//!     }
+//! };
+//! ```
+//!
+//! See the [`container!`] macro documentation for complete syntax details and examples.
 
 extern crate proc_macro;
 
@@ -87,6 +106,56 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
     output.into_iter().collect()
 }
 
+/// Procedural macro for writing HTML-like templates with Rust syntax.
+///
+/// This macro parses HTML-like template syntax and generates `Vec<Container>` structures
+/// that can be rendered to HTML or other formats through the `HyperChad` rendering system.
+///
+/// # Template Syntax
+///
+/// The macro supports:
+///
+/// * HTML-like element syntax: `div { "content" }`, `button { "Click me" }`
+/// * Attributes: `input type="text" name="field";`
+/// * Dynamic expressions: `div { (variable) }`
+/// * CSS-like selectors: `div.container #main { }`
+/// * Control flow: `@if`, `@else`, `@for`, `@while`, `@match`
+/// * HTMX attributes: `hx-get`, `hx-post`, `hx-trigger`, etc.
+/// * Interactive behaviors: `fx-click`, `fx-hover`, etc.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```ignore
+/// use hyperchad_template_macros::container;
+///
+/// let username = "Alice";
+/// let items = vec!["Apple", "Banana", "Cherry"];
+///
+/// let html = container! {
+///     div.container {
+///         h1 { "Welcome, " (username) }
+///
+///         @if !items.is_empty() {
+///             ul {
+///                 @for item in items {
+///                     li { (item) }
+///                 }
+///             }
+///         }
+///
+///         input type="text" name="search" placeholder="Search...";
+///
+///         button hx-post="/search" hx-trigger="click" {
+///             "Search"
+///         }
+///     }
+/// };
+/// ```
+///
+/// For comprehensive documentation on template syntax, control flow, CSS units, colors,
+/// and interactive behaviors with the `fx` DSL, see the crate README.
 #[proc_macro]
 pub fn container(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input2 = proc_macro2::TokenStream::from(input);
