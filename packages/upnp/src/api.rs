@@ -19,6 +19,7 @@ use crate::{
     scan_devices, seek, set_volume, subscribe_events,
 };
 
+/// Binds all `UPnP` API endpoints to the provided Actix-web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -37,6 +38,7 @@ pub fn bind_services<
         .service(seek_endpoint)
 }
 
+/// OpenAPI specification for `UPnP` API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -97,14 +99,14 @@ impl From<UpnpDeviceScannerError> for actix_web::Error {
         tags = ["UPnP"],
         post,
         path = "/scan-devices",
-        description = "Scan the network for UPnP devices",
+        description = "Scan the network for `UPnP` devices",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
         ),
         responses(
             (
                 status = 200,
-                description = "List of UPnP devices",
+                description = "List of `UPnP` devices",
                 body = Vec<UpnpDevice>,
             )
         )
