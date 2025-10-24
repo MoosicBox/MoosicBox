@@ -17,25 +17,36 @@ use thiserror::Error;
 pub use hyperchad_test_utils as test_utils;
 pub use web_server_simulator as web_server;
 
+/// Errors that can occur during `HyperChad` simulation operations.
 #[derive(Debug, Error)]
 pub enum SimulatorError {
+    /// Simulation failed to execute properly.
     #[error("Simulation failed: {0}")]
     SimulationFailed(String),
+    /// The specified renderer type is not supported.
     #[error("Renderer not supported: {0:?}")]
     UnsupportedRenderer(RendererType),
+    /// Test plan execution failed.
     #[error("Test plan execution failed: {0}")]
     TestPlanFailed(String),
+    /// Web server error occurred.
     #[error("Web server error: {0}")]
     WebServer(#[from] web_server_simulator::Error),
+    /// Simvar simulation error occurred.
     #[error("Simvar error: {0}")]
     Simvar(#[from] simvar::Error),
 }
 
+/// Supported renderer types for `HyperChad` applications.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RendererType {
+    /// HTML renderer.
     Html,
+    /// Vanilla JavaScript renderer.
     VanillaJs,
+    /// Egui GUI renderer.
     Egui,
+    /// FLTK GUI renderer.
     Fltk,
 }
 
@@ -50,11 +61,16 @@ impl std::fmt::Display for RendererType {
     }
 }
 
+/// Configuration for a `HyperChad` application being simulated.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    /// Application name.
     pub name: String,
+    /// Available routes in the application.
     pub routes: Vec<String>,
+    /// Static assets mapped from path to content.
     pub static_assets: BTreeMap<String, String>,
+    /// Environment variables for the application.
     pub environment: BTreeMap<String, String>,
 }
 
@@ -69,13 +85,18 @@ impl Default for AppConfig {
     }
 }
 
+/// Mock data for simulation environment.
 #[derive(Debug, Clone, Default)]
 pub struct SimulationData {
+    /// Simulated user data.
     pub users: Vec<serde_json::Value>,
+    /// Mock API responses mapped from endpoint to response data.
     pub api_responses: BTreeMap<String, serde_json::Value>,
+    /// Simulated database state mapped from key to value.
     pub database_state: BTreeMap<String, serde_json::Value>,
 }
 
+/// Simulator for testing `HyperChad` applications across different renderer implementations.
 #[derive(Debug)]
 pub struct HyperChadSimulator {
     app_config: AppConfig,
@@ -85,6 +106,7 @@ pub struct HyperChadSimulator {
 }
 
 impl HyperChadSimulator {
+    /// Creates a new simulator with default configuration.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -95,12 +117,14 @@ impl HyperChadSimulator {
         }
     }
 
+    /// Sets the application configuration for the simulation.
     #[must_use]
     pub fn with_app_config(mut self, config: AppConfig) -> Self {
         self.app_config = config;
         self
     }
 
+    /// Adds a renderer to be tested in the simulation.
     #[must_use]
     pub fn with_renderer(mut self, renderer: RendererType) -> Self {
         if !self.enabled_renderers.contains(&renderer) {
@@ -109,6 +133,7 @@ impl HyperChadSimulator {
         self
     }
 
+    /// Adds multiple renderers to be tested in the simulation.
     #[must_use]
     pub fn with_renderers(mut self, renderers: Vec<RendererType>) -> Self {
         for renderer in renderers {
@@ -117,12 +142,14 @@ impl HyperChadSimulator {
         self
     }
 
+    /// Sets the mock data for the simulation environment.
     #[must_use]
     pub fn with_mock_data(mut self, data: SimulationData) -> Self {
         self.mock_data = data;
         self
     }
 
+    /// Sets the web server for the simulation.
     #[must_use]
     pub fn with_web_server(mut self, server: Arc<SimulationWebServer>) -> Self {
         self.web_server = Some(server);
@@ -178,11 +205,6 @@ impl HyperChadSimulator {
     }
 
     /// Simulate a specific renderer
-    ///
-    /// # Errors
-    ///
-    /// * If the renderer is not supported
-    /// * If the renderer simulation fails
     #[cfg(feature = "test-utils")]
     fn simulate_renderer(renderer: RendererType, plan: &TestPlan) -> TestResult {
         log::info!("Simulating renderer: {renderer}");
