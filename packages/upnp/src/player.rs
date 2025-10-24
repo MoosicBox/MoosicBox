@@ -26,11 +26,13 @@ use symphonia::core::audio::AudioBuffer;
 
 use crate::listener::Handle;
 
+/// Default retry options for seeking operations on `UPnP` devices.
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(100),
 };
 
+/// `UPnP` player implementation that controls playback on `UPnP`/DLNA devices.
 #[derive(Clone)]
 pub struct UpnpPlayer {
     pub source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
@@ -645,6 +647,7 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
     }
 }
 
+/// Represents a UPnP `AVTransport` service for audio output.
 #[derive(Clone)]
 pub struct UpnpAvTransportService {
     pub device: Device,
