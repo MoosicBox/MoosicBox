@@ -1381,6 +1381,7 @@ impl Generator {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn markup_to_swap_strategy_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
@@ -1419,6 +1420,77 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
+                // Handle simple identifier paths (unquoted literals like hx-swap=children)
+                if let syn::Expr::Path(expr_path) = &*expr
+                    && expr_path.path.segments.len() == 1
+                    && expr_path.qself.is_none()
+                {
+                    let identifier_name = expr_path.path.segments[0].ident.to_string();
+                    match identifier_name.to_lowercase().as_str() {
+                        "children" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::Children };
+                        }
+                        "this" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::This };
+                        }
+                        "beforebegin" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::BeforeBegin };
+                        }
+                        "afterbegin" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::AfterBegin };
+                        }
+                        "beforeend" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::BeforeEnd };
+                        }
+                        "afterend" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::AfterEnd };
+                        }
+                        "delete" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::Delete };
+                        }
+                        "none" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::None };
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle string literal expressions in splices
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(lit_str),
+                    ..
+                }) = &*expr
+                {
+                    let identifier_name = lit_str.value();
+                    match identifier_name.to_lowercase().as_str() {
+                        "children" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::Children };
+                        }
+                        "this" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::This };
+                        }
+                        "beforebegin" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::BeforeBegin };
+                        }
+                        "afterbegin" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::AfterBegin };
+                        }
+                        "beforeend" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::BeforeEnd };
+                        }
+                        "afterend" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::AfterEnd };
+                        }
+                        "delete" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::Delete };
+                        }
+                        "none" => {
+                            return quote! { hyperchad_transformer_models::SwapStrategy::None };
+                        }
+                        _ => {}
+                    }
+                }
+
                 quote! { (#expr).into() }
             }
             Markup::BraceSplice { items, .. } => {
