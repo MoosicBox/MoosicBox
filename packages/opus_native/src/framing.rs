@@ -202,6 +202,8 @@ fn parse_code3(packet: &[u8]) -> Result<Vec<&[u8]>> {
     }
 }
 
+/// Parses an Opus packet into individual frames according to RFC 6716
+///
 /// # Errors
 ///
 /// * Returns error if packet violates RFC 6716 requirements (R1-R7)
