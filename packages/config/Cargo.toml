@@ -31,14 +31,14 @@ utoipa    = { workspace = true, optional = true }
 serde      = { workspace = true }
 serde_with = { workspace = true, features = ["macros"] }
 
-# Test dependencies
-switchy_fs     = { workspace = true, optional = true, features = ["std", "sync"] }
-switchy_random = { workspace = true, optional = true, features = ["rand"] }
-
 home      = { workspace = true }
 json5     = { workspace = true }
 log       = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+switchy_fs     = { workspace = true, features = ["std", "sync"] }
+switchy_random = { workspace = true, features = ["rand"] }
 
 [features]
 default = ["api", "db", "file", "openapi"]
@@ -48,11 +48,11 @@ fail-on-warnings = [
     "moosicbox_json_utils?/fail-on-warnings",
     "moosicbox_profiles?/fail-on-warnings",
     "switchy_database?/fail-on-warnings",
-    "switchy_fs?/fail-on-warnings",
-    "switchy_random?/fail-on-warnings",
 ]
 
-test = ["dep:switchy_fs", "dep:switchy_random"]
+# Empty feature kept for backward compatibility
+# Test dependencies are now in [dev-dependencies]
+test = []
 
 db = [
     "dep:moosicbox_json_utils",
