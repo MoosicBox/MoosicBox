@@ -23,6 +23,7 @@ moosicbox_assert = { workspace = true }
 log        = { workspace = true }
 quickcheck = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
 moosicbox_arb = { workspace = true, features = ["serde", "xml"] }

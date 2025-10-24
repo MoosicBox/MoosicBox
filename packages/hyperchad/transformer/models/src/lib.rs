@@ -186,6 +186,52 @@ impl Selector {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub struct ParseSelectorError;
+
+impl std::fmt::Display for ParseSelectorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Invalid selector")
+    }
+}
+
+impl TryFrom<String> for Selector {
+    type Error = ParseSelectorError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.as_str().try_into()
+    }
+}
+
+impl TryFrom<&String> for Selector {
+    type Error = ParseSelectorError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        value.as_str().try_into()
+    }
+}
+
+impl TryFrom<&str> for Selector {
+    type Error = ParseSelectorError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "self" => Self::SelfTarget,
+            value => {
+                if let Some(id) = value.strip_prefix('#') {
+                    Self::Id(id.to_string())
+                } else if let Some(class) = value.strip_prefix('.') {
+                    Self::Class(class.to_string())
+                } else if let Some(class) = value.strip_prefix("> .") {
+                    Self::ChildClass(class.to_string())
+                } else {
+                    return Err(ParseSelectorError);
+                }
+            }
+        })
+    }
+}
+
 impl std::fmt::Display for Selector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

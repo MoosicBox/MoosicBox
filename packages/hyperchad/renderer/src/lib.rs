@@ -162,27 +162,35 @@ impl ViewBuilder {
 
     /// Add a delete selector
     #[must_use]
-    pub fn with_delete_selector(mut self, selector: Selector) -> Self {
-        self.delete_selectors.push(selector);
+    pub fn with_delete_selector(mut self, selector: impl Into<Selector>) -> Self {
+        self.delete_selectors.push(selector.into());
         self
     }
 
     /// Add a delete selector
-    pub fn delete_selector(&mut self, selector: Selector) -> &mut Self {
-        self.delete_selectors.push(selector);
+    pub fn delete_selector(&mut self, selector: impl Into<Selector>) -> &mut Self {
+        self.delete_selectors.push(selector.into());
         self
     }
 
     /// Add multiple delete selectors
     #[must_use]
-    pub fn with_delete_selectors(mut self, selectors: impl IntoIterator<Item = Selector>) -> Self {
-        self.delete_selectors.extend(selectors);
+    pub fn with_delete_selectors(
+        mut self,
+        selectors: impl IntoIterator<Item = impl Into<Selector>>,
+    ) -> Self {
+        self.delete_selectors
+            .extend(selectors.into_iter().map(Into::into));
         self
     }
 
     /// Add multiple delete selectors
-    pub fn delete_selectors(&mut self, selectors: impl IntoIterator<Item = Selector>) -> &mut Self {
-        self.delete_selectors.extend(selectors);
+    pub fn delete_selectors(
+        &mut self,
+        selectors: impl IntoIterator<Item = impl Into<Selector>>,
+    ) -> &mut Self {
+        self.delete_selectors
+            .extend(selectors.into_iter().map(Into::into));
         self
     }
 
@@ -250,26 +258,32 @@ impl ContentBuilder {
 
     /// Add a delete selector
     #[must_use]
-    pub fn with_delete_selector(mut self, selector: Selector) -> Self {
+    pub fn with_delete_selector(mut self, selector: impl Into<Selector>) -> Self {
         self.builder = self.builder.with_delete_selector(selector);
         self
     }
 
     /// Add a delete selector
-    pub fn delete_selector(&mut self, selector: Selector) -> &mut Self {
+    pub fn delete_selector(&mut self, selector: impl Into<Selector>) -> &mut Self {
         self.builder.delete_selector(selector);
         self
     }
 
     /// Add multiple delete selectors
     #[must_use]
-    pub fn with_delete_selectors(mut self, selectors: impl IntoIterator<Item = Selector>) -> Self {
+    pub fn with_delete_selectors(
+        mut self,
+        selectors: impl IntoIterator<Item = impl Into<Selector>>,
+    ) -> Self {
         self.builder = self.builder.with_delete_selectors(selectors);
         self
     }
 
     /// Add multiple delete selectors
-    pub fn delete_selectors(&mut self, selectors: impl IntoIterator<Item = Selector>) -> &mut Self {
+    pub fn delete_selectors(
+        &mut self,
+        selectors: impl IntoIterator<Item = impl Into<Selector>>,
+    ) -> &mut Self {
         self.builder.delete_selectors(selectors);
         self
     }

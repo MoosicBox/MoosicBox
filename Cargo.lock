@@ -6119,6 +6119,7 @@ dependencies = [
  "moosicbox_assert",
  "quickcheck",
  "serde",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
