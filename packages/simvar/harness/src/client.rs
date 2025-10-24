@@ -14,6 +14,10 @@ scoped_thread_local! {
     static HANDLE: Handle
 }
 
+/// Returns the name of the currently executing client, if any.
+///
+/// This function is only meaningful when called from within a client's action
+/// future. Returns `None` if called from outside a client context.
 #[allow(unused)]
 #[must_use]
 pub fn current_client() -> Option<String> {
@@ -29,6 +33,9 @@ fn with_client<T>(name: String, f: impl FnOnce(&str) -> T) -> T {
     HANDLE.set(&client, || f(&client.name))
 }
 
+/// Result type for client actions.
+///
+/// Clients return `Ok(())` on success or an error on failure.
 pub type ClientResult = Result<(), Box<dyn std::error::Error + Send>>;
 
 pub struct Client {
