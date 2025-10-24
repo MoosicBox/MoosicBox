@@ -46,7 +46,7 @@ The HyperChad Transformer Models package provides:
 ### Routing & HTMX
 
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
-- **Selector**: Id, Class, ChildClass, SelfTarget targeting for CSS selectors
+- **Selector**: Id, Class, ChildClass, SelfTarget element targeting
 - **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies for HTMX
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
 
@@ -223,7 +223,7 @@ use hyperchad_transformer_models::LayoutPosition;
 ### Visual Models
 
 - **Visibility**: Element visibility states
-- **Position**: CSS positioning types
+- **Position**: Element positioning types
 - **Cursor**: Mouse cursor appearances
 - **ImageLoading**: Image loading strategies
 - **ImageFit**: Image fitting modes
@@ -231,18 +231,18 @@ use hyperchad_transformer_models::LayoutPosition;
 ### Interaction Models
 
 - **Route**: HTTP routing with HTMX support
-- **Selector**: CSS selector targeting
+- **Selector**: Element selector targeting
 - **SwapStrategy**: HTMX content swap strategies
 - **LinkTarget**: Link navigation targets
 
 ## String Conversion
 
-All models implement `Display` for CSS-compatible string output:
+All models implement `Display` for string output compatible with various backends:
 
 ```rust
 use hyperchad_transformer_models::*;
 
-// All models convert to CSS-compatible strings
+// All models convert to backend-compatible strings
 assert_eq!(LayoutDirection::Row.to_string(), "row");
 assert_eq!(LayoutDirection::Column.to_string(), "col");
 assert_eq!(JustifyContent::SpaceBetween.to_string(), "space-between");
@@ -280,7 +280,7 @@ Optional dependencies:
 This package is designed for:
 
 - **UI Frameworks**: Core UI component modeling
-- **CSS Generation**: CSS class and style generation
+- **Style Generation**: Class and style generation for various backends
 - **HTMX Integration**: Server-side rendered applications
 - **Layout Systems**: Flexbox and grid layout systems
 - **Component Libraries**: Reusable UI component definitions
