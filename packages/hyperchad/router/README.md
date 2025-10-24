@@ -133,6 +133,7 @@ println!("OS: {}", request.info.client.os.name);
 
 ```rust
 use serde::Deserialize;
+use switchy::http::models::Method;
 
 #[derive(Deserialize)]
 struct LoginForm {
