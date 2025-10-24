@@ -1,12 +1,16 @@
 use eframe::egui::{self};
 use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds, FontMetricsRow};
 
+/// Font metrics implementation for egui renderer.
+///
+/// Provides text measurement capabilities using egui's font system.
 #[derive(Clone)]
 pub struct EguiFontMetrics {
     ctx: egui::Context,
 }
 
 impl EguiFontMetrics {
+    /// Creates a new `EguiFontMetrics` instance with the given egui context.
     #[must_use]
     pub const fn new(ctx: egui::Context) -> Self {
         Self { ctx }

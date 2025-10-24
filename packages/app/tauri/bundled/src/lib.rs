@@ -8,10 +8,14 @@ use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
 
+/// Commands for the Tauri bundled app service.
 #[derive(Debug, AsRefStr)]
 pub enum Command {
+    /// Process a Tauri run event.
     RunEvent { event: Arc<RunEvent> },
+    /// Wait for the server to complete startup.
     WaitForStartup { sender: oneshot::Sender<()> },
+    /// Wait for the server to complete shutdown.
     WaitForShutdown { sender: oneshot::Sender<()> },
 }
 
@@ -21,6 +25,7 @@ impl std::fmt::Display for Command {
     }
 }
 
+/// Async service for managing the Tauri bundled app lifecycle.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context);
 }
@@ -81,12 +86,15 @@ impl service::Processor for service::Service {
     }
 }
 
+/// Context for the Tauri bundled app service.
 pub struct Context {
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
     receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
 }
 
 impl Context {
+    /// Creates a new `Context` and starts the embedded server.
+    ///
     /// # Panics
     ///
     /// * If fails to get the `LibraryDatabase`
@@ -153,6 +161,8 @@ impl Context {
         }
     }
 
+    /// Handles a Tauri run event, initiating shutdown on exit requests.
+    ///
     /// # Errors
     ///
     /// * If an IO error occurs
@@ -163,9 +173,11 @@ impl Context {
         Ok(())
     }
 
+    /// Shuts down the embedded server.
+    ///
     /// # Errors
     ///
-    /// * None
+    /// * This function currently never returns an error
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
         if let Some(handle) = &self.server_handle {
             handle.abort();

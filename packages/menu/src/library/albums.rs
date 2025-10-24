@@ -39,6 +39,11 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     }
 }
 
+/// Propagates API sources from a library album to an album fetched from an API source.
+///
+/// This function matches the given album against library albums and copies the
+/// `album_sources` and `artist_sources` fields if a match is found. This ensures
+/// that albums fetched from external APIs retain their connections to the local library.
 pub fn propagate_api_sources_from_library_album<'a>(
     source: &ApiSource,
     album: &'a mut Album,

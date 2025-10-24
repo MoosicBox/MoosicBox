@@ -2,8 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Error type for integer parsing operations.
 #[derive(Clone, Copy, Debug)]
 pub enum ParseIntError {
+    /// An invalid digit was encountered in the input string.
     InvalidDigit,
 }
 
@@ -124,6 +126,12 @@ pub const fn parse_isize(b: &str) -> Result<isize, ParseIntError> {
     Ok(result as isize * sign)
 }
 
+/// Parses a compile-time environment variable as a `usize`.
+///
+/// # Panics
+///
+/// * If the environment variable is not set at compile time
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! env_usize {
     ($name:expr $(,)?) => {
@@ -134,6 +142,11 @@ macro_rules! env_usize {
     };
 }
 
+/// Returns a compile-time environment variable as a `usize`, or a default value if not set.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! default_env_usize {
     ($name:expr, $default:expr $(,)?) => {
@@ -144,6 +157,11 @@ macro_rules! default_env_usize {
     };
 }
 
+/// Returns a compile-time environment variable as a `u64`, or a default value if not set.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! default_env_u64 {
     ($name:expr, $default:expr $(,)?) => {
@@ -154,6 +172,11 @@ macro_rules! default_env_u64 {
     };
 }
 
+/// Returns a compile-time environment variable as a `u32`, or a default value if not set.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! default_env_u32 {
     ($name:expr, $default:expr $(,)?) => {
@@ -164,6 +187,11 @@ macro_rules! default_env_u32 {
     };
 }
 
+/// Returns a compile-time environment variable as a `u16`, or a default value if not set.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! default_env_u16 {
     ($name:expr, $default:expr $(,)?) => {
@@ -174,6 +202,13 @@ macro_rules! default_env_u16 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<usize>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_usize {
     ($name:expr $(,)?) => {
@@ -187,6 +222,13 @@ macro_rules! option_env_usize {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<u64>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_u64 {
     ($name:expr $(,)?) => {
@@ -200,6 +242,13 @@ macro_rules! option_env_u64 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<u32>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_u32 {
     ($name:expr $(,)?) => {
@@ -213,6 +262,13 @@ macro_rules! option_env_u32 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<u16>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_u16 {
     ($name:expr $(,)?) => {
@@ -226,6 +282,13 @@ macro_rules! option_env_u16 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<isize>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_isize {
     ($name:expr $(,)?) => {
@@ -239,6 +302,13 @@ macro_rules! option_env_isize {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<i64>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_i64 {
     ($name:expr $(,)?) => {
@@ -252,6 +322,13 @@ macro_rules! option_env_i64 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<i32>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_i32 {
     ($name:expr $(,)?) => {
@@ -265,6 +342,13 @@ macro_rules! option_env_i32 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<i16>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_i16 {
     ($name:expr $(,)?) => {
@@ -278,6 +362,13 @@ macro_rules! option_env_i16 {
     };
 }
 
+/// Returns a compile-time environment variable as an `Option<i8>`.
+///
+/// Returns `None` if the environment variable is not set at compile time.
+///
+/// # Panics
+///
+/// * If the environment variable contains an invalid digit
 #[macro_export]
 macro_rules! option_env_i8 {
     ($name:expr $(,)?) => {
@@ -291,6 +382,7 @@ macro_rules! option_env_i8 {
     };
 }
 
+/// Returns a compile-time environment variable as a string slice, or a default value if not set.
 #[macro_export]
 macro_rules! default_env {
     ($name:expr, $default:expr $(,)?) => {

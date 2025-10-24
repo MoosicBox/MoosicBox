@@ -8,11 +8,16 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "arb")]
 pub mod arb;
 
+/// Layout direction for flexbox-style layouts.
+///
+/// Determines whether child elements are laid out horizontally or vertically.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum LayoutDirection {
+    /// Horizontal layout (left-to-right or right-to-left).
     Row,
+    /// Vertical layout (top-to-bottom). This is the default.
     #[default]
     Column,
 }
@@ -26,18 +31,28 @@ impl std::fmt::Display for LayoutDirection {
     }
 }
 
+/// Overflow behavior for layouts when content exceeds available space.
+///
+/// Controls how a layout container handles child elements that don't fit.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum LayoutOverflow {
+    /// Automatically determine overflow behavior.
     Auto,
+    /// Enable scrolling for overflow content.
     Scroll,
+    /// Expand the container to fit all content. This is the default.
     #[default]
     Expand,
+    /// Compress content to fit within the container.
     Squash,
+    /// Wrap content to the next line or column.
     Wrap {
+        /// Whether to use grid layout for wrapped content.
         grid: bool,
     },
+    /// Hide content that overflows the container.
     Hidden,
 }
 
@@ -54,15 +69,23 @@ impl std::fmt::Display for LayoutOverflow {
     }
 }
 
+/// Content justification along the main axis in flexbox-style layouts.
+///
+/// Controls how space is distributed between and around child elements along the main axis.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum JustifyContent {
+    /// Align items to the start of the container. This is the default.
     #[default]
     Start,
+    /// Center items along the main axis.
     Center,
+    /// Align items to the end of the container.
     End,
+    /// Distribute items with equal space between them.
     SpaceBetween,
+    /// Distribute items with equal space around them.
     SpaceEvenly,
 }
 
@@ -78,13 +101,19 @@ impl std::fmt::Display for JustifyContent {
     }
 }
 
+/// Item alignment along the cross axis in flexbox-style layouts.
+///
+/// Controls how child elements are positioned along the cross axis (perpendicular to the main axis).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum AlignItems {
+    /// Align items to the start of the cross axis. This is the default.
     #[default]
     Start,
+    /// Center items along the cross axis.
     Center,
+    /// Align items to the end of the cross axis.
     End,
 }
 
@@ -98,14 +127,21 @@ impl std::fmt::Display for AlignItems {
     }
 }
 
+/// Text alignment within a container.
+///
+/// Controls horizontal alignment of text content.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum TextAlign {
+    /// Align text to the start edge. This is the default.
     #[default]
     Start,
+    /// Center text horizontally.
     Center,
+    /// Align text to the end edge.
     End,
+    /// Justify text to fill the full width.
     Justify,
 }
 
@@ -120,21 +156,29 @@ impl std::fmt::Display for TextAlign {
     }
 }
 
+/// Position information for elements in wrapped layouts.
+///
+/// Specifies the row and column position when layout overflow is set to wrap with grid.
 #[cfg(feature = "layout")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum LayoutPosition {
+    /// Explicit grid position with row and column indices.
     Wrap {
+        /// The row index in the wrapped grid layout.
         row: u32,
+        /// The column index in the wrapped grid layout.
         col: u32,
     },
+    /// Use default positioning (no explicit grid position). This is the default.
     #[default]
     Default,
 }
 
 #[cfg(feature = "layout")]
 impl LayoutPosition {
+    /// Returns the row index if this is a `Wrap` position.
     #[must_use]
     pub const fn row(&self) -> Option<u32> {
         match self {
@@ -143,6 +187,7 @@ impl LayoutPosition {
         }
     }
 
+    /// Returns the column index if this is a `Wrap` position.
     #[must_use]
     pub const fn column(&self) -> Option<u32> {
         match self {
@@ -152,40 +197,59 @@ impl LayoutPosition {
     }
 }
 
+/// A target reference that can be either a literal string or a reference to a value.
+///
+/// Used to specify targets in routes and other contexts where values might be literals or references.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Target {
+    /// A literal string value.
     Literal(String),
+    /// A reference to a string value.
     Ref(String),
 }
 
+/// CSS-style selector for targeting elements.
+///
+/// Supports ID selectors, class selectors, child class selectors, and self-targeting.
+/// Can be parsed from strings like `#id`, `.class`, `> .child-class`, or `self`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Selector {
+    /// Select by element ID (e.g., `#my-id`).
     Id(String),
+    /// Select by element class (e.g., `.my-class`).
     Class(String),
+    /// Select direct children with a class (e.g., `> .my-class`).
     ChildClass(String),
+    /// Target the current element. This is the default.
     #[default]
     SelfTarget,
 }
 
 impl Selector {
+    /// Creates an ID selector.
     #[must_use]
     pub fn id(id: impl Into<String>) -> Self {
         Self::Id(id.into())
     }
 
+    /// Creates a class selector.
     #[must_use]
     pub fn class(class: impl Into<String>) -> Self {
         Self::Class(class.into())
     }
 
+    /// Creates a child class selector.
     #[must_use]
     pub fn child_class(class: impl Into<String>) -> Self {
         Self::ChildClass(class.into())
     }
 }
 
+/// Error type for selector parsing failures.
+///
+/// Returned when a string cannot be parsed into a valid [`Selector`].
 #[derive(Debug, thiserror::Error)]
 pub struct ParseSelectorError;
 
@@ -268,6 +332,7 @@ impl From<&Self> for Target {
 }
 
 impl Target {
+    /// Returns the string value of the target, regardless of whether it's literal or a reference.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         match self {
@@ -275,40 +340,55 @@ impl Target {
         }
     }
 
+    /// Creates a literal target.
     #[must_use]
     pub fn literal(str: impl Into<String>) -> Self {
         Self::Literal(str.into())
     }
 
+    /// Creates a reference target.
     #[must_use]
     pub fn reference(str: impl Into<String>) -> Self {
         Self::Ref(str.into())
     }
 }
 
+/// Target specification for DOM element selection.
+///
+/// Provides various ways to target elements including by string ID, class, child class,
+/// internal numeric ID, self-reference, or last child.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ElementTarget {
+    /// Target by string ID.
     StrId(Target),
+    /// Target by CSS class.
     Class(Target),
+    /// Target direct children with a specific class.
     ChildClass(Target),
+    /// Target by internal numeric ID.
     Id(usize),
+    /// Target the current element. This is the default.
     #[default]
     SelfTarget,
+    /// Target the last child element.
     LastChild,
 }
 
 impl ElementTarget {
+    /// Creates a string ID target.
     #[must_use]
     pub fn str_id(target: impl Into<Target>) -> Self {
         Self::StrId(target.into())
     }
 
+    /// Creates a class target.
     #[must_use]
     pub fn class(target: impl Into<Target>) -> Self {
         Self::Class(target.into())
     }
 
+    /// Creates a child class target.
     #[must_use]
     pub fn child_class(target: impl Into<Target>) -> Self {
         Self::ChildClass(target.into())
@@ -346,18 +426,29 @@ impl std::fmt::Display for ElementTarget {
     }
 }
 
+/// Strategy for how to swap or insert content in the DOM.
+///
+/// Based on htmx swap strategies, controls where new content is placed relative to the target element.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum SwapStrategy {
+    /// Replace the target element itself. This is the default.
     #[default]
     This,
+    /// Replace the children of the target element.
     Children,
+    /// Insert before the target element (as a sibling).
     BeforeBegin,
+    /// Insert as the first child of the target element.
     AfterBegin,
+    /// Insert as the last child of the target element.
     BeforeEnd,
+    /// Insert after the target element (as a sibling).
     AfterEnd,
+    /// Delete the target element.
     Delete,
+    /// Do not swap any content.
     None,
 }
 
@@ -376,71 +467,128 @@ impl std::fmt::Display for SwapStrategy {
     }
 }
 
+/// HTTP route definition with target and swap strategy.
+///
+/// Represents different HTTP methods with associated route paths, event triggers,
+/// target selectors, and swap strategies for dynamic content updates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum Route {
+    /// HTTP GET request.
     Get {
+        /// The URL path for the request.
         route: String,
+        /// Optional event trigger (e.g., `click`, `load`).
         trigger: Option<String>,
+        /// Target element selector.
         target: Selector,
+        /// How to swap the response content.
         strategy: SwapStrategy,
     },
+    /// HTTP POST request.
     Post {
+        /// The URL path for the request.
         route: String,
+        /// Optional event trigger (e.g., `click`, `load`).
         trigger: Option<String>,
+        /// Target element selector.
         target: Selector,
+        /// How to swap the response content.
         strategy: SwapStrategy,
     },
+    /// HTTP PUT request.
     Put {
+        /// The URL path for the request.
         route: String,
+        /// Optional event trigger (e.g., `click`, `load`).
         trigger: Option<String>,
+        /// Target element selector.
         target: Selector,
+        /// How to swap the response content.
         strategy: SwapStrategy,
     },
+    /// HTTP DELETE request.
     Delete {
+        /// The URL path for the request.
         route: String,
+        /// Optional event trigger (e.g., `click`, `load`).
         trigger: Option<String>,
+        /// Target element selector.
         target: Selector,
+        /// How to swap the response content.
         strategy: SwapStrategy,
     },
+    /// HTTP PATCH request.
     Patch {
+        /// The URL path for the request.
         route: String,
+        /// Optional event trigger (e.g., `click`, `load`).
         trigger: Option<String>,
+        /// Target element selector.
         target: Selector,
+        /// How to swap the response content.
         strategy: SwapStrategy,
     },
 }
 
+/// Mouse cursor style.
+///
+/// Defines the appearance of the mouse cursor when hovering over an element.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum Cursor {
+    /// Default cursor (usually an arrow). This is the default.
     #[default]
     Auto,
+    /// Pointing hand cursor (typically for links).
     Pointer,
+    /// Text selection cursor (I-beam).
     Text,
+    /// Crosshair cursor.
     Crosshair,
+    /// Move cursor (four-directional arrows).
     Move,
+    /// Not-allowed cursor (circle with a line through it).
     NotAllowed,
+    /// No-drop cursor (hand with a no symbol).
     NoDrop,
+    /// Grab cursor (open hand).
     Grab,
+    /// Grabbing cursor (closed hand).
     Grabbing,
+    /// All-scroll cursor (arrows in all directions).
     AllScroll,
+    /// Column resize cursor (horizontal arrows).
     ColResize,
+    /// Row resize cursor (vertical arrows).
     RowResize,
+    /// North resize cursor.
     NResize,
+    /// East resize cursor.
     EResize,
+    /// South resize cursor.
     SResize,
+    /// West resize cursor.
     WResize,
+    /// Northeast resize cursor.
     NeResize,
+    /// Northwest resize cursor.
     NwResize,
+    /// Southeast resize cursor.
     SeResize,
+    /// Southwest resize cursor.
     SwResize,
+    /// East-west resize cursor.
     EwResize,
+    /// North-south resize cursor.
     NsResize,
+    /// Northeast-southwest resize cursor.
     NeswResize,
+    /// Zoom in cursor (magnifying glass with +).
     ZoomIn,
+    /// Zoom out cursor (magnifying glass with -).
     ZoomOut,
 }
 
@@ -476,19 +624,32 @@ impl std::fmt::Display for Cursor {
     }
 }
 
+/// CSS positioning mode for elements.
+///
+/// Controls how an element is positioned in the layout.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum Position {
+    /// Default positioning in the normal document flow. This is the default.
     #[default]
     Static,
+    /// Positioned relative to its normal position.
     Relative,
+    /// Positioned relative to its nearest positioned ancestor.
     Absolute,
+    /// Positioned based on scroll position.
     Sticky,
+    /// Positioned relative to the viewport.
     Fixed,
 }
 
 impl Position {
+    /// Returns `true` if the position is relative to its parent container.
+    ///
+    /// Returns `true` for `Static`, `Relative`, and `Sticky`, which are positioned relative
+    /// to their parent. Returns `false` for `Absolute` and `Fixed`, which break out of
+    /// the normal flow.
     #[must_use]
     pub const fn is_relative(self) -> bool {
         match self {
@@ -510,12 +671,17 @@ impl std::fmt::Display for Position {
     }
 }
 
+/// Element visibility state.
+///
+/// Controls whether an element is visible or hidden (but still occupies space).
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum Visibility {
+    /// Element is visible. This is the default.
     #[default]
     Visible,
+    /// Element is hidden but still occupies layout space.
     Hidden,
 }
 
@@ -528,12 +694,17 @@ impl std::fmt::Display for Visibility {
     }
 }
 
+/// Image loading strategy.
+///
+/// Controls when images are loaded relative to page load.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum ImageLoading {
+    /// Load image immediately. This is the default.
     #[default]
     Eager,
+    /// Defer loading until the image is near the viewport.
     Lazy,
 }
 
@@ -546,15 +717,23 @@ impl std::fmt::Display for ImageLoading {
     }
 }
 
+/// How an image should fit within its container.
+///
+/// Controls the sizing behavior of images relative to their container.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum ImageFit {
+    /// Use default sizing behavior. This is the default.
     #[default]
     Default,
+    /// Scale to fit within container while preserving aspect ratio.
     Contain,
+    /// Scale to cover entire container while preserving aspect ratio (may crop).
     Cover,
+    /// Stretch to fill container (may distort aspect ratio).
     Fill,
+    /// Do not resize the image.
     None,
 }
 
@@ -570,15 +749,23 @@ impl std::fmt::Display for ImageFit {
     }
 }
 
+/// Text decoration line style.
+///
+/// Controls the type of line decoration applied to text.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum TextDecorationLine {
+    /// Inherit from parent element. This is the default.
     #[default]
     Inherit,
+    /// No text decoration.
     None,
+    /// Underline the text.
     Underline,
+    /// Line above the text.
     Overline,
+    /// Strike through the text.
     LineThrough,
 }
 
@@ -594,16 +781,25 @@ impl std::fmt::Display for TextDecorationLine {
     }
 }
 
+/// Text decoration style.
+///
+/// Controls the visual style of text decoration lines.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum TextDecorationStyle {
+    /// Inherit from parent element. This is the default.
     #[default]
     Inherit,
+    /// Solid line.
     Solid,
+    /// Double line.
     Double,
+    /// Dotted line.
     Dotted,
+    /// Dashed line.
     Dashed,
+    /// Wavy line.
     Wavy,
 }
 
@@ -620,15 +816,23 @@ impl std::fmt::Display for TextDecorationStyle {
     }
 }
 
+/// HTML link target attribute.
+///
+/// Controls where a linked document should open.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum LinkTarget {
+    /// Open in the same frame/tab. This is the default.
     #[default]
     SelfTarget,
+    /// Open in a new window or tab.
     Blank,
+    /// Open in the parent frame.
     Parent,
+    /// Open in the top-level frame.
     Top,
+    /// Open in a named frame or window.
     Custom(String),
 }
 
@@ -644,30 +848,53 @@ impl std::fmt::Display for LinkTarget {
     }
 }
 
+/// Font weight (thickness) values.
+///
+/// Supports both named weights and numeric weights from 100-900.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum FontWeight {
+    /// Thin weight (typically 100).
     Thin,
+    /// Extra light weight (typically 200).
     ExtraLight,
+    /// Light weight (typically 300).
     Light,
+    /// Normal/regular weight (typically 400). This is the default.
     #[default]
     Normal,
+    /// Medium weight (typically 500).
     Medium,
+    /// Semi-bold weight (typically 600).
     SemiBold,
+    /// Bold weight (typically 700).
     Bold,
+    /// Extra bold weight (typically 800).
     ExtraBold,
+    /// Black/heavy weight (typically 900).
     Black,
+    /// Lighter than parent element.
     Lighter,
+    /// Bolder than parent element.
     Bolder,
+    /// Numeric weight 100.
     Weight100,
+    /// Numeric weight 200.
     Weight200,
+    /// Numeric weight 300.
     Weight300,
+    /// Numeric weight 400.
     Weight400,
+    /// Numeric weight 500.
     Weight500,
+    /// Numeric weight 600.
     Weight600,
+    /// Numeric weight 700.
     Weight700,
+    /// Numeric weight 800.
     Weight800,
+    /// Numeric weight 900.
     Weight900,
 }
 
@@ -700,13 +927,19 @@ impl std::fmt::Display for FontWeight {
     }
 }
 
+/// White space handling in text.
+///
+/// Controls how white space is collapsed and wrapped in text content.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum WhiteSpace {
+    /// Collapse white space and wrap text normally. This is the default.
     #[default]
     Normal,
+    /// Preserve white space and prevent wrapping.
     Preserve,
+    /// Preserve white space but allow wrapping.
     PreserveWrap,
 }
 
@@ -720,14 +953,21 @@ impl std::fmt::Display for WhiteSpace {
     }
 }
 
+/// Text selection behavior.
+///
+/// Controls whether and how users can select text content.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum UserSelect {
+    /// Default selection behavior. This is the default.
     #[default]
     Auto,
+    /// Prevent text selection.
     None,
+    /// Allow text selection.
     Text,
+    /// Select all text on click.
     All,
 }
 
@@ -742,13 +982,19 @@ impl std::fmt::Display for UserSelect {
     }
 }
 
+/// Word breaking and wrapping behavior.
+///
+/// Controls how words break when they exceed the container width.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum OverflowWrap {
+    /// Break only at normal break points (spaces, hyphens). This is the default.
     #[default]
     Normal,
+    /// Break long words at arbitrary points to prevent overflow.
     BreakWord,
+    /// Break at any character to prevent overflow.
     Anywhere,
 }
 
@@ -762,12 +1008,17 @@ impl std::fmt::Display for OverflowWrap {
     }
 }
 
+/// Text overflow behavior.
+///
+/// Controls how overflowing text is displayed when it exceeds its container.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum TextOverflow {
+    /// Clip the overflowing text. This is the default.
     #[default]
     Clip,
+    /// Display an ellipsis (...) to indicate clipped text.
     Ellipsis,
 }
 

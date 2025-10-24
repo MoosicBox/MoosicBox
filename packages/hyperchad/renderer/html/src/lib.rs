@@ -47,12 +47,21 @@ pub mod web_server;
 #[cfg(feature = "extend")]
 pub mod extend;
 
+/// Default implementation of HTML tag rendering with responsive trigger support.
+///
+/// This renderer converts hyperchad containers into HTML elements with CSS styling
+/// and supports responsive design through media queries.
 #[derive(Debug, Default, Clone)]
 pub struct DefaultHtmlTagRenderer {
+    /// Map of responsive trigger names to their trigger conditions.
     pub responsive_triggers: BTreeMap<String, ResponsiveTrigger>,
 }
 
 impl DefaultHtmlTagRenderer {
+    /// Adds a responsive trigger and returns the modified renderer.
+    ///
+    /// Responsive triggers define media query conditions that can be referenced
+    /// by containers to apply responsive overrides.
     #[must_use]
     pub fn with_responsive_trigger(
         mut self,
@@ -433,13 +442,21 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
     }
 }
 
+/// Trait for HTML application implementations that handle rendering and configuration.
+///
+/// Implementations provide access to tag rendering, responsive triggers, assets,
+/// viewport settings, and page metadata like title and description.
 pub trait HtmlApp {
+    /// Returns a reference to the HTML tag renderer.
     fn tag_renderer(&self) -> &dyn HtmlTagRenderer;
 
+    /// Adds a responsive trigger and returns the modified app.
     #[must_use]
     fn with_responsive_trigger(self, _name: String, _trigger: ResponsiveTrigger) -> Self;
+    /// Adds a responsive trigger to the app.
     fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger);
 
+    /// Adds static asset routes and returns the modified app.
     #[cfg(feature = "assets")]
     #[must_use]
     fn with_static_asset_routes(
@@ -447,40 +464,56 @@ pub trait HtmlApp {
         paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,
     ) -> Self;
 
+    /// Returns an iterator over the static asset routes.
     #[cfg(feature = "assets")]
     fn static_asset_routes(
         &self,
     ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute>;
 
+    /// Sets the viewport meta tag and returns the modified app.
     #[must_use]
     fn with_viewport(self, viewport: Option<String>) -> Self;
+    /// Sets the viewport meta tag.
     fn set_viewport(&mut self, viewport: Option<String>);
 
+    /// Sets the page title and returns the modified app.
     #[must_use]
     fn with_title(self, title: Option<String>) -> Self;
+    /// Sets the page title.
     fn set_title(&mut self, title: Option<String>);
 
+    /// Sets the page description and returns the modified app.
     #[must_use]
     fn with_description(self, description: Option<String>) -> Self;
+    /// Sets the page description.
     fn set_description(&mut self, description: Option<String>);
 
+    /// Sets the background color and returns the modified app.
     #[must_use]
     fn with_background(self, background: Option<Color>) -> Self;
+    /// Sets the background color.
     fn set_background(&mut self, background: Option<Color>);
 
+    /// Sets the renderer event receiver and returns the modified app.
     #[cfg(feature = "extend")]
     #[must_use]
     fn with_html_renderer_event_rx(self, rx: Receiver<hyperchad_renderer::RendererEvent>) -> Self;
+    /// Sets the renderer event receiver.
     #[cfg(feature = "extend")]
     fn set_html_renderer_event_rx(&mut self, rx: Receiver<hyperchad_renderer::RendererEvent>);
 }
 
+/// HTML renderer that wraps an HTML application and manages rendering state.
+///
+/// This renderer handles dimensions, navigation events, and optional extensions
+/// for custom rendering behavior.
 #[derive(Clone)]
 pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
     width: Option<f32>,
     height: Option<f32>,
     x: Option<i32>,
     y: Option<i32>,
+    /// The HTML application being rendered.
     pub app: T,
     receiver: Receiver<String>,
     #[cfg(feature = "extend")]
@@ -490,6 +523,7 @@ pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
 }
 
 impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
+    /// Creates a new HTML renderer with the given application.
     #[must_use]
     pub fn new(app: T) -> Self {
         let (_tx, rx) = flume::unbounded();
@@ -508,29 +542,34 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         }
     }
 
+    /// Sets the background color and returns the modified renderer.
     #[must_use]
     pub fn with_background(mut self, background: Option<Color>) -> Self {
         self.app = self.app.with_background(background);
         self
     }
 
+    /// Sets the page title and returns the modified renderer.
     #[must_use]
     pub fn with_title(mut self, title: Option<String>) -> Self {
         self.app = self.app.with_title(title);
         self
     }
 
+    /// Sets the page description and returns the modified renderer.
     #[must_use]
     pub fn with_description(mut self, description: Option<String>) -> Self {
         self.app = self.app.with_description(description);
         self
     }
 
+    /// Waits for navigation events from the renderer.
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
 
+    /// Adds static asset routes and returns the modified renderer.
     #[cfg(feature = "assets")]
     #[must_use]
     pub fn with_static_asset_routes(
@@ -541,6 +580,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         self
     }
 
+    /// Returns an iterator over the static asset routes.
     #[cfg(feature = "assets")]
     pub fn static_asset_routes(
         &self,
@@ -548,6 +588,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         self.app.static_asset_routes()
     }
 
+    /// Sets a custom HTML renderer extension and returns the modified renderer.
     #[cfg(feature = "extend")]
     #[must_use]
     pub fn with_extend_html_renderer(
@@ -558,6 +599,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         self
     }
 
+    /// Sets the renderer event publisher and returns the modified renderer.
     #[cfg(feature = "extend")]
     #[must_use]
     pub fn with_html_renderer_event_pub(mut self, publisher: extend::HtmlRendererEventPub) -> Self {

@@ -4,12 +4,19 @@ use thiserror::Error;
 
 use crate::{Calculation, Number};
 
+/// Error type for number and calculation parsing failures.
 #[derive(Debug, Error)]
 pub enum GetNumberError {
+    /// Failed to parse the given string as a number or calculation.
     #[error("Failed to parse number '{0}'")]
     Parse(String),
 }
 
+/// Splits a string on the first occurrence of a character outside of brackets.
+///
+/// Respects nested parentheses and braces, only splitting on characters that appear
+/// outside of all bracket pairs.
+///
 /// # Errors
 ///
 /// * If there is an unmatched ending ')'
@@ -61,6 +68,10 @@ pub fn split_on_char(
     Ok(None)
 }
 
+/// Splits a string on a character and trims whitespace from both parts.
+///
+/// Same as `split_on_char` but trims the resulting string slices.
+///
 /// # Errors
 ///
 /// * If the `split_on_char` fn failed.
@@ -72,6 +83,8 @@ pub fn split_on_char_trimmed(
     Ok(split_on_char(haystack, needle, start)?.map(|(x, y)| (x.trim(), y.trim())))
 }
 
+/// Parses a parenthesized grouping expression like `(expr)`.
+///
 /// # Errors
 ///
 /// * If the input is not a grouping.
@@ -90,6 +103,8 @@ pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
     }
 }
 
+/// Parses a `min(a, b)` function expression.
+///
 /// # Errors
 ///
 /// * If the input is not a `min` function.
@@ -116,6 +131,8 @@ pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
     Err(GetNumberError::Parse(message))
 }
 
+/// Parses a `max(a, b)` function expression.
+///
 /// # Errors
 ///
 /// * If the input is not a `max` function.
@@ -142,6 +159,8 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
     Err(GetNumberError::Parse(message))
 }
 
+/// Parses a CSS `calc()` function expression.
+///
 /// # Errors
 ///
 /// * If the input is not a `calc` function.
@@ -163,6 +182,10 @@ pub fn parse_calc(calc: &str) -> Result<Number, GetNumberError> {
     Err(GetNumberError::Parse(message))
 }
 
+/// Parses a calculation expression with operators and functions.
+///
+/// Supports addition, subtraction, multiplication, division, grouping, min, and max.
+///
 /// # Errors
 ///
 /// * If the `calc` fails to parse.
@@ -231,6 +254,10 @@ fn parse_signed_operation(
     Err(GetNumberError::Parse(message))
 }
 
+/// Parses a number with optional units (%, px, vw, vh, dvw, dvh).
+///
+/// Supports integers, floats, and various CSS unit suffixes.
+///
 /// # Errors
 ///
 /// * If the input string is not a valid number.

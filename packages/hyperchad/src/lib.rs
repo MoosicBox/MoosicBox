@@ -1,3 +1,59 @@
+//! A template-based UI framework for building cross-platform applications.
+//!
+//! `HyperChad` enables developers to write UI templates once and deploy across desktop
+//! (Egui, FLTK), web (HTML, Vanilla JS), and server-side (Actix, Lambda) environments.
+//!
+//! # Features
+//!
+//! * **Multi-Renderer Architecture**: Support for Egui, FLTK, HTML, Vanilla JS, and server-side rendering
+//! * **Template-Based UI**: Build interfaces using the `container!` macro system
+//! * **Routing System**: Async router with navigation support
+//! * **Action System**: Event handling and data flow management
+//! * **State Persistence**: Key-value state store with optional `SQLite` persistence
+//! * **Color Management**: Consistent theming across all renderers
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! use hyperchad::app::{App, AppBuilder};
+//! use hyperchad::router::{Router, RoutePath, RouteRequest};
+//! use hyperchad::template::container;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let router = Router::new()
+//!     .with_route(RoutePath::Literal("/"), |_req: RouteRequest| async move {
+//!         let content = container! {
+//!             div {
+//!                 h1 { "Welcome to HyperChad" }
+//!                 button { "Click Me" }
+//!             }
+//!         };
+//!         Ok(content)
+//!     });
+//!
+//! let app = AppBuilder::new()
+//!     .with_title("My App".to_string())
+//!     .with_router(router)
+//!     .build_default()?;
+//!
+//! app.run()?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Modules
+//!
+//! The crate re-exports several sub-crates as modules:
+//!
+//! * [`actions`] - Event handling and action system
+//! * [`app`] - Application builder and runtime
+//! * [`color`] - Color management
+//! * [`router`] - Routing functionality
+//! * [`state`] - State persistence system
+//! * [`template`] - Template macro system
+//! * [`transformer`] - Container and element types
+//! * [`transformer_models`] - Data models for transformers
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

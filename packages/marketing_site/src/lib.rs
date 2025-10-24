@@ -16,12 +16,16 @@ mod download;
 
 static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
 
+/// Default viewport meta tag content for responsive design.
 pub static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
 #[cfg(feature = "assets")]
 static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
     LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
 
+/// Application router with all configured routes for the marketing site.
+///
+/// Includes routes for home, download, try-now, releases, and health check endpoints.
 pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
     Router::new()
         .with_static_route(&["/", "/home"], |_| async {
@@ -55,6 +59,9 @@ static ASSETS_DIR: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
     )
 });
 
+/// Static asset routes for the marketing site.
+///
+/// Includes JavaScript files, favicon, and public directory assets.
 #[cfg(feature = "assets")]
 pub static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> =
     LazyLock::new(|| {
@@ -80,9 +87,12 @@ pub static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> 
         ]
     });
 
+/// Initializes the application builder with default configuration.
+///
 /// # Panics
 ///
 /// * If an invalid number is given to `WINDOW_WIDTH` or `WINDOW_HEIGHT`
+#[must_use]
 pub fn init() -> AppBuilder {
     #[allow(unused_mut)]
     let mut app = AppBuilder::new()
@@ -107,6 +117,8 @@ pub fn init() -> AppBuilder {
     app
 }
 
+/// Builds the application from the provided builder.
+///
 /// # Errors
 ///
 /// * If the `NativeApp` fails to start

@@ -18,103 +18,154 @@ pub mod reqwest;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
+/// Errors that can occur when making HTTP requests.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Failed to decode response data.
     #[error("Decode")]
     Decode,
 
+    /// JSON deserialization error (requires `json` feature).
     #[cfg(feature = "json")]
     #[error(transparent)]
     Deserialize(#[from] serde_json::Error),
 
+    /// Reqwest HTTP client error (requires `reqwest` feature).
     #[cfg(feature = "reqwest")]
     #[error(transparent)]
     Reqwest(#[from] ::reqwest::Error),
 }
 
+/// Common HTTP header names.
 #[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Header {
+    /// HTTP `Authorization` header.
     Authorization,
+    /// HTTP `User-Agent` header.
     UserAgent,
+    /// HTTP `Range` header.
     Range,
+    /// HTTP `Content-Length` header.
     ContentLength,
 }
 
+/// Generic trait for building and configuring HTTP requests.
 #[async_trait]
 pub trait GenericRequestBuilder<R>: Send + Sync {
+    /// Add a header to the request.
     fn header(&mut self, name: &str, value: &str);
+    /// Add a query parameter to the request.
     fn query_param(&mut self, name: &str, value: &str);
+    /// Add an optional query parameter to the request.
     fn query_param_opt(&mut self, name: &str, value: Option<&str>);
+    /// Add multiple query parameters to the request.
     fn query_params(&mut self, params: &[(&str, &str)]);
+    /// Set the request body.
     #[allow(unused)]
     fn body(&mut self, body: Bytes);
+    /// Set the request body as a form (requires `json` feature).
     #[cfg(feature = "json")]
     fn form(&mut self, form: &serde_json::Value);
+    /// Send the HTTP request.
+    ///
+    /// # Errors
+    ///
+    /// * If the request fails to send
     async fn send(&mut self) -> Result<R, Error>;
 }
 
+/// Generic trait for building HTTP clients.
 pub trait GenericClientBuilder<RB, C: GenericClient<RB>>: Send + Sync {
+    /// Build the HTTP client.
+    ///
     /// # Errors
     ///
     /// * If the `Client` fails to build
     fn build(self) -> Result<C, Error>;
 }
 
+/// Generic trait for HTTP clients.
 pub trait GenericClient<RB>: Send + Sync {
+    /// Create a GET request builder.
     fn get(&self, url: &str) -> RB {
         self.request(Method::Get, url)
     }
 
+    /// Create a POST request builder.
     fn post(&self, url: &str) -> RB {
         self.request(Method::Post, url)
     }
 
+    /// Create a PUT request builder.
     fn put(&self, url: &str) -> RB {
         self.request(Method::Put, url)
     }
 
+    /// Create a PATCH request builder.
     fn patch(&self, url: &str) -> RB {
         self.request(Method::Patch, url)
     }
 
+    /// Create a DELETE request builder.
     fn delete(&self, url: &str) -> RB {
         self.request(Method::Delete, url)
     }
 
+    /// Create a HEAD request builder.
     fn head(&self, url: &str) -> RB {
         self.request(Method::Head, url)
     }
 
+    /// Create an OPTIONS request builder.
     fn options(&self, url: &str) -> RB {
         self.request(Method::Options, url)
     }
 
+    /// Create a request builder with the specified HTTP method.
     fn request(&self, method: Method, url: &str) -> RB;
 }
 
+/// Generic trait for HTTP responses.
 #[async_trait]
 pub trait GenericResponse: Send + Sync {
+    /// Get the HTTP status code of the response.
     fn status(&self) -> StatusCode;
+    /// Get the response headers.
     fn headers(&mut self) -> &BTreeMap<String, String>;
+    /// Get the response body as text.
+    ///
+    /// # Errors
+    ///
+    /// * If the response body cannot be decoded as text
     async fn text(&mut self) -> Result<String, Error>;
+    /// Get the response body as bytes.
+    ///
+    /// # Errors
+    ///
+    /// * If the response body cannot be read
     async fn bytes(&mut self) -> Result<Bytes, Error>;
+    /// Get the response body as a stream of bytes (requires `stream` feature).
     #[cfg(feature = "stream")]
     fn bytes_stream(
         &mut self,
     ) -> std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, Error>> + Send>>;
 }
 
+/// Wrapper type for generic request builders.
 pub struct RequestBuilderWrapper<R, B: GenericRequestBuilder<R>>(
     pub(crate) B,
     pub(crate) PhantomData<R>,
 );
+/// Wrapper type for generic HTTP clients.
 pub struct ClientWrapper<RB, T: GenericClient<RB>>(pub(crate) T, pub(crate) PhantomData<RB>);
+/// Wrapper type for generic client builders.
 pub struct ClientBuilderWrapper<RB, C: GenericClient<RB>, T: GenericClientBuilder<RB, C>>(
     pub(crate) T,
     PhantomData<RB>,
     PhantomData<C>,
 );
+/// Wrapper type for generic HTTP responses.
 pub struct ResponseWrapper<T: GenericResponse>(pub(crate) T);
 
 #[allow(unused)]

@@ -2,6 +2,11 @@
 
 use quickcheck::{Arbitrary, Gen};
 
+/// Arbitrary CSS identifier string for property-based testing.
+///
+/// Generates valid CSS identifier strings containing only alphanumeric characters,
+/// hyphens, and underscores. The generated strings are non-empty and contain at
+/// least one alphanumeric character (not just hyphens or underscores).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CssIdentifierString(pub String);
 

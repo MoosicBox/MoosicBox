@@ -6,8 +6,10 @@ use std::{
 
 use tokio::sync::RwLock;
 
+/// Type alias for boxed errors that can be sent across threads.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;
 
+/// Type alias for player update event listener callbacks.
 pub type PlayersUpdatedSubscriptionAction = Box<
     dyn (Fn() -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + Send>>)
         + Send
@@ -17,6 +19,7 @@ static PLAYERS_UPDATED_EVENT_LISTENERS: LazyLock<
     Arc<RwLock<Vec<PlayersUpdatedSubscriptionAction>>>,
 > = LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
+/// Registers a listener to be notified when players are updated.
 pub async fn on_players_updated_event<
     F: Send + Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + 'static,
 >(

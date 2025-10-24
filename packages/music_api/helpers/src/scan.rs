@@ -27,6 +27,8 @@ pub async fn scan_enabled(
 
 /// # Errors
 ///
+/// * If the user is not logged in (returns `Error::Unauthorized`)
+/// * If the music API is not found for the profile
 /// * If there was a database error
 /// * If the scan fails
 ///

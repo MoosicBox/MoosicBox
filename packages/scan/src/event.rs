@@ -12,6 +12,7 @@ use tokio::sync::RwLock;
 
 use crate::ScanOrigin;
 
+/// API representation of a scan task for serialization.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -33,6 +34,7 @@ impl From<ScanTask> for ApiScanTask {
     }
 }
 
+/// API representation of a progress event for serialization.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -92,6 +94,7 @@ impl From<ProgressEvent> for Option<ApiProgressEvent> {
     }
 }
 
+/// Progress events emitted during scanning operations.
 #[derive(Clone)]
 pub enum ProgressEvent {
     ScanFinished {
@@ -115,6 +118,7 @@ pub enum ProgressEvent {
     },
 }
 
+/// Represents a scan task to be executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScanTask {
     #[cfg(feature = "local")]
@@ -126,6 +130,7 @@ pub enum ScanTask {
     },
 }
 
+/// Current state of a scan task.
 #[derive(
     Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Eq, Default,
 )]
@@ -148,6 +153,7 @@ pub type ProgressListenerRef =
 pub(crate) static PROGRESS_LISTENERS: LazyLock<Arc<RwLock<Vec<Arc<ProgressListenerRef>>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(vec![])));
 
+/// Registers a listener to receive progress events during scanning.
 pub async fn add_progress_listener(listener: ProgressListenerRef) {
     PROGRESS_LISTENERS.write().await.push(Arc::new(listener));
 }

@@ -23,6 +23,7 @@ use serde_json::Value;
 
 use crate::{API_SOURCE, TidalAlbumType};
 
+/// Tidal artist metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtist {
@@ -74,6 +75,7 @@ impl From<TidalArtist> for ApiGlobalSearchResult {
     }
 }
 
+/// Available image sizes for Tidal artist pictures.
 #[derive(Clone, Copy, Debug)]
 pub enum TidalArtistImageSize {
     Max,    // 750
@@ -153,6 +155,7 @@ impl AsModelResult<TidalArtist, ParseError> for serde_json::Value {
     }
 }
 
+/// Tidal artist metadata from search results.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchArtist {
@@ -205,6 +208,7 @@ impl AsModelResult<TidalSearchArtist, ParseError> for serde_json::Value {
     }
 }
 
+/// Tidal album metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
@@ -289,6 +293,7 @@ impl TryFrom<Album> for TidalAlbum {
     }
 }
 
+/// Available image sizes for Tidal album covers.
 #[derive(Clone, Copy, Debug)]
 pub enum TidalAlbumImageSize {
     Max,       // 1280
@@ -340,6 +345,7 @@ impl Display for TidalAlbumImageSize {
     }
 }
 
+/// Tidal album metadata from search results.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchAlbum {
@@ -450,6 +456,7 @@ impl AsModelResult<TidalAlbum, ParseError> for serde_json::Value {
     }
 }
 
+/// Tidal track metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrack {
@@ -534,6 +541,7 @@ impl AsModelResult<TidalTrack, ParseError> for serde_json::Value {
     }
 }
 
+/// Tidal track metadata from search results.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchTrack {
@@ -606,6 +614,7 @@ impl AsModelResult<TidalSearchTrack, ParseError> for serde_json::Value {
     }
 }
 
+/// Paginated list of search results from Tidal.
 #[derive(Serialize, Deserialize)]
 pub struct TidalSearchResultList<T> {
     pub items: Vec<T>,
@@ -638,6 +647,7 @@ where
     }
 }
 
+/// Search results containing albums, artists, and tracks from Tidal.
 #[derive(Serialize, Deserialize)]
 pub struct TidalSearchResults {
     pub albums: TidalSearchResultList<TidalSearchAlbum>,

@@ -11,6 +11,7 @@ use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 
+/// Binds profile management endpoints to the provided Actix web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -27,13 +28,21 @@ pub fn bind_services<
     )
 }
 
+/// Query parameters for the new profile form endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewProfileQuery {
+    /// Pre-filled value for the profile name field.
     value: Option<String>,
+    /// Whether the profile is bundled (affects default name behavior).
     bundled: Option<bool>,
 }
 
+/// Endpoint that renders the new profile creation form.
+///
+/// # Errors
+///
+/// This endpoint does not return errors currently.
 #[route("new", method = "GET")]
 pub async fn new_profile_endpoint(
     _htmx: Htmx,
@@ -46,18 +55,27 @@ pub async fn new_profile_endpoint(
     ))
 }
 
+/// Form data for creating a new profile.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateNewProfileForm {
+    /// The name of the profile to create.
     profile: String,
 }
 
+/// Query parameters for creating a new profile.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateNewProfileQuery {
+    /// Whether the profile is bundled.
     bundled: Option<bool>,
 }
 
+/// Endpoint that handles creating a new profile.
+///
+/// # Errors
+///
+/// This endpoint does not return errors; failures are rendered as HTML with error messages.
 #[route("new", method = "POST")]
 pub async fn create_new_profile_endpoint(
     htmx: Htmx,
@@ -129,6 +147,7 @@ pub async fn create_new_profile_endpoint(
     })
 }
 
+/// Renders a form for creating a new profile.
 #[must_use]
 pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled: bool) -> Markup {
     html! {
@@ -145,12 +164,19 @@ pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled:
     }
 }
 
+/// Query parameters for deleting a profile.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteProfileQuery {
+    /// The name of the profile to delete.
     profile: String,
 }
 
+/// Endpoint that handles deleting a profile.
+///
+/// # Errors
+///
+/// This endpoint does not return errors; failures are rendered as HTML.
 #[route("", method = "DELETE")]
 pub async fn delete_profile_endpoint(
     htmx: Htmx,
@@ -189,6 +215,11 @@ pub async fn delete_profile_endpoint(
     })
 }
 
+/// Endpoint that renders the list of all profiles.
+///
+/// # Errors
+///
+/// * If fails to fetch the profiles from the database
 #[route("", method = "GET")]
 pub async fn list_profile_endpoint(
     _htmx: Htmx,
@@ -197,12 +228,19 @@ pub async fn list_profile_endpoint(
     profiles(&db).await.map_err(ErrorInternalServerError)
 }
 
+/// Form data for selecting a profile.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectProfileForm {
+    /// The name of the profile to select.
     profile: String,
 }
 
+/// Endpoint that handles profile selection via POST.
+///
+/// # Errors
+///
+/// This endpoint does not return errors currently.
 #[route("select", method = "POST")]
 pub async fn post_select_endpoint(
     htmx: Htmx,
@@ -226,6 +264,11 @@ pub async fn post_select_endpoint(
     ))
 }
 
+/// Endpoint that renders the profile selection form.
+///
+/// # Errors
+///
+/// This endpoint does not return errors currently.
 #[route("select", method = "GET")]
 pub async fn select_endpoint(
     _htmx: Htmx,
@@ -240,6 +283,7 @@ pub async fn select_endpoint(
     ))
 }
 
+/// Renders a profile selection form with the given profiles and selected profile.
 #[must_use]
 pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&str>) -> Markup {
     html! {
@@ -249,6 +293,7 @@ pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&s
     }
 }
 
+/// Renders a profile selection dropdown.
 #[must_use]
 pub fn select(profiles: &[&str], selected: Option<&str>) -> Markup {
     html! {
@@ -260,6 +305,7 @@ pub fn select(profiles: &[&str], selected: Option<&str>) -> Markup {
     }
 }
 
+/// Renders a single profile item with delete button.
 #[must_use]
 pub fn profile(profile: &str) -> Markup {
     html! {

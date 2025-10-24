@@ -10,6 +10,9 @@ use thiserror::Error;
 
 use crate::EncodeInfo;
 
+/// FLAC encoder with internal state for streaming encoding.
+///
+/// Maintains a byte sink for output and position tracking across multiple encode calls.
 pub struct Encoder {
     sink: ByteSink,
     pos: usize,

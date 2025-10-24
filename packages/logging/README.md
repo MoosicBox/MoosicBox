@@ -1,28 +1,28 @@
-# MoosicBox Logging
+# `MoosicBox` Logging
 
-Logging utilities with feature-gated modules for MoosicBox applications.
+Logging utilities with feature-gated modules for `MoosicBox` applications.
 
 ## Overview
 
-The MoosicBox Logging package provides:
+The `MoosicBox` Logging package provides:
 
-- **Free Log Integration**: Initialize and configure free_log_client for structured logging
+- **Free Log Integration**: Initialize and configure `free_log_client` for structured logging
 - **Logging Macros**: Conditional logging macros (e.g., `debug_or_trace!`)
-- **API Support**: Optional API feature for free_log_client
+- **API Support**: Optional API feature for `free_log_client`
 - **Feature-Gated Modules**: Enable only the logging components you need
 
 ## Current Implementation
 
 ### Core Components
 
-- **Free Log Module**: Provides `init()` function to configure free_log_client with file writing and custom layers
+- **Free Log Module**: Provides `init()` function to configure `free_log_client` with file writing and custom layers
 - **Macro Module**: Provides `debug_or_trace!` macro for conditional logging based on log level
 - **Re-exports**: Exposes `free_log_client` and `log` crates for convenience
 
 ### Available Features
 
-- **`api`**: Enables API features in free_log_client (enabled by default)
-- **`free_log`**: Enables free_log integration module with init function (enabled by default)
+- **`api`**: Enables API features in `free_log_client` (enabled by default)
+- **`free_log`**: Enables `free_log` integration module with init function (enabled by default)
 - **`macros`**: Enables logging macro utilities (enabled by default)
 
 ## Installation
@@ -102,13 +102,13 @@ fn example() {
 ## Features
 
 - **Default**: Includes `api`, `free_log`, and `macros` features
-- **`api`**: Enables API support in free_log_client
-- **`free_log`**: Enables free_log integration module with `init()` function
+- **`api`**: Enables API support in `free_log_client`
+- **`free_log`**: Enables `free_log` integration module with `init()` function
 - **`macros`**: Enables logging macro utilities (`debug_or_trace!` macro)
 
 ## API Reference
 
-### Free Log Module (feature = "free_log")
+### Free Log Module (feature = "`free_log`")
 
 #### `init` Function
 
@@ -136,7 +136,7 @@ Initializes the logging system with optional file output and custom layers.
 
 #### Re-exports
 
-- `pub use free_log_client;` - Exposes the entire free_log_client crate
+- `pub use free_log_client;` - Exposes the entire `free_log_client` crate
 
 ### Macros Module (feature = "macros")
 
@@ -170,7 +170,7 @@ Conditionally logs at trace level if enabled, otherwise logs at debug level.
 
 ## Package Structure
 
-```
+```text
 src/
 ├── lib.rs           # Feature-gated module exports
 ├── free_log.rs      # Free log initialization (feature = "free_log")

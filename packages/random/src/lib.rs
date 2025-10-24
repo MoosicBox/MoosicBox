@@ -12,21 +12,35 @@ pub mod rand;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
+/// A thread-safe random number generator trait.
+///
+/// This trait extends `RngCore` with thread safety guarantees and additional methods
+/// for generating random values.
 pub trait GenericRng: Send + Sync + RngCore {
+    /// Returns the next random `u32` value.
     fn next_u32(&self) -> u32;
 
+    /// Returns the next random `i32` value.
     fn next_i32(&self) -> i32;
 
+    /// Returns the next random `u64` value.
     fn next_u64(&self) -> u64;
 
+    /// Fills the destination byte slice with random data.
     fn fill_bytes(&self, dest: &mut [u8]);
 
+    /// Fills the destination byte slice with random data.
+    ///
     /// # Errors
     ///
     /// * If the underlying random implementation fails to fill the bytes
     fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand::Error>;
 }
 
+/// A thread-safe wrapper around a `GenericRng` implementation.
+///
+/// This wrapper provides interior mutability through `Arc<Mutex<R>>`, allowing
+/// the RNG to be shared across threads and cloned.
 pub struct RngWrapper<R: GenericRng>(Arc<Mutex<R>>);
 
 impl<R: GenericRng> Clone for RngWrapper<R> {
@@ -87,6 +101,9 @@ macro_rules! impl_rng {
 
         pub use $module::rng;
 
+        /// The primary random number generator type for this crate.
+        ///
+        /// This is a thread-safe wrapper around the underlying RNG implementation.
         pub type Rng = RngWrapper<$type>;
 
         impl Default for Rng {
@@ -96,27 +113,34 @@ macro_rules! impl_rng {
         }
 
         impl Rng {
+            /// Creates a new random number generator with a random seed.
             #[must_use]
             pub fn new() -> Self {
                 Self::from_seed(None)
             }
 
+            /// Creates a new random number generator from an optional seed.
+            ///
+            /// If `None` is provided, a random seed will be used.
             pub fn from_seed<S: Into<Option<u64>>>(seed: S) -> Self {
                 Self(Arc::new(Mutex::new(<$type>::new(seed))))
             }
 
+            /// Returns the next random `u32` value.
             #[inline]
             #[must_use]
             pub fn next_u32(&self) -> u32 {
                 <Self as GenericRng>::next_u32(self)
             }
 
+            /// Returns the next random `i32` value.
             #[inline]
             #[must_use]
             pub fn next_i32(&self) -> i32 {
                 <Self as GenericRng>::next_i32(self)
             }
 
+            /// Returns the next random `u64` value.
             #[inline]
             #[must_use]
             pub fn next_u64(&self) -> u64 {
@@ -125,6 +149,9 @@ macro_rules! impl_rng {
         }
 
         impl Rng {
+            /// Generates a random value of type `T`.
+            ///
+            /// The type must implement the `Standard` distribution.
             #[must_use]
             pub fn random<T>(&self) -> T
             where
@@ -133,6 +160,11 @@ macro_rules! impl_rng {
                 ::rand::distributions::Standard.sample(&mut *self.0.lock().unwrap())
             }
 
+            /// Generates a random value within the specified range.
+            ///
+            /// # Panics
+            ///
+            /// * If the range is empty
             pub fn gen_range<T, R>(&self, range: R) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -142,6 +174,13 @@ macro_rules! impl_rng {
                 range.sample_single(&mut *self.0.lock().unwrap())
             }
 
+            /// Generates a random value within the specified range with a non-uniform distribution.
+            ///
+            /// The distribution is controlled by the `dist` parameter using a floating-point power.
+            ///
+            /// # Panics
+            ///
+            /// * If the range is empty
             pub fn gen_range_dist<T, R>(&self, range: R, dist: f64) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -154,6 +193,13 @@ macro_rules! impl_rng {
                 T::from_f64(value)
             }
 
+            /// Generates a random value within the specified range with a non-uniform distribution.
+            ///
+            /// The distribution is controlled by the `dist` parameter using an integer power.
+            ///
+            /// # Panics
+            ///
+            /// * If the range is empty
             pub fn gen_range_disti<T, R>(&self, range: R, dist: i32) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -166,15 +212,23 @@ macro_rules! impl_rng {
                 T::from_f64(value)
             }
 
+            /// Samples a value from the given distribution.
             pub fn sample<T, D: ::rand::prelude::Distribution<T>>(&self, distr: D) -> T {
                 distr.sample(&mut *self.0.lock().unwrap())
             }
 
+            /// Fills the destination with random values.
+            ///
+            /// # Panics
+            ///
+            /// * If the underlying `Rng` implementation fails to fill
             pub fn fill<T: ::rand::Fill + ?Sized>(&self, dest: &mut T) {
                 dest.try_fill(&mut *self.0.lock().unwrap())
                     .unwrap_or_else(|_| core::panic!("Rng::fill failed"))
             }
 
+            /// Fills the destination with random values.
+            ///
             /// # Errors
             ///
             /// * If the underlying `Rng` implementation fails to fill
@@ -185,12 +239,22 @@ macro_rules! impl_rng {
                 dest.try_fill(&mut *self.0.lock().unwrap())
             }
 
+            /// Generates a boolean with the given probability of being `true`.
+            ///
+            /// # Panics
+            ///
+            /// * If `p` is not in the range `[0.0, 1.0]`
             #[must_use]
             pub fn gen_bool(&self, p: f64) -> bool {
                 let d = ::rand::distributions::Bernoulli::new(p).unwrap();
                 self.sample(d)
             }
 
+            /// Generates a boolean with probability `numerator / denominator` of being `true`.
+            ///
+            /// # Panics
+            ///
+            /// * If `numerator > denominator` or `denominator == 0`
             #[must_use]
             pub fn gen_ratio(&self, numerator: u32, denominator: u32) -> bool {
                 let d =
@@ -201,8 +265,14 @@ macro_rules! impl_rng {
     };
 }
 
+/// A trait for types that can be converted to and from `f64`.
+///
+/// This is used internally for non-uniform distribution functions.
 pub trait F64Convertible: Sized {
+    /// Converts from `f64` to `Self`.
     fn from_f64(f: f64) -> Self;
+
+    /// Converts from `Self` to `f64`.
     fn into_f64(self) -> f64;
 }
 
@@ -253,12 +323,20 @@ impl_f64_round_convertible!(i32);
 impl_f64_round_convertible!(i64);
 impl_f64_round_convertible!(i128);
 
+/// Applies a non-uniform distribution to a value using a floating-point power.
+///
+/// This function scales the input value by a random factor raised to the given power,
+/// creating a non-uniform distribution that can favor lower or higher values.
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
     value * rng.gen_range(0.0001..1.0f64).powf(pow)
 }
 
+/// Applies a non-uniform distribution to a value using an integer power.
+///
+/// This function scales the input value by a random factor raised to the given integer power,
+/// creating a non-uniform distribution that can favor lower or higher values.
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_i32(value: f64, pow: i32, rng: &Rng) -> f64 {

@@ -3,6 +3,10 @@ use std::io::{Read, Seek};
 use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use symphonia::core::io::MediaSource;
 
+/// A media source wrapper around [`RemoteByteStream`].
+///
+/// This type implements [`MediaSource`], [`Read`], and [`Seek`] to allow using
+/// a remote byte stream as an audio source.
 pub struct RemoteByteStreamMediaSource(RemoteByteStream);
 
 impl From<RemoteByteStream> for RemoteByteStreamMediaSource {

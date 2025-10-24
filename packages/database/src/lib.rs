@@ -141,20 +141,29 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Database configuration and initialization
 pub mod config;
+/// Trait for executing database operations
 pub mod executable;
 #[cfg(feature = "postgres-raw")]
+/// `PostgreSQL` database backend implementation
 pub mod postgres;
+/// Database profiles management for multi-database support
 pub mod profiles;
 #[cfg(feature = "sqlite-rusqlite")]
+/// SQLite database backend using rusqlite
 pub mod rusqlite;
 #[cfg(feature = "simulator")]
+/// Database simulator for testing
 pub mod simulator;
 #[cfg(feature = "sqlx")]
+/// Database backends using `SQLx` library
 pub mod sqlx;
 #[cfg(feature = "turso")]
+/// Turso database backend
 pub mod turso;
 
+/// SQL query builder types and builders
 pub mod query;
 pub mod query_transform;
 pub mod sql_interval;
@@ -175,47 +184,85 @@ use query::{
 };
 use thiserror::Error;
 
+/// Represents values that can be stored in or retrieved from a database
+///
+/// This enum provides a unified type for all database values, handling both
+/// nullable and non-nullable variants of each type. It supports conversion
+/// to and from Rust primitive types.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DatabaseValue {
+    /// SQL NULL value
     Null,
+    /// Non-nullable string
     String(String),
+    /// Nullable string
     StringOpt(Option<String>),
+    /// Non-nullable boolean
     Bool(bool),
+    /// Nullable boolean
     BoolOpt(Option<bool>),
+    /// Non-nullable 8-bit signed integer
     Int8(i8),
+    /// Nullable 8-bit signed integer
     Int8Opt(Option<i8>),
+    /// Non-nullable 16-bit signed integer
     Int16(i16),
+    /// Nullable 16-bit signed integer
     Int16Opt(Option<i16>),
+    /// Non-nullable 32-bit signed integer
     Int32(i32),
+    /// Nullable 32-bit signed integer
     Int32Opt(Option<i32>),
+    /// Non-nullable 64-bit signed integer
     Int64(i64),
+    /// Nullable 64-bit signed integer
     Int64Opt(Option<i64>),
+    /// Non-nullable 8-bit unsigned integer
     UInt8(u8),
+    /// Nullable 8-bit unsigned integer
     UInt8Opt(Option<u8>),
+    /// Non-nullable 16-bit unsigned integer
     UInt16(u16),
+    /// Nullable 16-bit unsigned integer
     UInt16Opt(Option<u16>),
+    /// Non-nullable 32-bit unsigned integer
     UInt32(u32),
+    /// Nullable 32-bit unsigned integer
     UInt32Opt(Option<u32>),
+    /// Non-nullable 64-bit unsigned integer
     UInt64(u64),
+    /// Nullable 64-bit unsigned integer
     UInt64Opt(Option<u64>),
+    /// Non-nullable 64-bit floating point
     Real64(f64),
+    /// Nullable 64-bit floating point
     Real64Opt(Option<f64>),
+    /// Non-nullable 32-bit floating point
     Real32(f32),
+    /// Nullable 32-bit floating point
     Real32Opt(Option<f32>),
     #[cfg(feature = "decimal")]
+    /// Non-nullable decimal number (requires decimal feature)
     Decimal(rust_decimal::Decimal),
     #[cfg(feature = "decimal")]
+    /// Nullable decimal number (requires decimal feature)
     DecimalOpt(Option<rust_decimal::Decimal>),
     #[cfg(feature = "uuid")]
+    /// Non-nullable UUID (requires uuid feature)
     Uuid(uuid::Uuid),
     #[cfg(feature = "uuid")]
+    /// Nullable UUID (requires uuid feature)
     UuidOpt(Option<uuid::Uuid>),
+    /// Current timestamp plus an interval (generates SQL expression)
     NowPlus(SqlInterval),
+    /// Current timestamp (generates SQL `NOW()` function)
     Now,
+    /// Specific date/time value
     DateTime(NaiveDateTime),
 }
 
 impl DatabaseValue {
+    /// Extracts a string reference if this value is a string type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_str(&self) -> Option<&str> {
@@ -225,6 +272,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an i8 value if this value is an `Int8` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i8(&self) -> Option<i8> {
@@ -234,6 +282,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an i16 value if this value is an integer type (coerces i8 to i16)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i16(&self) -> Option<i16> {
@@ -244,6 +293,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an i32 value if this value is an integer type (coerces smaller integers to i32)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i32(&self) -> Option<i32> {
@@ -255,6 +305,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an i64 value if this value is an integer type (coerces smaller integers to i64)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_i64(&self) -> Option<i64> {
@@ -314,6 +365,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an f64 value if this value is a floating point type (coerces f32 to f64)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_f64(&self) -> Option<f64> {
@@ -324,6 +376,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts an f32 value if this value is a `Real32` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_f32(&self) -> Option<f32> {
@@ -333,6 +386,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a `Decimal` value if this value is a decimal type or can be parsed as one
     #[cfg(feature = "decimal")]
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
@@ -346,6 +400,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a `UUID` value if this value is a `UUID` type or can be parsed as one
     #[cfg(feature = "uuid")]
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
@@ -357,6 +412,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a `NaiveDateTime` value if this value is a `DateTime` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_datetime(&self) -> Option<NaiveDateTime> {
@@ -366,6 +422,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a boolean value if this value is a `Bool` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_bool(&self) -> Option<bool> {
@@ -375,6 +432,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a u8 value if this value is a `UInt8` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_u8(&self) -> Option<u8> {
@@ -384,6 +442,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a u16 value if this value is an unsigned integer type (coerces u8 to u16)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_u16(&self) -> Option<u16> {
@@ -394,6 +453,7 @@ impl DatabaseValue {
         }
     }
 
+    /// Extracts a u32 value if this value is an unsigned integer type (coerces smaller unsigned integers to u32)
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_u32(&self) -> Option<u32> {
@@ -522,14 +582,19 @@ impl From<usize> for DatabaseValue {
     }
 }
 
+/// Trait for types that can be converted to a database ID value
 pub trait AsId {
+    /// Converts this value to a `DatabaseValue` representing an ID
     fn as_id(&self) -> DatabaseValue;
 }
 
+/// Error type for `DatabaseValue` type conversions
 #[derive(Debug, Error)]
 pub enum TryFromError {
+    /// Failed to convert `DatabaseValue` to target type
     #[error("Could not convert to type '{0}'")]
     CouldNotConvert(String),
+    /// Integer conversion overflow error
     #[error(transparent)]
     TryFromInt(#[from] TryFromIntError),
 }
@@ -807,41 +872,56 @@ impl TryFrom<DatabaseValue> for uuid::Uuid {
     }
 }
 
+/// Errors that can occur during database operations
 #[derive(Debug, Error)]
 pub enum DatabaseError {
     #[cfg(feature = "sqlite-rusqlite")]
+    /// Error from rusqlite `SQLite` backend
     #[error(transparent)]
     Rusqlite(rusqlite::RusqliteDatabaseError),
     #[cfg(feature = "mysql-sqlx")]
+    /// Error from sqlx `MySQL` backend
     #[error(transparent)]
     MysqlSqlx(sqlx::mysql::SqlxDatabaseError),
     #[cfg(feature = "sqlite-sqlx")]
+    /// Error from sqlx `SQLite` backend
     #[error(transparent)]
     SqliteSqlx(sqlx::sqlite::SqlxDatabaseError),
     #[cfg(feature = "postgres-raw")]
+    /// Error from raw `PostgreSQL` backend
     #[error(transparent)]
     Postgres(postgres::postgres::PostgresDatabaseError),
     #[cfg(feature = "postgres-sqlx")]
+    /// Error from sqlx `PostgreSQL` backend
     #[error(transparent)]
     PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
     #[cfg(feature = "turso")]
+    /// Error from Turso backend
     #[error(transparent)]
     Turso(#[from] turso::TursoDatabaseError),
+    /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
     #[cfg(feature = "schema")]
+    /// Schema definition is invalid
     #[error("Invalid schema: {0}")]
     InvalidSchema(String),
+    /// Attempted to start a transaction while already in one
     #[error("Already in transaction - nested transactions not supported")]
     AlreadyInTransaction,
+    /// Transaction has already been committed
     #[error("Transaction already committed")]
     TransactionCommitted,
+    /// Transaction has already been rolled back
     #[error("Transaction already rolled back")]
     TransactionRolledBack,
+    /// Transaction failed to start
     #[error("Transaction failed to start")]
     TransactionFailed,
+    /// Operation returned unexpected result
     #[error("Unexpected result from operation")]
     UnexpectedResult,
+    /// Database backend does not support this data type
     #[error("Unsupported data type: {0}")]
     UnsupportedDataType(String),
     /// Invalid savepoint name (contains invalid characters or empty)
@@ -877,6 +957,7 @@ pub enum DatabaseError {
 }
 
 impl DatabaseError {
+    /// Checks if this error is a database connection error
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn is_connection_error(&self) -> bool {
@@ -932,12 +1013,17 @@ pub(crate) fn validate_savepoint_name(name: &str) -> Result<(), DatabaseError> {
     Ok(())
 }
 
+/// Represents a row of data returned from a database query
+///
+/// Each row contains named columns with their associated values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
+    /// Column name-value pairs in this row
     pub columns: Vec<(String, DatabaseValue)>,
 }
 
 impl Row {
+    /// Gets the value of a column by name
     #[must_use]
     pub fn get(&self, column_name: &str) -> Option<DatabaseValue> {
         self.columns
@@ -946,6 +1032,7 @@ impl Row {
             .map(|c| c.1.clone())
     }
 
+    /// Convenience method to get the "id" column value
     #[must_use]
     pub fn id(&self) -> Option<DatabaseValue> {
         self.get("id")

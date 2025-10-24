@@ -10,13 +10,18 @@ use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 
 use crate::{PROFILE, RENDERER, STATE};
 
+/// Handles UI actions and dispatches them to the appropriate handlers.
+///
 /// # Errors
 ///
-/// If an error occurs relating to the `AppState`
+/// * If the action is missing required parameters
+/// * If the action parameters are invalid or of wrong type
+/// * If fails to queue WebSocket messages to the server
+/// * If the music API source is invalid or unavailable
 ///
 /// # Panics
 ///
-/// * If the default `PROFILE` is missing.
+/// * If the default `PROFILE` is missing
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppStateError> {
     log::debug!("handle_action: action={action:?} value={value:?}");

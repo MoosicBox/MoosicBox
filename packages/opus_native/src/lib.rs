@@ -15,18 +15,27 @@ mod util;
 pub use error::{Error, Result};
 pub use toc::{Bandwidth, Configuration, FrameSize, OpusMode, Toc};
 
+/// Audio channel configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channels {
+    /// Single audio channel
     Mono = 1,
+    /// Two audio channels (left/right)
     Stereo = 2,
 }
 
+/// Supported output sample rates for decoded audio
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleRate {
+    /// 8000 Hz (Narrowband)
     Hz8000 = 8000,
+    /// 12000 Hz (Mediumband)
     Hz12000 = 12000,
+    /// 16000 Hz (Wideband)
     Hz16000 = 16000,
+    /// 24000 Hz (Super-wideband)
     Hz24000 = 24000,
+    /// 48000 Hz (Fullband)
     Hz48000 = 48000,
 }
 

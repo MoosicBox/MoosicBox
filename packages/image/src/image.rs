@@ -4,6 +4,8 @@ use thiserror::Error;
 
 use crate::Encoding;
 
+/// Resizes an image file and encodes it in the specified format.
+///
 /// # Errors
 ///
 /// * If the image encoder fails to encode the resized image
@@ -32,14 +34,19 @@ pub fn try_resize_local_file(
     }
 }
 
+/// Error type for image resize operations.
 #[derive(Debug, Error)]
 pub enum ResizeImageError {
+    /// Image processing error.
     #[error(transparent)]
     Image(#[from] image::error::ImageError),
+    /// Task join error.
     #[error(transparent)]
     Join(#[from] switchy_async::task::JoinError),
 }
 
+/// Asynchronously resizes an image file and encodes it in the specified format.
+///
 /// # Errors
 ///
 /// * If the image encoder fails to encode the resized image

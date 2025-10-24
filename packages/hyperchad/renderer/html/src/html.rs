@@ -67,6 +67,9 @@ pub fn write_css_attr_important(
     Ok(())
 }
 
+/// Converts a number to an HTML/CSS string representation.
+///
+/// When `px` is true, numeric values are suffixed with `px` for CSS pixel units.
 #[must_use]
 pub fn number_to_html_string(number: &Number, px: bool) -> String {
     match number {
@@ -98,6 +101,7 @@ pub fn number_to_html_string(number: &Number, px: bool) -> String {
     }
 }
 
+/// Converts a color to a CSS color string (rgb or rgba).
 #[must_use]
 pub fn color_to_css_string(color: Color) -> String {
     color.a.map_or_else(
@@ -114,6 +118,9 @@ pub fn color_to_css_string(color: Color) -> String {
     )
 }
 
+/// Converts a calculation expression to a CSS `calc()` string.
+///
+/// When `px` is true, numeric values are suffixed with `px` for CSS pixel units.
 #[must_use]
 pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
     match calc {

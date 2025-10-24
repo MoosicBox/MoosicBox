@@ -31,6 +31,7 @@ use crate::models::{
     InboundPayload, OutboundPayload, ScanEventPayload, SessionUpdatedPayload, SessionsPayload,
 };
 
+/// Response for websocket operations.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
@@ -38,8 +39,10 @@ pub struct Response {
     pub body: String,
 }
 
+/// Callback function executed when a session update affects a player.
 pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// Context for a websocket connection.
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
     pub connection_id: String,
@@ -47,6 +50,7 @@ pub struct WebsocketContext {
     pub player_actions: Vec<(u64, PlayerAction)>,
 }
 
+/// Errors that can occur when sending websocket messages.
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
     #[error(transparent)]
@@ -59,21 +63,46 @@ pub enum WebsocketSendError {
     Serde(#[from] serde_json::Error),
 }
 
+/// Data associated with a websocket connection.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebsocketConnectionData {
     pub playing: bool,
 }
 
+/// Trait for sending messages via websocket.
 #[async_trait]
 pub trait WebsocketSender: Send + Sync {
+    /// Sends a message to a specific connection.
+    ///
+    /// # Errors
+    ///
+    /// * If the websocket message fails to send
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError>;
+
+    /// Sends a message to all connections.
+    ///
+    /// # Errors
+    ///
+    /// * If the websocket message fails to send
     async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError>;
+
+    /// Sends a message to all connections except the specified one.
+    ///
+    /// # Errors
+    ///
+    /// * If the websocket message fails to send
     async fn send_all_except(
         &self,
         connection_id: &str,
         data: &str,
     ) -> Result<(), WebsocketSendError>;
+
+    /// Sends a ping to all connections.
+    ///
+    /// # Errors
+    ///
+    /// * If the websocket ping fails to send
     async fn ping(&self) -> Result<(), WebsocketSendError>;
 }
 
@@ -86,12 +115,14 @@ impl core::fmt::Debug for dyn WebsocketSender {
 static CONNECTION_DATA: LazyLock<Arc<RwLock<BTreeMap<String, Connection>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(BTreeMap::new())));
 
+/// Errors that can occur when connecting to a websocket.
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {
     #[error("Unknown")]
     Unknown,
 }
 
+/// Handles a websocket connection.
 pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Response {
     log::debug!("Connected {}", context.connection_id);
 
@@ -101,6 +132,7 @@ pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Re
     }
 }
 
+/// Errors that can occur when disconnecting from a websocket.
 #[derive(Debug, Error)]
 pub enum WebsocketDisconnectError {
     #[error(transparent)]
@@ -165,6 +197,7 @@ pub async fn process_message(
     message(config_db, sender, payload, &context).await
 }
 
+/// Errors that can occur when processing a websocket message.
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
     #[error("Missing message type")]
@@ -509,6 +542,7 @@ pub async fn send_scan_event<ProgressEvent: Serialize + Send>(
     Ok(())
 }
 
+/// Errors that can occur when updating a session.
 #[derive(Debug, Error)]
 pub enum UpdateSessionError {
     #[error("No session found")]

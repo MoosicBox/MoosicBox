@@ -14,18 +14,21 @@ use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 pub mod sender;
 pub mod websocket_sender;
 
+/// Error type for sending bytes through the tunnel.
 #[derive(Debug, Error)]
 pub enum SendBytesError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// Error type for sending messages through the tunnel.
 #[derive(Debug, Error)]
 pub enum SendMessageError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// Error type for tunnel request processing.
 #[derive(Debug, Error)]
 pub enum TunnelRequestError {
     #[error("Bad request: {0}")]
@@ -80,6 +83,7 @@ struct GetTrackInfoQuery {
     source: Option<ApiSource>,
 }
 
+/// Message type received from the tunnel websocket.
 pub enum TunnelMessage {
     Text(String),
     Binary(Bytes),

@@ -81,6 +81,7 @@ async fn search_for_cover(
     }
 }
 
+/// Represents a scanned track with metadata.
 #[derive(Debug, Clone)]
 pub struct ScanTrack {
     pub path: Option<String>,
@@ -152,6 +153,7 @@ impl ScanTrack {
     }
 }
 
+/// Represents a scanned album with metadata and tracks.
 #[derive(Debug, Clone)]
 pub struct ScanAlbum {
     artist: ScanArtist,
@@ -330,6 +332,7 @@ impl ScanAlbum {
     }
 }
 
+/// Represents a scanned artist with metadata and albums.
 #[derive(Debug, Clone)]
 pub struct ScanArtist {
     pub name: String,
@@ -457,12 +460,14 @@ impl ScanArtist {
     }
 }
 
+/// Results from updating the database with scanned items.
 pub struct UpdateDatabaseResults {
     pub artists: Vec<LibraryArtist>,
     pub albums: Vec<LibraryAlbum>,
     pub tracks: Vec<LibraryTrack>,
 }
 
+/// Errors that can occur when updating the database with scan results.
 #[derive(Debug, Error)]
 pub enum UpdateDatabaseError {
     #[error(transparent)]
@@ -485,6 +490,7 @@ pub enum UpdateDatabaseError {
     ChronoParse(#[from] chrono::ParseError),
 }
 
+/// Accumulates scanned items before writing to the database.
 #[derive(Clone)]
 pub struct ScanOutput {
     pub artists: Arc<RwLock<Vec<Arc<RwLock<ScanArtist>>>>>,

@@ -23,6 +23,7 @@ static C2: &str = "YzJ0RFBvNHQ=";
 static SP1: &str = "VkpLaERGcUpQcXZzUFZOQlY2dWtYVA==";
 static SP2: &str = "Sm13bHZidHRQN3dsTWxyYzcyc2U0PQ==";
 
+/// Binds Tidal authentication and settings endpoints to the provided Actix web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -55,6 +56,12 @@ static CLIENT_SECRET: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+/// Endpoint that initiates Tidal device authorization flow.
+///
+/// # Errors
+///
+/// * If the device authorization request to Tidal API fails
+/// * If the response is missing required fields
 #[route("auth/device-authorization", method = "POST")]
 pub async fn device_authorization_endpoint(
     htmx: Htmx,
@@ -79,13 +86,21 @@ pub async fn device_authorization_endpoint(
         .map_err(ErrorInternalServerError)
 }
 
+/// Query parameters for polling device authorization token.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceAuthorizationTokenQuery {
+    /// The device code from the authorization request.
     device_code: String,
+    /// The URL the user should visit to authorize.
     url: String,
 }
 
+/// Endpoint that polls for Tidal device authorization token.
+///
+/// # Errors
+///
+/// * If the token request fails or token is not yet available
 #[route("auth/device-authorization/token", method = "POST")]
 pub async fn device_authorization_token_endpoint(
     htmx: Htmx,
@@ -149,13 +164,20 @@ async fn device_authorization_token(
     }
 }
 
+/// Query parameters for the Tidal settings endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSettingsQuery {
+    /// Whether to show scan controls in the settings UI.
     #[cfg(feature = "scan")]
     show_scan: Option<bool>,
 }
 
+/// Endpoint that renders the Tidal settings and authentication status.
+///
+/// # Errors
+///
+/// * If fails to fetch the Tidal config from the database
 #[route("settings", method = "GET")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
@@ -171,6 +193,12 @@ pub async fn get_settings_endpoint(
     .map_err(|e| ErrorInternalServerError(format!("Failed to get Tidal settings: {e:?}")))
 }
 
+/// Endpoint that triggers a scan of the Tidal music library.
+///
+/// # Errors
+///
+/// * If the Tidal API source is not registered
+/// * If the scan fails to start or encounters errors during execution
 #[cfg(feature = "scan")]
 #[route("run-scan", method = "POST")]
 pub async fn run_scan_endpoint(
@@ -188,6 +216,7 @@ pub async fn run_scan_endpoint(
     Ok(html! {})
 }
 
+/// Renders the Tidal settings UI when the user is logged in.
 #[must_use]
 pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     #[cfg(feature = "scan")]
@@ -213,6 +242,7 @@ pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     }
 }
 
+/// Renders the Tidal settings UI when the user is not logged in.
 #[must_use]
 pub fn settings_logged_out() -> Markup {
     html! {

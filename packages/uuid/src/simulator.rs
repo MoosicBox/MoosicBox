@@ -1,3 +1,11 @@
+//! Deterministic UUID generation for testing and simulation.
+//!
+//! This module provides UUID v4 generation using a seeded random number generator,
+//! allowing for reproducible UUIDs in test and simulation environments.
+//!
+//! The seed can be configured via the `SIMULATOR_UUID_SEED` environment variable.
+//! If not set, defaults to 12345.
+
 use switchy_env::var_parse_or;
 use switchy_random::{GenericRng, Rng};
 use uuid::Uuid;
