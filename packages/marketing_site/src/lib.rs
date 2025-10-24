@@ -122,7 +122,6 @@ pub fn init() -> AppBuilder {
 /// # Errors
 ///
 /// * If the `NativeApp` fails to start
-#[must_use]
 pub fn build_app(builder: AppBuilder) -> Result<App<DefaultRenderer>, hyperchad::app::Error> {
     use hyperchad::renderer::Renderer as _;
 
