@@ -1,7 +1,10 @@
+/// Errors that can occur when running the simple GET example.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// HTTP request error.
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// URL argument was not provided.
     #[error("MissingUrlArgument")]
     MissingUrlArgument,
 }
