@@ -588,7 +588,13 @@ generate_summary() {
 
         if [[ "$INPUT_SUMMARY_SHOW_JOBS_DETAILS" == "true" && -n "$reasoning" && "$reasoning" != "null" ]]; then
             # Complex JQ transformation that creates collapsible sections with full job details
-            printf '%s' "$matrix" | jq -r --argjson reasoning "$reasoning" '
+            # Use temp files to avoid "Argument list too long" errors with large matrices
+            local matrix_file=$(mktemp)
+            local reasoning_file=$(mktemp)
+            printf '%s' "$matrix" > "$matrix_file"
+            printf '%s' "$reasoning" > "$reasoning_file"
+
+            jq -r --slurpfile reasoning "$reasoning_file" '
                 # Group packages and collect all job details
                 group_by(.name) |
                 map({
@@ -602,7 +608,7 @@ generate_summary() {
                     . as $pkg |
                     $pkg + {
                         reasoning: (
-                            $reasoning |
+                            $reasoning[0] |
                             map(select(
                                 # Match if reasoning name equals matrix name
                                 .name == $pkg.name or
@@ -629,10 +635,15 @@ generate_summary() {
                     end
                 ) |
                 join("\n")
-            ' >> $GITHUB_STEP_SUMMARY
+            ' "$matrix_file" >> $GITHUB_STEP_SUMMARY
+
+            rm -f "$matrix_file" "$reasoning_file"
         else
             # Fallback to simple list without reasoning
-            printf '%s' "$matrix" | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
+            local matrix_file=$(mktemp)
+            printf '%s' "$matrix" > "$matrix_file"
+            jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' "$matrix_file" >> $GITHUB_STEP_SUMMARY
+            rm -f "$matrix_file"
         fi
 
         echo "</details>" >> $GITHUB_STEP_SUMMARY
