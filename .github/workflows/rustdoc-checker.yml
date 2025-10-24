@@ -175,14 +175,14 @@ jobs:
             - name: Setup Rust toolchain
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Check if package has library source
+            - name: Check if package has source to document
               id: check_lib
               run: |
-                  if [ -f "${{ matrix.package.path }}/src/lib.rs" ]; then
+                  if [ -f "${{ matrix.package.path }}/src/lib.rs" ] || [ -f "${{ matrix.package.path }}/src/main.rs" ]; then
                     echo "exists=true" >> $GITHUB_OUTPUT
                   else
                     echo "exists=false" >> $GITHUB_OUTPUT
-                    echo "No lib.rs found for ${{ matrix.package.name }}, skipping"
+                    echo "No lib.rs or main.rs found for ${{ matrix.package.name }}, skipping"
                   fi
 
             - name: Update rustdoc with Claude
