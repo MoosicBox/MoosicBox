@@ -38,7 +38,7 @@ pub fn bind_services<
         .service(seek_endpoint)
 }
 
-/// OpenAPI specification for `UPnP` API endpoints.
+/// `OpenAPI` specification for `UPnP` API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -131,17 +131,17 @@ pub struct GetTransportInfoQuery {
         tags = ["UPnP"],
         get,
         path = "/transport-info",
-        description = "Get the current UPnP transport info",
+        description = "Get the current `UPnP` transport info",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get transport info from"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get transport info from"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to get transport info from"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to get transport info from"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to get transport info from"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to get transport info from"),
         ),
         responses(
             (
                 status = 200,
-                description = "The current UPnP transport info",
+                description = "The current `UPnP` transport info",
                 body = TransportInfo,
             )
         )
@@ -176,17 +176,17 @@ pub struct GetMediaInfoQuery {
         tags = ["UPnP"],
         get,
         path = "/media-info",
-        description = "Get the current UPnP media info",
+        description = "Get the current `UPnP` media info",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get media info from"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get media info from"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to get media info from"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to get media info from"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to get media info from"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to get media info from"),
         ),
         responses(
             (
                 status = 200,
-                description = "The current UPnP media info",
+                description = "The current `UPnP` media info",
                 body = MediaInfo,
             )
         )
@@ -221,17 +221,17 @@ pub struct GetPositionInfoQuery {
         tags = ["UPnP"],
         get,
         path = "/position-info",
-        description = "Get the current UPnP position info",
+        description = "Get the current `UPnP` position info",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get position info from"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get position info from"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to get position info from"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to get position info from"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to get position info from"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to get position info from"),
         ),
         responses(
             (
                 status = 200,
-                description = "The current UPnP position info",
+                description = "The current `UPnP` position info",
                 body = PositionInfo,
             )
         )
@@ -267,18 +267,18 @@ pub struct GetVolumeQuery {
         tags = ["UPnP"],
         get,
         path = "/volume",
-        description = "Get the current UPnP volume info for a device",
+        description = "Get the current `UPnP` volume info for a device",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to get volume info from"),
+            ("channel" = Option<String>, Query, description = "`UPnP` device channel to get volume info from"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to get volume info from"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to get volume info from"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to get volume info from"),
         ),
         responses(
             (
                 status = 200,
-                description = "The current UPnP volume info",
+                description = "The current `UPnP` volume info",
                 body = BTreeMap<String, String>,
             )
         )
@@ -321,13 +321,13 @@ pub struct SetVolumeQuery {
         tags = ["UPnP"],
         post,
         path = "/volume",
-        description = "Set the current UPnP volume for a device",
+        description = "Set the current `UPnP` volume for a device",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to get volume info from"),
+            ("channel" = Option<String>, Query, description = "`UPnP` device channel to get volume info from"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to get volume info from"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to get volume info from"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to get volume info from"),
             ("value" = u8, Query, description = "Integer to set the device volume to"),
         ),
         responses(
@@ -378,9 +378,9 @@ pub struct SubscribeQuery {
         description = "Subscribe to the specified device's service",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to subscribe to"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to subscribe to"),
-            ("serviceId" = String, Query, description = "UPnP device service ID to subscribe to"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to subscribe to"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to subscribe to"),
+            ("serviceId" = String, Query, description = "`UPnP` device service ID to subscribe to"),
         ),
         responses(
             (
@@ -431,12 +431,12 @@ pub struct PauseQuery {
         tags = ["UPnP"],
         post,
         path = "/pause",
-        description = "Pause the specified device's AVTransport",
+        description = "Pause the specified device's `AVTransport`",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to pause"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to pause"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to pause"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to pause"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to pause"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to pause"),
         ),
         responses(
             (
@@ -477,13 +477,13 @@ pub struct PlayQuery {
         tags = ["UPnP"],
         post,
         path = "/play",
-        description = "Play the specified device's AVTransport",
+        description = "Play the specified device's `AVTransport`",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("speed" = Option<f64>, Query, description = "Speed to play the playback at"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to play"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to play"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to play"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to play"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to play"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to play"),
         ),
         responses(
             (
@@ -529,13 +529,13 @@ pub struct SeekQuery {
         tags = ["UPnP"],
         post,
         path = "/seek",
-        description = "Seek the specified device's AVTransport",
+        description = "Seek the specified device's `AVTransport`",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("position" = f64, Query, description = "Seek position to seek the playback to"),
-            ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to seek"),
-            ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to seek"),
-            ("instanceId" = u32, Query, description = "UPnP instance ID to seek"),
+            ("deviceUdn" = Option<String>, Query, description = "`UPnP` device UDN to seek"),
+            ("deviceUrl" = Option<String>, Query, description = "`UPnP` device URL to seek"),
+            ("instanceId" = u32, Query, description = "`UPnP` instance ID to seek"),
             ("unit" = Option<String>, Query, description = "Seek unit"),
         ),
         responses(
