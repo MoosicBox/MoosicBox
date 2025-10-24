@@ -26,36 +26,51 @@ use crate::{
 
 static TIMEOUT_DURATION: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs(30));
 
+/// Error updating a download task in the database.
 #[derive(Debug, Error)]
 pub enum UpdateTaskError {
+    /// Database operation failed
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// No database connection available
     #[error("No database")]
     NoDatabase,
+    /// Task row not found in database
     #[error("No row")]
     NoRow,
 }
 
+/// Error processing the download queue.
 #[derive(Debug, Error)]
 pub enum ProcessDownloadQueueError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Database operation failed
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to update task
     #[error(transparent)]
     UpdateTask(#[from] UpdateTaskError),
+    /// Task join failed
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// Failed to download track
     #[error(transparent)]
     DownloadTrack(#[from] DownloadTrackError),
+    /// Failed to download album
     #[error(transparent)]
     DownloadAlbum(#[from] DownloadAlbumError),
+    /// Local scan operation failed
     #[error(transparent)]
     LocalScan(#[from] moosicbox_scan::local::ScanError),
+    /// I/O operation failed
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// No database connection available
     #[error("No database")]
     NoDatabase,
+    /// No downloader configured
     #[error("No downloader")]
     NoDownloader,
 }
@@ -97,41 +112,80 @@ impl DownloadQueueState {
     }
 }
 
+/// Generic progress event for download operations.
 #[derive(Clone)]
 pub enum GenericProgressEvent {
-    Size { bytes: Option<u64> },
-    Speed { bytes_per_second: f64 },
-    BytesRead { read: usize, total: usize },
-}
-
-#[derive(Clone)]
-pub enum ProgressEvent {
+    /// Total size of the download in bytes
     Size {
-        task: DownloadTask,
+        /// Total bytes to download, if known
         bytes: Option<u64>,
     },
+    /// Current download speed
     Speed {
-        task: DownloadTask,
+        /// Download speed in bytes per second
         bytes_per_second: f64,
     },
+    /// Bytes read progress
     BytesRead {
-        task: DownloadTask,
+        /// Bytes read so far
         read: usize,
+        /// Total bytes to read
         total: usize,
     },
-    State {
+}
+
+/// Progress event for a specific download task.
+#[derive(Clone)]
+pub enum ProgressEvent {
+    /// Total size of the download
+    Size {
+        /// The download task
         task: DownloadTask,
+        /// Total bytes to download, if known
+        bytes: Option<u64>,
+    },
+    /// Current download speed
+    Speed {
+        /// The download task
+        task: DownloadTask,
+        /// Download speed in bytes per second
+        bytes_per_second: f64,
+    },
+    /// Bytes read progress
+    BytesRead {
+        /// The download task
+        task: DownloadTask,
+        /// Bytes read so far
+        read: usize,
+        /// Total bytes to read
+        total: usize,
+    },
+    /// Task state changed
+    State {
+        /// The download task
+        task: DownloadTask,
+        /// New task state
         state: DownloadTaskState,
     },
 }
 
+/// Future returned by progress listener callbacks.
 pub type ProgressListenerFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Progress listener callback for generic progress events.
 pub type ProgressListener =
     Box<dyn (FnMut(GenericProgressEvent) -> ProgressListenerFut) + Send + Sync>;
+
+/// Future returned by progress listener reference callbacks.
 pub type ProgressListenerRefFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Progress listener callback for task-specific progress events.
 pub type ProgressListenerRef =
     Box<dyn (Fn(&ProgressEvent) -> ProgressListenerRefFut) + Send + Sync>;
 
+/// Queue for managing and processing download tasks.
+///
+/// Downloads are processed sequentially in the order they are added.
 #[derive(Clone)]
 pub struct DownloadQueue {
     progress_listeners: Vec<Arc<ProgressListenerRef>>,
@@ -144,6 +198,7 @@ pub struct DownloadQueue {
 }
 
 impl DownloadQueue {
+    /// Creates a new empty download queue.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -156,44 +211,52 @@ impl DownloadQueue {
         }
     }
 
+    /// Returns whether the queue has a database connection configured.
     #[must_use]
     pub const fn has_database(&self) -> bool {
         self.database.is_some()
     }
 
+    /// Configures the queue with a database connection.
     #[must_use]
     pub fn with_database(mut self, database: LibraryDatabase) -> Self {
         self.database.replace(database);
         self
     }
 
+    /// Returns whether the queue has a downloader configured.
     #[must_use]
     pub fn has_downloader(&self) -> bool {
         self.downloader.is_some()
     }
 
+    /// Configures the queue with a downloader.
     #[must_use]
     pub fn with_downloader(mut self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
         self.downloader.replace(Arc::new(downloader));
         self
     }
 
+    /// Adds a progress listener to receive download progress events.
     #[must_use]
     pub fn add_progress_listener(mut self, listener: ProgressListenerRef) -> Self {
         self.progress_listeners.push(Arc::new(listener));
         self
     }
 
+    /// Configures whether to scan downloaded files.
     #[must_use]
     pub const fn with_scan(mut self, scan: bool) -> Self {
         self.scan = scan;
         self
     }
 
+    /// Returns the currently processing download task, if any.
     pub async fn current_task(&self) -> Option<DownloadTask> {
         self.state.read().await.current_task().cloned()
     }
 
+    /// Returns the current download speed in bytes per second, if available.
     #[must_use]
     pub fn speed(&self) -> Option<f64> {
         self.downloader
@@ -201,14 +264,19 @@ impl DownloadQueue {
             .and_then(|downloader| downloader.speed())
     }
 
+    /// Adds a task to the download queue.
     pub async fn add_task_to_queue(&mut self, task: DownloadTask) {
         self.state.write().await.add_task_to_queue(task);
     }
 
+    /// Adds multiple tasks to the download queue.
     pub async fn add_tasks_to_queue(&mut self, tasks: Vec<DownloadTask>) {
         self.state.write().await.add_tasks_to_queue(tasks);
     }
 
+    /// Starts processing the download queue.
+    ///
+    /// Returns a handle to the background task processing the queue.
     pub fn process(&mut self) -> JoinHandle<Result<(), ProcessDownloadQueueError>> {
         let join_handle = self.join_handle.clone();
         let this = self.clone();
