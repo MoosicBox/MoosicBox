@@ -39,6 +39,9 @@ use switchy_database::profiles::LibraryDatabase;
 
 pub mod profiles;
 
+/// Music API implementation for local library access.
+///
+/// Provides music API operations against a local library database.
 #[derive(Clone)]
 pub struct LibraryMusicApi {
     db: LibraryDatabase,
@@ -63,6 +66,7 @@ impl From<LibraryDatabase> for LibraryMusicApi {
 }
 
 impl LibraryMusicApi {
+    /// Creates a new `LibraryMusicApi` instance.
     #[must_use]
     pub const fn new(db: LibraryDatabase) -> Self {
         Self { db }
