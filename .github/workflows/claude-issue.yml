@@ -416,7 +416,7 @@ jobs:
                       exit 1
                   fi
 
-            - name: Add co-author to commits
+            - name: Add co-author and comment URL to commits
               if: always()
               env:
                   GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
@@ -425,7 +425,7 @@ jobs:
                   COMMITS_AHEAD=$(git rev-list --count origin/$DEFAULT_BRANCH..HEAD 2>/dev/null || echo "0")
 
                   if [ "$COMMITS_AHEAD" = "0" ]; then
-                    echo "📭 No commits to add co-author to"
+                    echo "📭 No commits to add co-author and comment URL to"
                     exit 0
                   fi
 
@@ -441,27 +441,51 @@ jobs:
                   COAUTHOR_LINE="Co-authored-by: ${COMMENTER_LOGIN} <${COMMENTER_EMAIL}>"
                   echo "👥 Adding co-author: $COAUTHOR_LINE"
 
+                  # Capture the triggering comment/issue URL
+                  COMMENT_URL="${{ github.event.comment.html_url || github.event.issue.html_url }}"
+                  echo "🔗 Comment URL: ${COMMENT_URL:-'(none)'}"
+
                   BASE_COMMIT=$(git merge-base HEAD origin/$DEFAULT_BRANCH)
 
                   cat > /tmp/add_coauthor.sh << 'SCRIPT'
                   #!/bin/bash
-                  if ! git log -1 --pretty=%B | grep -qF "$COAUTHOR_LINE"; then
-                    MSG=$(git log -1 --pretty=%B)
+                  MSG=$(git log -1 --pretty=%B)
+                  MODIFIED=false
+
+                  # Add comment URL if not already present and available
+                  if [ -n "$COMMENT_URL" ] && ! echo "$MSG" | grep -qF "Triggered-by:"; then
                     if echo "$MSG" | tail -1 | grep -q '^$'; then
-                      printf '%s%s\n' "$MSG" "$COAUTHOR_LINE" | git commit --amend -F -
+                      MSG=$(printf '%sTriggered-by: %s\n' "$MSG" "$COMMENT_URL")
                     else
-                      printf '%s\n\n%s\n' "$MSG" "$COAUTHOR_LINE" | git commit --amend -F -
+                      MSG=$(printf '%s\n\nTriggered-by: %s\n' "$MSG" "$COMMENT_URL")
                     fi
+                    MODIFIED=true
+                  fi
+
+                  # Add co-author if not already present
+                  if ! echo "$MSG" | grep -qF "$COAUTHOR_LINE"; then
+                    if echo "$MSG" | tail -1 | grep -q '^$'; then
+                      MSG=$(printf '%s%s\n' "$MSG" "$COAUTHOR_LINE")
+                    else
+                      MSG=$(printf '%s\n\n%s\n' "$MSG" "$COAUTHOR_LINE")
+                    fi
+                    MODIFIED=true
+                  fi
+
+                  # Amend commit if we made changes
+                  if [ "$MODIFIED" = "true" ]; then
+                    printf '%s' "$MSG" | git commit --amend -F -
                   fi
                   SCRIPT
 
                   chmod +x /tmp/add_coauthor.sh
                   export COAUTHOR_LINE
+                  export COMMENT_URL
 
                   if GIT_SEQUENCE_EDITOR=true git rebase -i --exec "/tmp/add_coauthor.sh" $BASE_COMMIT; then
-                    echo "✅ Added co-author attribution to $COMMITS_AHEAD commit(s)"
+                    echo "✅ Added co-author attribution and comment URL to $COMMITS_AHEAD commit(s)"
                   else
-                    echo "⚠️ Failed to add co-author, continuing with push anyway..."
+                    echo "⚠️ Failed to add co-author and comment URL, continuing with push anyway..."
                     git rebase --abort 2>/dev/null || true
                   fi
 
