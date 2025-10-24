@@ -50,10 +50,6 @@ fail-on-warnings = [
     "switchy_database?/fail-on-warnings",
 ]
 
-# Empty feature kept for backward compatibility
-# Test dependencies are now in [dev-dependencies]
-test = []
-
 db = [
     "dep:moosicbox_json_utils",
     "dep:moosicbox_profiles",
