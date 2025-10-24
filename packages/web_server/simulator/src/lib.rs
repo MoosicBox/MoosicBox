@@ -1,3 +1,9 @@
+//! Web server simulator for testing HTTP interactions without a real server.
+//!
+//! This crate provides a lightweight simulation framework for testing web server
+//! behavior in unit tests. It allows you to define routes, mock responses, and
+//! verify request handling without starting an actual HTTP server.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -24,24 +30,35 @@ type HandlerFn = Arc<
         + Sync,
 >;
 
+/// Errors that can occur during web server simulation.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// No route was found matching the request method and path.
     #[error("Route not found: {method} {path}")]
     RouteNotFound { method: HttpMethod, path: String },
+    /// Handler execution failed.
     #[error("Handler execution failed: {0}")]
     HandlerFailed(String),
+    /// Server is not running.
     #[error("Server not started")]
     ServerNotStarted,
+    /// JSON serialization failed.
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 }
 
+/// Represents a simulated HTTP request.
 #[derive(Debug, Clone)]
 pub struct SimulatedRequest {
+    /// HTTP method (GET, POST, etc.).
     pub method: HttpMethod,
+    /// Request path.
     pub path: String,
+    /// Query string parameters.
     pub query_string: String,
+    /// HTTP headers.
     pub headers: BTreeMap<String, String>,
+    /// Request body.
     pub body: Option<Bytes>,
 }
 
@@ -95,10 +112,14 @@ impl SimulatedRequest {
     }
 }
 
+/// Represents a simulated HTTP response.
 #[derive(Debug, Clone)]
 pub struct SimulatedResponse {
+    /// HTTP status code.
     pub status_code: StatusCode,
+    /// Response headers.
     pub headers: BTreeMap<String, String>,
+    /// Response body.
     pub body: Option<Bytes>,
 }
 
@@ -169,9 +190,13 @@ impl SimulatedResponse {
     }
 }
 
+/// Route handler that processes simulated requests for a specific HTTP method and path.
 pub struct RouteHandler {
+    /// HTTP method this handler responds to.
     pub method: HttpMethod,
+    /// Path pattern this handler matches.
     pub path_pattern: String,
+    /// Handler function that processes the request.
     pub handler: HandlerFn,
 }
 
@@ -195,6 +220,8 @@ impl Clone for RouteHandler {
 }
 
 impl RouteHandler {
+    /// Creates a new route handler for the specified method, path pattern, and handler function.
+    #[must_use]
     pub fn new<F, Fut>(method: HttpMethod, path_pattern: impl Into<String>, handler: F) -> Self
     where
         F: Fn(SimulatedRequest) -> Fut + Send + Sync + 'static,
@@ -228,6 +255,7 @@ impl RouteHandler {
     }
 }
 
+/// Simulated web server for testing HTTP interactions without a real server.
 #[derive(Debug)]
 pub struct SimulationWebServer {
     routes: Arc<RwLock<Vec<RouteHandler>>>,
@@ -263,9 +291,9 @@ impl SimulationWebServer {
     ///
     /// # Errors
     ///
-    /// * If no matching route is found
-    /// * If the handler execution fails
-    /// * If the server is not running
+    /// * Returns `Error::ServerNotStarted` if the server is not running
+    /// * Returns `Error::RouteNotFound` if no matching route or mock response is found
+    /// * Returns errors from the handler if handler execution fails
     ///
     /// # Panics
     ///
@@ -398,11 +426,12 @@ impl Clone for SimulationWebServer {
     }
 }
 
-/// Helper functions for creating common route handlers
+/// Helper functions for creating common route handlers.
 pub mod handlers {
     use super::{Arc, HttpMethod, RouteHandler, Serialize, SimulatedResponse};
 
-    /// Create a simple JSON response handler
+    /// Creates a route handler that returns a JSON response.
+    #[must_use]
     pub fn json_response<T: Serialize + Send + Sync + 'static>(
         method: HttpMethod,
         path: impl Into<String>,
@@ -415,7 +444,8 @@ pub mod handlers {
         })
     }
 
-    /// Create a simple text response handler
+    /// Creates a route handler that returns a plain text response.
+    #[must_use]
     pub fn text_response(
         method: HttpMethod,
         path: impl Into<String>,
@@ -428,7 +458,8 @@ pub mod handlers {
         })
     }
 
-    /// Create a simple HTML response handler
+    /// Creates a route handler that returns an HTML response.
+    #[must_use]
     pub fn html_response(
         method: HttpMethod,
         path: impl Into<String>,
@@ -441,7 +472,8 @@ pub mod handlers {
         })
     }
 
-    /// Create a health check handler
+    /// Creates a health check route handler that returns a success status.
+    #[must_use]
     pub fn health_check(path: impl Into<String>) -> RouteHandler {
         json_response(
             HttpMethod::Get,
