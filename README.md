@@ -28,7 +28,7 @@ MoosicBox is a powerful, self-hosted music server that lets you stream your pers
 
 - **Web interface** - Stream from any browser
 - **Desktop applications** - Native apps for Windows, macOS, and Linux
-- **Mobile apps** - iOS (in-progress) and Android applications
+- **Mobile apps** - Android (in-progress)
 - **Cross-device sync** - Continue listening where you left off
 
 ### 🎼 **Music Service Integration**
@@ -116,7 +116,7 @@ MoosicBox is built with a modular, high-performance architecture:
 ### Supported Platforms
 
 - **🖥️ Desktop**: Windows, macOS, Linux (via Tauri)
-- **📱 Mobile**: iOS, Android
+- **📱 Mobile**: Android
 - **🌐 Web**: All modern browsers
 - **🐧 Server**: Linux, Docker, cloud deployments
 
@@ -128,7 +128,6 @@ MoosicBox supports multiple database backends for maximum flexibility:
 
 - **SQLite** - Perfect for personal use and getting started
 - **PostgreSQL** - Recommended for production and multi-user setups
-- **MySQL** - Enterprise-grade reliability and performance
 
 ## 🔧 Development
 
