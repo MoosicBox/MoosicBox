@@ -156,7 +156,7 @@ pub async fn run<T>(
     #[cfg(feature = "profiling-puffin")]
     start_puffin_server();
 
-    ApiSource::register_library();
+    let _ = ApiSource::register_library();
 
     #[cfg(feature = "tidal")]
     ApiSource::register("Tidal", "Tidal");
