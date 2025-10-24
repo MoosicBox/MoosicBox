@@ -17,6 +17,10 @@ use serde::Deserialize;
 
 use crate::models::{ApiMusicApi, AuthValues, convert_to_api_music_api};
 
+/// Binds music API HTTP endpoints to an Actix-Web scope.
+///
+/// Registers all music API-related endpoints including listing APIs,
+/// authentication, scanning, and search functionality.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -30,6 +34,9 @@ pub fn bind_services<
         .service(search_music_apis_endpoint)
 }
 
+/// OpenAPI specification for music API endpoints.
+///
+/// Provides OpenAPI/Swagger documentation for all music API-related endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -75,6 +82,12 @@ pub struct GetMusicApis {
     )
 )]
 #[route("", method = "GET")]
+/// Retrieves a paginated list of enabled music APIs for the current profile.
+///
+/// # Errors
+///
+/// * Returns a 404 error if the specified profile is not found
+/// * Returns a 500 error if querying music API state fails
 pub async fn music_apis_endpoint(
     query: web::Query<GetMusicApis>,
     profile_name: ProfileName,
@@ -135,6 +148,16 @@ pub struct AuthMusicApi {
 )]
 #[route("/auth", method = "POST")]
 #[cfg_attr(not(feature = "_auth"), allow(unreachable_code, unused))]
+/// Authenticates with a specific music API using the provided credentials.
+///
+/// Supports different authentication methods (username/password or OAuth polling)
+/// depending on the API's capabilities.
+///
+/// # Errors
+///
+/// * Returns a 404 error if the specified music API is not found
+/// * Returns a 400 error if the authentication method is not supported
+/// * Returns a 500 error if the authentication process fails
 pub async fn auth_music_api_endpoint(
     query: web::Query<AuthMusicApi>,
     form: web::Form<AuthValues>,
@@ -220,6 +243,14 @@ pub struct ScanMusicApi {
     )
 )]
 #[route("/scan", method = "POST")]
+/// Initiates a library scan for a specific music API.
+///
+/// This triggers the music API to scan and index its available content.
+///
+/// # Errors
+///
+/// * Returns a 404 error if the specified music API is not found
+/// * Returns a 500 error if the scan operation fails
 pub async fn scan_music_api_endpoint(
     query: web::Query<ScanMusicApi>,
     music_apis: MusicApis,
@@ -263,6 +294,14 @@ pub struct EnableScanMusicApi {
     )
 )]
 #[route("/scan-origins", method = "POST")]
+/// Enables library scanning for a specific music API.
+///
+/// This configures the music API to be included in library scan operations.
+///
+/// # Errors
+///
+/// * Returns a 404 error if the specified music API is not found
+/// * Returns a 500 error if enabling the scan fails
 pub async fn enable_scan_origin_music_api_endpoint(
     query: web::Query<EnableScanMusicApi>,
     music_apis: MusicApis,
@@ -315,6 +354,16 @@ pub struct SearchMusicApis {
     )
 )]
 #[route("/search", method = "GET")]
+/// Searches across one or more music APIs for content matching the query.
+///
+/// Results are returned grouped by API source. If no API sources are specified,
+/// all enabled APIs that support search will be queried.
+///
+/// # Errors
+///
+/// * Returns a 404 error if the specified profile is not found
+/// * Returns a 400 error if invalid API sources are provided
+/// * Returns a 500 error if any search operation fails
 pub async fn search_music_apis_endpoint(
     query: web::Query<SearchMusicApis>,
     profile_name: ProfileName,
