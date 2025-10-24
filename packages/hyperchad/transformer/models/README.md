@@ -46,7 +46,8 @@ The HyperChad Transformer Models package provides:
 ### Routing & HTMX
 
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
-- **SwapTarget**: This, Children, Id targeting for HTMX swaps
+- **Selector**: Id, Class, ChildClass, SelfTarget targeting for CSS selectors
+- **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies for HTMX
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
 
 ## Installation
@@ -130,19 +131,21 @@ println!("Image: {} {}", loading, fit);
 ### HTMX Routing
 
 ```rust
-use hyperchad_transformer_models::{Route, SwapTarget};
+use hyperchad_transformer_models::{Route, Selector, SwapStrategy};
 
 // Define routes
 let get_route = Route::Get {
     route: "/api/data".to_string(),
     trigger: Some("click".to_string()),
-    swap: SwapTarget::This,
+    target: Selector::SelfTarget,
+    strategy: SwapStrategy::This,
 };
 
 let post_route = Route::Post {
     route: "/api/submit".to_string(),
     trigger: Some("submit".to_string()),
-    swap: SwapTarget::Id("result".to_string()),
+    target: Selector::Id("result".to_string()),
+    strategy: SwapStrategy::Children,
 };
 ```
 
@@ -228,7 +231,8 @@ use hyperchad_transformer_models::LayoutPosition;
 ### Interaction Models
 
 - **Route**: HTTP routing with HTMX support
-- **SwapTarget**: HTMX content swap targets
+- **Selector**: CSS selector targeting
+- **SwapStrategy**: HTMX content swap strategies
 - **LinkTarget**: Link navigation targets
 
 ## String Conversion
