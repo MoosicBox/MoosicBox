@@ -56,7 +56,7 @@ fn main() -> Result<(), ParseError> {
 ### Nested Value Access
 
 ```rust
-use moosicbox_json_utils::serde_json::{ToNestedValue, get_nested_value};
+use moosicbox_json_utils::serde_json::ToNestedValue;
 
 let metadata = serde_json::json!({
     "track": {
