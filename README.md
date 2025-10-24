@@ -128,6 +128,7 @@ MoosicBox supports multiple database backends for maximum flexibility:
 
 - **SQLite** - Perfect for personal use and getting started
 - **PostgreSQL** - Recommended for production and multi-user setups
+- **MySQL** - Full feature support with SQLite compatibility
 
 ## 🔧 Development
 
