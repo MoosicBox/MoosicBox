@@ -13,6 +13,9 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
 
+/// HTTP request method.
+///
+/// Represents standard HTTP methods as defined in RFC 7231 and RFC 5789.
 #[derive(Debug, Clone, Copy, AsRefStr, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
@@ -29,6 +32,7 @@ pub enum Method {
     Trace,
 }
 
+/// Error returned when parsing an invalid HTTP method string.
 #[derive(Debug, thiserror::Error)]
 pub struct InvalidMethod;
 
@@ -63,7 +67,11 @@ impl std::fmt::Display for Method {
     }
 }
 
-// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
+/// HTTP status code.
+///
+/// Represents standard HTTP status codes as defined in various RFCs.
+///
+/// See: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status>
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumString, AsRefStr)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
@@ -202,6 +210,7 @@ impl From<StatusCode> for u16 {
     }
 }
 
+/// Error returned when converting an invalid u16 to a status code.
 #[derive(Debug, thiserror::Error)]
 #[error("TryFromU16StatusCodeError")]
 pub struct TryFromU16StatusCodeError;
@@ -281,11 +290,13 @@ impl TryFrom<u16> for StatusCode {
 }
 
 impl StatusCode {
+    /// Converts the status code to its numeric u16 representation.
     #[must_use]
     pub fn into_u16(self) -> u16 {
         self.into()
     }
 
+    /// Returns the numeric u16 representation of the status code.
     #[must_use]
     pub fn as_u16(&self) -> u16 {
         (*self).into_u16()
