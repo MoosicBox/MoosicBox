@@ -12,9 +12,11 @@ pub fn init(tunnel_info: TunnelInfo) -> Result<(), TunnelInfo> {
     TUNNEL_INFO.set(tunnel_info)
 }
 
+/// Tunnel configuration information accessible via Actix-web request extraction.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct TunnelInfo {
+    /// The tunnel host, if configured.
     pub host: Arc<Option<String>>,
 }
 
