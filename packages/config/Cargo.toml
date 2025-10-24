@@ -25,28 +25,29 @@ switchy_database = { workspace = true, optional = true }
 
 # API dependencies
 actix-web = { workspace = true, optional = true }
-serde     = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
-# Test dependencies
-switchy_random = { workspace = true, optional = true, features = ["rand"] }
+# Serialization (used by both file and API modules)
+serde      = { workspace = true }
+serde_with = { workspace = true, features = ["macros"] }
 
 home      = { workspace = true }
+json5     = { workspace = true }
 log       = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+switchy_fs = { workspace = true, features = ["std", "sync"] }
+
 [features]
-default = ["api", "db", "openapi"]
+default = ["api", "db", "file", "openapi"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
     "moosicbox_json_utils?/fail-on-warnings",
     "moosicbox_profiles?/fail-on-warnings",
     "switchy_database?/fail-on-warnings",
-    "switchy_random?/fail-on-warnings",
 ]
-
-test = ["dep:switchy_random"]
 
 db = [
     "dep:moosicbox_json_utils",
@@ -55,5 +56,7 @@ db = [
     "dep:switchy_database",
 ]
 
-api     = ["db", "dep:actix-web", "dep:serde", "switchy_database?/api"]
+file = []
+
+api     = ["db", "dep:actix-web", "switchy_database?/api"]
 openapi = ["dep:utoipa"]

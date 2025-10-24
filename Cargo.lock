@@ -6753,6 +6753,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "json5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1"
+dependencies = [
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
 name = "json_extractor_standalone_example"
 version = "0.1.0"
 dependencies = [
@@ -8128,13 +8139,16 @@ version = "0.1.4"
 dependencies = [
  "actix-web",
  "home",
+ "json5",
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_profiles",
  "nanoid",
  "serde",
+ "serde_with",
  "switchy_database",
+ "switchy_fs",
  "switchy_random",
  "thiserror 2.0.17",
  "utoipa",
