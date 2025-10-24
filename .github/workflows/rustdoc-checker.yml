@@ -172,8 +172,13 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
 
-            - name: Setup Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
+              with:
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: "true"
+                  rust-components: "rustfmt, clippy"
 
             - name: Check if package has source to document
               id: check_lib
