@@ -234,24 +234,28 @@ let renderer = router_to_actix(tag_renderer, router)
 
 ### Partial Updates
 
-The HTML renderer supports partial page updates through the `PartialView` type. When a route returns a `PartialView`, the renderer:
+The HTML renderer supports partial page updates through the `View` type. When a route returns a `View` with fragments, the renderer:
 
-- Generates only the updated HTML content
-- Sets the `v-fragment` header with the target element selector
+- Generates only the updated HTML content for fragments
+- Sets custom headers to communicate fragment information
 - Works seamlessly with HTMX and similar frameworks
 
 ```rust
-use hyperchad_renderer::{PartialView, Content};
+use hyperchad_renderer::{View, Content, ReplaceContainer, Selector};
 use hyperchad_router::Container;
 
-// In your route handler, return a PartialView
+// In your route handler, return a View with fragments
 async fn update_handler() -> Content {
     let updated_content = Container::default(); // your updated content
 
-    Content::PartialView(PartialView {
-        target: "content".to_string(),
-        container: updated_content,
-    })
+    Content::View(Box::new(View {
+        primary: None,
+        fragments: vec![ReplaceContainer {
+            selector: Selector::from("#content"),
+            container: updated_content,
+        }],
+        delete_selectors: vec![],
+    }))
 }
 ```
 
