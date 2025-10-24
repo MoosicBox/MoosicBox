@@ -647,7 +647,7 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
     }
 }
 
-/// Represents a UPnP `AVTransport` service for audio output.
+/// Represents a `UPnP` `AVTransport` service for audio output.
 #[derive(Clone)]
 pub struct UpnpAvTransportService {
     pub device: Device,
