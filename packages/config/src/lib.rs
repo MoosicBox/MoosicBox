@@ -117,13 +117,16 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
     None
 }
 
-#[cfg(feature = "test")]
 #[must_use]
 pub fn get_tests_dir_path() -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "moosicbox_tests_{}",
-        switchy_random::rng().next_u64()
-    ))
+    use std::time::SystemTime;
+
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let pid = std::process::id();
+
+    std::env::temp_dir().join(format!("moosicbox_tests_{pid}_{timestamp}"))
 }
 
 #[cfg(feature = "db")]
