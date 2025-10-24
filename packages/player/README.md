@@ -68,9 +68,18 @@ Implement this trait to create custom player backends:
 ```rust
 #[async_trait]
 pub trait Player: std::fmt::Debug + Send {
+    async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
+        Ok(())
+    }
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
     async fn trigger_stop(&self) -> Result<(), PlayerError>;
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
+    async fn before_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
+    async fn after_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
     async fn trigger_pause(&self) -> Result<(), PlayerError>;
     async fn trigger_resume(&self) -> Result<(), PlayerError>;
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
