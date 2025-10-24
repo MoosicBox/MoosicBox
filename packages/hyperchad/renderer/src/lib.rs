@@ -17,24 +17,36 @@ pub use switchy_async::runtime::Handle;
 
 pub use hyperchad_transformer as transformer;
 
+/// Events that can be emitted by a renderer
 #[derive(Debug)]
 pub enum RendererEvent {
+    /// View content to render
     View(Box<View>),
+    /// Canvas update event
     #[cfg(feature = "canvas")]
     CanvasUpdate(canvas::CanvasUpdate),
+    /// Generic event with optional value
     Event {
+        /// Event name
         name: String,
+        /// Optional event value
         value: Option<String>,
     },
 }
 
+/// Response content that can be returned to the client
 #[derive(Debug, Clone)]
 pub enum Content {
+    /// HTML view content
     View(Box<View>),
+    /// JSON response content
     #[cfg(feature = "json")]
     Json(serde_json::Value),
+    /// Raw response with custom content type
     Raw {
+        /// Response data
         data: Bytes,
+        /// HTTP content type
         content_type: String,
     },
 }
@@ -54,9 +66,12 @@ impl Content {
     }
 }
 
+/// Container with selector for targeted DOM replacement
 #[derive(Debug, Clone)]
 pub struct ReplaceContainer {
+    /// CSS selector to target DOM element for replacement
     pub selector: Selector,
+    /// Container content to replace the target with
     pub container: Container,
 }
 
@@ -105,6 +120,7 @@ impl View {
     }
 }
 
+/// Builder for constructing `View` instances
 #[derive(Debug, Default)]
 pub struct ViewBuilder {
     primary: Option<Container>,
@@ -205,6 +221,7 @@ impl ViewBuilder {
     }
 }
 
+/// Builder for constructing `Content` instances
 #[derive(Debug, Default)]
 pub struct ContentBuilder {
     builder: ViewBuilder,
@@ -393,6 +410,7 @@ impl From<Vec<Container>> for View {
     }
 }
 
+/// Trait for running a renderer in a blocking manner
 pub trait RenderRunner: Send + Sync {
     /// # Errors
     ///
@@ -400,6 +418,7 @@ pub trait RenderRunner: Send + Sync {
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 }
 
+/// Trait for converting a value into a `RenderRunner`
 pub trait ToRenderRunner {
     /// # Errors
     ///
@@ -410,6 +429,7 @@ pub trait ToRenderRunner {
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>>;
 }
 
+/// Trait for async renderer implementations
 #[async_trait]
 pub trait Renderer: ToRenderRunner + Send + Sync {
     /// # Errors
@@ -456,8 +476,10 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     }
 }
 
+/// Trait for rendering HTML elements with hyperchad transformations
 #[cfg(feature = "html")]
 pub trait HtmlTagRenderer {
+    /// Add a responsive trigger for media queries
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
 
     /// # Errors
