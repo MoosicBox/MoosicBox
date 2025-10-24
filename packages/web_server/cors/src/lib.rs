@@ -61,13 +61,28 @@ fn tests() {
     assert!(AllOrSome::Some(()).is_some());
 }
 
+/// CORS (Cross-Origin Resource Sharing) configuration.
+///
+/// Defines policies for allowing cross-origin requests, including which origins,
+/// methods, and headers are permitted.
 #[derive(Debug, Clone)]
 pub struct Cors {
+    /// Origins allowed to make cross-origin requests.
     pub allowed_origins: AllOrSome<Vec<String>>,
+
+    /// HTTP methods allowed for cross-origin requests.
     pub allowed_methods: AllOrSome<Vec<Method>>,
+
+    /// Headers allowed in cross-origin requests.
     pub allowed_headers: AllOrSome<Vec<String>>,
+
+    /// Headers that should be exposed to the browser.
     pub expose_headers: AllOrSome<Vec<String>>,
+
+    /// Whether credentials (cookies, authorization headers) are supported.
     pub supports_credentials: bool,
+
+    /// Maximum age in seconds for preflight request caching.
     pub max_age: Option<u32>,
 }
 
@@ -86,12 +101,14 @@ impl Default for Cors {
 }
 
 impl Cors {
+    /// Allows requests from any origin (sets `Access-Control-Allow-Origin: *`).
     #[must_use]
     pub fn allow_any_origin(mut self) -> Self {
         self.allowed_origins = AllOrSome::All;
         self
     }
 
+    /// Adds an allowed origin. Has no effect if [`allow_any_origin`](Self::allow_any_origin) was called.
     #[must_use]
     pub fn allow_origin<T: Into<String>>(mut self, origin: T) -> Self {
         match &mut self.allowed_origins {
@@ -104,6 +121,7 @@ impl Cors {
         self
     }
 
+    /// Adds multiple allowed origins. Has no effect if [`allow_any_origin`](Self::allow_any_origin) was called.
     #[must_use]
     pub fn allowed_origins<T: Into<String>, I: IntoIterator<Item = T>>(
         mut self,
@@ -119,12 +137,14 @@ impl Cors {
         self
     }
 
+    /// Allows any HTTP method (sets `Access-Control-Allow-Methods: *`).
     #[must_use]
     pub fn allow_any_method(mut self) -> Self {
         self.allowed_methods = AllOrSome::All;
         self
     }
 
+    /// Adds an allowed HTTP method. Has no effect if [`allow_any_method`](Self::allow_any_method) was called.
     #[must_use]
     pub fn allow_method<T: Into<Method>>(mut self, method: T) -> Self {
         match &mut self.allowed_methods {
@@ -137,6 +157,7 @@ impl Cors {
         self
     }
 
+    /// Adds multiple allowed HTTP methods. Has no effect if [`allow_any_method`](Self::allow_any_method) was called.
     #[must_use]
     pub fn allowed_methods<T: Into<Method>, I: IntoIterator<Item = T>>(
         mut self,
@@ -152,12 +173,14 @@ impl Cors {
         self
     }
 
+    /// Allows any header (sets `Access-Control-Allow-Headers: *`).
     #[must_use]
     pub fn allow_any_header(mut self) -> Self {
         self.allowed_headers = AllOrSome::All;
         self
     }
 
+    /// Adds an allowed request header. Has no effect if [`allow_any_header`](Self::allow_any_header) was called.
     #[must_use]
     pub fn allow_header<T: Into<String>>(mut self, header: T) -> Self {
         match &mut self.allowed_headers {
@@ -170,6 +193,7 @@ impl Cors {
         self
     }
 
+    /// Adds multiple allowed request headers. Has no effect if [`allow_any_header`](Self::allow_any_header) was called.
     #[must_use]
     pub fn allowed_headers<T: Into<String>, I: IntoIterator<Item = T>>(
         mut self,
@@ -185,12 +209,14 @@ impl Cors {
         self
     }
 
+    /// Exposes any response header (sets `Access-Control-Expose-Headers: *`).
     #[must_use]
     pub fn expose_any_header(mut self) -> Self {
         self.expose_headers = AllOrSome::All;
         self
     }
 
+    /// Adds a response header to expose. Has no effect if [`expose_any_header`](Self::expose_any_header) was called.
     #[must_use]
     pub fn expose_header<T: Into<String>>(mut self, header: T) -> Self {
         match &mut self.expose_headers {
@@ -203,6 +229,7 @@ impl Cors {
         self
     }
 
+    /// Adds multiple response headers to expose. Has no effect if [`expose_any_header`](Self::expose_any_header) was called.
     #[must_use]
     pub fn expose_headers<T: Into<String>, I: IntoIterator<Item = T>>(
         mut self,
@@ -218,12 +245,14 @@ impl Cors {
         self
     }
 
+    /// Enables credentials support (sets `Access-Control-Allow-Credentials: true`).
     #[must_use]
     pub const fn support_credentials(mut self) -> Self {
         self.supports_credentials = true;
         self
     }
 
+    /// Sets the maximum age for preflight request caching in seconds.
     #[must_use]
     pub fn max_age(mut self, max_age: impl Into<Option<u32>>) -> Self {
         self.max_age = max_age.into();
