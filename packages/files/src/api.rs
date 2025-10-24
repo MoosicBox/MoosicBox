@@ -37,6 +37,9 @@ use crate::files::{
     },
 };
 
+/// Binds all file service endpoints to the provided Actix web scope.
+///
+/// This includes endpoints for tracks, artist covers, album covers, and visualizations.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
