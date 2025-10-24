@@ -356,6 +356,8 @@ macro_rules! impl_file_sync {
 }
 
 /// File type information for directory entries
+///
+/// Provides methods to determine whether an entry is a directory, file, or symbolic link.
 #[derive(Debug, Clone)]
 pub struct FileType {
     is_dir: bool,
