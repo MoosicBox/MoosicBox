@@ -1,0 +1,20 @@
+error: Code generation failed in container! macro.
+
+       Error: <summary> element can only be used as a direct child of <details>
+
+       This usually indicates:
+       - Unknown element types
+       - Invalid attribute combinations
+       - Unsupported template features
+       - Complex nested structures that failed to generate
+ --> tests/warnings/summary-outside-details.rs:5:19
+  |
+5 |       let _result = container! {
+  |  ___________________^
+6 | |         div {
+7 | |             summary { "Invalid" }
+8 | |         }
+9 | |     };
+  | |_____^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

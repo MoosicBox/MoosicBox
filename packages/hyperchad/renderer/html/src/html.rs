@@ -216,7 +216,9 @@ pub fn element_style_to_html(
         | Element::TBody
         | Element::TR
         | Element::TD { .. }
-        | Element::Canvas => {}
+        | Element::Canvas
+        | Element::Details { .. }
+        | Element::Summary => {}
     }
 
     let is_grid = is_grid_container(container);
@@ -1157,6 +1159,8 @@ pub fn element_to_html(
         Element::TBody => Some("tbody"),
         Element::TR => Some("tr"),
         Element::Canvas => Some("canvas"),
+        Element::Details { .. } => Some("details"),
+        Element::Summary => Some("summary"),
         _ => None,
     };
 

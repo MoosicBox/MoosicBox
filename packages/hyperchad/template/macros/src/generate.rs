@@ -1,5 +1,7 @@
 #![allow(clippy::option_if_let_else)]
 
+use std::collections::HashMap;
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Expr, Local};
@@ -10,10 +12,155 @@ use crate::ast::{
     Markup, Markups, MatchExpr, NoElement, WhileExpr,
 };
 
+/// Context about the parent element for validation purposes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParentContext {
+    /// No parent (root level)
+    Root,
+    /// Any generic parent
+    Generic,
+    /// Inside a <details> element
+    Details,
+}
+
+impl ParentContext {
+    /// Get the parent context for an element's children
+    fn child_context(element_name: &str) -> Self {
+        match element_name {
+            "details" => Self::Details,
+            _ => Self::Generic,
+        }
+    }
+}
+
+/// Tracks child positions for validation
+#[derive(Debug, Clone)]
+struct ChildPositionTracker {
+    /// Current child index (0-based)
+    index: usize,
+    /// Elements seen so far by name
+    seen_elements: HashMap<String, usize>,
+}
+
+impl ChildPositionTracker {
+    fn new() -> Self {
+        Self {
+            index: 0,
+            seen_elements: HashMap::new(),
+        }
+    }
+
+    fn increment(&mut self, element_name: &str) {
+        *self
+            .seen_elements
+            .entry(element_name.to_string())
+            .or_insert(0) += 1;
+        self.index += 1;
+    }
+
+    fn get_count(&self, element_name: &str) -> usize {
+        self.seen_elements.get(element_name).copied().unwrap_or(0)
+    }
+}
+
+/// Constraint on how many times a child can appear
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CountConstraint {
+    /// At most N occurrences
+    AtMost(usize),
+}
+
+impl CountConstraint {
+    const fn validate(self, count: usize) -> bool {
+        match self {
+            Self::AtMost(n) => count <= n,
+        }
+    }
+}
+
+/// Validation rule for a child element
+#[derive(Debug, Clone)]
+struct ChildValidationRule {
+    /// Child element name
+    child_element: &'static str,
+    /// Parent context where this rule applies
+    parent_context: ParentContext,
+    /// Count constraint
+    count: CountConstraint,
+    /// Error message for position violations (when child must be first)
+    position_error: &'static str,
+    /// Error message for count violations
+    count_error: &'static str,
+}
+
+const CHILD_VALIDATION_RULES: &[ChildValidationRule] = &[ChildValidationRule {
+    child_element: "summary",
+    parent_context: ParentContext::Details,
+    count: CountConstraint::AtMost(1),
+    position_error: "<summary> must be the first child of <details>",
+    count_error: "<details> can contain at most one <summary> element",
+}];
+
+/// Validation rule for parent requirements
+struct ParentValidationRule {
+    /// Element name
+    element_name: &'static str,
+    /// Required parent contexts (empty = any parent allowed)
+    allowed_parents: &'static [ParentContext],
+    /// Error message if validation fails
+    error_message: &'static str,
+}
+
+const PARENT_VALIDATION_RULES: &[ParentValidationRule] = &[ParentValidationRule {
+    element_name: "summary",
+    allowed_parents: &[ParentContext::Details],
+    error_message: "<summary> element can only be used as a direct child of <details>",
+}];
+
+/// Validate that an element is allowed in the given parent context
+fn validate_element_parent(
+    element_name: &str,
+    parent_context: ParentContext,
+) -> Result<(), String> {
+    for rule in PARENT_VALIDATION_RULES {
+        if rule.element_name == element_name
+            && !rule.allowed_parents.is_empty()
+            && !rule.allowed_parents.contains(&parent_context)
+        {
+            return Err(rule.error_message.to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Validate child element against position/count rules
+fn validate_child_element(
+    element_name: &str,
+    parent_context: ParentContext,
+    tracker: &ChildPositionTracker,
+) -> Result<(), String> {
+    for rule in CHILD_VALIDATION_RULES {
+        if rule.child_element == element_name && rule.parent_context == parent_context {
+            // Check position constraint (must be first child)
+            if tracker.index != 0 {
+                return Err(rule.position_error.to_string());
+            }
+
+            // Check count constraint (for elements we've seen so far + this one)
+            let new_count = tracker.get_count(element_name) + 1;
+            if !rule.count.validate(new_count) {
+                return Err(rule.count_error.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn generate(markups: Markups<Element>, output_ident: Ident) -> Result<TokenStream, String> {
     let mut build = Builder::new(output_ident.clone());
     let generator = Generator::new(output_ident);
-    generator.markups(markups, &mut build)?;
+    let mut tracker = ChildPositionTracker::new();
+    generator.markups_with_context(markups, &mut build, ParentContext::Root, &mut tracker)?;
     Ok(build.finish())
 }
 
@@ -30,21 +177,25 @@ impl Generator {
         Builder::new(self.output_ident.clone())
     }
 
-    fn markups<E: Into<Element>>(
+    fn markups_with_context<E: Into<Element>>(
         &self,
         markups: Markups<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &mut ChildPositionTracker,
     ) -> Result<(), String> {
         for markup in markups.markups {
-            self.markup(markup, build)?;
+            self.markup_with_context(markup, build, parent_context, tracker)?;
         }
         Ok(())
     }
 
-    fn markup<E: Into<Element>>(
+    fn markup_with_context<E: Into<Element>>(
         &self,
         markup: Markup<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &mut ChildPositionTracker,
     ) -> Result<(), String> {
         match markup {
             Markup::Block(block) => {
@@ -56,13 +207,12 @@ impl Generator {
                     }
                     false
                 }) {
-                    self.block(block, build)?;
+                    self.block_with_context(block, build, parent_context, tracker)?;
                 } else {
-                    self.markups(block.markups, build)?;
+                    self.markups_with_context(block.markups, build, parent_context, tracker)?;
                 }
             }
             Markup::Lit(lit) => {
-                // For literals, create a Raw element with the content
                 let value = match &lit.lit {
                     syn::Lit::Str(lit_str) => lit_str.value(),
                     syn::Lit::Int(lit_int) => lit_int.to_string(),
@@ -81,7 +231,6 @@ impl Generator {
                 }
             }
             Markup::NumericLit(numeric_lit) => {
-                // For numeric literals, create a Raw element with the value
                 let value = &numeric_lit.value;
                 build.push_container(quote! {
                     hyperchad_transformer::Container {
@@ -91,7 +240,6 @@ impl Generator {
                 });
             }
             Markup::Splice { expr, .. } => {
-                // For spliced expressions, use RenderContainer trait to convert to containers
                 let output_ident = &self.output_ident;
                 build.push_tokens(quote! {
                     {
@@ -105,23 +253,31 @@ impl Generator {
                 });
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items {item1 item2 ...}, process each item in order
-                // This handles mixed content like {"Name: " (some_function())} properly
                 for item in items {
-                    self.markup(item, build)?;
+                    self.markup_with_context(item, build, parent_context, tracker)?;
                 }
             }
-            Markup::Element(element) => self.element(element.into(), build)?,
-            Markup::ControlFlow(control_flow) => self.control_flow(*control_flow, build)?,
+            Markup::Element(element) => {
+                self.element_with_context(element.into(), build, parent_context, tracker)?;
+            }
+            Markup::ControlFlow(control_flow) => {
+                self.control_flow_with_context(*control_flow, build, parent_context, tracker)?;
+            }
             Markup::Semi(_) => {}
         }
         Ok(())
     }
 
-    fn block<E: Into<Element>>(&self, block: Block<E>, build: &mut Builder) -> Result<(), String> {
+    fn block_with_context<E: Into<Element>>(
+        &self,
+        block: Block<E>,
+        build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &mut ChildPositionTracker,
+    ) -> Result<(), String> {
         let markups = {
             let mut build = self.builder();
-            self.markups(block.markups, &mut build)?;
+            self.markups_with_context(block.markups, &mut build, parent_context, tracker)?;
             build.finish()
         };
 
@@ -129,10 +285,28 @@ impl Generator {
         Ok(())
     }
 
-    fn element(&self, element: Element, build: &mut Builder) -> Result<(), String> {
+    #[allow(clippy::too_many_lines)]
+    fn element_with_context(
+        &self,
+        element: Element,
+        build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &mut ChildPositionTracker,
+    ) -> Result<(), String> {
         let element_name = element.name.clone().unwrap_or_else(|| ElementName {
             name: format_ident!("div"),
         });
+
+        let element_name_str = element_name.name.to_string();
+
+        // VALIDATION 1: Check parent context
+        validate_element_parent(&element_name_str, parent_context)?;
+
+        // VALIDATION 2: Check child position/count constraints
+        validate_child_element(&element_name_str, parent_context, tracker)?;
+
+        // Update tracker for next sibling
+        tracker.increment(&element_name_str);
 
         // Generate attribute assignments
         let mut attr_assignments = Vec::new();
@@ -146,7 +320,6 @@ impl Generator {
                     attr_assignments.push(quote! { str_id: Some(#id_str.to_string()) });
                 }
                 ContainerNameOrMarkup::Markup(markup) => {
-                    // For dynamic IDs, use markup_to_string_tokens to handle concatenation
                     let id_tokens = Self::markup_to_string_tokens(markup);
                     attr_assignments.push(quote! { str_id: Some(#id_tokens) });
                 }
@@ -157,16 +330,13 @@ impl Generator {
         if !classes.is_empty() {
             let class_strings: Vec<_> = classes
                 .into_iter()
-                .map(|(name, _toggler)| {
-                    match name {
-                        ContainerNameOrMarkup::Name(name) => {
-                            let class_str = name.to_string();
-                            quote! { #class_str.to_string() }
-                        }
-                        ContainerNameOrMarkup::Markup(_) => {
-                            // For dynamic classes, we'd need special handling
-                            quote! { String::new() }
-                        }
+                .map(|(name, _toggler)| match name {
+                    ContainerNameOrMarkup::Name(name) => {
+                        let class_str = name.to_string();
+                        quote! { #class_str.to_string() }
+                    }
+                    ContainerNameOrMarkup::Markup(_) => {
+                        quote! { String::new() }
                     }
                 })
                 .collect();
@@ -180,7 +350,6 @@ impl Generator {
         let mut filtered_named_attrs = Vec::new();
         for (name, attr_type) in named_attrs {
             if name.to_string() == "id" {
-                // Handle id attribute specially
                 if let AttributeType::Normal { value, .. } = attr_type {
                     let id_tokens = Self::markup_to_string_tokens(value);
                     attr_assignments.push(quote! { str_id: Some(#id_tokens) });
@@ -213,33 +382,38 @@ impl Generator {
             Self::separate_element_and_container_attributes(&element_name, filtered_named_attrs);
 
         // Special handling for textarea: extract value from children before generating element
-        let element_name_str = element_name.name.to_string();
         let (element_type, children) = if element_name_str == "textarea" {
-            // For textarea, children become the value field
             let value_tokens = if let ElementBody::Block(ref block) = element.body {
                 Self::element_markups_to_string_tokens(block.markups.clone())
             } else {
                 quote! { String::new() }
             };
 
-            // Generate textarea element with value from children
             let element_type =
                 Self::generate_textarea_element_with_value(element_attrs, &value_tokens);
 
-            // Textarea has no children
             (element_type, quote! { children: Vec::new() })
         } else {
-            // Generate the element type with element-specific attributes
             let element_type =
                 Self::element_name_to_type_with_attributes(&element_name, element_attrs)?;
 
-            // Generate children
+            // Generate children with context tracking
             let children = if let ElementBody::Block(block) = element.body {
-                // Create a unique identifier for children to avoid borrowing conflicts
                 let children_ident = format_ident!("__children_{}", self.output_ident);
                 let child_generator = Self::new(children_ident.clone());
                 let mut child_build = child_generator.builder();
-                child_generator.markups(block.markups, &mut child_build)?;
+
+                // Determine child context and create tracker if needed
+                let child_context = ParentContext::child_context(&element_name_str);
+                let mut child_tracker = ChildPositionTracker::new();
+
+                child_generator.markups_with_context(
+                    block.markups,
+                    &mut child_build,
+                    child_context,
+                    &mut child_tracker,
+                )?;
+
                 let children_tokens = child_build.finish();
                 quote! { children: { let mut #children_ident = Vec::new(); #children_tokens #children_ident } }
             } else {
@@ -249,7 +423,7 @@ impl Generator {
             (element_type, children)
         };
 
-        // Process container-level attributes (styling, layout, etc.)
+        // Process container-level attributes
         let processed_attrs = Self::process_attributes(container_attrs)?;
         for assignment in processed_attrs {
             attr_assignments.push(assignment);
@@ -322,6 +496,7 @@ impl Generator {
                     name_str.as_str(),
                     "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
                 ),
+                "details" => matches!(name_str.as_str(), "open"),
                 _ => false,
             };
 
@@ -349,6 +524,7 @@ impl Generator {
             "image" => Self::generate_image_element(element_attrs),
             "td" => Self::generate_td_element(element_attrs),
             "th" => Self::generate_th_element(element_attrs),
+            "details" => Self::generate_details_element(element_attrs),
             _ => Self::element_name_to_type(name), // Fallback to simple element generation
         })
     }
@@ -747,6 +923,40 @@ impl Generator {
             hyperchad_transformer::Element::TH {
                 rows: #rows_field,
                 columns: #columns_field,
+            }
+        }
+    }
+
+    fn generate_details_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
+        let mut open = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => {
+                    if name_str == "open" {
+                        let open_tokens = Self::markup_to_bool_tokens(attr_value);
+                        open = Some(quote! { Some(#open_tokens) });
+                    }
+                }
+                AttributeType::Optional { toggler, .. } => {
+                    if name_str == "open" {
+                        let cond = &toggler.cond;
+                        open =
+                            Some(quote! { if let Some(val) = (#cond) { Some(val) } else { None } });
+                    }
+                }
+                AttributeType::Empty { .. } => {}
+            }
+        }
+
+        let open_field = open.unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Details {
+                open: #open_field
             }
         }
     }
@@ -1932,9 +2142,11 @@ impl Generator {
                 rows: None,
                 cols: None,
             } },
+            "details" => quote! { hyperchad_transformer::Element::Details { open: None } },
+            "summary" => quote! { hyperchad_transformer::Element::Summary },
             _ => {
                 let error_msg = format!(
-                    "Unknown element type '{name_str}'. Supported elements are: div, section, aside, main, header, footer, form, span, button, anchor, image, input, textarea, h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, th, tbody, tr, td, canvas",
+                    "Unknown element type '{name_str}'. Supported elements are: div, section, aside, main, header, footer, form, span, button, anchor, image, input, textarea, details, summary, h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, th, tbody, tr, td, canvas",
                 );
                 quote! { compile_error!(#error_msg) }
             }
@@ -3281,22 +3493,32 @@ impl Generator {
         quote! { #(#combined_tokens)* }
     }
 
-    fn control_flow<E: Into<Element>>(
+    fn control_flow_with_context<E: Into<Element>>(
         &self,
         control_flow: ControlFlow<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &ChildPositionTracker,
     ) -> Result<(), String> {
         match control_flow.kind {
-            ControlFlowKind::If(if_) => self.control_flow_if(*if_, build)?,
+            ControlFlowKind::If(if_) => {
+                self.control_flow_if_with_context(*if_, build, parent_context, tracker)?;
+            }
             ControlFlowKind::Let(let_) => Self::control_flow_let(&let_, build),
-            ControlFlowKind::For(for_) => self.control_flow_for(*for_, build)?,
-            ControlFlowKind::While(while_) => self.control_flow_while(*while_, build)?,
-            ControlFlowKind::Match(match_) => self.control_flow_match(*match_, build)?,
+            ControlFlowKind::For(for_) => {
+                self.control_flow_for_with_context(*for_, build, parent_context, tracker)?;
+            }
+            ControlFlowKind::While(while_) => {
+                self.control_flow_while_with_context(*while_, build, parent_context, tracker)?;
+            }
+            ControlFlowKind::Match(match_) => {
+                self.control_flow_match_with_context(*match_, build, parent_context, tracker)?;
+            }
         }
         Ok(())
     }
 
-    fn control_flow_if<E: Into<Element>>(
+    fn control_flow_if_with_context<E: Into<Element>>(
         &self,
         IfExpr {
             if_token: _,
@@ -3305,14 +3527,22 @@ impl Generator {
             else_branch,
         }: IfExpr<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &ChildPositionTracker,
     ) -> Result<(), String> {
         let then_body = {
             let mut build = self.builder();
-            self.markups(then_branch.markups, &mut build)?;
+            let mut branch_tracker = ChildPositionTracker::new();
+            branch_tracker.index = tracker.index;
+            self.markups_with_context(
+                then_branch.markups,
+                &mut build,
+                parent_context,
+                &mut branch_tracker,
+            )?;
             build.finish()
         };
 
-        // Generate the condition based on its type
         let condition_tokens = match &cond {
             IfCondition::Expr(expr) => quote! { (#expr) },
             IfCondition::Let {
@@ -3329,9 +3559,17 @@ impl Generator {
             Some((_, _, else_branch)) => {
                 let else_body = {
                     let mut build = self.builder();
-                    self.control_flow_if_or_block(*else_branch, &mut build)?;
+                    let mut branch_tracker = ChildPositionTracker::new();
+                    branch_tracker.index = tracker.index;
+                    self.control_flow_if_or_block_with_context(
+                        *else_branch,
+                        &mut build,
+                        parent_context,
+                        &mut branch_tracker,
+                    )?;
                     build.finish()
                 };
+
                 build.push_tokens(quote! {
                     if #condition_tokens {
                         #then_body
@@ -3348,26 +3586,28 @@ impl Generator {
                 });
             }
         }
+
         Ok(())
     }
 
-    fn control_flow_if_or_block<E: Into<Element>>(
+    fn control_flow_if_or_block_with_context<E: Into<Element>>(
         &self,
-        if_or_block: IfOrBlock<E>,
+        branch: IfOrBlock<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &mut ChildPositionTracker,
     ) -> Result<(), String> {
-        match if_or_block {
-            IfOrBlock::If(if_) => self.control_flow_if(if_, build)?,
-            IfOrBlock::Block(block) => self.markups(block.markups, build)?,
+        match branch {
+            IfOrBlock::If(if_) => {
+                self.control_flow_if_with_context(if_, build, parent_context, tracker)
+            }
+            IfOrBlock::Block(block) => {
+                self.markups_with_context(block.markups, build, parent_context, tracker)
+            }
         }
-        Ok(())
     }
 
-    fn control_flow_let(let_: &Local, build: &mut Builder) {
-        build.push_tokens(quote!(#let_;));
-    }
-
-    fn control_flow_for<E: Into<Element>>(
+    fn control_flow_for_with_context<E: Into<Element>>(
         &self,
         ForExpr {
             for_token: _,
@@ -3377,22 +3617,27 @@ impl Generator {
             body,
         }: ForExpr<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &ChildPositionTracker,
     ) -> Result<(), String> {
-        let body_tokens = {
+        let for_body = {
             let mut build = self.builder();
-            self.markups(body.markups, &mut build)?;
+            let mut loop_tracker = ChildPositionTracker::new();
+            loop_tracker.index = tracker.index;
+            self.markups_with_context(body.markups, &mut build, parent_context, &mut loop_tracker)?;
             build.finish()
         };
 
         build.push_tokens(quote! {
             for #pat in (#expr) {
-                #body_tokens
+                #for_body
             }
         });
+
         Ok(())
     }
 
-    fn control_flow_while<E: Into<Element>>(
+    fn control_flow_while_with_context<E: Into<Element>>(
         &self,
         WhileExpr {
             while_token: _,
@@ -3400,22 +3645,27 @@ impl Generator {
             body,
         }: WhileExpr<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &ChildPositionTracker,
     ) -> Result<(), String> {
-        let body_tokens = {
+        let while_body = {
             let mut build = self.builder();
-            self.markups(body.markups, &mut build)?;
+            let mut loop_tracker = ChildPositionTracker::new();
+            loop_tracker.index = tracker.index;
+            self.markups_with_context(body.markups, &mut build, parent_context, &mut loop_tracker)?;
             build.finish()
         };
 
         build.push_tokens(quote! {
-            while (#cond) {
-                #body_tokens
+            while #cond {
+                #while_body
             }
         });
+
         Ok(())
     }
 
-    fn control_flow_match<E: Into<Element>>(
+    fn control_flow_match_with_context<E: Into<Element>>(
         &self,
         MatchExpr {
             match_token: _,
@@ -3424,6 +3674,8 @@ impl Generator {
             arms,
         }: MatchExpr<E>,
         build: &mut Builder,
+        parent_context: ParentContext,
+        tracker: &ChildPositionTracker,
     ) -> Result<(), String> {
         let mut arm_tokens = Vec::new();
         for arm in arms {
@@ -3433,7 +3685,9 @@ impl Generator {
             });
             let body = {
                 let mut build = self.builder();
-                self.markup(arm.body, &mut build)?;
+                let mut arm_tracker = ChildPositionTracker::new();
+                arm_tracker.index = tracker.index;
+                self.markup_with_context(arm.body, &mut build, parent_context, &mut arm_tracker)?;
                 build.finish()
             };
 
@@ -3447,7 +3701,12 @@ impl Generator {
                 #(#arm_tokens,)*
             }
         });
+
         Ok(())
+    }
+
+    fn control_flow_let(let_: &Local, build: &mut Builder) {
+        build.push_tokens(quote!(#let_;));
     }
 
     fn markup_to_border_tokens(value: Markup<NoElement>) -> TokenStream {

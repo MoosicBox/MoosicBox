@@ -1882,6 +1882,14 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                             .flatten(),
                     };
                 }
+                "details" => {
+                    container.element = crate::Element::Details {
+                        open: get_tag_attr_value_undecoded(tag, "open").map(|_| true),
+                    };
+                }
+                "summary" => {
+                    container.element = crate::Element::Summary;
+                }
                 #[cfg(feature = "canvas")]
                 "canvas" => container.element = crate::Element::Canvas,
                 _ => {

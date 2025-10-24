@@ -869,7 +869,9 @@ impl FltkRenderer {
             | Element::Button { .. }
             | Element::OrderedList
             | Element::UnorderedList
-            | Element::ListItem => {
+            | Element::ListItem
+            | Element::Details { .. }
+            | Element::Summary => {
                 context = context.with_container(container);
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);

@@ -2443,6 +2443,10 @@ pub enum Element {
         rows: Option<Number>,
         cols: Option<Number>,
     },
+    Details {
+        open: Option<bool>,
+    },
+    Summary,
 }
 
 #[derive(Default)]
@@ -2643,7 +2647,9 @@ impl Container {
             | Element::Table
             | Element::THead
             | Element::TBody
-            | Element::TR => {}
+            | Element::TR
+            | Element::Details { .. }
+            | Element::Summary => {}
             #[cfg(feature = "canvas")]
             Element::Canvas => {}
         }
@@ -3357,6 +3363,27 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</canvas>"))?;
             }
+            Element::Details { open } => {
+                f.write_fmt(format_args!("<details"))?;
+                f.write_fmt(format_args!(
+                    "{attrs}",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                if matches!(open, Some(true)) {
+                    f.write_fmt(format_args!(" open"))?;
+                }
+                f.write_fmt(format_args!(">"))?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
+                f.write_fmt(format_args!("</details>"))?;
+            }
+            Element::Summary => {
+                f.write_fmt(format_args!(
+                    "<summary{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
+                f.write_fmt(format_args!("</summary>"))?;
+            }
         }
 
         Ok(())
@@ -3622,7 +3649,9 @@ impl Element {
             | Self::TH { .. }
             | Self::TBody
             | Self::TR
-            | Self::TD { .. } => true,
+            | Self::TD { .. }
+            | Self::Details { .. }
+            | Self::Summary => true,
             Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } | Self::Textarea { .. } => {
                 false
             }
@@ -3660,6 +3689,8 @@ impl Element {
             #[cfg(feature = "canvas")]
             Self::Canvas { .. } => "Canvas",
             Self::Textarea { .. } => "Textarea",
+            Self::Details { .. } => "Details",
+            Self::Summary { .. } => "Summary",
         }
     }
 }
