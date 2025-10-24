@@ -37,8 +37,7 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-switchy_fs     = { workspace = true, features = ["std", "sync"] }
-switchy_random = { workspace = true, features = ["rand"] }
+switchy_fs = { workspace = true, features = ["std", "sync"] }
 
 [features]
 default = ["api", "db", "file", "openapi"]
