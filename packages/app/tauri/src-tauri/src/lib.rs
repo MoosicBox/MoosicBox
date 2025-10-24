@@ -28,8 +28,12 @@ use thiserror::Error;
 
 mod mdns;
 
+/// Error type for Tauri player operations.
+///
+/// This error type is serializable for transmission across the Tauri IPC boundary.
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum TauriPlayerError {
+    /// An unknown error occurred.
     #[error("Unknown({0})")]
     Unknown(String),
 }
@@ -46,12 +50,16 @@ impl From<PlayerError> for TauriPlayerError {
     }
 }
 
+/// Error type for application-level operations.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// A Tauri framework error occurred.
     #[error(transparent)]
     Tauri(#[from] tauri::Error),
+    /// An application state error occurred.
     #[error(transparent)]
     AppState(#[from] AppStateError),
+    /// An unknown error occurred.
     #[error("Unknown({0})")]
     Unknown(String),
 }
@@ -106,17 +114,30 @@ async fn on_startup() -> Result<(), tauri::Error> {
     Ok(())
 }
 
+/// Application state update structure for Tauri IPC.
+///
+/// This structure is used to update various parts of the application state
+/// via Tauri commands. All fields are optional to allow partial updates.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TauriUpdateAppState {
+    /// The connection ID for the current server connection.
     pub connection_id: Option<String>,
+    /// The human-readable name of the current connection.
     pub connection_name: Option<String>,
+    /// The API URL for the MoosicBox server.
     pub api_url: Option<String>,
+    /// The client ID for authentication.
     pub client_id: Option<String>,
+    /// The signature token for request signing.
     pub signature_token: Option<String>,
+    /// The API token for authentication.
     pub api_token: Option<String>,
+    /// The active user profile.
     pub profile: Option<String>,
+    /// The target for playback (local or remote).
     pub playback_target: Option<PlaybackTarget>,
+    /// The ID of the current playback session.
     pub current_session_id: Option<u64>,
 }
 
@@ -267,13 +288,17 @@ async fn handle_after_ws_message(message: OutboundPayload) {
     }
 }
 
+/// Track identifier that can reference tracks from different sources.
 #[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(untagged)]
 pub enum TrackId {
+    /// A track from the local library.
     Library(u64),
+    /// A track from the Tidal service.
     #[cfg(feature = "tidal")]
     Tidal(u64),
+    /// A track from the Qobuz service.
     #[cfg(feature = "qobuz")]
     Qobuz(u64),
 }
@@ -419,6 +444,11 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
     Ok(())
 }
 
+/// Callback invoked when a playback event occurs in the player.
+///
+/// This function propagates playback state changes to both the Tauri plugin
+/// and connected WebSocket clients. It spawns an asynchronous task to handle
+/// the propagation without blocking the caller.
 pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     log::debug!("on_playback_event: received update, spawning task to handle update={update:?}");
 
@@ -691,13 +721,23 @@ fn init_log() {
 }
 
 #[cfg(feature = "moosicbox-app-native")]
+/// HTTP request structure for the native app's custom URI scheme handler.
+///
+/// This type represents an HTTP request received via Tauri's custom protocol
+/// handler, which is used to serve the native application UI.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HttpRequest {
+    /// The HTTP method (GET, POST, etc.).
     pub method: String,
+    /// The request path.
     pub path: String,
+    /// Query parameters as key-value pairs.
     pub query: std::collections::BTreeMap<String, String>,
+    /// HTTP headers as key-value pairs.
     pub headers: std::collections::BTreeMap<String, String>,
+    /// Cookies as key-value pairs.
     pub cookies: std::collections::BTreeMap<String, String>,
+    /// Optional request body.
     pub body: Option<Vec<u8>>,
 }
 
@@ -739,6 +779,11 @@ async fn handle_http_request(
         .map_err(|e| TauriPlayerError::Unknown(e.to_string()))
 }
 
+/// Runs the MoosicBox Tauri application.
+///
+/// This is the main entry point for the application. It initializes all services,
+/// configures plugins, sets up the application state, and starts the Tauri runtime.
+///
 /// # Panics
 ///
 /// * If the `UPnP` listener fails to initialize
