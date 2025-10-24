@@ -22,9 +22,19 @@ pub trait P2PSystem: Send + Sync + 'static {
     // type Listener: P2PListener<Connection = Self::Connection>;
 
     /// Connect to a remote peer by node ID
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the connection fails to establish
+    /// * Returns an error if no route exists to the destination node
     async fn connect(&self, node_id: Self::NodeId) -> P2PResult<Self::Connection>;
 
     /// Discover a peer by name (mock DNS in simulator)
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the name is not registered with any node
+    /// * Returns an error if the discovery service is unavailable
     async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
 
     /// Get this node's ID
@@ -56,9 +66,20 @@ pub trait P2PConnection: Send + Sync + 'static {
     type NodeId: P2PNodeId;
 
     /// Send data to remote peer
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the connection is closed
+    /// * Returns an error if the message cannot be delivered
+    /// * Returns an error if the message exceeds the maximum size limit
     async fn send(&mut self, data: &[u8]) -> P2PResult<()>;
 
     /// Receive data from remote peer (non-blocking)
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if no message is currently available
+    /// * Returns an error if the connection has failed
     async fn recv(&mut self) -> P2PResult<Vec<u8>>;
 
     /// Get remote peer's node ID
