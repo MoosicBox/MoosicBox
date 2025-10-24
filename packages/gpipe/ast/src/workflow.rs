@@ -141,15 +141,19 @@ pub struct ActionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
+    /// Action description (for inline type)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
+    /// Action inputs (for inline type)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inputs: Option<BTreeMap<String, ActionInput>>,
 
+    /// Action outputs (for inline type)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outputs: Option<BTreeMap<String, ActionOutput>>,
 
+    /// Action runs configuration (for inline type)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runs: Option<ActionRuns>,
 }
