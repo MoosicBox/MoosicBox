@@ -26,7 +26,9 @@ use hyperchad_transformer::{
 pub use eframe;
 pub use hyperchad_renderer::*;
 
+/// Represents a view to be rendered.
 pub enum RenderView {
+    /// A container view with its contents.
     View(Container),
 }
 
@@ -41,6 +43,9 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
+/// Egui-based renderer for `HyperChad` applications.
+///
+/// Manages the rendering state and provides access to the underlying egui application.
 #[derive(Clone)]
 pub struct EguiRenderer<C: EguiCalc + Clone + Send + Sync> {
     width: Option<f32>,
@@ -52,6 +57,7 @@ pub struct EguiRenderer<C: EguiCalc + Clone + Send + Sync> {
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
+    /// Creates a new `EguiRenderer` instance.
     #[must_use]
     pub fn new(
         _router: Router,
@@ -71,12 +77,16 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
         }
     }
 
+    /// Waits for a navigation event and returns the navigation URL if one occurs.
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
 }
 
+/// Runner for executing the egui renderer.
+///
+/// Handles the event loop and window management for the egui application.
 pub struct EguiRenderRunner<C: EguiCalc + Clone + Send + Sync> {
     width: f32,
     height: f32,
