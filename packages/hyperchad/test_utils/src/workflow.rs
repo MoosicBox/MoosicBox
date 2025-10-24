@@ -2,53 +2,45 @@ use std::{collections::BTreeMap, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
+/// A user interaction step with the page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InteractionStep {
-    Click {
-        selector: String,
-    },
-    DoubleClick {
-        selector: String,
-    },
-    RightClick {
-        selector: String,
-    },
-    Hover {
-        selector: String,
-    },
-    Focus {
-        selector: String,
-    },
-    Blur {
-        selector: String,
-    },
-    KeyPress {
-        key: Key,
-    },
-    KeySequence {
-        keys: Vec<Key>,
-    },
+    /// Click an element.
+    Click { selector: String },
+    /// Double-click an element.
+    DoubleClick { selector: String },
+    /// Right-click an element.
+    RightClick { selector: String },
+    /// Hover over an element.
+    Hover { selector: String },
+    /// Focus an element.
+    Focus { selector: String },
+    /// Blur an element.
+    Blur { selector: String },
+    /// Press a keyboard key.
+    KeyPress { key: Key },
+    /// Press a sequence of keyboard keys.
+    KeySequence { keys: Vec<Key> },
+    /// Scroll the page.
     Scroll {
         direction: ScrollDirection,
         amount: i32,
     },
+    /// Drag and drop from one element to another.
     DragAndDrop {
         from_selector: String,
         to_selector: String,
     },
-    MouseMove {
-        x: i32,
-        y: i32,
-    },
-    MouseDown {
-        button: MouseButton,
-    },
-    MouseUp {
-        button: MouseButton,
-    },
+    /// Move the mouse to coordinates.
+    MouseMove { x: i32, y: i32 },
+    /// Press a mouse button.
+    MouseDown { button: MouseButton },
+    /// Release a mouse button.
+    MouseUp { button: MouseButton },
 }
 
 impl InteractionStep {
+    /// Returns a human-readable description of this interaction step.
     #[must_use]
     pub fn description(&self) -> String {
         match self {
@@ -74,6 +66,7 @@ impl InteractionStep {
     }
 }
 
+/// Keyboard keys for interaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Key {
     // Letters
@@ -176,39 +169,54 @@ pub enum Key {
     Quote,
 }
 
+/// Scroll direction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ScrollDirection {
+    /// Scroll up.
     Up,
+    /// Scroll down.
     Down,
+    /// Scroll left.
     Left,
+    /// Scroll right.
     Right,
 }
 
+/// Mouse button.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MouseButton {
+    /// Left mouse button.
     Left,
+    /// Right mouse button.
     Right,
+    /// Middle mouse button.
     Middle,
 }
 
+/// Control flow operations for test execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ControlStep {
+    /// Repeat steps a fixed number of times.
     Loop {
         count: u32,
         steps: Vec<crate::TestStep>,
     },
+    /// Execute steps for each item in a data set.
     ForEach {
         data: Vec<serde_json::Value>,
         steps: Vec<crate::TestStep>,
     },
+    /// Execute multiple branches in parallel.
     Parallel {
         branches: BTreeMap<String, Vec<crate::TestStep>>,
     },
+    /// Try steps with optional catch and finally blocks.
     Try {
         steps: Vec<crate::TestStep>,
         catch_steps: Option<Vec<crate::TestStep>>,
         finally_steps: Option<Vec<crate::TestStep>>,
     },
+    /// Retry steps on failure with a maximum attempt count.
     Retry {
         steps: Vec<crate::TestStep>,
         max_attempts: u32,
@@ -217,21 +225,25 @@ pub enum ControlStep {
 }
 
 impl ControlStep {
+    /// Creates a loop control step.
     #[must_use]
     pub const fn loop_count(count: u32, steps: Vec<crate::TestStep>) -> Self {
         Self::Loop { count, steps }
     }
 
+    /// Creates a for-each control step.
     #[must_use]
     pub const fn for_each(data: Vec<serde_json::Value>, steps: Vec<crate::TestStep>) -> Self {
         Self::ForEach { data, steps }
     }
 
+    /// Creates a parallel execution control step.
     #[must_use]
     pub const fn parallel(branches: BTreeMap<String, Vec<crate::TestStep>>) -> Self {
         Self::Parallel { branches }
     }
 
+    /// Creates a try-catch-finally control step.
     #[must_use]
     pub const fn try_catch(
         steps: Vec<crate::TestStep>,
@@ -245,6 +257,7 @@ impl ControlStep {
         }
     }
 
+    /// Creates a retry control step.
     #[must_use]
     pub const fn retry(
         steps: Vec<crate::TestStep>,
@@ -258,6 +271,7 @@ impl ControlStep {
         }
     }
 
+    /// Returns a human-readable description of this control step.
     #[must_use]
     pub fn description(&self) -> String {
         match self {
