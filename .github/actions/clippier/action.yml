@@ -1,310 +1,310 @@
-name: 'Clippier Matrix Generator'
-description: 'Generate CI matrices and analyze package dependencies using clippier'
-author: 'MoosicBox'
+name: "Clippier Matrix Generator"
+description: "Generate CI matrices and analyze package dependencies using clippier"
+author: "MoosicBox"
 
 inputs:
     command:
-        description: 'Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup)'
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup)"
         required: true
 
     workspace-path:
-        description: 'Path to workspace/package'
+        description: "Path to workspace/package"
         required: false
-        default: '.'
+        default: "."
 
     os:
-        description: 'Target operating system'
+        description: "Target operating system"
         required: false
 
     offset:
-        description: 'Skip first N features'
+        description: "Skip first N features"
         required: false
 
     max:
-        description: 'Maximum number of features'
+        description: "Maximum number of features"
         required: false
 
     max-parallel:
-        description: 'Maximum parallel jobs'
+        description: "Maximum parallel jobs"
         required: false
 
     chunked:
-        description: 'Group features into chunks'
+        description: "Group features into chunks"
         required: false
 
     spread:
-        description: 'Spread features across jobs'
+        description: "Spread features across jobs"
         required: false
-        default: 'false'
+        default: "false"
 
     randomize:
-        description: 'Randomize features before chunking/spreading'
+        description: "Randomize features before chunking/spreading"
         required: false
-        default: 'false'
+        default: "false"
 
     seed:
-        description: 'Seed for deterministic randomization'
+        description: "Seed for deterministic randomization"
         required: false
 
     features:
-        description: 'Specific features to include (comma-separated)'
+        description: "Specific features to include (comma-separated)"
         required: false
 
     skip-features:
-        description: 'Features to exclude (comma-separated)'
+        description: "Features to exclude (comma-separated)"
         required: false
 
     required-features:
-        description: 'Always-required features (comma-separated)'
+        description: "Always-required features (comma-separated)"
         required: false
 
     packages:
-        description: 'Specific packages to process (comma-separated)'
+        description: "Specific packages to process (comma-separated)"
         required: false
 
     changed-files:
-        description: 'List of changed files (comma-separated)'
+        description: "List of changed files (comma-separated)"
         required: false
 
     git-strategy:
-        description: 'Git comparison strategy: auto (detect event type), workflow-history (use GitHub API), branch-comparison (compare against branch), or manual (use provided base/head)'
+        description: "Git comparison strategy: auto (detect event type), workflow-history (use GitHub API), branch-comparison (compare against branch), or manual (use provided base/head)"
         required: false
-        default: 'auto'
+        default: "auto"
 
     git-base:
-        description: 'Git base commit (only used when git-strategy is manual)'
+        description: "Git base commit (only used when git-strategy is manual)"
         required: false
 
     git-head:
-        description: 'Git head commit (only used when git-strategy is manual)'
+        description: "Git head commit (only used when git-strategy is manual)"
         required: false
 
     git-compare-branch:
-        description: 'Branch to compare against (for branch-comparison strategy)'
+        description: "Branch to compare against (for branch-comparison strategy)"
         required: false
-        default: 'master'
+        default: "master"
 
     git-workflow-name:
-        description: 'Workflow name for API lookups (defaults to current workflow)'
+        description: "Workflow name for API lookups (defaults to current workflow)"
         required: false
 
     git-default-branch:
-        description: 'Default branch name'
+        description: "Default branch name"
         required: false
-        default: 'master'
+        default: "master"
 
     github-token:
-        description: 'GitHub token for API access (for workflow-history strategy)'
+        description: "GitHub token for API access (for workflow-history strategy)"
         required: false
         default: ${{ github.token }}
 
     github-repository:
-        description: 'Repository (owner/repo) for API lookups'
+        description: "Repository (owner/repo) for API lookups"
         required: false
         default: ${{ github.repository }}
 
     github-ref-name:
-        description: 'Current ref name for API lookups'
+        description: "Current ref name for API lookups"
         required: false
         default: ${{ github.ref_name }}
 
     include-reasoning:
-        description: 'Include reasoning for why packages are affected'
+        description: "Include reasoning for why packages are affected"
         required: false
-        default: 'false'
+        default: "false"
 
     ignore:
         description: 'Glob patterns to ignore when detecting affected packages (newline or comma-separated, e.g., "**/*.md")'
         required: false
 
     target-package:
-        description: 'Package to check if affected (for affected-packages command)'
+        description: "Package to check if affected (for affected-packages command)"
         required: false
 
     package:
-        description: 'Target package name (for workspace-deps command)'
+        description: "Target package name (for workspace-deps command)"
         required: false
 
     all-potential-deps:
-        description: 'Include all potential workspace dependencies'
+        description: "Include all potential workspace dependencies"
         required: false
-        default: 'false'
+        default: "false"
 
     additional-package-checks:
-        description: 'JSON array of additional package checks with summary configuration'
+        description: "JSON array of additional package checks with summary configuration"
         required: false
 
     inject-reasoning:
-        description: 'Custom reasoning to inject into all packages'
+        description: "Custom reasoning to inject into all packages"
         required: false
 
     inject-reasoning-condition:
-        description: 'Condition to inject reasoning (evaluates as bash condition)'
+        description: "Condition to inject reasoning (evaluates as bash condition)"
         required: false
-        default: 'true'
+        default: "true"
 
     force-full-matrix-condition:
-        description: 'Condition to force full matrix generation regardless of changes'
+        description: "Condition to force full matrix generation regardless of changes"
         required: false
 
     skip-on-no-changes:
-        description: 'Skip matrix generation if no changes detected'
+        description: "Skip matrix generation if no changes detected"
         required: false
-        default: 'true'
+        default: "true"
 
     transform-name-regex:
         description: 'Regex substitution for package name (e.g., "^(moosicbox|switchy|hyperchad)_")'
         required: false
 
     transform-name-replacement:
-        description: 'Replacement string for name regex'
+        description: "Replacement string for name regex"
         required: false
-        default: ''
+        default: ""
 
     matrix-properties:
-        description: 'Comma-separated list of properties to include in matrix'
+        description: "Comma-separated list of properties to include in matrix"
         required: false
-        default: 'name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules'
+        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
 
     os-suffix:
         description: 'Suffix to add to OS field (e.g., "-latest")'
         required: false
-        default: '-latest'
+        default: "-latest"
 
     generate-summary:
-        description: 'Generate GitHub workflow summary'
+        description: "Generate GitHub workflow summary"
         required: false
-        default: 'false'
+        default: "false"
 
     summary-title:
-        description: 'Title for the summary section'
+        description: "Title for the summary section"
         required: false
-        default: 'Smart CI Analysis Summary'
+        default: "Smart CI Analysis Summary"
 
     summary-include-seed:
-        description: 'Include randomization seed in summary'
+        description: "Include randomization seed in summary"
         required: false
-        default: 'true'
+        default: "true"
 
     summary-event-name:
-        description: 'GitHub event name for summary context'
+        description: "GitHub event name for summary context"
         required: false
         default: ${{ github.event_name }}
 
     summary-ref-name:
-        description: 'GitHub ref name for summary context'
+        description: "GitHub ref name for summary context"
         required: false
         default: ${{ github.ref_name }}
 
     summary-trigger-input:
-        description: 'Workflow input that triggered the run (for workflow_dispatch)'
+        description: "Workflow input that triggered the run (for workflow_dispatch)"
         required: false
 
     summary-show-trigger:
-        description: 'Show trigger information in summary'
+        description: "Show trigger information in summary"
         required: false
-        default: 'true'
+        default: "true"
 
     summary-show-jobs-details:
-        description: 'Show detailed job breakdown in summary (OS, features, etc.)'
+        description: "Show detailed job breakdown in summary (OS, features, etc.)"
         required: false
-        default: 'false'
+        default: "false"
 
     enable-docker-analysis:
-        description: 'Enable Docker package analysis and matrix generation'
+        description: "Enable Docker package analysis and matrix generation"
         required: false
-        default: 'false'
+        default: "false"
 
     docker-packages:
-        description: 'JSON mapping of packages to Docker info'
+        description: "JSON mapping of packages to Docker info"
         required: false
 
     docker-name-prefix:
-        description: 'Prefix to add when looking up Docker packages'
+        description: "Prefix to add when looking up Docker packages"
         required: false
-        default: ''
+        default: ""
 
     clippier-version:
-        description: 'Git ref/tag for clippier (default: use from current repo)'
+        description: "Git ref/tag for clippier (default: use from current repo)"
         required: false
 
     clippier-features:
-        description: 'Features to enable when building clippier'
+        description: "Features to enable when building clippier"
         required: false
-        default: 'git-diff'
+        default: "git-diff"
 
     cache-key-prefix:
-        description: 'Prefix for cache key'
+        description: "Prefix for cache key"
         required: false
-        default: 'clippier'
+        default: "clippier"
 
     skip-cache:
-        description: 'Skip caching clippier binary'
+        description: "Skip caching clippier binary"
         required: false
-        default: 'false'
+        default: "false"
 
     package-json:
-        description: 'JSON object containing matrix.package properties (for setup command)'
+        description: "JSON object containing matrix.package properties (for setup command)"
         required: false
 
     skip-checkout:
-        description: 'Skip repository checkout step (for setup command when already checked out)'
+        description: "Skip repository checkout step (for setup command when already checked out)"
         required: false
-        default: 'false'
+        default: "false"
 
     checkout-fetch-depth:
-        description: 'Git fetch depth for checkout (for setup command)'
+        description: "Git fetch depth for checkout (for setup command)"
         required: false
-        default: '0'
+        default: "0"
 
     rust-components:
-        description: 'Rust components to install (for setup command)'
+        description: "Rust components to install (for setup command)"
         required: false
-        default: 'rustfmt, clippy'
+        default: "rustfmt, clippy"
 
 outputs:
     matrix:
-        description: 'Generated matrix JSON for GitHub Actions'
+        description: "Generated matrix JSON for GitHub Actions"
         value: ${{ steps.run-action.outputs.matrix }}
 
     raw-output:
-        description: 'Raw output from clippier before transformation'
+        description: "Raw output from clippier before transformation"
         value: ${{ steps.run-action.outputs.raw-output }}
 
     affected:
-        description: 'Whether target package is affected (for affected-packages command)'
+        description: "Whether target package is affected (for affected-packages command)"
         value: ${{ steps.run-action.outputs.affected }}
 
     reasoning:
-        description: 'Reasoning output (when include-reasoning is enabled)'
+        description: "Reasoning output (when include-reasoning is enabled)"
         value: ${{ steps.run-action.outputs.reasoning }}
 
     git-base:
-        description: 'Detected or provided git base SHA'
+        description: "Detected or provided git base SHA"
         value: ${{ steps.run-action.outputs.git-base }}
 
     git-head:
-        description: 'Detected or provided git head SHA'
+        description: "Detected or provided git head SHA"
         value: ${{ steps.run-action.outputs.git-head }}
 
     has-changes:
-        description: 'Whether any changes were detected'
+        description: "Whether any changes were detected"
         value: ${{ steps.run-action.outputs.has-changes }}
 
     docker-matrix:
-        description: 'Generated Docker build matrix (when enable-docker-analysis is true)'
+        description: "Generated Docker build matrix (when enable-docker-analysis is true)"
         value: ${{ steps.run-action.outputs.docker-matrix }}
 
     has-docker-changes:
-        description: 'Whether any Docker packages are affected'
+        description: "Whether any Docker packages are affected"
         value: ${{ steps.run-action.outputs.has-docker-changes }}
 
     docker-count:
-        description: 'Number of Docker images to build'
+        description: "Number of Docker images to build"
         value: ${{ steps.run-action.outputs.docker-count }}
 
     docker-packages-list:
-        description: 'Formatted list of Docker packages for summary'
+        description: "Formatted list of Docker packages for summary"
         value: ${{ steps.run-action.outputs.docker-packages-list }}
 
     additional-checks:
@@ -312,7 +312,7 @@ outputs:
         value: ${{ steps.run-action.outputs.additional-checks }}
 
 runs:
-    using: 'composite'
+    using: "composite"
     steps:
         - name: Checkout repository
           if: inputs.command == 'setup' && inputs.skip-checkout != 'true'
@@ -344,7 +344,7 @@ runs:
           if: inputs.command == 'setup'
           uses: jwlawson/actions-setup-cmake@v2
           with:
-              cmake-version: '3.x'
+              cmake-version: "3.x"
 
         - name: Cache clippier binary
           if: inputs.skip-cache != 'true' && inputs.command != 'setup'

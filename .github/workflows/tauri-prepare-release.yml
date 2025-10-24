@@ -515,8 +515,8 @@ jobs:
             - uses: actions/setup-java@v4
               if: ${{ matrix.release.runner != 'self-hosted' }}
               with:
-                  distribution: 'adopt'
-                  java-version: '17'
+                  distribution: "adopt"
+                  java-version: "17"
 
             - name: Copy Files
               working-directory: MoosicBox/packages/app/tauri

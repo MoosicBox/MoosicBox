@@ -4,41 +4,41 @@ on:
     workflow_dispatch:
         inputs:
             stage:
-                description: 'Stage'
+                description: "Stage"
                 required: false
-                default: 'prod'
+                default: "prod"
             remove:
-                description: 'SST Remove'
+                description: "SST Remove"
                 required: false
-                default: 'false'
+                default: "false"
             deploy:
-                description: 'SST Deploy'
+                description: "SST Deploy"
                 required: false
-                default: 'true'
+                default: "true"
             extra_clusters:
-                description: 'Extra Clusters'
+                description: "Extra Clusters"
                 required: false
-                default: ''
+                default: ""
             ssl:
-                description: 'SSL'
+                description: "SSL"
                 required: false
-                default: 'true'
+                default: "true"
             force:
-                description: 'K8S Patch Force'
+                description: "K8S Patch Force"
                 required: false
-                default: 'false'
+                default: "false"
             refresh:
-                description: 'Pulumi refresh'
+                description: "Pulumi refresh"
                 required: false
-                default: 'false'
+                default: "false"
             unlock:
-                description: 'SST unlock'
+                description: "SST unlock"
                 required: false
-                default: 'false'
+                default: "false"
             delete_unreachable:
-                description: 'K8S Delete Unreachable'
+                description: "K8S Delete Unreachable"
                 required: false
-                default: 'false'
+                default: "false"
 
 env:
     CARGO_TERM_COLOR: always

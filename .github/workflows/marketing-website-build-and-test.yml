@@ -2,19 +2,19 @@ name: Marketing Website Build and Validate
 
 on:
     push:
-        branches: ['master']
+        branches: ["master"]
         paths:
             - packages/marketing_site/**
             - .github/workflows/marketing-website-build-and-test.yml
-            - '!**/*.md'
+            - "!**/*.md"
     pull_request:
-        branches: ['master']
+        branches: ["master"]
     workflow_dispatch:
         inputs:
             ref:
-                description: 'Ref'
+                description: "Ref"
                 required: false
-                default: 'master'
+                default: "master"
 
 jobs:
     build:

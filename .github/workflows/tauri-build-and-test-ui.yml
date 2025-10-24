@@ -2,13 +2,13 @@ name: Tauri Build and Validate UI
 
 on:
     push:
-        branches: ['master']
+        branches: ["master"]
         paths:
             - packages/app/tauri/src/**
             - .github/workflows/tauri-build-and-test-ui.yml
-            - '!**/*.md'
+            - "!**/*.md"
     pull_request:
-        branches: ['master']
+        branches: ["master"]
 
 jobs:
     build:

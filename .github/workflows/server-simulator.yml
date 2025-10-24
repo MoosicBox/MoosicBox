@@ -2,26 +2,26 @@ name: Server Simulator
 
 on:
     push:
-        branches: ['master', 'edge']
+        branches: ["master", "edge"]
         paths:
             - packages/**
-            - '**/*.toml'
-            - '**/Cargo.lock'
+            - "**/*.toml"
+            - "**/Cargo.lock"
             - .github/workflows/server-simulator.yml
-            - '!packages/marketing_site/**'
-            - '!packages/hyperchad/**'
-            - '!packages/app/**'
-            - '!**/*.nix'
-            - '!**/Dockerfile'
-            - '!**/*.Dockerfile'
-            - '!**/*.dockerignore'
-            - '!**/*.md'
+            - "!packages/marketing_site/**"
+            - "!packages/hyperchad/**"
+            - "!packages/app/**"
+            - "!**/*.nix"
+            - "!**/Dockerfile"
+            - "!**/*.Dockerfile"
+            - "!**/*.dockerignore"
+            - "!**/*.md"
     pull_request:
-        branches: ['master', 'edge']
+        branches: ["master", "edge"]
     workflow_dispatch:
         inputs:
             edge:
-                description: 'Edge'
+                description: "Edge"
                 required: false
                 type: boolean
                 default: false
@@ -49,7 +49,7 @@ jobs:
                   command: features
                   workspace-path: packages/server
                   features: default
-                  transform-name-regex: '^moosicbox_'
+                  transform-name-regex: "^moosicbox_"
 
     simulator:
         name: Simulator
@@ -99,7 +99,7 @@ jobs:
             - name: Setup cmake
               uses: jwlawson/actions-setup-cmake@v2
               with:
-                  cmake-version: '3.x'
+                  cmake-version: "3.x"
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}

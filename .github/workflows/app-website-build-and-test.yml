@@ -2,13 +2,13 @@ name: App Website Build and Validate
 
 on:
     push:
-        branches: ['master']
+        branches: ["master"]
         paths:
             - app-website/**
             - .github/workflows/app-website-build-and-test.yml
-            - '!**/*.md'
+            - "!**/*.md"
     pull_request:
-        branches: ['master']
+        branches: ["master"]
 
 jobs:
     build:

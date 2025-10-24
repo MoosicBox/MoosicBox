@@ -4,41 +4,41 @@ on:
     workflow_dispatch:
         inputs:
             stage:
-                description: 'Stage'
+                description: "Stage"
                 required: false
-                default: 'prod'
+                default: "prod"
             destroy:
-                description: 'Terraform Destroy'
+                description: "Terraform Destroy"
                 required: false
-                default: 'false'
+                default: "false"
             apply:
-                description: 'Terraform Apply'
+                description: "Terraform Apply"
                 required: false
-                default: 'true'
+                default: "true"
             extra_clusters:
-                description: 'Extra Clusters'
+                description: "Extra Clusters"
                 required: false
-                default: ''
+                default: ""
             ssl:
-                description: 'SSL'
+                description: "SSL"
                 required: false
-                default: 'true'
+                default: "true"
             force:
-                description: 'Force Apply'
+                description: "Force Apply"
                 required: false
-                default: 'false'
+                default: "false"
             node_count:
-                description: 'Number of nodes'
+                description: "Number of nodes"
                 required: false
-                default: '1'
+                default: "1"
             node_size:
-                description: 'Node size (e.g. s-1vcpu-2gb)'
+                description: "Node size (e.g. s-1vcpu-2gb)"
                 required: false
-                default: 's-1vcpu-2gb'
+                default: "s-1vcpu-2gb"
             create_firewall:
-                description: 'Create firewall rules for HTTP/HTTPS'
+                description: "Create firewall rules for HTTP/HTTPS"
                 required: false
-                default: 'true'
+                default: "true"
 
 env:
     TF_WORKSPACE: ${{ github.event.inputs.stage }}

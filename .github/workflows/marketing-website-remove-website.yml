@@ -4,9 +4,9 @@ on:
     workflow_dispatch:
         inputs:
             stage:
-                description: 'Stage'
+                description: "Stage"
                 required: false
-                default: 'prod'
+                default: "prod"
 
 jobs:
     deploy:

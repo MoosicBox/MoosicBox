@@ -2,20 +2,20 @@ name: Marketing Website Deploy
 
 on:
     push:
-        branches: ['master']
+        branches: ["master"]
         paths:
             - packages/marketing_site/**
             - .github/workflows/marketing-website-deploy-website.yml
     workflow_dispatch:
         inputs:
             stage:
-                description: 'Stage'
+                description: "Stage"
                 required: false
-                default: 'prod'
+                default: "prod"
             rust-log:
-                description: 'Rust log level'
+                description: "Rust log level"
                 required: false
-                default: 'moosicbox=debug,hyperchad=debug,switchy=debug'
+                default: "moosicbox=debug,hyperchad=debug,switchy=debug"
 
 jobs:
     # Deploy to non-prod environments without approval

@@ -2,53 +2,53 @@ name: README Accuracy Checker
 
 on:
     schedule:
-        - cron: '0 8 * * 1'
+        - cron: "0 8 * * 1"
     workflow_dispatch:
         inputs:
             existing_branch:
-                description: 'Use existing branch (leave empty to create new)'
+                description: "Use existing branch (leave empty to create new)"
                 required: false
                 type: string
-                default: ''
+                default: ""
 
             packages:
-                description: 'Comma-separated packages (leave empty for all)'
+                description: "Comma-separated packages (leave empty for all)"
                 required: false
                 type: string
-                default: ''
+                default: ""
 
             prompt_override:
-                description: 'Additional guidance or custom prompt'
+                description: "Additional guidance or custom prompt"
                 required: false
                 type: string
-                default: ''
+                default: ""
 
             model:
-                description: 'Claude model to use (leave empty for latest default)'
+                description: "Claude model to use (leave empty for latest default)"
                 required: false
                 type: choice
                 options:
-                    - ''
-                    - 'claude-sonnet-4-5-20250929'
-                    - 'claude-opus-4-1-20250805'
-                    - 'claude-opus-4-20250514'
-                    - 'claude-sonnet-4-20250514'
-                    - 'claude-3-7-sonnet-20250219'
-                    - 'claude-3-5-haiku-20241022'
-                    - 'claude-3-haiku-20240307'
-                default: ''
+                    - ""
+                    - "claude-sonnet-4-5-20250929"
+                    - "claude-opus-4-1-20250805"
+                    - "claude-opus-4-20250514"
+                    - "claude-sonnet-4-20250514"
+                    - "claude-3-7-sonnet-20250219"
+                    - "claude-3-5-haiku-20241022"
+                    - "claude-3-haiku-20240307"
+                default: ""
 
             max_tokens:
-                description: 'Maximum tokens per request (leave empty for default)'
+                description: "Maximum tokens per request (leave empty for default)"
                 required: false
                 type: string
-                default: ''
+                default: ""
 
             max_turns:
-                description: 'Maximum conversation turns (leave empty for default)'
+                description: "Maximum conversation turns (leave empty for default)"
                 required: false
                 type: string
-                default: ''
+                default: ""
 
 env:
     CARGO_TERM_COLOR: always
@@ -143,10 +143,10 @@ jobs:
               with:
                   command: packages
                   packages: ${{ github.event.inputs.packages }}
-                  skip-on-no-changes: 'false'
-                  force-full-matrix-condition: 'true'
-                  os-suffix: '-latest'
-                  os: 'ubuntu'
+                  skip-on-no-changes: "false"
+                  force-full-matrix-condition: "true"
+                  os-suffix: "-latest"
+                  os: "ubuntu"
 
     update-readmes:
         name: Update ${{ matrix.package.name }}

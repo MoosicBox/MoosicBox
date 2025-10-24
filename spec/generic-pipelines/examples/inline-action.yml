@@ -26,11 +26,11 @@ actions:
             channel:
                 description: Notification channel
                 required: false
-                default: 'general'
+                default: "general"
             priority:
                 description: Notification priority level
                 required: false
-                default: 'normal'
+                default: "normal"
         outputs:
             status:
                 description: Notification delivery status
@@ -61,11 +61,11 @@ actions:
             features:
                 description: Cargo features to enable
                 required: false
-                default: ''
+                default: ""
             release:
                 description: Build in release mode
                 required: false
-                default: 'false'
+                default: "false"
         outputs:
             binary_path:
                 description: Path to the built binary
@@ -104,9 +104,9 @@ jobs:
         steps:
             - uses: notify
               with:
-                  message: 'Pipeline started'
-                  channel: 'ci-cd'
-                  priority: 'high'
+                  message: "Pipeline started"
+                  channel: "ci-cd"
+                  priority: "high"
 
             - run: |
                   echo "Notification status: ${{ steps.notify.outputs.status }}"
@@ -118,8 +118,8 @@ jobs:
 
             - uses: build-and-test
               with:
-                  features: 'default'
-                  release: 'true'
+                  features: "default"
+                  release: "true"
               id: build
 
             - run: |
@@ -128,8 +128,8 @@ jobs:
 
             - uses: notify
               with:
-                  message: 'Build completed successfully! Binary: ${{ steps.build.outputs.binary_path }}'
-                  channel: 'builds'
+                  message: "Build completed successfully! Binary: ${{ steps.build.outputs.binary_path }}"
+                  channel: "builds"
               id: success-notification
 
     final-notification:
@@ -137,6 +137,6 @@ jobs:
         steps:
             - uses: notify
               with:
-                  message: 'All jobs completed successfully!'
-                  channel: 'general'
-                  priority: 'low'
+                  message: "All jobs completed successfully!"
+                  channel: "general"
+                  priority: "low"

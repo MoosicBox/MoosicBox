@@ -1,10 +1,10 @@
 ignore:
-    - 'packages/arb'
+    - "packages/arb"
 
 flag_management:
     default_rules:
         carryforward: true # carries forward last known coverage
-        carryforward_mode: 'labels' # Use the last coverage for this flag
+        carryforward_mode: "labels" # Use the last coverage for this flag
 
 coverage:
     status:

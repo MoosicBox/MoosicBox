@@ -2,45 +2,45 @@ name: Build and Test
 
 on:
     push:
-        branches: ['master', 'edge']
+        branches: ["master", "edge"]
         paths:
             - .github/workflows/build-and-test.yml
             - packages/**
-            - '**/*.toml'
-            - '**/Cargo.lock'
-            - '!packages/marketing_site/*.ts'
-            - '!packages/marketing_site/*.json'
-            - '!packages/marketing_site/pnpm-lock.yaml'
-            - '!packages/marketing_site/*.mjs'
-            - '!packages/marketing_site/*.js'
-            - '!packages/marketing_site/*.md'
-            - '!packages/marketing_site/.prettierignore'
-            - '!packages/marketing_site/hyperchad/**'
-            - '!packages/marketing_site/infra/**'
-            - '!**/*.nix'
-            - '!**/Dockerfile'
-            - '!**/*.Dockerfile'
-            - '!**/*.dockerignore'
-            - '!**/*.md'
+            - "**/*.toml"
+            - "**/Cargo.lock"
+            - "!packages/marketing_site/*.ts"
+            - "!packages/marketing_site/*.json"
+            - "!packages/marketing_site/pnpm-lock.yaml"
+            - "!packages/marketing_site/*.mjs"
+            - "!packages/marketing_site/*.js"
+            - "!packages/marketing_site/*.md"
+            - "!packages/marketing_site/.prettierignore"
+            - "!packages/marketing_site/hyperchad/**"
+            - "!packages/marketing_site/infra/**"
+            - "!**/*.nix"
+            - "!**/Dockerfile"
+            - "!**/*.Dockerfile"
+            - "!**/*.dockerignore"
+            - "!**/*.md"
     pull_request:
-        branches: ['master', 'edge']
+        branches: ["master", "edge"]
     schedule:
-        - cron: '0 7 * * *'
+        - cron: "0 7 * * *"
     workflow_dispatch:
         inputs:
             edge:
-                description: 'Edge'
+                description: "Edge"
                 required: false
-                default: 'false'
+                default: "false"
             seed:
-                description: 'Random seed for deterministic feature randomization (leave empty for random)'
+                description: "Random seed for deterministic feature randomization (leave empty for random)"
                 required: false
                 type: string
             packages:
                 description: 'Comma-separated list of packages to build (e.g., "moosicbox_server,moosicbox_tunnel_server,moosicbox_app"). Leave empty to build all packages.'
                 required: false
                 type: string
-                default: ''
+                default: ""
 env:
     CARGO_TERM_COLOR: always
 
@@ -120,7 +120,7 @@ jobs:
                   seed: ${{ steps.seed.outputs.value }}
                   skip-features: fail-on-warnings
                   include-reasoning: true
-                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   git-strategy: workflow-history
                   ignore: |
                       **/*.md
@@ -163,9 +163,9 @@ jobs:
                           "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"},
                           "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}
                       }
-                  docker-name-prefix: 'moosicbox_'
+                  docker-name-prefix: "moosicbox_"
                   generate-summary: true
-                  summary-title: '🧠 Smart CI Analysis Summary'
+                  summary-title: "🧠 Smart CI Analysis Summary"
                   summary-event-name: ${{ github.event_name }}
                   summary-ref-name: ${{ github.ref_name }}
                   summary-trigger-input: ${{ github.event.inputs.packages }}
@@ -180,7 +180,7 @@ jobs:
             fail-fast: true
 
             matrix:
-                os: ['macos-latest', 'ubuntu-latest', 'windows-latest']
+                os: ["macos-latest", "ubuntu-latest", "windows-latest"]
 
         runs-on: ${{ matrix.os }}
 
@@ -266,8 +266,8 @@ jobs:
               with:
                   command: setup
                   package-json: ${{ toJson(matrix.package) }}
-                  skip-checkout: 'true'
-                  rust-components: 'rustfmt, clippy, llvm-tools-preview'
+                  skip-checkout: "true"
+                  rust-components: "rustfmt, clippy, llvm-tools-preview"
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash

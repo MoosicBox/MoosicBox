@@ -35,7 +35,7 @@ jobs:
             fail-fast: true
 
             matrix:
-                os: ['ubuntu-latest']
+                os: ["ubuntu-latest"]
 
         runs-on: ${{ matrix.os }}
 
@@ -57,7 +57,7 @@ jobs:
               uses: ./.github/actions/clippier
               with:
                   command: features
-                  transform-name-regex: '^(moosicbox|switchy|hyperchad)_'
+                  transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
 
     bloaty:
         runs-on: ${{ matrix.package.os }}
@@ -105,7 +105,7 @@ jobs:
             - name: Setup cmake
               uses: jwlawson/actions-setup-cmake@v2
               with:
-                  cmake-version: '3.x'
+                  cmake-version: "3.x"
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
