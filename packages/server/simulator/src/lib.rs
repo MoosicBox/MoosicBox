@@ -21,6 +21,8 @@ enum Action {
     Bounce(String),
 }
 
+/// Queues a bounce (restart) action for a host.
+///
 /// # Panics
 ///
 /// * If the `ACTIONS` `Mutex` fails to lock
@@ -31,6 +33,8 @@ pub fn queue_bounce(host: impl Into<String>) {
         .push_back(Action::Bounce(host.into()));
 }
 
+/// Handles all queued actions in the simulation.
+///
 /// # Panics
 ///
 /// * If `ACTIONS` `Mutex` fails to lock
@@ -46,6 +50,8 @@ pub fn handle_actions(sim: &mut impl Sim) {
     }
 }
 
+/// Attempts to connect to a TCP stream with retries.
+///
 /// # Errors
 ///
 /// * If fails to connect to the TCP stream after `max_attempts` tries
