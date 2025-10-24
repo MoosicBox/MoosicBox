@@ -288,12 +288,18 @@ jobs:
 
                       ## Verification Process
 
-                      1. **Check Claims Against Code**
+                      1. **Check Git History First**
+                         - Before making ANY change to the README, check `git blame` and `git log` for the specific lines/sections you want to modify
+                         - Look for commit messages that explain why content was written a certain way
+                         - Check if previous commits indicate intentional decisions (e.g., "add X feature to README", "clarify Y behavior")
+                         - If the git history shows the content was recently added/updated with a clear rationale, be extra cautious about changing it
+
+                      2. **Check Claims Against Code**
                          - Read the code at `{1}/src/` to verify README claims
                          - Compare API examples with actual function signatures
                          - Check `{1}/Cargo.toml` for dependency accuracy
 
-                      2. **Identify Only Fundamental Issues**
+                      3. **Identify Only Fundamental Issues**
                          - Focus on factual errors and critical omissions
                          - Ignore style, wording, or organizational preferences
 
@@ -510,12 +516,18 @@ jobs:
 
                       ## Verification Process
 
-                      1. **Check Major Claims**
+                      1. **Check Git History First**
+                         - Before making ANY change, check `git blame` and `git log` for the specific lines/sections you want to modify
+                         - Look for commit messages that explain why content was written a certain way
+                         - Check if previous commits indicate intentional decisions or fixes
+                         - If the git history shows the content was recently updated with clear rationale, be extra cautious about changing it
+
+                      2. **Check Major Claims**
                          - Verify listed features actually exist in the codebase
                          - Test that installation instructions are accurate
                          - Confirm technology stack claims
 
-                      2. **Identify Only Fundamental Issues**
+                      3. **Identify Only Fundamental Issues**
                          - Focus on factual errors and critical omissions
                          - Ignore wording preferences and organizational choices
 
