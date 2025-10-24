@@ -159,7 +159,7 @@ async fn create_player_window(app: AppHandle) -> Result<(), String> {
 
 ```rust
 use moosicbox_player::{Playback, PlayerError};
-use moosicbox_music_models::{ApiTrack, PlaybackQuality};
+use moosicbox_music_models::{api::ApiTrack, PlaybackQuality};
 
 #[tauri::command]
 async fn play_track(track_id: u64) -> Result<(), String> {
