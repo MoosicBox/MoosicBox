@@ -73,14 +73,18 @@ use hyperchad_template::container;
 // Create router
 let router = Router::new()
     .with_route("/", |_req| async {
-        Content::try_view(container! {
-            h1 { "Home" }
-        })
+        Content::builder()
+            .with_primary(container! {
+                h1 { "Home" }
+            })
+            .build()
     })
     .with_route("/about", |_req| async {
-        Content::try_view(container! {
-            h1 { "About" }
-        })
+        Content::builder()
+            .with_primary(container! {
+                h1 { "About" }
+            })
+            .build()
     });
 
 // Build application
