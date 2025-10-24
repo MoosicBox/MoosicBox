@@ -101,7 +101,7 @@ Attributes that exempt from checking:
 
 - **Function Level**: `#[inject_yields]` on the function
 - **Impl Level**: `#[inject_yields]` on the impl block
-- **Module Level**: `inject_yields_mod!` wrapping the module
+- **Module Level**: `#[inject_yields]` on the module
 
 ### Example Code
 
@@ -129,12 +129,11 @@ impl MyStruct {
     }
 }
 
-// ✅ Correct: Module-level macro covers all functions
-inject_yields_mod! {
-    mod my_module {
-        async fn function_in_module() {
-            // Function body
-        }
+// ✅ Correct: Module-level attribute covers all functions
+#[inject_yields]
+mod my_module {
+    async fn function_in_module() {
+        // Function body
     }
 }
 ```
