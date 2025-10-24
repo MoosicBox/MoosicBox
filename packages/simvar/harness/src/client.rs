@@ -38,6 +38,16 @@ fn with_client<T>(name: String, f: impl FnOnce(&str) -> T) -> T {
 /// Clients return `Ok(())` on success or an error on failure.
 pub type ClientResult = Result<(), Box<dyn std::error::Error + Send>>;
 
+/// A client actor in the simulation.
+///
+/// Clients represent ephemeral actors that perform specific tasks and then exit.
+/// Unlike hosts, clients cannot be restarted or "bounced". They are created through
+/// the [`Sim::client`] method and run until their action completes or the simulation
+/// is cancelled.
+///
+/// This type is opaque and cannot be constructed directly by users.
+///
+/// [`Sim::client`]: crate::Sim::client
 pub struct Client {
     pub(crate) name: String,
     #[allow(clippy::type_complexity)]
