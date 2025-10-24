@@ -28,45 +28,45 @@ This example validates the handler extractor system implementation, testing vari
 
 ```bash
 # From repository root
-cargo run --bin test_actix --example handler_macro_test --features moosicbox_web_server/actix
+cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
 
 # From example directory
 cd packages/web_server/examples/handler_macro_test
 cargo run --bin test_actix --features moosicbox_web_server/actix
 
 # With NixOS
-nix develop .#server --command cargo run --bin test_actix --example handler_macro_test --features moosicbox_web_server/actix
+nix develop .#server --command cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
 ```
 
 ### Simulator Backend Tests
 
 ```bash
 # From repository root
-cargo run --bin test_simulator --example handler_macro_test --features moosicbox_web_server/simulator
+cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
 
 # From example directory
 cd packages/web_server/examples/handler_macro_test
 cargo run --bin test_simulator --features moosicbox_web_server/simulator
 
 # With NixOS
-nix develop .#server --command cargo run --bin test_simulator --example handler_macro_test --features moosicbox_web_server/simulator
+nix develop .#server --command cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
 ```
 
 ### Debug Mode
 
 ```bash
 # Debug Actix backend behavior
-cargo run --bin debug_actix --example handler_macro_test --features moosicbox_web_server/actix
+cargo run -p handler_macro_test --bin debug_actix --features moosicbox_web_server/actix
 ```
 
 ### Build All Binaries
 
 ```bash
 # Test compilation of all binaries
-cargo build --bins --example handler_macro_test --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
+cargo build -p handler_macro_test --bins --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
 
 # Build specific binary
-cargo build --bin test_actix --example handler_macro_test --features moosicbox_web_server/actix
+cargo build -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
 ```
 
 ## Expected Results
@@ -195,23 +195,23 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 
 ```bash
 # Verify all handler signatures compile
-cargo check --example handler_macro_test --features moosicbox_web_server/actix
-cargo check --example handler_macro_test --features moosicbox_web_server/simulator
+cargo check -p handler_macro_test --features moosicbox_web_server/actix
+cargo check -p handler_macro_test --features moosicbox_web_server/simulator
 ```
 
 ### Runtime Tests
 
 ```bash
 # Test actual handler execution
-cargo run --bin test_actix --example handler_macro_test --features moosicbox_web_server/actix
-cargo run --bin test_simulator --example handler_macro_test --features moosicbox_web_server/simulator
+cargo run -p handler_macro_test --bin test_actix --features moosicbox_web_server/actix
+cargo run -p handler_macro_test --bin test_simulator --features moosicbox_web_server/simulator
 ```
 
 ### Cross-Backend Validation
 
 ```bash
 # Ensure same behavior across backends
-cargo build --example handler_macro_test --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
+cargo build -p handler_macro_test --features "moosicbox_web_server/actix,moosicbox_web_server/simulator"
 ```
 
 ## Related Documentation
