@@ -17,7 +17,6 @@ on:
             - '!packages/marketing_site/.prettierignore'
             - '!packages/marketing_site/hyperchad/**'
             - '!packages/marketing_site/infra/**'
-            - '!packages/hyperchad/renderer/vanilla_js/web/**'
             - '!**/*.nix'
             - '!**/Dockerfile'
             - '!**/*.Dockerfile'
