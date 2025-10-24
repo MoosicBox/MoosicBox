@@ -4,7 +4,7 @@
 
 use hyperchad::{
     app::AppBuilder,
-    renderer::Content,
+    renderer::View,
     router::{Container, RouteRequest, Router},
     template::{self as hyperchad_template, Containers, container},
 };
@@ -332,42 +332,37 @@ fn create_main_page() -> Container {
 }
 
 fn create_router() -> Router {
-    let router = Router::new();
+    Router::new()
+        // Main page
+        .with_route_result("/", |_req: RouteRequest| async move {
+            Ok(create_main_page()) as Result<Container, Box<dyn std::error::Error>>
+        })
+        // Normal task creation (500ms delay)
+        .with_route("/api/tasks", |_req: RouteRequest| async move {
+            switchy::unsync::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Main page
-    router.add_route_result("/", |_req: RouteRequest| async move {
-        Ok(create_main_page()) as Result<Container, Box<dyn std::error::Error>>
-    });
+            // Return button + clear input using fragments
+            View::builder()
+                .with_primary(create_add_task_button())
+                .with_fragment(task_input())
+                .build()
+        })
+        // Error endpoint (always fails)
+        .with_route_result("/api/tasks/error", |_req: RouteRequest| async move {
+            switchy::unsync::time::sleep(std::time::Duration::from_millis(100)).await;
+            Err("Simulated error for testing HTTP error events".into())
+                as Result<Container, Box<dyn std::error::Error>>
+        })
+        // Slow endpoint (3 second delay)
+        .with_route("/api/tasks/slow", |_req: RouteRequest| async move {
+            switchy::unsync::time::sleep(std::time::Duration::from_secs(3)).await;
 
-    // Normal task creation (500ms delay)
-    router.add_route_result("/api/tasks", |_req: RouteRequest| async move {
-        switchy::unsync::time::sleep(std::time::Duration::from_millis(500)).await;
-
-        // Return button + clear input using fragments
-        Ok(Content::view(create_add_task_button())
-            .fragment(task_input())
-            .into()) as Result<Content, Box<dyn std::error::Error>>
-    });
-
-    // Error endpoint (always fails)
-    router.add_route_result("/api/tasks/error", |_req: RouteRequest| async move {
-        switchy::unsync::time::sleep(std::time::Duration::from_millis(100)).await;
-        Err("Simulated error for testing HTTP error events".into())
-            as Result<Container, Box<dyn std::error::Error>>
-    });
-
-    // Slow endpoint (3 second delay)
-    router.add_route_result("/api/tasks/slow", |_req: RouteRequest| async move {
-        switchy::unsync::time::sleep(std::time::Duration::from_secs(3)).await;
-
-        // Return button + clear input using fragments
-        Ok(Content::view(create_slow_button())
-            .fragment(task_input())
-            .into()) as Result<Content, Box<dyn std::error::Error>>
-            as Result<Content, Box<dyn std::error::Error>>
-    });
-
-    router
+            // Return button + clear input using fragments
+            View::builder()
+                .with_primary(create_slow_button())
+                .with_fragment(task_input())
+                .build()
+        })
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

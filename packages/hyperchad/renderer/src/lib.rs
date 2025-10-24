@@ -12,7 +12,7 @@ pub mod viewport;
 use async_trait::async_trait;
 use bytes::Bytes;
 pub use hyperchad_color::Color;
-use hyperchad_transformer::{Container, ResponsiveTrigger, html::ParseError};
+use hyperchad_transformer::{Container, ResponsiveTrigger, html::ParseError, models::Selector};
 pub use switchy_async::runtime::Handle;
 
 pub use hyperchad_transformer as transformer;
@@ -28,6 +28,7 @@ pub enum RendererEvent {
     },
 }
 
+#[derive(Debug, Clone)]
 pub enum Content {
     View(Box<View>),
     #[cfg(feature = "json")]
@@ -39,24 +40,10 @@ pub enum Content {
 }
 
 impl Content {
-    /// Create a view with primary content
+    /// Create a `ContentBuilder`
     #[must_use]
-    pub fn view(primary: impl Into<Container>) -> ViewBuilder {
-        ViewBuilder {
-            primary: Some(primary.into()),
-            fragments: vec![],
-            delete_selectors: vec![],
-        }
-    }
-
-    /// Create a fragments-only view (no primary content)
-    #[must_use]
-    pub const fn fragments_only() -> ViewBuilder {
-        ViewBuilder {
-            primary: None,
-            fragments: vec![],
-            delete_selectors: vec![],
-        }
+    pub fn builder() -> ContentBuilder {
+        ContentBuilder::default()
     }
 
     /// # Errors
@@ -64,6 +51,33 @@ impl Content {
     /// * If the `view` fails to convert to a `View`
     pub fn try_view<T: TryInto<View>>(view: T) -> Result<Self, T::Error> {
         Ok(Self::View(Box::new(view.try_into()?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceContainer {
+    pub selector: Selector,
+    pub container: Container,
+}
+
+impl From<Container> for ReplaceContainer {
+    fn from(container: Container) -> Self {
+        Self {
+            selector: container
+                .str_id
+                .as_ref()
+                .map_or(Selector::SelfTarget, |id| Selector::Id(id.clone())),
+            container,
+        }
+    }
+}
+
+impl From<Vec<Container>> for ReplaceContainer {
+    fn from(container: Vec<Container>) -> Self {
+        Self {
+            selector: Selector::SelfTarget,
+            container: container.into(),
+        }
     }
 }
 
@@ -77,11 +91,11 @@ pub struct View {
     /// Additional containers to swap by ID
     /// Each container MUST have an `id` attribute
     /// Client finds DOM elements with matching IDs and swaps them
-    pub fragments: Vec<Container>,
+    pub fragments: Vec<ReplaceContainer>,
 
     /// Element selectors to delete from the DOM
     /// Client finds DOM elements with matching selectors and removes them
-    pub delete_selectors: Vec<hyperchad_transformer::models::Selector>,
+    pub delete_selectors: Vec<Selector>,
 }
 
 impl View {
@@ -94,21 +108,53 @@ impl View {
 #[derive(Debug, Default)]
 pub struct ViewBuilder {
     primary: Option<Container>,
-    fragments: Vec<Container>,
-    delete_selectors: Vec<hyperchad_transformer::models::Selector>,
+    fragments: Vec<ReplaceContainer>,
+    delete_selectors: Vec<Selector>,
 }
 
 impl ViewBuilder {
+    /// Set the primary view
+    #[must_use]
+    pub fn with_primary(mut self, view: impl Into<Container>) -> Self {
+        self.primary = Some(view.into());
+        self
+    }
+
+    /// Set the primary view
+    pub fn primary(&mut self, view: impl Into<Container>) -> &mut Self {
+        self.primary = Some(view.into());
+        self
+    }
+
     /// Add a fragment container (must have an ID)
     #[must_use]
-    pub fn fragment(mut self, container: impl Into<Container>) -> Self {
+    pub fn with_fragment(mut self, container: impl Into<ReplaceContainer>) -> Self {
+        self.fragments.push(container.into());
+        self
+    }
+
+    /// Add a fragment container (must have an ID)
+    pub fn fragment(&mut self, container: impl Into<ReplaceContainer>) -> &mut Self {
         self.fragments.push(container.into());
         self
     }
 
     /// Add multiple fragment containers
     #[must_use]
-    pub fn fragments(mut self, containers: impl IntoIterator<Item = impl Into<Container>>) -> Self {
+    pub fn with_fragments(
+        mut self,
+        containers: impl IntoIterator<Item = impl Into<ReplaceContainer>>,
+    ) -> Self {
+        self.fragments
+            .extend(containers.into_iter().map(Into::into));
+        self
+    }
+
+    /// Add multiple fragment containers
+    pub fn fragments(
+        &mut self,
+        containers: impl IntoIterator<Item = impl Into<ReplaceContainer>>,
+    ) -> &mut Self {
         self.fragments
             .extend(containers.into_iter().map(Into::into));
         self
@@ -116,35 +162,122 @@ impl ViewBuilder {
 
     /// Add a delete selector
     #[must_use]
-    pub fn delete_selector(mut self, selector: hyperchad_transformer::models::Selector) -> Self {
+    pub fn with_delete_selector(mut self, selector: Selector) -> Self {
+        self.delete_selectors.push(selector);
+        self
+    }
+
+    /// Add a delete selector
+    pub fn delete_selector(&mut self, selector: Selector) -> &mut Self {
         self.delete_selectors.push(selector);
         self
     }
 
     /// Add multiple delete selectors
     #[must_use]
-    pub fn delete_selectors(
-        mut self,
-        selectors: impl IntoIterator<Item = hyperchad_transformer::models::Selector>,
-    ) -> Self {
+    pub fn with_delete_selectors(mut self, selectors: impl IntoIterator<Item = Selector>) -> Self {
+        self.delete_selectors.extend(selectors);
+        self
+    }
+
+    /// Add multiple delete selectors
+    pub fn delete_selectors(&mut self, selectors: impl IntoIterator<Item = Selector>) -> &mut Self {
         self.delete_selectors.extend(selectors);
         self
     }
 
     /// Build the View
     #[must_use]
-    pub fn build(self) -> Content {
-        Content::View(Box::new(View {
+    pub fn build(self) -> View {
+        View {
             primary: self.primary,
             fragments: self.fragments,
             delete_selectors: self.delete_selectors,
-        }))
+        }
     }
 }
 
-impl From<ViewBuilder> for Content {
-    fn from(builder: ViewBuilder) -> Self {
-        builder.build()
+#[derive(Debug, Default)]
+pub struct ContentBuilder {
+    builder: ViewBuilder,
+}
+
+impl ContentBuilder {
+    /// Set the primary view
+    #[must_use]
+    pub fn with_primary(mut self, view: impl Into<Container>) -> Self {
+        self.builder = self.builder.with_primary(view);
+        self
+    }
+
+    /// Set the primary view
+    pub fn primary(&mut self, view: impl Into<Container>) -> &mut Self {
+        self.builder.primary(view);
+        self
+    }
+
+    /// Add a fragment container (must have an ID)
+    #[must_use]
+    pub fn with_fragment(mut self, container: impl Into<ReplaceContainer>) -> Self {
+        self.builder = self.builder.with_fragment(container);
+        self
+    }
+
+    /// Add a fragment container (must have an ID)
+    pub fn fragment(&mut self, container: impl Into<ReplaceContainer>) -> &mut Self {
+        self.builder.fragment(container);
+        self
+    }
+
+    /// Add multiple fragment containers
+    #[must_use]
+    pub fn with_fragments(
+        mut self,
+        containers: impl IntoIterator<Item = impl Into<ReplaceContainer>>,
+    ) -> Self {
+        self.builder = self.builder.with_fragments(containers);
+        self
+    }
+
+    /// Add multiple fragment containers
+    pub fn fragments(
+        &mut self,
+        containers: impl IntoIterator<Item = impl Into<ReplaceContainer>>,
+    ) -> &mut Self {
+        self.builder.fragments(containers);
+        self
+    }
+
+    /// Add a delete selector
+    #[must_use]
+    pub fn with_delete_selector(mut self, selector: Selector) -> Self {
+        self.builder = self.builder.with_delete_selector(selector);
+        self
+    }
+
+    /// Add a delete selector
+    pub fn delete_selector(&mut self, selector: Selector) -> &mut Self {
+        self.builder.delete_selector(selector);
+        self
+    }
+
+    /// Add multiple delete selectors
+    #[must_use]
+    pub fn with_delete_selectors(mut self, selectors: impl IntoIterator<Item = Selector>) -> Self {
+        self.builder = self.builder.with_delete_selectors(selectors);
+        self
+    }
+
+    /// Add multiple delete selectors
+    pub fn delete_selectors(&mut self, selectors: impl IntoIterator<Item = Selector>) -> &mut Self {
+        self.builder.delete_selectors(selectors);
+        self
+    }
+
+    /// Build the Content
+    #[must_use]
+    pub fn build(self) -> Content {
+        Content::View(Box::new(self.builder.build()))
     }
 }
 

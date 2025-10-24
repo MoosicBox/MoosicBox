@@ -429,11 +429,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
             let size: u16 = 200;
 
             let container = load_albums(size, *sort, filtered_sources, filter);
-            let view = View {
-                primary: None,
-                fragments: container,
-                delete_selectors: vec![],
-            };
+            let view = View::builder().with_fragment(container).build();
             let response = RENDERER.get().unwrap().render(view).await;
             if let Err(e) = response {
                 log::error!("Failed to render_partial: {e:?}");

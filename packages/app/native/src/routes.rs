@@ -589,11 +589,7 @@ pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> 
             container.str_id = Some("settings-music-api-settings-section".to_string());
             let renderer = RENDERER.get().unwrap();
             renderer
-                .render(View {
-                    primary: None,
-                    fragments: vec![container],
-                    delete_selectors: vec![],
-                })
+                .render(View::builder().with_fragment(container).build())
                 .await?;
 
             Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
@@ -760,8 +756,8 @@ pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Cont
 
     let state = convert_state(&STATE).await;
 
-    Ok(Content::fragments_only()
-        .fragment(settings_music_api_settings_markup(&state).await?)
+    Ok(Content::builder()
+        .with_fragment(settings_music_api_settings_markup(&state).await?)
         .build())
 }
 
@@ -828,17 +824,18 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
 
         let settings = music_api.into();
 
-        return Ok(Content::view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(
-                &settings,
-                AuthState::Initial,
-            ),
-        )
-        .build());
+        return Ok(Content::builder()
+            .with_primary(
+                moosicbox_app_native_ui::settings::music_api_settings_content(
+                    &settings,
+                    AuthState::Initial,
+                ),
+            )
+            .build());
     }
 
-    Ok(Content::fragments_only()
-        .fragment(moosicbox_app_native_ui::settings::scan_error_message(
+    Ok(Content::builder()
+        .with_fragment(moosicbox_app_native_ui::settings::scan_error_message(
             &api_source,
             Some("Failed to scan"),
         ))
@@ -875,17 +872,18 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
 
         let settings = music_api.into();
 
-        return Ok(Content::view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(
-                &settings,
-                AuthState::Initial,
-            ),
-        )
-        .build());
+        return Ok(Content::builder()
+            .with_primary(
+                moosicbox_app_native_ui::settings::music_api_settings_content(
+                    &settings,
+                    AuthState::Initial,
+                ),
+            )
+            .build());
     }
 
-    Ok(Content::fragments_only()
-        .fragment(moosicbox_app_native_ui::settings::scan_error_message(
+    Ok(Content::builder()
+        .with_fragment(moosicbox_app_native_ui::settings::scan_error_message(
             &api_source,
             Some("Failed to enable scan origin"),
         ))
@@ -934,14 +932,17 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
             AuthValues::Poll => AuthState::Polling,
         };
 
-        return Ok(Content::view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(&settings, auth_state),
-        )
-        .build());
+        return Ok(Content::builder()
+            .with_primary(
+                moosicbox_app_native_ui::settings::music_api_settings_content(
+                    &settings, auth_state,
+                ),
+            )
+            .build());
     }
 
-    Ok(Content::fragments_only()
-        .fragment(moosicbox_app_native_ui::settings::auth_error_message(
+    Ok(Content::builder()
+        .with_fragment(moosicbox_app_native_ui::settings::auth_error_message(
             &api_source,
             Some("Failed to authenticate"),
         ))
@@ -1004,11 +1005,7 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
 
             let renderer = RENDERER.get().unwrap();
             renderer
-                .render(View {
-                    primary: None,
-                    fragments: markup,
-                    delete_selectors: vec![],
-                })
+                .render(View::builder().with_fragment(markup).build())
                 .await
                 .unwrap();
 
@@ -1139,7 +1136,7 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
 
     let markup = download_settings_content(&settings);
 
-    Ok(Content::fragments_only().fragment(markup).build())
+    Ok(Content::builder().with_fragment(markup).build())
 }
 
 #[derive(Deserialize)]
@@ -1231,7 +1228,7 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
 
     let markup = scan_settings_content(&settings);
 
-    Ok(Content::fragments_only().fragment(markup).build())
+    Ok(Content::builder().with_fragment(markup).build())
 }
 
 #[derive(Deserialize)]

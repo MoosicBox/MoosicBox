@@ -1407,13 +1407,14 @@ mod native_app {
             // Handle fragments
             for container in view.fragments {
                 let tag_renderer = self.tag_renderer.lock().unwrap();
-                let content = container_element_to_html(&container, &*tag_renderer)
+                let content = container_element_to_html(&container.container, &*tag_renderer)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-                let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
+                let content =
+                    tag_renderer.partial_html(&HEADERS, &container.container, content, None, None);
                 drop(tag_renderer);
 
                 let event_value = EventData {
-                    id: container.str_id.clone(),
+                    id: container.container.str_id.clone(),
                     event: "fragment".to_string(),
                     data: content,
                 };
