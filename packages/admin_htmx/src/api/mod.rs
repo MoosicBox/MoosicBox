@@ -25,6 +25,11 @@ pub mod scan;
 pub mod tidal;
 pub(crate) mod util;
 
+/// Binds all admin HTMX endpoints to the provided Actix web scope.
+///
+/// This is the main entry point for integrating the admin UI into an Actix web application.
+/// It registers all admin-related endpoints including server info, profiles management,
+/// and optionally scan, Tidal, and Qobuz settings endpoints (depending on enabled features).
 #[allow(clippy::let_and_return)]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -44,13 +49,21 @@ pub fn bind_services<
     scope
 }
 
+/// Query parameters for the admin index page.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexQuery {
+    /// Whether to show scan-related UI elements.
     #[cfg(feature = "scan")]
     show_scan: Option<bool>,
 }
 
+/// Admin index page endpoint that renders the main admin interface.
+///
+/// # Errors
+///
+/// * If the requested profile does not exist in the database
+/// * If any of the profile information sections fail to load
 #[route("", method = "GET")]
 pub async fn index_endpoint(
     htmx: Htmx,
