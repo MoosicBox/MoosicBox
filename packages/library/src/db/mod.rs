@@ -353,15 +353,24 @@ pub async fn get_artist_albums(
         .as_model_mapped()
 }
 
+/// Parameters for setting track size information.
 #[derive(Debug, Clone)]
 pub struct SetTrackSize {
+    /// Track ID.
     pub track_id: u64,
+    /// Playback quality.
     pub quality: PlaybackQuality,
+    /// File size in bytes.
     pub bytes: Option<Option<u64>>,
+    /// Audio bit depth.
     pub bit_depth: Option<Option<u8>>,
+    /// Audio bitrate.
     pub audio_bitrate: Option<Option<u32>>,
+    /// Overall bitrate.
     pub overall_bitrate: Option<Option<u32>>,
+    /// Sample rate.
     pub sample_rate: Option<Option<u32>>,
+    /// Number of audio channels.
     pub channels: Option<Option<u8>>,
 }
 
@@ -776,10 +785,14 @@ pub async fn add_album_maps_and_get_albums(
         .to_value_type()?)
 }
 
+/// Parameters for inserting a track into the database.
 #[derive(Debug, Clone, Default)]
 pub struct InsertTrack {
+    /// Track to insert.
     pub track: LibraryTrack,
+    /// Album ID.
     pub album_id: u64,
+    /// File path.
     pub file: Option<String>,
 }
 
@@ -842,18 +855,28 @@ pub async fn add_tracks(
         .to_value_type()?)
 }
 
+/// Parameters for inserting an API source mapping into the database.
 #[derive(Debug, Clone, Default)]
 pub struct InsertApiSource {
+    /// Entity type.
     pub entity_type: String,
+    /// Entity ID.
     pub entity_id: u64,
+    /// API source name.
     pub source: String,
+    /// API source ID.
     pub source_id: String,
 }
 
+/// API source mapping.
 pub struct ApiSourceMapping {
+    /// Entity type.
     pub entity_type: String,
+    /// Entity ID.
     pub entity_id: u64,
+    /// API source name.
     pub source: String,
+    /// API source ID.
     pub source_id: String,
 }
 
@@ -903,10 +926,14 @@ pub async fn add_api_sources(
         .to_value_type()?)
 }
 
+/// Parameters for updating an API source mapping.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateApiSource {
+    /// Entity ID.
     pub entity_id: u64,
+    /// API source name.
     pub source: String,
+    /// API source ID.
     pub source_id: String,
 }
 
