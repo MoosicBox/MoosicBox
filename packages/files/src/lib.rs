@@ -32,6 +32,10 @@ pub mod range;
 static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
+/// Sanitizes a filename by replacing all non-alphanumeric characters with underscores.
+///
+/// Preserves only ASCII letters (A-Z, a-z), digits (0-9), and underscores.
+#[must_use]
 pub fn sanitize_filename(string: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
 }
@@ -296,12 +300,15 @@ pub enum FetchCoverError {
 #[cfg(feature = "files")]
 pub(crate) type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
+/// Cover image bytes with optional size information.
 #[cfg(feature = "files")]
 pub struct CoverBytes {
+    /// Stream of image bytes
     pub stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor<
         Result<Bytes, std::io::Error>,
         BytesStream,
     >,
+    /// Optional size of the image in bytes
     pub size: Option<u64>,
 }
 
