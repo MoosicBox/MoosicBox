@@ -2,17 +2,25 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+/// An HTTP request step for testing API endpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpRequestStep {
+    /// The HTTP method.
     pub method: HttpMethod,
+    /// The target URL.
     pub url: String,
+    /// Request headers.
     pub headers: BTreeMap<String, String>,
+    /// Optional request body.
     pub body: Option<RequestBody>,
+    /// Expected HTTP status code.
     pub expected_status: Option<u16>,
+    /// Request timeout.
     pub timeout: Option<std::time::Duration>,
 }
 
 impl HttpRequestStep {
+    /// Creates a GET request.
     #[must_use]
     pub fn get(url: impl Into<String>) -> Self {
         Self {
@@ -25,6 +33,7 @@ impl HttpRequestStep {
         }
     }
 
+    /// Creates a POST request.
     #[must_use]
     pub fn post(url: impl Into<String>) -> Self {
         Self {
@@ -37,6 +46,7 @@ impl HttpRequestStep {
         }
     }
 
+    /// Creates a PUT request.
     #[must_use]
     pub fn put(url: impl Into<String>) -> Self {
         Self {
@@ -49,6 +59,7 @@ impl HttpRequestStep {
         }
     }
 
+    /// Creates a DELETE request.
     #[must_use]
     pub fn delete(url: impl Into<String>) -> Self {
         Self {
@@ -117,20 +128,29 @@ impl HttpRequestStep {
         self
     }
 
+    /// Returns a human-readable description of this HTTP request.
     #[must_use]
     pub fn description(&self) -> String {
         format!("{} {}", self.method, self.url)
     }
 }
 
+/// HTTP request method.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HttpMethod {
+    /// GET method.
     Get,
+    /// POST method.
     Post,
+    /// PUT method.
     Put,
+    /// DELETE method.
     Delete,
+    /// PATCH method.
     Patch,
+    /// HEAD method.
     Head,
+    /// OPTIONS method.
     Options,
 }
 
@@ -148,10 +168,15 @@ impl std::fmt::Display for HttpMethod {
     }
 }
 
+/// HTTP request body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestBody {
+    /// Plain text body.
     Text(String),
+    /// JSON body.
     Json(serde_json::Value),
+    /// Form-encoded body.
     Form(BTreeMap<String, String>),
+    /// Binary body.
     Binary(Vec<u8>),
 }
