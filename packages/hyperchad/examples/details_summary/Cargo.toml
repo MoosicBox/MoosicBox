@@ -1,0 +1,60 @@
+[package]
+description = "Example demonstrating details/summary collapsible elements in HyperChad"
+edition     = { workspace = true }
+keywords    = ["details", "example", "hyperchad", "summary", "web-server"]
+license     = { workspace = true }
+name        = "hyperchad_details_summary_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "details_summary_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad = { workspace = true, features = [
+    "actions",
+    "app",
+    "color",
+    "logic",
+    "renderer",
+    "renderer-assets",
+    "renderer-html",
+    "renderer-html-sse",
+    "renderer-html-web-server-actix",
+    "renderer-vanilla-js",
+    "router",
+    "router-form",
+    "router-serde",
+    "template",
+    "transformer",
+    "transformer-models",
+] }
+
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-time",
+    "async-tokio",
+] }
+
+env_logger = { workspace = true }
+log        = { workspace = true }
+
+[features]
+actix = ["hyperchad/renderer-html-actix"]
+assets = ["hyperchad/renderer-assets"]
+default = ["actix", "dev", "vanilla-js"]
+dev = ["assets"]
+fail-on-warnings = ["hyperchad/fail-on-warnings", "switchy/fail-on-warnings"]
+vanilla-js = [
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-plugin-actions",
+    "hyperchad/renderer-vanilla-js-plugin-canvas",
+    "hyperchad/renderer-vanilla-js-plugin-event",
+    "hyperchad/renderer-vanilla-js-plugin-form",
+    "hyperchad/renderer-vanilla-js-plugin-http-events",
+    "hyperchad/renderer-vanilla-js-plugin-idiomorph",
+    "hyperchad/renderer-vanilla-js-plugin-nav",
+    "hyperchad/renderer-vanilla-js-plugin-routing",
+]
