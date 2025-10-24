@@ -4,6 +4,7 @@ use crate::Error;
 
 use super::Auth;
 
+/// Builder for username/password authentication.
 #[derive(Clone)]
 pub struct UsernamePasswordAuthBuilder {
     handle_login: Option<
@@ -28,11 +29,13 @@ impl Default for UsernamePasswordAuthBuilder {
 }
 
 impl UsernamePasswordAuthBuilder {
+    /// Creates a new builder.
     #[must_use]
     pub const fn new() -> Self {
         Self { handle_login: None }
     }
 
+    /// Sets the login handler function.
     #[must_use]
     pub fn with_handler<
         Fut: Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send + 'static,
@@ -47,9 +50,11 @@ impl UsernamePasswordAuthBuilder {
         self
     }
 
+    /// Builds the username/password authentication.
+    ///
     /// # Errors
     ///
-    /// * If the `handle_login` is missing
+    /// * If the login handler was not configured
     pub fn build(self) -> Result<UsernamePasswordAuth, Error> {
         let handle_login = self
             .handle_login
@@ -59,6 +64,7 @@ impl UsernamePasswordAuthBuilder {
     }
 }
 
+/// Username and password authentication configuration.
 #[derive(Clone)]
 pub struct UsernamePasswordAuth {
     handle_login: Arc<
@@ -86,14 +92,17 @@ impl From<UsernamePasswordAuth> for Auth {
 }
 
 impl UsernamePasswordAuth {
+    /// Creates a new builder.
     #[must_use]
     pub const fn builder() -> UsernamePasswordAuthBuilder {
         UsernamePasswordAuthBuilder::new()
     }
 
+    /// Attempts to log in with the given username and password.
+    ///
     /// # Errors
     ///
-    /// * If the username password auth fails
+    /// * If the login attempt fails
     #[allow(clippy::unused_async)]
     pub async fn login(
         &self,

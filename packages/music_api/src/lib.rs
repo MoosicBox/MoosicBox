@@ -22,6 +22,7 @@ pub use moosicbox_music_api_models as models;
 pub mod auth;
 pub mod profiles;
 
+/// Collection of music API implementations indexed by source.
 #[derive(Clone)]
 pub struct MusicApis(Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>);
 
@@ -32,11 +33,13 @@ impl Default for MusicApis {
 }
 
 impl MusicApis {
+    /// Creates a new empty collection of music APIs.
     #[must_use]
     pub fn new() -> Self {
         Self(Arc::new(BTreeMap::new()))
     }
 
+    /// Adds a music API implementation for a specific source.
     pub fn add_source(&mut self, api: Arc<Box<dyn MusicApi>>) {
         let mut map = (*self.0).clone();
         map.insert(api.source().clone(), api);
@@ -69,6 +72,7 @@ impl SourceToMusicApi for MusicApis {
     }
 }
 
+/// Iterator over music API implementations.
 pub struct MusicApisIter<'a> {
     inner: std::collections::btree_map::Iter<'a, ApiSource, Arc<Box<dyn MusicApi>>>,
 }
@@ -84,6 +88,7 @@ impl<'a> Iterator for MusicApisIter<'a> {
 }
 
 impl MusicApis {
+    /// Returns an iterator over the music APIs.
     #[must_use]
     pub fn iter(&self) -> MusicApisIter<'_> {
         MusicApisIter {
@@ -103,34 +108,43 @@ impl<'a> IntoIterator for &'a MusicApis {
     }
 }
 
+/// Trait for retrieving music API implementations by source.
 pub trait SourceToMusicApi {
-    /// # Errors
-    ///
-    /// * If the `MusicApi` is not found
+    /// Gets the music API for the given source, or `None` if not found.
     fn get(&self, source: &ApiSource) -> Option<Arc<Box<dyn MusicApi>>>;
 }
 
+/// Errors that can occur when using the music API.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The music API for the specified source was not found.
     #[error("Music API for source not found: {0}")]
     MusicApiNotFound(ApiSource),
+    /// The requested action is not supported.
     #[error("Unsupported Action: {0}")]
     UnsupportedAction(&'static str),
+    /// Authentication failed or is required.
     #[error("Unauthorized")]
     Unauthorized,
+    /// Other error occurred.
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// Represents either a track or its ID.
 pub enum TrackOrId {
+    /// A complete track.
     Track(Box<Track>),
+    /// A track ID.
     Id(Id),
 }
 
 impl TrackOrId {
+    /// Resolves to a track, fetching from the API if necessary.
+    ///
     /// # Errors
     ///
-    /// * If failed to get the track from the `MusicApi`
+    /// * If failed to fetch the track from the API
     pub async fn track(self, api: &dyn MusicApi) -> Result<Option<Track>, Error> {
         Ok(match self {
             Self::Track(track) => Some(*track),
@@ -138,6 +152,7 @@ impl TrackOrId {
         })
     }
 
+    /// Returns the track ID.
     #[must_use]
     pub const fn id(&self) -> &Id {
         match self {
@@ -171,10 +186,15 @@ impl From<&Track> for TrackOrId {
     }
 }
 
+/// Core trait for music API implementations.
+///
+/// Provides methods to access and manage artists, albums, tracks, and authentication.
 #[async_trait]
 pub trait MusicApi: Send + Sync {
+    /// Returns the API source for this implementation.
     fn source(&self) -> &ApiSource;
 
+    /// Retrieves a paginated list of artists.
     async fn artists(
         &self,
         offset: Option<u32>,
@@ -183,12 +203,28 @@ pub trait MusicApi: Send + Sync {
         order_direction: Option<ArtistOrderDirection>,
     ) -> PagingResult<Artist, Error>;
 
+    /// Retrieves an artist by ID.
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error>;
 
+    /// Adds an artist to the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the artist could not be added
     async fn add_artist(&self, artist_id: &Id) -> Result<(), Error>;
 
+    /// Removes an artist from the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the artist could not be removed
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), Error>;
 
+    /// Retrieves the artist for a given album.
+    ///
+    /// # Errors
+    ///
+    /// * If the album or artist could not be retrieved
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, Error> {
         let Some(album) = self
             .album(album_id)
@@ -201,6 +237,11 @@ pub trait MusicApi: Send + Sync {
         self.artist(&album.artist_id).await
     }
 
+    /// Retrieves the cover art source for an artist.
+    ///
+    /// # Errors
+    ///
+    /// * If the cover source could not be retrieved
     async fn artist_cover_source(
         &self,
         artist: &Artist,
@@ -212,10 +253,13 @@ pub trait MusicApi: Send + Sync {
             .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
+    /// Retrieves a paginated list of albums.
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
 
+    /// Retrieves an album by ID.
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error>;
 
+    /// Retrieves different versions of an album.
     async fn album_versions(
         &self,
         album_id: &Id,
@@ -223,6 +267,7 @@ pub trait MusicApi: Send + Sync {
         limit: Option<u32>,
     ) -> PagingResult<AlbumVersion, Error>;
 
+    /// Retrieves a paginated list of albums for a specific artist.
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
         &self,
@@ -234,10 +279,25 @@ pub trait MusicApi: Send + Sync {
         order_direction: Option<AlbumOrderDirection>,
     ) -> PagingResult<Album, Error>;
 
+    /// Adds an album to the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the album could not be added
     async fn add_album(&self, album_id: &Id) -> Result<(), Error>;
 
+    /// Removes an album from the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the album could not be removed
     async fn remove_album(&self, album_id: &Id) -> Result<(), Error>;
 
+    /// Retrieves the cover art source for an album.
+    ///
+    /// # Errors
+    ///
+    /// * If the cover source could not be retrieved
     async fn album_cover_source(
         &self,
         album: &Album,
@@ -249,6 +309,7 @@ pub trait MusicApi: Send + Sync {
             .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
+    /// Retrieves a paginated list of tracks.
     async fn tracks(
         &self,
         track_ids: Option<&[Id]>,
@@ -258,8 +319,10 @@ pub trait MusicApi: Send + Sync {
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, Error>;
 
+    /// Retrieves a track by ID.
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error>;
 
+    /// Retrieves a paginated list of tracks for a specific album.
     async fn album_tracks(
         &self,
         album_id: &Id,
@@ -269,16 +332,36 @@ pub trait MusicApi: Send + Sync {
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, Error>;
 
+    /// Adds a track to the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the track could not be added
     async fn add_track(&self, track_id: &Id) -> Result<(), Error>;
 
+    /// Removes a track from the library.
+    ///
+    /// # Errors
+    ///
+    /// * If the track could not be removed
     async fn remove_track(&self, track_id: &Id) -> Result<(), Error>;
 
+    /// Retrieves the playback source for a track.
+    ///
+    /// # Errors
+    ///
+    /// * If the track source could not be retrieved
     async fn track_source(
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, Error>;
 
+    /// Retrieves the size of a track in bytes.
+    ///
+    /// # Errors
+    ///
+    /// * If the track size could not be retrieved
     async fn track_size(
         &self,
         track: TrackOrId,
@@ -286,30 +369,53 @@ pub trait MusicApi: Send + Sync {
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, Error>;
 
+    /// Enables scanning for new media.
+    ///
+    /// # Errors
+    ///
+    /// * If scanning is not supported or could not be enabled
     async fn enable_scan(&self) -> Result<(), Error> {
         Err(Error::UnsupportedAction("enable_scan"))
     }
 
+    /// Triggers a media library scan.
+    ///
+    /// # Errors
+    ///
+    /// * If scanning is not supported or failed
     async fn scan(&self) -> Result<(), Error> {
         Err(Error::UnsupportedAction("scan"))
     }
 
+    /// Returns the authentication handler for this API, if any.
     fn auth(&self) -> Option<&ApiAuth> {
         None
     }
 
+    /// Checks whether scanning is currently enabled.
+    ///
+    /// # Errors
+    ///
+    /// * If scanning is not supported
     async fn scan_enabled(&self) -> Result<bool, Error> {
         Err(Error::UnsupportedAction("scan_enabled"))
     }
 
+    /// Returns whether this API supports scanning.
     fn supports_scan(&self) -> bool {
         false
     }
 
+    /// Returns whether this API supports search.
     fn supports_search(&self) -> bool {
         false
     }
 
+    /// Searches for artists, albums, and tracks matching the query.
+    ///
+    /// # Errors
+    ///
+    /// * If search is not supported or failed
     async fn search(
         &self,
         _query: &str,
@@ -319,6 +425,7 @@ pub trait MusicApi: Send + Sync {
         Err(Error::UnsupportedAction("search"))
     }
 
+    /// Wraps this API with caching for artists, albums, and tracks.
     fn cached(self) -> impl MusicApi
     where
         Self: Sized,
@@ -333,6 +440,9 @@ pub trait MusicApi: Send + Sync {
     }
 }
 
+/// A caching wrapper for music API implementations.
+///
+/// Caches artists, albums, and tracks to reduce API calls.
 pub struct CachedMusicApi<T: MusicApi> {
     inner: T,
     cascade_delete: bool,
@@ -342,6 +452,8 @@ pub struct CachedMusicApi<T: MusicApi> {
 }
 
 impl<T: MusicApi> CachedMusicApi<T> {
+    /// Creates a new cached music API wrapping the given API.
+    #[must_use]
     pub fn new(api: T) -> Self {
         Self {
             inner: api,
@@ -352,16 +464,19 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Sets whether removing an artist should cascade to its albums and tracks.
     #[must_use]
     pub const fn with_cascade_delete(mut self, cascade_delete: bool) -> Self {
         self.cascade_delete = cascade_delete;
         self
     }
 
+    /// Sets whether removing an artist should cascade to its albums and tracks.
     pub const fn set_cascade_delete(&mut self, cascade_delete: bool) {
         self.cascade_delete = cascade_delete;
     }
 
+    /// Clears all cached data.
     pub async fn clear_cache(&self) {
         self.artists.write().await.clear();
         self.albums.write().await.clear();
@@ -383,14 +498,17 @@ impl<T: MusicApi> CachedMusicApi<T> {
         self.tracks.read().await.get(track_id).cloned()
     }
 
+    /// Caches that the specified artist IDs do not exist.
     pub async fn cache_empty_artists(&self, ids: &[&Id]) {
         Self::cache_empty_values(&self.artists, ids).await;
     }
 
+    /// Caches that the specified album IDs do not exist.
     pub async fn cache_empty_albums(&self, ids: &[&Id]) {
         Self::cache_empty_values(&self.albums, ids).await;
     }
 
+    /// Caches that the specified track IDs do not exist.
     pub async fn cache_empty_tracks(&self, ids: &[&Id]) {
         Self::cache_empty_values(&self.tracks, ids).await;
     }
@@ -405,6 +523,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Caches the specified artists.
     pub async fn cache_artists(&self, artists: &[Artist]) {
         Self::cache_artists_inner(&self.artists, artists).await;
     }
@@ -416,6 +535,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Caches the specified albums.
     pub async fn cache_albums(&self, albums: &[Album]) {
         Self::cache_albums_inner(&self.albums, albums).await;
     }
@@ -427,6 +547,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Caches the specified tracks.
     pub async fn cache_tracks(&self, tracks: &[Track]) {
         Self::cache_tracks_inner(&self.tracks, tracks).await;
     }
@@ -438,6 +559,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Removes artists from the cache by ID.
     pub async fn remove_cache_artist_ids(&self, ids: &[&Id]) {
         Self::remove_cache_ids(&mut *self.artists.write().await, ids);
 
@@ -484,6 +606,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         });
     }
 
+    /// Removes albums from the cache by ID.
     pub async fn remove_cache_album_ids(&self, ids: &[&Id]) {
         Self::remove_cache_album_ids_inner(&mut *self.albums.write().await, ids);
     }
@@ -492,6 +615,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::remove_cache_ids(albums, ids);
     }
 
+    /// Removes tracks from the cache by ID.
     pub async fn remove_cache_track_ids(&self, ids: &[&Id]) {
         Self::remove_cache_ids(&mut *self.tracks.write().await, ids);
     }
@@ -502,6 +626,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Removes artists from the cache.
     pub async fn remove_cache_artists(&self, artists: &[Artist]) {
         Self::remove_cache_artists_inner(&self.artists, artists).await;
     }
@@ -516,6 +641,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Removes albums from the cache.
     pub async fn remove_cache_albums(&self, albums: &[Album]) {
         Self::remove_cache_albums_inner(&self.albums, albums).await;
     }
@@ -530,6 +656,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
+    /// Removes tracks from the cache.
     pub async fn remove_cache_tracks(&self, tracks: &[Track]) {
         Self::remove_cache_tracks_inner(&self.tracks, tracks).await;
     }
