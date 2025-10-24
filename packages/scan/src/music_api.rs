@@ -15,6 +15,7 @@ use crate::{
     output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
 };
 
+/// Errors that can occur during music API scanning.
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
