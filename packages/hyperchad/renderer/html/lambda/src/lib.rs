@@ -17,18 +17,27 @@ use lambda_http::{
 pub use lambda_http;
 pub use lambda_runtime;
 
+/// HTTP response content types for Lambda responses.
 pub enum Content {
+    /// HTML content with UTF-8 encoding.
     Html(String),
+    /// Raw binary content with a custom content type.
     Raw {
+        /// The binary data to send.
         data: Bytes,
+        /// The MIME type for the content.
         content_type: String,
     },
+    /// JSON content (requires `json` feature).
     #[cfg(feature = "json")]
     Json(serde_json::Value),
 }
 
+/// Processes Lambda HTTP requests and generates responses.
 #[async_trait]
 pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
+    /// Prepares request data for processing.
+    ///
     /// # Errors
     ///
     /// * If the request fails to prepare
@@ -38,13 +47,24 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
         body: Option<Arc<Bytes>>,
     ) -> Result<T, lambda_runtime::Error>;
 
+    /// Returns additional HTTP headers for the response based on content.
     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>>;
 
+    /// Generates the response content and headers from processed data.
+    ///
+    /// # Errors
+    ///
+    /// * If response generation fails
     async fn to_response(
         &self,
         data: T,
     ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>;
 
+    /// Converts rendered content to the appropriate response body type.
+    ///
+    /// # Errors
+    ///
+    /// * If content conversion fails
     async fn to_body(
         &self,
         content: hyperchad_renderer::Content,
@@ -52,15 +72,20 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     ) -> Result<Content, lambda_runtime::Error>;
 }
 
+/// Lambda application with configurable response processing.
 #[derive(Clone)]
 pub struct LambdaApp<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone> {
+    /// The response processor for handling requests.
     pub processor: R,
+    /// Static asset routes (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
     _phantom: PhantomData<T>,
 }
 
 impl<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone> LambdaApp<T, R> {
+    /// Creates a new Lambda application with the given response processor.
+    #[must_use]
     pub const fn new(to_html: R) -> Self {
         Self {
             processor: to_html,
@@ -84,11 +109,14 @@ impl<
     }
 }
 
+/// Runtime handler for executing the Lambda application.
 pub struct LambdaAppRunner<
     T: Send + Sync + Clone,
     R: LambdaResponseProcessor<T> + Send + Sync + Clone,
 > {
+    /// The Lambda application configuration.
     pub app: LambdaApp<T, R>,
+    /// Runtime handle for async execution.
     pub handle: Handle,
 }
 
