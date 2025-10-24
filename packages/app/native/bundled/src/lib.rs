@@ -6,10 +6,14 @@ use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
 
+/// Commands for controlling the bundled native application service.
 #[derive(Debug, AsRefStr)]
 pub enum Command {
+    /// Process a Tauri run event.
     RunEvent { event: Arc<RunEvent> },
+    /// Wait for the application server to start up.
     WaitForStartup { sender: oneshot::Sender<()> },
+    /// Wait for the application server to shut down.
     WaitForShutdown { sender: oneshot::Sender<()> },
 }
 
@@ -76,12 +80,18 @@ impl service::Processor for service::Service {
     }
 }
 
+/// Application context managing the embedded server and startup lifecycle.
 pub struct Context {
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
     receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
 }
 
 impl Context {
+    /// Creates a new application context and starts the embedded server.
+    ///
+    /// The server listens on `0.0.0.0:8016` and signals startup completion
+    /// through an internal channel.
+    #[must_use]
     pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
         let (sender, receiver) = switchy_async::sync::oneshot::channel();
 
@@ -104,6 +114,11 @@ impl Context {
         }
     }
 
+    /// Handles Tauri run events, triggering appropriate lifecycle actions.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if shutting down the server fails during `ExitRequested` handling
     pub fn handle_event(&self, event: Arc<RunEvent>) -> Result<(), std::io::Error> {
         match *event {
             tauri::RunEvent::Exit => {}
@@ -119,6 +134,11 @@ impl Context {
         Ok(())
     }
 
+    /// Shuts down the embedded server by aborting its task handle.
+    ///
+    /// # Errors
+    ///
+    /// * Currently always returns `Ok(())`
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
         if let Some(handle) = &self.server_handle {
             handle.abort();
