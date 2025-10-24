@@ -21,7 +21,7 @@ This example demonstrates how to use `switchy_schema` with static lifetime migra
 ## Running the Example
 
 ```bash
-cargo run --bin static_migrations_example
+cargo run -p static_migrations_example
 ```
 
 This will:
