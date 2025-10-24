@@ -244,7 +244,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 }
 
                 if !view.delete_selectors.is_empty()
-                    && let Ok(selectors_json) = serde_json::to_string(&view.delete_selectors)
+                    && let Ok(selectors_json) = serde_json::to_string(
+                        &view
+                            .delete_selectors
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>(),
+                    )
                 {
                     headers.push(("X-HyperChad-Delete-Selectors".to_string(), selectors_json));
                 }
@@ -301,26 +307,25 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 }
 
                 // Render fragments
-                if !view.fragments.is_empty() {
-                    parts.push("\n<!--hyperchad-fragments-->\n".to_string());
+                for fragment in &view.fragments {
+                    parts.push(format!(
+                        "\n<!--hyperchad-fragment-->\n{}\n",
+                        fragment.selector
+                    ));
 
-                    for fragment in &view.fragments {
-                        let html = container_element_to_html(fragment, &self.tag_renderer)
-                            .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
+                        .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
-                        let html = self.tag_renderer.partial_html(
-                            &HEADERS,
-                            fragment,
-                            html,
-                            self.viewport.as_deref(),
-                            self.background,
-                        );
+                    let html = self.tag_renderer.partial_html(
+                        &HEADERS,
+                        &fragment.container,
+                        html,
+                        self.viewport.as_deref(),
+                        self.background,
+                    );
 
-                        parts.push(html);
-                        parts.push("\n".to_string());
-                    }
-
-                    parts.push("<!--hyperchad-fragments-end-->\n".to_string());
+                    parts.push(html);
+                    parts.push("\n".to_string());
                 }
 
                 Content::Html(parts.join(""))

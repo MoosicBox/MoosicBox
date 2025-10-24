@@ -213,7 +213,13 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             if v.delete_selectors.is_empty() {
                 None
             } else {
-                serde_json::to_string(&v.delete_selectors).ok()
+                serde_json::to_string(
+                    &v.delete_selectors
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>(),
+                )
+                .ok()
             }
         } else {
             None

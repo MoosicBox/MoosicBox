@@ -235,46 +235,31 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                     if v.delete_selectors.is_empty() {
                         None
                     } else {
-                        serde_json::to_string(&v.delete_selectors).ok()
+                        serde_json::to_string(
+                            &v.delete_selectors
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>(),
+                        )
+                        .ok()
                     }
                 } else {
                     None
                 };
 
-                match content {
-                    hyperchad_renderer::Content::View(view) => {
-                        let (body, content_type) = self
-                            .to_body(hyperchad_renderer::Content::View(view), req)
-                            .await?;
+                let (body, content_type) = self.to_body(content, req).await?;
 
-                        let mut response = HttpResponse::Ok();
-                        response.content_type(content_type.as_str());
+                let mut response = HttpResponse::Ok();
+                response.content_type(content_type.as_str());
 
-                        if has_fragments {
-                            response.append_header(("X-HyperChad-Fragments", "true"));
-                        }
-
-                        if let Some(selectors) = delete_selectors {
-                            response.append_header(("X-HyperChad-Delete-Selectors", selectors));
-                        }
-
-                        Ok(response.body(body))
-                    }
-                    hyperchad_renderer::Content::Raw { data, content_type } => {
-                        Ok(HttpResponse::Ok()
-                            .content_type(content_type.as_str())
-                            .body(data.to_vec()))
-                    }
-                    #[cfg(feature = "json")]
-                    hyperchad_renderer::Content::Json(json) => {
-                        let (body, content_type) = self
-                            .to_body(hyperchad_renderer::Content::Json(json), req)
-                            .await?;
-                        Ok(HttpResponse::Ok()
-                            .content_type(content_type.as_str())
-                            .body(body))
-                    }
+                if has_fragments {
+                    response.append_header(("X-HyperChad-Fragments", "true"));
                 }
+                if let Some(selectors) = delete_selectors {
+                    response.append_header(("X-HyperChad-Delete-Selectors", selectors));
+                }
+
+                Ok(response.body(body))
             }
             None => Ok(HttpResponse::NoContent().finish()),
         }
@@ -320,26 +305,25 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 }
 
                 // Render fragments
-                if !view.fragments.is_empty() {
-                    parts.push("\n<!--hyperchad-fragments-->\n".to_string());
+                for fragment in &view.fragments {
+                    parts.push(format!(
+                        "\n<!--hyperchad-fragment-->\n{}\n",
+                        fragment.selector
+                    ));
 
-                    for fragment in &view.fragments {
-                        let html = container_element_to_html(fragment, &self.tag_renderer)
-                            .map_err(ErrorInternalServerError)?;
+                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
+                        .map_err(ErrorInternalServerError)?;
 
-                        let html = self.tag_renderer.partial_html(
-                            &HEADERS,
-                            fragment,
-                            html,
-                            self.viewport.as_deref(),
-                            self.background,
-                        );
+                    let html = self.tag_renderer.partial_html(
+                        &HEADERS,
+                        &fragment.container,
+                        html,
+                        self.viewport.as_deref(),
+                        self.background,
+                    );
 
-                        parts.push(html);
-                        parts.push("\n".to_string());
-                    }
-
-                    parts.push("<!--hyperchad-fragments-end-->\n".to_string());
+                    parts.push(html);
+                    parts.push("\n".to_string());
                 }
 
                 let body = parts.join("");

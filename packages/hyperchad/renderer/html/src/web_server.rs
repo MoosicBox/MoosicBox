@@ -205,7 +205,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
                     if v.delete_selectors.is_empty() {
                         None
                     } else {
-                        serde_json::to_string(&v.delete_selectors).ok()
+                        serde_json::to_string(
+                            &v.delete_selectors
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>(),
+                        )
+                        .ok()
                     }
                 } else {
                     None
@@ -295,31 +301,30 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
                 }
 
                 // Render fragments
-                if !view.fragments.is_empty() {
-                    parts.push("\n<!--hyperchad-fragments-->\n".to_string());
+                for fragment in &view.fragments {
+                    parts.push(format!(
+                        "\n<!--hyperchad-fragment-->\n{}\n",
+                        fragment.selector
+                    ));
 
-                    for fragment in &view.fragments {
-                        let html = container_element_to_html(fragment, &self.tag_renderer)
-                            .map_err(|e| {
-                                hyperchad_renderer_html_web_server::WebServerError::Http {
-                                    status_code: StatusCode::InternalServerError,
-                                    source: Box::new(e),
-                                }
-                            })?;
+                    let html = container_element_to_html(&fragment.container, &self.tag_renderer)
+                        .map_err(|e| {
+                        hyperchad_renderer_html_web_server::WebServerError::Http {
+                            status_code: StatusCode::InternalServerError,
+                            source: Box::new(e),
+                        }
+                    })?;
 
-                        let html = self.tag_renderer.partial_html(
-                            &HEADERS,
-                            fragment,
-                            html,
-                            self.viewport.as_deref(),
-                            self.background,
-                        );
+                    let html = self.tag_renderer.partial_html(
+                        &HEADERS,
+                        &fragment.container,
+                        html,
+                        self.viewport.as_deref(),
+                        self.background,
+                    );
 
-                        parts.push(html);
-                        parts.push("\n".to_string());
-                    }
-
-                    parts.push("<!--hyperchad-fragments-end-->\n".to_string());
+                    parts.push(html);
+                    parts.push("\n".to_string());
                 }
 
                 let body = parts.join("").as_bytes().to_vec().into();

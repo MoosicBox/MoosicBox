@@ -38,9 +38,10 @@ function handleResponse(element: HTMLElement, text: string): boolean {
     return true;
 }
 
+type Fragment = { selector: string; element: HTMLElement };
 interface ParsedResponse {
     primary: string | null;
-    fragments: HTMLElement[];
+    fragments: Fragment[];
     deleteSelectors: string[];
 }
 
@@ -61,45 +62,34 @@ function parseResponse(responseText: string, headers: Headers): ParsedResponse {
     }
 
     // Split by fragment marker
-    const fragmentStart = responseText.indexOf('<!--hyperchad-fragments-->');
-    const fragmentEnd = responseText.indexOf('<!--hyperchad-fragments-end-->');
+    const contents = responseText.split('\n<!--hyperchad-fragment-->\n');
 
     let primary: string | null = null;
-    let fragmentsHtml = '';
 
-    if (fragmentStart > 0) {
-        primary = responseText.substring(0, fragmentStart).trim();
-    }
-
-    if (fragmentStart >= 0 && fragmentEnd > fragmentStart) {
-        fragmentsHtml = responseText
-            .substring(
-                fragmentStart + '<!--hyperchad-fragments-->'.length,
-                fragmentEnd,
-            )
-            .trim();
+    if (contents[0].length > 0) {
+        primary = contents[0];
     }
 
     // Parse fragment elements
-    const fragments: HTMLElement[] = [];
-    if (fragmentsHtml) {
+    const fragments: Fragment[] = [];
+
+    for (let i = 1; i < contents.length; i++) {
+        const content = contents[i];
+        const split = content.indexOf('\n');
+        const selector = content.substring(0, split);
+        const fragment = content.substring(split + 1);
         const temp = document.createElement('template');
-        const { html, style } = splitHtml(fragmentsHtml);
+        const { html, style } = splitHtml(fragment);
 
         temp.innerHTML = html;
 
         // Get all top-level elements with IDs
-        for (const child of Array.from(temp.content.children)) {
-            if (!(child instanceof HTMLElement)) continue;
-            if (!child.id) {
-                console.warn('Fragment element missing ID attribute:', child);
-                continue;
-            }
-
+        for (const element of Array.from(temp.content.children)) {
+            if (!(element instanceof HTMLElement)) continue;
             if (style) {
-                triggerHandlers('swapStyle', { id: child.id, style });
+                triggerHandlers('swapStyle', { id: element.id, style });
             }
-            fragments.push(child);
+            fragments.push({ selector, element });
         }
     }
 
@@ -124,30 +114,34 @@ async function handleHtmlResponse(
         resp.headers,
     );
 
-    // Handle primary swap (to triggering element)
-    if (primary !== null) {
-        handleResponse(element, primary);
-    }
-
     // Handle fragment swaps (by ID)
     for (const fragment of fragments) {
-        const targetId = fragment.id;
-        const target = document.getElementById(targetId);
-        if (!target) continue;
+        const targets = document.querySelectorAll(fragment.selector);
 
-        triggerHandlers('swapHtml', {
-            target,
-            html: fragment.outerHTML,
-            strategy: 'this', // Always this for fragments
-        });
+        for (const target of targets) {
+            if (!(target instanceof HTMLElement)) continue;
+            triggerHandlers('swapHtml', {
+                target,
+                html: fragment.element.outerHTML,
+                strategy: 'this', // Always this for fragments
+            });
+        }
     }
 
     // Handle delete selectors
-    for (const selector of deleteSelectors) {
+    for (let selector of deleteSelectors) {
+        const child = selector.startsWith('> ');
+        const target = child ? element : document;
+        selector = child ? selector.substring(2) : selector;
         if (selector === '') element.remove();
         if (!selector) continue;
 
-        document.querySelectorAll(selector).forEach((el) => el.remove());
+        target.querySelectorAll(selector).forEach((el) => el.remove());
+    }
+
+    // Handle primary swap (to triggering element)
+    if (primary !== null) {
+        handleResponse(element, primary);
     }
 }
 
