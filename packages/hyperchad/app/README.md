@@ -72,10 +72,10 @@ use hyperchad_renderer::Color;
 // Create router
 let router = Router::new()
     .with_route("/", |_req| async {
-        Some(hyperchad_renderer::Content::view("<h1>Home</h1>"))
+        Ok("<h1>Home</h1>".try_into()?)
     })
     .with_route("/about", |_req| async {
-        Some(hyperchad_renderer::Content::view("<h1>About</h1>"))
+        Ok("<h1>About</h1>".try_into()?)
     });
 
 // Build application
