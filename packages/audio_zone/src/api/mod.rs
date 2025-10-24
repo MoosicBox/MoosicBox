@@ -15,6 +15,14 @@ use crate::models::{ApiAudioZone, ApiAudioZoneWithSession, CreateAudioZone, Upda
 
 pub mod models;
 
+/// Binds all audio zone API endpoints to the provided Actix-web scope.
+///
+/// This registers the following HTTP endpoints:
+/// * GET `/` - List audio zones
+/// * GET `/with-session` - List audio zones with their sessions
+/// * POST `/` - Create a new audio zone
+/// * PATCH `/` - Update an existing audio zone
+/// * DELETE `/` - Delete an audio zone
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -28,6 +36,10 @@ pub fn bind_services<
         .service(delete_audio_zone_endpoint)
 }
 
+/// `OpenAPI` specification for audio zone endpoints.
+///
+/// This struct provides the `OpenAPI` documentation for all audio zone API endpoints
+/// when the `openapi` feature is enabled.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
