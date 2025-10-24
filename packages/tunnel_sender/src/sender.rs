@@ -63,12 +63,16 @@ use super::{
 };
 use crate::websocket_sender::TunnelWebsocketSender;
 
+/// Error type for closing tunnel connections.
 #[derive(Debug, Error)]
 pub enum CloseError {
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
 
+/// Handle for controlling and interacting with a tunnel sender.
+///
+/// Provides methods to close the connection and add player actions.
 #[derive(Clone)]
 pub struct TunnelSenderHandle {
     #[allow(clippy::type_complexity)]
@@ -78,10 +82,13 @@ pub struct TunnelSenderHandle {
 }
 
 impl TunnelSenderHandle {
+    /// Closes the tunnel connection by cancelling the cancellation token.
     pub fn close(&self) {
         self.cancellation_token.cancel();
     }
 
+    /// Adds a player action to the tunnel sender.
+    ///
     /// # Panics
     ///
     /// * If the `player_actions` `RwLock` is poisoned
@@ -154,12 +161,14 @@ impl WebsocketSender for TunnelSenderHandle {
     }
 }
 
+/// Message types that can be sent through the tunnel.
 pub enum TunnelResponseMessage {
     Packet(TunnelResponsePacket),
     Ws(TunnelResponseWs),
     Ping,
 }
 
+/// A packet response for a specific tunnel request.
 pub struct TunnelResponsePacket {
     pub request_id: u64,
     pub packet_id: u32,
@@ -169,12 +178,17 @@ pub struct TunnelResponsePacket {
     pub only_id: Option<u64>,
 }
 
+/// A websocket response with connection filtering options.
 pub struct TunnelResponseWs {
     pub message: Message,
     pub exclude_connection_ids: Option<Vec<u64>>,
     pub to_connection_ids: Option<Vec<u64>>,
 }
 
+/// Main tunnel sender that manages websocket connections and request forwarding.
+///
+/// Handles communication between local services and remote tunnel servers,
+/// processing HTTP requests and websocket messages.
 #[derive(Clone)]
 pub struct TunnelSender {
     id: u64,
@@ -200,6 +214,9 @@ static WS_MAX_PACKET_SIZE: usize =
     default_env_usize!("WS_MAX_PACKET_SIZE", DEFAULT_WS_MAX_PACKET_SIZE);
 
 impl TunnelSender {
+    /// Creates a new tunnel sender with the specified connection parameters.
+    ///
+    /// Returns both the sender and a handle for controlling it.
     #[must_use]
     pub fn new(
         host: String,
@@ -235,12 +252,15 @@ impl TunnelSender {
         )
     }
 
+    /// Sets a custom cancellation token for the tunnel sender.
     #[must_use]
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
         self
     }
 
+    /// Adds a player action to be tracked by the tunnel sender.
+    ///
     /// # Panics
     ///
     /// * If the `player_actions` `RwLock` is poisoned
@@ -266,6 +286,7 @@ impl TunnelSender {
         .await
     }
 
+    /// Starts the tunnel connection and returns a receiver for incoming messages.
     pub fn start(&self) -> Receiver<TunnelMessage> {
         self.start_tunnel(Self::message_handler)
     }
@@ -543,6 +564,8 @@ impl TunnelSender {
         rx
     }
 
+    /// Sends raw bytes through the tunnel for a specific request.
+    ///
     /// # Panics
     ///
     /// * If the `Sender` `RwLock` is poisoned
@@ -576,6 +599,8 @@ impl TunnelSender {
         Ok(())
     }
 
+    /// Sends a text message through the tunnel for a specific request.
+    ///
     /// # Panics
     ///
     /// * If the `Sender` `RwLock` is poisoned
@@ -1197,6 +1222,10 @@ impl TunnelSender {
         builder.send().await
     }
 
+    /// Processes an HTTP tunnel request, forwarding it through the tunnel connection.
+    ///
+    /// Handles various routes including track streaming, album covers, and proxy requests.
+    ///
     /// # Panics
     ///
     /// * If any of the relevant `RwLock`s are poisoned
@@ -1679,6 +1708,8 @@ impl TunnelSender {
         }
     }
 
+    /// Processes a websocket tunnel request, handling player actions and message forwarding.
+    ///
     /// # Panics
     ///
     /// * If any of the relevant `RwLock`s are poisoned
@@ -1717,6 +1748,8 @@ impl TunnelSender {
         Ok(())
     }
 
+    /// Aborts an in-progress tunnel request by cancelling its token.
+    ///
     /// # Panics
     ///
     /// * If the `abort_request_tokens` `RwLock` is poisoned
