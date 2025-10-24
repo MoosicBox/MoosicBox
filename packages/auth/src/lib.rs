@@ -17,16 +17,22 @@ use thiserror::Error;
 
 use crate::db::{create_client_access_token, get_client_access_token};
 
+/// Authentication errors that can occur during auth operations.
 #[derive(Debug, Error)]
 pub enum AuthError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to parse data.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// HTTP request failed.
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// Client registration failed.
     #[error("Failed to register client")]
     RegisterClient,
+    /// Request was unauthorized.
     #[error("Unauthorized")]
     Unauthorized,
 }
@@ -88,9 +94,17 @@ fn create_client_id() -> String {
     new_v4_string()
 }
 
+/// Gets or creates a client ID and access token for authentication.
+///
+/// If credentials already exist in the database, they are returned. Otherwise,
+/// a new client ID is created and registered with the host.
+///
 /// # Errors
 ///
-/// Will error if there is a database error
+/// * Database fetch operations fail
+/// * Client registration with the host fails
+/// * HTTP requests to the host fail
+/// * Response parsing fails
 pub async fn get_client_id_and_access_token(
     db: &ConfigDatabase,
     host: &str,
@@ -126,6 +140,10 @@ async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, 
         .to_value("token")?)
 }
 
+/// Actix-web request guard that ensures requests are not from the `MoosicBox` tunnel.
+///
+/// This guard checks the User-Agent header and rejects requests from `MOOSICBOX_TUNNEL`,
+/// allowing only non-tunnel requests to proceed.
 pub struct NonTunnelRequestAuthorized;
 
 impl FromRequest for NonTunnelRequestAuthorized {
@@ -155,6 +173,8 @@ fn is_authorized(req: &HttpRequest) -> bool {
     true
 }
 
+/// Fetches a signature token from the authentication host.
+///
 /// # Errors
 ///
 /// * If the request is unauthorized
