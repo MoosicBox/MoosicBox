@@ -281,11 +281,10 @@ impl std::fmt::Debug for FlattenedRoute {
 /// ```
 ///
 /// ## Special Characters and Encoding
-/// ```ignore
-/// // Paths are used exactly as provided - no encoding/decoding
-/// // Leading slashes are required for proper concatenation
-/// // Trailing slashes are preserved if present
-/// ```
+///
+/// * Paths are used exactly as provided - no encoding/decoding
+/// * Leading slashes are required for proper concatenation
+/// * Trailing slashes are preserved if present
 ///
 /// # Performance Considerations
 ///
