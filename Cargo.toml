@@ -498,6 +498,7 @@ rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust-embed = "8.8.0"
 rust_decimal = { version = "1.39.0", default-features = false }
 rust_decimal_macros = { version = "1.39.0", default-features = false }
+rustc_version = "0.4.1"
 ryu = "1.0.20"
 scoped-tls = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
