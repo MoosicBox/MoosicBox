@@ -24,6 +24,10 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod db;
 
+/// Represents a music artist.
+///
+/// Contains basic metadata about an artist including their unique identifier,
+/// name (title), optional cover artwork, and associated API sources.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Artist {
@@ -34,9 +38,12 @@ pub struct Artist {
     pub api_sources: ApiSources,
 }
 
+/// Sort order for artist listings.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum ArtistSort {
+    /// Sort by artist name in ascending order
     NameAsc,
+    /// Sort by artist name in descending order
     NameDesc,
 }
 
@@ -52,12 +59,22 @@ impl FromStr for ArtistSort {
     }
 }
 
+/// Global registry of all registered API sources.
+///
+/// # Panics
+///
+/// * Methods that read or write to this lock will panic if the `RwLock` is poisoned
 pub static API_SOURCES: LazyLock<RwLock<BTreeSet<ApiSource>>> =
     LazyLock::new(|| RwLock::new(BTreeSet::new()));
 
+/// The built-in "Library" API source representing locally stored music.
 pub static LIBRARY_API_SOURCE: LazyLock<ApiSource> =
     LazyLock::new(|| ApiSource::register("Library", "Library"));
 
+/// An identifier for a music API source (e.g., "Library", "Tidal", "Qobuz").
+///
+/// API sources distinguish between different origins of music content within the system.
+/// Each source has both an internal ID and a display name.
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Ord, PartialOrd)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 // TODO: Potentially make the inner type a `Arc<...>` instead of a `String`
@@ -67,6 +84,8 @@ pub struct ApiSource {
 }
 
 impl ApiSource {
+    /// Registers a new API source and adds it to the global registry.
+    ///
     /// # Panics
     ///
     /// * If the `API_SOURCES` `RwLock` is poisoned
@@ -81,35 +100,43 @@ impl ApiSource {
         api_source
     }
 
+    /// Returns the library API source (same as [`library()`](Self::library)).
+    #[must_use]
     pub fn register_library() -> Self {
         LIBRARY_API_SOURCE.clone()
     }
 
+    /// Returns a clone of the library API source.
     #[must_use]
     pub fn library() -> Self {
         LIBRARY_API_SOURCE.clone()
     }
 
+    /// Returns a static reference to the library API source.
     #[must_use]
     pub fn library_ref() -> &'static Self {
         &LIBRARY_API_SOURCE
     }
 
+    /// Returns `true` if this API source is the library source.
     #[must_use]
     pub fn is_library(&self) -> bool {
         self == &*LIBRARY_API_SOURCE
     }
 
+    /// Returns `true` if this API source's ID matches the given string.
     #[must_use]
     pub fn matches_str(&self, other: &str) -> bool {
         self.id == other
     }
 
+    /// Returns the display name as a `String`.
     #[must_use]
     pub fn to_string_display(&self) -> String {
         self.as_display().to_string()
     }
 
+    /// Returns the display name as a string slice.
     #[must_use]
     pub const fn as_display(&self) -> &str {
         self.display.as_str()
@@ -171,6 +198,7 @@ impl TryFrom<String> for ApiSource {
     }
 }
 
+/// Error returned when attempting to parse an unregistered API source.
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid ApiSource: '{0}'")]
 pub struct FromStringApiSourceError(String);
@@ -196,6 +224,8 @@ impl From<ApiSource> for String {
 }
 
 impl ApiSource {
+    /// Returns an iterator over all registered API sources.
+    ///
     /// # Panics
     ///
     /// * If the `API_SOURCES` `RwLock` is poisoned
@@ -216,15 +246,19 @@ impl std::fmt::Display for ApiSource {
     }
 }
 
+/// The API source for a specific track, either local or from an external API.
 #[derive(Default, Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TrackApiSource {
+    /// Track is from local storage
     #[default]
     Local,
+    /// Track is from an external API
     Api(ApiSource),
 }
 
 impl TrackApiSource {
+    /// Returns a static slice containing all possible track API sources.
     #[must_use]
     pub fn all() -> &'static [Self] {
         static ALL: LazyLock<Vec<TrackApiSource>> = LazyLock::new(|| {
@@ -239,6 +273,7 @@ impl TrackApiSource {
         &ALL
     }
 
+    /// Attempts to create a track API source from an API source identifier string.
     #[must_use]
     pub fn for_api_source(source: impl Into<String>) -> Option<Self> {
         ApiSource::try_from(source.into()).ok().map(Self::Api)
@@ -280,6 +315,7 @@ impl std::fmt::Display for TrackApiSource {
     }
 }
 
+/// Error returned when attempting to parse an invalid track API source string.
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid track api source: '{0}'")]
 pub struct TryFromStringTrackApiSourceError(String);
@@ -377,6 +413,7 @@ impl ToValueType<TrackApiSource> for &serde_json::Value {
     }
 }
 
+/// Represents a music track with its metadata and audio properties.
 #[derive(Default, Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
@@ -481,6 +518,8 @@ impl From<TrackInner> for Track {
 }
 
 impl Track {
+    /// Returns the directory path containing this track's file.
+    ///
     /// # Panics
     ///
     /// * If the parent file doesn't exist
@@ -494,6 +533,7 @@ impl Track {
     }
 }
 
+/// Represents the audio quality characteristics of a specific album version.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -505,32 +545,38 @@ pub struct AlbumVersionQuality {
     pub source: TrackApiSource,
 }
 
+/// A collection of API source-ID pairs for tracking the same entity across multiple sources.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(transparent)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSources(BTreeSet<ApiId>);
 
 impl ApiSources {
+    /// Adds a source-ID pair to this collection.
     pub fn add_source(&mut self, source: ApiSource, id: Id) {
         self.0.insert(ApiId { source, id });
     }
 
+    /// Removes all entries for the specified source.
     pub fn remove_source(&mut self, source: &ApiSource) {
         self.0.retain(|x| &x.source != source);
     }
 
+    /// Adds a source-ID pair if the ID is `Some`.
     pub fn add_source_opt(&mut self, source: ApiSource, id: Option<Id>) {
         if let Some(id) = id {
             self.0.insert(ApiId { source, id });
         }
     }
 
+    /// Returns a new `ApiSources` with the given source-ID pair added.
     #[must_use]
     pub fn with_source(mut self, source: ApiSource, id: Id) -> Self {
         self.0.insert(ApiId { source, id });
         self
     }
 
+    /// Returns a new `ApiSources` with the given source-ID pair added if the ID is `Some`.
     #[must_use]
     pub fn with_source_opt(mut self, source: ApiSource, id: Option<Id>) -> Self {
         if let Some(id) = id {
@@ -539,12 +585,14 @@ impl ApiSources {
         self
     }
 
+    /// Returns a new `ApiSources` with the given API ID added.
     #[must_use]
     pub fn with_api_id(mut self, api_id: ApiId) -> Self {
         self.0.insert(api_id);
         self
     }
 
+    /// Returns the ID for the given source, if present.
     #[must_use]
     pub fn get(&self, source: &ApiSource) -> Option<&Id> {
         self.iter().find_map(|x| {
@@ -558,6 +606,7 @@ impl ApiSources {
 }
 
 impl ApiSources {
+    /// Returns an iterator over the API IDs in this collection.
     pub fn iter(&self) -> std::collections::btree_set::Iter<'_, ApiId> {
         self.0.iter()
     }
@@ -581,6 +630,7 @@ impl IntoIterator for ApiSources {
     }
 }
 
+/// The type/category of an album.
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
 )]
@@ -588,12 +638,18 @@ impl IntoIterator for ApiSources {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
+    /// Studio album (LP)
     #[default]
     Lp,
+    /// Live recording
     Live,
+    /// Compilation album
     Compilations,
+    /// EPs and singles
     EpsAndSingles,
+    /// Other album types
     Other,
+    /// Digital download release
     Download,
 }
 
@@ -603,6 +659,7 @@ impl std::fmt::Display for AlbumType {
     }
 }
 
+/// Represents a music album with its metadata and available versions.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Album {
     pub id: Id,
@@ -662,11 +719,14 @@ impl TryFrom<Track> for Album {
     }
 }
 
+/// The API source for an album, either local or from an external API.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default, AsRefStr)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumSource {
+    /// Album is from local storage
     #[default]
     Local,
+    /// Album is from an external API
     Api(ApiSource),
 }
 
@@ -717,15 +777,24 @@ impl std::fmt::Display for AlbumSource {
     }
 }
 
+/// Sort order for album listings.
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, Eq, PartialEq)]
 pub enum AlbumSort {
+    /// Sort by artist name in ascending order
     ArtistAsc,
+    /// Sort by artist name in descending order
     ArtistDesc,
+    /// Sort by album name in ascending order
     NameAsc,
+    /// Sort by album name in descending order
     NameDesc,
+    /// Sort by release date in ascending order
     ReleaseDateAsc,
+    /// Sort by release date in descending order
     ReleaseDateDesc,
+    /// Sort by date added in ascending order
     DateAddedAsc,
+    /// Sort by date added in descending order
     DateAddedDesc,
 }
 
@@ -762,6 +831,7 @@ impl FromStr for AlbumSort {
     }
 }
 
+/// Audio format for tracks and albums.
 #[derive(
     Copy, Debug, Clone, Serialize, Deserialize, EnumString, Default, AsRefStr, PartialEq, Eq,
 )]
@@ -769,14 +839,19 @@ impl FromStr for AlbumSort {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AudioFormat {
+    /// AAC audio format
     #[cfg(feature = "aac")]
     Aac,
+    /// FLAC audio format
     #[cfg(feature = "flac")]
     Flac,
+    /// MP3 audio format
     #[cfg(feature = "mp3")]
     Mp3,
+    /// Opus audio format
     #[cfg(feature = "opus")]
     Opus,
+    /// Use the source audio format without transcoding
     #[default]
     Source,
 }
@@ -787,6 +862,10 @@ impl std::fmt::Display for AudioFormat {
     }
 }
 
+/// Converts a file extension to an audio format.
+///
+/// Returns `None` if the extension is not recognized or if the corresponding
+/// feature is not enabled.
 #[must_use]
 pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
     #[allow(unreachable_code)]
@@ -803,12 +882,14 @@ pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
     })
 }
 
+/// Playback quality settings for audio.
 #[derive(Copy, Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackQuality {
     pub format: AudioFormat,
 }
 
+/// Represents the size of a track in a specific format.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct TrackSize {
     pub id: u64,
