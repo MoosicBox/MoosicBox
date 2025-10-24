@@ -9,7 +9,7 @@ The HyperChad Transformer Models package provides:
 - **Layout Models**: Flexible layout direction and overflow handling
 - **Alignment Types**: Content and item alignment options
 - **Position Models**: Element positioning and cursor types
-- **Route Models**: HTTP routing and HTMX integration
+- **Route Models**: HTTP routing and dynamic content swapping
 - **Visual Models**: Visibility, image, and text styling options
 - **Typography Models**: Font weight and text decoration options
 - **Serialization**: Optional serde support for all models
@@ -43,11 +43,11 @@ The HyperChad Transformer Models package provides:
 - **ImageLoading**: Eager/Lazy loading strategies
 - **ImageFit**: Default, Contain, Cover, Fill, None
 
-### Routing & HTMX
+### Routing & Swapping
 
 - **Route**: GET, POST, PUT, DELETE, PATCH HTTP methods
 - **Selector**: Id, Class, ChildClass, SelfTarget targeting for CSS selectors
-- **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies for HTMX
+- **SwapStrategy**: This, Children, BeforeBegin, AfterBegin, BeforeEnd, AfterEnd, Delete, None swap strategies
 - **LinkTarget**: SelfTarget, Blank, Parent, Top, Custom
 
 ## Installation
@@ -128,7 +128,7 @@ println!("Image: {} {}", loading, fit);
 // Output: "Image: lazy cover"
 ```
 
-### HTMX Routing
+### Dynamic Routing
 
 ```rust
 use hyperchad_transformer_models::{Route, Selector, SwapStrategy};
@@ -230,9 +230,9 @@ use hyperchad_transformer_models::LayoutPosition;
 
 ### Interaction Models
 
-- **Route**: HTTP routing with HTMX support
+- **Route**: HTTP routing with dynamic content swapping
 - **Selector**: CSS selector targeting
-- **SwapStrategy**: HTMX content swap strategies
+- **SwapStrategy**: Content swap strategies
 - **LinkTarget**: Link navigation targets
 
 ## String Conversion
@@ -281,6 +281,6 @@ This package is designed for:
 
 - **UI Frameworks**: Core UI component modeling
 - **CSS Generation**: CSS class and style generation
-- **HTMX Integration**: Server-side rendered applications
+- **Dynamic Content**: Server-side rendered applications
 - **Layout Systems**: Flexbox and grid layout systems
 - **Component Libraries**: Reusable UI component definitions
