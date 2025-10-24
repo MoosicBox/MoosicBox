@@ -222,8 +222,6 @@ pub fn load_merged_config(app_type: AppType, profile: &str) -> Result<MergedConf
 mod tests {
     use super::*;
     use std::sync::{LazyLock, Mutex};
-
-    #[cfg(feature = "test")]
     use switchy_fs::sync;
 
     // Test lock to ensure tests that modify ROOT_DIR run serially
@@ -290,7 +288,6 @@ mod tests {
 
     // Tests for get_config_file_path()
     #[test]
-    #[cfg(feature = "test")]
     fn test_get_config_file_path_prefers_json5() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -306,7 +303,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_get_config_file_path_falls_back_to_json() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -320,7 +316,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_get_config_file_path_returns_none_when_missing() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -331,7 +326,6 @@ mod tests {
 
     // Tests for load_config_file()
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_config_file_success() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -352,7 +346,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_config_file_read_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -365,7 +358,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_config_file_parse_error() {
         let temp_dir = switchy_fs::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -380,7 +372,6 @@ mod tests {
 
     // Tests for load_global_config()
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_global_config_with_json5_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -414,7 +405,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_global_config_with_json_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -440,7 +430,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_global_config_returns_default_when_file_missing() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -459,7 +448,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_global_config_parse_error() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -480,7 +468,6 @@ mod tests {
 
     // Tests for load_profile_config()
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_profile_config_with_json5_file() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -514,7 +501,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_profile_config_returns_default_when_file_missing() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -536,7 +522,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_profile_config_parse_error() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -560,7 +545,6 @@ mod tests {
 
     // Tests for load_merged_config()
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_merged_config_combines_global_and_profile() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -624,7 +608,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_merged_config_with_missing_files() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -646,7 +629,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_merged_config_global_parse_error_propagates() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
@@ -668,7 +650,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "test")]
     fn test_load_merged_config_profile_parse_error_propagates() {
         let _lock = TEST_LOCK.lock().unwrap();
         let temp_dir = switchy_fs::tempdir().unwrap();
