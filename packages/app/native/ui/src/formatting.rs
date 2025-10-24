@@ -6,7 +6,11 @@ use moosicbox_music_models::{
 use rust_decimal::{Decimal, RoundingStrategy};
 use rust_decimal_macros::dec;
 
+/// Formats time values into human-readable strings.
+///
+/// Converts numeric time values (in seconds) to formatted strings like "1:23" or "1:23:45".
 pub trait TimeFormat {
+    /// Converts the time value to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -38,7 +42,9 @@ impl TimeFormat for u64 {
     }
 }
 
+/// Formats API source values into display strings.
 pub trait ApiSourceFormat {
+    /// Converts the API source to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -48,7 +54,9 @@ impl ApiSourceFormat for ApiSource {
     }
 }
 
+/// Formats track API source values into display strings.
 pub trait TrackApiSourceFormat {
+    /// Converts the track API source to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -58,7 +66,9 @@ impl TrackApiSourceFormat for TrackApiSource {
     }
 }
 
+/// Formats audio format values into human-readable strings.
 pub trait AudioFormatFormat {
+    /// Converts the audio format to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -78,7 +88,11 @@ impl AudioFormatFormat for AudioFormat {
     }
 }
 
+/// Formats album version quality information into display strings.
+///
+/// Includes format, sample rate, and bit depth information.
 pub trait AlbumVersionQualityFormat {
+    /// Converts the album version quality to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -120,6 +134,10 @@ impl AlbumVersionQualityFormat for ApiAlbumVersionQuality {
     }
 }
 
+/// Displays a list of album version qualities as a single formatted string.
+///
+/// Qualities are separated by " / " and truncated with a count indicator if they exceed `max_characters`.
+#[must_use]
 pub fn display_album_version_qualities<T: AlbumVersionQualityFormat>(
     mut qualities: impl Iterator<Item = T>,
     max_characters: Option<usize>,
@@ -150,7 +168,9 @@ pub fn display_album_version_qualities<T: AlbumVersionQualityFormat>(
     formatted
 }
 
+/// Formats album type values into human-readable category names.
 pub trait AlbumTypeFormat {
+    /// Converts the album type to a formatted string.
     fn into_formatted(self) -> String;
 }
 
@@ -166,6 +186,9 @@ impl AlbumTypeFormat for AlbumType {
     }
 }
 
+/// Formats a date string into a specific format.
+///
+/// Returns "n/a" if the date string cannot be parsed.
 #[must_use]
 pub fn format_date_string(date_string: &str, format: &str) -> String {
     // January 08, 2025
@@ -175,17 +198,22 @@ pub fn format_date_string(date_string: &str, format: &str) -> String {
     format_date(&date, format)
 }
 
+/// Formats a date into a string using the specified format.
 #[must_use]
 pub fn format_date(date: &NaiveDateTime, format: &str) -> String {
     // January 08, 2025
     date.format(format).to_string()
 }
 
+/// Formats a byte size into a human-readable string.
 #[must_use]
 pub fn format_size(size: u64) -> String {
     bytesize::ByteSize::b(size).to_string()
 }
 
+/// Converts a name to a CSS class-friendly format.
+///
+/// Converts to lowercase and replaces non-alphanumeric characters with hyphens.
 #[must_use]
 pub fn classify_name<T: AsRef<str>>(class: T) -> String {
     let class = class.as_ref();
