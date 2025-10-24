@@ -202,6 +202,7 @@ jobs:
             - name: Setup cargo-machete
               uses: BSteffaniak/cache-artifact@master
               with:
+                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   repo: https://github.com/BSteffaniak/cargo-machete
                   command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
                   shell: bash
@@ -214,6 +215,7 @@ jobs:
             - name: Setup taplo
               uses: BSteffaniak/cache-artifact@master
               with:
+                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   repo: https://github.com/tamasfe/taplo
                   command: cargo install taplo-cli --locked
                   shell: bash

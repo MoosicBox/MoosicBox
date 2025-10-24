@@ -192,6 +192,7 @@ jobs:
             - name: Setup cargo-machete
               uses: BSteffaniak/cache-artifact@master
               with:
+                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   repo: https://github.com/BSteffaniak/cargo-machete
                   command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
                   shell: bash
@@ -469,6 +470,7 @@ jobs:
             - name: Setup clippier
               uses: BSteffaniak/cache-artifact@master
               with:
+                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   directory: ./packages/clippier
                   command: cargo build --package clippier --features git-diff --release
                   output-path: ./target/release/clippier
