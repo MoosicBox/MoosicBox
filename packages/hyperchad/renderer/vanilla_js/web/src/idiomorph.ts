@@ -28,14 +28,10 @@ on('swapHtml', ({ target, html, strategy }) => {
     // Resolve target to element
     if (typeof target === 'string') {
         const element = document.querySelector(target);
-        if (!element) {
-            console.warn(`Swap target not found: ${target}`);
-            return;
-        }
+        if (!element) return;
+
         target = element as HTMLElement;
     }
-
-    const addedElements: HTMLElement[] = [];
 
     // Handle delete
     if (strategy === 'delete') {
@@ -44,9 +40,7 @@ on('swapHtml', ({ target, html, strategy }) => {
     }
 
     // Handle none
-    if (strategy === 'none') {
-        return;
-    }
+    if (strategy === 'none') return;
 
     // Handle positional insertions using native DOM API
     if (
@@ -60,18 +54,19 @@ on('swapHtml', ({ target, html, strategy }) => {
         target.insertAdjacentHTML(position, htmlString);
 
         // Collect newly inserted elements
-        const newElements = getInsertedElements(target, position);
-        addedElements.push(...newElements);
+        const newElement = getInsertedElements(target, position);
 
-        if (addedElements.length > 0) {
+        if (newElement) {
             triggerHandlers('domLoad', {
                 initial: false,
                 navigation: false,
-                elements: addedElements,
+                elements: [newElement],
             });
         }
         return;
     }
+
+    const addedElements: HTMLElement[] = [];
 
     // Handle morph strategies (children, this) using Idiomorph
     // Map to idiomorph's innerHTML/outerHTML terminology
@@ -106,31 +101,23 @@ on('swapHtml', ({ target, html, strategy }) => {
 function getInsertedElements(
     target: HTMLElement,
     position: InsertPosition,
-): HTMLElement[] {
-    const elements: HTMLElement[] = [];
-
+): HTMLElement | undefined {
     switch (position) {
         case 'beforebegin':
-            if (target.previousElementSibling instanceof HTMLElement) {
-                elements.push(target.previousElementSibling);
-            }
+            if (target.previousElementSibling instanceof HTMLElement)
+                return target.previousElementSibling;
             break;
         case 'afterbegin':
-            if (target.firstElementChild instanceof HTMLElement) {
-                elements.push(target.firstElementChild);
-            }
+            if (target.firstElementChild instanceof HTMLElement)
+                return target.firstElementChild;
             break;
         case 'beforeend':
-            if (target.lastElementChild instanceof HTMLElement) {
-                elements.push(target.lastElementChild);
-            }
+            if (target.lastElementChild instanceof HTMLElement)
+                return target.lastElementChild;
             break;
         case 'afterend':
-            if (target.nextElementSibling instanceof HTMLElement) {
-                elements.push(target.nextElementSibling);
-            }
+            if (target.nextElementSibling instanceof HTMLElement)
+                return target.nextElementSibling;
             break;
     }
-
-    return elements;
 }
