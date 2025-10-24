@@ -125,7 +125,7 @@ pub struct TauriUpdateAppState {
     pub connection_id: Option<String>,
     /// The human-readable name of the current connection.
     pub connection_name: Option<String>,
-    /// The API URL for the MoosicBox server.
+    /// The API URL for the `MoosicBox` server.
     pub api_url: Option<String>,
     /// The client ID for authentication.
     pub client_id: Option<String>,
@@ -779,7 +779,7 @@ async fn handle_http_request(
         .map_err(|e| TauriPlayerError::Unknown(e.to_string()))
 }
 
-/// Runs the MoosicBox Tauri application.
+/// Runs the `MoosicBox` Tauri application.
 ///
 /// This is the main entry point for the application. It initializes all services,
 /// configures plugins, sets up the application state, and starts the Tauri runtime.
