@@ -141,7 +141,14 @@ jobs:
                   # Format thread history for Claude (exclude the latest comment since it's passed separately)
                   if [ "$THREAD_COUNT" -gt 1 ]; then
                     echo "thread_history<<EOF" >> $GITHUB_OUTPUT
-                    echo "$THREAD_HISTORY" | jq -r '.[0:-1] | .[] | "[@\(.user.login) at \(.created_at)]:\n\(.body)\n"' >> $GITHUB_OUTPUT
+                    echo "$THREAD_HISTORY" | jq -r '.[0:-1] | .[] |
+                      "[@\(.user.login) at \(.created_at)]:\n" +
+                      (if ((.body | startswith("👀 Looking into this...")) or (.user.login | ascii_downcase | IN("moosicboxbot", "claude[bot]"))) then
+                        (.body | split("\n---\n")[0] | split("\n\n---\n")[0])
+                      else
+                        .body
+                      end) +
+                      "\n"' >> $GITHUB_OUTPUT
                     echo "EOF" >> $GITHUB_OUTPUT
                   else
                     # No previous history, just the current comment
