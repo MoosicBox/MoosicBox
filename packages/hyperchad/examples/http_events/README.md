@@ -28,7 +28,7 @@ This example demonstrates the complete HTTP request lifecycle event system in Hy
 
 ```bash
 cd packages/hyperchad/examples/http_events
-PORT=3131 cargo run
+PORT=3131 cargo run -- serve
 ```
 
 Then open your browser to: **http://localhost:3131**
@@ -38,7 +38,7 @@ Then open your browser to: **http://localhost:3131**
 ### Production (expects external JS hosting):
 
 ```bash
-PORT=3131 cargo run --no-default-features --features actix,vanilla-js
+PORT=3131 cargo run --no-default-features --features actix,vanilla-js -- serve
 ```
 
 ## Features
