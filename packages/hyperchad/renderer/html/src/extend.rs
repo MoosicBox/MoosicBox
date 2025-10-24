@@ -6,11 +6,15 @@ use hyperchad_renderer::{
 };
 use thiserror::Error;
 
+/// Publisher for HTML renderer events.
+///
+/// Allows publishing renderer events to subscribers through a channel.
 #[derive(Clone)]
 pub struct HtmlRendererEventPub {
     sender: Sender<RendererEvent>,
 }
 
+/// Errors that can occur when publishing HTML renderer events.
 #[derive(Debug, Error)]
 pub enum HtmlRendererEventPubError {
     #[error(transparent)]
@@ -18,6 +22,7 @@ pub enum HtmlRendererEventPubError {
 }
 
 impl HtmlRendererEventPub {
+    /// Creates a new event publisher and returns the publisher along with a receiver.
     #[must_use]
     pub fn new() -> (Self, Receiver<RendererEvent>) {
         let (tx, rx) = flume::unbounded();
@@ -33,6 +38,10 @@ impl HtmlRendererEventPub {
     }
 }
 
+/// Trait for extending HTML renderer with custom behavior.
+///
+/// Implementations can hook into rendering events to add custom functionality
+/// like server-sent events, WebSocket updates, or other real-time features.
 #[async_trait]
 pub trait ExtendHtmlRenderer {
     /// # Errors
@@ -58,9 +67,6 @@ pub trait ExtendHtmlRenderer {
         Ok(())
     }
 
-    /// # Errors
-    ///
-    /// Will error if `ExtendHtmlRenderer` implementation fails to render the partial elements.
     /// # Errors
     ///
     /// Will error if `ExtendHtmlRenderer` implementation fails to render the canvas update.

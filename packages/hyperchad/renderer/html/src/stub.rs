@@ -3,14 +3,21 @@ use hyperchad_transformer::ResponsiveTrigger;
 
 use crate::HtmlApp;
 
+/// Stub HTML application for testing or minimal rendering scenarios.
+///
+/// This implementation provides basic HTML app functionality without
+/// actual rendering or server integration.
 #[derive(Clone)]
 pub struct StubApp<T: HtmlTagRenderer> {
+    /// The HTML tag renderer.
     pub tag_renderer: T,
     #[cfg(feature = "assets")]
+    /// Static asset routes.
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
 }
 
 impl<T: HtmlTagRenderer> StubApp<T> {
+    /// Creates a new stub app with the given tag renderer.
     pub const fn new(tag_renderer: T) -> Self {
         Self {
             tag_renderer,
@@ -90,6 +97,9 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
     }
 }
 
+/// Stub render runner that performs no actual rendering.
+///
+/// Useful for testing or scenarios where render execution is not required.
 #[derive(Clone)]
 pub struct StubRunner;
 
