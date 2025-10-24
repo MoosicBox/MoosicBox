@@ -129,6 +129,7 @@ pub fn to_html(containers: &[Container]) -> String {
 /// };
 /// let html = into_html(&containers);
 /// ```
+#[must_use]
 pub fn into_html(containers: &[Container]) -> String {
     containers
         .iter()
@@ -459,6 +460,7 @@ impl core::fmt::Display for ContainerList {
 }
 
 impl ContainerList {
+    /// Create a new `ContainerList` from a `Vec<Container>`.
     #[must_use]
     pub const fn new(containers: Vec<Container>) -> Self {
         Self(containers)
@@ -470,6 +472,7 @@ impl ContainerList {
         self.0.iter().map(ToString::to_string).collect::<String>()
     }
 
+    /// Returns an iterator over the containers.
     pub fn iter(&self) -> core::slice::Iter<'_, Container> {
         self.0.iter()
     }
@@ -538,8 +541,12 @@ pub use hyperchad_transformer_models::*;
 #[cfg(feature = "logic")]
 pub use hyperchad_actions::logic::{IfExpression, Responsive, if_responsive};
 
-/// Trait for converting values to bool (to handle `IfExpression<bool, Responsive>`)
+/// Trait for converting values to `bool`.
+///
+/// This trait handles conversion from various types to boolean values, including
+/// conditional expressions like `IfExpression<bool, Responsive>` when the `logic` feature is enabled.
 pub trait ToBool {
+    /// Converts the value to a `bool`.
     fn to_bool(self) -> bool;
 }
 
@@ -559,8 +566,11 @@ impl ToBool for IfExpression<bool, Responsive> {
 }
 
 /// Trait for converting various types to `ActionEffect`.
-/// This handles the conversion chain properly without violating the orphan rule.
+///
+/// This trait enables flexible conversion from action-related types to `ActionEffect`,
+/// handling the conversion chain properly without violating the orphan rule.
 pub trait IntoActionEffect {
+    /// Converts the value into an `ActionEffect`.
     fn into_action_effect(self) -> actions::ActionEffect;
 }
 
@@ -604,9 +614,12 @@ impl IntoActionEffect for actions::logic::If {
     }
 }
 
-/// Trait for converting various types to border tuples (Color, Number).
-/// This handles flexible border specification in templates.
+/// Trait for converting various types to border tuples `(Color, Number)`.
+///
+/// This trait enables flexible border specification in templates, supporting various
+/// combinations of color and numeric types for defining borders.
 pub trait IntoBorder {
+    /// Converts the value into a border tuple of `(Color, Number)`.
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number);
 }
 
@@ -1159,7 +1172,22 @@ pub mod calc {
     }
 }
 
-/// Helper module for function-style unit syntax like vw(50), vh(100), dvw(90), dvh(60)
+/// Helper functions for creating viewport unit values.
+///
+/// This module provides function-style syntax for creating viewport-relative numbers,
+/// such as `vw(50)`, `vh(100)`, `dvw(90)`, and `dvh(60)`.
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_template::container;
+///
+/// let containers = container! {
+///     div width=vw(50) height=vh(100) {
+///         "Full height, half width"
+///     }
+/// };
+/// ```
 pub mod unit_functions {
     use hyperchad_transformer::Number;
 
@@ -1170,7 +1198,7 @@ pub mod unit_functions {
         num.calc(0.0, 100.0, 100.0)
     }
 
-    // Viewport units
+    /// Convert a value to viewport width units (vw).
     pub fn vw<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1181,6 +1209,7 @@ pub mod unit_functions {
         }
     }
 
+    /// Convert a value to viewport height units (vh).
     pub fn vh<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1190,6 +1219,7 @@ pub mod unit_functions {
         }
     }
 
+    /// Convert a value to dynamic viewport width units (dvw).
     pub fn dvw<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1199,6 +1229,7 @@ pub mod unit_functions {
         }
     }
 
+    /// Convert a value to dynamic viewport height units (dvh).
     pub fn dvh<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
