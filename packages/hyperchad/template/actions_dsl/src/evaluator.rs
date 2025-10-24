@@ -79,7 +79,8 @@ fn generate_statement_push(
             // Special handling for function calls that should become actions
             if let Expression::Call { function, args } = expr {
                 match function.as_str() {
-                    "show" | "hide" | "show_self" | "hide_self" => {
+                    "show" | "hide" | "show_self" | "hide_self" | "no_display_self"
+                    | "display_self" => {
                         // These should be converted to ActionType constructors
                         let action_code = generate_function_call_code(context, function, args)?;
                         return Ok(quote! {
@@ -1675,6 +1676,22 @@ fn generate_function_call_code(
                         hyperchad_actions::ActionType::hide_self()
                     })
                 }
+                "no_display_self" => {
+                    if !args.is_empty() {
+                        return Err("no_display_self() expects no arguments".to_string());
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::no_display_self()
+                    })
+                }
+                "display_self" => {
+                    if !args.is_empty() {
+                        return Err("display_self() expects no arguments".to_string());
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::display_self()
+                    })
+                }
                 "remove_background_self" => {
                     if !args.is_empty() {
                         return Err("remove_background_self() expects no arguments".to_string());
@@ -1817,6 +1834,22 @@ fn generate_function_call_code(
             }
             Ok(quote! {
                 hyperchad_actions::ActionType::hide_self()
+            })
+        }
+        "no_display_self" => {
+            if !args.is_empty() {
+                return Err("no_display_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::no_display_self()
+            })
+        }
+        "display_self" => {
+            if !args.is_empty() {
+                return Err("display_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::display_self()
             })
         }
         "remove_background_self" => {
