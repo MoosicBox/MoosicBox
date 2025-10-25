@@ -16,8 +16,8 @@ Core features (always available):
 
 With optional features enabled:
 
-- **Track Management**: Handle audio track files, metadata, and streaming (requires `files` feature)
-- **Album/Artist Artwork**: Manage album and artist cover images (requires `files` feature)
+- **Track Management**: Handle audio track files, metadata, and streaming with pooling support (requires `files` feature)
+- **Album/Artist Artwork**: Serve album and artist cover images via API (requires `files` feature)
 - **HTTP Range Support**: Parse and handle HTTP byte range requests (requires `range` feature)
 - **REST API Endpoints**: Actix-web endpoints for serving files, tracks, and artwork (requires `api` feature)
 - **Audio Codec Support**: Decode/encode various audio formats including AAC, FLAC, MP3, and Opus (requires decoder/encoder features)
@@ -275,7 +275,7 @@ The library provides specific error types for different operations:
 
 The package provides several optional features:
 
-- `files` - Enable file download and cover art functionality (includes track management, album/artist handling)
+- `files` - Enable track management, album/artist handling, and audio file pooling
 - `range` - Enable HTTP range request support
 - `api` - Enable Actix-web API endpoints for file serving (implies `files` and `range`)
 - `openapi` - Enable OpenAPI/utoipa documentation support
