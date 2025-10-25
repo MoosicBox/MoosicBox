@@ -150,7 +150,7 @@ The `db` feature enables database integration via `switchy_database`:
 - **ID Traits**: All models implement `AsId` for database operations
 - **Helper Functions**:
     - `get_album_version_qualities()`: Retrieves album versions from the database with sorting
-    - `sort_album_versions()`: Sorts album versions by sample rate, bit depth, and source
+    - `sort_album_versions()`: Sorts album versions by source, bit depth, and sample rate
 
 These traits enable seamless conversion between database rows and library models, supporting complex queries with joins and relationship loading.
 
@@ -162,7 +162,7 @@ use moosicbox_music_models::AlbumVersionQuality;
 
 let mut versions: Vec<AlbumVersionQuality> = vec![/* ... */];
 sort_album_versions(&mut versions);
-// Versions are now sorted by: sample rate (desc), bit depth (desc), source
+// Versions are now sorted by: source (asc), bit depth (desc), sample rate (desc)
 ```
 
 ## Dependencies
