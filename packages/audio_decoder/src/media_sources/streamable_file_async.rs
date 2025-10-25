@@ -7,12 +7,18 @@ use rangemap::RangeSet;
 use switchy_http::Client;
 use symphonia::core::io::MediaSource;
 
-// Used in cpal_output.rs to mute the stream when buffering.
+/// Global flag indicating whether the stream is currently buffering.
+///
+/// This is used in audio output implementations to mute audio during buffering.
 pub static IS_STREAM_BUFFERING: AtomicBool = AtomicBool::new(false);
 
 const CHUNK_SIZE: usize = 1024 * 128;
 const FETCH_OFFSET: usize = CHUNK_SIZE / 2;
 
+/// A media source that streams a file asynchronously over HTTP.
+///
+/// This type implements [`MediaSource`], [`Read`], and [`Seek`] to allow streaming
+/// audio files from a remote URL with automatic chunk fetching and buffering.
 pub struct StreamableFileAsync {
     url: String,
     buffer: Vec<u8>,

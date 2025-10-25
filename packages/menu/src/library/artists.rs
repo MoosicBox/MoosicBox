@@ -7,21 +7,31 @@ use serde::{Deserialize, Serialize};
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 
+/// Request parameters for querying artists from the library.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistsRequest {
+    /// Optional list of album sources to filter by
     pub sources: Option<Vec<AlbumSource>>,
+    /// Optional sort order for the results
     pub sort: Option<ArtistSort>,
+    /// Filters to apply to the artist query
     pub filters: ArtistFilters,
 }
 
+/// Filter criteria for artist queries.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistFilters {
+    /// Filter by artist name (case-insensitive substring match)
     pub name: Option<String>,
+    /// Generic search query (case-insensitive substring match)
     pub search: Option<String>,
 }
 
+/// Filters a list of artists based on the provided request criteria.
+///
+/// Applies name and search filters from the request to the artist list.
 #[must_use]
 pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> Vec<LibraryArtist> {
     artists
@@ -41,6 +51,9 @@ pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> 
         .collect()
 }
 
+/// Sorts a list of artists based on the sort order specified in the request.
+///
+/// Applies case-insensitive sorting by artist name in ascending or descending order.
 #[must_use]
 pub fn sort_artists(
     mut artists: Vec<LibraryArtist>,

@@ -17,7 +17,14 @@ use symphonia::core::{
 
 use crate::packet::OpusPacket;
 
-/// Opus decoder implementation.
+/// Opus audio decoder for Symphonia.
+///
+/// Implements the Symphonia [`Decoder`] trait to provide RFC 6716 compliant
+/// Opus decoding using libopus. Supports mono and stereo playback at sample
+/// rates of 8, 12, 16, 24, and 48 kHz.
+///
+/// Create instances using [`Decoder::try_new`] with appropriate [`CodecParameters`],
+/// or register with a codec registry using [`register_opus_codec`](crate::register_opus_codec).
 pub struct OpusDecoder {
     params: CodecParameters,
     decoder: Mutex<OpusLibDecoder>,

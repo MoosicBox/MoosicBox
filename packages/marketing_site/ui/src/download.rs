@@ -12,6 +12,10 @@ use crate::page;
 
 pub use hyperchad::template as hyperchad_template;
 
+/// Generates the downloads page.
+///
+/// Returns a page container with a header and a container that will be
+/// dynamically populated with release information via HTMX.
 #[must_use]
 pub fn download() -> Containers {
     page(&container! {
@@ -24,32 +28,49 @@ pub fn download() -> Containers {
     })
 }
 
+/// Operating system information for download page rendering.
 #[derive(Default, Clone, Debug)]
 pub struct Os<'a> {
+    /// Lowercase operating system name used for matching assets.
     pub lower_name: &'a str,
+    /// Display name of the operating system.
     pub name: &'a str,
+    /// Header text for the operating system section.
     pub header: &'a str,
 }
 
+/// Software release information for a specific operating system.
 #[derive(Default, Clone, Debug)]
 pub struct OsRelease<'a> {
+    /// Version string of the release.
     pub version: &'a str,
+    /// Timestamp when the release was published.
     pub published_at: NaiveDateTime,
+    /// URL to the release page on GitHub.
     pub url: &'a str,
+    /// List of downloadable assets for different platforms.
     pub assets: Vec<OsAsset<'a>>,
 }
 
+/// Downloadable asset for a specific operating system.
 #[derive(Default, Clone, Debug)]
 pub struct OsAsset<'a> {
+    /// Name identifier for the asset (e.g., "windows", "linux").
     pub name: &'a str,
+    /// Primary download file for this asset.
     pub asset: Option<FileAsset<'a>>,
+    /// Alternative download formats available for this asset.
     pub other_formats: Vec<FileAsset<'a>>,
 }
 
+/// Downloadable file information.
 #[derive(Default, Clone, Debug)]
 pub struct FileAsset<'a> {
+    /// Direct download URL for the file.
     pub browser_download_url: &'a str,
+    /// Filename of the asset.
     pub name: &'a str,
+    /// File size in bytes.
     pub size: u64,
 }
 
@@ -79,6 +100,10 @@ fn format_date(date: &NaiveDateTime) -> String {
     date.format("%B %d, %Y %H:%M:%S").to_string()
 }
 
+/// Generates the releases list component.
+///
+/// Renders a formatted list of software releases with download links for each
+/// operating system. Highlights the detected OS for user convenience.
 #[must_use]
 pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
     container! {

@@ -96,7 +96,13 @@ impl ToValueType<u64> for &OwnedValue {
     }
 }
 
+/// Trait for extracting typed values from tantivy documents.
+///
+/// This trait provides methods to get values by field name from tantivy documents
+/// and convert them to the desired Rust type.
 pub trait ToValue<Type> {
+    /// Extracts a value from a tantivy document field and converts it to type `T`.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse

@@ -31,6 +31,10 @@ static INSECURE_WARNING: LazyLock<()> = LazyLock::new(|| {
     );
 });
 
+/// HTML tag renderer that generates vanilla JavaScript for hyperchad framework.
+///
+/// This renderer produces HTML with custom attributes (e.g., `v-onclick`, `hx-get`)
+/// that are processed by the hyperchad JavaScript runtime to enable interactive behavior.
 #[derive(Debug, Default, Clone)]
 pub struct VanillaJsTagRenderer {
     default: DefaultHtmlTagRenderer,
@@ -42,20 +46,46 @@ const SCRIPT_NAME_EXTENSION: &str = "js";
 #[cfg(not(debug_assertions))]
 const SCRIPT_NAME_EXTENSION: &str = "min.js";
 
+/// The filename of the hyperchad JavaScript runtime.
+///
+/// In debug builds, this is `"hyperchad.js"`. In release builds, this is `"hyperchad.min.js"`.
 pub const SCRIPT_NAME: &str = concatcp!(SCRIPT_NAME_STEM, ".", SCRIPT_NAME_EXTENSION);
 
+/// The embedded hyperchad JavaScript runtime source code.
+///
+/// This constant contains the full JavaScript source that implements the hyperchad
+/// runtime for handling interactive elements, actions, and events. In debug builds,
+/// this is the unminified source from `index.js`. In release builds, this is the
+/// minified source from `index.min.js`.
+///
+/// Only available when the `script` feature is enabled.
 #[cfg(all(debug_assertions, feature = "script"))]
 pub const SCRIPT: &str = include_str!(concat!(
     env!("HYPERCHAD_VANILLA_JS_EMBED_SCRIPT_DIR"),
     "/index.js"
 ));
 
+/// The embedded hyperchad JavaScript runtime source code.
+///
+/// This constant contains the full JavaScript source that implements the hyperchad
+/// runtime for handling interactive elements, actions, and events. In debug builds,
+/// this is the unminified source from `index.js`. In release builds, this is the
+/// minified source from `index.min.js`.
+///
+/// Only available when the `script` feature is enabled.
 #[cfg(all(not(debug_assertions), feature = "script"))]
 pub const SCRIPT: &str = include_str!(concat!(
     env!("HYPERCHAD_VANILLA_JS_EMBED_SCRIPT_DIR"),
     "/index.min.js"
 ));
 
+/// Content-hashed filename for the hyperchad JavaScript runtime.
+///
+/// This static computes an MD5 hash of the script content (including enabled plugin features)
+/// and generates a filename like `"hyperchad-a1b2c3d4e5.js"` or `"hyperchad-a1b2c3d4e5.min.js"`.
+/// The hash ensures browsers invalidate their cache when the script content changes.
+///
+/// Only available when both `hash` and `script` features are enabled.
 #[cfg(all(feature = "hash", feature = "script"))]
 pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     #[allow(unused_mut)]
@@ -931,6 +961,10 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
     }
 }
 
+/// Renderer implementation that extends HTML rendering with vanilla JavaScript capabilities.
+///
+/// This renderer implements the `ExtendHtmlRenderer` trait to enable server-sent events,
+/// view updates, and canvas rendering in hyperchad applications using vanilla JavaScript.
 pub struct VanillaJsRenderer {}
 
 #[async_trait]

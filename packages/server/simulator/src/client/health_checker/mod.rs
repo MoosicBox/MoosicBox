@@ -11,6 +11,9 @@ use crate::{
     try_connect,
 };
 
+/// Starts the health checker client in the simulation.
+///
+/// The health checker periodically verifies the server's health status.
 pub fn start(sim: &mut impl Sim) {
     let mut plan = HealthCheckInteractionPlan::new().with_gen_interactions(1000);
 

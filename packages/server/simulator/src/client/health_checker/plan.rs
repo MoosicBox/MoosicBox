@@ -5,6 +5,7 @@ use strum::{EnumDiscriminants, EnumIter};
 
 use crate::host::moosicbox_server::{HOST, PORT};
 
+/// Context for health check interaction plan.
 pub struct InteractionPlanContext {}
 
 impl Default for InteractionPlanContext {
@@ -20,6 +21,9 @@ impl InteractionPlanContext {
     }
 }
 
+/// Interaction plan for health checking.
+///
+/// Generates and executes health check interactions.
 pub struct HealthCheckInteractionPlan {
     #[allow(unused)]
     context: InteractionPlanContext,
@@ -44,11 +48,14 @@ impl HealthCheckInteractionPlan {
     }
 }
 
+/// Health check interaction type.
 #[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(InteractionType))]
 pub enum Interaction {
+    /// Sleep for a duration.
     Sleep(Duration),
+    /// Perform a health check on a host.
     HealthCheck(String),
 }
 

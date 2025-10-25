@@ -1,3 +1,8 @@
+//! `MoosicBox` native UI component library.
+//!
+//! This crate provides UI components and templates for rendering the `MoosicBox`
+//! music player interface using the hyperchad templating system.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -29,16 +34,33 @@ use search::search;
 use serde::{Deserialize, Serialize};
 use state::State;
 
+/// Height of the visualization canvas in pixels.
 pub const VIZ_HEIGHT: u16 = 35;
+/// Padding around the visualization canvas in pixels.
 pub const VIZ_PADDING: u16 = 5;
+/// Border size of the footer in pixels.
 pub const FOOTER_BORDER_SIZE: u16 = 3;
+/// Total height of the footer including visualization and padding.
 pub const FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
+/// Size of icons in the footer in pixels.
 pub const FOOTER_ICON_SIZE: u16 = 25;
+/// Size of the current album artwork in the player in pixels.
 pub const CURRENT_ALBUM_SIZE: u16 = 70;
 
+/// Dark background color used in the UI.
 pub const DARK_BACKGROUND: &str = "#080a0b";
+/// Standard background color used in the UI.
 pub const BACKGROUND: &str = "#181a1b";
 
+/// Constructs a path to a public image asset.
+///
+/// # Examples
+///
+/// ```
+/// # use moosicbox_app_native_ui::public_img;
+/// let icon_path = public_img!("icon128.png");
+/// assert_eq!(icon_path, "/public/img/icon128.png");
+/// ```
 #[macro_export]
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -46,6 +68,9 @@ macro_rules! public_img {
     };
 }
 
+/// Custom UI actions that can be triggered in the application.
+///
+/// Actions are serialized to JSON and sent to the frontend for execution.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Action {
@@ -122,6 +147,9 @@ impl std::fmt::Display for Action {
 impl TryFrom<String> for Action {
     type Error = serde_json::Error;
 
+    /// # Errors
+    ///
+    /// * Returns an error if the string is not valid JSON or does not match the `Action` schema
     fn try_from(value: String) -> Result<Self, Self::Error> {
         serde_json::from_str(&value)
     }
@@ -130,6 +158,9 @@ impl TryFrom<String> for Action {
 impl TryFrom<&String> for Action {
     type Error = serde_json::Error;
 
+    /// # Errors
+    ///
+    /// * Returns an error if the string is not valid JSON or does not match the `Action` schema
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
@@ -138,6 +169,9 @@ impl TryFrom<&String> for Action {
 impl<'a> TryFrom<&'a str> for Action {
     type Error = serde_json::Error;
 
+    /// # Errors
+    ///
+    /// * Returns an error if the string is not valid JSON or does not match the `Action` schema
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
@@ -314,9 +348,13 @@ pub fn player(state: &State) -> Containers {
     }
 }
 
+/// DOM element ID for the volume slider container.
 pub const VOLUME_SLIDER_CONTAINER_ID: &str = "volume-slider-container";
+/// DOM element ID for the volume slider.
 pub const VOLUME_SLIDER_ID: &str = "volume-slider";
+/// DOM element ID for the volume slider value container.
 pub const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-container";
+/// DOM element ID for the volume slider value display.
 pub const VOLUME_SLIDER_VALUE_ID: &str = "volume-slider-value";
 
 fn volume(state: &State, size: u16) -> Containers {
@@ -634,7 +672,9 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
     }
 }
 
+/// DOM element ID for the audio zones modal.
 pub static AUDIO_ZONES_ID: &str = "audio-zones";
+/// DOM element ID for the audio zones modal content.
 pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 #[must_use]
@@ -653,8 +693,11 @@ pub fn audio_zones() -> Containers {
     )
 }
 
+/// DOM element ID for the playback sessions modal.
 pub static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
+/// DOM element ID for the playback sessions modal content.
 pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
+/// DOM element ID for the play queue panel.
 pub static PLAY_QUEUE_ID: &str = "play-queue";
 
 #[must_use]

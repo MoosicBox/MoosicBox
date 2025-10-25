@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{Credentials, CredentialsParseError};
 
+/// Errors that can occur when retrieving database credentials
 #[derive(Debug, Error)]
 pub enum GetDbCredsError {
     #[error("Invalid Connection Options")]

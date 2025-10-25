@@ -24,6 +24,7 @@ use serde_json::Value;
 
 use crate::{API_SOURCE, QobuzAlbumReleaseType, format_title};
 
+/// Represents image URLs at different sizes for Qobuz album and artist artwork.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzImage {
@@ -35,6 +36,7 @@ pub struct QobuzImage {
     pub mega: Option<String>,
 }
 
+/// Image size variants for Qobuz artwork, with pixel dimensions indicated in comments.
 #[derive(Clone, Copy, Debug)]
 pub enum QobuzImageSize {
     Mega,       // 4800
@@ -173,6 +175,7 @@ impl AsModelResult<QobuzImage, ParseError> for Value {
     }
 }
 
+/// Represents a music genre in the Qobuz catalog.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzGenre {
@@ -197,6 +200,7 @@ impl AsModelResult<QobuzGenre, ParseError> for Value {
     }
 }
 
+/// Represents an album in the Qobuz music catalog with full metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbum {
@@ -326,6 +330,9 @@ impl ToValueType<QobuzAlbum> for &Value {
     }
 }
 
+/// Determines the album release type based on track count and duration heuristics.
+///
+/// Used as a fallback when the Qobuz API does not provide explicit release type information.
 #[must_use]
 pub const fn magic_qobuz_album_release_type_determinizer(
     duration: u32,
@@ -382,6 +389,7 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
     }
 }
 
+/// Represents an album release in the Qobuz catalog, typically from artist album listings.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzRelease {
@@ -444,6 +452,7 @@ impl AsModelResult<QobuzRelease, ParseError> for Value {
     }
 }
 
+/// Represents a track in the Qobuz music catalog with metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct QobuzTrack {
@@ -592,6 +601,7 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
     }
 }
 
+/// Represents an artist in the Qobuz music catalog.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtist {
@@ -705,6 +715,7 @@ impl TryFrom<QobuzRelease> for ApiAlbum {
     }
 }
 
+/// Represents a paginated list of search results from Qobuz.
 #[derive(Serialize, Deserialize)]
 pub struct QobuzSearchResultList<T> {
     pub items: Vec<T>,
@@ -737,6 +748,7 @@ where
     }
 }
 
+/// Contains search results across albums, artists, and tracks from Qobuz.
 #[derive(Serialize, Deserialize)]
 pub struct QobuzSearchResults {
     pub albums: QobuzSearchResultList<QobuzAlbum>,

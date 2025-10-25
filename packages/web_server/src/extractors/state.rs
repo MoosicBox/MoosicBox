@@ -164,7 +164,7 @@ impl<T> State<T> {
         Self(value)
     }
 
-    /// Get the inner Arc<T> value
+    /// Get the inner `Arc<T>` value
     #[must_use]
     pub fn into_inner(self) -> Arc<T> {
         self.0

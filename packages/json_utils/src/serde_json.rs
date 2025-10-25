@@ -8,7 +8,10 @@ use serde_json::Value;
 
 use crate::{ParseError, ToValueType};
 
+/// Trait for navigating to nested values in JSON structures.
 pub trait ToNested<Type> {
+    /// Navigates to a nested value using a path of keys.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse
@@ -191,7 +194,10 @@ impl ToValueType<isize> for &Value {
     }
 }
 
+/// Trait for extracting typed values from JSON by key.
 pub trait ToValue {
+    /// Extracts a value from a JSON object by key and converts it to type `T`.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse
@@ -218,7 +224,10 @@ impl ToValue for &Value {
     }
 }
 
+/// Trait for extracting typed values from nested JSON structures.
 pub trait ToNestedValue {
+    /// Navigates to a nested JSON value using a path and converts it to type `T`.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse

@@ -159,6 +159,10 @@ pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
     }
 }
 
+/// Writes a single Ogg packet to a file.
+///
+/// Creates an Ogg packet writer and writes the provided content as a single packet
+/// with stream end marker.
 pub fn write_ogg(file: std::fs::File, content: &[u8]) {
     let mut writer = PacketWriter::new(file);
 
@@ -175,6 +179,10 @@ struct OpusPacket {
     info: PacketWriteEndInfo,
 }
 
+/// Ogg/Opus stream writer with buffering support.
+///
+/// Implements [`std::io::Write`] to provide a streaming interface for writing Opus-encoded
+/// audio data to an Ogg container file.
 pub struct OpusWrite<'a> {
     packet_writer: PacketWriter<'a, File>,
     serial: u32,
@@ -184,7 +192,14 @@ pub struct OpusWrite<'a> {
     packet: Option<OpusPacket>,
 }
 
-// Construct Opus Stream Header Packet data
+/// Opus stream identification header for Ogg encapsulation.
+///
+/// Contains the `OpusHead` magic signature and stream configuration:
+/// * Version 1
+/// * Stereo (2 channels)
+/// * 48000 Hz sample rate
+/// * Zero pre-skip and output gain
+/// * Normal channel mapping family
 pub const OPUS_STREAM_IDENTIFICATION_HEADER: [u8; 19] = [
     // Opus magic signature ("OpusHead")
     b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd',
@@ -204,7 +219,11 @@ pub const OPUS_STREAM_IDENTIFICATION_HEADER: [u8; 19] = [
     0x00, // Channel mapping: "normal"
 ];
 
-// Construct Opus Stream Header Packet data
+/// Opus stream comment header for Ogg encapsulation.
+///
+/// Contains the `OpusTags` magic signature and minimal vendor string:
+/// * Vendor string: "ENCODER"
+/// * Empty user comment list
 pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 23] = [
     // Opus magic signature ("OpusHead")
     b'O', b'p', b'u', b's', b'T', b'a', b'g', b's',

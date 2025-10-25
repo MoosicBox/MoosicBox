@@ -6,16 +6,24 @@ pub use rand;
 
 use crate::{GenericRng, Rng};
 
+/// The global random number generator instance.
+///
+/// This static provides a shared RNG that can be used across the application.
 pub static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(Rng::new);
 
+/// Returns a clone of the global random number generator.
 #[must_use]
 pub fn rng() -> crate::Rng {
     RNG.clone()
 }
 
+/// The underlying random number generator implementation using `rand::rngs::SmallRng`.
 pub struct RandRng(Arc<Mutex<SmallRng>>);
 
 impl RandRng {
+    /// Creates a new random number generator from an optional seed.
+    ///
+    /// If `None` is provided, the RNG is seeded from entropy.
     pub fn new<T: Into<u64>, S: Into<Option<T>>>(seed: S) -> Self {
         Self(Arc::new(Mutex::new(
             seed.into()

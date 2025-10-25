@@ -17,6 +17,10 @@ use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
 
 pub use hyperchad_renderer_html_lambda::*;
 
+/// Converts a hyperchad router to an AWS Lambda-compatible HTML renderer.
+///
+/// Creates an HTML renderer configured for AWS Lambda with the provided tag renderer
+/// and router configuration.
 #[must_use]
 pub fn router_to_lambda<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     tag_renderer: T,
@@ -29,17 +33,28 @@ pub fn router_to_lambda<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     ))
 }
 
+/// Lambda response processor for HTML rendering.
+///
+/// Processes AWS Lambda requests and generates HTML responses using the
+/// configured router and tag renderer.
 #[derive(Clone)]
 pub struct HtmlLambdaResponseProcessor<T: HtmlTagRenderer + Clone + Send + Sync> {
+    /// The hyperchad router for handling navigation.
     pub router: Router,
+    /// The HTML tag renderer.
     pub tag_renderer: T,
+    /// Background color for the page.
     pub background: Option<Color>,
+    /// Page title.
     pub title: Option<String>,
+    /// Page description.
     pub description: Option<String>,
+    /// Viewport meta tag content.
     pub viewport: Option<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlLambdaResponseProcessor<T> {
+    /// Creates a new Lambda response processor.
     #[must_use]
     pub const fn new(tag_renderer: T, router: Router) -> Self {
         Self {
@@ -141,6 +156,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+/// Prepared request for Lambda processing.
+///
+/// Contains the parsed route request and flags indicating the request type.
 #[derive(Clone)]
 pub struct PreparedRequest {
     full: bool,

@@ -1,3 +1,9 @@
+//! CDN optimization utilities for Hyperchad HTML renderers.
+//!
+//! This crate provides functionality to configure Hyperchad routers for CDN-optimized
+//! deployments. It creates a static skeleton HTML file that can be cached by CDNs,
+//! while the actual dynamic content is loaded via JavaScript.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

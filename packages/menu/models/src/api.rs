@@ -5,15 +5,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::AlbumVersion;
 
+/// API representation of an album version with audio quality metadata.
+///
+/// This is the serializable version of [`AlbumVersion`] used for API responses
+/// and requests. It contains the same quality information but uses [`ApiTrack`]
+/// for the tracks collection.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAlbumVersion {
+    /// The tracks included in this album version.
     pub tracks: Vec<ApiTrack>,
+    /// The audio format (e.g., FLAC, MP3).
     pub format: Option<AudioFormat>,
+    /// The bit depth in bits (e.g., 16, 24).
     pub bit_depth: Option<u8>,
+    /// The sample rate in Hz (e.g., 44100, 96000).
     pub sample_rate: Option<u32>,
+    /// The number of audio channels (e.g., 2 for stereo).
     pub channels: Option<u8>,
+    /// The API source this version comes from.
     pub source: TrackApiSource,
 }
 

@@ -18,34 +18,43 @@ static INTERVAL_PERIOD: LazyLock<RwLock<Option<Duration>>> =
     LazyLock::new(|| RwLock::new(Some(Duration::from_millis(16))));
 static DIMENSIONS: LazyLock<RwLock<(f32, f32)>> = LazyLock::new(|| RwLock::new((0.0, 0.0)));
 
+/// Returns the current visualization canvas dimensions.
+///
 /// # Panics
 ///
-/// * If the `DIMENSIONS` is poisoned
+/// * If the `DIMENSIONS` lock is poisoned
 pub fn get_dimensions() -> (f32, f32) {
     *DIMENSIONS.read().unwrap()
 }
 
+/// Sets the visualization canvas dimensions.
+///
 /// # Panics
 ///
-/// * If the `DIMENSIONS` is poisoned
+/// * If the `DIMENSIONS` lock is poisoned
 pub fn set_dimensions(width: f32, height: f32) {
     *DIMENSIONS.write().unwrap() = (width, height);
 }
 
+/// Sets the visualization update interval period.
+///
 /// # Panics
 ///
-/// * If the `INTERVAL_PERIOD` is poisoned
+/// * If the `INTERVAL_PERIOD` lock is poisoned
 pub fn set_interval_period(period: Duration) {
     *INTERVAL_PERIOD.write().unwrap() = Some(period);
 }
 
+/// Disables the visualization update interval.
+///
 /// # Panics
 ///
-/// * If the `INTERVAL_PERIOD` is poisoned
+/// * If the `INTERVAL_PERIOD` lock is poisoned
 pub fn disable_interval() {
     *INTERVAL_PERIOD.write().unwrap() = None;
 }
 
+/// Represents the currently playing track for visualization purposes.
 #[derive(Debug, Clone)]
 pub struct CurrentTrack {
     #[allow(unused)]
@@ -325,9 +334,11 @@ async fn tick_visualization() {
     update_visualization(visualization_width, visualization_height, current_track).await;
 }
 
+/// Checks and updates the visualization based on the current playback state.
+///
 /// # Panics
 ///
-/// * If the `CURRENT_TRACK` is poisoned
+/// * If the `CURRENT_TRACK` lock is poisoned
 pub async fn check_visualization_update() {
     let session = STATE.get_current_session_ref().await;
     if let Some(session) = session {

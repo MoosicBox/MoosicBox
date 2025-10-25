@@ -6,12 +6,15 @@ use std::collections::BTreeMap;
 
 use hyperchad_transformer_models::Visibility;
 
+/// Logic and conditional evaluation for actions
 #[cfg(feature = "logic")]
 pub mod logic;
 
+/// Arbitrary value generation for property-based testing
 #[cfg(feature = "arb")]
 pub mod arb;
 
+/// Action handler implementation for processing and executing actions
 #[cfg(feature = "handler")]
 pub mod handler;
 
@@ -22,6 +25,7 @@ pub use hyperchad_transformer_models::{ElementTarget, Target};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Keyboard key representation for key events
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Key {
@@ -107,6 +111,7 @@ pub enum Key {
 }
 
 impl Key {
+    /// Returns the string representation of the key
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -199,6 +204,7 @@ impl std::fmt::Display for Key {
     }
 }
 
+/// Context information for HTTP-related action events
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HttpEventContext {
@@ -210,6 +216,7 @@ pub struct HttpEventContext {
     pub error: Option<String>,
 }
 
+/// Event trigger that determines when an action should execute
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionTrigger {
@@ -232,6 +239,7 @@ pub enum ActionTrigger {
 }
 
 impl ActionTrigger {
+    /// Returns the trigger type name as a string
     #[must_use]
     pub const fn trigger_type(&self) -> &'static str {
         match self {
@@ -254,11 +262,14 @@ impl ActionTrigger {
     }
 }
 
+/// Action that combines a trigger event with an effect
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct Action {
+    /// Event that triggers this action
     pub trigger: ActionTrigger,
+    /// Effect to execute when triggered
     pub effect: ActionEffect,
 }
 
@@ -269,20 +280,26 @@ impl std::fmt::Display for Action {
     }
 }
 
+/// Effect that wraps an action with timing and execution modifiers
 #[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct ActionEffect {
+    /// The action to execute
     pub action: ActionType,
+    /// Milliseconds to delay before turning off the effect
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub delay_off: Option<u64>,
+    /// Milliseconds to throttle repeated executions
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub throttle: Option<u64>,
+    /// Whether this effect should be unique
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub unique: Option<bool>,
 }
 
 impl ActionEffect {
+    /// Converts this effect into an `ActionEffect` (identity function for chaining)
     #[must_use]
     pub const fn into_action_effect(self) -> Self {
         self
@@ -308,18 +325,21 @@ impl From<Vec<ActionType>> for ActionEffect {
 }
 
 impl ActionEffect {
+    /// Sets the `delay_off` duration in milliseconds
     #[must_use]
     pub const fn delay_off(mut self, millis: u64) -> Self {
         self.delay_off = Some(millis);
         self
     }
 
+    /// Sets the throttle duration in milliseconds
     #[must_use]
     pub const fn throttle(mut self, millis: u64) -> Self {
         self.throttle = Some(millis);
         self
     }
 
+    /// Marks this effect as unique
     #[must_use]
     pub const fn unique(mut self) -> Self {
         self.unique = Some(true);
@@ -349,6 +369,7 @@ impl std::fmt::Display for ActionEffect {
     }
 }
 
+/// Log severity level for logging actions
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogLevel {
@@ -359,52 +380,83 @@ pub enum LogLevel {
     Trace,
 }
 
+/// Input-related action types
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum InputActionType {
-    Select { target: ElementTarget },
+    /// Select an input element
+    Select {
+        /// Target element to select
+        target: ElementTarget,
+    },
 }
 
+/// Types of actions that can be performed on UI elements
 #[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionType {
+    /// No operation action
     #[default]
     NoOp,
+    /// Variable assignment
     Let {
+        /// Variable name
         name: String,
+        /// Value expression
         value: dsl::Expression,
     },
+    /// Style modification action
     Style {
+        /// Target element
         target: ElementTarget,
+        /// Style action to apply
         action: StyleAction,
     },
+    /// Input-related action
     Input(InputActionType),
+    /// Navigate to a URL
     Navigate {
+        /// URL to navigate to
         url: String,
     },
+    /// Log a message
     Log {
+        /// Message to log
         message: String,
+        /// Log level
         level: LogLevel,
     },
+    /// Custom action
     Custom {
+        /// Custom action name
         action: String,
     },
+    /// Event-triggered action
     Event {
+        /// Event name
         name: String,
+        /// Action to execute on event
         action: Box<Self>,
     },
+    /// Multiple actions executed sequentially
     Multi(Vec<Self>),
+    /// Multiple effects executed sequentially
     MultiEffect(Vec<ActionEffect>),
+    /// Parameterized action with dynamic value
     #[cfg(feature = "logic")]
     Parameterized {
+        /// Action to execute
         action: Box<Self>,
+        /// Dynamic value parameter
         value: logic::Value,
     },
+    /// Conditional logic action
     #[cfg(feature = "logic")]
     Logic(logic::If),
 }
 
 impl ActionType {
+    /// Converts this action into an `ActionEffect`
     #[must_use]
     pub fn into_action_effect(self) -> ActionEffect {
         self.into()
@@ -412,6 +464,7 @@ impl ActionType {
 }
 
 impl ActionType {
+    /// Creates an event-triggered action
     #[must_use]
     pub fn on_event(event: impl Into<String>, action: impl Into<Self>) -> Self {
         Self::Event {
@@ -420,6 +473,7 @@ impl ActionType {
         }
     }
 
+    /// Sets focus on an element identified by string ID
     #[must_use]
     pub fn set_focus_str_id(focus: bool, target: impl Into<Target>) -> Self {
         Self::Style {
@@ -428,6 +482,7 @@ impl ActionType {
         }
     }
 
+    /// Sets focus on an element identified by class name
     #[must_use]
     pub fn set_focus_class(focus: bool, class: impl Into<Target>) -> Self {
         Self::Style {
@@ -436,6 +491,7 @@ impl ActionType {
         }
     }
 
+    /// Sets focus on a child element identified by class name
     #[must_use]
     pub fn set_focus_child_class(focus: bool, class: impl Into<Target>) -> Self {
         Self::Style {
@@ -444,6 +500,7 @@ impl ActionType {
         }
     }
 
+    /// Selects an input element identified by string ID
     #[must_use]
     pub fn select_str_id(target: impl Into<Target>) -> Self {
         Self::Input(InputActionType::Select {
@@ -451,6 +508,7 @@ impl ActionType {
         })
     }
 
+    /// Selects an input element identified by class name
     #[must_use]
     pub fn select_class(class: impl Into<Target>) -> Self {
         Self::Input(InputActionType::Select {
@@ -458,6 +516,7 @@ impl ActionType {
         })
     }
 
+    /// Selects a child input element identified by class name
     #[must_use]
     pub fn select_child_class(class: impl Into<Target>) -> Self {
         Self::Input(InputActionType::Select {
@@ -465,6 +524,7 @@ impl ActionType {
         })
     }
 
+    /// Sets visibility on an element identified by string ID
     #[must_use]
     pub fn set_visibility_str_id(visibility: Visibility, target: impl Into<Target>) -> Self {
         Self::Style {
@@ -473,6 +533,7 @@ impl ActionType {
         }
     }
 
+    /// Sets visibility on a child element identified by class name
     #[must_use]
     pub fn set_visibility_child_class(visibility: Visibility, class: impl Into<Target>) -> Self {
         Self::Style {
@@ -481,36 +542,43 @@ impl ActionType {
         }
     }
 
+    /// Hides an element identified by string ID
     #[must_use]
     pub fn hide_str_id(target: impl Into<Target>) -> Self {
         Self::set_visibility_str_id(Visibility::Hidden, target)
     }
 
+    /// Shows an element identified by string ID
     #[must_use]
     pub fn show_str_id(target: impl Into<Target>) -> Self {
         Self::set_visibility_str_id(Visibility::Visible, target)
     }
 
+    /// Hides an element identified by class name
     #[must_use]
     pub fn hide_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Hidden, class_name)
     }
 
+    /// Shows an element identified by class name
     #[must_use]
     pub fn show_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Visible, class_name)
     }
 
+    /// Focuses an element identified by string ID
     #[must_use]
     pub fn focus_str_id(target: impl Into<Target>) -> Self {
         Self::set_focus_str_id(true, target)
     }
 
+    /// Focuses an element identified by class name
     #[must_use]
     pub fn focus_class(class_name: impl Into<Target>) -> Self {
         Self::set_focus_class(true, class_name)
     }
 
+    /// Sets visibility on an element identified by class name
     #[must_use]
     pub fn set_visibility_class(visibility: Visibility, class_name: impl Into<Target>) -> Self {
         Self::Style {
@@ -519,6 +587,7 @@ impl ActionType {
         }
     }
 
+    /// Sets visibility on an element identified by numeric ID
     #[must_use]
     pub const fn set_visibility_id(visibility: Visibility, target: usize) -> Self {
         Self::Style {
@@ -527,16 +596,19 @@ impl ActionType {
         }
     }
 
+    /// Hides an element identified by numeric ID
     #[must_use]
     pub const fn hide_id(target: usize) -> Self {
         Self::set_visibility_id(Visibility::Hidden, target)
     }
 
+    /// Shows an element identified by numeric ID
     #[must_use]
     pub const fn show_id(target: usize) -> Self {
         Self::set_visibility_id(Visibility::Visible, target)
     }
 
+    /// Sets visibility on the element itself
     #[must_use]
     pub const fn set_visibility_self(visibility: Visibility) -> Self {
         Self::Style {
@@ -545,16 +617,19 @@ impl ActionType {
         }
     }
 
+    /// Hides the element itself
     #[must_use]
     pub const fn hide_self() -> Self {
         Self::set_visibility_self(Visibility::Hidden)
     }
 
+    /// Shows the element itself
     #[must_use]
     pub const fn show_self() -> Self {
         Self::set_visibility_self(Visibility::Visible)
     }
 
+    /// Sets visibility on the last child element
     #[must_use]
     pub const fn set_visibility_last_child(visibility: Visibility) -> Self {
         Self::Style {
@@ -563,16 +638,19 @@ impl ActionType {
         }
     }
 
+    /// Hides the last child element
     #[must_use]
     pub const fn hide_last_child() -> Self {
         Self::set_visibility_last_child(Visibility::Hidden)
     }
 
+    /// Shows the last child element
     #[must_use]
     pub const fn show_last_child() -> Self {
         Self::set_visibility_last_child(Visibility::Visible)
     }
 
+    /// Toggles visibility on an element identified by string ID
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_visibility_str_id(target: impl Into<Target>) -> Self {
@@ -603,6 +681,7 @@ impl ActionType {
         })
     }
 
+    /// Sets display property on an element identified by string ID
     #[must_use]
     pub fn set_display_str_id(display: bool, target: impl Into<Target>) -> Self {
         Self::Style {
@@ -611,6 +690,7 @@ impl ActionType {
         }
     }
 
+    /// Sets display property on an element identified by class name
     #[must_use]
     pub fn set_display_class(display: bool, class_name: impl Into<Target>) -> Self {
         Self::Style {
@@ -619,26 +699,31 @@ impl ActionType {
         }
     }
 
+    /// Disables display on an element identified by string ID
     #[must_use]
     pub fn no_display_str_id(target: impl Into<Target>) -> Self {
         Self::set_display_str_id(false, target)
     }
 
+    /// Enables display on an element identified by string ID
     #[must_use]
     pub fn display_str_id(target: impl Into<Target>) -> Self {
         Self::set_display_str_id(true, target)
     }
 
+    /// Disables display on an element identified by class name
     #[must_use]
     pub fn no_display_class(class_name: impl Into<Target>) -> Self {
         Self::set_display_class(false, class_name)
     }
 
+    /// Enables display on an element identified by class name
     #[must_use]
     pub fn display_class(class_name: impl Into<Target>) -> Self {
         Self::set_display_class(true, class_name)
     }
 
+    /// Sets display property on an element identified by numeric ID
     #[must_use]
     pub const fn set_display_id(display: bool, target: usize) -> Self {
         Self::Style {
@@ -647,16 +732,19 @@ impl ActionType {
         }
     }
 
+    /// Disables display on an element identified by numeric ID
     #[must_use]
     pub const fn no_display_id(target: usize) -> Self {
         Self::set_display_id(false, target)
     }
 
+    /// Enables display on an element identified by numeric ID
     #[must_use]
     pub const fn display_id(target: usize) -> Self {
         Self::set_display_id(true, target)
     }
 
+    /// Sets display property on the element itself
     #[must_use]
     pub const fn set_display_self(display: bool) -> Self {
         Self::Style {
@@ -665,16 +753,19 @@ impl ActionType {
         }
     }
 
+    /// Disables display on the element itself
     #[must_use]
     pub const fn no_display_self() -> Self {
         Self::set_display_self(false)
     }
 
+    /// Enables display on the element itself
     #[must_use]
     pub const fn display_self() -> Self {
         Self::set_display_self(true)
     }
 
+    /// Sets display property on the last child element
     #[must_use]
     pub const fn set_display_last_child(display: bool) -> Self {
         Self::Style {
@@ -683,16 +774,19 @@ impl ActionType {
         }
     }
 
+    /// Disables display on the last child element
     #[must_use]
     pub const fn no_display_last_child() -> Self {
         Self::set_display_last_child(false)
     }
 
+    /// Enables display on the last child element
     #[must_use]
     pub const fn display_last_child() -> Self {
         Self::set_display_last_child(true)
     }
 
+    /// Sets display property on a child element identified by class name
     #[must_use]
     pub fn set_display_child_class(display: bool, class: impl Into<Target>) -> Self {
         Self::Style {
@@ -701,16 +795,19 @@ impl ActionType {
         }
     }
 
+    /// Disables display on a child element identified by class name
     #[must_use]
     pub fn no_display_child_class(class: impl Into<Target>) -> Self {
         Self::set_display_child_class(false, class)
     }
 
+    /// Enables display on a child element identified by class name
     #[must_use]
     pub fn display_child_class(class: impl Into<Target>) -> Self {
         Self::set_display_child_class(true, class)
     }
 
+    /// Toggles display property on an element identified by string ID
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_str_id(target: impl Into<Target>) -> Self {
@@ -737,6 +834,7 @@ impl ActionType {
         })
     }
 
+    /// Toggles display property on an element identified by class name
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_str_class(target: impl Into<Target>) -> Self {
@@ -763,6 +861,7 @@ impl ActionType {
         })
     }
 
+    /// Toggles display property on a child element identified by class name
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_child_class(target: impl Into<Target>) -> Self {
@@ -789,6 +888,7 @@ impl ActionType {
         })
     }
 
+    /// Toggles display property on an element identified by numeric ID
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_id(target: usize) -> Self {
@@ -818,6 +918,7 @@ impl ActionType {
         })
     }
 
+    /// Toggles display property on the element itself
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_self() -> Self {
@@ -847,6 +948,7 @@ impl ActionType {
         })
     }
 
+    /// Toggles display property on the last child element
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_display_last_child() -> Self {
@@ -876,6 +978,7 @@ impl ActionType {
         })
     }
 
+    /// Sets background on an element identified by string ID
     #[must_use]
     pub fn set_background_str_id(background: impl Into<String>, target: impl Into<Target>) -> Self {
         Self::Style {
@@ -884,6 +987,7 @@ impl ActionType {
         }
     }
 
+    /// Sets background on an element identified by numeric ID
     #[must_use]
     pub fn set_background_id(background: impl Into<String>, target: usize) -> Self {
         Self::Style {
@@ -892,6 +996,7 @@ impl ActionType {
         }
     }
 
+    /// Sets background on the element itself
     #[must_use]
     pub fn set_background_self(background: impl Into<String>) -> Self {
         Self::Style {
@@ -900,6 +1005,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from the element itself
     #[must_use]
     pub const fn remove_background_self() -> Self {
         Self::Style {
@@ -908,6 +1014,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from an element identified by string ID
     #[must_use]
     pub fn remove_background_str_id(target: impl Into<Target>) -> Self {
         Self::Style {
@@ -916,6 +1023,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from an element identified by numeric ID
     #[must_use]
     pub const fn remove_background_id(target: usize) -> Self {
         Self::Style {
@@ -924,6 +1032,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from an element identified by class name
     #[must_use]
     pub fn remove_background_class(class_name: impl Into<Target>) -> Self {
         Self::Style {
@@ -932,6 +1041,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from a child element identified by class name
     #[must_use]
     pub fn remove_background_child_class(class_name: impl Into<Target>) -> Self {
         Self::Style {
@@ -940,6 +1050,7 @@ impl ActionType {
         }
     }
 
+    /// Removes background from the last child element
     #[must_use]
     pub const fn remove_background_last_child() -> Self {
         Self::Style {
@@ -948,6 +1059,7 @@ impl ActionType {
         }
     }
 
+    /// Sets background on the last child element
     #[must_use]
     pub fn set_background_last_child(background: impl Into<String>) -> Self {
         Self::Style {
@@ -956,6 +1068,7 @@ impl ActionType {
         }
     }
 
+    /// Chains this action with another action
     #[must_use]
     pub fn and(self, action: impl Into<Self>) -> Self {
         if let Self::Multi(mut actions) = self {
@@ -966,6 +1079,7 @@ impl ActionType {
         }
     }
 
+    /// Wraps this action with a throttle delay
     #[must_use]
     pub const fn throttle(self, millis: u64) -> ActionEffect {
         ActionEffect {
@@ -976,6 +1090,7 @@ impl ActionType {
         }
     }
 
+    /// Wraps this action with a `delay_off` duration
     #[must_use]
     pub const fn delay_off(self, millis: u64) -> ActionEffect {
         ActionEffect {
@@ -986,6 +1101,7 @@ impl ActionType {
         }
     }
 
+    /// Marks this action as unique
     #[must_use]
     pub const fn unique(self) -> ActionEffect {
         ActionEffect {
@@ -1034,6 +1150,7 @@ impl<'a> TryFrom<&'a str> for ActionType {
     }
 }
 
+/// Style modification actions for UI elements
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StyleAction {

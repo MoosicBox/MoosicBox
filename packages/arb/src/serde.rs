@@ -3,6 +3,10 @@ use serde_json::Value;
 
 use crate::xml::XmlString;
 
+/// Arbitrary JSON value for property-based testing.
+///
+/// Currently generates JSON string values using XML-compatible strings
+/// to ensure broad compatibility in testing scenarios.
 #[derive(Clone, Debug)]
 pub struct JsonValue(pub Value);
 
@@ -12,6 +16,10 @@ impl Arbitrary for JsonValue {
     }
 }
 
+/// Arbitrary finite `f64` for JSON serialization in property-based testing.
+///
+/// Generates only finite floating-point values (excludes NaN and infinity),
+/// as these are the only values valid in JSON.
 #[derive(Clone, Debug)]
 pub struct JsonF64(pub f64);
 
@@ -29,6 +37,10 @@ impl Arbitrary for JsonF64 {
     }
 }
 
+/// Arbitrary finite `f32` for JSON serialization in property-based testing.
+///
+/// Generates only finite floating-point values (excludes NaN and infinity),
+/// as these are the only values valid in JSON.
 #[derive(Clone, Debug)]
 pub struct JsonF32(pub f32);
 

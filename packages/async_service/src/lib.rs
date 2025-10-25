@@ -1,3 +1,44 @@
+//! Asynchronous service management framework for the `MoosicBox` ecosystem.
+//!
+//! This crate provides macros and utilities for building async services with command processing,
+//! lifecycle management, and cancellation support. It generates boilerplate code for managing
+//! service state, processing commands via channels, and coordinating async tasks.
+//!
+//! # Examples
+//!
+//! ```
+//! use moosicbox_async_service::*;
+//!
+//! #[derive(Debug)]
+//! pub enum MyCommand {
+//!     ProcessData { data: String },
+//! }
+//!
+//! pub struct MyContext {
+//!     pub count: u32,
+//! }
+//!
+//! // Generate service with sequential command processing
+//! async_service_sequential!(MyCommand, MyContext);
+//!
+//! #[async_trait]
+//! impl Processor for Service {
+//!     type Error = Error;
+//!
+//!     async fn process_command(
+//!         ctx: Arc<sync::RwLock<MyContext>>,
+//!         command: MyCommand,
+//!     ) -> Result<(), Self::Error> {
+//!         match command {
+//!             MyCommand::ProcessData { data } => {
+//!                 ctx.write().await.count += 1;
+//!             }
+//!         }
+//!         Ok(())
+//!     }
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -14,6 +55,93 @@ pub use switchy_async::util::CancellationToken;
 pub use switchy_async::{runtime, select, sync};
 pub use thiserror::Error;
 
+/// Generates the core async service implementation with customizable command processing mode.
+///
+/// This is a low-level macro that generates the complete service infrastructure including:
+/// * `Processor` trait for implementing command processing logic
+/// * `Service` struct for managing service lifecycle and state
+/// * `Handle` struct for sending commands to the service
+/// * `Command` struct for wrapping commands with optional completion notifications
+/// * `Commander` trait with methods for sending commands
+/// * `CommanderError` enum for command sending errors
+///
+/// # Parameters
+///
+/// * `$command` - The command enum type that defines all possible commands
+/// * `$context` - The context struct type that holds service state
+/// * `$sequential` - Boolean literal (`true` or `false`) controlling command processing:
+///   * `true`: Commands are processed sequentially in the order received
+///   * `false`: Commands are processed concurrently, spawning a new task for each
+///
+/// # Generated Types
+///
+/// The macro generates several types in the current module:
+///
+/// * `Service` - Main service struct with methods:
+///   * `new(ctx)` - Create a new service with the given context
+///   * `with_name(name)` - Set a name for the service (for logging and task naming)
+///   * `start()` - Start the service on the current runtime
+///   * `start_on(handle)` - Start the service on a specific runtime handle
+///   * `handle()` - Get a cloneable handle for sending commands
+///
+/// * `Handle` - Cloneable handle for interacting with the service (implements `Commander`)
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_async_service::*;
+///
+/// #[derive(Debug)]
+/// pub enum MyCommand {
+///     DoWork { value: u32 },
+/// }
+///
+/// pub struct MyContext {
+///     total: u32,
+/// }
+///
+/// // Define your own Error type
+/// #[derive(Debug, thiserror::Error)]
+/// pub enum Error {
+///     #[error(transparent)]
+///     Join(#[from] JoinError),
+///     #[error("Failed to send")]
+///     Send,
+///     #[error(transparent)]
+///     IO(#[from] std::io::Error),
+/// }
+///
+/// impl From<SendError<()>> for Error {
+///     fn from(_: SendError<()>) -> Self {
+///         Self::Send
+///     }
+/// }
+///
+/// // Generate service with sequential processing
+/// async_service_body!(MyCommand, MyContext, true);
+///
+/// #[async_trait]
+/// impl Processor for Service {
+///     type Error = Error;
+///
+///     async fn process_command(
+///         ctx: Arc<sync::RwLock<MyContext>>,
+///         command: MyCommand,
+///     ) -> Result<(), Self::Error> {
+///         match command {
+///             MyCommand::DoWork { value } => {
+///                 ctx.write().await.total += value;
+///             }
+///         }
+///         Ok(())
+///     }
+/// }
+/// ```
+///
+/// # Notes
+///
+/// Most users should use the higher-level macros [`async_service!`] or
+/// [`async_service_sequential!`] instead, which also generate the `Error` enum automatically.
 #[macro_export]
 macro_rules! async_service_body {
     ($command:path, $context:path, $sequential:expr $(,)?) => {
@@ -215,6 +343,81 @@ macro_rules! async_service_body {
     };
 }
 
+/// Generates an async service with sequential command processing.
+///
+/// This macro is a convenience wrapper around [`async_service_body!`] that:
+/// * Automatically generates an `Error` enum with common error types
+/// * Configures the service to process commands sequentially (one at a time, in order)
+/// * Optionally includes a custom error type for command processing errors
+///
+/// Commands are processed in the order they are received, and each command completes
+/// before the next one begins. This is useful when command processing must be serialized,
+/// such as when modifying shared state or when order matters.
+///
+/// # Variants
+///
+/// ## Two-argument form (no custom error)
+///
+/// ```text
+/// async_service_sequential!(CommandType, ContextType);
+/// ```
+///
+/// Generates an `Error` enum with these variants:
+/// * `Error::Join` - Task join errors
+/// * `Error::Send` - Command sending errors
+/// * `Error::IO` - I/O errors
+///
+/// ## Three-argument form (with custom error)
+///
+/// ```text
+/// async_service_sequential!(CommandType, ContextType, ProcessErrorType);
+/// ```
+///
+/// Adds an additional `Error::Process` variant for command processing errors.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_async_service::*;
+///
+/// #[derive(Debug)]
+/// pub enum Command {
+///     Increment,
+///     GetValue,
+/// }
+///
+/// pub struct Context {
+///     value: u32,
+/// }
+///
+/// // Generate service with sequential processing
+/// async_service_sequential!(Command, Context);
+///
+/// #[async_trait]
+/// impl Processor for Service {
+///     type Error = Error;
+///
+///     async fn process_command(
+///         ctx: Arc<sync::RwLock<Context>>,
+///         command: Command,
+///     ) -> Result<(), Self::Error> {
+///         match command {
+///             Command::Increment => {
+///                 ctx.write().await.value += 1;
+///             }
+///             Command::GetValue => {
+///                 println!("Value: {}", ctx.read().await.value);
+///             }
+///         }
+///         Ok(())
+///     }
+/// }
+/// ```
+///
+/// # See Also
+///
+/// * [`async_service!`] - For concurrent command processing
+/// * [`async_service_body!`] - For full control over error types and processing mode
 #[macro_export]
 macro_rules! async_service_sequential {
     ($command:path, $context:path $(,)?) => {
@@ -262,6 +465,82 @@ macro_rules! async_service_sequential {
     };
 }
 
+/// Generates an async service with concurrent command processing.
+///
+/// This macro is a convenience wrapper around [`async_service_body!`] that:
+/// * Automatically generates an `Error` enum with common error types
+/// * Configures the service to process commands concurrently (in parallel)
+/// * Optionally includes a custom error type for command processing errors
+///
+/// Each command is processed in its own spawned task, allowing multiple commands to run
+/// simultaneously. This is useful for I/O-bound operations or when commands are independent
+/// and can be processed in any order.
+///
+/// # Variants
+///
+/// ## Two-argument form (no custom error)
+///
+/// ```text
+/// async_service!(CommandType, ContextType);
+/// ```
+///
+/// Generates an `Error` enum with these variants:
+/// * `Error::Join` - Task join errors
+/// * `Error::Send` - Command sending errors
+/// * `Error::IO` - I/O errors
+///
+/// ## Three-argument form (with custom error)
+///
+/// ```text
+/// async_service!(CommandType, ContextType, ProcessErrorType);
+/// ```
+///
+/// Adds an additional `Error::Process` variant for command processing errors.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_async_service::*;
+///
+/// #[derive(Debug)]
+/// pub enum Command {
+///     FetchData { url: String },
+///     ProcessResult { data: String },
+/// }
+///
+/// pub struct Context {
+///     results: Vec<String>,
+/// }
+///
+/// // Generate service with concurrent processing
+/// async_service!(Command, Context);
+///
+/// #[async_trait]
+/// impl Processor for Service {
+///     type Error = Error;
+///
+///     async fn process_command(
+///         ctx: Arc<sync::RwLock<Context>>,
+///         command: Command,
+///     ) -> Result<(), Self::Error> {
+///         match command {
+///             Command::FetchData { url } => {
+///                 // Simulate async I/O - multiple fetches can run concurrently
+///                 println!("Fetching from {}", url);
+///             }
+///             Command::ProcessResult { data } => {
+///                 ctx.write().await.results.push(data);
+///             }
+///         }
+///         Ok(())
+///     }
+/// }
+/// ```
+///
+/// # See Also
+///
+/// * [`async_service_sequential!`] - For sequential command processing
+/// * [`async_service_body!`] - For full control over error types and processing mode
 #[macro_export]
 macro_rules! async_service {
     ($command:path, $context:path $(,)?) => {

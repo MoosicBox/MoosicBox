@@ -18,6 +18,10 @@ use switchy::http::models::Method;
 use switchy_async::task::JoinHandle;
 use thiserror::Error;
 
+/// Default client information based on the current operating system.
+///
+/// This is lazily initialized on first access and provides OS information
+/// for the default [`ClientInfo`].
 pub static DEFAULT_CLIENT_INFO: std::sync::LazyLock<std::sync::Arc<ClientInfo>> =
     std::sync::LazyLock::new(|| {
         let os_name = os_info::get().os_type().to_string();
@@ -26,6 +30,10 @@ pub static DEFAULT_CLIENT_INFO: std::sync::LazyLock<std::sync::Arc<ClientInfo>> 
         })
     });
 
+/// A route handler function type.
+///
+/// Route handlers take a [`RouteRequest`] and return a future that resolves to
+/// an optional [`Content`] or an error.
 pub type RouteFunc = Arc<
     Box<
         dyn (Fn(
@@ -39,32 +47,43 @@ pub type RouteFunc = Arc<
     >,
 >;
 
+/// Errors that can occur when parsing request data.
 #[cfg(feature = "serde")]
 #[derive(Debug, Error)]
 pub enum ParseError {
+    /// JSON deserialization error.
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+    /// URL-encoded form deserialization error.
     #[error(transparent)]
     SerdeUrlEncoded(#[from] serde_urlencoded::de::Error),
+    /// Request body is missing.
     #[error("Missing body")]
     MissingBody,
+    /// Content-Type header is invalid or unsupported.
     #[error("Invalid Content-Type")]
     InvalidContentType,
+    /// I/O error during form parsing.
     #[cfg(feature = "form")]
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Multipart form is missing boundary parameter.
     #[cfg(feature = "form")]
     #[error("Missing boundary")]
     MissingBoundary,
+    /// UTF-8 parsing error.
     #[cfg(feature = "form")]
     #[error(transparent)]
     ParseUtf8(#[from] std::string::FromUtf8Error),
+    /// Multipart parsing error.
     #[cfg(feature = "form")]
     #[error(transparent)]
     Multipart(#[from] mime_multipart::Error),
+    /// Content-Disposition header is invalid.
     #[cfg(feature = "form")]
     #[error("Invalid Content‑Disposition")]
     InvalidContentDisposition,
+    /// Custom deserialization error.
     #[cfg(feature = "form")]
     #[error("Custom deserialization error: {0}")]
     CustomDeserialize(String),
@@ -671,13 +690,17 @@ mod form_deserializer {
     }
 }
 
+/// Client operating system information.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClientOs {
+    /// Operating system name.
     pub name: String,
 }
 
+/// Information about the client making a request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientInfo {
+    /// Client operating system.
     pub os: ClientOs,
 }
 
@@ -687,23 +710,40 @@ impl Default for ClientInfo {
     }
 }
 
+/// Metadata about the request context.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RequestInfo {
+    /// Client making the request.
     pub client: Arc<ClientInfo>,
 }
 
+/// An HTTP request for routing.
+///
+/// Contains all the information needed to handle an HTTP request including
+/// path, method, query parameters, headers, cookies, and body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteRequest {
+    /// Request path.
     pub path: String,
+    /// HTTP method.
     pub method: Method,
+    /// Query string parameters.
     pub query: BTreeMap<String, String>,
+    /// HTTP headers.
     pub headers: BTreeMap<String, String>,
+    /// HTTP cookies.
     pub cookies: BTreeMap<String, String>,
+    /// Request metadata.
     pub info: RequestInfo,
+    /// Request body bytes.
     pub body: Option<Arc<Bytes>>,
 }
 
 impl RouteRequest {
+    /// Create a `RouteRequest` from a path string and request info.
+    ///
+    /// If the path contains a query string (indicated by `?`), it will be
+    /// parsed and stored in the `query` field.
     #[must_use]
     pub fn from_path(path: &str, info: RequestInfo) -> Self {
         let (path, query) = if let Some((path, query)) = path.split_once('?') {
@@ -723,11 +763,14 @@ impl RouteRequest {
         }
     }
 
+    /// Get the Content-Type header value.
     #[must_use]
     pub fn content_type(&self) -> Option<&str> {
         self.headers.get("content-type").map(String::as_str)
     }
 
+    /// Parse multipart form data from the request body.
+    ///
     /// # Errors
     ///
     /// * If the `Content-Type` header is missing
@@ -834,6 +877,8 @@ impl RouteRequest {
         }
     }
 
+    /// Parse JSON from the request body.
+    ///
     /// # Errors
     ///
     /// * If the `Content-Type` is not `application/json` or `application/x-www-form-urlencoded`
@@ -868,14 +913,21 @@ impl From<&Navigation> for RouteRequest {
     }
 }
 
+/// A route path matcher.
+///
+/// Supports exact matches, multiple alternative matches, and prefix matches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoutePath {
+    /// Match a single exact path.
     Literal(String),
+    /// Match any of the specified paths.
     Literals(Vec<String>),
+    /// Match paths that start with the specified prefix.
     LiteralPrefix(String),
 }
 
 impl RoutePath {
+    /// Check if this route path matches the given path.
     #[must_use]
     pub fn matches(&self, path: &str) -> bool {
         match self {
@@ -885,6 +937,11 @@ impl RoutePath {
         }
     }
 
+    /// Strip the matched portion from the path.
+    ///
+    /// For exact matches, returns an empty string if the path matches.
+    /// For prefix matches, returns the remainder after the prefix.
+    /// Returns `None` if the path doesn't match.
     #[must_use]
     pub fn strip_match<'a>(&'a self, path: &'a str) -> Option<&'a str> {
         const EMPTY: &str = "";
@@ -1010,22 +1067,34 @@ impl From<Vec<String>> for RoutePath {
     }
 }
 
+/// Errors that can occur during navigation.
 #[derive(Debug, Error)]
 pub enum NavigateError {
+    /// The requested path has no registered route handler.
     #[error("Invalid path")]
     InvalidPath,
+    /// The route handler returned an error.
     #[error("Handler error: {0:?}")]
     Handler(Box<dyn std::error::Error + Send + Sync>),
+    /// Failed to send navigation result through channel.
     #[error("Sender error")]
     Sender,
 }
 
+/// HTTP router for handling requests and navigation.
+///
+/// The router manages route registration and dispatching requests to
+/// appropriate handlers. Routes can be dynamic or static (with the
+/// `static-routes` feature).
 #[derive(Clone)]
 pub struct Router {
+    /// Static route handlers (enabled with `static-routes` feature).
     #[cfg(feature = "static-routes")]
     pub static_routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
+    /// Dynamic route handlers.
     pub routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     sender: Sender<Content>,
+    /// Receiver for navigation content.
     pub receiver: Receiver<Content>,
 }
 
@@ -1044,6 +1113,7 @@ impl Default for Router {
     }
 }
 
+/// A navigation request consisting of a path and client information.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Navigation(String, Arc<ClientInfo>);
 
@@ -1239,6 +1309,7 @@ impl From<(&String, RequestInfo)> for Navigation {
 }
 
 impl Router {
+    /// Create a new router with an unbounded channel for navigation events.
     #[must_use]
     pub fn new() -> Self {
         let (tx, rx) = flume::unbounded();
@@ -1252,6 +1323,8 @@ impl Router {
         }
     }
 
+    /// Register a route with a handler that returns a `Result`.
+    ///
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
@@ -1276,6 +1349,8 @@ impl Router {
         self
     }
 
+    /// Register a route with a handler that returns no content on success.
+    ///
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
@@ -1294,6 +1369,10 @@ impl Router {
         })
     }
 
+    /// Register a static route with a handler that returns a `Result`.
+    ///
+    /// Static routes are only compiled in when the `static-routes` feature is enabled.
+    ///
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
@@ -1320,6 +1399,8 @@ impl Router {
         self
     }
 
+    /// Register a route with an infallible handler.
+    ///
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
@@ -1343,6 +1424,10 @@ impl Router {
         self
     }
 
+    /// Register a static route with an infallible handler.
+    ///
+    /// Static routes are only compiled in when the `static-routes` feature is enabled.
+    ///
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
@@ -1368,6 +1453,10 @@ impl Router {
         self
     }
 
+    /// Get the route handler function for a given path.
+    ///
+    /// Searches dynamic routes first, then static routes if enabled.
+    ///
     /// # Panics
     ///
     /// * If the `routes` `RwLock` is poisoned
@@ -1397,9 +1486,12 @@ impl Router {
         dyn_route
     }
 
+    /// Navigate to a path and return the resulting content.
+    ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to render the navigation result.
+    /// * Returns [`NavigateError::InvalidPath`] if no route matches the path
+    /// * Returns [`NavigateError::Handler`] if the route handler returns an error
     ///
     /// # Panics
     ///
@@ -1430,9 +1522,13 @@ impl Router {
         })
     }
 
+    /// Navigate to a path and send the resulting content through the channel.
+    ///
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to render the navigation result.
+    /// * Returns [`NavigateError::InvalidPath`] if no route matches the path
+    /// * Returns [`NavigateError::Handler`] if the route handler returns an error
+    /// * Returns [`NavigateError::Sender`] if sending through the channel fails
     ///
     /// # Panics
     ///
@@ -1474,9 +1570,13 @@ impl Router {
         Ok(())
     }
 
+    /// Spawn a task to navigate and send the result.
+    ///
+    /// Uses the current async runtime handle.
+    ///
     /// # Errors
     ///
-    /// Will error if there was an error navigating
+    /// The returned `JoinHandle` resolves to an error if navigation fails.
     #[must_use]
     pub fn navigate_spawn(
         &self,
@@ -1489,9 +1589,11 @@ impl Router {
         self.navigate_spawn_on(&switchy_async::runtime::Handle::current(), navigation)
     }
 
+    /// Spawn a task to navigate and send the result on a specific runtime handle.
+    ///
     /// # Errors
     ///
-    /// Will error if there was an error navigating
+    /// The returned `JoinHandle` resolves to an error if navigation fails.
     #[must_use]
     pub fn navigate_spawn_on(
         &self,
@@ -1511,6 +1613,9 @@ impl Router {
         })
     }
 
+    /// Wait for the next navigation content from the channel.
+    ///
+    /// Returns `None` if the channel is closed.
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<Content> {
         self.receiver.recv_async().await.ok()

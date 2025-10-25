@@ -10,6 +10,10 @@ pub mod sqlite;
 #[async_trait]
 pub trait StatePersistence: Send + Sync {
     /// Store a value with the given key
+    ///
+    /// # Errors
+    ///
+    /// * If the value cannot be serialized or stored
     async fn set<T: Serialize + Send + Sync>(
         &self,
         key: impl Into<String> + Send + Sync,
@@ -17,6 +21,10 @@ pub trait StatePersistence: Send + Sync {
     ) -> Result<(), Error>;
 
     /// Retrieve a value by key
+    ///
+    /// # Errors
+    ///
+    /// * If the value cannot be deserialized
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -33,11 +41,19 @@ pub trait StatePersistence: Send + Sync {
     }
 
     /// Remove a value by key and return the value
+    ///
+    /// # Errors
+    ///
+    /// * If the value cannot be deserialized
     async fn take<T: DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
     ) -> Result<Option<T>, Error>;
 
     /// Clear all stored values
+    ///
+    /// # Errors
+    ///
+    /// * If the underlying storage cannot be cleared
     async fn clear(&self) -> Result<(), Error>;
 }

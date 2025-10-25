@@ -43,6 +43,7 @@ use switchy::http::models::Method;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
+/// Errors that can occur when interacting with the Tidal API.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("No user ID available")]
@@ -73,6 +74,7 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
 }
 
+/// Device type for Tidal API requests.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -113,6 +115,7 @@ static CLIENT: LazyLock<switchy::http::Client> =
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
 
+/// The API source identifier for Tidal.
 pub static API_SOURCE: LazyLock<ApiSource> =
     LazyLock::new(|| ApiSource::register("Tidal", "Tidal"));
 
@@ -175,6 +178,20 @@ fn attach_query_string(value: &str, query: &[(&str, &str)]) -> String {
     format!("{}?{}", value, &query_string.finish())
 }
 
+/// Constructs Tidal API endpoint URLs with optional parameters and query strings.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Basic endpoint
+/// let url = tidal_api_endpoint!(Album);
+///
+/// // With URL parameters
+/// let url = tidal_api_endpoint!(Album, &[(":albumId", "123")]);
+///
+/// // With URL parameters and query string
+/// let url = tidal_api_endpoint!(Album, &[(":albumId", "123")], &[("locale", "en_US")]);
+/// ```
 #[macro_export]
 macro_rules! tidal_api_endpoint {
     ($name:ident $(,)?) => {
@@ -576,6 +593,7 @@ async fn refetch_access_token(
     Ok(access_token.to_string())
 }
 
+/// Order field for artist queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -584,6 +602,7 @@ pub enum TidalArtistOrder {
     Date,
 }
 
+/// Sort direction for artist queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -593,6 +612,14 @@ pub enum TidalArtistOrderDirection {
     Desc,
 }
 
+/// Fetches the user's favorite artists from Tidal.
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
+/// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -821,6 +848,7 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
+/// Order field for album queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -829,6 +857,7 @@ pub enum TidalAlbumOrder {
     Date,
 }
 
+/// Sort direction for album queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -853,6 +882,14 @@ impl From<AlbumSort> for TidalAlbumOrderDirection {
     }
 }
 
+/// Fetches the user's favorite albums from Tidal.
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
+/// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -1130,6 +1167,7 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
+/// Order field for track queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1138,6 +1176,7 @@ pub enum TidalTrackOrder {
     Date,
 }
 
+/// Sort direction for track queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1147,6 +1186,14 @@ pub enum TidalTrackOrderDirection {
     Desc,
 }
 
+/// Fetches the user's favorite tracks from Tidal.
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
+/// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1375,6 +1422,7 @@ pub async fn remove_favorite_track(
     Ok(())
 }
 
+/// Album type classification in Tidal.
 #[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Eq, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
@@ -1420,6 +1468,13 @@ impl ToValueType<TidalAlbumType> for &Value {
     }
 }
 
+/// Fetches albums by an artist from Tidal.
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -1525,6 +1580,13 @@ pub async fn artist_albums(
     })
 }
 
+/// Fetches tracks from an album on Tidal.
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1737,6 +1799,7 @@ pub async fn track(
     Ok(value.as_model()?)
 }
 
+/// Content types that can be searched on Tidal.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1763,6 +1826,7 @@ impl From<SearchType> for TidalSearchType {
     }
 }
 
+/// Tidal-specific search type identifiers.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
@@ -1859,6 +1923,7 @@ pub async fn search(
     Ok(value.as_model()?)
 }
 
+/// Audio quality levels supported by Tidal.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1913,6 +1978,7 @@ pub async fn track_file_url(
     Ok(value.to_value("urls")?)
 }
 
+/// Playback information for a Tidal track including audio metadata.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -2023,6 +2089,7 @@ impl From<TrackOrderDirection> for TidalTrackOrderDirection {
     }
 }
 
+/// Error returned when converting an unsupported album type to `TidalAlbumType`.
 #[derive(Debug, thiserror::Error)]
 #[error("Unsupported AlbumType")]
 pub struct TryFromAlbumTypeError;
@@ -2052,6 +2119,7 @@ impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     }
 }
 
+/// Errors that can occur when configuring the Tidal API client.
 #[derive(Debug, thiserror::Error)]
 pub enum TidalConfigError {
     #[cfg(feature = "db")]
@@ -2062,6 +2130,7 @@ pub enum TidalConfigError {
     GetTidalConfig(#[from] db::GetTidalConfigError),
 }
 
+/// Builder for configuring and constructing a [`TidalMusicApi`] instance.
 #[derive(Default)]
 pub struct TidalMusicApiBuilder {
     #[cfg(feature = "db")]
@@ -2069,6 +2138,7 @@ pub struct TidalMusicApiBuilder {
 }
 
 impl TidalMusicApiBuilder {
+    /// Sets the database connection (builder pattern).
     #[cfg(feature = "db")]
     #[must_use]
     pub fn with_db(mut self, db: LibraryDatabase) -> Self {
@@ -2076,6 +2146,7 @@ impl TidalMusicApiBuilder {
         self
     }
 
+    /// Sets the database connection (mutable reference pattern).
     #[cfg(feature = "db")]
     pub fn db(&mut self, db: LibraryDatabase) -> &mut Self {
         self.db = Some(db);
@@ -2135,6 +2206,7 @@ impl TidalMusicApiBuilder {
     }
 }
 
+/// Implementation of the [`MusicApi`] trait for Tidal streaming service.
 pub struct TidalMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
@@ -2142,6 +2214,7 @@ pub struct TidalMusicApi {
 }
 
 impl TidalMusicApi {
+    /// Creates a new builder for configuring a `TidalMusicApi` instance.
     #[must_use]
     pub fn builder() -> TidalMusicApiBuilder {
         TidalMusicApiBuilder::default()

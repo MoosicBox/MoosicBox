@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 pub struct StandardEnv;
 
 impl StandardEnv {
+    /// Creates a new standard environment provider
     #[must_use]
     pub const fn new() -> Self {
         Self

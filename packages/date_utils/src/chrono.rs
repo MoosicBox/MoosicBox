@@ -1,5 +1,14 @@
 pub use chrono::*;
 
+/// Parses a date/time string into a `NaiveDateTime`.
+///
+/// Supports multiple input formats:
+/// * Year only (4 digits or less): `"2024"`
+/// * ISO date: `"2024-10-24"`
+/// * ISO datetime with Z suffix: `"2024-10-24T12:30:45Z"`
+/// * ISO datetime with timezone: `"2024-10-24T12:30:45.123+00:00"`
+/// * ISO datetime with fractional seconds: `"2024-10-24T12:30:45.123"`
+///
 /// # Errors
 ///
 /// * If the datetime fails to parse

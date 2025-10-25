@@ -14,6 +14,7 @@ pub mod tokio;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
+/// Error types for TCP operations.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -27,35 +28,57 @@ pub enum Error {
     Send,
 }
 
+/// Generic trait for TCP listeners that can accept connections.
+///
+/// # Errors
+///
+/// * `accept` may fail if the underlying listener encounters an error while accepting a connection
 #[async_trait]
 pub trait GenericTcpListener<T>: Send + Sync {
+    /// Accepts a new incoming connection.
+    ///
+    /// Returns the connected stream and the remote address.
+    ///
+    /// # Errors
+    ///
+    /// * If the underlying listener fails to accept a connection
     async fn accept(&self) -> Result<(T, SocketAddr), Error>;
 }
 
+/// Generic trait for TCP streams that can be split into read and write halves.
 pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWriteHalf>:
     AsyncRead + AsyncWrite + Send + Sync + Unpin
 {
+    /// Splits the stream into separate read and write halves.
     fn into_split(self) -> (R, W);
 
+    /// Returns the local address of this stream.
+    ///
     /// # Errors
     ///
     /// * If the underlying `TcpStream` fails to get the `local_addr`
     fn local_addr(&self) -> std::io::Result<SocketAddr>;
 
+    /// Returns the remote address of this stream.
+    ///
     /// # Errors
     ///
     /// * If the underlying `TcpStream` fails to get the `peer_addr`
     fn peer_addr(&self) -> std::io::Result<SocketAddr>;
 }
+/// Generic trait for the read half of a TCP stream.
 pub trait GenericTcpStreamReadHalf: AsyncRead + Send + Sync + Unpin {}
+/// Generic trait for the write half of a TCP stream.
 pub trait GenericTcpStreamWriteHalf: AsyncWrite + Send + Sync + Unpin {}
 
+/// Wrapper type for generic TCP listeners.
 pub struct TcpListenerWrapper<
     R: GenericTcpStreamReadHalf,
     W: GenericTcpStreamWriteHalf,
     S: GenericTcpStream<R, W>,
     T: GenericTcpListener<S>,
 >(T, PhantomData<R>, PhantomData<W>, PhantomData<S>);
+/// Wrapper type for generic TCP streams.
 pub struct TcpStreamWrapper<
     R: GenericTcpStreamReadHalf,
     W: GenericTcpStreamWriteHalf,

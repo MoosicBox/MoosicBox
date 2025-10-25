@@ -11,6 +11,10 @@ use symphonia::core::io::MediaSource;
 type ByteStreamType =
     Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send + std::marker::Unpin>;
 
+/// A media source that reads from a byte stream.
+///
+/// This type implements [`MediaSource`], [`Read`], and [`Seek`] to allow streaming audio data
+/// from an asynchronous byte stream source.
 pub struct ByteStreamSource {
     finished: bool,
     seekable: bool,
@@ -129,6 +133,15 @@ impl Drop for ByteStreamSourceFetcher {
 }
 
 impl ByteStreamSource {
+    /// Creates a new byte stream source.
+    ///
+    /// # Parameters
+    ///
+    /// * `stream` - The byte stream to read from
+    /// * `size` - The total size of the stream in bytes, if known
+    /// * `autostart_fetch` - Whether to immediately start fetching data
+    /// * `seekable` - Whether the stream supports seeking
+    /// * `abort` - Cancellation token to stop the stream
     #[must_use]
     pub fn new(
         stream: ByteStreamType,

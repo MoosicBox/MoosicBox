@@ -11,6 +11,25 @@ pub mod time;
 #[cfg(feature = "util")]
 pub mod util;
 
+/// Waits on multiple concurrent futures, returning when the first one completes.
+///
+/// This macro is similar to `tokio::select!`, allowing you to wait on multiple
+/// async operations simultaneously and react to whichever one completes first.
+///
+/// # Examples
+///
+/// ```ignore
+/// use switchy_async::select;
+///
+/// select! {
+///     result = future1 => {
+///         // Handle result from future1
+///     },
+///     result = future2 => {
+///         // Handle result from future2
+///     },
+/// }
+/// ```
 #[cfg(feature = "macros")]
 #[macro_export]
 macro_rules! select {
@@ -25,6 +44,18 @@ macro_rules! select {
 #[cfg(feature = "macros")]
 pub use select;
 
+/// Waits for multiple futures to complete, returning all results.
+///
+/// This macro runs multiple futures concurrently and waits for all of them to complete.
+/// All futures must complete successfully.
+///
+/// # Examples
+///
+/// ```ignore
+/// use switchy_async::join;
+///
+/// let (result1, result2) = join!(future1, future2);
+/// ```
 #[cfg(feature = "macros")]
 #[macro_export]
 macro_rules! join {
@@ -39,6 +70,19 @@ macro_rules! join {
 #[cfg(feature = "macros")]
 pub use join;
 
+/// Waits for multiple futures to complete, returning early if any future returns an error.
+///
+/// This macro runs multiple futures concurrently. If all futures complete successfully,
+/// it returns all results. If any future returns an error, it short-circuits and returns
+/// that error immediately.
+///
+/// # Examples
+///
+/// ```ignore
+/// use switchy_async::try_join;
+///
+/// let (result1, result2) = try_join!(future1, future2)?;
+/// ```
 #[cfg(feature = "macros")]
 #[macro_export]
 macro_rules! try_join {

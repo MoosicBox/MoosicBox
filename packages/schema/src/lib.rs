@@ -8,6 +8,7 @@ use switchy_schema::{
 };
 use thiserror::Error;
 
+/// Error type for database migration operations
 #[derive(Debug, Error)]
 pub enum MigrateError {
     #[error(transparent)]

@@ -86,6 +86,7 @@ static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> = Calculator::
     },
 );
 
+/// Errors that can occur when loading an image.
 #[derive(Debug, Error)]
 pub enum LoadImageError {
     #[error(transparent)]
@@ -96,19 +97,25 @@ pub enum LoadImageError {
     Fltk(#[from] FltkError),
 }
 
+/// Source of an image to be loaded.
 #[derive(Debug, Clone)]
 pub enum ImageSource {
+    /// Image data provided as bytes with a source identifier.
     Bytes { bytes: Arc<Bytes>, source: String },
+    /// Image to be fetched from a URL.
     Url(String),
 }
 
+/// Events that can occur within the FLTK application.
 #[derive(Debug, Clone)]
 pub enum AppEvent {
+    /// Window resize event.
     Resize {},
+    /// Mouse wheel scroll event.
     MouseWheel {},
-    Navigate {
-        href: String,
-    },
+    /// Navigate to a different URL.
+    Navigate { href: String },
+    /// Register an image for lazy loading.
     RegisterImage {
         viewport: Option<Viewport>,
         source: ImageSource,
@@ -116,17 +123,18 @@ pub enum AppEvent {
         height: Option<f32>,
         frame: Frame,
     },
+    /// Load an image into a frame.
     LoadImage {
         source: ImageSource,
         width: Option<f32>,
         height: Option<f32>,
         frame: Frame,
     },
-    UnloadImage {
-        frame: Frame,
-    },
+    /// Unload an image from a frame.
+    UnloadImage { frame: Frame },
 }
 
+/// An image that has been registered for rendering.
 #[derive(Debug, Clone)]
 pub struct RegisteredImage {
     source: ImageSource,
@@ -137,6 +145,7 @@ pub struct RegisteredImage {
 
 type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
 
+/// FLTK-based renderer implementation for Hyperchad.
 #[derive(Clone)]
 pub struct FltkRenderer {
     app: Option<App>,
@@ -157,6 +166,7 @@ pub struct FltkRenderer {
 }
 
 impl FltkRenderer {
+    /// Creates a new FLTK renderer.
     #[must_use]
     pub fn new(request_action: Sender<(String, Option<Value>)>) -> Self {
         let (tx, rx) = flume::unbounded();
@@ -1164,12 +1174,14 @@ impl FltkRenderer {
         }
     }
 
+    /// Waits for a navigation event and returns the href.
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
 }
 
+/// Runner for executing the FLTK event loop.
 pub struct FltkRenderRunner {
     app: App,
 }

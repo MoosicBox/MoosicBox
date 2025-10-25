@@ -28,14 +28,21 @@ use urlencoding::encode;
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
+/// Errors that can occur when making HTTP requests to a remote `MoosicBox` server.
 #[derive(Debug, Error)]
 pub enum RequestError {
+    /// HTTP request error from the underlying HTTP client.
     #[error(transparent)]
     Request(#[from] switchy_http::Error),
+    /// HTTP request returned an unsuccessful status code.
     #[error("Unsuccessful: {0}")]
     Unsuccessful(String),
 }
 
+/// A [`MusicApi`] implementation that proxies requests to a remote `MoosicBox` server.
+///
+/// This implementation allows accessing a remote `MoosicBox` instance's music library
+/// via HTTP requests, supporting all standard music API operations.
 #[derive(Clone)]
 pub struct RemoteLibraryMusicApi {
     host: String,
@@ -44,6 +51,13 @@ pub struct RemoteLibraryMusicApi {
 }
 
 impl RemoteLibraryMusicApi {
+    /// Creates a new remote library API client.
+    ///
+    /// # Parameters
+    ///
+    /// * `host` - Base URL of the remote `MoosicBox` server (e.g., `"http://localhost:8000"`)
+    /// * `api_source` - The API source identifier for this connection
+    /// * `profile` - Profile name to use for authentication/authorization
     #[must_use]
     pub const fn new(host: String, api_source: ApiSource, profile: String) -> Self {
         Self {

@@ -2,9 +2,12 @@
 
 use thiserror::Error;
 
+/// Represents a byte range with optional start and end positions.
 #[derive(Debug, Clone)]
 pub struct Range {
+    /// Starting byte position (inclusive)
     pub start: Option<usize>,
+    /// Ending byte position (inclusive)
     pub end: Option<usize>,
 }
 

@@ -8,9 +8,23 @@ use switchy_async::task::JoinHandle;
 use switchy_async::util::CancellationToken;
 use switchy_http::Client;
 
-// Trait for HTTP fetching to enable dependency injection in tests
+/// Trait for HTTP fetching to enable dependency injection in tests.
+///
+/// Implementations can fetch byte ranges from HTTP URLs. The default implementation
+/// uses [`switchy_http::Client`], but custom implementations can be provided for testing
+/// or alternative HTTP clients.
 #[async_trait::async_trait]
 pub trait HttpFetcher: Send + Sync + Clone + 'static {
+    /// Fetches a byte range from the specified URL.
+    ///
+    /// Returns a stream of bytes for the requested range. If `end` is `None`,
+    /// fetches from `start` to the end of the resource.
+    ///
+    /// # Errors
+    ///
+    /// * If the HTTP request fails
+    /// * If the server returns a non-success status code
+    /// * If the response cannot be converted to a byte stream
     async fn fetch_range(
         &self,
         url: &str,
@@ -26,7 +40,9 @@ pub trait HttpFetcher: Send + Sync + Clone + 'static {
     >;
 }
 
-// Default implementation using switchy_http::Client
+/// Default implementation of [`HttpFetcher`] using [`switchy_http::Client`].
+///
+/// Makes HTTP range requests using the `Range` header to fetch specific byte ranges.
 #[derive(Clone)]
 pub struct DefaultHttpFetcher;
 
@@ -84,11 +100,20 @@ impl HttpFetcher for DefaultHttpFetcher {
     }
 }
 
+/// A seekable byte stream that fetches data from a remote HTTP URL on demand.
+///
+/// Implements [`std::io::Read`] and [`std::io::Seek`], allowing random access to remote
+/// files. Data is fetched in chunks as needed, with automatic handling of HTTP range requests.
+/// When seeking outside of already-downloaded data, a new HTTP request is initiated.
 pub struct RemoteByteStream<F: HttpFetcher = DefaultHttpFetcher> {
     url: String,
+    /// Whether the stream has finished reading all data.
     pub finished: bool,
+    /// Whether the stream supports seeking (requires known size).
     pub seekable: bool,
+    /// Total size of the remote resource in bytes, if known.
     pub size: Option<u64>,
+    /// Current read position in bytes.
     pub read_position: u64,
     fetcher: RemoteByteStreamFetcher<F>,
     abort: CancellationToken,
@@ -234,6 +259,10 @@ impl<F: HttpFetcher> Drop for RemoteByteStreamFetcher<F> {
 }
 
 impl<F: HttpFetcher> RemoteByteStream<F> {
+    /// Creates a new remote byte stream with a custom HTTP fetcher.
+    ///
+    /// This constructor allows dependency injection of a custom [`HttpFetcher`]
+    /// implementation, primarily for testing purposes.
     #[must_use]
     pub fn new_with_fetcher(
         url: String,
@@ -263,6 +292,15 @@ impl<F: HttpFetcher> RemoteByteStream<F> {
 }
 
 impl RemoteByteStream<DefaultHttpFetcher> {
+    /// Creates a new remote byte stream using the default HTTP fetcher.
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - The HTTP URL to fetch data from
+    /// * `size` - Total size of the resource in bytes, if known. Required for seeking from end.
+    /// * `autostart_fetch` - Whether to immediately start fetching data or wait for first read
+    /// * `seekable` - Whether seeking is supported (should match whether size is known)
+    /// * `abort` - Cancellation token to abort ongoing HTTP requests
     #[must_use]
     pub fn new(
         url: String,
@@ -283,6 +321,15 @@ impl RemoteByteStream<DefaultHttpFetcher> {
 }
 
 impl<F: HttpFetcher> Read for RemoteByteStream<F> {
+    /// Reads bytes from the remote stream into the provided buffer.
+    ///
+    /// Data is fetched from the remote URL as needed. If the internal buffer has data,
+    /// it is returned immediately. Otherwise, the implementation waits for more data
+    /// from the ongoing HTTP request.
+    ///
+    /// # Errors
+    ///
+    /// * [`std::io::ErrorKind::UnexpectedEof`] - If the HTTP stream ends before expected size is reached
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Check if stream has been finished for a grace period
@@ -448,6 +495,19 @@ impl<F: HttpFetcher> Read for RemoteByteStream<F> {
 }
 
 impl<F: HttpFetcher> Seek for RemoteByteStream<F> {
+    /// Seeks to a position in the remote stream.
+    ///
+    /// If seeking within already-downloaded data, the read position is updated without
+    /// making a new HTTP request. If seeking outside downloaded data, the current HTTP
+    /// request is aborted and a new one is started from the target position.
+    ///
+    /// # Errors
+    ///
+    /// * [`std::io::ErrorKind::InvalidInput`] - If the computed position is invalid (negative)
+    ///
+    /// # Panics
+    ///
+    /// * If using [`std::io::SeekFrom::End`] when size is `None` (unwraps on `None`)
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position = match pos {
             std::io::SeekFrom::Start(pos) => pos,

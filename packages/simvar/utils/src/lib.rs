@@ -15,6 +15,9 @@ thread_local! {
     static WORKER_THREAD_ID: RefCell<u64> = RefCell::new(WORKER_THREAD_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 }
 
+/// Returns the unique identifier for the current worker thread.
+///
+/// Each thread gets a unique, monotonically increasing ID starting from 1.
 #[must_use]
 pub fn worker_thread_id() -> u64 {
     WORKER_THREAD_ID.with_borrow(|x| *x)
@@ -76,6 +79,11 @@ pub fn cancel_global_simulation() {
     GLOBAL_SIMULATOR_CANCELLATION_TOKEN.read().unwrap().cancel();
 }
 
+/// Runs a future until it completes or simulation is cancelled.
+///
+/// Returns `Some(output)` if the future completes, or `None` if either the global
+/// or thread-local simulation cancellation token is triggered.
+///
 /// # Panics
 ///
 /// * If the `GLOBAL_SIMULATOR_CANCELLATION_TOKEN` `RwLock` fails to read from

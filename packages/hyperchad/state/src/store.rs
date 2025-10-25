@@ -15,6 +15,8 @@ pub struct StateStore<P: StatePersistence> {
 }
 
 impl<P: StatePersistence> StateStore<P> {
+    /// Create a new state store with the given persistence backend
+    #[must_use]
     pub fn new(persistence: P) -> Self {
         Self {
             persistence: Arc::new(persistence),
@@ -86,7 +88,7 @@ impl<P: StatePersistence> StateStore<P> {
         self.persistence.remove(key).await
     }
 
-    /// Remove a value from the store
+    /// Remove a value from the store and return it
     ///
     /// # Errors
     ///

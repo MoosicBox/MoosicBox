@@ -14,6 +14,9 @@ use crate::api::models::ApiProfile;
 
 pub mod models;
 
+/// Binds the configuration API endpoints to an Actix-Web scope.
+///
+/// This function registers the profiles endpoints with the provided scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -24,6 +27,7 @@ pub fn bind_services<
         .service(create_profile_endpoint)
 }
 
+/// `OpenAPI` documentation structure for the configuration API.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -36,6 +40,11 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// API endpoint to retrieve all `MoosicBox` profiles.
+///
+/// # Errors
+///
+/// * If a database error occurs while retrieving profiles
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Config"],
@@ -64,12 +73,21 @@ pub async fn get_profiles_endpoint(db: ConfigDatabase) -> Result<Json<Vec<ApiPro
     ))
 }
 
+/// Query parameters for creating a profile.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateProfileQuery {
+    /// Name of the profile to create
     name: String,
 }
 
+/// API endpoint to create a new `MoosicBox` profile.
+///
+/// If a profile with the given name already exists, returns the existing profile.
+///
+/// # Errors
+///
+/// * If a database error occurs while creating the profile
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Config"],

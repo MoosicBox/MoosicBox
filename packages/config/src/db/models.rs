@@ -1,7 +1,10 @@
 use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue};
 
+/// Represents a `MoosicBox` profile stored in the database.
 pub struct Profile {
+    /// Unique identifier for the profile
     pub id: u64,
+    /// Name of the profile
     pub name: String,
 }
 

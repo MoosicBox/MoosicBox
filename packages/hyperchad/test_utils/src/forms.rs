@@ -2,12 +2,15 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// Form data containing field values for form filling operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormData {
+    /// Map of field names to their values.
     pub fields: BTreeMap<String, FormValue>,
 }
 
 impl FormData {
+    /// Creates a new empty form data builder.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -68,17 +71,25 @@ impl Default for FormData {
     }
 }
 
+/// A value for a form field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FormValue {
+    /// Text input value.
     Text(String),
+    /// Numeric input value.
     Number(f64),
+    /// Boolean checkbox value.
     Boolean(bool),
+    /// Single select dropdown value.
     Select(String),
+    /// Multiple select values.
     MultiSelect(Vec<String>),
+    /// File path for file upload.
     File(PathBuf),
 }
 
 impl FormValue {
+    /// Converts the form value to a string representation.
     #[must_use]
     pub fn as_string(&self) -> String {
         match self {
@@ -91,32 +102,28 @@ impl FormValue {
     }
 }
 
+/// A form interaction step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FormStep {
-    FillForm {
-        data: FormData,
-    },
-    FillField {
-        selector: String,
-        value: FormValue,
-    },
-    SelectOption {
-        selector: String,
-        value: String,
-    },
+    /// Fill multiple form fields at once.
+    FillForm { data: FormData },
+    /// Fill a single form field.
+    FillField { selector: String, value: FormValue },
+    /// Select an option from a dropdown.
+    SelectOption { selector: String, value: String },
+    /// Upload a file to a file input.
     UploadFile {
         selector: String,
         file_path: PathBuf,
     },
-    SubmitForm {
-        selector: String,
-    },
-    ResetForm {
-        selector: String,
-    },
+    /// Submit a form.
+    SubmitForm { selector: String },
+    /// Reset a form to its initial state.
+    ResetForm { selector: String },
 }
 
 impl FormStep {
+    /// Returns a human-readable description of this form step.
     #[must_use]
     pub fn description(&self) -> String {
         match self {

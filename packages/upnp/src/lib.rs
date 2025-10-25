@@ -181,6 +181,8 @@ mod cache {
     }
 }
 
+/// Retrieves a cached `UPnP` device by its unique device name (UDN).
+///
 /// # Errors
 ///
 /// * If a `Device` is not found with the given `udn`
@@ -188,6 +190,8 @@ pub fn get_device(udn: &str) -> Result<Device, ScanError> {
     cache::get_device(udn)
 }
 
+/// Retrieves a cached `UPnP` service by device UDN and service ID.
+///
 /// # Errors
 ///
 /// * If a `Service` is not found with the given `device_udn` and `service_id`
@@ -195,6 +199,8 @@ pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanEr
     cache::get_service(device_udn, service_id)
 }
 
+/// Retrieves a cached `UPnP` device and service by device UDN and service ID.
+///
 /// # Errors
 ///
 /// * If a `Device` or `Service` is not found with the given `device_udn` and `service_id`
@@ -205,6 +211,8 @@ pub fn get_device_and_service(
     cache::get_device_and_service(device_udn, service_id)
 }
 
+/// Retrieves a cached `UPnP` device by its URL.
+///
 /// # Errors
 ///
 /// * If a `Device` is not found with the given `url`
@@ -212,6 +220,8 @@ pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
     cache::get_device_from_url(url)
 }
 
+/// Retrieves a cached `UPnP` device and service by device URL and service ID.
+///
 /// # Errors
 ///
 /// * If a `Device` or `Service` is not found with the given `device_url` and `service_id`
@@ -222,6 +232,7 @@ pub fn get_device_and_service_from_url(
     cache::get_device_and_service_from_url(device_url, service_id)
 }
 
+/// Errors that can occur when executing `UPnP` actions.
 #[derive(Debug, Error)]
 pub enum ActionError {
     #[error(transparent)]
@@ -232,9 +243,10 @@ pub enum ActionError {
     MissingProperty(String),
 }
 
+/// Errors that can occur when scanning for `UPnP` devices and services.
 #[derive(Debug, Error)]
 pub enum ScanError {
-    #[error("Failed to find RenderingControl service")]
+    #[error("Failed to find `RenderingControl` service")]
     RenderingControlNotFound,
     #[error("Failed to find MediaRenderer service")]
     MediaRendererNotFound,
@@ -248,6 +260,8 @@ pub enum ScanError {
     Rupnp(#[from] rupnp::Error),
 }
 
+/// Converts a duration string in the format "HH:MM:SS" to seconds.
+///
 /// # Panics
 ///
 /// * If the duration str is an invalid format
@@ -262,6 +276,7 @@ pub fn str_to_duration(duration: &str) -> u32 {
     time_components[0] * 60 * 60 + time_components[1] * 60 + time_components[2]
 }
 
+/// Converts a duration in seconds to a string in the format "HH:MM:SS".
 #[must_use]
 pub fn duration_to_string(duration: u32) -> String {
     format!(
@@ -277,6 +292,8 @@ static UPNP_NS: &str = "urn:schemas-upnp-org:metadata-1-0/upnp/";
 static DC_NS: &str = "http://purl.org/dc/elements/1.1/";
 static SEC_NS: &str = "http://www.sec.co.kr/";
 
+/// Sets the AV transport URI for a `UPnP` device with metadata.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -379,6 +396,7 @@ pub async fn set_av_transport_uri(
         .collect())
 }
 
+/// Parsed track metadata from `UPnP` `DIDL-Lite` XML.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -386,6 +404,7 @@ pub struct TrackMetadata {
     items: Vec<TrackMetadataItem>,
 }
 
+/// A single track metadata item from `UPnP` `DIDL-Lite` XML.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -399,6 +418,7 @@ pub struct TrackMetadataItem {
     res: TrackMetadataItemResource,
 }
 
+/// Resource information for a track metadata item.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -481,6 +501,7 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
     Ok(TrackMetadata { items: items? })
 }
 
+/// `UPnP` `AVTransport` service transport information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -490,6 +511,8 @@ pub struct TransportInfo {
     current_speed: String,
 }
 
+/// Retrieves transport information from a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -525,6 +548,7 @@ pub async fn get_transport_info(
     })
 }
 
+/// `UPnP` `AVTransport` service position information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -539,6 +563,8 @@ pub struct PositionInfo {
     track_duration: u32,
 }
 
+/// Retrieves position information from a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -595,6 +621,8 @@ pub async fn get_position_info(
     })
 }
 
+/// Seeks to a specific position in the current media on a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -625,6 +653,8 @@ pub async fn seek(
         .collect())
 }
 
+/// Retrieves the volume from a `UPnP` `RenderingControl` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -645,6 +675,8 @@ pub async fn get_volume(
         .collect())
 }
 
+/// Sets the volume on a `UPnP` `RenderingControl` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -665,6 +697,7 @@ pub async fn set_volume(
         .collect())
 }
 
+/// `UPnP` `AVTransport` service media information.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -678,6 +711,8 @@ pub struct MediaInfo {
     current_uri: String,
 }
 
+/// Retrieves media information from a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -728,6 +763,8 @@ pub async fn get_media_info(
     })
 }
 
+/// Subscribes to events from a `UPnP` service.
+///
 /// # Errors
 ///
 /// * If the subscription failed to execute
@@ -746,6 +783,8 @@ pub async fn subscribe_events(
     Ok((url, stream.map(|x| x.map(|x| x.into_iter().collect()))))
 }
 
+/// Starts playback on a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -766,6 +805,8 @@ pub async fn play(
         .collect())
 }
 
+/// Pauses playback on a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -785,6 +826,8 @@ pub async fn pause(
         .collect())
 }
 
+/// Stops playback on a `UPnP` `AVTransport` service.
+///
 /// # Errors
 ///
 /// * If the action failed to execute
@@ -804,6 +847,8 @@ pub async fn stop(
         .collect())
 }
 
+/// Scans and retrieves information about a `UPnP` service.
+///
 /// # Errors
 ///
 /// * If failed to scan for `UPnP` services
@@ -837,6 +882,11 @@ pub async fn scan_service(
     Ok(service.into())
 }
 
+/// Scans a `UPnP` device and its sub-devices, returning information about all discovered devices.
+///
+/// # Errors
+///
+/// * If failed to scan for `UPnP` devices
 #[async_recursion]
 pub async fn scan_device(
     device: Option<Device>,
@@ -928,6 +978,8 @@ static SCANNER: LazyLock<Box<dyn UpnpScanner>> = LazyLock::new(|| {
     }
 });
 
+/// Scans the network for `UPnP` devices and caches them.
+///
 /// # Errors
 ///
 /// * If failed to scan for `UPnP` devices
@@ -935,16 +987,19 @@ pub async fn scan_devices() -> Result<(), UpnpDeviceScannerError> {
     UPNP_DEVICE_SCANNER.lock().await.scan().await
 }
 
+/// Returns the list of cached `UPnP` devices from the last scan.
 pub async fn devices() -> Vec<UpnpDevice> {
     UPNP_DEVICE_SCANNER.lock().await.devices.clone()
 }
 
+/// Scanner for discovering `UPnP` devices on the network.
 #[derive(Default)]
 pub struct UpnpDeviceScanner {
     scanning: bool,
     pub devices: Vec<UpnpDevice>,
 }
 
+/// Errors that can occur when scanning for `UPnP` devices.
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
@@ -999,7 +1054,7 @@ impl UpnpDeviceScanner {
         }
 
         if upnp_devices.is_empty() {
-            log::debug!("No UPnP devices discovered");
+            log::debug!("No `UPnP` devices discovered");
         }
 
         self.devices = upnp_devices

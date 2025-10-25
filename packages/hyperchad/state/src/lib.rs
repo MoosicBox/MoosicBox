@@ -8,6 +8,7 @@ mod store;
 pub use persistence::*;
 pub use store::StateStore;
 
+/// Errors that can occur when working with state storage
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[cfg(feature = "persistence-sqlite")]

@@ -63,6 +63,9 @@ pub enum LibraryFavoriteArtistsError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -163,6 +166,7 @@ pub enum LibraryAlbumOrderDirection {
     Desc,
 }
 
+/// Filters albums based on the provided request criteria.
 pub fn filter_albums<'a>(
     albums: &'a [LibraryAlbum],
     request: &'a AlbumsRequest,
@@ -230,6 +234,7 @@ pub fn filter_albums<'a>(
         })
 }
 
+/// Sorts albums based on the provided request criteria.
 #[must_use]
 pub fn sort_albums<'a>(
     mut albums: Vec<&'a LibraryAlbum>,
@@ -293,6 +298,9 @@ pub enum LibraryFavoriteAlbumsError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -414,6 +422,9 @@ pub enum LibraryFavoriteTracksError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -476,7 +487,7 @@ pub enum LibraryAddFavoriteTrackError {
 
 /// # Errors
 ///
-/// * If no user id i available for the request
+/// * If no user id is available for the request
 /// * If the request failed
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
@@ -518,6 +529,9 @@ pub enum LibraryArtistAlbumsError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -573,6 +587,9 @@ pub enum LibraryAlbumTracksError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -636,6 +653,7 @@ pub async fn album(
     Ok(db::get_album(db, ApiSource::library_ref(), album_id).await?)
 }
 
+/// Sorts album versions by audio quality metrics.
 pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| {
         b.sample_rate

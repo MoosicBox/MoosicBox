@@ -1,3 +1,24 @@
+//! Time utilities with support for both standard system time and simulated time.
+//!
+//! This crate provides a unified interface for getting the current time, with the ability to
+//! switch between real system time and simulated time for testing purposes. When the `simulator`
+//! feature is enabled, time can be controlled programmatically for deterministic testing.
+//!
+//! # Features
+//!
+//! * `std` - Enables standard library time functions
+//! * `simulator` - Enables time simulation capabilities for testing
+//! * `chrono` - Adds support for `chrono` `DateTime` types
+//!
+//! # Examples
+//!
+//! ```
+//! use switchy_time::now;
+//! use std::time::SystemTime;
+//!
+//! let current_time = now();
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

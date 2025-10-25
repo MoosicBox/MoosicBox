@@ -50,6 +50,7 @@ static GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET: LazyLock<RwLock<usize>> =
 static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: LazyLock<RwLock<Option<usize>>> =
     LazyLock::new(|| RwLock::new(None));
 
+/// Error type for failures when retrieving the global search index.
 #[derive(Debug, Error, Clone)]
 pub enum GetGlobalSearchIndexError {
     #[error(transparent)]
@@ -69,6 +70,7 @@ static GLOBAL_SEARCH_INDEX: LazyLock<RwLock<Result<Index, GetGlobalSearchIndexEr
         )
     });
 
+/// Error type for failures when retrieving the global search index reader.
 #[derive(Debug, Error, Clone)]
 pub enum GetGlobalSearchReaderError {
     #[error(transparent)]
@@ -99,6 +101,7 @@ static GLOBAL_SEARCH_READER: LazyLock<RwLock<Result<IndexReader, GetGlobalSearch
         RwLock::new(index)
     });
 
+/// Error type for failures when creating a search index.
 #[derive(Debug, Error)]
 pub enum CreateIndexError {
     #[error(transparent)]
@@ -230,6 +233,7 @@ fn create_global_search_index(
     })
 }
 
+/// Error type for failures when recreating a search index.
 #[derive(Debug, Error)]
 pub enum RecreateIndexError {
     #[error(transparent)]
@@ -252,6 +256,7 @@ fn recreate_global_search_index_sync(path: &Path) -> Result<(), RecreateIndexErr
     Ok(())
 }
 
+/// Error type for failures when retrieving an index reader.
 #[derive(Debug, Error)]
 pub enum GetIndexReaderError {
     #[error(transparent)]
@@ -267,6 +272,7 @@ fn get_index_reader(index: &Index) -> Result<IndexReader, GetIndexReaderError> {
         .try_into()?)
 }
 
+/// Error type for failures when populating a search index.
 #[derive(Debug, Error)]
 pub enum PopulateIndexError {
     #[error(transparent)]
@@ -279,10 +285,14 @@ pub enum PopulateIndexError {
     Join(#[from] JoinError),
 }
 
+/// Represents a data value that can be indexed in the search system.
 #[derive(Debug, Clone)]
 pub enum DataValue {
+    /// A string value
     String(String),
+    /// A boolean value
     Bool(bool),
+    /// A numeric value (unsigned 64-bit integer)
     Number(u64),
 }
 
@@ -459,6 +469,7 @@ pub fn populate_global_search_index_sync(
     Ok(())
 }
 
+/// Error type for failures when deleting from a search index.
 #[derive(Debug, Error)]
 pub enum DeleteFromIndexError {
     #[error(transparent)]
@@ -550,6 +561,7 @@ pub fn delete_from_global_search_index(
     Ok(())
 }
 
+/// Error type for failures when reindexing a search index.
 #[derive(Debug, Error)]
 pub enum ReindexError {
     #[error(transparent)]
@@ -609,6 +621,7 @@ fn reindex_global_search_index_sync(data: &[Vec<(&str, DataValue)>]) -> Result<(
     Ok(())
 }
 
+/// Error type for failures when searching a search index.
 #[derive(Debug, Error)]
 pub enum SearchIndexError {
     #[error(transparent)]

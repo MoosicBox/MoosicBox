@@ -9,8 +9,10 @@ use moosicbox_music_models::ApiSource;
 
 use crate::{MusicApi, MusicApis};
 
+/// Global registry of music API collections by profile.
 pub static PROFILES: LazyLock<MusicApisProfiles> = LazyLock::new(MusicApisProfiles::default);
 
+/// Registry for managing music API collections associated with profiles.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
 pub struct MusicApisProfiles {
@@ -18,9 +20,11 @@ pub struct MusicApisProfiles {
 }
 
 impl MusicApisProfiles {
+    /// Adds a music API collection for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * If the `RwLock` is poisoned
     pub fn add(
         &self,
         profile: String,
@@ -33,9 +37,11 @@ impl MusicApisProfiles {
             .insert(profile, MusicApis(music_apis));
     }
 
+    /// Inserts or updates a music API collection for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * If the `RwLock` is poisoned
     pub fn upsert(
         &self,
         profile: String,
@@ -50,17 +56,21 @@ impl MusicApisProfiles {
         }
     }
 
+    /// Removes the music API collection for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * If the `RwLock` is poisoned
     pub fn remove(&self, profile: &str) {
         self.profiles.write().unwrap().remove(profile);
     }
 
+    /// Adds a music API collection and returns it.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
-    /// profiles
+    /// * If the `RwLock` is poisoned
+    /// * If the profile was not added successfully
     #[must_use]
     pub fn add_fetch(
         &self,
@@ -71,9 +81,11 @@ impl MusicApisProfiles {
         self.get(profile).unwrap()
     }
 
+    /// Retrieves the music API collection for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * If the `RwLock` is poisoned
     #[must_use]
     pub fn get(&self, profile: &str) -> Option<MusicApis> {
         self.profiles.read().unwrap().iter().find_map(|(p, api)| {
@@ -85,9 +97,11 @@ impl MusicApisProfiles {
         })
     }
 
+    /// Returns the names of all registered profiles.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * If the `RwLock` is poisoned
     #[must_use]
     pub fn names(&self) -> Vec<String> {
         self.profiles.read().unwrap().keys().cloned().collect()

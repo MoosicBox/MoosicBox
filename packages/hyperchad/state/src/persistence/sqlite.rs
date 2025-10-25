@@ -12,11 +12,14 @@ use crate::Error;
 
 use super::StatePersistence;
 
+/// SQLite-backed state persistence implementation
 pub struct SqlitePersistence {
     db: Box<dyn Database>,
 }
 
 impl SqlitePersistence {
+    /// Create a new in-memory `SQLite` persistence store
+    ///
     /// # Errors
     ///
     /// * If the database connection cannot be established
@@ -50,6 +53,8 @@ impl SqlitePersistence {
         Ok(())
     }
 
+    /// Create a new file-based `SQLite` persistence store
+    ///
     /// # Errors
     ///
     /// * If the database connection cannot be established

@@ -13,10 +13,14 @@ use crate::ApiSource;
 #[cfg(feature = "db")]
 pub use db::*;
 
+/// The type of entity an ID refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum IdType {
+    /// Artist entity
     Artist,
+    /// Album entity
     Album,
+    /// Track entity
     Track,
 }
 
@@ -30,6 +34,7 @@ impl std::fmt::Display for IdType {
     }
 }
 
+/// Represents an ID that is unique within a specific API source.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ApiId {
     pub source: ApiSource,
@@ -37,6 +42,7 @@ pub struct ApiId {
 }
 
 impl ApiId {
+    /// Creates a new API ID from a source and ID.
     #[must_use]
     pub const fn new(source: ApiSource, id: Id) -> Self {
         Self { source, id }
@@ -71,9 +77,15 @@ impl utoipa::ToSchema for ApiId {
     }
 }
 
+/// A flexible identifier that can be either a string or numeric value.
+///
+/// Different API sources use different ID formats - local/library sources
+/// typically use numeric IDs, while external APIs often use string IDs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Id {
+    /// String-based identifier
     String(String),
+    /// Numeric identifier
     Number(u64),
 }
 
@@ -106,6 +118,8 @@ impl utoipa::ToSchema for Id {
 }
 
 impl Id {
+    /// Parses a string into an ID appropriate for the given API source.
+    ///
     /// # Panics
     ///
     /// * If the value fails to parse into the relevant type
@@ -114,6 +128,8 @@ impl Id {
         Self::try_from_str(value, source).unwrap()
     }
 
+    /// Attempts to parse a string into an ID appropriate for the given API source.
+    ///
     /// # Errors
     ///
     /// * If the value fails to parse into the relevant type
@@ -125,6 +141,7 @@ impl Id {
         })
     }
 
+    /// Returns the default value for the given API source.
     #[must_use]
     pub fn default_value(source: &ApiSource) -> Self {
         if source.is_library() {
@@ -134,6 +151,7 @@ impl Id {
         }
     }
 
+    /// Returns `true` if this ID is a number.
     #[must_use]
     pub const fn is_number(&self) -> bool {
         match self {
@@ -142,6 +160,7 @@ impl Id {
         }
     }
 
+    /// Returns the numeric value if this ID is a number.
     #[must_use]
     pub const fn as_u64(&self) -> Option<u64> {
         match self {
@@ -150,6 +169,7 @@ impl Id {
         }
     }
 
+    /// Returns the numeric value if this ID is a number.
     #[must_use]
     pub const fn as_number(&self) -> Option<u64> {
         match self {
@@ -158,6 +178,7 @@ impl Id {
         }
     }
 
+    /// Returns `true` if this ID is a string.
     #[must_use]
     pub const fn is_string(&self) -> bool {
         match self {
@@ -166,6 +187,7 @@ impl Id {
         }
     }
 
+    /// Returns the string value if this ID is a string.
     #[must_use]
     pub const fn as_str(&self) -> Option<&str> {
         match self {
@@ -255,8 +277,10 @@ impl From<String> for Id {
     }
 }
 
+/// Error returned when attempting to convert an ID to the wrong type.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TryFromIdError {
+    /// The ID is not the expected type
     #[error("Invalid type. Expected {0}")]
     InvalidType(String),
 }
@@ -496,16 +520,22 @@ pub fn parse_integer_ranges_to_ids(
         .collect::<Vec<Id>>())
 }
 
+/// Error returned when parsing ID ranges or sequences.
 #[derive(Debug, Error)]
 pub enum ParseIdsError {
+    /// Failed to parse an ID value
     #[error("Could not parse ids: {0}")]
     ParseId(String),
+    /// Range syntax is invalid
     #[error("Unmatched range: {0}")]
     UnmatchedRange(String),
+    /// Range is too large (> 100,000 items)
     #[error("Range too large: {0}")]
     RangeTooLarge(String),
 }
 
+/// Parses a comma-separated sequence of IDs.
+///
 /// # Errors
 ///
 /// * If a value fails to parse to an `Id`
@@ -518,6 +548,10 @@ pub fn parse_id_sequences(
         .collect::<std::result::Result<Vec<_>, _>>()
 }
 
+/// Parses ID ranges and sequences (e.g., "1,2,5-10,20").
+///
+/// Supports comma-separated IDs and numeric ranges with hyphens.
+///
 /// # Errors
 ///
 /// * If a value fails to parse to an `Id`

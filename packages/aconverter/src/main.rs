@@ -101,12 +101,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Error type for audio tag operations.
 #[derive(Debug, Error)]
 pub enum TagTrackFileError {
+    /// Error reading or writing audio tags.
     #[error(transparent)]
     Tag(#[from] moosicbox_audiotags::Error),
 }
 
+/// Copies audio metadata tags from one file to another.
+///
+/// Reads tags (title, track number, album, artist, album artist, and date) from the input file
+/// and writes them to the output file.
+///
 /// # Errors
 ///
 /// * If the tags fail to read from the input file

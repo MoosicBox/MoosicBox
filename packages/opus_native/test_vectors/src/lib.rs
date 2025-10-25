@@ -4,12 +4,20 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Test vector containing an Opus packet and expected decoded PCM output.
+///
+/// Used for validating Opus decoder implementations against reference outputs.
 #[derive(Debug, Clone)]
 pub struct TestVector {
+    /// Name of the test vector.
     pub name: String,
+    /// Encoded Opus packet data.
     pub packet: Vec<u8>,
+    /// Expected PCM samples after decoding (16-bit signed integers).
     pub expected_pcm: Vec<i16>,
+    /// Sample rate in Hz.
     pub sample_rate: u32,
+    /// Number of audio channels.
     pub channels: u8,
 }
 
@@ -75,6 +83,16 @@ impl TestVector {
     }
 }
 
+/// Calculates Signal-to-Noise Ratio (SNR) in decibels between reference and decoded signals.
+///
+/// SNR measures the quality of the decoded signal compared to the reference.
+/// Higher SNR values indicate better quality (less noise/distortion).
+///
+/// # Special Return Values
+///
+/// * `f64::INFINITY` - Signals are identical (no noise)
+/// * `f64::NEG_INFINITY` - Signals have different lengths
+/// * `0.0` - Reference signal has negligible power
 #[must_use]
 pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
     if reference.len() != decoded.len() {
@@ -104,11 +122,17 @@ pub fn calculate_snr(reference: &[i16], decoded: &[i16]) -> f64 {
     10.0 * (signal_power / noise_power).log10()
 }
 
+/// Returns the path to the directory containing generated test vectors.
+///
+/// Test vectors are generated at build time and stored in the build output directory.
 #[must_use]
 pub fn test_vectors_dir() -> PathBuf {
     PathBuf::from(env!("OUT_DIR")).join("generated")
 }
 
+/// Returns whether test vectors are available.
+///
+/// Checks if the test vectors directory exists and contains either SILK or CELT test data.
 #[must_use]
 pub fn vectors_available() -> bool {
     let dir = test_vectors_dir();

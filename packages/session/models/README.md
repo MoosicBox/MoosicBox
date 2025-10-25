@@ -1,10 +1,10 @@
-# MoosicBox Session Models
+# `MoosicBox` Session Models
 
 Data models for session management, playback control, and connection handling.
 
 ## Overview
 
-The MoosicBox Session Models package provides:
+The `MoosicBox` Session Models package provides:
 
 - **Session Management**: Playback session data structures
 - **Connection Models**: Client connection and registration
@@ -14,18 +14,20 @@ The MoosicBox Session Models package provides:
 
 ## Installation
 
-Add this to your Cargo.toml:
+Add this to your `Cargo.toml`:
 
+```toml
 [dependencies]
 moosicbox_session_models = { path = "../session/models" }
+```
 
 ## Dependencies
 
 - **serde**: Serialization and deserialization
-- **moosicbox_audio_zone_models**: Audio zone models
-- **moosicbox_music_models**: Music and track models
-- **moosicbox_json_utils**: JSON parsing utilities
-- **switchy_database**: Database value types and traits
-- **strum/strum_macros**: Enum string conversions
+- **`moosicbox_audio_zone_models`**: Audio zone models
+- **`moosicbox_music_models`**: Music and track models
+- **`moosicbox_json_utils`**: JSON parsing utilities
+- **`switchy_database`**: Database value types and traits
+- **`strum/strum_macros`**: Enum string conversions
 - **log**: Logging facade
-- **utoipa** (optional): OpenAPI schema generation
+- **utoipa** (optional): `OpenAPI` schema generation

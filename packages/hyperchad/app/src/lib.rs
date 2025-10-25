@@ -11,8 +11,10 @@ use hyperchad_router::{Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 use switchy_env::var_parse_or;
 
+/// Renderer implementations and type aliases for different backends.
 pub mod renderer;
 
+/// Errors that can occur in the hyperchad app.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -27,6 +29,7 @@ pub enum Error {
     Join(#[from] switchy::unsync::task::JoinError),
 }
 
+/// Errors that can occur when building an [`App`].
 #[derive(Debug, thiserror::Error)]
 pub enum BuilderError {
     #[error("Missing Router")]
@@ -56,15 +59,27 @@ enum Commands {
     Serve,
 }
 
+/// Trait for generating static output from a router.
 #[async_trait]
 pub trait Generator {
+    /// Generates static output for the given router.
+    ///
+    /// # Errors
+    ///
+    /// * If the renderer fails to generate the output
     async fn generate(&self, router: &Router, output: Option<String>) -> Result<(), Error> {
         unimplemented!("generate: unimplemented router={router:?} output={output:?}")
     }
 }
 
+/// Trait for cleaning generated output.
 #[async_trait]
 pub trait Cleaner {
+    /// Cleans the generated output directory.
+    ///
+    /// # Errors
+    ///
+    /// * If the renderer fails to clean the output
     async fn clean(&self, output: Option<String>) -> Result<(), Error> {
         unimplemented!("clean: unimplemented output={output:?}")
     }
@@ -80,6 +95,7 @@ type ActionHandler = Box<
 >;
 type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send + Sync>;
 
+/// Builder for constructing an [`App`] instance.
 #[derive(Clone)]
 pub struct AppBuilder {
     router: Option<Router>,
@@ -432,6 +448,7 @@ impl AppBuilder {
     }
 }
 
+/// Represents a hyperchad application with a specific renderer.
 #[derive(Debug)]
 pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> {
     pub renderer: R,

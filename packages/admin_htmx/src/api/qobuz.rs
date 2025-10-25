@@ -14,6 +14,7 @@ use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
 use switchy_database::profiles::LibraryDatabase;
 
+/// Binds Qobuz authentication and settings endpoints to the provided Actix web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -30,13 +31,21 @@ pub fn bind_services<
     scope.service(nested)
 }
 
+/// Form data for Qobuz user login.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserLoginForm {
+    /// Qobuz account username.
     username: String,
+    /// Qobuz account password.
     password: String,
 }
 
+/// Endpoint that handles Qobuz user login.
+///
+/// # Errors
+///
+/// This endpoint does not return errors; failures are rendered as HTML with error messages.
 #[route("auth/user-login", method = "POST")]
 pub async fn user_login_endpoint(
     htmx: Htmx,
@@ -74,13 +83,20 @@ pub async fn user_login_endpoint(
     })
 }
 
+/// Query parameters for the Qobuz settings endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSettingsQuery {
+    /// Whether to show scan controls in the settings UI.
     #[cfg(feature = "scan")]
     show_scan: Option<bool>,
 }
 
+/// Endpoint that renders the Qobuz settings and authentication status.
+///
+/// # Errors
+///
+/// * If fails to fetch the Qobuz config from the database
 #[route("settings", method = "GET", method = "OPTIONS", method = "HEAD")]
 pub async fn get_settings_endpoint(
     _htmx: Htmx,
@@ -96,6 +112,12 @@ pub async fn get_settings_endpoint(
     .map_err(|e| ErrorInternalServerError(format!("Failed to get Qobuz settings: {e:?}")))
 }
 
+/// Endpoint that triggers a scan of the Qobuz music library.
+///
+/// # Errors
+///
+/// * If the Qobuz API source is not registered
+/// * If the scan fails to start or encounters errors during execution
 #[cfg(feature = "scan")]
 #[route("run-scan", method = "POST")]
 pub async fn run_scan_endpoint(
@@ -113,6 +135,7 @@ pub async fn run_scan_endpoint(
     Ok(html! {})
 }
 
+/// Renders the Qobuz settings UI when the user is logged in.
 #[must_use]
 pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     #[cfg(feature = "scan")]
@@ -138,6 +161,7 @@ pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     }
 }
 
+/// Renders the Qobuz settings UI when the user is not logged in.
 #[must_use]
 pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     html! {

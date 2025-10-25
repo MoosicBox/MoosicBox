@@ -40,10 +40,29 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServe
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
+/// Starts the `MoosicBox` server with basic configuration.
+///
+/// This is a simplified version of [`run`] that uses default settings for optional features.
+/// It automatically configures telemetry metrics if the feature is enabled.
+///
+/// # Parameters
+///
+/// * `app_type` - The type of application being run
+/// * `addr` - The network address to bind the server to
+/// * `service_port` - The port number for the service
+/// * `actix_workers` - Optional number of Actix worker threads
+/// * `on_startup` - Callback function invoked when the server starts, receives the server handle
+///
+/// # Returns
+///
+/// Returns the value produced by the `on_startup` callback
+///
 /// # Errors
 ///
-/// * If the server fails to start
-/// * If the server fails during execution
+/// * If the server fails to bind to the specified address and port
+/// * If the server fails during initialization or execution
+/// * If database initialization or migration fails
+/// * If required services fail to start
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn run_basic<T>(
     #[allow(unused)] app_type: AppType,
@@ -72,14 +91,48 @@ pub async fn run_basic<T>(
     .await
 }
 
+/// Starts the `MoosicBox` server with full configuration options.
+///
+/// This function initializes and runs the complete `MoosicBox` server, including database setup,
+/// service initialization, `API` endpoint registration, and optional features like players,
+/// `UPnP` discovery, tunneling, and telemetry.
+///
+/// # Parameters
+///
+/// * `app_type` - The type of application being run
+/// * `addr` - The network address to bind the server to
+/// * `service_port` - The port number for the service
+/// * `actix_workers` - Optional number of Actix worker threads
+/// * `listener` - Optional pre-configured TCP listener to use instead of binding to addr/port
+/// * `local_players` - Whether to enable local audio players (requires `player` feature)
+/// * `upnp_players` - Whether to enable `UPnP` player discovery (requires `upnp` feature)
+/// * `metrics_handler` - `HTTP` metrics handler for telemetry (requires `telemetry` feature)
+/// * `on_startup` - Callback function invoked when the server starts, receives the server handle
+///
+/// # Returns
+///
+/// Returns the value produced by the `on_startup` callback
+///
 /// # Errors
 ///
-/// * If the server fails to start
-/// * If the server fails during execution
+/// * If the server fails to bind to the specified address and port
+/// * If the server fails during initialization or execution
+/// * If database initialization or migration fails
+/// * If required services fail to start
+/// * If `TLS` certificate operations fail (with `tls` feature)
 ///
 /// # Panics
 ///
-/// * If cannot create config paths
+/// * If the config database path cannot be created (with `sqlite` feature, non-simulator mode)
+/// * If database initialization fails
+/// * If database migration fails (with `sqlite` or `postgres` features)
+/// * If the static `CONFIG_DB` lock is poisoned
+/// * If server identity cannot be retrieved or initialized
+/// * If profile initialization fails
+/// * If tunnel setup fails (with `tunnel` feature)
+/// * If config directory path cannot be determined (with `tls` feature)
+/// * If `TLS` directory creation fails (with `tls` feature)
+/// * If `TLS` certificate generation or loading fails (with `tls` feature)
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -103,7 +156,7 @@ pub async fn run<T>(
     #[cfg(feature = "profiling-puffin")]
     start_puffin_server();
 
-    ApiSource::register_library();
+    let _ = ApiSource::register_library();
 
     #[cfg(feature = "tidal")]
     ApiSource::register("Tidal", "Tidal");

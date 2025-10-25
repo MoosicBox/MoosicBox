@@ -9,12 +9,18 @@ pub mod standard;
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
+/// Trait for synchronous file operations
+///
+/// This trait combines standard I/O traits for use with generic file handling code.
 #[cfg(all(feature = "sync", feature = "std"))]
 pub trait GenericSyncFile:
     Send + Sync + ::std::io::Read + ::std::io::Write + ::std::io::Seek
 {
 }
 
+/// Trait for asynchronous file operations
+///
+/// This trait combines async I/O traits for use with generic async file handling code.
 #[cfg(all(feature = "async", feature = "tokio"))]
 pub trait GenericAsyncFile:
     Send
@@ -28,6 +34,9 @@ pub trait GenericAsyncFile:
 #[allow(unused)]
 macro_rules! impl_open_options {
     ($(,)?) => {
+        /// Options for configuring how a file is opened
+        ///
+        /// This builder exposes the ability to configure how a file is opened and what operations are permitted on the resulting file.
         #[derive(Clone)]
         pub struct OpenOptions {
             pub(crate) create: bool,
@@ -44,6 +53,9 @@ macro_rules! impl_open_options {
         }
 
         impl OpenOptions {
+            /// Creates a new set of options with default values
+            ///
+            /// All options are initially set to `false`.
             #[must_use]
             pub const fn new() -> Self {
                 Self {
@@ -55,30 +67,35 @@ macro_rules! impl_open_options {
                 }
             }
 
+            /// Sets the option to create a new file if it doesn't exist
             #[must_use]
             pub const fn create(mut self, create: bool) -> Self {
                 self.create = create;
                 self
             }
 
+            /// Sets the option to append to a file
             #[must_use]
             pub const fn append(mut self, append: bool) -> Self {
                 self.append = append;
                 self
             }
 
+            /// Sets the option to read from a file
             #[must_use]
             pub const fn read(mut self, read: bool) -> Self {
                 self.read = read;
                 self
             }
 
+            /// Sets the option to write to a file
             #[must_use]
             pub const fn write(mut self, write: bool) -> Self {
                 self.write = write;
                 self
             }
 
+            /// Sets the option to truncate the file to 0 length if it exists
             #[must_use]
             pub const fn truncate(mut self, truncate: bool) -> Self {
                 self.truncate = truncate;
@@ -169,6 +186,9 @@ pub use temp_dir::Builder;
 #[cfg(all(feature = "simulator-real-fs", feature = "simulator"))]
 pub use simulator::with_real_fs;
 
+/// Executes a function, always using the actual filesystem (no-op when simulator feature is disabled)
+///
+/// When the `simulator` feature is disabled, this simply executes the provided closure.
 #[cfg(all(feature = "simulator-real-fs", not(feature = "simulator")))]
 pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
     f()

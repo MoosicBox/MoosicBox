@@ -17,23 +17,39 @@ pub mod stalled_monitor;
 
 static CUR_ID: AtomicUsize = AtomicUsize::new(1);
 
+/// Generates a unique ID for byte writers.
+///
+/// Returns a monotonically increasing identifier that can be used to track
+/// and distinguish different byte writer instances.
+#[must_use]
 pub fn new_byte_writer_id() -> usize {
     CUR_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
 
+/// A writer that broadcasts bytes to multiple stream readers.
+///
+/// Implements the [`std::io::Write`] trait and allows multiple [`ByteStream`] instances
+/// to receive the same data being written. Each stream receives its own copy of the data.
 #[derive(Clone)]
 pub struct ByteWriter {
+    /// Unique identifier for this writer instance.
     pub id: usize,
     written: Arc<RwLock<u64>>,
     senders: Arc<RwLock<Vec<Sender<Bytes>>>>,
 }
 
 impl ByteWriter {
+    /// Creates a new stream that will receive bytes written to this writer.
+    ///
+    /// Multiple streams can be created from the same writer, and each will receive
+    /// a copy of all data written.
     #[must_use]
     pub fn stream(&self) -> ByteStream {
         ByteStream::from(self)
     }
 
+    /// Returns the total number of bytes written so far.
+    ///
     /// # Panics
     ///
     /// * If the internal `RwLock` is poisoned
@@ -42,6 +58,11 @@ impl ByteWriter {
         *self.written.read().unwrap()
     }
 
+    /// Closes the writer by sending an empty bytes signal to all connected streams.
+    ///
+    /// This notifies all streams that no more data will be written. Disconnected
+    /// receivers are removed from the internal list.
+    ///
     /// # Panics
     ///
     /// * If the internal `RwLock` is poisoned
@@ -71,6 +92,17 @@ impl Default for ByteWriter {
 }
 
 impl std::io::Write for ByteWriter {
+    /// Writes bytes to the writer and broadcasts them to all connected streams.
+    ///
+    /// Empty buffers are ignored. Disconnected receivers are automatically removed.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation never returns errors (always returns `Ok`)
+    ///
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
@@ -110,11 +142,21 @@ impl std::io::Write for ByteWriter {
         Ok(buf.len())
     }
 
+    /// Flushes the writer.
+    ///
+    /// This is a no-op for `ByteWriter` as data is immediately sent to streams.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation never returns errors (always returns `Ok`)
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 }
 
+/// A stream that receives bytes from a [`ByteWriter`].
+///
+/// Implements the [`futures::Stream`] trait, yielding `Result<Bytes, std::io::Error>` items.
 pub struct ByteStream {
     id: usize,
     receiver: Receiver<Bytes>,
@@ -122,6 +164,10 @@ pub struct ByteStream {
 
 #[cfg(feature = "stalled-monitor")]
 impl ByteStream {
+    /// Wraps this stream in a stalled read monitor for timeout detection.
+    ///
+    /// The returned monitor can detect when the stream stalls (no data received)
+    /// and enforce timeout or throttling policies.
     #[must_use]
     pub fn stalled_monitor(
         self,
@@ -174,6 +220,10 @@ impl From<&ByteWriter> for ByteStream {
     }
 }
 
+/// A writer that broadcasts typed values to multiple stream readers.
+///
+/// Similar to [`ByteWriter`] but works with any cloneable type `T` instead of just bytes.
+/// Each connected [`TypedStream`] receives its own copy of the data.
 #[derive(Clone)]
 pub struct TypedWriter<T> {
     id: usize,
@@ -181,6 +231,10 @@ pub struct TypedWriter<T> {
 }
 
 impl<T> TypedWriter<T> {
+    /// Creates a new stream that will receive values written to this writer.
+    ///
+    /// Multiple streams can be created from the same writer, and each will receive
+    /// a copy of all data written.
     #[must_use]
     pub fn stream(&self) -> TypedStream<T> {
         TypedStream::from(self)
@@ -188,6 +242,11 @@ impl<T> TypedWriter<T> {
 }
 
 impl<T: Clone> TypedWriter<T> {
+    /// Writes a value to the writer and broadcasts it to all connected streams.
+    ///
+    /// The value is cloned for each connected stream except the last one, which
+    /// receives the original value. Disconnected receivers are automatically removed.
+    ///
     /// # Panics
     ///
     /// * If the internal `RwLock` is poisoned
@@ -228,12 +287,19 @@ impl<T> Default for TypedWriter<T> {
     }
 }
 
+/// A stream that receives typed values from a [`TypedWriter`].
+///
+/// Implements the [`futures::Stream`] trait, yielding items of type `T`.
 pub struct TypedStream<T> {
     receiver: Receiver<T>,
 }
 
 #[cfg(feature = "stalled-monitor")]
 impl<T> TypedStream<T> {
+    /// Wraps this stream in a stalled read monitor for timeout detection.
+    ///
+    /// The returned monitor can detect when the stream stalls (no data received)
+    /// and enforce timeout or throttling policies.
     #[must_use]
     pub fn stalled_monitor(self) -> stalled_monitor::StalledReadMonitor<T, Self> {
         self.into()

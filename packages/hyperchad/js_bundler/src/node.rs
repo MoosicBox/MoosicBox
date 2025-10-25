@@ -25,6 +25,13 @@ static ENABLED_NPM_COMMANDS: LazyLock<Vec<String>> = LazyLock::new(|| {
         .collect::<Vec<_>>()
 });
 
+/// Runs an npm command using the first available package manager.
+///
+/// Tries package managers in this order based on enabled features: pnpm, bun, npm.
+///
+/// # Panics
+///
+/// Panics if no enabled package manager binary is found or if the command fails.
 pub fn run_npm_command(arguments: &[&str], dir: &Path) {
     run_command(ENABLED_NPM_COMMANDS.clone().into_iter(), arguments, dir);
 }

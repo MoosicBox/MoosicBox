@@ -64,6 +64,7 @@ pub fn init_tracer(#[allow(unused)] name: &'static str) -> Result<DynLayer, Expo
     }
 }
 
+/// Creates an OpenTelemetry resource with service name attributes.
 #[must_use]
 pub fn get_resource_attr(name: &'static str) -> Resource {
     Resource::builder()
@@ -72,16 +73,20 @@ pub fn get_resource_attr(name: &'static str) -> Resource {
         .build()
 }
 
+/// HTTP metrics handler for Actix web applications.
 #[cfg(feature = "actix")]
 pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
+    /// Handles HTTP metrics endpoint requests.
     fn call(
         &self,
         request: HttpRequest,
     ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>;
 
+    /// Returns the request metrics middleware.
     fn request_middleware(&self) -> RequestMetrics;
 }
 
+/// Stub HTTP metrics handler that returns empty responses.
 #[derive(Debug)]
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
 pub struct StubHttpMetricsHandler;
@@ -103,9 +108,9 @@ impl crate::HttpMetricsHandler for StubHttpMetricsHandler {
     }
 }
 
-/// # Errors
+/// Returns the HTTP metrics handler implementation.
 ///
-/// * If the Prometheus exporter fails to build
+/// Uses the simulator implementation when the `simulator` feature is enabled.
 #[cfg(feature = "actix")]
 #[must_use]
 pub fn get_http_metrics_handler() -> Box<dyn HttpMetricsHandler> {
@@ -120,6 +125,7 @@ pub fn get_http_metrics_handler() -> Box<dyn HttpMetricsHandler> {
     }
 }
 
+/// Actix web endpoint for serving telemetry metrics.
 #[allow(clippy::future_not_send)]
 #[cfg(feature = "actix")]
 #[tracing::instrument]

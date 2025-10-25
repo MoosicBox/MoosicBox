@@ -3,6 +3,12 @@
 #![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::branches_sharing_code)]
 
+//! UI components and templates for the `MoosicBox` marketing website.
+//!
+//! This crate provides page templates, layout components, and responsive design
+//! utilities built with the `HyperChad` UI framework.
+
+/// Download page functionality for the marketing site.
 pub mod download;
 pub use hyperchad::template as hyperchad_template;
 
@@ -12,6 +18,18 @@ use hyperchad::{
     transformer::models::{LayoutDirection, TextAlign},
 };
 
+/// Generates a URL path to a public image asset.
+///
+/// This macro prepends `/public/img/` to the provided path, creating a full URL
+/// path suitable for use in HTML image elements.
+///
+/// # Examples
+///
+/// ```
+/// # use moosicbox_marketing_site_ui::public_img;
+/// let logo_path = public_img!("icon128.png");
+/// assert_eq!(logo_path, "/public/img/icon128.png");
+/// ```
 #[macro_export]
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -19,6 +37,10 @@ macro_rules! public_img {
     };
 }
 
+/// Generates the header component for the marketing site.
+///
+/// Returns a header container with the `MoosicBox` logo, navigation menu items,
+/// and responsive layout that adapts to mobile and desktop viewports.
 #[must_use]
 pub fn header() -> Containers {
     container! {
@@ -80,6 +102,9 @@ pub fn header() -> Containers {
     }
 }
 
+/// Generates the main content container for a page.
+///
+/// Wraps the provided content in a flex container that grows to fill available space.
 #[must_use]
 pub fn main(slot: &Containers) -> Containers {
     container! {
@@ -89,6 +114,9 @@ pub fn main(slot: &Containers) -> Containers {
     }
 }
 
+/// Generates the "Try Now" page.
+///
+/// Returns a page container with content for starting a free trial.
 #[must_use]
 pub fn try_now() -> Containers {
     page(&container! {
@@ -96,6 +124,9 @@ pub fn try_now() -> Containers {
     })
 }
 
+/// Generates the 404 error page.
+///
+/// Returns a page container with a "Page not found" message.
 #[must_use]
 pub fn not_found() -> Containers {
     page(&container! {
@@ -103,6 +134,11 @@ pub fn not_found() -> Containers {
     })
 }
 
+/// Generates the home page.
+///
+/// Returns a page container with the main landing page content, including
+/// the splash screen with motto and showcase images that adapt to mobile
+/// and desktop viewports.
 #[must_use]
 pub fn home() -> Containers {
     page(&container! {
@@ -186,6 +222,10 @@ pub fn home() -> Containers {
     })
 }
 
+/// Generates a complete page layout with header and content.
+///
+/// Wraps the provided content with the site header and base page styling,
+/// including fonts, colors, and responsive overflow behavior.
 #[must_use]
 pub fn page(slot: &Containers) -> Containers {
     container! {

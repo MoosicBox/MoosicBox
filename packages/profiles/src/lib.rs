@@ -10,8 +10,10 @@ use std::{
 #[cfg(feature = "events")]
 pub mod events;
 
+/// Global instance of the profiles registry.
 pub static PROFILES: LazyLock<Profiles> = LazyLock::new(Profiles::default);
 
+/// Registry for managing profile names.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
 pub struct Profiles {
@@ -19,6 +21,8 @@ pub struct Profiles {
 }
 
 impl Profiles {
+    /// Adds a profile to the registry.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -26,6 +30,8 @@ impl Profiles {
         self.profiles.write().unwrap().insert(profile);
     }
 
+    /// Removes a profile from the registry.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -33,6 +39,8 @@ impl Profiles {
         self.profiles.write().unwrap().retain(|p| p != profile);
     }
 
+    /// Adds a profile to the registry and returns it.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
@@ -43,6 +51,8 @@ impl Profiles {
         self.get(profile).unwrap()
     }
 
+    /// Retrieves a profile from the registry.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -57,6 +67,8 @@ impl Profiles {
         })
     }
 
+    /// Returns all profile names in the registry.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -100,6 +112,7 @@ pub mod api {
         Ok(profile)
     }
 
+    /// Profile name extracted from request without verification.
     #[derive(Debug)]
     pub struct ProfileNameUnverified(pub String);
 
@@ -110,6 +123,8 @@ pub mod api {
     }
 
     impl ProfileNameUnverified {
+        /// Extracts profile name from request headers or query parameters.
+        ///
         /// # Errors
         ///
         /// Will error if request is missing profile header and query param
@@ -132,6 +147,7 @@ pub mod api {
         }
     }
 
+    /// Verified profile name extracted from request.
     pub struct ProfileName(pub String);
 
     impl From<ProfileName> for String {
@@ -147,6 +163,8 @@ pub mod api {
     }
 
     impl ProfileName {
+        /// Extracts and verifies profile name from request.
+        ///
         /// # Errors
         ///
         /// Will error if request is missing profile header and query param or if the

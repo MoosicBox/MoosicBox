@@ -1,3 +1,9 @@
+//! Menu functionality for managing library content.
+//!
+//! This crate provides functionality for managing music library content, including
+//! albums, artists, and tracks. It includes both programmatic APIs for library
+//! operations and HTTP endpoint handlers for web service integration.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

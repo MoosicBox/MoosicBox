@@ -6,8 +6,10 @@ use std::{
 
 use tokio::sync::RwLock;
 
+/// Type alias for boxed errors that can be sent across threads.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;
 
+/// Type alias for profile update event listener callbacks.
 pub type ProfilesUpdatedSubscriptionAction = Box<
     dyn (Fn(
             &[String],
@@ -21,6 +23,7 @@ static PROFILES_UPDATED_EVENT_LISTENERS: LazyLock<
     Arc<RwLock<Vec<ProfilesUpdatedSubscriptionAction>>>,
 > = LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
+/// Registers a listener for profile update events.
 pub async fn on_profiles_updated_event<
     F: Send + Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + 'static,
 >(
@@ -34,6 +37,8 @@ pub async fn on_profiles_updated_event<
         }));
 }
 
+/// Triggers profile update events for all registered listeners.
+///
 /// # Errors
 ///
 /// * If any of the event listeners fail
@@ -44,6 +49,8 @@ pub async fn trigger_profiles_updated_event(
     send_profiles_updated_event(added, removed).await
 }
 
+/// Sends profile update events to all registered listeners.
+///
 /// # Errors
 ///
 /// * If any of the event listeners fail

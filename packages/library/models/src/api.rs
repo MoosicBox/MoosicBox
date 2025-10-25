@@ -88,6 +88,9 @@ impl From<ApiLibraryAlbum> for ApiAlbum {
 impl TryFrom<ApiLibraryAlbum> for Album {
     type Error = chrono::ParseError;
 
+    /// # Errors
+    ///
+    /// * If `date_released` or `date_added` contains an invalid date string
     fn try_from(value: ApiLibraryAlbum) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.album_id.into(),

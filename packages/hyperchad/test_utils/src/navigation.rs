@@ -1,15 +1,22 @@
 use serde::{Deserialize, Serialize};
 
+/// A navigation action in the browser.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NavigationStep {
+    /// Navigate to a URL.
     GoTo { url: String },
+    /// Navigate back in history.
     GoBack,
+    /// Navigate forward in history.
     GoForward,
+    /// Reload the current page.
     Reload,
+    /// Set the URL hash fragment.
     SetHash { hash: String },
 }
 
 impl NavigationStep {
+    /// Returns a human-readable description of this navigation step.
     #[must_use]
     pub fn description(&self) -> String {
         match self {

@@ -9,6 +9,9 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::sender::{TunnelResponseMessage, TunnelResponsePacket};
 
+/// Websocket sender that routes messages through both local and tunnel connections.
+///
+/// Manages message propagation and connection filtering for tunnel websocket operations.
 pub struct TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,

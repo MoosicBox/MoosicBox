@@ -283,7 +283,7 @@ impl WsServer {
             player_actions: self.player_actions.clone(),
         };
 
-        moosicbox_ws::connect(self, &context);
+        let _ = moosicbox_ws::connect(self, &context);
 
         // send id back
         id

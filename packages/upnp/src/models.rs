@@ -1,6 +1,7 @@
 use rupnp::{Device, DeviceSpec, Service};
 use serde::{Deserialize, Serialize};
 
+/// Represents a discovered `UPnP` device with its associated services.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpDevice {
@@ -42,6 +43,7 @@ impl UpnpDevice {
     }
 }
 
+/// Represents a `UPnP` service provided by a device.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpService {

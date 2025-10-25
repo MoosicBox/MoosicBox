@@ -1,6 +1,6 @@
-# MoosicBox HyperChad Test Utils
+# `MoosicBox` `HyperChad` Test Utils
 
-Test workflow builders and utilities for HyperChad application testing.
+Test workflow builders and utilities for `HyperChad` application testing.
 
 ## Features
 

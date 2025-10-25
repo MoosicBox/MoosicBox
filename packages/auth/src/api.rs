@@ -15,6 +15,10 @@ use url::form_urlencoded;
 
 use crate::{NonTunnelRequestAuthorized, create_magic_token, get_credentials_from_magic_token};
 
+/// Binds authentication API endpoints to an Actix-web scope.
+///
+/// This function registers the magic token endpoints for creating and retrieving
+/// authentication credentials.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -25,6 +29,7 @@ pub fn bind_services<
         .service(create_magic_token_endpoint)
 }
 
+/// `OpenAPI` documentation structure for authentication endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -34,10 +39,12 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for retrieving credentials from a magic token.
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct MagicTokenQuery {
+    /// The magic token to exchange for credentials.
     magic_token: String,
 }
 
@@ -58,6 +65,15 @@ pub struct MagicTokenQuery {
     )
 )]
 #[route("/magic-token", method = "GET")]
+/// Endpoint to retrieve client credentials from a magic token.
+///
+/// Returns the client ID and access token associated with the provided magic token.
+/// The magic token is consumed after successful retrieval.
+///
+/// # Errors
+///
+/// * If the magic token is invalid or expired
+/// * If database operations fail
 pub async fn get_magic_token_endpoint(
     query: web::Query<MagicTokenQuery>,
     db: ConfigDatabase,
@@ -76,9 +92,11 @@ pub async fn get_magic_token_endpoint(
     }
 }
 
+/// Query parameters for creating a magic token.
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateMagicTokenQuery {
+    /// Optional host URL to generate a complete link with the magic token.
     host: Option<String>,
 }
 
@@ -99,6 +117,15 @@ pub struct CreateMagicTokenQuery {
     )
 )]
 #[route("/magic-token", method = "POST")]
+/// Endpoint to create a new magic token for authentication.
+///
+/// Creates a magic token that can be exchanged for client credentials.
+/// If a host is provided, returns a complete URL with the token embedded.
+///
+/// # Errors
+///
+/// * If database operations fail
+/// * If tunnel synchronization fails
 pub async fn create_magic_token_endpoint(
     query: web::Query<CreateMagicTokenQuery>,
     tunnel_info: TunnelInfo,

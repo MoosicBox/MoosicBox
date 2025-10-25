@@ -10,6 +10,11 @@ use futures_core::{FusedStream, Stream};
 
 use crate::MoosicBoxSender;
 
+/// A sender that can prioritize messages based on a user-provided function.
+///
+/// Messages can be sent with priority ordering, where higher priority values
+/// are sent before lower priority values. Messages are buffered internally
+/// and flushed when the receiver polls for new items.
 pub struct PrioritizedSender<T: Send> {
     inner: UnboundedSender<T>,
     #[allow(clippy::type_complexity)]
@@ -19,6 +24,10 @@ pub struct PrioritizedSender<T: Send> {
 }
 
 impl<T: Send> PrioritizedSender<T> {
+    /// Sets the priority function for this sender.
+    ///
+    /// The function receives a reference to each message and returns a priority value.
+    /// Higher priority values are sent before lower priority values.
     #[must_use]
     pub fn with_priority(mut self, func: impl (Fn(&T) -> usize) + Send + Sync + 'static) -> Self {
         self.priority.replace(Arc::new(Box::new(func)));
@@ -112,6 +121,10 @@ impl<T: Send> Deref for PrioritizedSender<T> {
     }
 }
 
+/// A receiver that works with [`PrioritizedSender`] to receive prioritized messages.
+///
+/// This receiver automatically flushes the sender's priority buffer when polling
+/// for new messages, ensuring that buffered messages are sent in priority order.
 pub struct PrioritizedReceiver<T: Send> {
     inner: UnboundedReceiver<T>,
     sender: PrioritizedSender<T>,
@@ -154,6 +167,11 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
     }
 }
 
+/// Creates an unbounded prioritized channel.
+///
+/// Returns a sender and receiver pair that can be used to send and receive
+/// messages with optional priority ordering. Use [`PrioritizedSender::with_priority`]
+/// to configure priority ordering on the sender.
 #[must_use]
 pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
     let (tx, rx) = futures_channel::mpsc::unbounded();

@@ -15,6 +15,7 @@ pub use http;
 #[cfg(feature = "actions")]
 mod actions;
 
+/// Errors that can occur during HTTP request processing.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -32,10 +33,16 @@ pub enum Error {
     SerdeJson(#[from] serde_json::Error),
 }
 
+/// HTTP application wrapper for `HyperChad` rendering.
+///
+/// Combines a renderer, router, and optional action/asset handling into an HTTP response processor.
 #[derive(Clone)]
 pub struct HttpApp<R: HtmlTagRenderer + Sync> {
+    /// HTML tag renderer for converting views to HTML.
     pub renderer: R,
+    /// Router for handling navigation and route matching.
     pub router: Router,
+    /// Action sender channel for handling action requests.
     #[cfg(feature = "actions")]
     pub action_tx: Option<
         flume::Sender<(
@@ -43,8 +50,10 @@ pub struct HttpApp<R: HtmlTagRenderer + Sync> {
             Option<hyperchad_renderer::transformer::actions::logic::Value>,
         )>,
     >,
+    /// Static asset routes for serving files.
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    /// Custom handlers for resolving static asset paths.
     #[cfg(feature = "assets")]
     #[allow(clippy::type_complexity)]
     pub static_asset_route_handlers: Vec<
@@ -83,13 +92,18 @@ impl<R: HtmlTagRenderer + Sync> std::fmt::Debug for HttpApp<R> {
 }
 
 impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
+    /// Processes an HTTP request and returns an HTTP response.
+    ///
     /// # Errors
     ///
-    /// * If the request fails to process
+    /// * `Error::Http` - If HTTP response construction fails
+    /// * `Error::IO` - If file I/O operations fail (asset serving)
+    /// * `Error::Navigate` - If routing fails
+    /// * `Error::SerdeJson` - If JSON serialization fails (with `json` feature)
     ///
     /// # Panics
     ///
-    /// * Shouldn't
+    /// * If action channel send fails (with `actions` feature)
     #[allow(clippy::too_many_lines)]
     pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
         static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
@@ -290,6 +304,8 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 }
 
 impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
+    /// Creates a new HTTP application with the given renderer and router.
+    #[must_use]
     pub const fn new(renderer: R, router: Router) -> Self {
         Self {
             renderer,
@@ -307,30 +323,35 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         }
     }
 
+    /// Sets the viewport meta tag content for HTML responses.
     #[must_use]
     pub fn with_viewport(mut self, content: impl Into<String>) -> Self {
         self.viewport.replace(content.into());
         self
     }
 
+    /// Sets the background color for HTML responses.
     #[must_use]
     pub fn with_background(mut self, color: impl Into<Color>) -> Self {
         self.background.replace(color.into());
         self
     }
 
+    /// Sets the page title for HTML responses.
     #[must_use]
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.title.replace(title.into());
         self
     }
 
+    /// Sets the page description meta tag for HTML responses.
     #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description.replace(description.into());
         self
     }
 
+    /// Sets the action sender channel for handling action requests.
     #[cfg(feature = "actions")]
     #[must_use]
     pub fn with_action_tx(
@@ -344,6 +365,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         self
     }
 
+    /// Adds a custom handler for resolving static asset routes.
     #[cfg(feature = "assets")]
     #[must_use]
     pub fn with_static_asset_route_handler(
@@ -358,6 +380,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         self
     }
 
+    /// Sets the action sender channel by mutable reference.
     #[cfg(feature = "actions")]
     pub fn set_action_tx(
         &mut self,

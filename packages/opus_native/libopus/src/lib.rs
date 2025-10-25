@@ -8,21 +8,40 @@
 
 use std::ffi::c_int;
 
+/// Success return code from libopus functions.
 pub const OPUS_OK: c_int = 0;
+
+/// Application mode optimized for voice over IP.
 pub const OPUS_APPLICATION_VOIP: c_int = 2048;
+
+/// Application mode optimized for general audio encoding.
 pub const OPUS_APPLICATION_AUDIO: c_int = 2049;
 
+/// Opaque handle to a libopus encoder instance.
+///
+/// This struct represents a low-level FFI binding to the libopus encoder.
+/// For a safe Rust API, use [`safe::Encoder`] instead.
 #[repr(C)]
 pub struct OpusEncoder {
     _private: [u8; 0],
 }
 
+/// Opaque handle to a libopus decoder instance.
+///
+/// This struct represents a low-level FFI binding to the libopus decoder.
+/// For a safe Rust API, use [`safe::Decoder`] instead.
 #[repr(C)]
 pub struct OpusDecoder {
     _private: [u8; 0],
 }
 
 unsafe extern "C" {
+    /// Creates a new Opus encoder.
+    ///
+    /// # Safety
+    ///
+    /// * `error` must be a valid pointer to writable memory for storing the error code
+    /// * The returned pointer must be freed with [`opus_encoder_destroy`]
     pub fn opus_encoder_create(
         fs: c_int,
         channels: c_int,
@@ -30,6 +49,13 @@ unsafe extern "C" {
         error: *mut c_int,
     ) -> *mut OpusEncoder;
 
+    /// Encodes an Opus frame.
+    ///
+    /// # Safety
+    ///
+    /// * `st` must be a valid encoder created by [`opus_encoder_create`]
+    /// * `pcm` must point to at least `frame_size * channels` valid `i16` samples
+    /// * `data` must point to at least `max_data_bytes` writable bytes
     pub fn opus_encode(
         st: *mut OpusEncoder,
         pcm: *const i16,
@@ -38,10 +64,29 @@ unsafe extern "C" {
         max_data_bytes: c_int,
     ) -> c_int;
 
+    /// Destroys an Opus encoder and frees its resources.
+    ///
+    /// # Safety
+    ///
+    /// * `st` must be a valid encoder created by [`opus_encoder_create`]
+    /// * `st` must not be used after this call
     pub fn opus_encoder_destroy(st: *mut OpusEncoder);
 
+    /// Creates a new Opus decoder.
+    ///
+    /// # Safety
+    ///
+    /// * `error` must be a valid pointer to writable memory for storing the error code
+    /// * The returned pointer must be freed with [`opus_decoder_destroy`]
     pub fn opus_decoder_create(fs: c_int, channels: c_int, error: *mut c_int) -> *mut OpusDecoder;
 
+    /// Decodes an Opus packet.
+    ///
+    /// # Safety
+    ///
+    /// * `st` must be a valid decoder created by [`opus_decoder_create`]
+    /// * `data` must point to at least `len` valid bytes
+    /// * `pcm` must point to at least `frame_size * channels` writable `i16` samples
     pub fn opus_decode(
         st: *mut OpusDecoder,
         data: *const u8,
@@ -51,9 +96,20 @@ unsafe extern "C" {
         decode_fec: c_int,
     ) -> c_int;
 
+    /// Destroys an Opus decoder and frees its resources.
+    ///
+    /// # Safety
+    ///
+    /// * `st` must be a valid decoder created by [`opus_decoder_create`]
+    /// * `st` must not be used after this call
     pub fn opus_decoder_destroy(st: *mut OpusDecoder);
 }
 
+/// Safe Rust wrapper around the libopus FFI.
+///
+/// This module provides safe, idiomatic Rust APIs for Opus encoding and decoding.
+/// All FFI interactions are encapsulated, memory is managed automatically,
+/// and errors are returned as `Result` types.
 pub mod safe {
     use super::{
         OPUS_OK, OpusDecoder, OpusEncoder, opus_decode, opus_decoder_create, opus_decoder_destroy,
@@ -61,21 +117,33 @@ pub mod safe {
     };
     use std::ffi::c_int;
 
+    /// Error types returned by safe Opus operations.
     #[derive(Debug)]
     pub enum OpusError {
+        /// Failed to create an encoder, with libopus error code.
         EncoderCreateFailed(c_int),
+        /// Failed to create a decoder, with libopus error code.
         DecoderCreateFailed(c_int),
+        /// Failed to encode audio, with libopus error code.
         EncodeFailed(c_int),
+        /// Failed to decode audio, with libopus error code.
         DecodeFailed(c_int),
+        /// Sample rate not one of 8000, 12000, 16000, 24000, or 48000 Hz.
         InvalidSampleRate,
+        /// Channel count not 1 or 2.
         InvalidChannels,
     }
 
+    /// Safe wrapper around an Opus encoder.
+    ///
+    /// Automatically manages the lifecycle of the underlying libopus encoder.
     pub struct Encoder {
         ptr: *mut OpusEncoder,
     }
 
     impl Encoder {
+        /// Creates a new Opus encoder.
+        ///
         /// # Errors
         ///
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
@@ -106,6 +174,10 @@ pub mod safe {
             Ok(Self { ptr })
         }
 
+        /// Encodes PCM audio data to Opus format.
+        ///
+        /// Returns the number of bytes written to the output buffer.
+        ///
         /// # Errors
         ///
         /// * `EncodeFailed` - libopus encoding failed with error code
@@ -143,11 +215,16 @@ pub mod safe {
 
     unsafe impl Send for Encoder {}
 
+    /// Safe wrapper around an Opus decoder.
+    ///
+    /// Automatically manages the lifecycle of the underlying libopus decoder.
     pub struct Decoder {
         ptr: *mut OpusDecoder,
     }
 
     impl Decoder {
+        /// Creates a new Opus decoder.
+        ///
         /// # Errors
         ///
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
@@ -173,6 +250,10 @@ pub mod safe {
             Ok(Self { ptr })
         }
 
+        /// Decodes Opus-encoded audio data to PCM format.
+        ///
+        /// Returns the number of samples decoded per channel.
+        ///
         /// # Errors
         ///
         /// * `DecodeFailed` - libopus decoding failed with error code

@@ -4,6 +4,7 @@ use switchy_database::{AsId, DatabaseValue};
 
 use crate::ScanOrigin;
 
+/// Represents a configured scan location in the database.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanLocation {

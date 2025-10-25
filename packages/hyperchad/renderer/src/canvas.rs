@@ -2,20 +2,28 @@
 
 use hyperchad_color::Color;
 
+/// 2D position with x and y coordinates
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Pos(pub f32, pub f32);
 
+/// Actions that can be performed on a canvas
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub enum CanvasAction {
+    /// Set the stroke width
     StrokeSize(f32),
+    /// Set the stroke color
     StrokeColor(Color),
+    /// Draw a line from first position to second position
     Line(Pos, Pos),
+    /// Fill a rectangle from first position to second position
     FillRect(Pos, Pos),
+    /// Clear the entire canvas
     Clear,
+    /// Clear a rectangular area from first position to second position
     ClearRect(Pos, Pos),
 }
 
@@ -29,10 +37,13 @@ impl CanvasAction {
     }
 }
 
+/// Update to apply to a canvas element
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CanvasUpdate {
+    /// Target canvas element identifier
     pub target: String,
+    /// Actions to perform on the canvas
     pub canvas_actions: Vec<CanvasAction>,
 }

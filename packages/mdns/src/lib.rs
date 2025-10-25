@@ -7,12 +7,16 @@ use service::MdnsServiceDaemon;
 use thiserror::Error;
 
 #[cfg(feature = "scanner")]
+/// mDNS service scanner for discovering `MoosicBox` servers on the network.
 pub mod scanner;
 
+/// mDNS service registration and daemon management.
 pub mod service;
 
+/// The mDNS service type for `MoosicBox` servers.
 pub const SERVICE_TYPE: &str = "_moosicboxserver._tcp.local.";
 
+/// Errors that can occur when registering an mDNS service.
 #[derive(Debug, Error)]
 pub enum RegisterServiceError {
     #[error(transparent)]
@@ -36,6 +40,11 @@ fn get_service_daemon() -> Result<Box<dyn MdnsServiceDaemon>, mdns_sd::Error> {
     }
 }
 
+/// Registers an mDNS service on the local network.
+///
+/// This function creates and registers a `MoosicBox` server instance with the specified
+/// instance name, IP address, and port number.
+///
 /// # Errors
 ///
 /// * If `mdns_sd` has an error initializing the mdns service

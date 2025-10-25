@@ -1,11 +1,15 @@
 use serde::{Serialize, ser::Serializer};
 
+/// Result type for player plugin operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors that can occur in player plugin operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// I/O error.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Mobile plugin invocation error.
     #[cfg(mobile)]
     #[error(transparent)]
     PluginInvoke(#[from] tauri::plugin::mobile::PluginInvokeError),

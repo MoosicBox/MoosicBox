@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::AsRefStr;
 
+/// Payload types for incoming websocket messages.
 #[derive(Debug, Serialize, Deserialize, Clone, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -29,6 +30,7 @@ impl std::fmt::Display for InboundPayload {
     }
 }
 
+/// Payload types for outgoing websocket messages.
 #[derive(Debug, Serialize, Deserialize, Clone, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -49,100 +51,117 @@ impl std::fmt::Display for OutboundPayload {
     }
 }
 
+/// Empty payload for websocket messages that require no data.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EmptyPayload {}
 
+/// Payload for creating a new session.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionPayload {
     pub payload: CreateSession,
 }
 
+/// Payload for updating an existing session.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPayload {
     pub payload: UpdateSession,
 }
 
+/// Payload for deleting a session.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSessionPayload {
     pub payload: DeleteSession,
 }
 
+/// Payload for registering a new connection.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterConnectionPayload {
     pub payload: RegisterConnection,
 }
 
+/// Payload for registering multiple players.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterPlayersPayload {
     pub payload: Vec<RegisterPlayer>,
 }
 
+/// Payload for creating a new audio zone.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAudioZonePayload {
     pub payload: CreateAudioZone,
 }
 
+/// Payload for playback actions.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackActionPayload {
     pub payload: Value,
 }
 
+/// Payload containing a connection ID.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionIdPayload {
     pub connection_id: String,
 }
 
+/// Payload containing a list of sessions.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionsPayload {
     pub payload: Vec<ApiSession>,
 }
 
+/// Payload containing audio zones with their sessions.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioZoneWithSessionsPayload {
     pub payload: Vec<ApiAudioZoneWithSession>,
 }
 
+/// Payload for session update notifications.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionUpdatedPayload {
     pub payload: ApiUpdateSession,
 }
 
+/// Payload for download event notifications.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadEventPayload {
     pub payload: Value,
 }
 
+/// Payload for scan event notifications.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanEventPayload {
     pub payload: Value,
 }
 
+/// Payload containing a list of connections.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionsPayload {
     pub payload: Vec<ApiConnection>,
 }
 
+/// Payload for setting seek position.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeekPayload {
     pub payload: SetSeek,
 }
 
+/// Seek position data for a session.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {

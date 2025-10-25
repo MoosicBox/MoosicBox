@@ -8,6 +8,10 @@ use thiserror::Error;
 #[cfg(feature = "creds")]
 pub mod creds;
 
+/// Database connection credentials
+///
+/// Contains host, database name, username, and optional password
+/// for establishing database connections.
 #[allow(unused)]
 pub struct Credentials {
     host: String,
@@ -16,6 +20,7 @@ pub struct Credentials {
     password: Option<String>,
 }
 
+/// Errors that can occur when parsing database credentials from a URL
 #[derive(Debug, Error)]
 pub enum CredentialsParseError {
     #[error("Invalid URL format")]
@@ -31,6 +36,7 @@ pub enum CredentialsParseError {
 }
 
 impl Credentials {
+    /// Creates new database credentials
     #[must_use]
     pub const fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
         Self {
@@ -100,27 +106,32 @@ impl Credentials {
         }
     }
 
+    /// Returns the database host
     #[must_use]
     pub fn host(&self) -> &str {
         &self.host
     }
 
+    /// Returns the database name
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Returns the username
     #[must_use]
     pub fn user(&self) -> &str {
         &self.user
     }
 
+    /// Returns the password, if present
     #[must_use]
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }
 }
 
+/// Errors that can occur when initializing a database connection
 #[derive(Debug, Error)]
 pub enum InitDbError {
     #[cfg(feature = "sqlite-rusqlite")]
@@ -282,6 +293,7 @@ pub async fn init_default_non_sqlite(
     panic!("Invalid database features")
 }
 
+/// Errors that can occur when initializing a `SQLite` connection via `rusqlite`
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
 pub enum InitSqliteRusqliteError {
@@ -343,6 +355,7 @@ pub fn init_sqlite_rusqlite(
     )))
 }
 
+/// Errors that can occur when initializing a `PostgreSQL` connection
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitPostgresError {
@@ -354,6 +367,7 @@ pub enum InitPostgresError {
     PostgresSqlx(#[from] sqlx::Error),
 }
 
+/// Errors that can occur when initializing a `SQLite` connection via `sqlx`
 #[cfg(any(
     feature = "sqlite-sqlx",
     all(
@@ -430,6 +444,7 @@ pub async fn init_sqlite_sqlx(
     ))))
 }
 
+/// Errors that can occur when initializing a Turso database connection
 #[cfg(feature = "turso")]
 #[derive(Debug, Error)]
 pub enum InitTursoError {
@@ -454,6 +469,7 @@ pub async fn init_turso_local(
     Ok(Box::new(db))
 }
 
+/// Errors that can occur during database initialization
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitDatabaseError {

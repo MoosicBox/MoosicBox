@@ -5,6 +5,7 @@ use actix_web::{
 use maud::{Markup, html};
 use switchy_database::{DatabaseError, config::ConfigDatabase};
 
+/// Binds server info endpoints to the provided Actix web scope.
 pub const fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -13,6 +14,8 @@ pub const fn bind_services<
     scope
 }
 
+/// Renders server information including the server identity.
+///
 /// # Errors
 ///
 /// * If fails to get the server identity from the database

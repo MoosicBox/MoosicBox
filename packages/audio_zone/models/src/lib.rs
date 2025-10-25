@@ -6,10 +6,16 @@ use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToVa
 use serde::{Deserialize, Serialize};
 use switchy_database::{AsId, DatabaseValue};
 
+/// Represents an audio zone containing multiple audio players.
+///
+/// An audio zone groups multiple players together for synchronized audio playback.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioZone {
+    /// Unique identifier for the audio zone
     pub id: u64,
+    /// Human-readable name of the audio zone
     pub name: String,
+    /// List of players in this audio zone
     pub players: Vec<Player>,
 }
 
@@ -27,12 +33,19 @@ impl From<ApiAudioZone> for AudioZone {
     }
 }
 
+/// API representation of an audio zone.
+///
+/// This is the serialization format used for API responses and requests,
+/// with camelCase field names.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAudioZone {
+    /// Unique identifier for the audio zone
     pub id: u64,
+    /// Human-readable name of the audio zone
     pub name: String,
+    /// List of players in this audio zone
     pub players: Vec<ApiPlayer>,
 }
 
@@ -50,11 +63,18 @@ impl From<AudioZone> for ApiAudioZone {
     }
 }
 
+/// Represents an audio zone with an associated playback session.
+///
+/// This extends [`AudioZone`] with session tracking information.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioZoneWithSession {
+    /// Unique identifier for the audio zone
     pub id: u64,
+    /// Identifier of the associated playback session
     pub session_id: u64,
+    /// Human-readable name of the audio zone
     pub name: String,
+    /// List of players in this audio zone
     pub players: Vec<Player>,
 }
 
@@ -73,13 +93,21 @@ impl From<ApiAudioZoneWithSession> for AudioZoneWithSession {
     }
 }
 
+/// API representation of an audio zone with session information.
+///
+/// This is the serialization format used for API responses and requests,
+/// with camelCase field names.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAudioZoneWithSession {
+    /// Unique identifier for the audio zone
     pub id: u64,
+    /// Identifier of the associated playback session
     pub session_id: u64,
+    /// Human-readable name of the audio zone
     pub name: String,
+    /// List of players in this audio zone
     pub players: Vec<ApiPlayer>,
 }
 
@@ -98,14 +126,23 @@ impl From<AudioZoneWithSession> for ApiAudioZoneWithSession {
     }
 }
 
+/// Represents an audio player within an audio zone.
+///
+/// A player corresponds to an audio output device and maintains playback state.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
+    /// Unique identifier for the player
     pub id: u64,
+    /// Identifier of the associated audio output device
     pub audio_output_id: String,
+    /// Human-readable name of the player
     pub name: String,
+    /// Whether the player is currently playing
     pub playing: bool,
+    /// Timestamp when the player was created
     pub created: String,
+    /// Timestamp when the player was last updated
     pub updated: String,
 }
 
@@ -143,13 +180,21 @@ impl AsId for Player {
     }
 }
 
+/// API representation of an audio player.
+///
+/// This is the serialization format used for API responses and requests,
+/// with camelCase field names.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayer {
+    /// Unique identifier for the player
     pub player_id: u64,
+    /// Identifier of the associated audio output device
     pub audio_output_id: String,
+    /// Human-readable name of the player
     pub name: String,
+    /// Whether the player is currently playing
     pub playing: bool,
 }
 
@@ -164,18 +209,29 @@ impl From<Player> for ApiPlayer {
     }
 }
 
+/// Request to create a new audio zone.
+///
+/// This struct is used to specify the initial properties when creating
+/// an audio zone.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAudioZone {
+    /// Name for the new audio zone
     pub name: String,
 }
 
+/// Request to update an existing audio zone.
+///
+/// All fields except `id` are optional. Only provided fields will be updated.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdateAudioZone {
+    /// Identifier of the audio zone to update
     pub id: u64,
+    /// New name for the audio zone (if provided)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// New list of player IDs for the audio zone (if provided)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub players: Option<Vec<u64>>,
 }

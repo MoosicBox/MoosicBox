@@ -5,6 +5,14 @@ use crate::{
     node::{run_command, run_npm_command},
 };
 
+/// Bundles a JavaScript or TypeScript file using esbuild.
+///
+/// This function installs npm dependencies if needed, then runs esbuild
+/// with minification and bundling enabled.
+///
+/// # Panics
+///
+/// Panics if the npm install or esbuild command fails to execute.
 pub fn bundle(target: &Path, out: &Path) {
     run_npm_command(&["install"], &MANIFEST_DIR);
     run_command(

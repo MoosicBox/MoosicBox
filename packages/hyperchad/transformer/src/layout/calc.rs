@@ -5,10 +5,14 @@ use crate::Container;
 
 use super::{Calc, font::FontMetrics};
 
+/// Default styling values for text elements.
 #[derive(Debug, Clone, Copy)]
 pub struct CalculatorDefaults {
+    /// Default font size.
     pub font_size: f32,
+    /// Default top margin for text.
     pub font_margin_top: f32,
+    /// Default bottom margin for text.
     pub font_margin_bottom: f32,
     pub h1_font_size: f32,
     pub h1_font_margin_top: f32,
@@ -30,12 +34,15 @@ pub struct CalculatorDefaults {
     pub h6_font_margin_bottom: f32,
 }
 
+/// Layout calculator that computes container dimensions and positions.
 pub struct Calculator<F: FontMetrics> {
     font_metrics: F,
     defaults: CalculatorDefaults,
 }
 
 impl<F: FontMetrics> Calculator<F> {
+    /// Creates a new calculator with the given font metrics and defaults.
+    #[must_use]
     pub const fn new(font_metrics: F, defaults: CalculatorDefaults) -> Self {
         Self {
             font_metrics,

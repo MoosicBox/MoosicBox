@@ -29,17 +29,29 @@ pub mod html;
 pub mod layout;
 pub mod parse;
 
+/// Represents a calculation expression that can be evaluated with context.
+///
+/// Supports arithmetic operations, grouping, and min/max functions. Calculations can
+/// contain dynamic values that depend on container size or viewport dimensions.
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(CalculationType))]
 pub enum Calculation {
+    /// A numeric value.
     Number(Box<Number>),
+    /// Addition of two calculations.
     Add(Box<Self>, Box<Self>),
+    /// Subtraction of two calculations.
     Subtract(Box<Self>, Box<Self>),
+    /// Multiplication of two calculations.
     Multiply(Box<Self>, Box<Self>),
+    /// Division of two calculations.
     Divide(Box<Self>, Box<Self>),
+    /// Grouped calculation for precedence control.
     Grouping(Box<Self>),
+    /// Minimum of two calculations.
     Min(Box<Self>, Box<Self>),
+    /// Maximum of two calculations.
     Max(Box<Self>, Box<Self>),
 }
 
@@ -77,6 +89,9 @@ impl Calculation {
         }
     }
 
+    /// Returns a reference to this calculation if it contains dynamic values.
+    ///
+    /// Dynamic values are those that depend on container size (percentages).
     #[must_use]
     pub fn as_dynamic(&self) -> Option<&Self> {
         match self {
@@ -109,11 +124,15 @@ impl Calculation {
         }
     }
 
+    /// Checks if this calculation contains dynamic values.
     #[must_use]
     pub fn is_dynamic(&self) -> bool {
         self.as_dynamic().is_some()
     }
 
+    /// Returns a reference to this calculation if it contains only fixed values.
+    ///
+    /// Fixed values are absolute values that don't depend on context.
     #[must_use]
     pub fn as_fixed(&self) -> Option<&Self> {
         match self {
@@ -146,6 +165,7 @@ impl Calculation {
         }
     }
 
+    /// Checks if this calculation contains only fixed values.
     #[must_use]
     pub fn is_fixed(&self) -> bool {
         self.as_fixed().is_some()
@@ -167,22 +187,39 @@ impl std::fmt::Display for Calculation {
     }
 }
 
+/// Represents a numeric value with optional unit or calculation.
+///
+/// Supports absolute values, percentages, viewport units, and calculated expressions.
+/// Can be evaluated to a concrete value given container and viewport dimensions.
 #[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(NumberType))]
 pub enum Number {
+    /// Floating-point absolute value.
     Real(f32),
+    /// Integer absolute value.
     Integer(i64),
+    /// Floating-point percentage of container.
     RealPercent(f32),
+    /// Integer percentage of container.
     IntegerPercent(i64),
+    /// Floating-point dynamic viewport width percentage.
     RealDvw(f32),
+    /// Integer dynamic viewport width percentage.
     IntegerDvw(i64),
+    /// Floating-point dynamic viewport height percentage.
     RealDvh(f32),
+    /// Integer dynamic viewport height percentage.
     IntegerDvh(i64),
+    /// Floating-point viewport width percentage.
     RealVw(f32),
+    /// Integer viewport width percentage.
     IntegerVw(i64),
+    /// Floating-point viewport height percentage.
     RealVh(f32),
+    /// Integer viewport height percentage.
     IntegerVh(i64),
+    /// Calculated expression.
     Calc(Calculation),
 }
 
@@ -276,6 +313,10 @@ impl<'de> Deserialize<'de> for Number {
 }
 
 impl Number {
+    /// Evaluates this number to a concrete pixel value.
+    ///
+    /// Percentages are calculated relative to `container`, viewport units relative to
+    /// `view_width` and `view_height`.
     #[must_use]
     pub fn calc(&self, container: f32, view_width: f32, view_height: f32) -> f32 {
         match self {
@@ -295,6 +336,9 @@ impl Number {
         }
     }
 
+    /// Returns a reference to this number if it is dynamic.
+    ///
+    /// Dynamic numbers depend on container size (percentages).
     #[must_use]
     pub fn as_dynamic(&self) -> Option<&Self> {
         match self {
@@ -319,11 +363,15 @@ impl Number {
         }
     }
 
+    /// Checks if this number is dynamic.
     #[must_use]
     pub fn is_dynamic(&self) -> bool {
         self.as_dynamic().is_some()
     }
 
+    /// Returns a reference to this number if it is fixed.
+    ///
+    /// Fixed numbers don't depend on container size.
     #[must_use]
     pub fn as_fixed(&self) -> Option<&Self> {
         match self {
@@ -348,6 +396,7 @@ impl Number {
         }
     }
 
+    /// Checks if this number is fixed.
     #[must_use]
     pub fn is_fixed(&self) -> bool {
         self.as_fixed().is_some()
@@ -634,6 +683,7 @@ impl From<hyperchad_actions::logic::IfExpression<f32, hyperchad_actions::logic::
     }
 }
 
+/// Wrapper for boolean values with conditional logic support.
 #[cfg(feature = "logic")]
 pub struct BoolWrapper(pub bool);
 
@@ -687,18 +737,27 @@ where
     }
 }
 
+/// Text decoration configuration including underline, overline, and strikethrough.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct TextDecoration {
+    /// Color of the decoration line.
     pub color: Option<Color>,
+    /// Types of decoration lines to apply.
     pub line: Vec<TextDecorationLine>,
+    /// Style of the decoration line.
     pub style: Option<TextDecorationStyle>,
+    /// Thickness of the decoration line.
     pub thickness: Option<Number>,
 }
 
+/// Flexbox sizing configuration with grow, shrink, and basis values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Flex {
+    /// Flex grow factor.
     pub grow: Number,
+    /// Flex shrink factor.
     pub shrink: Number,
+    /// Flex basis size.
     pub basis: Number,
 }
 
@@ -721,22 +780,34 @@ impl From<i64> for Flex {
     }
 }
 
+/// Conditions that trigger responsive layout changes.
 #[derive(Clone, Debug)]
 pub enum ResponsiveTrigger {
+    /// Triggered when container width is at most the specified value.
     MaxWidth(Number),
+    /// Triggered when container height is at most the specified value.
     MaxHeight(Number),
 }
 
+/// Configuration override applied when a condition is met.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfigOverride {
+    /// Condition that must be satisfied for overrides to apply.
     pub condition: OverrideCondition,
+    /// Style properties to override when condition is met.
     pub overrides: Vec<OverrideItem>,
+    /// Default override if condition is not met.
     pub default: Option<OverrideItem>,
 }
 
+/// Condition type for configuration overrides.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverrideCondition {
-    ResponsiveTarget { name: String },
+    /// Condition based on responsive target name.
+    ResponsiveTarget {
+        /// Name of the responsive target.
+        name: String,
+    },
 }
 
 impl From<String> for OverrideCondition {
@@ -751,11 +822,17 @@ impl From<&str> for OverrideCondition {
     }
 }
 
+/// Style property that can be overridden based on conditions.
+///
+/// Represents individual style properties that can be dynamically changed
+/// when responsive conditions are met.
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(OverrideItemType))]
 pub enum OverrideItem {
+    /// Element ID override.
     StrId(String),
+    /// CSS class list override.
     Classes(Vec<String>),
     Direction(LayoutDirection),
     OverflowX(LayoutOverflow),
@@ -1327,14 +1404,25 @@ macro_rules! override_item {
     }};
 }
 
+/// Represents a layout container with style properties and child elements.
+///
+/// The main building block for constructing UI layouts. Contains all layout and styling
+/// properties needed for rendering, along with child containers forming a tree structure.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Container {
+    /// Unique numeric identifier.
     pub id: usize,
+    /// Optional string identifier.
     pub str_id: Option<String>,
+    /// CSS class names.
     pub classes: Vec<String>,
+    /// Custom data attributes.
     pub data: BTreeMap<String, String>,
+    /// Element type and content.
     pub element: Element,
+    /// Child containers.
     pub children: Vec<Self>,
+    /// Layout direction (row or column).
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
@@ -1622,6 +1710,9 @@ impl From<&Container> for BfsPaths {
     }
 }
 
+/// Breadth-first search traversal paths for container trees.
+///
+/// Stores level-ordered paths for efficient tree traversal.
 pub struct BfsPaths {
     levels: Vec<Vec<usize>>,
     paths: Vec<Vec<usize>>,
@@ -2383,13 +2474,22 @@ impl Container {
 }
 
 #[derive(Default, Clone, Debug, PartialEq)]
+/// HTML element type with associated properties.
+///
+/// Represents different HTML elements that can be used in a container,
+/// with element-specific properties like image sources, anchor hrefs, etc.
 pub enum Element {
+    /// Generic div container (default).
     #[default]
     Div,
+    /// Raw text content.
     Raw {
+        /// The text value.
         value: String,
     },
+    /// Aside element for sidebar content.
     Aside,
+    /// Main content element.
     Main,
     Header,
     Footer,
@@ -2455,8 +2555,13 @@ struct Attrs {
 }
 
 #[derive(Debug)]
+/// Represents a value that may have been replaced with a string.
+///
+/// Used for tracking template substitutions and variable replacements.
 pub enum MaybeReplaced<T: std::fmt::Display> {
+    /// Original unreplaced value.
     NotReplaced(T),
+    /// Value replaced with a string.
     Replaced(String),
 }
 
@@ -3695,15 +3800,21 @@ impl Element {
     }
 }
 
+/// Iterator over table rows and headings with immutable references.
 pub struct TableIter<'a> {
+    /// Iterator over heading row cells, if present.
     pub headings:
         Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a Container> + 'a>> + 'a>>,
+    /// Iterator over table body row cells.
     pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a Container> + 'a>> + 'a>,
 }
 
+/// Iterator over table rows and headings with mutable references.
 pub struct TableIterMut<'a> {
+    /// Iterator over heading row cells, if present.
     pub headings:
         Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut Container> + 'a>> + 'a>>,
+    /// Iterator over table body row cells.
     pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut Container> + 'a>> + 'a>,
 }
 
@@ -3844,12 +3955,19 @@ impl Container {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// HTML heading level sizes.
 pub enum HeaderSize {
+    /// Level 1 heading.
     H1,
+    /// Level 2 heading.
     H2,
+    /// Level 3 heading.
     H3,
+    /// Level 4 heading.
     H4,
+    /// Level 5 heading.
     H5,
+    /// Level 6 heading.
     H6,
 }
 
@@ -3893,19 +4011,30 @@ impl From<HeaderSize> for Number {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// HTML input element types with associated properties.
 pub enum Input {
+    /// Checkbox input.
     Checkbox {
+        /// Whether the checkbox is checked.
         checked: Option<bool>,
     },
+    /// Text input field.
     Text {
+        /// Current input value.
         value: Option<String>,
+        /// Placeholder text.
         placeholder: Option<String>,
     },
+    /// Password input field.
     Password {
+        /// Current password value.
         value: Option<String>,
+        /// Placeholder text.
         placeholder: Option<String>,
     },
+    /// Hidden input field.
     Hidden {
+        /// Hidden value.
         value: Option<String>,
     },
 }

@@ -17,77 +17,116 @@ use tokio::sync::mpsc::UnboundedReceiver;
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
 
+/// Encoding format for tunnel response data.
 #[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TunnelEncoding {
+    /// Binary encoding for raw bytes.
     Binary,
+    /// Base64 encoding for text-safe transmission.
     #[cfg(feature = "base64")]
     Base64,
 }
 
+/// Response for a WebSocket tunnel request.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TunnelWsResponse {
+    /// Unique identifier for the request.
     pub request_id: u64,
+    /// Response body payload.
     pub body: Value,
+    /// Connection IDs to exclude from receiving this response.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_connection_ids: Option<Vec<u64>>,
+    /// Connection IDs to send this response to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub to_connection_ids: Option<Vec<u64>>,
 }
 
+/// Response packet from a tunnel HTTP request.
 #[derive(Debug)]
 pub struct TunnelResponse {
+    /// Unique identifier for the request.
     pub request_id: u64,
+    /// Packet sequence number (1-indexed).
     pub packet_id: u32,
+    /// Whether this is the final packet for this request.
     pub last: bool,
+    /// Response body bytes.
     pub bytes: Bytes,
+    /// HTTP status code (present in first packet only).
     pub status: Option<u16>,
+    /// HTTP headers (present in first packet only).
     pub headers: Option<BTreeMap<String, String>>,
 }
 
+/// Request sent through the tunnel.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum TunnelRequest {
+    /// HTTP request.
     Http(TunnelHttpRequest),
+    /// WebSocket request.
     Ws(TunnelWsRequest),
+    /// Request to abort an in-progress request.
     Abort(TunnelAbortRequest),
 }
 
+/// HTTP request sent through the tunnel.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelHttpRequest {
+    /// Unique identifier for the request.
     pub request_id: u64,
+    /// HTTP method.
     pub method: Method,
+    /// Request path.
     pub path: String,
+    /// Query parameters.
     pub query: Value,
+    /// Request body payload.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<Value>,
+    /// HTTP headers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<Value>,
+    /// Encoding format for the response.
     pub encoding: TunnelEncoding,
+    /// Profile identifier for the request.
     pub profile: Option<String>,
 }
 
+/// WebSocket request sent through the tunnel.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelWsRequest {
+    /// WebSocket connection identifier.
     pub conn_id: u64,
+    /// Unique identifier for the request.
     pub request_id: u64,
+    /// Request body payload.
     pub body: Value,
+    /// Connection identifier from the original request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<Value>,
+    /// Profile identifier for the request.
     pub profile: Option<String>,
 }
 
+/// Request to abort an in-progress tunnel request.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelAbortRequest {
+    /// Unique identifier for the request to abort.
     pub request_id: u64,
 }
 
+/// Errors that can occur when converting bytes to a tunnel response.
 #[derive(Debug, Error)]
 pub enum TryFromBytesError {
+    /// Failed to convert byte slice to array.
     #[error(transparent)]
     TryFromSlice(#[from] std::array::TryFromSliceError),
+    /// Failed to deserialize JSON data.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
@@ -95,6 +134,12 @@ pub enum TryFromBytesError {
 impl TryFrom<Bytes> for TunnelResponse {
     type Error = TryFromBytesError;
 
+    /// Converts binary bytes to a tunnel response.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`TryFromBytesError::TryFromSlice`] if byte conversion fails
+    /// * Returns [`TryFromBytesError::Serde`] if JSON deserialization fails
     fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let mut data = bytes.slice(13..);
         let request_id = u64::from_be_bytes(bytes[..8].try_into()?);
@@ -122,11 +167,14 @@ impl TryFrom<Bytes> for TunnelResponse {
     }
 }
 
+/// Errors that can occur when decoding base64-encoded tunnel responses.
 #[cfg(feature = "base64")]
 #[derive(Debug, Error)]
 pub enum Base64DecodeError {
+    /// Invalid content format.
     #[error("Invalid Content: {0:?}")]
     InvalidContent(String),
+    /// Failed to decode base64 data.
     #[error(transparent)]
     Decode(#[from] base64::DecodeError),
 }
@@ -135,6 +183,12 @@ pub enum Base64DecodeError {
 impl TryFrom<&str> for TunnelResponse {
     type Error = Base64DecodeError;
 
+    /// Converts a base64-encoded string to a tunnel response.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
+    /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
         use base64::{Engine, engine::general_purpose};
 
@@ -206,19 +260,32 @@ impl TryFrom<&str> for TunnelResponse {
 impl TryFrom<String> for TunnelResponse {
     type Error = Base64DecodeError;
 
+    /// Converts a base64-encoded string to a tunnel response.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
+    /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
     fn try_from(base64: String) -> Result<Self, Self::Error> {
         base64.as_str().try_into()
     }
 }
 
+/// Errors that can occur when streaming tunnel responses.
 #[derive(Debug, Error)]
 pub enum TunnelStreamError {
+    /// Stream was aborted before completion.
     #[error("TunnelStream aborted")]
     Aborted,
+    /// Stream reached end without completing.
     #[error("TunnelStream end of stream")]
     EndOfStream,
 }
 
+/// Stream of tunnel response packets.
+///
+/// Implements [`Stream`] to provide ordered response packets for a tunnel request.
+/// Handles out-of-order packet delivery and tracks performance metrics.
 pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> {
     start: SystemTime,
     request_id: u64,
@@ -234,6 +301,15 @@ pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Er
 }
 
 impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStream<'a, F> {
+    /// Creates a new tunnel stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_id` - Unique identifier for the request
+    /// * `rx` - Channel receiver for incoming response packets
+    /// * `abort_token` - Token to signal stream cancellation
+    /// * `on_end` - Callback invoked when the stream completes
+    #[must_use]
     pub fn new(
         request_id: u64,
         rx: UnboundedReceiver<TunnelResponse>,

@@ -8,9 +8,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "music-api-api")]
 pub use moosicbox_music_api_api::models::AuthMethod;
 
+/// Represents a connection to a `MoosicBox` server.
+///
+/// Contains the server name and API URL for establishing connections.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Connection {
+    /// Display name for the connection
     pub name: String,
+    /// Base URL for the API endpoint
     pub api_url: String,
 }
 
@@ -20,15 +25,25 @@ impl AsRef<Self> for Connection {
     }
 }
 
+/// Settings for a music API integration.
+///
+/// Stores configuration and capabilities for integrating with external music APIs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicApiSettings {
+    /// Unique identifier for the music API
     pub id: String,
+    /// Display name of the music API
     pub name: String,
+    /// Whether the user is currently logged in to the API
     pub logged_in: bool,
+    /// Whether the API supports library scanning
     pub supports_scan: bool,
+    /// Whether library scanning is enabled for this API
     pub scan_enabled: bool,
+    /// Endpoint URL for triggering a library scan
     pub run_scan_endpoint: Option<String>,
+    /// Authentication method used by the API
     #[cfg(feature = "music-api-api")]
     pub auth_method: Option<AuthMethod>,
 }
@@ -62,9 +77,14 @@ pub mod music_api_api {
     }
 }
 
+/// Settings for managing download locations.
+///
+/// Stores configured download paths and the default location for new downloads.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DownloadSettings {
+    /// List of download locations as (ID, path) pairs
     pub download_locations: Vec<(u64, String)>,
+    /// Default path for new downloads
     pub default_download_location: Option<String>,
 }
 
@@ -74,8 +94,12 @@ impl AsRef<Self> for DownloadSettings {
     }
 }
 
+/// Settings for library scanning.
+///
+/// Contains the filesystem paths to scan for media files.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanSettings {
+    /// List of filesystem paths to scan for media files
     pub scan_paths: Vec<String>,
 }
 

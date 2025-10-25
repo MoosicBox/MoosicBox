@@ -59,12 +59,16 @@ static END_SIM: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 #[cfg(feature = "tui")]
 static DISPLAY_STATE: LazyLock<tui::DisplayState> = LazyLock::new(tui::DisplayState::new);
 
+/// Errors that can occur during simulation execution.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// I/O operation failed.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Simulation step returned an error.
     #[error(transparent)]
     Step(Box<dyn std::error::Error + Send>),
+    /// Task join operation failed.
     #[error(transparent)]
     Join(#[from] switchy::unsync::task::JoinError),
 }
@@ -78,6 +82,10 @@ fn ctrl_c() {
     end_sim();
 }
 
+/// Signals all running simulations to stop.
+///
+/// This sets a global flag and cancels the global simulation, causing all
+/// simulation runs to terminate gracefully.
 pub fn end_sim() {
     END_SIM.store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -528,35 +536,54 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
     }
 }
 
+/// Trait for bootstrapping and configuring simulations.
+///
+/// Implement this trait to customize simulation behavior at various lifecycle
+/// points. All methods have default implementations that do nothing.
 pub trait SimBootstrap: Send + Sync + 'static {
+    /// Returns custom properties to include in simulation output.
     #[must_use]
     fn props(&self) -> Vec<(String, String)> {
         vec![]
     }
 
+    /// Modifies the simulation configuration before the simulation starts.
     #[must_use]
     fn build_sim(&self, config: SimConfig) -> SimConfig {
         config
     }
 
+    /// Called once before any simulation runs begin.
     fn init(&self) {}
 
+    /// Called when a simulation run starts.
     fn on_start(&self, #[allow(unused)] sim: &mut impl Sim) {}
 
+    /// Called on each simulation step.
     fn on_step(&self, #[allow(unused)] sim: &mut impl Sim) {}
 
+    /// Called when a simulation run ends.
     fn on_end(&self, #[allow(unused)] sim: &mut impl Sim) {}
 }
 
+/// Interface for managing simulation actors (hosts and clients).
 pub trait Sim {
+    /// Simulates a host restart by name.
     fn bounce(&mut self, host: impl Into<String>);
 
+    /// Spawns a host actor with the given name and action.
+    ///
+    /// The action is a factory function that returns a future representing
+    /// the host's behavior.
     fn host<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
         &mut self,
         name: impl Into<String>,
         action: F,
     );
 
+    /// Spawns a client actor with the given name and action.
+    ///
+    /// The action is a future representing the client's behavior.
     fn client(
         &mut self,
         name: impl Into<String>,

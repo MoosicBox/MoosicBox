@@ -33,10 +33,12 @@ static CACHE_DIR: LazyLock<PathBuf> =
 
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
+/// Cancels any ongoing scan operations.
 pub fn cancel() {
     CANCELLATION_TOKEN.cancel();
 }
 
+/// Type alias for track API sources used as scan origins.
 pub type ScanOrigin = TrackApiSource;
 
 #[allow(unused)]
@@ -57,6 +59,7 @@ async fn get_origins_or_default(
     })
 }
 
+/// Errors that can occur during scanning operations.
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
@@ -72,6 +75,7 @@ pub enum ScanError {
     InvalidSource,
 }
 
+/// Manages scanning operations for music library sources.
 #[derive(Clone)]
 pub struct Scanner {
     scanned: Arc<AtomicUsize>,
@@ -117,6 +121,7 @@ impl Scanner {
         Ok(Self::new(task))
     }
 
+    /// Creates a new scanner for the given scan task.
     #[must_use]
     pub fn new(task: ScanTask) -> Self {
         Self {
@@ -170,6 +175,7 @@ impl Scanner {
         }
     }
 
+    /// Notifies listeners that the scan has finished.
     #[allow(unused)]
     pub async fn on_scan_finished(&self) {
         let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);

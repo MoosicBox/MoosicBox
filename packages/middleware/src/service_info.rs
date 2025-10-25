@@ -12,9 +12,11 @@ pub fn init(service_info: ServiceInfo) -> Result<(), ServiceInfo> {
     SERVICE_INFO.set(service_info)
 }
 
+/// Service configuration information accessible via Actix-web request extraction.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct ServiceInfo {
+    /// The port on which the service is running.
     pub port: u16,
 }
 

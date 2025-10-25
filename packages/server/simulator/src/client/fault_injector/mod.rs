@@ -5,6 +5,9 @@ pub mod plan;
 
 use crate::{host::moosicbox_server::HOST, queue_bounce};
 
+/// Starts the fault injector client in the simulation.
+///
+/// The fault injector generates random fault injection interactions to test system resilience.
 pub fn start(sim: &mut impl Sim) {
     log::debug!("Generating initial test plan");
 

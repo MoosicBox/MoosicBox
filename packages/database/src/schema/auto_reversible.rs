@@ -139,7 +139,9 @@ impl crate::Executable for AddColumnOperation<'_> {
 /// Represents a DROP COLUMN operation (the reverse of ADD COLUMN)
 #[cfg(feature = "auto-reverse")]
 pub struct DropColumnOperation<'a> {
+    /// Name of the table to drop column from
     pub table_name: &'a str,
+    /// Name of the column to drop
     pub column_name: String,
 }
 

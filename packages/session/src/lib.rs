@@ -215,6 +215,7 @@ pub enum CreatePlayersError {
 /// # Errors
 ///
 /// * If a database error occurs
+/// * If the specified connection does not exist
 pub async fn create_players(
     db: &ConfigDatabase,
     connection_id: &str,

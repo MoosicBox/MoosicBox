@@ -28,34 +28,46 @@ pub use feature_validator::{
     FeatureValidator, ValidationResult, ValidatorConfig, print_github_output, print_human_output,
 };
 
-// Core types for tests and CLI
+/// Output format for CLI commands
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 #[clap(rename_all = "kebab_case")]
 pub enum OutputType {
+    /// JSON formatted output
     Json,
+    /// Raw text output
     Raw,
 }
 
+/// Information about a package affected by changes
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AffectedPackageInfo {
+    /// Name of the affected package
     pub name: String,
+    /// Optional reasoning explaining why the package is affected
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Vec<String>>,
 }
 
-// Cargo.lock related types for test utilities
+/// Representation of a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLock {
+    /// Cargo.lock format version
     pub version: u32,
+    /// List of packages in the lockfile
     pub package: Vec<CargoLockPackage>,
 }
 
+/// A package entry in a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLockPackage {
+    /// Package name
     pub name: String,
+    /// Package version
     pub version: String,
+    /// Package source (registry, git, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Package dependencies
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<Vec<String>>,
 }
@@ -67,20 +79,28 @@ pub struct Step {
     features: Option<Vec<String>>,
 }
 
+/// Environment variable configuration that can be filtered by features
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum ClippierEnv {
+    /// Simple string value
     Value(String),
+    /// Value with optional feature filtering
     FilteredValue {
+        /// The environment variable value
         value: String,
+        /// Features that activate this environment variable
         features: Option<Vec<String>>,
     },
 }
 
+/// Helper type that accepts either a single item or a vector of items
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum VecOrItem<T> {
+    /// A single value
     Value(T),
+    /// Multiple values
     Values(Vec<T>),
 }
 
@@ -99,54 +119,83 @@ impl<T> Default for VecOrItem<T> {
     }
 }
 
+/// Configuration for a single platform/OS in clippier.toml
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConfiguration {
+    /// CI steps to run for this configuration
     pub ci_steps: Option<VecOrItem<Step>>,
+    /// Cargo commands to run
     pub cargo: Option<VecOrItem<String>>,
+    /// Environment variables for this configuration
     pub env: Option<BTreeMap<String, ClippierEnv>>,
+    /// System dependencies required
     pub dependencies: Option<Vec<Step>>,
+    /// Operating system this configuration applies to
     pub os: String,
+    /// Features to skip for this configuration
     pub skip_features: Option<Vec<String>>,
+    /// Features required for this configuration
     pub required_features: Option<Vec<String>>,
+    /// Optional name for this configuration
     pub name: Option<String>,
+    /// Whether to use nightly toolchain
     pub nightly: Option<bool>,
+    /// Whether git submodules are needed
     pub git_submodules: Option<bool>,
 }
 
+/// Configuration for parallelization settings
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ParallelizationConfig {
+    /// Number of chunks to split features into
     pub chunked: u16,
 }
 
+/// Root configuration structure for clippier.toml files
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConf {
+    /// Global CI steps
     pub ci_steps: Option<VecOrItem<Step>>,
+    /// Global cargo commands
     pub cargo: Option<VecOrItem<String>>,
+    /// Platform-specific configurations
     pub config: Vec<ClippierConfiguration>,
+    /// Global environment variables
     pub env: Option<BTreeMap<String, ClippierEnv>>,
+    /// Parallelization configuration
     pub parallelization: Option<ParallelizationConfig>,
+    /// Whether to use nightly toolchain globally
     pub nightly: Option<bool>,
+    /// Whether git submodules are needed globally
     pub git_submodules: Option<bool>,
 }
 
+/// List of features that may be chunked for parallel processing
 #[derive(Debug, Clone)]
 pub enum FeaturesList {
+    /// Features split into chunks for parallel processing
     Chunked(Vec<Vec<String>>),
+    /// Features as a single list without chunking
     NotChunked(Vec<String>),
 }
 
+/// Configuration that propagates from workspace dependencies
 #[derive(Debug, Clone, Default)]
 pub struct PropagatedConfig {
+    /// Whether git submodules are needed (propagated from dependencies)
     pub git_submodules: Option<bool>,
+    /// System dependencies collected from workspace dependencies
     pub dependencies: Vec<Step>,
+    /// CI steps collected from workspace dependencies
     pub ci_steps: Vec<Step>,
+    /// Environment variables collected from workspace dependencies
     pub env: BTreeMap<String, ClippierEnv>,
 }
 
-// Utility functions - these are working implementations for tests
+/// Splits a slice into approximately `n` equal-sized chunks
 pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
     if slice.is_empty() || n == 0 {
         return SplitIter::empty();
@@ -156,6 +205,7 @@ pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
     SplitIter::new(slice, chunk_size)
 }
 
+/// Iterator that yields chunks from a slice
 pub struct SplitIter<'a, T> {
     slice: &'a [T],
     chunk_size: usize,
@@ -189,6 +239,7 @@ impl<'a, T> Iterator for SplitIter<'a, T> {
     }
 }
 
+/// Processes a list of features with optional chunking, spreading, and randomization
 #[must_use]
 pub fn process_features(
     features: Vec<String>,
@@ -271,6 +322,7 @@ struct DependencyInfo<'a> {
     is_optional: bool,
 }
 
+/// Context for workspace member resolution and caching
 pub struct WorkspaceContext {
     root: std::path::PathBuf,
     member_patterns: Vec<String>,
@@ -642,6 +694,7 @@ fn find_workspace_root_from_package(
     Err("Workspace root not found".into())
 }
 
+/// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
     cargo_toml: &Value,
@@ -684,6 +737,7 @@ pub fn fetch_features(
     features
 }
 
+/// Checks if a dependency uses workspace inheritance
 #[must_use]
 pub fn is_workspace_dependency(dep_value: &Value) -> bool {
     match dep_value {
@@ -692,6 +746,7 @@ pub fn is_workspace_dependency(dep_value: &Value) -> bool {
     }
 }
 
+/// Checks if a dependency uses workspace inheritance with features
 #[must_use]
 pub fn is_workspace_dependency_with_features(dep_value: &Value) -> bool {
     if !is_workspace_dependency(dep_value) {
@@ -710,6 +765,7 @@ pub fn is_workspace_dependency_with_features(dep_value: &Value) -> bool {
     }
 }
 
+/// Gets the default-features setting for a dependency
 #[must_use]
 pub fn get_dependency_default_features(dep_value: &Value) -> Option<bool> {
     match dep_value {
@@ -744,6 +800,7 @@ pub fn is_git_url(path: &str) -> bool {
         || path.starts_with("git://")
 }
 
+/// Gets the binary name for a package, using override if provided or reading from Cargo.toml
 #[must_use]
 pub fn get_binary_name(
     workspace_root: &Path,
@@ -2721,7 +2778,7 @@ pub fn collect_system_dependencies(
     Ok(result)
 }
 
-// Additional functions needed by tests
+/// Parses a dependency line to extract the package name
 #[must_use]
 pub fn parse_dependency_name(dependency_line: &str) -> String {
     // Simple implementation that extracts the first word (package name)
@@ -2732,29 +2789,40 @@ pub fn parse_dependency_name(dependency_line: &str) -> String {
         .to_string()
 }
 
-// Additional types needed for CLI commands (moved from main.rs)
+/// Information about a workspace package
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PackageInfo {
+    /// Package name
     pub name: String,
+    /// Relative path to the package
     pub path: String,
 }
 
+/// Result structure for workspace dependencies command
 #[derive(Debug, Serialize)]
 pub struct WorkspaceDepsResult {
+    /// List of workspace packages
     pub packages: Vec<PackageInfo>,
 }
 
+/// Result structure for affected packages command
 #[derive(Debug, Serialize)]
 pub struct AffectedPackagesResult {
+    /// List of affected packages
     pub affected_packages: Vec<AffectedPackageInfo>,
 }
 
+/// Result structure for single package analysis
 #[derive(Debug, Serialize)]
 pub struct SinglePackageResult {
+    /// Package name being analyzed
     pub package: String,
+    /// Whether this package is affected
     pub affected: bool,
+    /// Reasoning for why the package is affected
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Vec<String>>,
+    /// All packages affected by the changes
     pub all_affected: Vec<AffectedPackageInfo>,
 }
 

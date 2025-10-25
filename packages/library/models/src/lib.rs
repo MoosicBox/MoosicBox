@@ -121,6 +121,9 @@ pub struct LibraryAlbum {
 impl TryFrom<LibraryAlbum> for Album {
     type Error = chrono::ParseError;
 
+    /// # Errors
+    ///
+    /// * If `date_released` or `date_added` contains an invalid date string
     fn try_from(value: LibraryAlbum) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id.into(),
@@ -153,6 +156,9 @@ impl TryFrom<LibraryAlbum> for Album {
 impl TryFrom<Album> for LibraryAlbum {
     type Error = TryFromIdError;
 
+    /// # Errors
+    ///
+    /// * If album or artist ID cannot be converted to `u64`
     fn try_from(value: Album) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id.try_into()?,
@@ -173,6 +179,7 @@ impl TryFrom<Album> for LibraryAlbum {
     }
 }
 
+/// Sorts album versions by source, bit depth (descending), and sample rate (descending).
 pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| {
         b.sample_rate
@@ -220,7 +227,8 @@ impl LibraryTrack {
     #[must_use]
     /// # Panics
     ///
-    /// Will panic if directory doesn't exist
+    /// * If the file path has no parent directory
+    /// * If the parent path contains invalid UTF-8
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()

@@ -97,6 +97,33 @@ impl Savepoint for ChecksumSavepoint {
     }
 }
 
+/// A database implementation that calculates checksums instead of executing SQL
+///
+/// This type implements the `Database` trait but instead of executing database
+/// operations, it computes a SHA-256 checksum of all operations in a deterministic
+/// way. This is used by the migration system to:
+///
+/// * Generate checksums for migration validation
+/// * Detect if migration content has changed
+/// * Ensure migration reproducibility
+///
+/// # Examples
+///
+/// ```
+/// use switchy_schema::ChecksumDatabase;
+///
+/// # async fn example() -> switchy_schema::Result<()> {
+/// let db = ChecksumDatabase::new();
+///
+/// // Perform database operations
+/// db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY)").await?;
+///
+/// // Get the checksum
+/// let checksum = db.finalize().await;
+/// assert_eq!(checksum.len(), 32); // SHA-256 produces 32 bytes
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct ChecksumDatabase {
     hasher: Arc<Mutex<Sha256>>,
@@ -110,6 +137,7 @@ impl Default for ChecksumDatabase {
 }
 
 impl ChecksumDatabase {
+    /// Create a new checksum database with a fresh hasher
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -125,6 +153,11 @@ impl ChecksumDatabase {
         }
     }
 
+    /// Finalize the checksum and return the computed hash
+    ///
+    /// This consumes the `ChecksumDatabase` and returns the final SHA-256 hash
+    /// as a 32-byte `Bytes` value. The hash represents all database operations
+    /// that were performed on this instance.
     pub async fn finalize(self) -> bytes::Bytes {
         match Arc::try_unwrap(self.hasher) {
             Ok(mutex) => {
@@ -506,6 +539,24 @@ impl DatabaseTransaction for ChecksumDatabase {
     }
 }
 
+/// Calculate a SHA-256 hash of the given content
+///
+/// This is a convenience function for computing checksums of string content.
+/// It returns a 32-byte hash that can be used for content validation.
+///
+/// # Examples
+///
+/// ```
+/// use switchy_schema::calculate_hash;
+///
+/// let hash1 = calculate_hash("SELECT * FROM users");
+/// let hash2 = calculate_hash("SELECT * FROM users");
+/// let hash3 = calculate_hash("SELECT * FROM posts");
+///
+/// assert_eq!(hash1, hash2); // Same content produces same hash
+/// assert_ne!(hash1, hash3); // Different content produces different hash
+/// assert_eq!(hash1.len(), 32); // SHA-256 produces 32 bytes
+/// ```
 #[must_use]
 pub fn calculate_hash(content: &str) -> bytes::Bytes {
     use sha2::{Digest as _, Sha256};

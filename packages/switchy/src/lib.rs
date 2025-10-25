@@ -1,13 +1,75 @@
+//! Runtime abstraction layer for testing and simulation.
+//!
+//! `switchy` provides runtime-agnostic interfaces for async operations, I/O, networking,
+//! and other system interactions. It enables code to be written once and run against
+//! different backends (e.g., Tokio, simulator) by switching feature flags.
+//!
+//! # Feature Flags
+//!
+//! This crate uses feature flags extensively to control which backends are enabled:
+//!
+//! * `async` - Core async runtime abstractions via `switchy_async`
+//! * `async-tokio` - Use Tokio as the async runtime
+//! * `simulator` - Use simulated runtime for deterministic testing
+//! * `async-macros` - Enable async macros like `select!`, `join!`, `try_join!`
+//! * `database` - Database abstraction layer
+//! * `fs` - Filesystem abstraction layer
+//! * `http` - HTTP client abstraction layer
+//! * `tcp` - TCP networking abstraction layer
+//! * `time` - Time and timing abstractions
+//! * `all` - Enable all features (default)
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "async")]
+//! # async fn example() {
+//! use switchy::unsync::sleep;
+//! use switchy::unsync::Duration;
+//!
+//! // This code works with both Tokio and simulator runtimes
+//! sleep(Duration::from_secs(1)).await;
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Async runtime abstractions and utilities.
+///
+/// This module provides runtime-agnostic async primitives that work with both
+/// Tokio and the simulator runtime. The actual backend is selected via feature flags.
+///
+/// # Feature Flags
+///
+/// * `async-tokio` - Use Tokio as the backend
+/// * `simulator` - Use simulator runtime for testing
 #[cfg(feature = "async")]
 pub mod unsync {
     // Re-export everything from switchy_async
     pub use switchy_async::*;
 
     // Override the select! macro to use the correct path for switchy::unsync
+    /// Waits on multiple concurrent branches, returning when the first completes.
+    ///
+    /// This macro provides a runtime-agnostic way to wait on multiple async operations.
+    /// When using the Tokio runtime, this delegates to `tokio::select!`. When using the
+    /// simulator runtime, this uses the simulator's implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(all(feature = "async-macros", feature = "async-tokio"))]
+    /// # async fn example() {
+    /// use switchy::unsync::{sleep, Duration};
+    ///
+    /// switchy::unsync::select! {
+    ///     _ = sleep(Duration::from_secs(1)) => println!("Timer elapsed"),
+    ///     _ = async { /* other operation */ } => println!("Other completed"),
+    /// }
+    /// # }
+    /// ```
     #[cfg(feature = "async-macros")]
     #[macro_export]
     macro_rules! select {
@@ -23,6 +85,28 @@ pub mod unsync {
     pub use select;
 
     // Override the join! macro to use the correct path for switchy::unsync
+    /// Waits for multiple concurrent futures, returning when all complete.
+    ///
+    /// This macro provides a runtime-agnostic way to execute multiple async operations
+    /// concurrently and wait for all of them to complete. When using the Tokio runtime,
+    /// this delegates to `tokio::join!`. When using the simulator runtime, this uses
+    /// the simulator's implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(all(feature = "async-macros", feature = "async-tokio"))]
+    /// # async fn example() {
+    /// use switchy::unsync::{sleep, Duration};
+    ///
+    /// let (a, b) = switchy::unsync::join!(
+    ///     async { 1 },
+    ///     async { 2 },
+    /// );
+    /// assert_eq!(a, 1);
+    /// assert_eq!(b, 2);
+    /// # }
+    /// ```
     #[cfg(feature = "async-macros")]
     #[macro_export]
     macro_rules! join {
@@ -38,6 +122,27 @@ pub mod unsync {
     pub use join;
 
     // Override the try_join! macro to use the correct path for switchy::unsync
+    /// Waits for multiple fallible concurrent futures, returning when all complete successfully.
+    ///
+    /// This macro provides a runtime-agnostic way to execute multiple async operations that
+    /// return `Result` and wait for all of them to complete. If any operation fails, the error
+    /// is returned immediately. When using the Tokio runtime, this delegates to `tokio::try_join!`.
+    /// When using the simulator runtime, this uses the simulator's implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(all(feature = "async-macros", feature = "async-tokio"))]
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let (a, b) = switchy::unsync::try_join!(
+    ///     async { Ok::<_, std::io::Error>(1) },
+    ///     async { Ok::<_, std::io::Error>(2) },
+    /// )?;
+    /// assert_eq!(a, 1);
+    /// assert_eq!(b, 2);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "async-macros")]
     #[macro_export]
     macro_rules! try_join {
@@ -56,6 +161,12 @@ pub mod unsync {
     #[cfg(all(test, feature = "async-macros"))]
     pub use crate::unsync_macros::unsync_test as test;
 }
+
+/// Internal macro support for async operations.
+///
+/// This module contains the internal implementation details for the `select!`, `join!`,
+/// and `try_join!` macros. Users should use the macros from the `unsync` module instead
+/// of accessing this module directly.
 #[cfg(feature = "async-macros")]
 pub mod unsync_macros {
     // Re-export everything from switchy_async_macros
@@ -173,6 +284,12 @@ pub use switchy_time as time;
 #[cfg(feature = "upnp")]
 pub use switchy_upnp as upnp;
 
+/// HTTP client and model abstractions.
+///
+/// This module provides HTTP functionality through two main components:
+///
+/// * HTTP client abstractions (when `http` feature is enabled)
+/// * HTTP model types and conversions (when `http-models` feature is enabled)
 #[cfg(any(feature = "http", feature = "http-models"))]
 pub mod http {
     #[cfg(feature = "http")]

@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+#![doc = include_str!("../README.md")]
 
 use std::{collections::BTreeMap, time::Duration};
 
@@ -17,43 +18,63 @@ pub use http::*;
 pub use navigation::*;
 pub use workflow::*;
 
+/// Represents a condition to wait for during test execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WaitStep {
+    /// Wait for an element matching the selector to exist in the DOM.
     ElementExists { selector: String },
+    /// Wait for the URL to contain the specified fragment.
     UrlContains { fragment: String },
+    /// Wait for a fixed duration.
     Duration { duration: Duration },
 }
 
+/// Errors that can occur during test execution.
 #[derive(Debug, Error)]
 pub enum TestError {
+    /// A test step failed with a specific reason.
     #[error("Test step failed: {step} - {reason}")]
     StepFailed { step: String, reason: String },
+    /// A wait condition timed out.
     #[error("Wait timeout: {condition}")]
     WaitTimeout { condition: String },
+    /// An element could not be found in the DOM.
     #[error("Element not found: {selector}")]
     ElementNotFound { selector: String },
+    /// An HTTP request failed.
     #[error("HTTP request failed: {url} - {reason}")]
     HttpRequestFailed { url: String, reason: String },
+    /// Form validation failed.
     #[error("Form validation failed: {field} - {reason}")]
     FormValidationFailed { field: String, reason: String },
+    /// Navigation to a URL failed.
     #[error("Navigation failed: {url} - {reason}")]
     NavigationFailed { url: String, reason: String },
+    /// JSON serialization or deserialization failed.
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    /// URL parsing failed.
     #[error("URL parsing error: {0}")]
     UrlParsing(#[from] url::ParseError),
 }
 
+/// The result of executing a test plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResult {
+    /// Whether the test succeeded.
     pub success: bool,
+    /// The number of steps executed.
     pub steps_executed: usize,
+    /// The total execution time.
     pub execution_time: Duration,
+    /// Errors encountered during execution.
     pub errors: Vec<String>,
+    /// Warnings encountered during execution.
     pub warnings: Vec<String>,
 }
 
 impl TestResult {
+    /// Creates a successful test result.
     #[must_use]
     pub const fn success() -> Self {
         Self {
@@ -65,6 +86,7 @@ impl TestResult {
         }
     }
 
+    /// Creates a failed test result with an error message.
     #[must_use]
     pub fn failure(error: impl Into<String>) -> Self {
         Self {
@@ -76,38 +98,49 @@ impl TestResult {
         }
     }
 
+    /// Sets the number of steps executed.
     #[must_use]
     pub const fn with_step_count(mut self, count: usize) -> Self {
         self.steps_executed = count;
         self
     }
 
+    /// Sets the execution time.
     #[must_use]
     pub const fn with_execution_time(mut self, duration: Duration) -> Self {
         self.execution_time = duration;
         self
     }
 
+    /// Adds an error message and marks the result as failed.
     pub fn add_error(&mut self, error: impl Into<String>) {
         self.errors.push(error.into());
         self.success = false;
     }
 
+    /// Adds a warning message.
     pub fn add_warning(&mut self, warning: impl Into<String>) {
         self.warnings.push(warning.into());
     }
 }
 
+/// A declarative test plan consisting of steps to execute.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestPlan {
+    /// The test steps to execute.
     pub steps: Vec<TestStep>,
+    /// Optional setup step to run before the test.
     pub setup: Option<SetupStep>,
+    /// Optional teardown step to run after the test.
     pub teardown: Option<TeardownStep>,
+    /// Optional timeout for the entire test plan.
     pub timeout: Option<Duration>,
+    /// Number of times to retry the test on failure.
     pub retry_count: u32,
 }
 
 impl TestPlan {
+    /// Creates a new empty test plan.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -324,30 +357,44 @@ impl Default for TestPlan {
     }
 }
 
+/// A single step in a test plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TestStep {
+    /// A navigation action.
     Navigation(NavigationStep),
+    /// An interaction with the page.
     Interaction(InteractionStep),
+    /// A form operation.
     Form(FormStep),
+    /// An HTTP request.
     Http(HttpRequestStep),
+    /// A wait condition.
     Wait(WaitStep),
+    /// A control flow operation.
     Control(ControlStep),
 }
 
+/// Setup steps to run before a test.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetupStep {
+    /// Description of what the setup does.
     pub description: String,
+    /// Steps to execute during setup.
     pub steps: Vec<TestStep>,
 }
 
+/// Teardown steps to run after a test.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeardownStep {
+    /// Description of what the teardown does.
     pub description: String,
+    /// Steps to execute during teardown.
     pub steps: Vec<TestStep>,
 }
 
 // Builder patterns for control flow
 
+/// Builder for creating loop control flow.
 pub struct LoopBuilder {
     plan: TestPlan,
     count: u32,
@@ -378,6 +425,7 @@ impl LoopBuilder {
     }
 }
 
+/// Builder for creating parallel execution branches.
 pub struct ParallelBuilder {
     plan: TestPlan,
     branches: BTreeMap<String, Vec<TestStep>>,
@@ -404,6 +452,7 @@ impl ParallelBuilder {
     }
 }
 
+/// Builder for adding steps to a parallel execution branch.
 pub struct BranchBuilder {
     parallel_builder: ParallelBuilder,
     branch_name: String,

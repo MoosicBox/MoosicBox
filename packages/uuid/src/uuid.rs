@@ -1,3 +1,7 @@
+//! Random UUID generation using the standard `uuid` crate.
+//!
+//! This module provides truly random UUID v4 generation suitable for production use.
+
 use uuid::Uuid;
 
 /// Generate a new random UUID v4

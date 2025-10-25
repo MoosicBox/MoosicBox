@@ -21,6 +21,10 @@ use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
 
 pub use hyperchad_renderer_html_actix::*;
 
+/// Converts a hyperchad router to an Actix-compatible HTML renderer.
+///
+/// Creates an HTML renderer configured for Actix Web with the provided tag renderer
+/// and router configuration.
 #[must_use]
 pub fn router_to_actix<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     tag_renderer: T,
@@ -37,17 +41,28 @@ pub fn router_to_actix<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     .with_html_renderer_event_pub(publisher)
 }
 
+/// Actix response processor for HTML rendering.
+///
+/// Processes Actix Web requests and generates HTML responses using the
+/// configured router and tag renderer.
 #[derive(Clone)]
 pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
+    /// The hyperchad router for handling navigation.
     pub router: Router,
+    /// The HTML tag renderer.
     pub tag_renderer: T,
+    /// Background color for the page.
     pub background: Option<Color>,
+    /// Page title.
     pub title: Option<String>,
+    /// Page description.
     pub description: Option<String>,
+    /// Viewport meta tag content.
     pub viewport: Option<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
+    /// Creates a new Actix response processor.
     #[must_use]
     pub const fn new(tag_renderer: T, router: Router) -> Self {
         Self {
@@ -143,6 +158,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+/// Prepared request for Actix processing.
+///
+/// Contains the parsed route request and flags indicating the request type.
 #[derive(Clone)]
 pub struct PreparedRequest {
     full: bool,

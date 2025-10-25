@@ -5,10 +5,15 @@ use actix_web::{
 use futures_util::{FutureExt, future::LocalBoxFuture};
 use std::future::{Ready, ready};
 
+/// Actix-web middleware for logging API requests and responses.
+///
+/// Logs request details (method, path, query, headers) and response details
+/// (status, duration, headers) at appropriate log levels.
 #[allow(clippy::module_name_repetitions)]
 pub struct ApiLogger {}
 
 impl ApiLogger {
+    /// Creates a new API logger middleware.
     #[must_use]
     pub const fn new() -> Self {
         Self {}
@@ -41,6 +46,7 @@ where
     }
 }
 
+/// The actual middleware service that wraps the next service in the chain.
 #[allow(clippy::module_name_repetitions)]
 pub struct ApiLoggerMiddleware<S> {
     service: S,

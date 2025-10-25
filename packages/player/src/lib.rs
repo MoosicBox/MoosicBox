@@ -52,18 +52,26 @@ pub mod symphonia;
 pub mod symphonia_unsync;
 pub mod volume_mixer;
 
+/// Default retry options for seek operations.
+///
+/// Configures 10 attempts with 100ms delay between retries.
 pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(100),
 };
 
+/// Default retry options for playback operations.
+///
+/// Configures 10 attempts with 500ms delay between retries.
 pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
     retry_delay: std::time::Duration::from_millis(500),
 };
 
+/// Global HTTP client for making requests.
 pub static CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Client::new);
 
+/// Errors that can occur during player operations.
 #[derive(Debug, Error)]
 pub enum PlayerError {
     #[error(transparent)]
@@ -133,6 +141,7 @@ impl std::fmt::Debug for PlayableTrack {
     }
 }
 
+/// Represents an active playback session.
 #[derive(Debug, Clone)]
 pub struct Playback {
     pub id: u64,
@@ -149,6 +158,8 @@ pub struct Playback {
 }
 
 impl Playback {
+    /// Creates a new playback session.
+    #[must_use]
     pub fn new(
         tracks: Vec<Track>,
         position: Option<u16>,
@@ -174,6 +185,7 @@ impl Playback {
     }
 }
 
+/// API representation of a playback session.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -195,6 +207,7 @@ impl From<Playback> for ApiPlayback {
     }
 }
 
+/// API representation of playback status.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -202,6 +215,7 @@ pub struct ApiPlaybackStatus {
     pub active_playbacks: Option<ApiPlayback>,
 }
 
+/// Status response for playback operations.
 #[derive(Serialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -335,12 +349,14 @@ pub async fn get_session_playlist_id_from_session_id(
     })
 }
 
+/// A track ready for playback with its media source.
 pub struct PlayableTrack {
     pub track_id: Id,
     pub source: Box<dyn MediaSource>,
     pub hint: Hint,
 }
 
+/// Specifies the type of playback method to use.
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlaybackType {
@@ -350,12 +366,14 @@ pub enum PlaybackType {
     Default,
 }
 
+/// Configuration for retry behavior during playback operations.
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
     pub max_attempts: u32,
     pub retry_delay: std::time::Duration,
 }
 
+/// Identifies the source of playback.
 #[derive(Debug, Clone)]
 pub enum PlayerSource {
     Local,
@@ -366,6 +384,7 @@ pub enum PlayerSource {
     },
 }
 
+/// Manages playback operations for a player.
 #[derive(Debug, Clone)]
 pub struct PlaybackHandler {
     pub id: u64,
@@ -376,10 +395,13 @@ pub struct PlaybackHandler {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl PlaybackHandler {
+    /// Creates a new playback handler with the given player.
+    #[must_use]
     pub fn new(player: impl Player + Sync + 'static) -> Self {
         Self::new_boxed(Box::new(player))
     }
 
+    /// Creates a new playback handler with a boxed player.
     #[must_use]
     pub fn new_boxed(player: Box<dyn Player + Sync>) -> Self {
         let playback = Arc::new(std::sync::RwLock::new(None));
@@ -393,12 +415,14 @@ impl PlaybackHandler {
         }
     }
 
+    /// Sets the playback state for this handler.
     #[must_use]
     pub fn with_playback(mut self, playback: Arc<std::sync::RwLock<Option<Playback>>>) -> Self {
         self.playback = playback;
         self
     }
 
+    /// Sets the audio output factory for this handler.
     #[must_use]
     pub fn with_output(
         mut self,
@@ -1148,6 +1172,7 @@ impl PlaybackHandler {
     }
 }
 
+/// Trait for implementing custom playback players.
 #[async_trait]
 pub trait Player: std::fmt::Debug + Send {
     async fn before_play_playback(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
@@ -1204,8 +1229,11 @@ fn same_active_track(position: Option<u16>, tracks: Option<&[Track]>, playback: 
     }
 }
 
+/// Global service port configuration.
 pub static SERVICE_PORT: LazyLock<RwLock<Option<u16>>> = LazyLock::new(|| RwLock::new(None));
 
+/// Sets the service port for local playback.
+///
 /// # Panics
 ///
 /// * If the `SERVICE_PORT` `RwLock` is poisoned
@@ -1225,6 +1253,7 @@ pub fn on_playback_event(listener: PlaybackEventCallback) {
     PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
 
+/// Triggers playback events for registered listeners when playback state changes.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let Some(playback_target) = current.playback_target.clone() else {

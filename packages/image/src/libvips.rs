@@ -13,12 +13,16 @@ static VIPS: LazyLock<VipsApp> = LazyLock::new(|| {
     app
 });
 
+/// Gets and clears the current libvips error buffer.
+#[must_use]
 pub fn get_error() -> String {
     let error = VIPS.error_buffer().unwrap_or_default().to_string();
     VIPS.error_clear();
     error
 }
 
+/// Resizes an image file using libvips.
+///
 /// # Errors
 ///
 /// * If the libvips image encoder fails to encode the resized image
@@ -45,6 +49,8 @@ pub fn resize_local_file(
     Ok(buffer.into())
 }
 
+/// Resizes image data from a byte buffer using libvips.
+///
 /// # Errors
 ///
 /// * If the libvips image encoder fails to encode the resized image

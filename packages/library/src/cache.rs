@@ -16,13 +16,19 @@ struct CacheItem {
     data: CacheItemType,
 }
 
+/// Types of cacheable library items.
 #[derive(Debug, Serialize, Deserialize, Clone, EnumAsInner)]
 #[serde(untagged)]
 pub enum CacheItemType {
+    /// Cached list of albums.
     Albums(Arc<Vec<LibraryAlbum>>),
+    /// Cached list of album tracks.
     AlbumTracks(Arc<Vec<LibraryTrack>>),
+    /// Cached list of artist albums.
     ArtistAlbums(Arc<Vec<LibraryAlbum>>),
+    /// Cached artist.
     Artist(Arc<LibraryArtist>),
+    /// Cached album.
     Album(Arc<LibraryAlbum>),
 }
 
@@ -38,8 +44,11 @@ pub fn current_time_nanos() -> u128 {
     since_the_epoch.as_nanos()
 }
 
+/// Request parameters for cache operations.
 pub struct CacheRequest<'a> {
+    /// Cache key.
     pub key: &'a str,
+    /// Cache entry expiration duration.
     pub expiration: Duration,
 }
 

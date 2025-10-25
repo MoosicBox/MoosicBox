@@ -15,16 +15,24 @@ mod routes;
 #[cfg(feature = "_canvas")]
 pub mod visualization;
 
+/// Global router instance for handling application routes.
 pub static ROUTER: OnceLock<Router> = OnceLock::new();
+
+/// Global renderer instance for rendering UI components.
 pub static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
 
+/// Global application state, initialized once.
 pub static STATE_LOCK: OnceLock<moosicbox_app_state::AppState> = OnceLock::new();
+
+/// Lazily initialized application state, cloned from [`STATE_LOCK`].
 pub static STATE: LazyLock<moosicbox_app_state::AppState> =
     LazyLock::new(|| STATE_LOCK.get().unwrap().clone());
 
+/// Application profile identifier.
 pub static PROFILE: &str = "master";
 
 #[cfg(feature = "assets")]
+/// Static asset configuration for the application.
 pub mod assets {
     use std::{path::PathBuf, sync::LazyLock};
 
@@ -40,6 +48,7 @@ pub mod assets {
         )
     });
 
+    /// Static asset routes for serving application resources.
     pub static ASSETS: LazyLock<Vec<renderer::assets::StaticAssetRoute>> = LazyLock::new(|| {
         vec![
             #[cfg(feature = "vanilla-js")]
@@ -64,9 +73,11 @@ pub mod assets {
     });
 }
 
+/// Converts the application state to the UI state representation.
+///
 /// # Panics
 ///
-/// * If the app persistence fails
+/// * If fails to get the current connection from the app state
 pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
 
@@ -88,9 +99,11 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
     state
 }
 
+/// Initializes the application router with all route handlers.
+///
 /// # Panics
 ///
-/// * If the `API_SOURCES` `RwLock` is poisoned
+/// * If the [`ROUTER`] has already been initialized
 pub fn init() -> Router {
     moosicbox_player::on_playback_event(events::on_playback_event);
 
@@ -188,13 +201,15 @@ pub fn init() -> Router {
     router
 }
 
+/// Initializes the application state with persistence and event listeners.
+///
 /// # Errors
 ///
-/// * If fails to initialize the persistence
+/// * If fails to initialize the persistence database
 ///
 /// # Panics
 ///
-/// * If fails to get the persistence directory
+/// * If fails to get or create the persistence directory
 pub async fn init_app_state(
     state: moosicbox_app_state::AppState,
 ) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {

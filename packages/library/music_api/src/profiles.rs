@@ -7,9 +7,11 @@ use switchy_database::profiles::LibraryDatabase;
 
 use crate::LibraryMusicApi;
 
+/// Global registry of library music API instances by profile.
 pub static PROFILES: LazyLock<LibraryMusicApiProfiles> =
     LazyLock::new(LibraryMusicApiProfiles::default);
 
+/// Manager for library music API instances across multiple profiles.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
 pub struct LibraryMusicApiProfiles {
@@ -17,9 +19,11 @@ pub struct LibraryMusicApiProfiles {
 }
 
 impl LibraryMusicApiProfiles {
+    /// Adds a library music API instance for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * Will panic if `RwLock` is poisoned
     pub fn add(&self, profile: String, db: LibraryDatabase) {
         moosicbox_profiles::PROFILES.add(profile.clone());
         self.profiles
@@ -28,26 +32,32 @@ impl LibraryMusicApiProfiles {
             .insert(profile, LibraryMusicApi { db });
     }
 
+    /// Removes the library music API instance for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * Will panic if `RwLock` is poisoned
     pub fn remove(&self, profile: &str) {
         self.profiles.write().unwrap().remove(profile);
     }
 
+    /// Adds a library music API instance for the specified profile and returns it.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
-    /// profiles
+    /// * Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
+    ///   profiles
     #[must_use]
     pub fn add_fetch(&self, profile: &str, db: LibraryDatabase) -> LibraryMusicApi {
         self.add(profile.to_owned(), db);
         self.get(profile).unwrap()
     }
 
+    /// Gets the library music API instance for the specified profile.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * Will panic if `RwLock` is poisoned
     #[must_use]
     pub fn get(&self, profile: &str) -> Option<LibraryMusicApi> {
         self.profiles
@@ -57,9 +67,11 @@ impl LibraryMusicApiProfiles {
             .find_map(|(p, db)| if p == profile { Some(db.clone()) } else { None })
     }
 
+    /// Returns all profile names.
+    ///
     /// # Panics
     ///
-    /// Will panic if `RwLock` is poisoned
+    /// * Will panic if `RwLock` is poisoned
     #[must_use]
     pub fn names(&self) -> Vec<String> {
         self.profiles.read().unwrap().keys().cloned().collect()

@@ -2,22 +2,33 @@ use std::{path::PathBuf, sync::LazyLock};
 
 use bytes::Bytes;
 
+/// Static asset route configuration
 #[derive(Clone, Debug)]
 pub struct StaticAssetRoute {
+    /// HTTP route path
     pub route: String,
+    /// Asset target (file, directory, or in-memory content)
     pub target: AssetPathTarget,
 }
 
+/// Target for static asset serving
 #[derive(Clone, Debug)]
 pub enum AssetPathTarget {
+    /// Single file path
     File(PathBuf),
+    /// In-memory file contents
     FileContents(Bytes),
+    /// Directory path for serving multiple files
     Directory(PathBuf),
 }
 
 impl TryFrom<PathBuf> for AssetPathTarget {
     type Error = std::io::Error;
 
+    /// # Errors
+    ///
+    /// * If the path exists but is neither a file nor a directory
+    /// * If the path does not exist
     fn try_from(value: PathBuf) -> Result<Self, Self::Error> {
         Ok(if value.is_dir() {
             Self::Directory(value)
@@ -40,6 +51,14 @@ impl TryFrom<PathBuf> for AssetPathTarget {
 impl TryFrom<&str> for AssetPathTarget {
     type Error = std::io::Error;
 
+    /// # Errors
+    ///
+    /// * If the path exists but is neither a file nor a directory
+    /// * If the path does not exist
+    ///
+    /// # Panics
+    ///
+    /// * If the `ASSETS_DIR` environment variable is not set at compile time
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
             std::option_env!("ASSETS_DIR")
@@ -60,6 +79,14 @@ impl TryFrom<&str> for AssetPathTarget {
 impl TryFrom<String> for AssetPathTarget {
     type Error = std::io::Error;
 
+    /// # Errors
+    ///
+    /// * If the path exists but is neither a file nor a directory
+    /// * If the path does not exist
+    ///
+    /// # Panics
+    ///
+    /// * If the `ASSETS_DIR` environment variable is not set at compile time
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }

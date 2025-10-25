@@ -12,12 +12,16 @@ pub mod poll;
 #[cfg(feature = "auth-username-password")]
 pub mod username_password;
 
+/// Authentication configuration for a music API.
 #[derive(Debug, Clone)]
 pub enum Auth {
+    /// Poll-based authentication.
     #[cfg(feature = "auth-poll")]
     Poll(poll::PollAuth),
+    /// Username and password authentication.
     #[cfg(feature = "auth-username-password")]
     UsernamePassword(username_password::UsernamePasswordAuth),
+    /// No authentication.
     None,
 }
 
@@ -30,36 +34,45 @@ where
     }
 }
 
+/// Extension trait for accessing specific authentication types.
 pub trait AuthExt {
+    /// Returns a reference to poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     fn as_poll(&self) -> Option<&poll::PollAuth>;
+    /// Consumes self and returns poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     fn into_poll(self) -> Option<poll::PollAuth>;
+    /// Returns a reference to username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     fn as_username_password(&self) -> Option<&username_password::UsernamePasswordAuth>;
+    /// Consumes self and returns username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     fn into_username_password(self) -> Option<username_password::UsernamePasswordAuth>;
 }
 
 impl Auth {
+    /// Returns a reference to poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     #[must_use]
     pub fn as_poll(&self) -> Option<&poll::PollAuth> {
         <Self as AuthExt>::as_poll(self)
     }
 
+    /// Consumes self and returns poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     #[must_use]
     pub fn into_poll(self) -> Option<poll::PollAuth> {
         <Self as AuthExt>::into_poll(self)
     }
 
+    /// Returns a reference to username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     #[must_use]
     pub fn as_username_password(&self) -> Option<&username_password::UsernamePasswordAuth> {
         <Self as AuthExt>::as_username_password(self)
     }
 
+    /// Consumes self and returns username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     #[must_use]
     pub fn into_username_password(self) -> Option<username_password::UsernamePasswordAuth> {
@@ -105,6 +118,7 @@ impl AuthExt for Auth {
     }
 }
 
+/// Builder for constructing `ApiAuth` instances.
 #[derive(Clone)]
 pub struct ApiAuthBuilder {
     auth: Option<Auth>,
@@ -137,6 +151,7 @@ impl Default for ApiAuthBuilder {
 }
 
 impl ApiAuthBuilder {
+    /// Creates a new builder.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -146,6 +161,7 @@ impl ApiAuthBuilder {
         }
     }
 
+    /// Configures the builder to use no authentication.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn without_auth(mut self) -> Self {
@@ -153,24 +169,28 @@ impl ApiAuthBuilder {
         self
     }
 
+    /// Sets the authentication configuration.
     #[must_use]
     pub fn with_auth(mut self, auth: impl Into<Auth>) -> Self {
         self.auth = Some(auth.into());
         self
     }
 
+    /// Sets the authentication configuration (mutable version).
     #[must_use]
     pub fn auth(&mut self, auth: impl Into<Auth>) -> &mut Self {
         self.auth = Some(auth.into());
         self
     }
 
+    /// Sets the initial logged-in state.
     #[must_use]
     pub const fn with_logged_in(mut self, logged_in: bool) -> Self {
         self.logged_in = Some(logged_in);
         self
     }
 
+    /// Sets a function to validate credentials.
     #[must_use]
     pub fn with_validate_credentials<
         Fut: Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send + 'static,
@@ -183,9 +203,11 @@ impl ApiAuthBuilder {
         self
     }
 
+    /// Builds the `ApiAuth` instance.
+    ///
     /// # Panics
     ///
-    /// * If `auth` is `None`
+    /// * If `auth` was not configured
     #[must_use]
     pub fn build(self) -> ApiAuth {
         let auth = self.auth.unwrap();
@@ -199,6 +221,7 @@ impl ApiAuthBuilder {
     }
 }
 
+/// Authentication handler for a music API.
 #[derive(Clone)]
 pub struct ApiAuth {
     logged_in: Arc<AtomicBool>,
@@ -225,27 +248,33 @@ impl std::fmt::Debug for ApiAuth {
 }
 
 impl ApiAuth {
+    /// Creates a new builder for `ApiAuth`.
     #[must_use]
     pub const fn builder() -> ApiAuthBuilder {
         ApiAuthBuilder::new()
     }
 
+    /// Returns whether the user is currently logged in.
+    ///
     /// # Errors
     ///
-    /// * If the authentication validation fails
+    /// * If the authentication status check fails
     #[allow(clippy::unused_async)]
     pub async fn is_logged_in(&self) -> Result<bool, Error> {
         Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
     }
 
+    /// Sets the logged-in state.
     pub fn set_logged_in(&self, logged_in: bool) {
         self.logged_in
             .store(logged_in, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Validates the configured credentials.
+    ///
     /// # Errors
     ///
-    /// * If the authentication validation fails
+    /// * If credential validation fails
     pub async fn validate_credentials(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         if let Some(validate_credentials) = &self.validate_credentials {
             match validate_credentials().await {
@@ -260,9 +289,11 @@ impl ApiAuth {
         Ok(false)
     }
 
+    /// Attempts to log in using the provided function.
+    ///
     /// # Errors
     ///
-    /// * If the `func` throws an error
+    /// * If the login attempt fails
     pub async fn attempt_login<
         Fut: Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send + 'static,
         Func: Fn(&Auth) -> Fut + Send + Sync + 'static,
@@ -278,24 +309,28 @@ impl ApiAuth {
         Ok(logged_in)
     }
 
+    /// Returns a reference to poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     #[must_use]
     pub fn as_poll(&self) -> Option<&poll::PollAuth> {
         <Self as AuthExt>::as_poll(self)
     }
 
+    /// Consumes self and returns poll authentication if applicable.
     #[cfg(feature = "auth-poll")]
     #[must_use]
     pub fn into_poll(self) -> Option<poll::PollAuth> {
         <Self as AuthExt>::into_poll(self)
     }
 
+    /// Returns a reference to username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     #[must_use]
     pub fn as_username_password(&self) -> Option<&username_password::UsernamePasswordAuth> {
         <Self as AuthExt>::as_username_password(self)
     }
 
+    /// Consumes self and returns username/password authentication if applicable.
     #[cfg(feature = "auth-username-password")]
     #[must_use]
     pub fn into_username_password(self) -> Option<username_password::UsernamePasswordAuth> {

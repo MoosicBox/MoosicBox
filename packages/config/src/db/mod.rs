@@ -5,10 +5,13 @@ use thiserror::Error;
 
 pub mod models;
 
+/// Error type for server identity operations.
 #[derive(Debug, Error)]
 pub enum GetOrInitServerIdentityError {
+    /// Database operation failed
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to retrieve or initialize server identity
     #[error("Failed to get server identity")]
     Failed,
 }

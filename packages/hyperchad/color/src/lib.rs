@@ -8,18 +8,31 @@ use thiserror::Error;
 #[cfg(feature = "arb")]
 pub mod arb;
 
+/// Errors that can occur when parsing a hex color string.
 #[derive(Debug, Error)]
 pub enum ParseHexError {
+    /// An invalid hex character was encountered at the specified index.
     #[error("Invalid character at index {0} '{1}'")]
     InvalidCharacter(usize, char),
+    /// A non-ASCII character was encountered at the specified index.
     #[error("Invalid non-ASCII character at index {0}")]
     InvalidNonAsciiCharacter(usize),
+    /// The hex string is longer than 8 characters (excluding '#' prefix and whitespace).
     #[error("Hex string too long")]
     StringTooLong,
+    /// The hex string has an invalid length (e.g., incomplete alpha channel).
     #[error("Hex string invalid length")]
     InvalidLength,
 }
 
+/// Represents an RGB or RGBA color with 8-bit channels.
+///
+/// # Fields
+///
+/// * `r` - Red channel (0-255)
+/// * `g` - Green channel (0-255)
+/// * `b` - Blue channel (0-255)
+/// * `a` - Optional alpha channel (0-255). `None` represents fully opaque.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Color {
@@ -30,6 +43,7 @@ pub struct Color {
 }
 
 impl Color {
+    /// Black color constant (RGB: 0, 0, 0).
     pub const BLACK: Self = Self {
         r: 0,
         g: 0,
@@ -37,6 +51,7 @@ impl Color {
         a: None,
     };
 
+    /// White color constant (RGB: 255, 255, 255).
     pub const WHITE: Self = Self {
         r: 255,
         g: 255,
@@ -47,9 +62,15 @@ impl Color {
     /// Parses a hex string (a-f/A-F/0-9) as a `Color` from the &str,
     /// ignoring surrounding whitespace.
     ///
+    /// Accepts hex strings in formats: RGB (3 chars), RGBA (4 chars),
+    /// RRGGBB (6 chars), or RRGGBBAA (8 chars). The '#' prefix is optional.
+    ///
     /// # Errors
     ///
-    /// * If a non-hex, non-whitespace character is encountered.
+    /// * `ParseHexError::InvalidCharacter` - If a non-hex, non-whitespace ASCII character is encountered.
+    /// * `ParseHexError::InvalidNonAsciiCharacter` - If a non-ASCII character is encountered.
+    /// * `ParseHexError::StringTooLong` - If the hex string is longer than 8 characters (excluding '#' and whitespace).
+    /// * `ParseHexError::InvalidLength` - If the hex string has an incomplete alpha channel (7 characters).
     #[allow(clippy::many_single_char_names)]
     pub fn try_from_hex(hex: &str) -> Result<Self, ParseHexError> {
         let mut short_r = 0;

@@ -2,6 +2,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::redundant_pub_crate)]
+#![doc = "Music download management system for the `MoosicBox` ecosystem."]
+#![doc = ""]
+#![doc = "Provides functionality for downloading music tracks, album covers, and artist covers"]
+#![doc = "from various music API sources with queue management, progress tracking, and automatic"]
+#![doc = "file tagging."]
 
 use std::{
     error::Error,
@@ -66,6 +71,9 @@ pub mod queue;
 static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
     LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
+/// Download API source for identifying where to download content from.
+///
+/// Specifies either a `MoosicBox` server or a third-party API source.
 #[derive(
     Debug, Serialize, Deserialize, EnumString, EnumDiscriminants, AsRefStr, PartialEq, Eq, Clone,
 )]
@@ -77,7 +85,9 @@ static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
 #[serde(tag = "source", content = "url")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DownloadApiSource {
+    /// `MoosicBox` server at the specified URL
     MoosicBox(String),
+    /// Third-party API source
     Api(ApiSource),
 }
 
@@ -102,8 +112,10 @@ impl From<DownloadApiSource> for ApiSource {
     }
 }
 
+/// Error converting from `TrackApiSource` to `DownloadApiSource`.
 #[derive(Debug, Error)]
 pub enum TryFromTrackApiSourceError {
+    /// Source is not valid for downloads
     #[error("Invalid source")]
     InvalidSource,
 }
@@ -120,34 +132,52 @@ impl TryFrom<TrackApiSource> for DownloadApiSource {
     }
 }
 
+/// Error that can occur during the download process.
 #[derive(Debug, Error)]
 pub enum DownloadError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to get config directory
     #[error("Failed to get config directory")]
     FailedToGetConfigDirectory,
+    /// Download item not found
     #[error("Not found")]
     NotFound,
+    /// Failed to get download path
     #[error(transparent)]
     GetDownloadPath(#[from] GetDownloadPathError),
+    /// Failed to get create download tasks
     #[error(transparent)]
     GetCreateDownloadTasks(#[from] GetCreateDownloadTasksError),
+    /// Failed to create download tasks
     #[error(transparent)]
     CreateDownloadTasks(#[from] CreateDownloadTasksError),
+    /// Music API operation failed
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
 }
 
+/// Request parameters for downloading music content.
 #[derive(Debug, Clone)]
 pub struct DownloadRequest {
+    /// Target directory for downloaded files
     pub directory: PathBuf,
+    /// Single track ID to download
     pub track_id: Option<Id>,
+    /// Multiple track IDs to download
     pub track_ids: Option<Vec<Id>>,
+    /// Single album ID to download
     pub album_id: Option<Id>,
+    /// Multiple album IDs to download
     pub album_ids: Option<Vec<Id>>,
+    /// Whether to download album cover art
     pub download_album_cover: Option<bool>,
+    /// Whether to download artist cover art
     pub download_artist_cover: Option<bool>,
+    /// Audio quality for downloaded tracks
     pub quality: Option<TrackAudioQuality>,
+    /// API source to download from
     pub source: DownloadApiSource,
 }
 
@@ -233,12 +263,16 @@ async fn get_default_download_queue(
     DOWNLOAD_QUEUE.clone()
 }
 
+/// Error getting the download path.
 #[derive(Debug, Error)]
 pub enum GetDownloadPathError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to get config directory
     #[error("Failed to get config directory")]
     FailedToGetConfigDirectory,
+    /// Download location not found
     #[error("Not found")]
     NotFound,
 }
@@ -278,18 +312,25 @@ pub fn get_default_download_path() -> Result<PathBuf, GetDownloadPathError> {
         .join("downloads"))
 }
 
+/// Error creating download tasks from track or album IDs.
 #[derive(Debug, Error)]
 pub enum GetCreateDownloadTasksError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API operation failed
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Failed to parse integer value
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    /// Failed to parse IDs
     #[error(transparent)]
     ParseIds(#[from] ParseIdsError),
+    /// Invalid API source
     #[error("Invalid source")]
     InvalidSource,
+    /// Track or album not found
     #[error("Not found")]
     NotFound,
 }
@@ -599,8 +640,10 @@ pub async fn get_create_download_tasks_for_album_ids(
     Ok(tasks)
 }
 
+/// Error creating download tasks in the database.
 #[derive(Debug, Error)]
 pub enum CreateDownloadTasksError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
@@ -631,26 +674,37 @@ fn get_filename_for_track(track: &Track) -> String {
     )
 }
 
+/// Error downloading a track.
 #[derive(Debug, Error)]
 pub enum DownloadTrackError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API operation failed
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Failed to get track source
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
+    /// Failed to get track bytes
     #[error(transparent)]
     GetTrackBytes(#[from] GetTrackBytesError),
+    /// I/O operation failed
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
+    /// Failed to get content length
     #[error(transparent)]
     GetContentLength(#[from] GetContentLengthError),
+    /// Failed to save bytes stream to file
     #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
+    /// Failed to tag track file
     #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
+    /// Invalid track source
     #[error("Invalid source")]
     InvalidSource,
+    /// Track not found
     #[error("Not found")]
     NotFound,
 }
@@ -965,8 +1019,10 @@ async fn download_track_inner(
     Ok(())
 }
 
+/// Error tagging a track file with metadata.
 #[derive(Debug, Error)]
 pub enum TagTrackFileError {
+    /// Failed to tag audio file
     #[error(transparent)]
     Tag(#[from] moosicbox_audiotags::Error),
 }
@@ -1001,24 +1057,34 @@ pub fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFi
     Ok(())
 }
 
+/// Error downloading an album.
 #[derive(Debug, Error)]
 pub enum DownloadAlbumError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API operation failed
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Failed to download track
     #[error(transparent)]
     DownloadTrack(#[from] DownloadTrackError),
+    /// I/O operation failed
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Failed to save bytes stream to file
     #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
+    /// Failed to get artist cover
     #[error(transparent)]
     ArtistCover(#[from] ArtistCoverError),
+    /// Failed to get album cover
     #[error(transparent)]
     AlbumCover(#[from] AlbumCoverError),
+    /// Invalid album source
     #[error("Invalid source")]
     InvalidSource,
+    /// Album not found
     #[error("Not found")]
     NotFound,
 }
@@ -1259,12 +1325,29 @@ pub async fn download_artist_cover(
     Ok(artist)
 }
 
+/// Trait for downloading music content.
+///
+/// Implementers provide functionality to download tracks, album covers, and artist covers.
 #[async_trait]
 pub trait Downloader {
+    /// Returns the current download speed in bytes per second, if available.
     fn speed(&self) -> Option<f64> {
         None
     }
 
+    /// Downloads a track by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If there is a database error
+    /// * If there are errors fetching track info
+    /// * If failed to fetch the track source
+    /// * If failed to add tags to the downloaded audio file
+    /// * If an IO error occurs
+    /// * If there is an error saving the bytes stream to the file
+    /// * If failed to get the content length of the audio data to download
+    /// * If given an invalid `ApiSource`
+    /// * If the track is not found
     async fn download_track_id(
         &self,
         path: &str,
@@ -1275,6 +1358,15 @@ pub trait Downloader {
         timeout_duration: Option<Duration>,
     ) -> Result<Track, DownloadTrackError>;
 
+    /// Downloads an album cover by album ID.
+    ///
+    /// # Errors
+    ///
+    /// * If there is a database error
+    /// * If there are errors fetching album info
+    /// * If an IO error occurs
+    /// * If there is an error saving the bytes stream to the file
+    /// * If the album is not found
     async fn download_album_cover(
         &self,
         path: &str,
@@ -1283,6 +1375,15 @@ pub trait Downloader {
         on_progress: ProgressListener,
     ) -> Result<Album, DownloadAlbumError>;
 
+    /// Downloads an artist cover by album ID.
+    ///
+    /// # Errors
+    ///
+    /// * If there is a database error
+    /// * If there are errors fetching artist info
+    /// * If an IO error occurs
+    /// * If there is an error saving the bytes stream to the file
+    /// * If the artist is not found
     async fn download_artist_cover(
         &self,
         path: &str,
@@ -1292,6 +1393,9 @@ pub trait Downloader {
     ) -> Result<Artist, DownloadAlbumError>;
 }
 
+/// `MoosicBox` implementation of the `Downloader` trait.
+///
+/// Provides music downloading functionality using the `MoosicBox` music APIs.
 pub struct MoosicboxDownloader {
     speed: Arc<AtomicF64>,
     db: LibraryDatabase,
@@ -1299,6 +1403,7 @@ pub struct MoosicboxDownloader {
 }
 
 impl MoosicboxDownloader {
+    /// Creates a new `MoosicboxDownloader` instance.
     #[must_use]
     pub fn new(db: LibraryDatabase, music_apis: MusicApis) -> Self {
         Self {
