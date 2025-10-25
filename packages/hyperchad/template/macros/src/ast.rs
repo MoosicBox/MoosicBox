@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::ToTokens;
 use syn::{
-    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed,
+    Error, Expr, Ident, Lit, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed,
     ext::IdentExt,
     parenthesized,
     parse::{Lookahead1, Parse, ParseStream},
@@ -477,6 +477,8 @@ impl<E: MaybeElement> Markup<E> {
                     return Ok(Self::NumericLit(numeric_lit));
                 }
 
+                // Note: boolean literals are handled by lookahead.peek(Lit) earlier in this function
+
                 // Handle as regular string identifier for enums
                 let expr: Expr = parse_quote!(#name_str);
                 Ok(Self::Splice {
@@ -492,6 +494,8 @@ impl<E: MaybeElement> Markup<E> {
                 if let Some(numeric_lit) = NumericLit::try_parse_identifier_unit(&ident_str) {
                     return Ok(Self::NumericLit(numeric_lit));
                 }
+
+                // Note: boolean literals are handled by lookahead.peek(Lit) earlier in this function
 
                 // Handle as regular identifier
                 let expr: Expr = parse_quote!(#ident);
@@ -800,23 +804,10 @@ impl DiagnosticParse for ContainerAttribute {
                 input.parse::<Question>()?;
             }
 
-            let fork = input.fork();
-
-            let attr = Self::Named {
-                name: name.clone(),
+            Ok(Self::Named {
+                name,
                 attr_type: input.diagnostic_parse(diagnostics)?,
-            };
-
-            if fork.peek(Eq) && fork.peek2(LitBool) {
-                diagnostics.push(
-                    attr.span()
-                        .error("attribute value must be a string")
-                        .help(format!("to declare an empty attribute, omit the equals sign: `{name}`"))
-                        .help(format!("to toggle the attribute, use square brackets: `{name}[some_boolean_flag]`"))
-                );
-            }
-
-            Ok(attr)
+            })
         }
     }
 }
@@ -1161,10 +1152,11 @@ impl DiagnosticParse for ContainerLit {
                         lit: Lit::Str(LitStr::new("", lit_char.span())),
                     })
                 }
-                Lit::Bool(_) => {
-                    // diagnostic handled earlier with more information
+                Lit::Bool(lit_bool) => {
+                    // Convert boolean to string representation for markup_to_bool_tokens
+                    let bool_str = if lit_bool.value { "true" } else { "false" };
                     Ok(Self {
-                        lit: Lit::Str(LitStr::new("", lit.span())),
+                        lit: Lit::Str(LitStr::new(bool_str, lit.span())),
                     })
                 }
                 _ => {

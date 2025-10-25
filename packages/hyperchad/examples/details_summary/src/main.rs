@@ -96,10 +96,10 @@ fn create_main_page() -> Containers {
                         gap=16
                     {
                         h2 { "Default Open State" }
-                        span color=#6b7280 { "Using open=\"true\" to start expanded" }
+                        span color=#6b7280 { "Using `open` to start expanded" }
 
                         details
-                            open="true"
+                            open
                             margin-top=12
                             border-radius=6
                             padding=12
@@ -428,7 +428,7 @@ fn create_main_page() -> Containers {
                                 "<summary> provides the clickable heading (optional)"
                             }
                             li {
-                                "open=\"true\" makes details expanded by default"
+                                "`open` makes details expanded by default"
                             }
                             li {
                                 "Native browser support - no JavaScript required"

@@ -948,7 +948,11 @@ impl Generator {
                             Some(quote! { if let Some(val) = (#cond) { Some(val) } else { None } });
                     }
                 }
-                AttributeType::Empty { .. } => {}
+                AttributeType::Empty(_) => {
+                    if name_str == "open" {
+                        open = Some(quote! { Some(true) });
+                    }
+                }
             }
         }
 
