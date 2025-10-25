@@ -227,7 +227,6 @@ app.static_asset_routes = vec![
 
 ```rust
 use hyperchad_template::container;
-use hyperchad_renderer::PartialView;
 
 async fn handle_htmx_request(req: HttpRequest) -> Result<HttpResponse> {
     if req.headers().contains_key("hx-request") {
