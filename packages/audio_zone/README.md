@@ -71,7 +71,7 @@ moosicbox_audio_zone = {
 ### Basic Zone Management
 
 ```rust
-use moosicbox_audio_zone::{zones, get_zone, create_audio_zone, CreateAudioZone};
+use moosicbox_audio_zone::{zones, get_zone, create_audio_zone, models::CreateAudioZone};
 use switchy_database::config::ConfigDatabase;
 
 async fn manage_zones(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
@@ -99,7 +99,7 @@ async fn manage_zones(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Err
 ### Zone Updates and Deletion
 
 ```rust
-use moosicbox_audio_zone::{update_audio_zone, delete_audio_zone, UpdateAudioZone};
+use moosicbox_audio_zone::{update_audio_zone, delete_audio_zone, models::UpdateAudioZone};
 
 async fn modify_zones(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
     // Update zone
