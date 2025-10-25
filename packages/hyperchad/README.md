@@ -262,7 +262,7 @@ state-sqlite = ["hyperchad_state/persistence-sqlite"]
 # Development features
 actions-logic = ["hyperchad_actions/logic"]
 renderer-egui-debug = ["hyperchad_renderer_egui/debug"]
-debug = ["renderer-egui-debug", "renderer-fltk-debug"]
+debug = ["hyperchad_app/debug", "renderer-egui-debug", "renderer-fltk-debug"]
 ```
 
 ## Renderer-Specific Usage
