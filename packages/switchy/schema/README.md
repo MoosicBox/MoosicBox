@@ -216,22 +216,6 @@ export SWITCHY_MIGRATIONS_DIR="./migrations"
 export SWITCHY_MIGRATION_TABLE="__switchy_migrations"
 ```
 
-#### `MOOSICBOX_SKIP_MIGRATION_EXECUTION`
-
-When set to `1`, skips executing migration SQL but still populates the migration
-tracking table with all migrations marked as completed. This is useful for:
-
-- Initializing a tracking table for an existing database with matching schema
-- Read-only deployments where schema is managed externally
-- Recovery scenarios where migrations were manually applied
-
-```bash
-export MOOSICBOX_SKIP_MIGRATION_EXECUTION=1
-```
-
-**Note:** Prior behavior completely skipped migrations. New behavior ensures the
-tracking table is populated for proper migration state management.
-
 ### Migration Marking Scopes
 
 When using `mark-all-completed`, you can control which migration states are affected:
@@ -823,7 +807,6 @@ cargo run
 #### Example Projects
 
 - **`examples/static_migrations/`** - Complete project demonstrating:
-
     - Custom migration implementations with `'static` lifetimes
     - All three discovery methods (embedded, directory, code)
     - Query builder integration
