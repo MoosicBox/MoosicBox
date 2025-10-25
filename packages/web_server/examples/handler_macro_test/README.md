@@ -182,7 +182,7 @@ async fn handler(Path(id): Path<u32>) -> Result<HttpResponse, Error>
 ### Compilation Errors
 
 **Problem**: Handler trait bound errors
-**Solution**: Ensure parameter types implement the `FromRequestData` trait and are used with the correct `Route::with_handlerN` method
+**Solution**: Ensure parameter types implement the `FromRequest` trait and are used with the correct `Route::with_handlerN` method
 
 ### Runtime Errors
 
