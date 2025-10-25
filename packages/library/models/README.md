@@ -59,13 +59,13 @@ The MoosicBox Library Models package provides:
 
 - API-compatible album model with `ApiAlbumVersionQuality` for versions
 - `contains_cover` flag instead of artwork path
-- Converts to/from `LibraryAlbum` and `ApiAlbum`
+- Converts from `LibraryAlbum` and to `ApiAlbum`/`Album`
 
 #### ApiLibraryTrack (available with `api` feature)
 
 - API-compatible track model without file path information
 - Includes all metadata and source tracking
-- Converts to/from `LibraryTrack` and `Track`
+- Converts to `LibraryTrack` and `Track`
 
 ## Features
 
