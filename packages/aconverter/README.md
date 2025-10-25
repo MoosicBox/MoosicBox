@@ -87,7 +87,7 @@ aconverter \
 
 ### Output Formats
 
-- **AAC** (.aac, .m4a) - Advanced Audio Codec
+- **AAC** (.m4a) - Advanced Audio Codec
 - **FLAC** (.flac) - Free Lossless Audio Codec
 - **MP3** (.mp3) - MPEG Layer 3
 - **Opus** (.opus) - Modern low-latency codec
