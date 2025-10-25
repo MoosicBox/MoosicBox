@@ -96,4 +96,4 @@ pub enum Error {
 ## Related
 
 - [`hyperchad`](../README.md) - Core HyperChad framework
-- [`switchy_database`](../../database/README.md) - Database abstraction layer
+- [`switchy`](../../switchy/README.md) - Database abstraction layer
