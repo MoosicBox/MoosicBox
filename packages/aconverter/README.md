@@ -53,7 +53,7 @@ aconverter input.mp3 --output output.flac --encoding FLAC
 Set encoding quality (0-100, default 80):
 
 ```bash
-aconverter input.wav --output output.mp3 --quality 95
+aconverter input.flac --output output.mp3 --quality 95
 ```
 
 ### Complete Example
@@ -82,10 +82,8 @@ aconverter \
 
 - **MP3** (.mp3)
 - **FLAC** (.flac)
-- **AAC/M4A** (.aac, .m4a, .mp4)
+- **AAC/M4A** (.m4a, .mp4)
 - **Opus** (.opus)
-- **WAV** (.wav)
-- **OGG** (.ogg)
 
 ### Output Formats
 
