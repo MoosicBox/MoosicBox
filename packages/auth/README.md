@@ -61,13 +61,11 @@ moosicbox_auth = { version = "0.1.4", default-features = false }
 use moosicbox_auth::{get_client_id_and_access_token, AuthError};
 use switchy_database::config::ConfigDatabase;
 
-#[tokio::main]
-async fn main() -> Result<(), AuthError> {
-    let db = ConfigDatabase::new().await?;
+async fn register_client(db: &ConfigDatabase) -> Result<(), AuthError> {
     let host = "https://api.example.com";
 
     // Get or create client credentials
-    let (client_id, access_token) = get_client_id_and_access_token(&db, host).await?;
+    let (client_id, access_token) = get_client_id_and_access_token(db, host).await?;
 
     println!("Client ID: {}", client_id);
     println!("Access Token: {}", access_token);
