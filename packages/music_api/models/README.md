@@ -116,7 +116,7 @@ let remote_source = TrackSource::RemoteUrl {
     url: "https://api.service.com/track/123".to_string(),
     format: AudioFormat::Flac,
     track_id: Some(123.into()),
-    source: TrackApiSource::Api(api_source),
+    source: TrackApiSource::Local,
     headers: Some(vec![("Authorization".to_string(), "Bearer token".to_string())]),
 };
 ```
