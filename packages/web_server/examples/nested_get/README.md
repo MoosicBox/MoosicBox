@@ -208,6 +208,6 @@ Scope::new("/public")
 - **simple_get**: Shows basic routing without nesting
 - **openapi**: Demonstrates nested routes with API documentation
 - **basic_handler**: Shows different handler registration approach
-- **combined_extractors**: Complex handlers in nested structures
+- **combined_extractors_standalone**: Complex handlers in nested structures
 
 This example is fundamental for understanding how to organize larger web applications with the MoosicBox web server abstraction, providing the foundation for building well-structured APIs.
