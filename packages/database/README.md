@@ -17,7 +17,7 @@ The Switchy Database package provides:
 ### Database Backends
 
 - **SQLite (rusqlite)**: File-based database using rusqlite driver with `?` placeholders
-- **SQLite (sqlx)**: File-based database using sqlx driver with `$N` placeholders
+- **SQLite (sqlx)**: File-based database using sqlx driver with `?` placeholders
 - **PostgreSQL (raw)**: Production PostgreSQL using tokio-postgres and deadpool-postgres
 - **PostgreSQL (sqlx)**: Production PostgreSQL using sqlx with connection pooling
 - **MySQL (sqlx)**: MySQL database using sqlx driver
@@ -341,7 +341,7 @@ async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
     // Raw query with parameters (safe from SQL injection)
     // Note: Parameter syntax varies by backend:
     // - rusqlite: ? placeholders
-    // - sqlx-sqlite: $1, $2 placeholders
+    // - sqlx-sqlite: ? placeholders
     // - PostgreSQL (raw/sqlx): $1, $2 placeholders
     // - MySQL (sqlx): ? placeholders
     let params = vec![DatabaseValue::String("The Beatles".to_string())];
@@ -496,13 +496,12 @@ The `Savepoint` trait provides:
 Two SQLite implementations are available:
 
 1. **rusqlite** (`sqlite-rusqlite` feature):
-
     - Uses `?` placeholders
     - Blocking operations wrapped in async
     - Connection pooling for concurrent transactions
 
 2. **sqlx** (`sqlite-sqlx` feature):
-    - Uses `$1, $2` placeholders (via transformation)
+    - Uses `?` placeholders
     - Native async support
     - Built-in connection pooling
 
@@ -511,7 +510,6 @@ Two SQLite implementations are available:
 Two PostgreSQL implementations are available:
 
 1. **Raw** (`postgres-raw` feature):
-
     - Uses tokio-postgres and deadpool-postgres
     - Uses `$1, $2` placeholders
     - Custom connection pool management
