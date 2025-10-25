@@ -121,15 +121,7 @@ All commands are processed asynchronously through the service framework with:
 - State management
 - Response coordination
 
-## Context Management
-
-### Context Structure
-
-- **server_handle**: Background server task handle
-- **receiver**: Startup synchronization receiver
-- **Event handling**: Tauri event processing logic
-
-### Server Configuration
+## Server Configuration
 
 - **Address**: 0.0.0.0 (all interfaces)
 - **Port**: 8016 (fixed port for native apps)
