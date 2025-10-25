@@ -267,25 +267,25 @@ let interactive_view = container! {
 
         div class="color-controls" {
             button
-                fx-click=fx { set_background("display-box", "#ff0000") }
+                fx-click=fx { set_background_str_id("#ff0000", "display-box") }
             {
                 "Red"
             }
 
             button
-                fx-click=fx { set_background("display-box", "#00ff00") }
+                fx-click=fx { set_background_str_id("#00ff00", "display-box") }
             {
                 "Green"
             }
 
             button
-                fx-click=fx { set_background("display-box", "#0000ff") }
+                fx-click=fx { set_background_str_id("#0000ff", "display-box") }
             {
                 "Blue"
             }
 
             button
-                fx-click=fx { remove_background("display-box") }
+                fx-click=fx { remove_background_str_id("display-box") }
             {
                 "Reset"
             }
@@ -409,7 +409,7 @@ Enhanced form handling capabilities:
 Canvas rendering support:
 
 - **2D Graphics**: Canvas 2D rendering context
-- **Drawing Operations**: Support for shapes, paths, and images through `CanvasUpdate` API
+- **Drawing Operations**: Basic rendering support (lines, rectangles, fills, strokes) through `CanvasUpdate` API
 
 ## Script Inclusion
 
