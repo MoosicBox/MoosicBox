@@ -118,18 +118,15 @@ let device_url = device.url();
 
 // Get transport state
 let transport = get_transport_info(&service, device_url, 0).await?;
-println!("Transport state: {}", transport.current_transport_state);
-println!("Transport status: {}", transport.current_transport_status);
+println!("Transport info: {:?}", transport);
 
 // Get position information
 let position = get_position_info(&service, device_url, 0).await?;
-println!("Current track: {}", position.track);
-println!("Position: {}s / {}s", position.rel_time, position.track_duration);
+println!("Position info: {:?}", position);
 
 // Get media information
 let media = get_media_info(&service, device_url, 0).await?;
-println!("Current URI: {}", media.current_uri);
-println!("Media duration: {}s", media.media_duration);
+println!("Media info: {:?}", media);
 ```
 
 ### Event Subscriptions
