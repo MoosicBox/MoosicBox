@@ -249,7 +249,7 @@ match scanner.scan(music_apis, &db).await {
 
 ## See Also
 
-- [moosicbox_scan_models](../scan_models/README.md) - Data models for scan operations
+- [moosicbox_scan_models](models/README.md) - Data models for scan operations
 - [moosicbox_library](../library/README.md) - Library database management
 - [moosicbox_music_api](../music_api/README.md) - Music API integrations
 - [moosicbox_files](../files/README.md) - File handling utilities
