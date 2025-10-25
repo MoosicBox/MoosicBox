@@ -132,6 +132,7 @@ The `container!` macro supports these HTML elements:
 - `ul`, `ol`, `li`
 - `table`, `thead`, `th`, `tbody`, `tr`, `td`
 - `canvas`
+- `details`, `summary`
 
 ## Next Steps
 
