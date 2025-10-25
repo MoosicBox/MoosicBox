@@ -91,7 +91,7 @@ async fn main() -> std::io::Result<()> {
     let tracer_layer = switchy_telemetry::init_tracer("web-service")?;
 
     // Create metrics handler
-    let metrics_handler = get_http_metrics_handler();
+    let metrics_handler = std::sync::Arc::new(get_http_metrics_handler());
 
     HttpServer::new(move || {
         App::new()
@@ -99,7 +99,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(RequestTracing::new())
             .wrap(metrics_handler.request_middleware())
             // Add metrics endpoint
-            .app_data(web::Data::new(std::sync::Arc::new(metrics_handler.clone())))
+            .app_data(web::Data::new(metrics_handler.clone()))
             .service(metrics)
             .service(my_handler)
     })
