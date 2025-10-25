@@ -1139,6 +1139,30 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
+        Element::Details { open } => {
+            const TAG_NAME: &[u8] = b"details";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if *open == Some(true) {
+                f.write_all(b" open")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
         _ => {}
     }
 
@@ -1159,7 +1183,6 @@ pub fn element_to_html(
         Element::TBody => Some("tbody"),
         Element::TR => Some("tr"),
         Element::Canvas => Some("canvas"),
-        Element::Details { .. } => Some("details"),
         Element::Summary => Some("summary"),
         _ => None,
     };
