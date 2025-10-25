@@ -270,8 +270,7 @@ match router.navigate("/api/endpoint").await {
 
 The `Content` enum (from `hyperchad_renderer`) supports:
 
-- **View(View)**: HTML view content (created from strings, Containers, or Views)
-- **PartialView(PartialView)**: Partial view updates for specific targets
+- **View(Box\<View\>)**: HTML view content (created from strings, Containers, or Views)
 - **Json(serde_json::Value)**: JSON responses (requires `json` feature)
 - **Raw { data, content_type }**: Raw content with custom MIME type
 
