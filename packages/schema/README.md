@@ -72,6 +72,22 @@ migrate_library_until(&*db, Some("2023-10-14-031701_create_tracks")).await?;
 
 ### Environment Variables
 
+#### Drop Migration Tracking Table
+
+```bash
+export MOOSICBOX_DROP_MIGRATIONS_TABLE=1
+```
+
+When this environment variable is set to "1", the migration tracking table (`__moosicbox_schema_migrations`) will be dropped before running migrations. This removes all migration history.
+
+**Warning:** This is a destructive operation. Use only for:
+
+- **Fresh setup**: Resetting a development database
+- **Testing**: Creating clean test environments
+- **Recovery**: Rebuilding corrupted tracking tables
+
+This is typically followed by running migrations with `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` to rebuild the tracking table.
+
 #### Skip Migration Execution
 
 ```bash
