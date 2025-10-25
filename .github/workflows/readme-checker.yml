@@ -387,14 +387,17 @@ jobs:
                     echo "📝 README changes detected, preparing commit..."
                     git add ${{ matrix.package.path }}/README.md
 
-                    # Extract commit message from Claude output
+                    # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
-                      COMMIT_DESC=$(sed -n '/COMMIT_MESSAGE_START/,/COMMIT_MESSAGE_END/p' output.txt | sed '1d;$d' | sed 's/^[[:space:]]*//')
+                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | sed -n 's/.*COMMIT_MESSAGE_START\\\n\(.*\)\\\nCOMMIT_MESSAGE_END.*/\1/p' | sed 's/\\\n/\n/g')
                     fi
 
                     if [ -n "$COMMIT_DESC" ]; then
+                      echo "📋 Extracted commit description:"
+                      echo "$COMMIT_DESC"
                       git commit -m "docs(${{ matrix.package.name }}): update README for accuracy" -m "$COMMIT_DESC"
                     else
+                      echo "⚠️ No commit description found, using simple message"
                       git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
                     fi
 
@@ -647,14 +650,17 @@ jobs:
                     echo "📝 Root README changes detected, preparing commit..."
                     git add README.md
 
-                    # Extract commit message from Claude output
+                    # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
-                      COMMIT_DESC=$(sed -n '/COMMIT_MESSAGE_START/,/COMMIT_MESSAGE_END/p' output.txt | sed '1d;$d' | sed 's/^[[:space:]]*//')
+                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | sed -n 's/.*COMMIT_MESSAGE_START\\\n\(.*\)\\\nCOMMIT_MESSAGE_END.*/\1/p' | sed 's/\\\n/\n/g')
                     fi
 
                     if [ -n "$COMMIT_DESC" ]; then
+                      echo "📋 Extracted commit description:"
+                      echo "$COMMIT_DESC"
                       git commit -m "docs(root): update README for accuracy" -m "$COMMIT_DESC"
                     else
+                      echo "⚠️ No commit description found, using simple message"
                       git commit -m "docs(root): update README for accuracy"
                     fi
 
