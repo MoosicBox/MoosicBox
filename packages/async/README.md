@@ -220,7 +220,9 @@ match handle.await {
 ### Tokio Features
 
 - **`rt-multi-thread`**: Multi-threaded Tokio runtime
+- **`fs`**: Async file system operations
 - **`io`**: Async I/O operations
+- **`net`**: Async networking
 - **`sync`**: Synchronization primitives (includes channels)
 - **`time`**: Timing utilities
 - **`util`**: Additional utilities
