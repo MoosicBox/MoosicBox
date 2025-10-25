@@ -2,6 +2,19 @@
 
 Pure Rust implementation of the Opus audio decoder (RFC 6716).
 
+## Usage
+
+```rust
+use moosicbox_opus_native::{Decoder, SampleRate, Channels};
+
+// Create decoder
+let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
+
+// Decode packet to i16 PCM
+let mut output = vec![0i16; 960 * 2]; // 10ms @ 48kHz stereo
+let samples = decoder.decode(Some(&packet), &mut output, false)?;
+```
+
 ## Features
 
 - `silk` (default): SILK decoder for speech/narrowband content
