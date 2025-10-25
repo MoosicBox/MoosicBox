@@ -7,7 +7,7 @@ Basic WebSocket tunnel communication library for the MoosicBox ecosystem, provid
 - **WebSocket Communication**: Basic WebSocket-based messaging
 - **Message Types**: Support for text, binary, ping/pong, and frame messages
 - **Error Handling**: Basic error types for tunnel operations
-- **Tunnel Request Processing**: Internal handling of tunnel-based HTTP-like requests
+- **Tunnel Request Processing**: Handling of tunnel-based HTTP-like requests
 - **Audio Streaming Support**: Backend support for streaming audio through tunnels
 
 ## Installation
