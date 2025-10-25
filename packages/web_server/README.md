@@ -120,6 +120,47 @@ async fn handle_request(req: HttpRequest) -> Result<HttpResponse, Error> {
 }
 ```
 
+### Path Parameter Extraction
+
+```rust
+#[cfg(feature = "serde")]
+use moosicbox_web_server::{Path, HttpResponse, Error};
+
+#[cfg(feature = "serde")]
+async fn get_user(Path(user_id): Path<u32>) -> Result<HttpResponse, Error> {
+    // Extract single path parameter from routes like "/users/123"
+    Ok(HttpResponse::ok().with_body(format!(r#"{{"user_id": {}}}"#, user_id)))
+}
+
+#[cfg(feature = "serde")]
+async fn get_user_post(Path((username, post_id)): Path<(String, u32)>) -> Result<HttpResponse, Error> {
+    // Extract multiple path parameters from routes like "/users/john/posts/456"
+    Ok(HttpResponse::ok().with_body(format!(
+        r#"{{"username": "{}", "post_id": {}}}"#,
+        username, post_id
+    )))
+}
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+
+#[cfg(feature = "serde")]
+#[derive(Deserialize)]
+struct UserPostParams {
+    username: String,
+    post_id: u32,
+}
+
+#[cfg(feature = "serde")]
+async fn get_user_post_named(Path(params): Path<UserPostParams>) -> Result<HttpResponse, Error> {
+    // Extract named path parameters using a struct
+    Ok(HttpResponse::ok().with_body(format!(
+        r#"{{"username": "{}", "post_id": {}}}"#,
+        params.username, params.post_id
+    )))
+}
+```
+
 ### Response Types
 
 ```rust
@@ -298,6 +339,15 @@ fn create_server_with_openapi() {
 - **`Scope`** - Route grouping and nesting
 - **`Route`** - Individual route definition
 - **`Error`** - HTTP error types with status codes
+
+### Extractors
+
+- **`Path<T>`** - Extract URL path parameters (requires `serde` feature)
+- **`Query<T>`** - Extract query parameters (requires `serde` feature)
+- **`Json<T>`** - Extract JSON request body (requires `serde` feature)
+- **`Headers`** - Extract request headers in a Send-safe way
+- **`RequestData`** - Send-safe wrapper containing commonly needed request data
+- **`RequestInfo`** - Basic request information (method, path, query, remote address)
 
 ### Request Methods
 
