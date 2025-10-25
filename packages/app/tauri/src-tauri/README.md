@@ -118,7 +118,7 @@ async fn on_startup() -> Result<(), tauri::Error> {
 
 // Update application state
 #[tauri::command]
-async fn set_state(state: TauriUpdateAppState) -> Result<(), String> {
+async fn set_state(state: TauriUpdateAppState) -> Result<(), TauriPlayerError> {
     // Update connection settings, API URLs, etc.
     println!("State updated: {:?}", state);
     Ok(())
@@ -155,30 +155,16 @@ async fn create_player_window(app: AppHandle) -> Result<(), String> {
 }
 ```
 
-### Music Player Integration
+### Playback Quality
 
 ```rust
-use moosicbox_player::{Playback, PlayerError};
-use moosicbox_music_models::{api::ApiTrack, PlaybackQuality};
+use moosicbox_music_models::PlaybackQuality;
 
 #[tauri::command]
-async fn play_track(track_id: u64) -> Result<(), String> {
-    // Play a specific track
-    println!("Playing track: {}", track_id);
-    Ok(())
-}
-
-#[tauri::command]
-async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), String> {
+async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlayerError> {
     // Set audio quality
     println!("Quality set to: {:?}", quality);
     Ok(())
-}
-
-#[tauri::command]
-async fn get_current_playback() -> Result<Option<Playback>, String> {
-    // Get current playback state
-    Ok(None)
 }
 ```
 
@@ -191,7 +177,7 @@ use serde_json::Value;
 async fn api_proxy_get(
     url: String,
     headers: Option<Value>,
-) -> Result<Value, String> {
+) -> Result<Value, TauriPlayerError> {
     // Proxy GET request to MoosicBox API
     println!("GET request to: {}", url);
     Ok(serde_json::json!({"success": true}))
@@ -202,7 +188,7 @@ async fn api_proxy_post(
     url: String,
     body: Option<Value>,
     headers: Option<Value>,
-) -> Result<Value, String> {
+) -> Result<Value, TauriPlayerError> {
     // Proxy POST request to MoosicBox API
     println!("POST request to: {}", url);
     Ok(serde_json::json!({"success": true}))
@@ -215,7 +201,7 @@ async fn api_proxy_post(
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 
 #[tauri::command]
-async fn propagate_ws_message(message: InboundPayload) -> Result<(), String> {
+async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayerError> {
     // Handle WebSocket messages from the web interface
     println!("WebSocket message: {:?}", message);
     Ok(())
@@ -235,88 +221,13 @@ async fn handle_ws_message(message: OutboundPayload) {
 }
 ```
 
-### File System Access
+### mDNS Server Discovery
 
 ```rust
-use std::path::PathBuf;
-
 #[tauri::command]
-async fn get_data_dir(app: tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get application data directory
-    app.path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn read_config_file(app: tauri::AppHandle) -> Result<String, String> {
-    let data_dir = get_data_dir(app).await?;
-    let config_path = data_dir.join("config.json");
-
-    std::fs::read_to_string(config_path)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn write_config_file(app: tauri::AppHandle, content: String) -> Result<(), String> {
-    let data_dir = get_data_dir(app).await?;
-    let config_path = data_dir.join("config.json");
-
-    std::fs::write(config_path, content)
-        .map_err(|e| e.to_string())
-}
-```
-
-### Configuration
-
-```rust
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppConfig {
-    pub api_url: Option<String>,
-    pub connection_name: Option<String>,
-    pub audio_quality: PlaybackQuality,
-    pub auto_start: bool,
-    pub minimize_to_tray: bool,
-    pub theme: String,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            api_url: None,
-            connection_name: None,
-            audio_quality: PlaybackQuality::High,
-            auto_start: false,
-            minimize_to_tray: true,
-            theme: "dark".to_string(),
-        }
-    }
-}
-
-#[tauri::command]
-async fn load_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
-    let config_path = get_data_dir(app).await?.join("config.json");
-
-    if config_path.exists() {
-        let content = std::fs::read_to_string(config_path)
-            .map_err(|e| e.to_string())?;
-        serde_json::from_str(&content)
-            .map_err(|e| e.to_string())
-    } else {
-        Ok(AppConfig::default())
-    }
-}
-
-#[tauri::command]
-async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> {
-    let config_path = get_data_dir(app).await?.join("config.json");
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| e.to_string())?;
-
-    std::fs::write(config_path, content)
-        .map_err(|e| e.to_string())
+async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerError> {
+    // Fetch discovered MoosicBox servers via mDNS
+    Ok(vec![])
 }
 ```
 
