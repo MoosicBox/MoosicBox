@@ -253,8 +253,8 @@ match global_search("query", Some(0), Some(10)) {
 
 ## See Also
 
-- [`moosicbox_music_api_models`](../music_api_models/README.md) - Search API models
-- [`moosicbox_music_models`](../music_models/README.md) - Music data models
+- [`moosicbox_music_api_models`](../music_api/models/README.md) - Search API models
+- [`moosicbox_music_models`](../music/models/README.md) - Music data models
 - [`moosicbox_library`](../library/README.md) - Music library management
 - [`moosicbox_scan`](../scan/README.md) - Library scanning and indexing
 - [`moosicbox_database`](../database/README.md) - Database operations
