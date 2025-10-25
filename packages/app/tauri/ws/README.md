@@ -74,8 +74,8 @@ handle.close();
 
 ### `WebsocketSender` trait
 
-- `send(&self, data: &str) -> Result<(), WebsocketSendError>`: Sends a text message
-- `ping(&self) -> Result<(), WebsocketSendError>`: Sends a ping message
+- `async fn send(&self, data: &str) -> Result<(), WebsocketSendError>`: Sends a text message
+- `async fn ping(&self) -> Result<(), WebsocketSendError>`: Sends a ping message
 
 ### `WsMessage` enum
 
