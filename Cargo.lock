@@ -8160,7 +8160,6 @@ dependencies = [
  "serde_with",
  "switchy_database",
  "switchy_fs",
- "switchy_random",
  "thiserror 2.0.17",
  "utoipa",
 ]

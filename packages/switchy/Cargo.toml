@@ -58,10 +58,12 @@ fail-on-warnings = [
 
 all = [
     "all-async",
+    "all-async-macros",
     "all-database",
     "all-database-connection",
     "all-fs",
     "all-http",
+    "all-http-models",
     "all-mdns",
     "all-random",
     "all-tcp",
