@@ -41,8 +41,7 @@ The MoosicBox Music API Models package provides:
 
 ### Search Integration
 
-- **Search Models**: Search request and response types (with `api-search` feature)
-- **Query Processing**: Search query parsing and handling
+- **Search Models**: Search response types (with `api-search` feature)
 
 ## Installation
 
@@ -65,7 +64,7 @@ moosicbox_music_api_models = {
 
 ```rust
 use moosicbox_music_api_models::{AlbumsRequest, AlbumFilters};
-use moosicbox_music_models::{AlbumSort, AlbumType};
+use moosicbox_music_models::{AlbumSort, AlbumSource, AlbumType};
 use moosicbox_paging::PagingRequest;
 
 let request = AlbumsRequest {
