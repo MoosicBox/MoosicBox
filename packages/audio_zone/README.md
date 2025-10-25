@@ -203,7 +203,7 @@ When the `events` feature is enabled (default), zone configuration changes trigg
 
 ### Available Events
 
-- **`trigger_audio_zones_updated_event`**: Triggered when zones are created, updated, or deleted
+- **`on_audio_zones_updated_event`**: Triggered when zones are created, updated, or deleted
 
 ### Event Usage
 
