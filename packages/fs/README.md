@@ -325,27 +325,6 @@ let temp = tempdir_in("/custom/temp/location")?;
 let kept_path = temp.keep();
 ```
 
-### Generic File Traits
-
-```rust
-use switchy_fs::{GenericSyncFile, GenericAsyncFile};
-use std::io::{Read, Write, Seek};
-
-// Function that works with any sync file implementation
-fn process_sync_file<F: GenericSyncFile>(mut file: F) -> std::io::Result<String> {
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    Ok(contents)
-}
-
-// Function that works with any async file implementation
-async fn process_async_file<F: GenericAsyncFile>(mut file: F) -> std::io::Result<String> {
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).await?;
-    Ok(contents)
-}
-```
-
 ## Feature Flags
 
 ### Operation Modes
