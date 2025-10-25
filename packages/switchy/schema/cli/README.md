@@ -252,7 +252,7 @@ The `--drop` flag is the most destructive operation and should only be used in e
 **Examples:**
 
 ```bash
-# Drop and recreate tracking table (requires triple confirmation)
+# Drop and recreate tracking table (requires double confirmation)
 switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
 
 # With specific scope to control what gets marked after drop
