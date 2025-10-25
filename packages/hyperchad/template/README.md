@@ -53,7 +53,7 @@ The HyperChad Template package provides:
 - **RGBA Functions**: `rgba()` as alias for 4-argument `rgb()`
 - **Alpha Support**: Float (0.0-1.0), integer (0-255), or percentage ("50%")
 - **Hex Colors**: Support for 3, 6, and 8-digit hex colors (#fff, #ffffff, #ffffffff)
-- **Named Colors**: Built-in color constants (red, blue, white, etc.)
+- **Named Colors**: Built-in color constants (black, white)
 
 ## Installation
 
@@ -117,7 +117,7 @@ let template = container! {
 ### Dynamic Content
 
 ```rust
-use hyperchad_template::{container, RenderContainer};
+use hyperchad_template::{container, Container, RenderContainer};
 
 // Custom type that can be rendered
 struct UserCard {
@@ -224,11 +224,12 @@ let html = template.into_string();
 
 ```rust
 use hyperchad_template::{container, IntoBorder};
+use hyperchad_color::Color;
 
 let template = container! {
     div
         border-top=("red", 2)          // Red 2px border
-        border-left=(Color::BLUE, 1)   // Blue 1px border
+        border-left=(Color::BLACK, 1)  // Black 1px border
         border-radius=5
     {
         "Bordered content"
