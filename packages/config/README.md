@@ -52,7 +52,7 @@ cargo build --release --package moosicbox_config
 
 ```toml
 [dependencies]
-# Default features include api, db, and openapi
+# Default features include api, db, file, and openapi
 moosicbox_config = { path = "../config" }
 
 # Or with specific features only
@@ -66,6 +66,7 @@ moosicbox_config = {
 ## Configuration File Format
 
 MoosicBox uses **JSON5** for configuration files, which allows:
+
 - **Comments**: Both single-line (`//`) and multi-line (`/* */`) comments
 - **Trailing commas**: In objects and arrays
 - **Unquoted keys**: For valid JavaScript identifiers
@@ -131,32 +132,32 @@ fn load_configurations() -> Result<(), Box<dyn std::error::Error>> {
 
 ```json5
 {
-  // Server configuration
-  server: {
-    host: "0.0.0.0",
-    port: 8080,
-  },
+    // Server configuration
+    server: {
+        host: '0.0.0.0',
+        port: 8080,
+    },
 
-  // Automatic backup settings
-  backup: {
-    enabled: true,
-    schedule: "0 0 * * *", // Daily at midnight
-    retentionDays: 30,
-  },
+    // Automatic backup settings
+    backup: {
+        enabled: true,
+        schedule: '0 0 * * *', // Daily at midnight
+        retentionDays: 30,
+    },
 
-  // Logging configuration
-  logging: {
-    level: "info",
-    file: "/var/log/moosicbox/server.log",
-  },
+    // Logging configuration
+    logging: {
+        level: 'info',
+        file: '/var/log/moosicbox/server.log',
+    },
 
-  // Feature flags
-  features: {
-    experimental: false,
-  },
+    // Feature flags
+    features: {
+        experimental: false,
+    },
 
-  // Default profile to use
-  defaultProfile: "default",
+    // Default profile to use
+    defaultProfile: 'default',
 }
 ```
 
@@ -164,42 +165,42 @@ fn load_configurations() -> Result<(), Box<dyn std::error::Error>> {
 
 ```json5
 {
-  // Music library paths
-  libraryPaths: [
-    "/music/library1",
-    "/music/library2", // Trailing comma is fine!
-  ],
+    // Music library paths
+    libraryPaths: [
+        '/music/library1',
+        '/music/library2', // Trailing comma is fine!
+    ],
 
-  // Streaming service credentials
-  services: {
-    tidal: {
-      accessToken: "your-tidal-token",
-      refreshToken: "your-refresh-token",
+    // Streaming service credentials
+    services: {
+        tidal: {
+            accessToken: 'your-tidal-token',
+            refreshToken: 'your-refresh-token',
+        },
+        qobuz: {
+            appId: 'your-app-id',
+            userAuthToken: 'your-auth-token',
+        },
     },
-    qobuz: {
-      appId: "your-app-id",
-      userAuthToken: "your-auth-token",
+
+    // Playback preferences
+    playback: {
+        gapless: true,
+        crossfadeDuration: 2.5,
     },
-  },
 
-  // Playback preferences
-  playback: {
-    gapless: true,
-    crossfadeDuration: 2.5,
-  },
+    // Audio quality settings
+    audioQuality: {
+        preferredFormat: 'FLAC',
+        bitDepth: 24,
+        sampleRate: 96000,
+    },
 
-  // Audio quality settings
-  audioQuality: {
-    preferredFormat: "FLAC",
-    bitDepth: 24,
-    sampleRate: 96000,
-  },
-
-  // Player settings
-  player: {
-    volume: 0.8,
-    bufferSize: 4096,
-  },
+    // Player settings
+    player: {
+        volume: 0.8,
+        bufferSize: 4096,
+    },
 }
 ```
 
