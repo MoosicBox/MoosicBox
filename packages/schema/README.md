@@ -306,9 +306,24 @@ The system automatically creates a `__moosicbox_schema_migrations` table to trac
 ```sql
 CREATE TABLE __moosicbox_schema_migrations (
     id TEXT NOT NULL PRIMARY KEY,
-    run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_on DATETIME,
+    up_checksum VARCHAR(64) NOT NULL,
+    down_checksum VARCHAR(64) NOT NULL,
+    status TEXT NOT NULL,
+    failure_reason TEXT
 );
 ```
+
+The tracking table records:
+
+- **id**: Unique migration identifier (e.g., `2023-10-13-195407_create_artists`)
+- **run_on**: When the migration started executing
+- **finished_on**: When the migration completed (NULL if still in progress)
+- **up_checksum**: SHA-256 checksum of the up migration SQL
+- **down_checksum**: SHA-256 checksum of the down migration SQL
+- **status**: Migration status (`completed`, `failed`, or `in_progress`)
+- **failure_reason**: Error message if migration failed (NULL if successful)
 
 ## Dependencies
 
