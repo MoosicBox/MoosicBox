@@ -139,7 +139,7 @@ use switchy::random;
 
 ### Top-Level Features
 
-- **`all`** (default): Enable all features
+- **`all`** (default): Enable all base module features (excludes `async-macros` and `http-models`)
 - **`simulator`**: Enable simulator mode across all modules
 - **`fail-on-warnings`**: Treat warnings as errors
 
