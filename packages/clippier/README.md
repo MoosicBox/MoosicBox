@@ -241,7 +241,7 @@ Include specific features:
 
 ```bash
 clippier workspace-deps /path/to/workspace package-name \
-  --features "feature1,feature2" \
+  --features feature1 --features feature2 \
   --format text
 ```
 
@@ -263,7 +263,7 @@ Automatically generate optimized multi-stage Dockerfiles:
 
 ```bash
 clippier generate-dockerfile /path/to/workspace target-package \
-  --features "feature1,feature2" \
+  --features feature1 --features feature2 \
   --output ./Dockerfile \
   --base-image rust:1-bookworm \
   --final-image debian:bookworm-slim \
@@ -409,7 +409,7 @@ Generate production-ready Dockerfiles with comprehensive dependency analysis:
 ```bash
 # Generate Dockerfile for server package with all potential dependencies
 clippier generate-dockerfile . server \
-  --features "production,postgres" \
+  --features production --features postgres \
   --output docker/Dockerfile.server \
   --build-args "--release --locked"
 ```
@@ -434,7 +434,7 @@ Analyze workspace dependencies with different levels of detail:
 
 ```bash
 # Get minimal dependencies for current features
-clippier workspace-deps . my-package --features "default,feature1"
+clippier workspace-deps . my-package --features default --features feature1
 
 # Get all potential dependencies for Docker builds
 clippier workspace-deps . my-package --all-potential-deps --format json
@@ -646,7 +646,7 @@ Generate production-ready Dockerfiles with comprehensive dependency analysis:
 ```bash
 # Generate Dockerfile for server package with all potential dependencies
 clippier generate-dockerfile . server \
-  --features "production,postgres" \
+  --features production --features postgres \
   --output docker/Dockerfile.server \
   --build-args "--release --locked"
 ```
@@ -657,7 +657,7 @@ Analyze workspace dependencies with different levels of detail:
 
 ```bash
 # Get minimal dependencies for current features
-clippier workspace-deps . my-package --features "default,feature1"
+clippier workspace-deps . my-package --features default --features feature1
 
 # Get all potential dependencies for Docker builds
 clippier workspace-deps . my-package --all-potential-deps --format json
