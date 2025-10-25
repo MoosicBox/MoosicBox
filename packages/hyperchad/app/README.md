@@ -51,6 +51,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperchad_app = { path = "../hyperchad/app" }
+hyperchad_template = { path = "../hyperchad/template" }
 
 # Or customize features (logic and assets are enabled by default)
 hyperchad_app = {
@@ -58,6 +59,7 @@ hyperchad_app = {
     default-features = false,
     features = ["egui", "logic"]
 }
+hyperchad_template = { path = "../hyperchad/template" }
 ```
 
 ## Usage
