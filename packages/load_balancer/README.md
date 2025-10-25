@@ -77,7 +77,7 @@ export CLUSTERS="example.com:10.0.1.1:8080;solver:127.0.0.1:8080"
 #### Using Let's Encrypt Certificates
 
 ```bash
-export SSL_CERT_PATH="/etc/letsencrypt/live/yourdomain.com/fullchain.pem"
+export SSL_CRT_PATH="/etc/letsencrypt/live/yourdomain.com/fullchain.pem"
 export SSL_KEY_PATH="/etc/letsencrypt/live/yourdomain.com/privkey.pem"
 ```
 
@@ -87,7 +87,7 @@ export SSL_KEY_PATH="/etc/letsencrypt/live/yourdomain.com/privkey.pem"
 # Generate self-signed certificate (for development)
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 
-export SSL_CERT_PATH="./cert.pem"
+export SSL_CRT_PATH="./cert.pem"
 export SSL_KEY_PATH="./key.pem"
 ```
 
