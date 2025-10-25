@@ -151,6 +151,17 @@ pub struct TunnelResponse {
 }
 ```
 
+### TunnelWsResponse
+
+```rust
+pub struct TunnelWsResponse {
+    pub request_id: u64,
+    pub body: Value,
+    pub exclude_connection_ids: Option<Vec<u64>>,
+    pub to_connection_ids: Option<Vec<u64>>,
+}
+```
+
 ### TunnelStream
 
 A `Stream` implementation that:
