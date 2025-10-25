@@ -68,23 +68,24 @@ With tunnel server integration:
 ```bash
 WS_HOST="wss://tunnel.moosicbox.com/ws" \
 TUNNEL_ACCESS_TOKEN='your_access_token' \
-STATIC_TOKEN='your_static_token' \
 moosicbox_server 8001
 ```
+
+Note: `STATIC_TOKEN` must be set at compile-time when using the `static-token-auth` feature.
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable              | Description                                                        | Default   |
-| --------------------- | ------------------------------------------------------------------ | --------- |
-| `BIND_ADDR`           | Network address to bind to                                         | `0.0.0.0` |
-| `PORT`                | Service port (can also be passed as first argument)                | `8000`    |
-| `ACTIX_WORKERS`       | Number of Actix worker threads                                     | Auto      |
-| `MAX_THREADS`         | Maximum blocking threads                                           | `64`      |
-| `STATIC_TOKEN`        | Static authentication token (requires `static-token-auth` feature) | -         |
-| `WS_HOST`             | WebSocket tunnel host (requires `tunnel` feature)                  | -         |
-| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token (requires `tunnel` feature)             | -         |
+| Variable              | Description                                                                      | Default   |
+| --------------------- | -------------------------------------------------------------------------------- | --------- |
+| `BIND_ADDR`           | Network address to bind to                                                       | `0.0.0.0` |
+| `PORT`                | Service port (can also be passed as first argument)                              | `8000`    |
+| `ACTIX_WORKERS`       | Number of Actix worker threads                                                   | Auto      |
+| `MAX_THREADS`         | Maximum blocking threads                                                         | `64`      |
+| `STATIC_TOKEN`        | Static authentication token (compile-time; requires `static-token-auth` feature) | -         |
+| `WS_HOST`             | WebSocket tunnel host (requires `tunnel` feature)                                | -         |
+| `TUNNEL_ACCESS_TOKEN` | Tunnel server access token (requires `tunnel` feature)                           | -         |
 
 ### Database Setup
 
