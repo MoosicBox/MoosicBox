@@ -59,7 +59,7 @@ moosicbox_config = { path = "../config" }
 moosicbox_config = {
     path = "../config",
     default-features = false,
-    features = ["db"]  # Choose specific features: api, db, openapi, test
+    features = ["db"]  # Choose specific features: api, db, openapi
 }
 ```
 
@@ -384,7 +384,6 @@ pub enum AppType {
 - **`api`**: Enable REST API endpoints for profile management
 - **`db`**: Enable database functionality for profiles and server identity
 - **`openapi`**: Enable OpenAPI/utoipa schema generation
-- **`test`**: Enable test utilities for temporary directories
 
 ## Default Behavior
 
