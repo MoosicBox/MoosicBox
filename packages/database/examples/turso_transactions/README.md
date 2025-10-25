@@ -52,7 +52,7 @@ The transaction is rolled back, leaving the database in its original state.
 
 ### Example 3: Multi-Step Transaction
 
-Creates a new account (Charlie) and applies a bonus within a transaction:
+Performs multiple operations (insert and update) within a single transaction:
 
 ```
 Add Charlie: $300
