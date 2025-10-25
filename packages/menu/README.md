@@ -61,7 +61,7 @@ Get albums from a source:
 use moosicbox_menu::library::albums::get_albums_from_source;
 use moosicbox_music_api::models::AlbumsRequest;
 
-let albums = get_albums_from_source(&db, &api, request).await?;
+let albums = get_albums_from_source(&db, &*api, request).await?;
 ```
 
 Album management:
@@ -70,13 +70,13 @@ Album management:
 use moosicbox_menu::library::albums::{add_album, remove_album, refavorite_album};
 
 // Add an album to the library
-let album = add_album(&api, &library_api, &db, &album_id).await?;
+let album = add_album(&*api, &library_api, &db, &album_id).await?;
 
 // Remove an album from the library
-let album = remove_album(&api, &library_api, &db, &album_id).await?;
+let album = remove_album(&*api, &library_api, &db, &album_id).await?;
 
 // Re-favorite an album (remove and re-add with updated information)
-let album = refavorite_album(&api, &library_api, &db, &album_id).await?;
+let album = refavorite_album(&*api, &library_api, &db, &album_id).await?;
 ```
 
 ### API Integration
@@ -118,5 +118,6 @@ HttpServer::new(|| {
 - `moosicbox_music_api` - Music API abstraction layer
 - `moosicbox_music_models` - Music domain models
 - `moosicbox_scan` - Music library scanning functionality
+- `moosicbox_search` - Search indexing functionality
 - `actix-web` - Web framework (optional, with `api` feature)
 - `utoipa` - OpenAPI documentation (optional, with `openapi` feature)
