@@ -287,6 +287,33 @@ jobs:
                       - YES (it''s a public API they''ll call) → Document it
                       - NO (it''s internal implementation) → Leave it out or remove it
 
+                      ## 📝 Commit Message Instructions
+
+                      If you make changes to the README, you MUST provide a commit message description.
+
+                      At the END of your response, include a section formatted EXACTLY as follows:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Brief description of what changed and why (1-2 sentences)
+                      - Additional changes if applicable
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Example:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Removed claim about WebSocket support as the feature is not implemented in the codebase
+                      - Added documentation for the new `connect_async` method which is exported in lib.rs but was missing from README
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Requirements:
+                      - Keep each bullet point concise (1-2 sentences max)
+                      - Focus on WHAT changed and WHY (the fundamental issue)
+                      - Use bullet points with dashes (-)
+                      - Do not include code snippets or line numbers
+                      - If no changes needed, output "No changes required - documentation is accurate"
+
                       ## Verification Process
 
                       1. **Check Git History First**
@@ -357,9 +384,19 @@ jobs:
                   if git diff --name-only | grep -q "${{ matrix.package.path }}/README.md" || \
                      git diff --cached --name-only | grep -q "${{ matrix.package.path }}/README.md"; then
 
-                    echo "📝 README changes detected, committing..."
+                    echo "📝 README changes detected, preparing commit..."
                     git add ${{ matrix.package.path }}/README.md
-                    git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
+
+                    # Extract commit message from Claude output
+                    if [ -f output.txt ]; then
+                      COMMIT_DESC=$(sed -n '/COMMIT_MESSAGE_START/,/COMMIT_MESSAGE_END/p' output.txt | sed '1d;$d' | sed 's/^[[:space:]]*//')
+                    fi
+
+                    if [ -n "$COMMIT_DESC" ]; then
+                      git commit -m "docs(${{ matrix.package.name }}): update README for accuracy" -m "$COMMIT_DESC"
+                    else
+                      git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
+                    fi
 
                     MAX_RETRIES=5
                     RETRY_COUNT=0
@@ -516,6 +553,33 @@ jobs:
 
                       **Focus on:** What users need to evaluate, install, configure, and use MoosicBox successfully.
 
+                      ## 📝 Commit Message Instructions
+
+                      If you make changes to the root README, you MUST provide a commit message description.
+
+                      At the END of your response, include a section formatted EXACTLY as follows:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Brief description of what changed and why (1-2 sentences)
+                      - Additional changes if applicable
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Example:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Corrected installation command from npm to cargo based on actual build system
+                      - Removed claim about Docker support as docker-compose.yml is not present in repository
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Requirements:
+                      - Keep each bullet point concise (1-2 sentences max)
+                      - Focus on WHAT changed and WHY (the fundamental issue)
+                      - Use bullet points with dashes (-)
+                      - Do not include code snippets or line numbers
+                      - If no changes needed, output "No changes required - documentation is accurate"
+
                       ## Verification Process
 
                       1. **Check Git History First**
@@ -580,9 +644,19 @@ jobs:
                   if git diff --name-only | grep -q "^README.md$" || \
                      git diff --cached --name-only | grep -q "^README.md$"; then
 
-                    echo "📝 Root README changes detected, committing..."
+                    echo "📝 Root README changes detected, preparing commit..."
                     git add README.md
-                    git commit -m "docs(root): update README for accuracy"
+
+                    # Extract commit message from Claude output
+                    if [ -f output.txt ]; then
+                      COMMIT_DESC=$(sed -n '/COMMIT_MESSAGE_START/,/COMMIT_MESSAGE_END/p' output.txt | sed '1d;$d' | sed 's/^[[:space:]]*//')
+                    fi
+
+                    if [ -n "$COMMIT_DESC" ]; then
+                      git commit -m "docs(root): update README for accuracy" -m "$COMMIT_DESC"
+                    else
+                      git commit -m "docs(root): update README for accuracy"
+                    fi
 
                     MAX_RETRIES=5
                     RETRY_COUNT=0

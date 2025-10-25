@@ -293,6 +293,34 @@ jobs:
                       - Document ALL error conditions in `# Errors` sections
                       - Use proper markdown formatting in doc comments
 
+                      ## 📝 Commit Message Instructions
+
+                      If you make changes to rustdoc comments, you MUST provide a commit message description.
+
+                      At the END of your response, include a section formatted EXACTLY as follows:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Brief description of documentation changes (1-2 sentences per major item)
+                      - Focus on what was missing or incorrect
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Example:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
+                      - Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
+                      - Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Requirements:
+                      - Keep each bullet point concise (1-2 sentences max)
+                      - Focus on WHAT was documented/fixed and WHY (what was missing or incorrect)
+                      - Use bullet points with dashes (-)
+                      - Do not include code snippets or line numbers
+                      - If no changes needed, output "No changes required - documentation is adequate"
+
                       ## Verification Process
 
                       1. **Check Git History First**
@@ -355,9 +383,19 @@ jobs:
                   if git diff --name-only | grep -q "^${{ matrix.package.path }}/.*\.rs$" || \
                      git diff --cached --name-only | grep -q "^${{ matrix.package.path }}/.*\.rs$"; then
 
-                    echo "📝 Rust file changes detected in package, committing..."
+                    echo "📝 Rust file changes detected in package, preparing commit..."
                     git add ${{ matrix.package.path }}
-                    git commit -m "docs(${{ matrix.package.name }}): improve rustdoc for public APIs"
+
+                    # Extract commit message from Claude output
+                    if [ -f output.txt ]; then
+                      COMMIT_DESC=$(sed -n '/COMMIT_MESSAGE_START/,/COMMIT_MESSAGE_END/p' output.txt | sed '1d;$d' | sed 's/^[[:space:]]*//')
+                    fi
+
+                    if [ -n "$COMMIT_DESC" ]; then
+                      git commit -m "docs(${{ matrix.package.name }}): improve rustdoc for public APIs" -m "$COMMIT_DESC"
+                    else
+                      git commit -m "docs(${{ matrix.package.name }}): improve rustdoc for public APIs"
+                    fi
 
                     MAX_RETRIES=5
                     RETRY_COUNT=0
