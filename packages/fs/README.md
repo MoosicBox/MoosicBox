@@ -231,14 +231,9 @@ for entry in all_entries {
 remove_dir_all("./deep")?;
 
 // Async versions
-use switchy_fs::unsync::{create_dir_all, remove_dir_all, read_dir_sorted, walk_dir_sorted};
+use switchy_fs::unsync::{create_dir_all, remove_dir_all};
 
 create_dir_all("./async/nested/dirs").await?;
-
-let entries = read_dir_sorted("./async").await?;
-for entry in entries {
-    println!("{:?}", entry.path());
-}
 
 remove_dir_all("./async").await?;
 ```
