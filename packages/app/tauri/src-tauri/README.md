@@ -97,139 +97,24 @@ cargo tauri dev
 
 ## Usage
 
-### Basic Application
+This is a Tauri desktop application. The main entry point is:
 
 ```rust
-use moosicbox_lib::{run, TauriUpdateAppState};
-use tauri::{Manager, Window};
-
-#[tokio::main]
-async fn main() {
-    // Run the Tauri application
-    run();
-}
-
-// Application startup
-#[tauri::command]
-async fn on_startup() -> Result<(), tauri::Error> {
-    println!("MoosicBox application started");
-    Ok(())
-}
-
-// Update application state
-#[tauri::command]
-async fn set_state(state: TauriUpdateAppState) -> Result<(), TauriPlayerError> {
-    // Update connection settings, API URLs, etc.
-    println!("State updated: {:?}", state);
-    Ok(())
+fn main() {
+    moosicbox_lib::run();
 }
 ```
 
-### Window Management
+The application provides the following Tauri commands that can be invoked from the frontend (JavaScript/TypeScript):
 
-```rust
-use tauri::{AppHandle, Manager, Window};
-
-#[tauri::command]
-async fn show_main_window(window: Window) {
-    window.get_webview_window("main")
-        .unwrap()
-        .show()
-        .unwrap();
-}
-
-#[tauri::command]
-async fn create_player_window(app: AppHandle) -> Result<(), String> {
-    let player_window = tauri::WindowBuilder::new(
-        &app,
-        "player",
-        tauri::WindowUrl::App("player.html".into())
-    )
-    .title("MoosicBox Player")
-    .inner_size(400.0, 600.0)
-    .resizable(false)
-    .build()
-    .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-```
-
-### Playback Quality
-
-```rust
-use moosicbox_music_models::PlaybackQuality;
-
-#[tauri::command]
-async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlayerError> {
-    // Set audio quality
-    println!("Quality set to: {:?}", quality);
-    Ok(())
-}
-```
-
-### API Integration
-
-```rust
-use serde_json::Value;
-
-#[tauri::command]
-async fn api_proxy_get(
-    url: String,
-    headers: Option<Value>,
-) -> Result<Value, TauriPlayerError> {
-    // Proxy GET request to MoosicBox API
-    println!("GET request to: {}", url);
-    Ok(serde_json::json!({"success": true}))
-}
-
-#[tauri::command]
-async fn api_proxy_post(
-    url: String,
-    body: Option<Value>,
-    headers: Option<Value>,
-) -> Result<Value, TauriPlayerError> {
-    // Proxy POST request to MoosicBox API
-    println!("POST request to: {}", url);
-    Ok(serde_json::json!({"success": true}))
-}
-```
-
-### WebSocket Communication
-
-```rust
-use moosicbox_ws::models::{InboundPayload, OutboundPayload};
-
-#[tauri::command]
-async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayerError> {
-    // Handle WebSocket messages from the web interface
-    println!("WebSocket message: {:?}", message);
-    Ok(())
-}
-
-async fn handle_ws_message(message: OutboundPayload) {
-    // Handle outbound WebSocket messages
-    match message {
-        OutboundPayload::SessionUpdated(session) => {
-            println!("Session updated: {:?}", session);
-        }
-        OutboundPayload::PlaybackUpdate(update) => {
-            println!("Playback update: {:?}", update);
-        }
-        _ => {}
-    }
-}
-```
-
-### mDNS Server Discovery
-
-```rust
-#[tauri::command]
-async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerError> {
-    // Fetch discovered MoosicBox servers via mDNS
-    Ok(vec![])
-}
-```
+- `on_startup()` - Called when the application starts
+- `show_main_window()` - Show the main application window (desktop only)
+- `set_state(state)` - Update application state (connection settings, API URLs, etc.)
+- `set_playback_quality(quality)` - Set audio playback quality
+- `propagate_ws_message(message)` - Send WebSocket messages to the backend
+- `api_proxy_get(url, headers)` - Proxy GET requests to MoosicBox API
+- `api_proxy_post(url, body, headers)` - Proxy POST requests to MoosicBox API
+- `fetch_moosicbox_servers()` - Fetch discovered MoosicBox servers via mDNS
 
 ## Building and Distribution
 
