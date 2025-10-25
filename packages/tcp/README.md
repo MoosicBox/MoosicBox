@@ -208,11 +208,10 @@ use switchy_tcp::simulator::{TcpListener, TcpStream};
 #[tokio::test]
 async fn test_tcp_communication() {
     // Use simulator for testing
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
 
     // Test client connection
-    let client_stream = TcpStream::connect(&addr.to_string()).await.unwrap();
+    let client_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
     let (server_stream, _) = listener.accept().await.unwrap();
 
     // Test communication
