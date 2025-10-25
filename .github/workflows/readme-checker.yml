@@ -389,7 +389,7 @@ jobs:
 
                     # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | sed -n 's/.*COMMIT_MESSAGE_START\\\n\(.*\)\\\nCOMMIT_MESSAGE_END.*/\1/p' | sed 's/\\\n/\n/g')
+                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
                     fi
 
                     if [ -n "$COMMIT_DESC" ]; then
@@ -652,7 +652,7 @@ jobs:
 
                     # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | sed -n 's/.*COMMIT_MESSAGE_START\\\n\(.*\)\\\nCOMMIT_MESSAGE_END.*/\1/p' | sed 's/\\\n/\n/g')
+                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
                     fi
 
                     if [ -n "$COMMIT_DESC" ]; then
