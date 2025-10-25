@@ -235,7 +235,7 @@ match AppBuilder::new().build(renderer) {
 
 ### serve
 
-Start development server with hot reloading and dynamic routing.
+Start development server.
 
 ### gen
 
@@ -323,7 +323,6 @@ The following features are enabled by default:
 ### Utility Dependencies
 
 - **async-trait**: Async trait support
-- **bytes**: Byte buffer utilities (required for `StaticAssetRoute` with `FileContents`)
 - **clap**: Command-line argument parsing
 - **flume**: Multi-producer multi-consumer channels
 - **log**: Logging facade
