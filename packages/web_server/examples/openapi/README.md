@@ -52,7 +52,7 @@ The server starts with multiple endpoints:
 - **API Endpoint**: `/example` - The actual API
 - **Documentation**: `/openapi/swagger-ui/` - Interactive Swagger UI
 - **Specification**: `/openapi/swagger-ui/api-docs/openapi.json` - Raw OpenAPI spec
-- **Alternative UIs**: `/openapi/redoc/`, `/openapi/rapidoc/`, `/openapi/scalar/`
+- **Alternative UIs**: `/openapi/redoc`, `/openapi/rapidoc`, `/openapi/scalar`
 
 ## Testing the API and Documentation
 
@@ -72,9 +72,9 @@ http://localhost:8080/openapi/swagger-ui/
 **Alternative Documentation UIs**
 
 ```
-http://localhost:8080/openapi/redoc/      # ReDoc - Clean, responsive docs
-http://localhost:8080/openapi/rapidoc/   # RapiDoc - Fast, customizable
-http://localhost:8080/openapi/scalar/    # Scalar - Modern, beautiful UI
+http://localhost:8080/openapi/redoc      # ReDoc - Clean, responsive docs
+http://localhost:8080/openapi/rapidoc   # RapiDoc - Fast, customizable
+http://localhost:8080/openapi/scalar    # Scalar - Modern, beautiful UI
 ```
 
 ### API Specification
@@ -186,9 +186,9 @@ This automatically creates:
 
 - `/openapi/swagger-ui/` - Swagger UI interface
 - `/openapi/swagger-ui/api-docs/openapi.json` - OpenAPI specification
-- `/openapi/redoc/` - ReDoc interface
-- `/openapi/rapidoc/` - RapiDoc interface
-- `/openapi/scalar/` - Scalar interface
+- `/openapi/redoc` - ReDoc interface
+- `/openapi/rapidoc` - RapiDoc interface
+- `/openapi/scalar` - Scalar interface
 
 ## API Documentation Structure
 
@@ -421,9 +421,9 @@ openapi-generator-cli generate \
 ├─────────────────────────────────────────────────────────┤
 │                  OpenAPI Routes                         │
 │  /openapi/swagger-ui/                        (Swagger)  │
-│  /openapi/redoc/                             (ReDoc)    │
-│  /openapi/rapidoc/                           (RapiDoc)  │
-│  /openapi/scalar/                            (Scalar)   │
+│  /openapi/redoc                              (ReDoc)    │
+│  /openapi/rapidoc                            (RapiDoc)  │
+│  /openapi/scalar                             (Scalar)   │
 │  /openapi/swagger-ui/api-docs/openapi.json   (Spec)     │
 ├─────────────────────────────────────────────────────────┤
 │                   API Routes                            │
