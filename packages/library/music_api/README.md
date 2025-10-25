@@ -102,7 +102,10 @@ Default features: `all-encoders`, `api`
 - **moosicbox_paging**: Pagination utilities
 - **moosicbox_menu_models**: Menu and UI model types
 - **moosicbox_music_models**: Core music domain models
+- **moosicbox_assert**: Assertion utilities
 - **switchy_database**: Database abstraction layer
+- **switchy_async**: Async synchronization primitives
 - **async-trait**: Async trait support
 - **futures**: Async runtime utilities
+- **log**: Logging support
 - **regex**: Regular expression support
