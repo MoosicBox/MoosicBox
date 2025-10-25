@@ -422,7 +422,7 @@ Automatic response compression is enabled by default via Actix Web middleware:
 - **Deflate**: Deflate compression support
 - **Zlib**: Zlib compression support
 
-Note: SSE streams support Gzip, Deflate, and Zlib encoding.
+Note: SSE streams are currently sent without compression (Identity encoding).
 
 ## Dependencies
 
