@@ -34,7 +34,7 @@ This will:
 The example includes four migrations:
 
 - `CreateUsersTable`: Creates users table with status and email fields
-- `CreatePostsTable`: Creates posts table with user_id foreign key reference
+- `CreatePostsTable`: Creates posts table with user_id relationship to users
 - `CreateAnalyticsTable`: Creates analytics table for tracking user events
 - `AddPerformanceIndexes`: Adds indexes on foreign keys and commonly queried fields
 
