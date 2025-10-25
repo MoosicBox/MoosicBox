@@ -183,30 +183,30 @@ pub struct UpnpService {
 }
 
 pub struct TransportInfo {
-    current_transport_status: String,
-    current_transport_state: String,
-    current_speed: String,
+    pub current_transport_status: String,
+    pub current_transport_state: String,
+    pub current_speed: String,
 }
 
 pub struct PositionInfo {
-    track: u32,
-    rel_time: u32,
-    abs_time: u32,
-    track_uri: String,
-    track_metadata: TrackMetadata,
-    rel_count: u32,
-    abs_count: u32,
-    track_duration: u32,
+    pub track: u32,
+    pub rel_time: u32,
+    pub abs_time: u32,
+    pub track_uri: String,
+    pub track_metadata: TrackMetadata,
+    pub rel_count: u32,
+    pub abs_count: u32,
+    pub track_duration: u32,
 }
 
 pub struct MediaInfo {
-    media_duration: u32,
-    record_medium: String,
-    write_status: String,
-    current_uri_metadata: TrackMetadata,
-    nr_tracks: u32,
-    play_medium: String,
-    current_uri: String,
+    pub media_duration: u32,
+    pub record_medium: String,
+    pub write_status: String,
+    pub current_uri_metadata: TrackMetadata,
+    pub nr_tracks: u32,
+    pub play_medium: String,
+    pub current_uri: String,
 }
 ```
 
