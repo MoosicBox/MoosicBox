@@ -51,18 +51,18 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default features include: form, format, json, serde, static-routes
-hyperchad_router = { path = "../hyperchad/router" }
+hyperchad_router = "0.1.4"
 
 # Disable default features and select specific ones
 hyperchad_router = {
-    path = "../hyperchad/router",
+    version = "0.1.4",
     default-features = false,
     features = ["serde", "json"]
 }
 
 # Enable additional features beyond defaults
 hyperchad_router = {
-    path = "../hyperchad/router",
+    version = "0.1.4",
     features = ["syntax-highlighting", "simd"]
 }
 ```
