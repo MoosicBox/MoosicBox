@@ -153,6 +153,9 @@ pub trait MusicApi: Send + Sync {
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error>;
     async fn add_artist(&self, artist_id: &Id) -> Result<(), Error>;
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), Error>;
+    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, Error>;
+    async fn artist_cover_source(&self, artist: &Artist, size: ImageCoverSize)
+                                 -> Result<Option<ImageCoverSource>, Error>;
 
     // Album operations
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
@@ -165,6 +168,8 @@ pub trait MusicApi: Send + Sync {
                           -> PagingResult<Album, Error>;
     async fn add_album(&self, album_id: &Id) -> Result<(), Error>;
     async fn remove_album(&self, album_id: &Id) -> Result<(), Error>;
+    async fn album_cover_source(&self, album: &Album, size: ImageCoverSize)
+                                -> Result<Option<ImageCoverSource>, Error>;
 
     // Track operations
     async fn tracks(&self, track_ids: Option<&[Id]>, offset: Option<u32>, limit: Option<u32>,
@@ -183,12 +188,18 @@ pub trait MusicApi: Send + Sync {
     async fn track_size(&self, track: TrackOrId, source: &TrackSource, quality: PlaybackQuality)
                        -> Result<Option<u64>, Error>;
 
-    // Optional features
-    fn supports_search(&self) -> bool;
+    // Scan operations
+    async fn enable_scan(&self) -> Result<(), Error>;
+    async fn scan(&self) -> Result<(), Error>;
+    async fn scan_enabled(&self) -> Result<bool, Error>;
     fn supports_scan(&self) -> bool;
+
+    // Search operations
+    fn supports_search(&self) -> bool;
     async fn search(&self, query: &str, offset: Option<u32>, limit: Option<u32>)
                    -> Result<ApiSearchResultsResponse, Error>;
 
+    // Other
     fn auth(&self) -> Option<&ApiAuth>;
     fn cached(self) -> impl MusicApi where Self: Sized;
 }
