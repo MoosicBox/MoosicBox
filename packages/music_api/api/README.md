@@ -125,16 +125,13 @@ println!("Scan Enabled: {}", api_model.scan_enabled);
 ### API Endpoints (when `api` feature enabled)
 
 ```rust
-use actix_web::{App, HttpServer};
+use actix_web::{web, App, HttpServer};
 use moosicbox_music_api_api::api::bind_services;
 
 // Bind API endpoints to your Actix-web application
 HttpServer::new(|| {
     App::new()
-        .service(
-            web::scope("/music-apis")
-                .configure(|scope| bind_services(scope))
-        )
+        .service(bind_services(web::scope("/music-apis")))
 })
 .bind("127.0.0.1:8080")?
 .run()
