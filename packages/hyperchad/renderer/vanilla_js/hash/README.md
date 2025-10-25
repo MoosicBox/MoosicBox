@@ -86,7 +86,7 @@ fn main() {
     // Get the hex-encoded hash string
     println!("Plugin hash: {}", PLUGIN_HASH_HEX);
 
-    // Get the raw hash string (before encoding)
+    // Get the plugin identifier string (input to the hash)
     println!("Raw plugin string: {}", PLUGIN_HASH);
 
     // Example output:
