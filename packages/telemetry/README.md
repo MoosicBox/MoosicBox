@@ -238,14 +238,10 @@ Access metrics at: `http://localhost:8080/metrics`
 
 ```rust
 use switchy_telemetry::init_tracer;
-use opentelemetry_otlp::ExporterBuildError;
 
 match init_tracer("my-service") {
     Ok(layer) => {
         // Use tracer layer
-    }
-    Err(ExporterBuildError::Tonic(e)) => {
-        eprintln!("Failed to connect to OTLP endpoint: {}", e);
     }
     Err(e) => {
         eprintln!("Tracer initialization failed: {}", e);
