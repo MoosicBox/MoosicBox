@@ -268,6 +268,7 @@ Core dependencies:
 
 - **log**: Logging support
 - **moosicbox_assert**: Assertion utilities
+- **thiserror**: Error type definitions
 
 Optional dependencies:
 
