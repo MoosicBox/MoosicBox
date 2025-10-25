@@ -5,7 +5,7 @@ This example demonstrates collapsible content using HTML `<details>` and `<summa
 ## Features Demonstrated
 
 ✅ Basic details/summary usage
-✅ Default open state with `open="true"`
+✅ Default open state with `open`
 ✅ FAQ accordion pattern
 ✅ Nested details elements
 ✅ Styled details with HyperChad attributes
@@ -46,7 +46,7 @@ Simple expand/collapse functionality showing hidden content.
 
 ### 2. Default Open
 
-Pre-expanded sections using `open="true"` attribute.
+Pre-expanded sections using `open` attribute.
 
 ### 3. FAQ Accordion
 
@@ -96,7 +96,7 @@ details {
 ### Default Open
 
 ```rust
-details open="true" {
+details open {
     summary { "Already expanded" }
     div { "Visible content" }
 }
