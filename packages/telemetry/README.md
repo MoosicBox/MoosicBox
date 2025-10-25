@@ -88,7 +88,8 @@ use switchy_telemetry::{RequestTracing, get_http_metrics_handler, metrics};
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize telemetry
-    let tracer_layer = switchy_telemetry::init_tracer("web-service")?;
+    let tracer_layer = switchy_telemetry::init_tracer("web-service")
+        .map_err(std::io::Error::other)?;
 
     // Create metrics handler
     let metrics_handler = std::sync::Arc::new(get_http_metrics_handler());
