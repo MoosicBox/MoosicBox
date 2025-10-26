@@ -1,3 +1,40 @@
+//! Procedural macros for async function transformation and yield injection.
+//!
+//! This crate provides macros that transform async functions to inject yield points after every
+//! `.await`, enabling deterministic testing with the simulator runtime. It also provides
+//! simulator-aware test attribute macros for setting up test runtimes.
+//!
+//! # Features
+//!
+//! * **Yield Injection**: Automatic yield point insertion via `#[inject_yields]` and `inject_yields_mod!`
+//! * **Test Macros**: Simulator-aware test attributes (`#[test]`, `#[unsync_test]`, `#[tokio_test_wrapper]`)
+//! * **Feature-Gated**: Transformation only occurs when the `simulator` feature is enabled
+//! * **Zero Cost**: No runtime overhead when the simulator feature is disabled
+//!
+//! # Main Macros
+//!
+//! * [`inject_yields`] - Attribute macro for injecting yields into async functions
+//! * [`inject_yields_mod`] - Procedural macro for transforming entire modules
+//! * [`test`] - Test attribute for `switchy_async` tests (simulator feature only)
+//! * [`unsync_test`] - Test attribute for `switchy::unsync` tests (simulator feature only)
+//! * [`tokio_test_wrapper`] - Tokio-compatible test wrapper (always available)
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "simulator")]
+//! # {
+//! use switchy_async_macros::inject_yields;
+//!
+//! #[inject_yields]
+//! async fn my_async_function(x: i32) -> i32 {
+//!     // With the simulator feature enabled, yield points are automatically
+//!     // inserted after each .await for deterministic execution
+//!     x + 1
+//! }
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
