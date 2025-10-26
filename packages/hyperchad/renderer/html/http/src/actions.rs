@@ -1,3 +1,9 @@
+//! Action request handling for `HyperChad` HTTP applications.
+//!
+//! This module provides functionality to handle action requests sent from
+//! client-side JavaScript. Actions are parsed from request bodies and sent
+//! through a channel for processing by the application.
+
 use http::Response;
 use hyperchad_renderer::transformer::actions::logic::Value;
 use hyperchad_router::RouteRequest;
