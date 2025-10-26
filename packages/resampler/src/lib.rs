@@ -1,3 +1,31 @@
+//! Audio resampling for converting between sample rates.
+//!
+//! This crate provides FFT-based audio resampling using the `rubato` library,
+//! designed to work seamlessly with Symphonia audio buffers. It supports
+//! converting audio from one sample rate to another with high quality.
+//!
+//! # Example
+//!
+//! ```rust
+//! # use moosicbox_resampler::Resampler;
+//! # use symphonia::core::audio::{AudioBuffer, SignalSpec, Signal, Channels};
+//! # use symphonia::core::units::Duration;
+//! # fn example() {
+//! // Create a signal specification for stereo 44.1kHz audio
+//! let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+//!
+//! // Create a resampler to convert to 48kHz with a duration of 1024 samples
+//! let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+//!
+//! // Resample an audio buffer (in practice, this would come from a decoder)
+//! # let input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
+//! if let Some(resampled) = resampler.resample(&input_buffer) {
+//!     // Use the resampled audio data
+//!     println!("Resampled {} samples", resampled.len());
+//! }
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, clippy::struct_field_names)]
@@ -163,6 +191,9 @@ where
 }
 
 /// Converts interleaved samples to an `AudioBuffer`.
+///
+/// **Note**: Currently only supports stereo (2-channel) audio. The function will panic
+/// or produce incorrect results if used with mono or multi-channel audio.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
 where
