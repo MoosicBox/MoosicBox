@@ -160,7 +160,7 @@ async fn search_handler(
     query: Query<SearchQuery>,
     data: RequestData,
 ) -> Result<HttpResponse, Error> {
-    // Use query.search_term for the search
+    // Use query.q for the search
     // Use data.user_agent for analytics
     // Use data.remote_addr for rate limiting
 }
