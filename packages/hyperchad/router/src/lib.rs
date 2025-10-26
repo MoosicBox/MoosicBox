@@ -1,3 +1,95 @@
+//! Async routing system for `HyperChad` applications with request handling and navigation.
+//!
+//! This crate provides a comprehensive routing solution with support for:
+//!
+//! * Flexible route matching (exact paths, multiple alternatives, prefix matching)
+//! * Async request handling with full HTTP method support
+//! * Request body parsing (JSON, URL-encoded forms, multipart forms with file uploads)
+//! * Client information detection and request metadata
+//! * Programmatic navigation with content delivery channels
+//!
+//! # Features
+//!
+//! * **`serde`** - Enable JSON and form parsing (enabled by default)
+//! * **`form`** - Enable multipart form support (enabled by default)
+//! * **`static-routes`** - Enable static route compilation (enabled by default)
+//! * **`json`** - Enable JSON content support (enabled by default)
+//! * **`format`** - Enable HTML formatting (enabled by default)
+//! * **`syntax-highlighting`** - Enable syntax highlighting support
+//! * **`simd`** - Enable SIMD optimizations
+//!
+//! # Basic Example
+//!
+//! ```rust
+//! use hyperchad_router::Router;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a router with some routes
+//! let router = Router::new()
+//!     .with_route("/", |_req| async {
+//!         "<h1>Home</h1>".to_string()
+//!     })
+//!     .with_route("/about", |_req| async {
+//!         "<h1>About</h1>".to_string()
+//!     });
+//!
+//! // Navigate to a route
+//! let content = router.navigate("/").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Route Patterns
+//!
+//! Routes can match in different ways:
+//!
+//! ```rust
+//! use hyperchad_router::{Router, RoutePath};
+//!
+//! # async fn example() {
+//! let router = Router::new()
+//!     // Exact path match
+//!     .with_route("/home", |_req| async { "Home".to_string() })
+//!     // Multiple alternative paths
+//!     .with_route(&["/api/v1", "/api/v2"][..], |_req| async { "API".to_string() })
+//!     // Prefix match for static files
+//!     .with_route(RoutePath::LiteralPrefix("/static/".to_string()), |_req| async {
+//!         "Static content".to_string()
+//!     });
+//! # }
+//! ```
+//!
+//! # Request Handling
+//!
+//! Handle requests with full access to HTTP method, headers, query parameters, and body:
+//!
+//! ```rust
+//! # #[cfg(all(feature = "serde", feature = "form"))]
+//! # {
+//! use hyperchad_router::Router;
+//! use serde::Deserialize;
+//! use switchy::http::models::Method;
+//!
+//! #[derive(Deserialize)]
+//! struct LoginForm {
+//!     username: String,
+//!     password: String,
+//! }
+//!
+//! # async fn example() {
+//! let router = Router::new()
+//!     .with_route_result("/login", |req| async move {
+//!         if req.method == Method::Post {
+//!             let form: LoginForm = req.parse_form()?;
+//!             Ok::<_, Box<dyn std::error::Error>>(format!("Welcome, {}!", form.username))
+//!         } else {
+//!             Ok("<form>...</form>".to_string())
+//!         }
+//!     });
+//! # }
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
