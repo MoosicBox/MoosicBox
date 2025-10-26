@@ -1,3 +1,32 @@
+//! Generic TCP stream and listener abstractions for async Rust.
+//!
+//! This crate provides generic traits and implementations for TCP networking that work
+//! across different async runtimes. It supports both real tokio-based networking and an
+//! in-memory simulator for testing.
+//!
+//! # Features
+//!
+//! * `tokio` - Real TCP networking using tokio
+//! * `simulator` - In-memory TCP simulator for testing without actual network I/O
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "tokio")]
+//! # {
+//! use switchy_tcp::{TokioTcpListener, GenericTcpListener};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a TCP listener
+//! let listener = TokioTcpListener::bind("127.0.0.1:8080").await?;
+//!
+//! // Accept incoming connections
+//! let (stream, addr) = listener.accept().await?;
+//! println!("Connection from: {}", addr);
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -8,9 +37,17 @@ use ::tokio::io::{AsyncRead, AsyncWrite};
 use async_trait::async_trait;
 use thiserror::Error;
 
+/// Real TCP networking implementation using tokio.
+///
+/// This module provides TCP streams and listeners backed by the tokio runtime for actual
+/// network I/O operations.
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
+/// In-memory TCP simulator for testing.
+///
+/// This module provides TCP streams and listeners that simulate network behavior in-memory
+/// without actual network I/O. Useful for deterministic testing and avoiding port conflicts.
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
@@ -72,13 +109,22 @@ pub trait GenericTcpStreamReadHalf: AsyncRead + Send + Sync + Unpin {}
 pub trait GenericTcpStreamWriteHalf: AsyncWrite + Send + Sync + Unpin {}
 
 /// Wrapper type for generic TCP listeners.
+///
+/// This type wraps implementations of `GenericTcpListener` and provides a unified interface
+/// for accepting TCP connections. It is typically instantiated via type aliases like
+/// `TokioTcpListener` or `SimulatorTcpListener`.
 pub struct TcpListenerWrapper<
     R: GenericTcpStreamReadHalf,
     W: GenericTcpStreamWriteHalf,
     S: GenericTcpStream<R, W>,
     T: GenericTcpListener<S>,
 >(T, PhantomData<R>, PhantomData<W>, PhantomData<S>);
+
 /// Wrapper type for generic TCP streams.
+///
+/// This type wraps implementations of `GenericTcpStream` and provides a unified interface
+/// for reading and writing over TCP connections. It is typically instantiated via type aliases
+/// like `TokioTcpStream` or `SimulatorTcpStream`.
 pub struct TcpStreamWrapper<
     R: GenericTcpStreamReadHalf,
     W: GenericTcpStreamWriteHalf,
