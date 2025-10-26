@@ -1,3 +1,9 @@
+//! Profile-based music API registry.
+//!
+//! This module provides [`MusicApisProfiles`], a global registry for managing collections
+//! of music APIs associated with different user profiles. Each profile can have its own
+//! set of configured music API sources.
+
 #![allow(clippy::type_complexity)]
 
 use std::{
