@@ -1,3 +1,46 @@
+//! Deterministic simulator for testing the MoosicBox server.
+//!
+//! This crate provides a simulation harness for testing the MoosicBox server under various
+//! conditions including fault injection and health monitoring. It uses deterministic simulation
+//! to enable reproducible testing of distributed system behaviors.
+//!
+//! # Main Components
+//!
+//! * [`client`] - Client simulators for fault injection and health checking
+//! * [`host`] - Host simulation for running the MoosicBox server
+//! * [`http`] - HTTP utilities for making requests and parsing responses in simulations
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use moosicbox_server_simulator::{client, handle_actions, host};
+//! use simvar::{Sim, SimBootstrap, run_simulation};
+//!
+//! struct MySimulator;
+//!
+//! impl SimBootstrap for MySimulator {
+//!     fn on_start(&self, sim: &mut impl Sim) {
+//!         // Start the MoosicBox server in the simulation
+//!         host::moosicbox_server::start(sim, None);
+//!
+//!         // Start client simulators
+//!         client::health_checker::start(sim);
+//!         client::fault_injector::start(sim);
+//!     }
+//!
+//!     fn on_step(&self, sim: &mut impl Sim) {
+//!         // Handle queued actions (like bounces)
+//!         handle_actions(sim);
+//!     }
+//! }
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Run the simulation
+//! let results = run_simulation(MySimulator)?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -10,8 +53,21 @@ use std::{
 
 use simvar::{Sim, switchy::tcp::TcpStream};
 
+/// Client simulators for testing the MoosicBox server.
+///
+/// This module provides client-side simulation components including:
+/// * `fault_injector` - Injects random faults to test resilience
+/// * `health_checker` - Monitors server health status
 pub mod client;
+/// Host simulation for the MoosicBox server.
+///
+/// This module provides the simulation infrastructure for running the MoosicBox server
+/// in a deterministic simulated environment.
 pub mod host;
+/// HTTP utilities for simulated network requests.
+///
+/// This module provides functions for making HTTP requests over simulated TCP streams
+/// and parsing HTTP responses.
 pub mod http;
 
 static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
