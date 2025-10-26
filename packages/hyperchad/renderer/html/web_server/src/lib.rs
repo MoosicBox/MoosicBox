@@ -1,3 +1,66 @@
+//! Web server renderer for `HyperChad`.
+//!
+//! This crate provides a web server backend for rendering `HyperChad` HTML content.
+//! It integrates the `HyperChad` renderer with `moosicbox_web_server` to enable
+//! server-side rendering of hyperchad views over HTTP.
+//!
+//! # Features
+//!
+//! * `assets` - Enable static asset serving (enabled by default)
+//! * `actix` - Use the Actix-web backend
+//! * `simulator` - Enable simulator mode for testing
+//! * `debug` - Enable debug logging (enabled by default)
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use hyperchad_renderer_html_web_server::{
+//!     WebServerApp, WebServerResponseProcessor, HttpRequest, HttpResponse, WebServerError
+//! };
+//! use hyperchad_renderer::{RendererEvent, Content};
+//! use async_trait::async_trait;
+//! use bytes::Bytes;
+//! use std::sync::Arc;
+//!
+//! // Define your request data type
+//! #[derive(Clone)]
+//! struct MyRequestData {
+//!     path: String,
+//! }
+//!
+//! // Implement the response processor
+//! #[derive(Clone)]
+//! struct MyProcessor;
+//!
+//! #[async_trait]
+//! impl WebServerResponseProcessor<MyRequestData> for MyProcessor {
+//!     fn prepare_request(
+//!         &self,
+//!         req: HttpRequest,
+//!         _body: Option<Arc<Bytes>>,
+//!     ) -> Result<MyRequestData, WebServerError> {
+//!         Ok(MyRequestData {
+//!             path: req.path().to_string(),
+//!         })
+//!     }
+//!
+//!     async fn to_response(&self, data: MyRequestData) -> Result<HttpResponse, WebServerError> {
+//!         Ok(HttpResponse::ok().with_body(format!("Path: {}", data.path)))
+//!     }
+//!
+//!     async fn to_body(&self, content: Content, _data: MyRequestData) -> Result<(Bytes, String), WebServerError> {
+//!         // Convert content to bytes and content type
+//!         Ok((Bytes::from("example"), "text/html".to_string()))
+//!     }
+//! }
+//!
+//! # fn main() {
+//! // Create the web server app
+//! let (tx, rx) = flume::unbounded::<RendererEvent>();
+//! let app = WebServerApp::new(MyProcessor, rx);
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
