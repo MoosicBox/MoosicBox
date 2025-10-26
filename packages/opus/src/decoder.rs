@@ -1,3 +1,8 @@
+//! Symphonia codec decoder implementation for Opus audio.
+//!
+//! This module provides [`OpusDecoder`], which implements the Symphonia [`Decoder`]
+//! trait to decode RFC 6716 compliant Opus audio streams using libopus.
+
 use std::sync::Mutex;
 
 use audiopus::{

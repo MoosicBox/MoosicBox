@@ -1,3 +1,8 @@
+//! Codec registry helpers for Opus decoder integration.
+//!
+//! This module provides convenience functions to register [`OpusDecoder`]
+//! with Symphonia codec registries.
+
 use symphonia::core::codecs::CodecRegistry;
 
 use crate::decoder::OpusDecoder;

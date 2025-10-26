@@ -1,3 +1,8 @@
+//! Opus packet parsing and frame extraction.
+//!
+//! This module provides [`OpusPacket`] for parsing RFC 6716 compliant Opus packets,
+//! including support for all frame packing codes (0-3) and padding extraction.
+
 use bytes::Bytes;
 use log::debug;
 
