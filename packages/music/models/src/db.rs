@@ -1,3 +1,9 @@
+//! Database integration for model types.
+//!
+//! This module provides database value conversions, query support, and model deserialization
+//! for the `switchy_database` library. It includes implementations for converting between
+//! database rows and model types, as well as specialized query functions.
+
 use std::str::FromStr as _;
 
 use moosicbox_json_utils::{

@@ -1,3 +1,23 @@
+//! Core data models for music metadata and playback.
+//!
+//! This crate provides the fundamental data structures for representing music entities
+//! (artists, albums, tracks) and their metadata across different API sources. It supports
+//! both local library content and external music service APIs.
+//!
+//! # Main Types
+//!
+//! * [`Artist`] - Represents a music artist with metadata
+//! * [`Album`] - Represents a music album with versions and quality information
+//! * [`Track`] - Represents a music track with audio properties and metadata
+//! * [`ApiSource`] - Identifies the source of music content (Library, Tidal, Qobuz, etc.)
+//! * [`id::Id`] - Flexible identifier supporting both numeric and string IDs
+//!
+//! # Features
+//!
+//! * `api` - Enables API-specific model types for serialization
+//! * `db` - Enables database integration and query support
+//! * Audio format support: `aac`, `flac`, `mp3`, `opus`
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -16,11 +36,23 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::{AsRefStr, EnumString};
 
+/// Flexible ID types supporting both numeric and string identifiers.
+///
+/// Provides [`id::Id`] and [`id::ApiId`] types for identifying music entities
+/// across different API sources.
 pub mod id;
 
+/// API-specific model types for serialization and network transfer.
+///
+/// Provides lightweight versions of core types optimized for API responses,
+/// with `contains_cover` boolean flags instead of full cover URLs.
 #[cfg(feature = "api")]
 pub mod api;
 
+/// Database integration for model types.
+///
+/// Provides database value conversions, query support, and model deserialization
+/// for the `switchy_database` library.
 #[cfg(feature = "db")]
 pub mod db;
 
