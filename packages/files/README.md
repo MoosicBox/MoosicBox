@@ -93,6 +93,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use moosicbox_files::{fetch_bytes_from_remote_url, save_bytes_stream_to_file_with_progress_listener};
 use switchy_http::Client;
 use std::path::Path;
+use std::pin::Pin;
+use std::future::Future;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -132,6 +134,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use moosicbox_files::{fetch_bytes_from_remote_url, save_bytes_stream_to_file_with_speed_listener};
 use switchy_http::Client;
 use std::path::Path;
+use std::pin::Pin;
+use std::future::Future;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
