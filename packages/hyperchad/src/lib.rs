@@ -21,14 +21,14 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let router = Router::new()
-//!     .with_route(RoutePath::Literal("/"), |_req: RouteRequest| async move {
+//!     .with_route(RoutePath::Literal("/".to_string()), |_req: RouteRequest| async move {
 //!         let content = container! {
 //!             div {
 //!                 h1 { "Welcome to HyperChad" }
 //!                 button { "Click Me" }
 //!             }
 //!         };
-//!         Ok(content)
+//!         content
 //!     });
 //!
 //! let app = AppBuilder::new()
