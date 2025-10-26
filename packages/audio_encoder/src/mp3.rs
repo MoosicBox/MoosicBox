@@ -1,15 +1,24 @@
+//! MP3 audio encoding using LAME.
+//!
+//! Provides functions to create and use MP3 encoders with configurable bitrate and quality
+//! settings, including ID3 tag support.
+
 #![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;
 
 use crate::EncodeInfo;
 
+/// Errors that can occur during MP3 encoding operations.
 #[derive(Debug, Error)]
 pub enum EncoderError {
+    /// Error during MP3 encoding
     #[error("Encoder error")]
     Encoder(mp3lame_encoder::EncodeError),
+    /// Error setting ID3 tags
     #[error("Encoder error")]
     Id3Tag(mp3lame_encoder::Id3TagError),
+    /// Error building the encoder
     #[error("Build error")]
     Build(mp3lame_encoder::BuildError),
 }
@@ -32,6 +41,11 @@ impl From<mp3lame_encoder::BuildError> for EncoderError {
     }
 }
 
+/// Creates a new MP3 encoder with default settings.
+///
+/// Configures the encoder for 320kbps stereo at 44.1kHz with best quality settings
+/// and default ID3 tags.
+///
 /// # Panics
 ///
 /// * If the `mp3lame_encoder::Builder` fails to initialize.
@@ -69,6 +83,8 @@ pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
     Ok(mp3_encoder)
 }
 
+/// Encodes PCM audio samples to MP3 format.
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the input bytes

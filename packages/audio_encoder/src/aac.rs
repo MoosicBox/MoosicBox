@@ -1,3 +1,8 @@
+//! AAC audio encoding using fdk-aac.
+//!
+//! Provides functions to create and use AAC encoders with MPEG-4 Low Complexity profile,
+//! outputting ADTS-formatted AAC streams.
+
 #![allow(clippy::module_name_repetitions)]
 
 use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
@@ -5,8 +10,10 @@ use thiserror::Error;
 
 use crate::EncodeInfo;
 
+/// Errors that can occur during AAC encoding operations.
 #[derive(Debug, Error)]
 pub enum EncoderError {
+    /// Error from the underlying fdk-aac encoder
     #[error("Encoder error")]
     Encoder(fdk_aac::enc::EncoderError),
 }
@@ -26,6 +33,11 @@ impl From<fdk_aac::enc::EncoderError> for EncoderError {
     }
 }
 
+/// Creates a new AAC encoder with default settings.
+///
+/// Configures the encoder for MPEG-4 Low Complexity AAC at 44.1kHz stereo with
+/// very high variable bitrate, outputting ADTS format.
+///
 /// # Errors
 ///
 /// * If the encoder fails to initialize
@@ -40,6 +52,8 @@ pub fn encoder_aac() -> Result<Encoder, EncoderError> {
     Ok(encoder)
 }
 
+/// Encodes PCM audio samples to AAC format.
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the input bytes
