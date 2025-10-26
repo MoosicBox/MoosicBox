@@ -239,8 +239,7 @@ async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<d
             let response = serde_json::json!({
                 "id": 123,
                 "name": new_user["name"],
-                "email": new_user["email"],
-                "created_at": chrono::Utc::now()
+                "email": new_user["email"]
             });
 
             Ok(Response::builder()
@@ -335,16 +334,12 @@ fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
         while let Ok((action_name, value)) = action_rx.recv_async().await {
             match action_name.as_str() {
                 "submit_contact_form" => {
-                    if let Some(Value::Object(data)) = value {
-                        println!("Contact form submitted: {:?}", data);
-                        // Send email, save to database, etc.
-                    }
+                    println!("Contact form submitted: {:?}", value);
+                    // Send email, save to database, etc.
                 }
                 "user_login" => {
-                    if let Some(Value::Object(credentials)) = value {
-                        println!("Login attempt: {:?}", credentials);
-                        // Authenticate user
-                    }
+                    println!("Login attempt: {:?}", value);
+                    // Authenticate user
                 }
                 _ => {
                     println!("Unknown action: {}", action_name);
