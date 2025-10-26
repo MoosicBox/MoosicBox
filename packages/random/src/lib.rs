@@ -1,3 +1,50 @@
+//! Thread-safe random number generation with pluggable backends.
+//!
+//! This crate provides a unified interface for random number generation with two backend
+//! implementations:
+//!
+//! * **`rand`** - Standard random number generation using `rand::rngs::SmallRng`
+//! * **`simulator`** - Deterministic random number generation for reproducible simulations
+//!
+//! # Features
+//!
+//! * Thread-safe RNG implementations that can be shared across threads
+//! * Consistent API regardless of backend
+//! * Support for seeded and entropy-based initialization
+//! * Non-uniform distribution helpers for advanced use cases
+//!
+//! # Examples
+//!
+//! Basic random number generation:
+//!
+//! ```rust
+//! # #[cfg(feature = "rand")]
+//! # {
+//! use switchy_random::Rng;
+//!
+//! let rng = Rng::new();
+//! let random_value: u32 = rng.next_u32();
+//! let random_range = rng.gen_range(1..=100);
+//! # }
+//! ```
+//!
+//! Using a seeded RNG for reproducible results:
+//!
+//! ```rust
+//! # #[cfg(feature = "rand")]
+//! # {
+//! use switchy_random::Rng;
+//!
+//! let rng = Rng::from_seed(12345);
+//! let value1 = rng.next_u32();
+//!
+//! let rng2 = Rng::from_seed(12345);
+//! let value2 = rng2.next_u32();
+//!
+//! assert_eq!(value1, value2); // Same seed produces same values
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -6,9 +53,18 @@ use std::sync::{Arc, Mutex};
 
 use ::rand::RngCore;
 
+/// Standard random number generation backend.
+///
+/// This module provides random number generation using the `rand` crate's `SmallRng`.
+/// It's suitable for general-purpose randomness with good performance.
 #[cfg(feature = "rand")]
 pub mod rand;
 
+/// Deterministic simulation backend.
+///
+/// This module provides a deterministic random number generator suitable for simulations
+/// that require reproducible random sequences. The initial seed can be configured via
+/// the `SIMULATOR_SEED` environment variable.
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
