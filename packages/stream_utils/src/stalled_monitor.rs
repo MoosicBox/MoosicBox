@@ -1,3 +1,10 @@
+//! Stream timeout and throttling monitoring.
+//!
+//! This module provides [`StalledReadMonitor`], a wrapper for streams that can detect
+//! when data flow stalls and enforce timeout or rate-limiting policies.
+//!
+//! Available when the `stalled-monitor` feature is enabled.
+
 use std::io::{ErrorKind, Result};
 use std::task::Poll;
 use std::time::Duration;
