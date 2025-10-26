@@ -1,3 +1,9 @@
+//! Unsynchronized decoder API using channels.
+//!
+//! This module provides an alternative decoding API that decodes audio in a separate thread
+//! and returns decoded buffers via a channel receiver. Unlike the main decoder API which uses
+//! callbacks, this approach allows the caller to pull decoded audio at their own pace.
+
 use flume::Receiver;
 use symphonia::core::audio::AudioBuffer;
 use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecRegistry, DecoderOptions};
