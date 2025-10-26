@@ -39,4 +39,3 @@ Available features:
 
 - **Serde**: Serialization and deserialization
 - **utoipa**: OpenAPI schema generation (optional, enabled with `openapi` feature)
-- **log**: Logging functionality
