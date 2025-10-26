@@ -1,3 +1,46 @@
+//! OpenTelemetry-based telemetry and metrics collection for Switchy services.
+//!
+//! This crate provides integration with OpenTelemetry for distributed tracing and metrics,
+//! with optional Actix web integration for HTTP metrics endpoints. It supports both production
+//! telemetry (via OTLP) and a simulator mode for testing.
+//!
+//! # Features
+//!
+//! * `actix` - Enables Actix web integration for HTTP metrics endpoints
+//! * `simulator` - Enables simulator mode with stub implementations for testing
+//!
+//! # Examples
+//!
+//! Initialize a tracer for your service:
+//!
+//! ```rust,no_run
+//! use switchy_telemetry::init_tracer;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let layer = init_tracer("my-service")?;
+//! // Add the layer to your tracing subscriber
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! With the `actix` feature, serve metrics via HTTP:
+//!
+//! ```rust,ignore
+//! use switchy_telemetry::{get_http_metrics_handler, metrics, RequestTracing};
+//! use actix_web::{App, HttpServer, web};
+//!
+//! let handler = get_http_metrics_handler();
+//! HttpServer::new(move || {
+//!     App::new()
+//!         .wrap(RequestTracing::new())
+//!         .app_data(web::Data::new(std::sync::Arc::new(handler.clone())))
+//!         .service(metrics)
+//! })
+//! .bind("127.0.0.1:8080")?
+//! .run()
+//! .await
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
