@@ -1,3 +1,10 @@
+//! Arbitrary implementations for property-based testing.
+//!
+//! This module provides [`quickcheck::Arbitrary`] implementations for all public types
+//! in this crate, enabling property-based testing with the `QuickCheck` framework.
+//!
+//! Available when the `arb` feature is enabled.
+
 use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 

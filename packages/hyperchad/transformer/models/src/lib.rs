@@ -1,3 +1,23 @@
+//! Type definitions for `HyperChad` UI transformer models.
+//!
+//! This crate provides the core data models used by the `HyperChad` transformer framework,
+//! including layout primitives, styling enums, routing definitions, and DOM manipulation types.
+//!
+//! # Core Types
+//!
+//! * [`LayoutDirection`], [`LayoutOverflow`], [`JustifyContent`], [`AlignItems`] - Flexbox-style layout controls
+//! * [`Selector`], [`ElementTarget`] - CSS-style element targeting
+//! * [`Route`], [`SwapStrategy`] - HTTP routing and DOM content swapping (htmx-inspired)
+//! * [`Position`], [`Cursor`], [`Visibility`] - Element positioning and styling
+//! * [`TextAlign`], [`FontWeight`], [`WhiteSpace`] - Text styling and formatting
+//! * [`ImageFit`], [`ImageLoading`] - Image display controls
+//!
+//! # Features
+//!
+//! * `serde` - Enables serialization/deserialization for all public types
+//! * `arb` - Provides `Arbitrary` implementations for property-based testing
+//! * `layout` - Enables the [`LayoutPosition`] type for grid-based layouts
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
