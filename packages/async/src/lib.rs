@@ -1,3 +1,59 @@
+//! A runtime-agnostic async abstraction layer that provides a unified interface for different async runtimes.
+//!
+//! This crate provides a common API that can work with either Tokio or a simulator runtime,
+//! allowing you to write async code once and run it in different contexts (production, testing, simulation).
+//!
+//! # Features
+//!
+//! * **Runtime abstraction**: Switch between Tokio and simulator runtimes using feature flags
+//! * **Common API**: Unified interface for spawning tasks, running futures, and managing concurrency
+//! * **Simulation support**: Deterministic testing with the simulator backend
+//! * **Re-exported macros**: Convenient access to `select!`, `join!`, `try_join!` and testing macros
+//!
+//! # Examples
+//!
+//! Creating and using a runtime:
+//!
+//! ```rust
+//! use switchy_async::{Builder, GenericRuntime};
+//!
+//! # fn main() -> Result<(), switchy_async::Error> {
+//! let runtime = Builder::new().build()?;
+//!
+//! let result = runtime.block_on(async {
+//!     // Your async code here
+//!     42
+//! });
+//!
+//! assert_eq!(result, 42);
+//! runtime.wait()?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Spawning tasks:
+//!
+//! ```rust,no_run
+//! use switchy_async::{Builder, GenericRuntime, task};
+//!
+//! # fn main() -> Result<(), switchy_async::Error> {
+//! let runtime = Builder::new().build()?;
+//!
+//! runtime.block_on(async {
+//!     let handle = task::spawn(async {
+//!         // Background task
+//!         "result"
+//!     });
+//!
+//!     let result = handle.await.unwrap();
+//!     assert_eq!(result, "result");
+//! });
+//!
+//! runtime.wait()?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -72,9 +128,17 @@ macro_rules! try_join_internal {
 #[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
 pub use crate::tokio::test as test_internal;
 
+/// Tokio runtime implementation.
+///
+/// This module provides the Tokio-based async runtime implementation, including
+/// task spawning, runtime management, and I/O utilities.
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
+/// Simulator runtime implementation.
+///
+/// This module provides a deterministic simulator runtime for testing async code
+/// with controlled time advancement and reproducible behavior.
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
