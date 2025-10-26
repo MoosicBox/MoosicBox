@@ -341,7 +341,7 @@ async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
     // Raw query with parameters (safe from SQL injection)
     // Note: Parameter syntax varies by backend:
     // - rusqlite: ? placeholders
-    // - sqlx-sqlite: ? placeholders
+    // - sqlx-sqlite: $1, $2 placeholders
     // - PostgreSQL (raw/sqlx): $1, $2 placeholders
     // - MySQL (sqlx): ? placeholders
     let params = vec![DatabaseValue::String("The Beatles".to_string())];
