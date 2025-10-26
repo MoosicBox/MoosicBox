@@ -1,3 +1,33 @@
+//! REST API endpoints for session management.
+//!
+//! This module provides HTTP endpoints for managing sessions, playlists, connections,
+//! and players through a REST API. It integrates with the Actix-Web framework and
+//! optionally provides `OpenAPI` documentation.
+//!
+//! # Endpoints
+//!
+//! Session operations:
+//! * GET `/session` - Retrieve a specific session
+//! * GET `/sessions` - List all sessions with pagination
+//! * GET `/session-playlist` - Get a session's playlist
+//! * GET `/session-playlist-tracks` - Get tracks in a session playlist
+//! * GET `/session-audio-zone` - Get a session's audio zone
+//! * GET `/session-playing` - Check if a session is currently playing
+//!
+//! Connection and player operations:
+//! * POST `/register-connection` - Register a new connection
+//! * POST `/register-players` - Register players for a connection
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use actix_web::App;
+//! # use moosicbox_session::api::bind_services;
+//! let app = App::new().service(
+//!     bind_services(actix_web::web::scope("/session"))
+//! );
+//! ```
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{
