@@ -1,3 +1,8 @@
+//! Browser navigation utilities for test workflows.
+//!
+//! This module provides types for controlling browser navigation during tests,
+//! including URL navigation, history operations, and hash manipulation.
+
 use serde::{Deserialize, Serialize};
 
 /// A navigation action in the browser.

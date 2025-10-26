@@ -1,3 +1,9 @@
+//! Test workflow execution and control flow utilities.
+//!
+//! This module provides types for user interactions (clicks, keyboard input, mouse
+//! operations), control flow operations (loops, parallel execution, try-catch, retry),
+//! and reusable test fragments for common scenarios like login, logout, and accessibility testing.
+
 use std::{collections::BTreeMap, time::Duration};
 
 use serde::{Deserialize, Serialize};

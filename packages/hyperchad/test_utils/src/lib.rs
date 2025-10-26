@@ -152,30 +152,35 @@ impl TestPlan {
         }
     }
 
+    /// Adds a setup step to run before the test.
     #[must_use]
     pub fn with_setup(mut self, setup: SetupStep) -> Self {
         self.setup = Some(setup);
         self
     }
 
+    /// Adds a teardown step to run after the test.
     #[must_use]
     pub fn with_teardown(mut self, teardown: TeardownStep) -> Self {
         self.teardown = Some(teardown);
         self
     }
 
+    /// Sets the timeout for the entire test plan.
     #[must_use]
     pub const fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Sets the number of times to retry the test on failure.
     #[must_use]
     pub const fn with_retry_count(mut self, count: u32) -> Self {
         self.retry_count = count;
         self
     }
 
+    /// Adds a test step to the plan.
     #[must_use]
     pub fn add_step(mut self, step: TestStep) -> Self {
         self.steps.push(step);
@@ -183,6 +188,7 @@ impl TestPlan {
     }
 
     // Navigation methods
+    /// Navigates to the specified URL.
     #[must_use]
     pub fn navigate_to(self, url: impl Into<String>) -> Self {
         self.add_step(TestStep::Navigation(NavigationStep::GoTo {
@@ -190,21 +196,25 @@ impl TestPlan {
         }))
     }
 
+    /// Navigates back in browser history.
     #[must_use]
     pub fn go_back(self) -> Self {
         self.add_step(TestStep::Navigation(NavigationStep::GoBack))
     }
 
+    /// Navigates forward in browser history.
     #[must_use]
     pub fn go_forward(self) -> Self {
         self.add_step(TestStep::Navigation(NavigationStep::GoForward))
     }
 
+    /// Reloads the current page.
     #[must_use]
     pub fn reload(self) -> Self {
         self.add_step(TestStep::Navigation(NavigationStep::Reload))
     }
 
+    /// Sets the URL hash fragment.
     #[must_use]
     pub fn set_hash(self, hash: impl Into<String>) -> Self {
         self.add_step(TestStep::Navigation(NavigationStep::SetHash {
@@ -213,6 +223,7 @@ impl TestPlan {
     }
 
     // Interaction methods
+    /// Clicks an element matching the selector.
     #[must_use]
     pub fn click(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::Click {
@@ -220,6 +231,7 @@ impl TestPlan {
         }))
     }
 
+    /// Double-clicks an element matching the selector.
     #[must_use]
     pub fn double_click(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::DoubleClick {
@@ -227,6 +239,7 @@ impl TestPlan {
         }))
     }
 
+    /// Right-clicks an element matching the selector.
     #[must_use]
     pub fn right_click(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::RightClick {
@@ -234,6 +247,7 @@ impl TestPlan {
         }))
     }
 
+    /// Hovers over an element matching the selector.
     #[must_use]
     pub fn hover(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::Hover {
@@ -241,6 +255,7 @@ impl TestPlan {
         }))
     }
 
+    /// Focuses an element matching the selector.
     #[must_use]
     pub fn focus(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::Focus {
@@ -248,6 +263,7 @@ impl TestPlan {
         }))
     }
 
+    /// Removes focus from an element matching the selector.
     #[must_use]
     pub fn blur(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::Blur {
@@ -255,16 +271,19 @@ impl TestPlan {
         }))
     }
 
+    /// Presses a keyboard key.
     #[must_use]
     pub fn key_press(self, key: Key) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::KeyPress { key }))
     }
 
+    /// Presses a sequence of keyboard keys.
     #[must_use]
     pub fn key_sequence(self, keys: Vec<Key>) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::KeySequence { keys }))
     }
 
+    /// Scrolls the page in the specified direction by the given amount.
     #[must_use]
     pub fn scroll(self, direction: ScrollDirection, amount: i32) -> Self {
         self.add_step(TestStep::Interaction(InteractionStep::Scroll {
@@ -274,11 +293,13 @@ impl TestPlan {
     }
 
     // Form methods
+    /// Fills multiple form fields at once.
     #[must_use]
     pub fn fill_form(self, data: FormData) -> Self {
         self.add_step(TestStep::Form(FormStep::FillForm { data }))
     }
 
+    /// Fills a single form field with a text value.
     #[must_use]
     pub fn fill_field(self, selector: impl Into<String>, value: impl Into<String>) -> Self {
         self.add_step(TestStep::Form(FormStep::FillField {
@@ -287,6 +308,7 @@ impl TestPlan {
         }))
     }
 
+    /// Selects an option from a dropdown.
     #[must_use]
     pub fn select_option(self, selector: impl Into<String>, value: impl Into<String>) -> Self {
         self.add_step(TestStep::Form(FormStep::SelectOption {
@@ -295,6 +317,7 @@ impl TestPlan {
         }))
     }
 
+    /// Uploads a file to a file input element.
     #[must_use]
     pub fn upload_file(
         self,
@@ -308,12 +331,14 @@ impl TestPlan {
     }
 
     // HTTP methods
+    /// Sends an HTTP request as part of the test.
     #[must_use]
     pub fn send_request(self, request: HttpRequestStep) -> Self {
         self.add_step(TestStep::Http(request))
     }
 
     // Wait methods
+    /// Waits for an element matching the selector to exist in the DOM.
     #[must_use]
     pub fn wait_for_element(self, selector: impl Into<String>) -> Self {
         self.add_step(TestStep::Wait(WaitStep::ElementExists {
@@ -321,6 +346,7 @@ impl TestPlan {
         }))
     }
 
+    /// Waits for the URL to contain the specified fragment.
     #[must_use]
     pub fn wait_for_url(self, url: impl Into<String>) -> Self {
         self.add_step(TestStep::Wait(WaitStep::UrlContains {
@@ -328,22 +354,26 @@ impl TestPlan {
         }))
     }
 
+    /// Waits for a fixed duration.
     #[must_use]
     pub fn sleep(self, duration: Duration) -> Self {
         self.add_step(TestStep::Wait(WaitStep::Duration { duration }))
     }
 
     // Control flow methods
+    /// Repeats the following steps a fixed number of times.
     #[must_use]
     pub const fn repeat(self, count: u32) -> LoopBuilder {
         LoopBuilder::new(self, count)
     }
 
+    /// Creates branches for parallel execution.
     #[must_use]
     pub const fn parallel(self) -> ParallelBuilder {
         ParallelBuilder::new(self)
     }
 
+    /// Includes steps from another test plan.
     #[must_use]
     pub fn include(mut self, other: Self) -> Self {
         self.steps.extend(other.steps);
@@ -410,12 +440,14 @@ impl LoopBuilder {
         }
     }
 
+    /// Adds a step to be executed in each loop iteration.
     #[must_use]
     pub fn step(mut self, step: TestStep) -> Self {
         self.steps.push(step);
         self
     }
 
+    /// Completes the loop definition and returns to the test plan.
     #[must_use]
     pub fn end_repeat(self) -> TestPlan {
         self.plan.add_step(TestStep::Control(ControlStep::Loop {
@@ -439,11 +471,13 @@ impl ParallelBuilder {
         }
     }
 
+    /// Creates a new parallel execution branch with the given name.
     #[must_use]
     pub fn branch(self, name: impl Into<String>) -> BranchBuilder {
         BranchBuilder::new(self, name.into())
     }
 
+    /// Completes the parallel definition and waits for all branches to complete.
     #[must_use]
     pub fn join_all(self) -> TestPlan {
         self.plan.add_step(TestStep::Control(ControlStep::Parallel {
@@ -468,12 +502,14 @@ impl BranchBuilder {
         }
     }
 
+    /// Adds a step to the current branch.
     #[must_use]
     pub fn step(mut self, step: TestStep) -> Self {
         self.steps.push(step);
         self
     }
 
+    /// Completes the current branch and starts a new branch.
     #[must_use]
     pub fn branch(mut self, name: impl Into<String>) -> Self {
         self.parallel_builder
@@ -482,6 +518,7 @@ impl BranchBuilder {
         Self::new(self.parallel_builder, name.into())
     }
 
+    /// Completes all branches and waits for parallel execution to finish.
     #[must_use]
     pub fn join_all(mut self) -> TestPlan {
         self.parallel_builder

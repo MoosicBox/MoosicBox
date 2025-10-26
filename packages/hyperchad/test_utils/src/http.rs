@@ -1,3 +1,8 @@
+//! HTTP request testing utilities.
+//!
+//! This module provides types for building and executing HTTP requests in test
+//! scenarios, with support for different methods, headers, and body formats.
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -72,24 +77,28 @@ impl HttpRequestStep {
         }
     }
 
+    /// Adds a header to the request.
     #[must_use]
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
+    /// Adds multiple headers to the request.
     #[must_use]
     pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Self {
         self.headers.extend(headers);
         self
     }
 
+    /// Sets the request body.
     #[must_use]
     pub fn with_body(mut self, body: RequestBody) -> Self {
         self.body = Some(body);
         self
     }
 
+    /// Sets a JSON request body and content-type header.
     #[must_use]
     pub fn json(mut self, value: serde_json::Value) -> Self {
         self.body = Some(RequestBody::Json(value));
@@ -98,6 +107,7 @@ impl HttpRequestStep {
         self
     }
 
+    /// Sets a plain text request body and content-type header.
     #[must_use]
     pub fn text(mut self, text: impl Into<String>) -> Self {
         self.body = Some(RequestBody::Text(text.into()));
@@ -106,6 +116,7 @@ impl HttpRequestStep {
         self
     }
 
+    /// Sets a form-encoded request body and content-type header.
     #[must_use]
     pub fn form(mut self, data: BTreeMap<String, String>) -> Self {
         self.body = Some(RequestBody::Form(data));
@@ -116,12 +127,14 @@ impl HttpRequestStep {
         self
     }
 
+    /// Sets the expected HTTP status code for validation.
     #[must_use]
     pub const fn expect_status(mut self, status: u16) -> Self {
         self.expected_status = Some(status);
         self
     }
 
+    /// Sets the request timeout duration.
     #[must_use]
     pub const fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.timeout = Some(timeout);
