@@ -1,3 +1,25 @@
+//! mDNS service registration and discovery for `MoosicBox` servers.
+//!
+//! This crate provides functionality for:
+//! * Registering `MoosicBox` servers on the local network via mDNS
+//! * Discovering `MoosicBox` servers on the local network (with `scanner` feature)
+//!
+//! # Features
+//!
+//! * `scanner` - Enables mDNS service discovery for finding `MoosicBox` servers
+//! * `simulator` - Provides a simulated mDNS daemon for testing purposes
+//!
+//! # Examples
+//!
+//! Registering a `MoosicBox` server:
+//!
+//! ```rust,no_run
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! switchy_mdns::register_service("my-server", "192.168.1.100", 8080).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

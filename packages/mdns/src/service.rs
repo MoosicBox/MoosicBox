@@ -1,3 +1,8 @@
+//! mDNS service registration and daemon management.
+//!
+//! This module provides abstractions for mDNS service daemons, supporting both
+//! real network operations and simulated testing scenarios.
+
 use async_trait::async_trait;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
