@@ -1,3 +1,99 @@
+//! A flexible, backend-agnostic HTTP web server framework for Rust.
+//!
+//! `moosicbox_web_server` provides a unified API for building HTTP web servers that can run on
+//! different backends (Actix-web or a built-in simulator) without changing application code.
+//!
+//! # Features
+//!
+//! * **Multiple backends**: Switch between Actix-web (production) and Simulator (testing) with feature flags
+//! * **Type-safe extractors**: Extract request data with compile-time type checking using [`FromRequest`]
+//! * **Builder pattern**: Construct servers with a fluent API using [`WebServerBuilder`]
+//! * **Route organization**: Group related routes into scopes with [`Scope`]
+//! * **Testing utilities**: Built-in test client and simulator for deterministic testing
+//! * **`OpenAPI` support**: Optional `OpenAPI` documentation generation with the `openapi` feature
+//!
+//! # Quick Start
+//!
+//! ```rust,no_run
+//! use moosicbox_web_server::{WebServerBuilder, Scope, Route, Method, HttpResponse};
+//! use moosicbox_web_server_core::WebServer;
+//!
+//! # async fn example() {
+//! // Create a simple handler
+//! async fn hello_handler() -> Result<HttpResponse, moosicbox_web_server::Error> {
+//!     Ok(HttpResponse::text("Hello, World!"))
+//! }
+//!
+//! // Build and start the server
+//! let server = WebServerBuilder::new()
+//!     .with_addr("127.0.0.1")
+//!     .with_port(8080_u16)
+//!     .with_scope(
+//!         Scope::new("/api")
+//!             .route(Method::Get, "/hello", |_req| {
+//!                 Box::pin(hello_handler())
+//!             })
+//!     )
+//!     .build();
+//!
+//! server.start().await;
+//! # }
+//! ```
+//!
+//! # Using Extractors
+//!
+//! Extract typed data from requests using the extractor system:
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::extractors::{Query, Json, Path};
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct SearchParams {
+//!     q: String,
+//!     limit: Option<u32>,
+//! }
+//!
+//! async fn search(Query(params): Query<SearchParams>) -> Result<HttpResponse, Error> {
+//!     // Use params.q and params.limit
+//!     Ok(HttpResponse::json(&format!("Searching for: {}", params.q))?)
+//! }
+//! ```
+//!
+//! # Feature Flags
+//!
+//! * `actix` - Enable Actix-web backend (production use)
+//! * `simulator` - Enable built-in simulator backend (testing)
+//! * `serde` - Enable JSON/query/form extractors
+//! * `cors` - Enable CORS middleware support
+//! * `openapi` - Enable `OpenAPI` documentation generation
+//! * `compress` - Enable response compression
+//!
+//! # Architecture
+//!
+//! The crate provides several key abstractions:
+//!
+//! * [`WebServerBuilder`] - Configures and builds web servers
+//! * [`Scope`] - Groups related routes under a common path prefix
+//! * [`Route`] - Defines individual HTTP endpoints
+//! * [`HttpRequest`] / [`HttpResponse`] - Backend-agnostic request/response types
+//! * [`FromRequest`] - Trait for extracting typed data from requests
+//! * [`handler::IntoHandler`] - Trait for converting functions into HTTP handlers
+//!
+//! # Testing
+//!
+//! The crate includes comprehensive testing support:
+//!
+//! ```rust,no_run
+//! use moosicbox_web_server::test_client::{ConcreteTestClient, TestClient, TestResponseExt};
+//!
+//! # fn test_example() {
+//! let client = ConcreteTestClient::new_with_test_routes();
+//! let response = client.get("/test").send().expect("Request failed");
+//! response.assert_status(200);
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

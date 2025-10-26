@@ -1,3 +1,28 @@
+//! `OpenAPI` documentation generation and UI integration.
+//!
+//! This module provides `OpenAPI` documentation support through integration with `utoipa`.
+//! It includes utilities for generating and serving `OpenAPI` specifications, as well as
+//! serving interactive API documentation UIs.
+//!
+//! # Features
+//!
+//! This module is only available when the `openapi` feature is enabled. Additional UI
+//! integrations require specific feature flags:
+//!
+//! * `openapi-swagger-ui` - `Swagger UI` documentation interface
+//! * `openapi-redoc` - `ReDoc` documentation interface
+//! * `openapi-rapidoc` - `RapiDoc` documentation interface
+//! * `openapi-scalar` - `Scalar` API documentation interface
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::openapi;
+//!
+//! // OpenAPI specification is stored in a global static
+//! // and can be accessed by documentation UIs
+//! ```
+
 use std::sync::{Arc, LazyLock, RwLock};
 
 use utoipa::openapi::OpenApi;

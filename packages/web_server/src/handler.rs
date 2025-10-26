@@ -1,3 +1,40 @@
+//! HTTP handler conversion traits and implementations.
+//!
+//! This module provides the [`IntoHandler`] trait, which enables functions with various
+//! signatures to be used as HTTP request handlers. The trait system automatically extracts
+//! typed data from requests and provides it as function arguments.
+//!
+//! # Overview
+//!
+//! The handler system supports:
+//!
+//! * Functions with 0-16 parameters that implement [`FromRequest`]
+//! * Async functions returning `Result<HttpResponse, Error>`
+//! * Dual-mode extraction (sync for Actix, async for Simulator)
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::{HttpResponse, Error};
+//! use moosicbox_web_server::extractors::Query;
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct Params {
+//!     name: String,
+//! }
+//!
+//! // Handler with no parameters
+//! async fn hello() -> Result<HttpResponse, Error> {
+//!     Ok(HttpResponse::text("Hello!"))
+//! }
+//!
+//! // Handler with extractors
+//! async fn greet(Query(params): Query<Params>) -> Result<HttpResponse, Error> {
+//!     Ok(HttpResponse::text(format!("Hello, {}!", params.name)))
+//! }
+//! ```
+
 use std::{future::Future, pin::Pin};
 
 use crate::from_request::{FromRequest, IntoHandlerError};

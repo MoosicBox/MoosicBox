@@ -1,3 +1,51 @@
+//! Simulator backend for deterministic testing.
+//!
+//! This module provides a lightweight, in-memory HTTP server simulator that can be used
+//! for testing without starting an actual HTTP server. It implements the same interfaces
+//! as the Actix backend but runs entirely in-process.
+//!
+//! # Overview
+//!
+//! The simulator backend includes:
+//!
+//! * [`SimulatorWebServer`] - In-memory web server for testing
+//! * [`SimulationRequest`] / [`SimulationResponse`] - Request/response types
+//! * [`SimulationStub`] - Enhanced request stub with state support
+//! * Path pattern matching with parameter extraction
+//! * Application state management
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_web_server::simulator::{SimulatorWebServer, SimulationRequest};
+//! use moosicbox_web_server::{Scope, Route, Method, HttpResponse};
+//!
+//! # async fn example() {
+//! // Create a simulator server with routes
+//! let server = SimulatorWebServer::with_test_routes();
+//!
+//! // Process a simulated request
+//! let request = SimulationRequest::new(Method::Get, "/test");
+//! let response = server.process_request(request).await;
+//!
+//! assert_eq!(response.status, 200);
+//! # }
+//! ```
+//!
+//! # Path Patterns
+//!
+//! The simulator supports parameterized routes using `{param}` syntax:
+//!
+//! ```rust
+//! use moosicbox_web_server::simulator::{parse_path_pattern, match_path};
+//!
+//! let pattern = parse_path_pattern("/users/{id}/posts/{post_id}");
+//! let params = match_path(&pattern, "/users/123/posts/456").unwrap();
+//!
+//! assert_eq!(params.get("id"), Some(&"123".to_string()));
+//! assert_eq!(params.get("post_id"), Some(&"456".to_string()));
+//! ```
+
 use std::{
     collections::BTreeMap,
     future::Future,
