@@ -1,3 +1,18 @@
+//! Configuration file generation for the `MoosicBox` Tauri application.
+//!
+//! This crate provides utilities to generate TypeScript configuration files
+//! that define build-time settings for the `MoosicBox` app, such as whether
+//! web or app interfaces are enabled and whether the build is bundled.
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! use moosicbox_app_create_config::generate;
+//!
+//! // Generate a configuration file for a bundled app build
+//! generate(true, "src/config.ts");
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
