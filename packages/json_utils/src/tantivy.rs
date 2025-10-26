@@ -1,3 +1,8 @@
+//! Type conversion utilities for `tantivy` document values.
+//!
+//! This module provides implementations of the [`ToValueType`] trait for converting
+//! values from Tantivy search engine documents into Rust types.
+
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,

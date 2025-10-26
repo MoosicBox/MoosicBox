@@ -1,3 +1,8 @@
+//! Type conversion utilities for `switchy_database` values.
+//!
+//! This module provides implementations of the [`ToValueType`] trait for converting
+//! database values from the `switchy_database` crate into Rust types.
+
 use std::sync::Arc;
 
 use async_trait::async_trait;

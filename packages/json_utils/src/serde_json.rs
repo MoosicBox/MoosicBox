@@ -1,3 +1,9 @@
+//! Type conversion utilities for `serde_json` values.
+//!
+//! This module provides implementations of the [`ToValueType`] trait for converting
+//! JSON values from the `serde_json` crate into Rust types. It includes support
+//! for navigating nested JSON structures.
+
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
