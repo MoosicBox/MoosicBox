@@ -1,3 +1,9 @@
+//! Download queue management and progress tracking.
+//!
+//! Provides a queue system for managing sequential download tasks with progress
+//! tracking and state management. The queue processes tasks one at a time and
+//! notifies listeners of download progress events.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{

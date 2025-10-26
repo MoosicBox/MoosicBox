@@ -1,3 +1,8 @@
+//! HTTP API endpoints for the download service.
+//!
+//! Provides REST API endpoints for managing downloads, download tasks, and download
+//! locations via HTTP requests. Available when the `api` feature is enabled.
+
 #![allow(clippy::needless_for_each)]
 
 use std::{path::PathBuf, str::FromStr as _, sync::LazyLock};
