@@ -1,3 +1,9 @@
+//! Stub implementations for testing and minimal rendering scenarios.
+//!
+//! This module provides stub implementations of HTML application and render runner
+//! that perform no actual rendering. These are useful for testing, development,
+//! or scenarios where rendering is not required.
+
 use hyperchad_renderer::{Color, Handle, HtmlTagRenderer, RenderRunner, ToRenderRunner};
 use hyperchad_transformer::ResponsiveTrigger;
 

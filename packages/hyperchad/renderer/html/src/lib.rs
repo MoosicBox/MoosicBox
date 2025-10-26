@@ -1,3 +1,37 @@
+//! HTML renderer for `HyperChad` UI framework.
+//!
+//! This crate provides HTML rendering capabilities for `HyperChad` applications,
+//! converting `HyperChad` containers into HTML elements with CSS styling. It supports
+//! responsive design through media queries and can integrate with various web frameworks.
+//!
+//! # Features
+//!
+//! * HTML rendering with CSS styling and responsive design
+//! * Support for multiple backend integrations (Actix, Lambda, custom web servers)
+//! * Static asset routing
+//! * Extensible renderer with custom event handling
+//! * Canvas rendering support
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_renderer_html::{DefaultHtmlTagRenderer, HtmlRenderer};
+//! use hyperchad_renderer_html::stub::StubApp;
+//!
+//! let tag_renderer = DefaultHtmlTagRenderer::default();
+//! let app = StubApp::new(tag_renderer);
+//! let renderer = HtmlRenderer::new(app);
+//! ```
+//!
+//! # Feature Flags
+//!
+//! * `actix` - Enables Actix web framework integration
+//! * `lambda` - Enables AWS Lambda integration
+//! * `web-server` - Enables custom web server support
+//! * `assets` - Enables static asset routing
+//! * `extend` - Enables renderer extension capabilities
+//! * `sse` - Enables server-sent events support (requires `actix`)
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
