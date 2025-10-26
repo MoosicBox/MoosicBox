@@ -24,9 +24,7 @@ cargo install --path packages/aconverter --features "aac,flac,mp3,opus"
 
 The following system dependencies may be required depending on the formats you want to support:
 
-- **libvorbis-dev** (for Opus support)
 - **libopus-dev** (for Opus support)
-- **libaac-dev** (for AAC support)
 
 ## Usage
 
