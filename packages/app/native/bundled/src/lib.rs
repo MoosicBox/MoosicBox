@@ -1,3 +1,29 @@
+//! Embedded server infrastructure for MoosicBox native applications.
+//!
+//! This crate provides the bundled server component for Tauri-based MoosicBox applications,
+//! managing an embedded HTTP server that handles music streaming and API requests. The server
+//! runs on `0.0.0.0:8016` and integrates with the Tauri application lifecycle.
+//!
+//! # Main Components
+//!
+//! * [`Command`] - Service commands for controlling server lifecycle and event processing
+//! * [`Context`] - Application context managing the embedded server and startup synchronization
+//! * [`service`] - Async service implementation for command processing
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use moosicbox_app_native_bundled::{Context, service};
+//! # use moosicbox_async_service::runtime::Handle;
+//! # async fn example(runtime_handle: &Handle) {
+//! // Create context and start embedded server
+//! let ctx = Context::new(runtime_handle);
+//!
+//! // Server starts listening on 0.0.0.0:8016
+//! // and processes music streaming requests
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
 use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
@@ -23,6 +49,10 @@ impl std::fmt::Display for Command {
     }
 }
 
+/// Async service implementation for processing application commands.
+///
+/// This module provides the service infrastructure for handling [`Command`](super::Command)
+/// instances asynchronously, managing server lifecycle and event processing.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context);
 }
