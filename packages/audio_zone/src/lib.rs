@@ -1,3 +1,24 @@
+//! Audio zone management for `MoosicBox`.
+//!
+//! This crate provides functionality for managing audio zones, which are logical groupings
+//! of audio players that can play synchronized content. Audio zones enable multi-room audio
+//! playback across multiple devices.
+//!
+//! # Features
+//!
+//! * `api` - Enables Actix-web HTTP API endpoints for managing audio zones
+//! * `events` - Enables event system for audio zone updates
+//! * `openapi` - Enables `OpenAPI` documentation generation
+//!
+//! # Main Functions
+//!
+//! * [`zones`] - List all audio zones
+//! * [`zones_with_sessions`] - List audio zones with their active playback sessions
+//! * [`get_zone`] - Retrieve a specific audio zone by ID
+//! * [`create_audio_zone`] - Create a new audio zone
+//! * [`update_audio_zone`] - Update an existing audio zone
+//! * [`delete_audio_zone`] - Delete an audio zone
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -9,12 +30,24 @@ use moosicbox_audio_zone_models::{
 use moosicbox_json_utils::database::DatabaseFetchError;
 use switchy_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 
+/// HTTP API endpoints for audio zone management.
+///
+/// Provides Actix-web route handlers for creating, reading, updating, and deleting audio zones
+/// via REST API. Available when the `api` feature is enabled.
 #[cfg(feature = "api")]
 pub mod api;
 
+/// Event system for audio zone updates.
+///
+/// Provides an event listener system that triggers callbacks when audio zones are created,
+/// updated, or deleted. Available when the `events` feature is enabled.
 #[cfg(feature = "events")]
 pub mod events;
 
+/// Database operations for audio zones.
+///
+/// Provides low-level database functions for managing audio zones, including CRUD operations
+/// and conversions between database models and domain models.
 pub mod db;
 pub use moosicbox_audio_zone_models as models;
 
