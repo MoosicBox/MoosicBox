@@ -1,3 +1,9 @@
+//! Database operations for library metadata.
+//!
+//! This module provides database access functions for managing library data including
+//! artists, albums, tracks, and their relationships. It handles CRUD operations and
+//! complex queries for the library database.
+
 use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::{AsModelResultMapped as _, DatabaseFetchError, ToValue as _},
