@@ -1,3 +1,17 @@
+//! WebSocket message payload types.
+//!
+//! This module defines the payload structures for WebSocket communication between
+//! `MoosicBox` clients and servers. It includes both inbound (client-to-server) and
+//! outbound (server-to-client) message types.
+//!
+//! # Message Types
+//!
+//! * [`InboundPayload`] - Messages sent from clients to the server
+//! * [`OutboundPayload`] - Messages sent from the server to clients
+//!
+//! Each payload type is a tagged enum that automatically serializes with a `type` field
+//! indicating the message type.
+
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, CreateAudioZone};
 use moosicbox_session::models::{
     ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, CreateSession, DeleteSession,
