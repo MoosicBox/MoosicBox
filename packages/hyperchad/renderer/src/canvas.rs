@@ -1,3 +1,30 @@
+//! Canvas drawing operations and update events.
+//!
+//! This module provides types for performing 2D canvas drawing operations, including
+//! lines, rectangles, and clearing operations. Canvas updates can be sent to renderers
+//! to update specific canvas elements.
+//!
+//! # Examples
+//!
+//! Creating a canvas update with drawing operations:
+//!
+//! ```rust
+//! # #[cfg(feature = "canvas")]
+//! # {
+//! use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction, Pos};
+//! use hyperchad_renderer::Color;
+//!
+//! let update = CanvasUpdate {
+//!     target: "my-canvas".to_string(),
+//!     canvas_actions: vec![
+//!         CanvasAction::StrokeColor(Color { r: 255, g: 0, b: 0, a: None }),
+//!         CanvasAction::StrokeSize(2.0),
+//!         CanvasAction::Line(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+//!     ],
+//! };
+//! # }
+//! ```
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad_color::Color;

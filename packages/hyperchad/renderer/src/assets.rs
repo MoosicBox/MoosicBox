@@ -1,3 +1,28 @@
+//! Static asset serving and routing configuration.
+//!
+//! This module provides types for configuring static asset routes in `HyperChad`
+//! applications. Assets can be served from files, directories, or in-memory content.
+//!
+//! # Examples
+//!
+//! Creating a static asset route:
+//!
+//! ```rust
+//! # #[cfg(feature = "assets")]
+//! # {
+//! use hyperchad_renderer::assets::{StaticAssetRoute, AssetPathTarget};
+//! use std::path::PathBuf;
+//!
+//! # fn example() -> Result<(), std::io::Error> {
+//! let route = StaticAssetRoute {
+//!     route: "/static".to_string(),
+//!     target: AssetPathTarget::Directory(PathBuf::from("./public")),
+//! };
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+
 use std::{path::PathBuf, sync::LazyLock};
 
 use bytes::Bytes;
