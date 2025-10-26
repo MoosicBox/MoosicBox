@@ -1,3 +1,8 @@
+//! Database integration and model conversion utilities.
+//!
+//! This module provides traits and functions for converting music models
+//! (artists, albums, tracks) into search index data values and delete terms.
+
 use std::path::Path;
 
 use moosicbox_json_utils::database::DatabaseFetchError;
