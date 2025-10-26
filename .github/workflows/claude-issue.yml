@@ -134,7 +134,7 @@ jobs:
 
             - name: Run Claude Code
               id: claude
-              uses: BSteffaniak/claude-code-action@main
+              uses: BSteffaniak/claude-code-action@dev
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
