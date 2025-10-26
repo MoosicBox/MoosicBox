@@ -1,3 +1,30 @@
+//! Profile management for `MoosicBox`.
+//!
+//! This crate provides a global registry for managing profile names, allowing applications
+//! to track and switch between different user profiles or configurations.
+//!
+//! # Features
+//!
+//! * `events` - Enables profile update event listeners for reacting to profile changes
+//! * `api` - Provides actix-web extractors for HTTP requests with profile information
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_profiles::PROFILES;
+//!
+//! // Add a profile to the global registry
+//! PROFILES.add("user1".to_string());
+//!
+//! // Retrieve a profile
+//! if let Some(profile) = PROFILES.get("user1") {
+//!     println!("Found profile: {}", profile);
+//! }
+//!
+//! // List all profiles
+//! let all_profiles = PROFILES.names();
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -7,6 +34,9 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
+/// Profile update event handling.
+///
+/// Provides listeners and event triggers for profile additions and removals.
 #[cfg(feature = "events")]
 pub mod events;
 
@@ -78,6 +108,21 @@ impl Profiles {
     }
 }
 
+/// actix-web integration for profile extraction from HTTP requests.
+///
+/// Provides extractors for retrieving profile names from HTTP request headers
+/// (`moosicbox-profile`) or query parameters (`moosicboxProfile`).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use actix_web::{web, HttpResponse};
+/// use moosicbox_profiles::api::ProfileName;
+///
+/// async fn handler(profile: ProfileName) -> HttpResponse {
+///     HttpResponse::Ok().body(format!("Profile: {}", profile.as_ref()))
+/// }
+/// ```
 #[cfg(feature = "api")]
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
