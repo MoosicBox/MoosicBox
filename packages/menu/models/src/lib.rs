@@ -1,3 +1,14 @@
+//! Data models for album versions in `MoosicBox` menu system.
+//!
+//! This crate provides data structures for representing album versions with
+//! audio quality metadata, including format, bit depth, sample rate, and channel
+//! information from various sources.
+//!
+//! # Main Types
+//!
+//! * [`AlbumVersion`] - Core domain model for an album version with tracks and quality info
+//! * [`api::ApiAlbumVersion`] - Serializable API representation for HTTP requests/responses
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
