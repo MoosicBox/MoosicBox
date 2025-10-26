@@ -1,3 +1,39 @@
+//! Test vectors for validating Opus decoder implementations.
+//!
+//! This crate provides a collection of Opus test vectors containing encoded Opus packets
+//! and their expected decoded PCM output. These vectors are used to validate the correctness
+//! of Opus decoder implementations by comparing actual decoder output against reference results.
+//!
+//! Test vectors include both SILK and CELT codec modes and are generated at build time.
+//!
+//! # Usage
+//!
+//! ```rust,no_run
+//! use moosicbox_opus_native_test_vectors::{TestVector, test_vectors_dir, calculate_snr};
+//!
+//! # fn decode_opus_packet(packet: &[u8], sample_rate: u32, channels: u8) -> Vec<i16> {
+//! #     // Placeholder decoder implementation
+//! #     vec![0; 1920]
+//! # }
+//! // Load all test vectors
+//! let vectors = TestVector::load_all(test_vectors_dir().join("silk"))?;
+//!
+//! // Validate decoder with each test vector
+//! for vector in &vectors {
+//!     let decoded = decode_opus_packet(&vector.packet, vector.sample_rate, vector.channels);
+//!     let snr = calculate_snr(&vector.expected_pcm, &decoded);
+//!     assert!(snr > 50.0, "SNR too low: {}", snr);
+//! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! # Main Types
+//!
+//! * [`TestVector`] - Contains an Opus packet and expected PCM output
+//! * [`calculate_snr`] - Calculates Signal-to-Noise Ratio for quality measurement
+//! * [`test_vectors_dir`] - Returns the path to generated test vectors
+//! * [`vectors_available`] - Checks if test vectors are available
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
