@@ -1,3 +1,48 @@
+//! Rust workspace analysis and automation tool for managing multi-package projects.
+//!
+//! Clippier provides utilities for analyzing Rust workspaces and automating development tasks
+//! with a focus on CI/CD pipeline generation, dependency analysis, and feature management.
+//!
+//! # Core Features
+//!
+//! * **CI/CD Pipeline Generation** - Generate feature matrices for comprehensive testing
+//! * **Dependency Analysis** - Analyze workspace dependencies and relationships
+//! * **Feature Management** - Generate and validate feature combinations
+//! * **Feature Propagation Validation** - Ensure features propagate correctly across workspace dependencies
+//! * **Change Impact Analysis** - Determine which packages are affected by file changes
+//! * **Docker Integration** - Generate optimized Dockerfiles for workspace packages
+//! * **External Dependency Tracking** - Detect changes in external dependencies via git diff
+//!
+//! # Basic Usage
+//!
+//! The primary entry point is the command-line tool, but the library also exports core
+//! functionality for programmatic use:
+//!
+//! ```rust
+//! use clippier::{FeatureValidator, ValidatorConfig, OutputType};
+//!
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Validate feature propagation across workspace
+//! let config = ValidatorConfig {
+//!     features: Some(vec!["fail-on-warnings".to_string()]),
+//!     workspace_only: true,
+//!     output_format: OutputType::Json,
+//! };
+//!
+//! let validator = FeatureValidator::new(None, config)?;
+//! let result = validator.validate()?;
+//!
+//! println!("Validated {} packages", result.total_packages);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Optional Features
+//!
+//! * `git-diff` (default) - Enhanced change analysis using git diff to detect external dependency changes
+//! * `test-utils` - Utilities for testing (automatically enabled when running tests)
+//! * `fail-on-warnings` - Fail build on compiler warnings
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -13,9 +58,38 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+/// Git diff analysis for detecting external dependency changes.
+///
+/// This module provides functionality for analyzing git diffs to detect changes in
+/// external dependencies via `Cargo.lock` modifications, mapping those changes to
+/// affected workspace packages.
+///
+/// Requires the `git-diff` feature (enabled by default).
 #[cfg(feature = "git-diff")]
 pub mod git_diff;
 
+/// Feature propagation validation for workspace dependencies.
+///
+/// This module validates that features are correctly propagated across workspace
+/// dependencies to ensure consistent builds and prevent feature-related compilation failures.
+///
+/// # Example
+///
+/// ```rust
+/// use clippier::{FeatureValidator, ValidatorConfig, OutputType};
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = ValidatorConfig {
+///     features: Some(vec!["fail-on-warnings".to_string()]),
+///     workspace_only: true,
+///     output_format: OutputType::Json,
+/// };
+///
+/// let validator = FeatureValidator::new(None, config)?;
+/// let result = validator.validate()?;
+/// # Ok(())
+/// # }
+/// ```
 pub mod feature_validator;
 
 #[cfg(any(test, feature = "test-utils"))]

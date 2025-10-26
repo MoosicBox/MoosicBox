@@ -1,3 +1,30 @@
+//! Git diff analysis for detecting external dependency changes.
+//!
+//! This module provides functionality for analyzing git repository diffs to detect changes
+//! in external dependencies via `Cargo.lock` modifications. It maps those changes to affected
+//! workspace packages, enabling comprehensive impact analysis for CI/CD pipelines.
+//!
+//! # Features
+//!
+//! * Parse `Cargo.lock` diff to detect dependency version changes
+//! * Map external dependencies to workspace packages that use them
+//! * Identify packages affected by external dependency updates
+//! * Support for git-based change detection between commits
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use clippier::git_diff::get_affected_packages_from_git;
+//!
+//! let affected = get_affected_packages_from_git(
+//!     "/path/to/repo",
+//!     "origin/main",
+//!     "HEAD",
+//!     &workspace_packages,
+//!     &package_cargo_values,
+//! )?;
+//! ```
+
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
