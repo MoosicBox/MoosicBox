@@ -1,3 +1,40 @@
+//! Data models for music API requests and responses.
+//!
+//! This crate provides common data structures used across `MoosicBox` music APIs for querying
+//! and retrieving music metadata including albums, artists, and tracks. It includes request
+//! parameters for filtering and pagination, response models for search results, and types
+//! for representing audio sources and quality levels.
+//!
+//! # Main Features
+//!
+//! * Request/response models for album, artist, and track queries
+//! * Filtering and sorting criteria for music metadata
+//! * Audio quality levels and format specifications
+//! * Track and image source location types (local files and remote URLs)
+//! * Search result models with pagination support (behind `search` feature)
+//!
+//! # Examples
+//!
+//! Building an album query request:
+//!
+//! ```rust
+//! use moosicbox_music_api_models::{AlbumsRequest, AlbumFilters};
+//! use moosicbox_paging::PagingRequest;
+//!
+//! let request = AlbumsRequest {
+//!     sources: None,
+//!     sort: None,
+//!     filters: Some(AlbumFilters {
+//!         artist: Some("The Beatles".to_string()),
+//!         ..Default::default()
+//!     }),
+//!     page: Some(PagingRequest {
+//!         offset: 0,
+//!         limit: 20,
+//!     }),
+//! };
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
