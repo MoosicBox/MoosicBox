@@ -1,3 +1,58 @@
+//! Deterministic simulation test harness for concurrent systems.
+//!
+//! This crate provides a framework for running deterministic simulations of distributed
+//! systems and concurrent applications. It allows you to test complex scenarios involving
+//! multiple actors (hosts and clients) with controlled timing, randomness, and networking.
+//!
+//! # Features
+//!
+//! * **Deterministic execution** - Same seed produces identical simulation results
+//! * **Host and client actors** - Model persistent services (hosts) and ephemeral clients
+//! * **Simulation lifecycle hooks** - Customize behavior at key points via [`SimBootstrap`]
+//! * **Built-in TUI** - Optional terminal UI for monitoring simulation progress
+//! * **Parallel execution** - Run multiple simulation runs concurrently
+//! * **Cancellation support** - Graceful shutdown with Ctrl-C handling
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use simvar_harness::{run_simulation, SimBootstrap, Sim, SimConfig};
+//! # use simvar_harness::host::HostResult;
+//! # use simvar_harness::client::ClientResult;
+//! struct MyBootstrap;
+//!
+//! impl SimBootstrap for MyBootstrap {
+//!     fn build_sim(&self, config: SimConfig) -> SimConfig {
+//!         config
+//!     }
+//!
+//!     fn on_start(&self, sim: &mut impl Sim) {
+//!         // Spawn a host actor
+//!         sim.host("server", || async {
+//!             // Server logic here
+//!             Ok(())
+//!         });
+//!
+//!         // Spawn a client actor
+//!         sim.client("client", async {
+//!             // Client logic here
+//!             Ok(())
+//!         });
+//!     }
+//! }
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let results = run_simulation(MyBootstrap)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Environment Variables
+//!
+//! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1)
+//! * `SIMULATOR_MAX_PARALLEL` - Maximum parallel runs (default: number of CPUs)
+//! * `NO_TUI` - Disable terminal UI when set
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -33,11 +88,26 @@ pub use simvar_utils as utils;
 
 pub use switchy;
 
+/// Client actor types and utilities.
+///
+/// Provides the [`Client`] type for modeling ephemeral actors in simulations.
+///
+/// [`Client`]: client::Client
 pub mod client;
 mod config;
 mod formatting;
+/// Host actor types and utilities.
+///
+/// Provides the [`Host`] type for modeling persistent actors that can be restarted.
+///
+/// [`Host`]: host::Host
 pub mod host;
 mod logging;
+/// Interaction planning utilities.
+///
+/// Provides the [`InteractionPlan`] trait for managing sequences of planned interactions.
+///
+/// [`InteractionPlan`]: plan::InteractionPlan
 pub mod plan;
 #[cfg(feature = "tui")]
 mod tui;
