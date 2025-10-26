@@ -241,8 +241,9 @@ The HTML renderer supports partial page updates through the `View` type. When a 
 - Works seamlessly with HTMX and similar frameworks
 
 ```rust
-use hyperchad_renderer::{View, Content, ReplaceContainer, Selector};
+use hyperchad_renderer::{View, Content, ReplaceContainer};
 use hyperchad_router::Container;
+use hyperchad_transformer::models::Selector;
 
 // In your route handler, return a View with fragments
 async fn update_handler() -> Content {
