@@ -1,3 +1,36 @@
+//! A lightweight color parsing and manipulation library.
+//!
+//! This crate provides a simple [`Color`] type representing RGB/RGBA colors with 8-bit channels,
+//! along with utilities for parsing hex color strings in various formats.
+//!
+//! # Features
+//!
+//! * Parse hex color strings in multiple formats (RGB, RGBA, RRGGBB, RRGGBBAA)
+//! * Support for optional alpha channel
+//! * Conversion to/from hex strings
+//! * Optional integration with egui (via `egui` feature)
+//! * Optional property testing support (via `arb` feature)
+//! * Optional serialization support (via `serde` feature)
+//!
+//! # Examples
+//!
+//! ```rust
+//! use hyperchad_color::Color;
+//!
+//! // Parse a hex color string
+//! let color = Color::from_hex("#FF5733");
+//! assert_eq!(color.r, 255);
+//! assert_eq!(color.g, 87);
+//! assert_eq!(color.b, 51);
+//!
+//! // Use predefined constants
+//! let black = Color::BLACK;
+//! let white = Color::WHITE;
+//!
+//! // Convert back to hex string
+//! assert_eq!(color.to_string(), "#FF5733");
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -5,6 +38,13 @@
 pub use color_hex::color_from_hex;
 use thiserror::Error;
 
+/// Property testing support via QuickCheck.
+///
+/// This module provides an [`Arbitrary`] implementation for [`Color`],
+/// enabling property-based testing with the [`quickcheck`] crate.
+///
+/// [`Arbitrary`]: quickcheck::Arbitrary
+/// [`quickcheck`]: https://docs.rs/quickcheck/latest/quickcheck/
 #[cfg(feature = "arb")]
 pub mod arb;
 
