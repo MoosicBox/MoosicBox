@@ -1,8 +1,15 @@
+//! Command-based control interface for audio outputs.
+//!
+//! This module provides an async command system for controlling audio playback through
+//! message passing. Audio outputs can be controlled from different threads or async contexts
+//! using [`AudioHandle`], which sends [`AudioCommand`]s and receives [`AudioResponse`]s.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::fmt;
 use thiserror::Error;
 
+/// Commands that can be sent to control audio output.
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
     SetVolume(f64),
@@ -13,18 +20,21 @@ pub enum AudioCommand {
     Reset,
 }
 
+/// Response returned after executing an audio command.
 #[derive(Debug, Clone)]
 pub enum AudioResponse {
     Success,
     Error(String),
 }
 
+/// Message structure for sending commands through channels.
 #[derive(Debug)]
 pub struct CommandMessage {
     pub command: AudioCommand,
     pub response_sender: Option<flume::Sender<AudioResponse>>,
 }
 
+/// Errors that can occur during audio command operations.
 #[derive(Debug, Error)]
 pub enum AudioError {
     #[error("Command error: {0}")]
@@ -57,6 +67,10 @@ impl From<flume::RecvError> for AudioError {
     }
 }
 
+/// Handle for sending commands to an audio output from different threads or async contexts.
+///
+/// The handle uses channels to communicate with the audio output's command processor,
+/// allowing safe control of playback from anywhere in the application.
 pub struct AudioHandle {
     command_sender: flume::Sender<CommandMessage>,
 }

@@ -1,3 +1,36 @@
+//! Audio output management for MoosicBox.
+//!
+//! This crate provides a flexible audio output system that supports writing decoded audio samples
+//! to various output destinations (hardware devices, encoders, etc.). It handles automatic
+//! resampling when the decoded sample rate doesn't match the output specification.
+//!
+//! # Features
+//!
+//! * Audio output abstraction through the [`AudioWrite`] trait
+//! * Automatic resampling support via [`AudioOutput`]
+//! * Audio device scanning and management with [`AudioOutputScanner`]
+//! * Progress tracking for playback position with [`ProgressTracker`]
+//! * Async command-based control through [`AudioHandle`]
+//! * Support for CPAL audio backend (with `cpal` feature)
+//! * Multiple audio encoder formats: AAC, FLAC, MP3, Opus (with corresponding features)
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use moosicbox_audio_output::{scan_outputs, default_output};
+//!
+//! // Scan for available audio outputs
+//! scan_outputs().await?;
+//!
+//! // Get the default audio output
+//! let mut output = default_output().await?;
+//!
+//! // Use the output with an audio decoder...
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -225,6 +258,7 @@ impl AudioOutputFactory {
     /// * `name` - Human-readable name for this audio output
     /// * `spec` - Audio signal specification (sample rate, channels, etc.)
     /// * `writer` - Function that creates the underlying audio writer when called
+    #[must_use]
     pub fn new(
         id: String,
         name: String,
