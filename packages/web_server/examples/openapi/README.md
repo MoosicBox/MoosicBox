@@ -436,9 +436,9 @@ openapi-generator-cli generate \
 - **basic_handler**: Foundation for handler patterns
 - **simple_get**: Basic routing without documentation
 - **nested_get**: Route organization patterns
-- **query_extractor**: Parameter extraction techniques
-- **json_extractor**: Request body handling
-- **combined_extractors**: Complex parameter handling
+- **query_extractor_standalone**: Parameter extraction techniques
+- **json_extractor_standalone**: Request body handling
+- **combined_extractors_standalone**: Complex parameter handling
 
 ## Next Steps
 
@@ -457,8 +457,8 @@ To make this example production-ready, you could:
 After understanding this example:
 
 1. Review the **basic_handler** example for handler implementation patterns
-2. Explore the **json_extractor** example to handle JSON request bodies
-3. Study the **combined_extractors** example for parameter validation
+2. Explore the **json_extractor_standalone** example to handle JSON request bodies
+3. Study the **combined_extractors_standalone** example for parameter validation
 4. Apply OpenAPI documentation to those patterns
 
 ### Production Deployment Considerations
