@@ -287,8 +287,6 @@ Events include:
 - `canvas_update`: Canvas updates for HTML5 canvas elements
 - `event`: Custom events with name and value
 
-The SSE stream automatically handles compression (Gzip, Deflate, Zlib) based on client capabilities.
-
 ### Custom Middleware
 
 ```rust
