@@ -17,7 +17,7 @@ Core features (always available):
 With optional features enabled:
 
 - **Track Management**: Handle audio track files, metadata, and streaming with pooling support (requires `files` feature)
-- **Album/Artist Artwork**: Handle album and artist cover images (requires `files` feature)
+- **Album/Artist Artwork**: Fetch, cache, and manage album and artist cover images (requires `files` feature)
 - **HTTP Range Support**: Parse and handle HTTP byte range requests (requires `range` feature)
 - **REST API Endpoints**: Actix-web endpoints for serving files, tracks, and artwork (requires `api` feature)
 - **Audio Codec Support**: Decode/encode various audio formats including AAC, FLAC, MP3, and Opus (requires decoder/encoder features)
