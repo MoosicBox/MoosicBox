@@ -1,3 +1,8 @@
+//! Settings and configuration UI components.
+//!
+//! This module provides UI templates for managing application settings including
+//! server connections, download locations, scan paths, and music API authentication.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{

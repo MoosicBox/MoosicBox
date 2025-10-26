@@ -1,3 +1,8 @@
+//! Album display and navigation components.
+//!
+//! This module provides UI templates for rendering album lists, album detail pages,
+//! and album cover artwork.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::slice;

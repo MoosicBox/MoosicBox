@@ -1,3 +1,8 @@
+//! Play queue UI components.
+//!
+//! This module provides UI templates for displaying the current play queue,
+//! including playback history, current track, and upcoming tracks.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::template::{self as hyperchad_template, Containers, container};

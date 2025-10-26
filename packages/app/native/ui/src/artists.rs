@@ -1,3 +1,8 @@
+//! Artist display and navigation components.
+//!
+//! This module provides UI templates for rendering artist lists, artist detail pages,
+//! and artist cover artwork.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{

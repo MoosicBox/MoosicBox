@@ -1,3 +1,8 @@
+//! Global search UI components.
+//!
+//! This module provides UI templates for searching across artists, albums, and tracks
+//! from multiple music API sources.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{

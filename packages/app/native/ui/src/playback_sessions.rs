@@ -1,3 +1,8 @@
+//! Playback session management UI components.
+//!
+//! This module provides UI templates for displaying and managing playback sessions
+//! and their associated playlists.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::template::{self as hyperchad_template, Containers, container};
