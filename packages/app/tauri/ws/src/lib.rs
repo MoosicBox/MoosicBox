@@ -1,3 +1,42 @@
+//! WebSocket client implementation for `MoosicBox` applications.
+//!
+//! This crate provides a robust WebSocket client with automatic reconnection,
+//! connection management, and message handling for `MoosicBox` applications.
+//!
+//! # Features
+//!
+//! * Automatic reconnection with exponential backoff on connection failures
+//! * Async/await based API using tokio
+//! * Message multiplexing with separate send/receive channels
+//! * Graceful cancellation and connection closing
+//! * Support for text, binary, and ping/pong messages
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_app_ws::{WsClient, WsMessage};
+//! # use tokio::sync::mpsc;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let (client, handle) = WsClient::new("ws://localhost:8080".to_string());
+//! let (tx, mut rx) = mpsc::channel(100);
+//!
+//! // Start the websocket connection
+//! tokio::spawn(async move {
+//!     client.start(None, None, "default".to_string(), || {}, tx).await
+//! });
+//!
+//! // Receive messages
+//! while let Some(msg) = rx.recv().await {
+//!     match msg {
+//!         WsMessage::TextMessage(text) => println!("Received: {}", text),
+//!         WsMessage::Message(bytes) => println!("Received {} bytes", bytes.len()),
+//!         WsMessage::Ping => println!("Received ping"),
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
