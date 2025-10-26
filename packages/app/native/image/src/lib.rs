@@ -1,6 +1,35 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+//! Embedded static assets for native applications.
+//!
+//! This crate provides compile-time embedded access to static assets (images, icons, etc.)
+//! from the `public/` directory using the `rust_embed` library. Assets are embedded directly
+//! into the binary, eliminating the need for runtime file system access.
+//!
+//! # Primary Use Cases
+//!
+//! * Embedding application icons and images in native GUI applications
+//! * Providing fallback assets when file system access is unavailable
+//! * Ensuring assets are always available without external dependencies
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_app_native_image::{Asset, get_asset_arc_bytes};
+//! use rust_embed::RustEmbed;
+//!
+//! // Access an embedded asset by path
+//! if let Some(asset) = Asset::get("/public/icon.png") {
+//!     let bytes = get_asset_arc_bytes(asset);
+//!     // Use the bytes...
+//! }
+//! ```
+//!
+//! # Main Entry Points
+//!
+//! * [`Asset`] - The embedded asset collection
+//! * [`get_asset_arc_bytes`] - Convert embedded files to `Arc<Bytes>`
 
 use std::{borrow::Cow, sync::Arc};
 
