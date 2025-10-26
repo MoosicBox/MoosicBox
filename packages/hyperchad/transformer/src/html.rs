@@ -1,3 +1,8 @@
+//! HTML parsing and generation utilities.
+//!
+//! This module provides functionality to parse HTML strings into [`Container`](crate::Container) trees
+//! and generate HTML/CSS output from container structures. Requires the `html` feature to be enabled.
+
 use std::{borrow::Cow, collections::BTreeMap, iter::once};
 
 use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};

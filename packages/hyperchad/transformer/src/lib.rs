@@ -1,3 +1,54 @@
+//! Core UI transformation system with container models, layout calculations, and HTML generation.
+//!
+//! This crate provides a comprehensive UI transformation system for building modern user interfaces.
+//! It includes a flexible container model, layout calculation engine, HTML generation, and tree
+//! traversal utilities.
+//!
+//! # Features
+//!
+//! * **Container System** - Comprehensive UI container model with styling and layout properties
+//! * **Layout Engine** - Advanced layout calculation with flexbox and grid support (via `layout` feature)
+//! * **HTML Generation** - Complete HTML rendering with CSS generation (via `html` feature)
+//! * **Calculation System** - CSS `calc()` expressions with viewport units (vw, vh, dvw, dvh)
+//! * **Element Types** - Full HTML element support including semantic elements, forms, and media
+//! * **Responsive Design** - Conditional styling and responsive breakpoints via override system
+//! * **Tree Traversal** - Efficient container tree navigation and manipulation
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_transformer::{Container, Element, Number};
+//! use hyperchad_transformer::models::LayoutDirection;
+//! use hyperchad_color::Color;
+//!
+//! // Create a basic container with styling
+//! let container = Container {
+//!     element: Element::Div,
+//!     width: Some(Number::from(300)),
+//!     height: Some(Number::from(200)),
+//!     background: Some(Color::from_hex("#f0f0f0")),
+//!     direction: LayoutDirection::Column,
+//!     padding_left: Some(Number::from(20)),
+//!     padding_right: Some(Number::from(20)),
+//!     ..Default::default()
+//! };
+//!
+//! // Generate HTML representation
+//! let html = container.to_string();
+//! ```
+//!
+//! # Main Entry Points
+//!
+//! * [`Container`] - The core UI container struct with styling and layout properties
+//! * [`Element`] - Enum representing different HTML element types
+//! * [`Number`] - Numeric values with unit support (px, %, vw, vh, calc expressions)
+//! * [`Calculation`] - Arithmetic expressions for CSS `calc()` support
+//!
+//! # Re-exports
+//!
+//! * [`actions`] - Action system for interactive behaviors (re-exported from `hyperchad_actions`)
+//! * [`models`] - Layout and styling model types (re-exported from `hyperchad_transformer_models`)
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
