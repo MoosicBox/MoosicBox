@@ -1,3 +1,9 @@
+//! Data models for music API HTTP requests and responses.
+//!
+//! This module provides the API-layer representations of music service providers,
+//! authentication methods, and conversion utilities from the core music API types
+//! to their HTTP API equivalents.
+
 use moosicbox_music_api::{MusicApi, auth::Auth};
 use serde::{Deserialize, Serialize};
 
