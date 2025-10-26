@@ -1,3 +1,18 @@
+//! API-specific model types and conversions for the music library.
+//!
+//! This module provides API-friendly representations of library entities and conversions
+//! between internal library models and external API types. These types are optimized for
+//! JSON serialization and API responses.
+//!
+//! # Main Types
+//!
+//! * [`ApiLibraryAlbum`] - API representation of a library album
+//! * [`ApiLibraryTrack`] - API representation of a library track
+//!
+//! The module also implements conversions between:
+//! * Internal library types (e.g., [`LibraryAlbum`]) and API types (e.g., [`ApiAlbum`])
+//! * API library types and general API types used across different music sources
+
 use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_music_models::{
     Album, AlbumSource, ApiSource, ApiSources, Artist, AudioFormat, Track, TrackApiSource,
@@ -41,22 +56,39 @@ impl From<LibraryAlbum> for ApiAlbum {
     }
 }
 
+/// API representation of a library album.
+///
+/// Optimized for JSON serialization with camelCase field names and boolean flags
+/// instead of optional file paths.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryAlbum {
+    /// Unique identifier for the album
     pub album_id: u64,
+    /// Album title
     pub title: String,
+    /// Primary artist name
     pub artist: String,
+    /// Primary artist ID
     pub artist_id: u64,
+    /// Album classification
     pub album_type: LibraryAlbumType,
+    /// Whether album artwork is available
     pub contains_cover: bool,
+    /// Release date in ISO 8601 format
     pub date_released: Option<String>,
+    /// Date added to library in ISO 8601 format
     pub date_added: Option<String>,
+    /// Source of the album
     pub source: AlbumSource,
+    /// Whether artwork should be blurred
     pub blur: bool,
+    /// Available quality versions
     pub versions: Vec<ApiAlbumVersionQuality>,
+    /// Cross-references to this album on external services
     pub album_sources: ApiSources,
+    /// Cross-references to the artist on external services
     pub artist_sources: ApiSources,
 }
 
@@ -151,31 +183,57 @@ impl From<LibraryTrack> for ApiTrack {
     }
 }
 
+/// API representation of a library track.
+///
+/// Optimized for JSON serialization with camelCase field names and detailed
+/// audio quality metadata for client applications.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryTrack {
+    /// Unique identifier for the track
     pub track_id: u64,
+    /// Track number within the album
     pub number: u32,
+    /// Track title
     pub title: String,
+    /// Duration in seconds
     pub duration: f64,
+    /// Artist name
     pub artist: String,
+    /// Artist ID
     pub artist_id: u64,
+    /// Album type classification
     pub album_type: LibraryAlbumType,
+    /// Release date in ISO 8601 format
     pub date_released: Option<String>,
+    /// Date added to library in ISO 8601 format
     pub date_added: Option<String>,
+    /// Album title
     pub album: String,
+    /// Album ID
     pub album_id: u64,
+    /// Whether track artwork is available
     pub contains_cover: bool,
+    /// Whether artwork should be blurred
     pub blur: bool,
+    /// File size in bytes
     pub bytes: u64,
+    /// Audio format
     pub format: Option<AudioFormat>,
+    /// Bit depth of the audio
     pub bit_depth: Option<u8>,
+    /// Audio bitrate in bits per second
     pub audio_bitrate: Option<u32>,
+    /// Overall bitrate including container overhead
     pub overall_bitrate: Option<u32>,
+    /// Sample rate in Hz
     pub sample_rate: Option<u32>,
+    /// Number of audio channels
     pub channels: Option<u8>,
+    /// Source of the track
     pub source: TrackApiSource,
+    /// Primary API source
     pub api_source: ApiSource,
 }
 

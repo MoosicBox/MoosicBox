@@ -1,3 +1,37 @@
+//! Data models for the `MoosicBox` local music library.
+//!
+//! This crate provides data structures representing music library entities (artists, albums, tracks)
+//! and their conversions between internal formats, API representations, and database rows.
+//!
+//! # Features
+//!
+//! * `api` - Enables API-specific model types and conversions
+//! * `db` - Enables database integration with model-to-row conversions
+//! * `openapi` - Adds `OpenAPI` schema derivations for API types
+//!
+//! # Main Types
+//!
+//! * [`LibraryArtist`] - Represents an artist in the local library
+//! * [`LibraryAlbum`] - Represents an album with metadata and version information
+//! * [`LibraryTrack`] - Represents a track with audio quality metadata
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_library_models::{LibraryAlbum, LibraryAlbumType};
+//! use moosicbox_music_models::AlbumSource;
+//!
+//! let album = LibraryAlbum {
+//!     id: 1,
+//!     title: "Example Album".to_string(),
+//!     artist: "Example Artist".to_string(),
+//!     artist_id: 1,
+//!     album_type: LibraryAlbumType::Lp,
+//!     source: AlbumSource::Local,
+//!     ..Default::default()
+//! };
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -19,11 +53,19 @@ use moosicbox_music_models::{
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
 
+/// Represents an artist in the local music library.
+///
+/// Contains artist metadata including title, cover art, and references to API sources
+/// for cross-platform music service integration.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct LibraryArtist {
+    /// Unique identifier for the artist
     pub id: u64,
+    /// Artist name
     pub title: String,
+    /// Optional path or URL to artist cover image
     pub cover: Option<String>,
+    /// Cross-references to this artist on external music services
     pub api_sources: ApiSources,
 }
 
@@ -39,18 +81,31 @@ impl From<LibraryArtist> for Artist {
     }
 }
 
+/// API representation of a library artist.
+///
+/// Used for JSON serialization in API responses, with camelCase field names
+/// and explicit external service IDs.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryArtist {
+    /// Unique identifier for the artist
     pub artist_id: u64,
+    /// Artist name
     pub title: String,
+    /// Whether the artist has cover artwork available
     pub contains_cover: bool,
+    /// Tidal service artist ID, if available
     pub tidal_id: Option<u64>,
+    /// Qobuz service artist ID, if available
     pub qobuz_id: Option<u64>,
+    /// `YouTube` Music artist ID, if available
     pub yt_id: Option<u64>,
 }
 
+/// Type classification for library albums.
+///
+/// Categorizes albums by their release type (LP, live recording, compilation, etc.).
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
 )]
@@ -58,11 +113,16 @@ pub struct ApiLibraryArtist {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryAlbumType {
+    /// Standard long-playing album
     #[default]
     Lp,
+    /// Live performance recording
     Live,
+    /// Compilation of various tracks
     Compilations,
+    /// Extended play or single releases
     EpsAndSingles,
+    /// Other album types
     Other,
 }
 
@@ -100,21 +160,39 @@ impl ToValueType<LibraryAlbumType> for &serde_json::Value {
     }
 }
 
+/// Represents an album in the local music library.
+///
+/// Contains comprehensive album metadata including artist information, release dates,
+/// artwork, quality versions, and cross-references to external music services.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct LibraryAlbum {
+    /// Unique identifier for the album
     pub id: u64,
+    /// Album title
     pub title: String,
+    /// Primary artist name
     pub artist: String,
+    /// Primary artist ID
     pub artist_id: u64,
+    /// Album classification (LP, live, compilation, etc.)
     pub album_type: LibraryAlbumType,
+    /// Release date in ISO 8601 format
     pub date_released: Option<String>,
+    /// Date added to library in ISO 8601 format
     pub date_added: Option<String>,
+    /// Path or URL to album artwork
     pub artwork: Option<String>,
+    /// Directory path containing album files
     pub directory: Option<String>,
+    /// Source of the album (local, streaming service, etc.)
     pub source: AlbumSource,
+    /// Whether artwork should be blurred (e.g., for explicit content)
     pub blur: bool,
+    /// Available quality versions of this album
     pub versions: Vec<AlbumVersionQuality>,
+    /// Cross-references to this album on external services
     pub album_sources: ApiSources,
+    /// Cross-references to the artist on external services
     pub artist_sources: ApiSources,
 }
 
@@ -194,32 +272,60 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| a.source.cmp(&b.source));
 }
 
+/// Represents a track in the local music library.
+///
+/// Contains detailed track metadata including audio quality information, album/artist
+/// relationships, and file location data.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
+    /// Unique identifier for the track
     pub id: u64,
+    /// Track number within the album
     pub number: u32,
+    /// Track title
     pub title: String,
+    /// Duration in seconds
     pub duration: f64,
+    /// Album title
     pub album: String,
+    /// Album ID
     pub album_id: u64,
+    /// Album type classification
     pub album_type: LibraryAlbumType,
+    /// Release date in ISO 8601 format
     pub date_released: Option<String>,
+    /// Date added to library in ISO 8601 format
     pub date_added: Option<String>,
+    /// Artist name
     pub artist: String,
+    /// Artist ID
     pub artist_id: u64,
+    /// Path to the audio file
     pub file: Option<String>,
+    /// Path or URL to track artwork
     pub artwork: Option<String>,
+    /// Whether artwork should be blurred
     pub blur: bool,
+    /// File size in bytes
     pub bytes: u64,
+    /// Audio format (FLAC, MP3, etc.)
     pub format: Option<AudioFormat>,
+    /// Bit depth of the audio (16, 24, etc.)
     pub bit_depth: Option<u8>,
+    /// Audio bitrate in bits per second
     pub audio_bitrate: Option<u32>,
+    /// Overall bitrate including container overhead
     pub overall_bitrate: Option<u32>,
+    /// Sample rate in Hz (44100, 48000, etc.)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels
     pub channels: Option<u8>,
+    /// Source of the track (local file, streaming, etc.)
     pub source: TrackApiSource,
+    /// Primary API source
     pub api_source: ApiSource,
+    /// Cross-references to this track on external services
     pub api_sources: ApiSources,
 }
 
