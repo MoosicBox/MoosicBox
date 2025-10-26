@@ -1,3 +1,12 @@
+//! In-memory filesystem simulator for testing.
+//!
+//! This module provides a complete filesystem simulation that runs entirely in memory,
+//! allowing you to test filesystem operations without touching the actual disk. This is
+//! particularly useful for unit tests, integration tests, and development environments.
+//!
+//! The simulator supports both synchronous and asynchronous operations, directory hierarchies,
+//! and temporary directory management.
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
