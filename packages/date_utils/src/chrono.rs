@@ -9,6 +9,24 @@ pub use chrono::*;
 /// * ISO datetime with timezone: `"2024-10-24T12:30:45.123+00:00"`
 /// * ISO datetime with fractional seconds: `"2024-10-24T12:30:45.123"`
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_date_utils::chrono::parse_date_time;
+///
+/// // Parse an ISO datetime
+/// let dt = parse_date_time("2024-10-24T12:30:45Z").unwrap();
+/// assert_eq!(dt.to_string(), "2024-10-24 12:30:45");
+///
+/// // Parse just a date
+/// let dt = parse_date_time("2024-10-24").unwrap();
+/// assert_eq!(dt.to_string(), "2024-10-24 00:00:00");
+///
+/// // Parse just a year
+/// let dt = parse_date_time("2024").unwrap();
+/// assert_eq!(dt.to_string(), "2024-01-01 00:00:00");
+/// ```
+///
 /// # Errors
 ///
 /// * If the datetime fails to parse
