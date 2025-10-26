@@ -1,3 +1,52 @@
+//! Configuration management for `MoosicBox` applications.
+//!
+//! This crate provides functionality for managing `MoosicBox` configuration, including:
+//!
+//! * Configuration directory paths for different application types (app, server, local)
+//! * Profile management for organizing settings per user or environment
+//! * File-based configuration loading with JSON5 support
+//! * Database-backed configuration storage (with `db` feature)
+//! * HTTP API endpoints for configuration (with `api` feature)
+//!
+//! # Directory Structure
+//!
+//! Configuration is stored in `~/.local/moosicbox` by default, organized by application type:
+//!
+//! ```text
+//! ~/.local/moosicbox/
+//! ├── server/
+//! │   ├── config.json5          # Global server config
+//! │   └── profiles/
+//! │       ├── default/
+//! │       │   └── config.json5  # Profile-specific config
+//! │       └── production/
+//! │           └── config.json5
+//! └── cache/                     # Shared cache directory
+//! ```
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_config::{AppType, get_app_config_dir_path, get_profile_dir_path};
+//!
+//! // Get the configuration directory for a server application
+//! if let Some(config_dir) = get_app_config_dir_path(AppType::Server) {
+//!     println!("Server config directory: {:?}", config_dir);
+//! }
+//!
+//! // Get a specific profile's directory
+//! if let Some(profile_dir) = get_profile_dir_path(AppType::Server, "production") {
+//!     println!("Production profile directory: {:?}", profile_dir);
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! * `file` - File-based configuration loading with JSON5 support
+//! * `db` - Database-backed configuration and profile management
+//! * `api` - HTTP API endpoints for configuration (requires `db`)
+//! * `openapi` - `OpenAPI` schema generation for API endpoints
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
