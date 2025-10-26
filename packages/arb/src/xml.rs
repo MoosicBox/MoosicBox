@@ -1,3 +1,8 @@
+//! XML-compatible string generators for property-based testing.
+//!
+//! Provides [`Arbitrary`] implementations for generating XML-safe strings and attribute names,
+//! along with utilities for validating XML characters.
+
 #![allow(clippy::module_name_repetitions)]
 
 use quickcheck::{Arbitrary, Gen};
