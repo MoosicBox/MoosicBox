@@ -1,3 +1,23 @@
+//! Simulator HTTP client backend implementation.
+//!
+//! This module provides a no-op HTTP client backend that returns empty responses without making
+//! any network requests. It is useful for testing and development environments where you want to
+//! avoid real network calls.
+//!
+//! All requests succeed immediately and return empty/default responses:
+//!
+//! * Status: 200 OK
+//! * Headers: Empty
+//! * Body: Empty
+//!
+//! This module is only available when the `simulator` feature is enabled.
+//!
+//! # Usage
+//!
+//! Use the exported types from the parent crate (`switchy_http::Client`, etc.) rather than
+//! accessing this module directly. The parent crate automatically selects the appropriate
+//! backend based on enabled features.
+
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use async_trait::async_trait;
