@@ -1,6 +1,6 @@
-//! Actix-web API endpoints for UPnP device control.
+//! Actix-web API endpoints for `UPnP` device control.
 //!
-//! This module provides HTTP REST API endpoints for discovering and controlling UPnP devices.
+//! This module provides HTTP REST API endpoints for discovering and controlling `UPnP` devices.
 //! Requires the `api` feature to be enabled.
 
 #![allow(clippy::needless_for_each)]

@@ -1,6 +1,6 @@
-//! Data models for UPnP devices and services.
+//! Data models for `UPnP` devices and services.
 //!
-//! This module provides the core data structures for representing discovered UPnP devices
+//! This module provides the core data structures for representing discovered `UPnP` devices
 //! and their associated services.
 
 use rupnp::{Device, DeviceSpec, Service};

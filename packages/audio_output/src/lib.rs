@@ -1,4 +1,4 @@
-//! Audio output management for MoosicBox.
+//! Audio output management for `MoosicBox`.
 //!
 //! This crate provides a flexible audio output system that supports writing decoded audio samples
 //! to various output destinations (hardware devices, encoders, etc.). It handles automatic

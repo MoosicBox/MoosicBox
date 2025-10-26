@@ -1,7 +1,7 @@
-//! Tunnel sender implementation for MoosicBox remote connectivity.
+//! Tunnel sender implementation for `MoosicBox` remote connectivity.
 //!
 //! This crate provides the client-side functionality for establishing and maintaining
-//! tunnel connections to remote MoosicBox servers. It handles bidirectional communication
+//! tunnel connections to remote `MoosicBox` servers. It handles bidirectional communication
 //! over WebSocket connections, forwarding HTTP requests and WebSocket messages through
 //! the tunnel.
 //!

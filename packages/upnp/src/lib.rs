@@ -2,19 +2,19 @@
 //!
 //! This crate provides functionality for discovering and controlling UPnP/DLNA devices
 //! on the local network. It supports device scanning, media playback control, volume
-//! management, and event subscriptions for UPnP AVTransport and RenderingControl services.
+//! management, and event subscriptions for `UPnP` `AVTransport` and `RenderingControl` services.
 //!
 //! # Features
 //!
-//! * `api` - Actix-web API endpoints for UPnP operations
-//! * `listener` - Event listener service for monitoring UPnP device state changes
-//! * `player` - UPnP player implementation for media playback
+//! * `api` - Actix-web API endpoints for `UPnP` operations
+//! * `listener` - Event listener service for monitoring `UPnP` device state changes
+//! * `player` - `UPnP` player implementation for media playback
 //! * `openapi` - OpenAPI/utoipa schema support
-//! * `simulator` - Simulated UPnP devices for testing
+//! * `simulator` - Simulated `UPnP` devices for testing
 //!
 //! # Examples
 //!
-//! Scanning for UPnP devices on the network:
+//! Scanning for `UPnP` devices on the network:
 //!
 //! ```rust,no_run
 //! # use switchy_upnp::{scan_devices, devices};
@@ -31,7 +31,7 @@
 //! # }
 //! ```
 //!
-//! Controlling playback on a UPnP device:
+//! Controlling playback on a `UPnP` device:
 //!
 //! ```rust,no_run
 //! # use switchy_upnp::{get_device_and_service, play, pause, set_volume};

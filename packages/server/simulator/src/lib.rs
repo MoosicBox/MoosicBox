@@ -1,13 +1,13 @@
-//! Deterministic simulator for testing the MoosicBox server.
+//! Deterministic simulator for testing the `MoosicBox` server.
 //!
-//! This crate provides a simulation harness for testing the MoosicBox server under various
+//! This crate provides a simulation harness for testing the `MoosicBox` server under various
 //! conditions including fault injection and health monitoring. It uses deterministic simulation
 //! to enable reproducible testing of distributed system behaviors.
 //!
 //! # Main Components
 //!
 //! * [`client`] - Client simulators for fault injection and health checking
-//! * [`host`] - Host simulation for running the MoosicBox server
+//! * [`host`] - Host simulation for running the `MoosicBox` server
 //! * [`http`] - HTTP utilities for making requests and parsing responses in simulations
 //!
 //! # Example
@@ -53,15 +53,15 @@ use std::{
 
 use simvar::{Sim, switchy::tcp::TcpStream};
 
-/// Client simulators for testing the MoosicBox server.
+/// Client simulators for testing the `MoosicBox` server.
 ///
 /// This module provides client-side simulation components including:
 /// * `fault_injector` - Injects random faults to test resilience
 /// * `health_checker` - Monitors server health status
 pub mod client;
-/// Host simulation for the MoosicBox server.
+/// Host simulation for the `MoosicBox` server.
 ///
-/// This module provides the simulation infrastructure for running the MoosicBox server
+/// This module provides the simulation infrastructure for running the `MoosicBox` server
 /// in a deterministic simulated environment.
 pub mod host;
 /// HTTP utilities for simulated network requests.

@@ -1,6 +1,6 @@
-//! Tauri bundled application service for MoosicBox.
+//! Tauri bundled application service for `MoosicBox`.
 //!
-//! This crate provides the bundled Tauri application that runs the MoosicBox
+//! This crate provides the bundled Tauri application that runs the `MoosicBox`
 //! server embedded within a desktop application. It manages the lifecycle of
 //! the embedded server, including startup, shutdown, and event handling.
 //!

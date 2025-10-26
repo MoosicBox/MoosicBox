@@ -1,6 +1,6 @@
 //! Tauri plugin for audio player control and media session management.
 //!
-//! This plugin provides platform-specific audio playback control for MoosicBox applications,
+//! This plugin provides platform-specific audio playback control for `MoosicBox` applications,
 //! supporting both desktop and mobile platforms with native media controls.
 //!
 //! # Features

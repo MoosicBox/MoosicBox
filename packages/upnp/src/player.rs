@@ -1,4 +1,4 @@
-//! UPnP player implementation for controlling media playback on UPnP/DLNA devices.
+//! `UPnP` player implementation for controlling media playback on UPnP/DLNA devices.
 //!
 //! This module provides a [`Player`] implementation that controls
 //! playback on UPnP/DLNA devices. Requires the `player` feature to be enabled.

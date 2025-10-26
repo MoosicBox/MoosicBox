@@ -1,7 +1,7 @@
 //! Minimal FFI bindings to libopus for test vector generation.
 //!
 //! This crate provides low-level FFI bindings to libopus along with safe Rust wrappers
-//! for encoding and decoding Opus audio. It is intended for internal use within MoosicBox
+//! for encoding and decoding Opus audio. It is intended for internal use within `MoosicBox`
 //! for generating test vectors and is not published to crates.io.
 //!
 //! # Usage

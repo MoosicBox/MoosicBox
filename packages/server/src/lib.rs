@@ -1,10 +1,10 @@
-//! MoosicBox server application.
+//! `MoosicBox` server application.
 //!
-//! This crate provides the main server implementation for MoosicBox, a music streaming and
+//! This crate provides the main server implementation for `MoosicBox`, a music streaming and
 //! management platform. It orchestrates various components including:
 //!
 //! * Audio playback and streaming
-//! * Music library management with support for multiple sources (local, Tidal, Qobuz, YouTube Music)
+//! * Music library management with support for multiple sources (local, Tidal, Qobuz, `YouTube` Music)
 //! * WebSocket communication for real-time updates
 //! * Audio zone management for multi-room audio
 //! * Player management (local and UPnP/DLNA devices)

@@ -1,6 +1,6 @@
-//! Audio playback engine for MoosicBox.
+//! Audio playback engine for `MoosicBox`.
 //!
-//! This crate provides the core playback functionality for the MoosicBox music player,
+//! This crate provides the core playback functionality for the `MoosicBox` music player,
 //! handling audio decoding, streaming, and playback control. It supports both local file
 //! playback and remote streaming from various audio sources.
 //!

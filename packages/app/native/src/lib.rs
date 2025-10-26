@@ -1,6 +1,6 @@
-//! Native desktop application for MoosicBox music player.
+//! Native desktop application for `MoosicBox` music player.
 //!
-//! This crate provides the core functionality for the MoosicBox native desktop application,
+//! This crate provides the core functionality for the `MoosicBox` native desktop application,
 //! including routing, UI rendering, state management, and playback visualization. It serves
 //! as the main entry point for the desktop GUI application.
 //!

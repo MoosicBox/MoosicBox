@@ -1,7 +1,7 @@
-//! Event listener service for monitoring UPnP device state changes.
+//! Event listener service for monitoring `UPnP` device state changes.
 //!
 //! This module provides an asynchronous service for subscribing to and monitoring state changes
-//! on UPnP devices, including media info, position info, and transport info updates.
+//! on `UPnP` devices, including media info, position info, and transport info updates.
 //! Requires the `listener` feature to be enabled.
 
 #![allow(clippy::module_name_repetitions)]

@@ -11,7 +11,7 @@
 //! * **Music playback**: Local playback with multiple audio output backends (CPAL, ASIO, JACK)
 //! * **Remote control**: WebSocket-based communication with `MoosicBox` servers
 //! * **Service discovery**: Automatic discovery of `MoosicBox` servers via mDNS/Zeroconf
-//! * **Multiple sources**: Support for local library, Tidal, Qobuz, and YouTube Music
+//! * **Multiple sources**: Support for local library, Tidal, Qobuz, and `YouTube` Music
 //! * **Native UI**: Optional native UI rendering with Hyperchad framework
 //! * **Bundled mode**: Optional embedded server for standalone operation
 //!
