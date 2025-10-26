@@ -294,15 +294,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("║                Combined Extractors Example                 ║");
         eprintln!("╠════════════════════════════════════════════════════════════╣");
         eprintln!("║ This example demonstrates multiple extractors working      ║");
-        eprintln!("║ together in handler functions.                            ║");
+        eprintln!("║ together in handler functions.                             ║");
         eprintln!("║                                                            ║");
-        eprintln!("║ To run this example, enable a backend feature:            ║");
+        eprintln!("║ To run this example, enable a backend feature:             ║");
         eprintln!("║                                                            ║");
-        eprintln!("║   cargo run --features actix                              ║");
-        eprintln!("║   cargo run --features simulator                          ║");
+        eprintln!("║   cargo run --features actix                               ║");
+        eprintln!("║   cargo run --features simulator                           ║");
         eprintln!("║                                                            ║");
-        eprintln!("║ The 'actix' feature uses the production Actix Web backend.║");
-        eprintln!("║ The 'simulator' feature uses a test simulator backend.    ║");
+        eprintln!("║ The 'actix' feature uses the production Actix Web backend. ║");
+        eprintln!("║ The 'simulator' feature uses a test simulator backend.     ║");
         eprintln!("╚════════════════════════════════════════════════════════════╝");
     }
 
