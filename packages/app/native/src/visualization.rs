@@ -1,3 +1,12 @@
+//! Real-time audio visualization for the native application.
+//!
+//! This module provides real-time waveform visualization for the currently playing track,
+//! rendering animated audio waveforms on an HTML canvas. The visualization updates
+//! periodically to show playback progress with a moving cursor.
+//!
+//! The module manages canvas dimensions, update intervals, and caches visualization data
+//! for performance.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
