@@ -381,31 +381,31 @@ macro_rules! async_service_body {
 /// use moosicbox_async_service::*;
 ///
 /// #[derive(Debug)]
-/// pub enum Command {
+/// pub enum MyCommand {
 ///     Increment,
 ///     GetValue,
 /// }
 ///
-/// pub struct Context {
+/// pub struct MyContext {
 ///     value: u32,
 /// }
 ///
 /// // Generate service with sequential processing
-/// async_service_sequential!(Command, Context);
+/// async_service_sequential!(MyCommand, MyContext);
 ///
 /// #[async_trait]
 /// impl Processor for Service {
 ///     type Error = Error;
 ///
 ///     async fn process_command(
-///         ctx: Arc<sync::RwLock<Context>>,
-///         command: Command,
+///         ctx: Arc<sync::RwLock<MyContext>>,
+///         command: MyCommand,
 ///     ) -> Result<(), Self::Error> {
 ///         match command {
-///             Command::Increment => {
+///             MyCommand::Increment => {
 ///                 ctx.write().await.value += 1;
 ///             }
-///             Command::GetValue => {
+///             MyCommand::GetValue => {
 ///                 println!("Value: {}", ctx.read().await.value);
 ///             }
 ///         }
@@ -503,32 +503,32 @@ macro_rules! async_service_sequential {
 /// use moosicbox_async_service::*;
 ///
 /// #[derive(Debug)]
-/// pub enum Command {
+/// pub enum MyCommand {
 ///     FetchData { url: String },
 ///     ProcessResult { data: String },
 /// }
 ///
-/// pub struct Context {
+/// pub struct MyContext {
 ///     results: Vec<String>,
 /// }
 ///
 /// // Generate service with concurrent processing
-/// async_service!(Command, Context);
+/// async_service!(MyCommand, MyContext);
 ///
 /// #[async_trait]
 /// impl Processor for Service {
 ///     type Error = Error;
 ///
 ///     async fn process_command(
-///         ctx: Arc<sync::RwLock<Context>>,
-///         command: Command,
+///         ctx: Arc<sync::RwLock<MyContext>>,
+///         command: MyCommand,
 ///     ) -> Result<(), Self::Error> {
 ///         match command {
-///             Command::FetchData { url } => {
+///             MyCommand::FetchData { url } => {
 ///                 // Simulate async I/O - multiple fetches can run concurrently
 ///                 println!("Fetching from {}", url);
 ///             }
-///             Command::ProcessResult { data } => {
+///             MyCommand::ProcessResult { data } => {
 ///                 ctx.write().await.results.push(data);
 ///             }
 ///         }
