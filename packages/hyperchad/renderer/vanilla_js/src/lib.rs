@@ -1,3 +1,36 @@
+//! Vanilla JavaScript renderer for the `HyperChad` framework.
+//!
+//! This crate provides an HTML renderer that generates interactive web applications using
+//! vanilla JavaScript (no framework dependencies). It produces HTML with custom attributes
+//! (e.g., `v-onclick`, `hx-get`) that are processed by the embedded `HyperChad` JavaScript
+//! runtime to enable reactive behavior, DOM manipulation, and HTTP requests.
+//!
+//! # Main Components
+//!
+//! * [`VanillaJsTagRenderer`] - Converts `HyperChad` containers to HTML with JavaScript event handlers
+//! * [`VanillaJsRenderer`] - Extends HTML rendering with server-sent events and canvas support
+//! * `SCRIPT` - The embedded JavaScript runtime (available with `script` feature)
+//! * [`SCRIPT_NAME`] - Filename for the JavaScript runtime file
+//!
+//! # Features
+//!
+//! * **Interactive elements** - Click, hover, resize, and keyboard event handlers
+//! * **HTTP requests** - Support for GET, POST, PUT, DELETE, PATCH with htmx-style attributes
+//! * **Server-sent events** - Real-time updates via SSE (requires `plugin-sse`)
+//! * **Canvas rendering** - Dynamic canvas updates (requires `plugin-canvas`)
+//! * **Content hashing** - Cache-busting filenames (requires `hash` feature)
+//! * **Plugin system** - Modular features for routing, forms, UUID generation, etc.
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_renderer_vanilla_js::VanillaJsTagRenderer;
+//! use hyperchad_renderer::HtmlTagRenderer;
+//!
+//! let renderer = VanillaJsTagRenderer::default();
+//! // Use renderer to convert HyperChad containers to HTML
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
