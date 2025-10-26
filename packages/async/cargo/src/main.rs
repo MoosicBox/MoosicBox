@@ -1,3 +1,30 @@
+//! A command-line tool for detecting missing `#[inject_yields]` attributes on async functions.
+//!
+//! This tool scans Rust source files in a workspace and warns about async functions
+//! and methods that are missing the `#[inject_yields]` attribute. The attribute is
+//! important for simulation testing, enabling deterministic async testing with controlled
+//! execution yield points.
+//!
+//! # Usage
+//!
+//! ```bash
+//! # Check current workspace
+//! switchy_async_cargo
+//!
+//! # Check specific directory
+//! switchy_async_cargo --root /path/to/project
+//! ```
+//!
+//! # Exit Codes
+//!
+//! * 0 - Success, no warnings found
+//! * 1 - Warnings found, missing `#[inject_yields]` attributes detected
+//!
+//! # Exemptions
+//!
+//! Functions and methods are exempt from the check if they have `#[inject_yields]`
+//! at the function level, or if their containing impl block or module has the attribute.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
