@@ -1,3 +1,9 @@
+//! Node.js package manager utilities.
+//!
+//! This module provides utilities for running Node.js package manager commands
+//! (pnpm, bun, or npm) with automatic detection and fallback support based on
+//! enabled features.
+
 use std::{
     path::{Path, PathBuf},
     process::Command,
