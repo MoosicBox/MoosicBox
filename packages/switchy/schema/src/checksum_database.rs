@@ -111,6 +111,7 @@ impl Savepoint for ChecksumSavepoint {
 ///
 /// ```
 /// use switchy_schema::ChecksumDatabase;
+/// use switchy_database::Database;
 ///
 /// # async fn example() -> switchy_schema::Result<()> {
 /// let db = ChecksumDatabase::new();
