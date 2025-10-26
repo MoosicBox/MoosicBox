@@ -1,3 +1,8 @@
+//! Tidal music service integration endpoints for the admin interface.
+//!
+//! Provides endpoints for Tidal authentication (device authorization flow), settings
+//! management, and library scanning.
+
 use std::sync::LazyLock;
 
 use actix_htmx::{Htmx, TriggerType};

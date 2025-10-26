@@ -1,3 +1,7 @@
+//! Qobuz music service integration endpoints for the admin interface.
+//!
+//! Provides endpoints for Qobuz user authentication, settings management, and library scanning.
+
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     Scope,
