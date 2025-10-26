@@ -1,3 +1,8 @@
+//! Conversions to and from `actix-web` HTTP types.
+//!
+//! This module provides `From` implementations to convert between this crate's
+//! [`StatusCode`](crate::StatusCode) and `actix-web`'s status code types.
+
 use actix_web::http::StatusCode;
 
 #[allow(clippy::fallible_impl_from)]
