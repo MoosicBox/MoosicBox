@@ -1,3 +1,29 @@
+//! Actix-web middleware for logging HTTP request and response details.
+//!
+//! This module provides [`ApiLogger`] middleware that logs:
+//! * Request method, path, query string, and relevant headers (e.g., Range)
+//! * Response status, duration, and relevant headers (e.g., Content-Range, Content-Length)
+//! * Different log levels for success (trace) vs. failure (error) responses
+//!
+//! # Example
+//!
+//! ```rust
+//! use actix_web::{App, HttpServer};
+//! use moosicbox_middleware::api_logger::ApiLogger;
+//!
+//! # async fn example() -> std::io::Result<()> {
+//! HttpServer::new(|| {
+//!     App::new()
+//!         .wrap(ApiLogger::new())
+//!         // ... add your routes
+//! })
+//! .bind(("127.0.0.1", 8080))?
+//! .run()
+//! # ;
+//! # Ok(())
+//! # }
+//! ```
+
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
     http::header,
