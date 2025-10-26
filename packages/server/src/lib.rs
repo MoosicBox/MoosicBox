@@ -1,3 +1,54 @@
+//! MoosicBox server application.
+//!
+//! This crate provides the main server implementation for MoosicBox, a music streaming and
+//! management platform. It orchestrates various components including:
+//!
+//! * Audio playback and streaming
+//! * Music library management with support for multiple sources (local, Tidal, Qobuz, YouTube Music)
+//! * WebSocket communication for real-time updates
+//! * Audio zone management for multi-room audio
+//! * Player management (local and UPnP/DLNA devices)
+//! * REST API endpoints for client applications
+//! * Optional tunneling for remote access
+//!
+//! # Main Entry Points
+//!
+//! * [`run`] - Full-featured server startup with all configuration options
+//! * [`run_basic`] - Simplified server startup with default settings
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_server::{run_basic};
+//! # use moosicbox_config::AppType;
+//! # async fn example() -> std::io::Result<()> {
+//! // Start a basic server on localhost:8080
+//! run_basic(
+//!     AppType::App,
+//!     "0.0.0.0",
+//!     8080,
+//!     None,
+//!     |handle| {
+//!         println!("Server started!");
+//!         handle
+//!     }
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Features
+//!
+//! The server supports numerous optional features including:
+//!
+//! * `player` - Local audio playback support
+//! * `upnp` - UPnP/DLNA player discovery and control
+//! * `tunnel` - Remote access tunneling
+//! * `telemetry` - Metrics and observability
+//! * `sqlite` / `postgres` - Database backend options
+//! * Music source integrations: `tidal`, `qobuz`, `yt`
+//! * Audio format support: `format-flac`, `format-mp3`, `format-aac`, `format-opus`
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

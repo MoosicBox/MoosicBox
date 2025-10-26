@@ -1,3 +1,8 @@
+//! WebSocket server and connection handling.
+//!
+//! This module provides WebSocket functionality for real-time client-server communication.
+//! It manages client connections, message routing, and event broadcasting to subscribed clients.
+
 pub mod handler;
 pub mod server;
 
