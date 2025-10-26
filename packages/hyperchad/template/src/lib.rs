@@ -1,3 +1,96 @@
+//! Template system for building HTML-like user interfaces.
+//!
+//! This crate provides a declarative template syntax via the [`container!`] macro,
+//! along with rendering traits and DSL functions for building dynamic UIs.
+//!
+//! # Main Features
+//!
+//! * **Template Syntax** - Use the [`container!`] macro to write HTML-like templates
+//! * **Rendering** - Implement [`RenderContainer`] to convert custom types to containers
+//! * **Actions DSL** - Define interactive behaviors with the [`fx`] function
+//! * **Styling** - Use [`calc`] for calculations and color functions like `rgb()`/`rgba()`
+//! * **Viewport Units** - Create responsive layouts with `vw()`, `vh()`, `dvw()`, `dvh()`
+//!
+//! # Basic Usage
+//!
+//! ```rust
+//! use hyperchad_template::{container, to_html};
+//!
+//! // Create a simple template
+//! let containers = container! {
+//!     div {
+//!         h1 { "Hello, World!" }
+//!         div { "Welcome to HyperChad templates." }
+//!     }
+//! };
+//!
+//! // Convert to HTML string
+//! let html = to_html(&containers);
+//! ```
+//!
+//! # Styling with Attributes
+//!
+//! ```rust
+//! use hyperchad_template::container;
+//!
+//! let containers = container! {
+//!     div width=100% height=vh(100) background=rgb(240, 240, 240) {
+//!         h1 color=rgb(0, 120, 200) { "Styled Header" }
+//!     }
+//! };
+//! ```
+//!
+//! # Interactive Actions
+//!
+//! ```rust
+//! use hyperchad_template::container;
+//!
+//! let containers = container! {
+//!     button fx-click=fx { show("modal") } {
+//!         "Open Modal"
+//!     }
+//!     div id="modal" hidden {
+//!         "Modal Content"
+//!     }
+//! };
+//! ```
+//!
+//! # Custom Components
+//!
+//! Implement [`RenderContainer`] to create reusable components:
+//!
+//! ```rust
+//! use hyperchad_template::{container, Containers, RenderContainer};
+//! use core::convert::Infallible;
+//!
+//! struct Alert {
+//!     message: String,
+//!     level: AlertLevel,
+//! }
+//!
+//! enum AlertLevel {
+//!     Info,
+//!     Warning,
+//! }
+//!
+//! impl RenderContainer for Alert {
+//!     type Error = Infallible;
+//!
+//!     fn render_to(&self, containers: &mut Containers) -> Result<(), Self::Error> {
+//!         let class = match self.level {
+//!             AlertLevel::Info => "alert-info",
+//!             AlertLevel::Warning => "alert-warning",
+//!         };
+//!         *containers = container! {
+//!             div class=(class) {
+//!                 (self.message.clone())
+//!             }
+//!         };
+//!         Ok(())
+//!     }
+//! }
+//! ```
+
 #![no_std]
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
