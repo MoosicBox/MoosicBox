@@ -1,3 +1,23 @@
+//! HTTP API endpoints for authentication operations.
+//!
+//! This module provides Actix-web endpoints for creating and retrieving magic tokens,
+//! which enable temporary credential exchange for authentication. These endpoints are
+//! only available when the `api` feature is enabled.
+//!
+//! # Endpoints
+//!
+//! * `POST /magic-token` - Create a new magic token
+//! * `GET /magic-token` - Retrieve credentials from a magic token
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use actix_web::App;
+//! # use moosicbox_auth::api;
+//! let app = App::new()
+//!     .service(api::bind_services(actix_web::web::scope("/auth")));
+//! ```
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{
