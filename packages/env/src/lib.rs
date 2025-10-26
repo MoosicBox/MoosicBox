@@ -1,12 +1,85 @@
+//! Switchy environment variable access with pluggable backends.
+//!
+//! This crate provides a unified interface for accessing environment variables with support
+//! for both standard system environment variables and a simulator mode for testing.
+//!
+//! # Features
+//!
+//! * **standard**: Uses `std::env` for real environment variable access
+//! * **simulator**: Provides a configurable environment for testing with deterministic defaults
+//!
+//! # Usage
+//!
+//! With the `standard` feature (default), access environment variables:
+//!
+//! ```rust
+//! # #[cfg(feature = "std")]
+//! # {
+//! use switchy_env::{var, var_parse};
+//!
+//! # unsafe { std::env::set_var("PORT", "8080"); }
+//! // Get a variable as a string
+//! let port_str = var("PORT").unwrap();
+//!
+//! // Parse a variable as a specific type
+//! let port: u16 = var_parse("PORT").unwrap();
+//! # }
+//! ```
+//!
+//! With the `simulator` feature, configure variables for testing:
+//!
+//! ```rust,ignore
+//! use switchy_env::{set_var, var, reset};
+//!
+//! // Set a test variable
+//! set_var("DATABASE_URL", "sqlite::memory:");
+//!
+//! // Access it like normal
+//! let db_url = var("DATABASE_URL").unwrap();
+//!
+//! // Reset to defaults
+//! reset();
+//! ```
+//!
+//! # Custom Providers
+//!
+//! Implement the [`EnvProvider`] trait to create custom environment variable sources:
+//!
+//! ```rust
+//! use switchy_env::{EnvProvider, EnvError, Result};
+//! use std::collections::BTreeMap;
+//!
+//! struct CustomEnv;
+//!
+//! impl EnvProvider for CustomEnv {
+//!     fn var(&self, name: &str) -> Result<String> {
+//!         // Custom logic here
+//!         Err(EnvError::NotFound(name.to_string()))
+//!     }
+//!
+//!     fn vars(&self) -> BTreeMap<String, String> {
+//!         BTreeMap::new()
+//!     }
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
 use std::collections::BTreeMap;
 
+/// Standard system environment variable access.
+///
+/// This module provides access to real system environment variables via `std::env`.
+/// Enabled with the `std` feature (default).
 #[cfg(feature = "std")]
 pub mod standard;
 
+/// Simulator environment for testing.
+///
+/// This module provides a configurable environment with deterministic defaults
+/// for testing. Enabled with the `simulator` feature (default).
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
