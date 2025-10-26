@@ -1,3 +1,10 @@
+//! Priority-based channel implementations using `futures-channel`.
+//!
+//! This module provides [`PrioritizedSender`] and [`PrioritizedReceiver`], which extend
+//! the standard unbounded channel with support for message prioritization. Messages can
+//! be sent with priority ordering, where higher priority values are processed before
+//! lower priority values.
+
 use std::{
     ops::Deref,
     pin::{Pin, pin},
