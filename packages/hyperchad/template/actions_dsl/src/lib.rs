@@ -1,3 +1,43 @@
+//! `HyperChad` Template Actions DSL
+//!
+//! A procedural macro crate providing a domain-specific language (DSL) for defining UI actions
+//! in `HyperChad` templates. The DSL allows writing Rust-like syntax for expressing interactive
+//! behaviors, event handling, and UI manipulation.
+//!
+//! # Overview
+//!
+//! The [`actions_dsl!`] macro transforms a Rust-like syntax into `HyperChad` action types at
+//! compile time, with extensive compile-time optimization to eliminate runtime overhead.
+//!
+//! # Features
+//!
+//! * **Rust-like syntax** - Write actions using familiar Rust control flow and expressions
+//! * **Compile-time optimization** - Zero runtime allocation for action construction
+//! * **Event handling** - Built-in support for event listeners with closures
+//! * **Type safety** - Full type checking at compile time
+//! * **Method chaining** - Fluent API for action composition
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use hyperchad_template_actions_dsl::actions_dsl;
+//!
+//! // Simple visibility control
+//! actions_dsl! {
+//!     show("modal");
+//!     hide("sidebar");
+//! }
+//!
+//! // Event handling with closures
+//! actions_dsl! {
+//!     on_event("play-track", |track_id| {
+//!         if track_id == get_data_attr_value_self("track-id") {
+//!             set_background_self("#333");
+//!         }
+//!     });
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
