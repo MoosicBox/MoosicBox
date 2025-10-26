@@ -1,3 +1,22 @@
+//! Data models for audio zone management in `MoosicBox`.
+//!
+//! This crate provides the core data structures for managing audio zones, which are groups
+//! of audio players that can be controlled together for synchronized playback. Audio zones
+//! enable multi-room audio functionality by coordinating playback across multiple devices.
+//!
+//! # Main Types
+//!
+//! * [`AudioZone`] - Represents a group of audio players
+//! * [`Player`] - Represents an individual audio output device within a zone
+//! * [`AudioZoneWithSession`] - An audio zone associated with a playback session
+//! * [`CreateAudioZone`] / [`UpdateAudioZone`] - Request types for zone management
+//!
+//! # API Representations
+//!
+//! The crate provides separate API-friendly types (e.g., [`ApiAudioZone`], [`ApiPlayer`])
+//! with camelCase field names for JSON serialization, which can be converted to/from
+//! internal types using `From` trait implementations.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
