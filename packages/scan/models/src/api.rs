@@ -1,3 +1,8 @@
+//! API types for scan path configuration.
+//!
+//! This module provides serializable types used for configuring file system
+//! paths to be scanned.
+
 #![allow(clippy::module_name_repetitions)]
 
 use serde::{Deserialize, Serialize};
