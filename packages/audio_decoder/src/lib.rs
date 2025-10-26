@@ -25,6 +25,7 @@ use moosicbox_opus::register_opus_codec;
 pub mod media_sources;
 pub mod unsync;
 
+/// Errors that can occur during audio decoding operations.
 #[allow(dead_code)]
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
@@ -45,6 +46,9 @@ pub enum AudioDecodeError {
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// Trait for types that can decode audio buffers.
+///
+/// Implementors of this trait receive decoded audio data and can process, filter, or output it.
 pub trait AudioDecode {
     /// # Errors
     ///
@@ -66,11 +70,19 @@ pub trait AudioDecode {
 }
 
 type InnerType = Box<dyn AudioDecode>;
+
+/// Handler function type that opens an audio decoder with the given signal specification and duration.
+///
+/// This is called when the audio stream's format is determined and returns an initialized decoder.
 pub type OpenAudioDecodeHandler =
     Box<dyn FnMut(SignalSpec, Duration) -> Result<InnerType, AudioDecodeError> + Send>;
 type AudioFilter =
     Box<dyn FnMut(&mut AudioBuffer<f32>, &Packet, &Track) -> Result<(), AudioDecodeError> + Send>;
 
+/// Handles audio decoding with support for filters, multiple outputs, and cancellation.
+///
+/// This struct coordinates the decoding process, applying filters to decoded audio
+/// and distributing it to registered output handlers.
 pub struct AudioDecodeHandler {
     pub cancellation_token: Option<CancellationToken>,
     filters: Vec<AudioFilter>,
@@ -80,6 +92,7 @@ pub struct AudioDecodeHandler {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl AudioDecodeHandler {
+    /// Creates a new audio decode handler with no filters or outputs.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -90,18 +103,27 @@ impl AudioDecodeHandler {
         }
     }
 
+    /// Adds an audio filter to the handler.
+    ///
+    /// Filters are applied to decoded audio before it's sent to outputs.
     #[must_use]
     pub fn with_filter(mut self, filter: AudioFilter) -> Self {
         self.filters.push(filter);
         self
     }
 
+    /// Adds an output handler to the decoder.
+    ///
+    /// The handler will be called when the audio format is determined.
     #[must_use]
     pub fn with_output(mut self, open_output: OpenAudioDecodeHandler) -> Self {
         self.open_decode_handlers.push(open_output);
         self
     }
 
+    /// Sets a cancellation token for the decoder.
+    ///
+    /// When the token is cancelled, decoding will stop.
     #[must_use]
     pub fn with_cancellation_token(mut self, cancellation_token: CancellationToken) -> Self {
         self.cancellation_token.replace(cancellation_token);
@@ -167,6 +189,7 @@ impl AudioDecodeHandler {
         Ok(())
     }
 
+    /// Returns `true` if there are output handlers waiting to be opened.
     #[must_use]
     pub fn contains_outputs_to_open(&self) -> bool {
         !self.open_decode_handlers.is_empty()
@@ -199,6 +222,7 @@ impl From<std::io::Error> for DecodeError {
     }
 }
 
+/// Errors that can occur during the complete decoding process.
 #[derive(Debug, Error)]
 pub enum DecodeError {
     #[error(transparent)]
@@ -287,6 +311,7 @@ pub fn decode_file_path_str(
     )
 }
 
+/// Return type for functions that construct an audio decode handler.
 pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, DecodeError>;
 
 /// # Errors

@@ -18,22 +18,34 @@ use crate::{
     parse::{GetNumberError, parse_number},
 };
 
+/// Error type for HTML attribute value parsing failures.
 #[derive(Debug, Error)]
 pub enum ParseAttrError {
+    /// The attribute value is not valid for the expected type.
     #[error("Invalid Value: '{0}'")]
     InvalidValue(String),
+    /// Failed to parse a number value.
     #[error(transparent)]
     GetNumber(#[from] GetNumberError),
+    /// Failed to parse a hex color value.
     #[error(transparent)]
     ParseHex(#[from] ParseHexError),
+    /// Failed to deserialize JSON value.
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
 }
 
+/// Wrapper error that includes the attribute name with the parsing error.
 #[derive(Debug, Error)]
 pub enum ParseAttrWrapperError {
+    /// Failed to parse attribute with the given name.
     #[error("Invalid attr value for {name}: '{error:?}'")]
-    Parse { name: String, error: ParseAttrError },
+    Parse {
+        /// Name of the attribute that failed to parse.
+        name: String,
+        /// The underlying parse error.
+        error: ParseAttrError,
+    },
 }
 
 impl TryFrom<String> for crate::Container {

@@ -16,6 +16,7 @@ impl From<flume::SendError<usize>> for ListenerError {
     }
 }
 
+/// Errors that can occur in the `UPnP` listener service.
 #[derive(Debug, Error)]
 pub enum ListenerError {
     #[error(transparent)]
@@ -26,6 +27,7 @@ pub enum ListenerError {
     Send,
 }
 
+/// Commands that can be sent to the `UPnP` listener service.
 #[derive(AsRefStr)]
 pub enum UpnpCommand {
     SubscribeMediaInfo {
@@ -63,6 +65,7 @@ impl Display for UpnpCommand {
     }
 }
 
+/// Context for managing `UPnP` listener subscriptions and state.
 pub struct UpnpContext {
     #[allow(clippy::type_complexity)]
     status_join_handles:
@@ -425,9 +428,12 @@ async fn unsubscribe(
 }
 
 type SubscriptionAction = Box<dyn (Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send>;
+/// Callback function for media info subscription events.
 pub type MediaInfoSubscriptionAction =
     Box<dyn (Fn(MediaInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+/// Callback function for position info subscription events.
 pub type PositionInfoSubscriptionAction =
     Box<dyn (Fn(PositionInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+/// Callback function for transport info subscription events.
 pub type TransportInfoSubscriptionAction =
     Box<dyn (Fn(TransportInfo) -> Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;

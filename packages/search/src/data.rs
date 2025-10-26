@@ -9,7 +9,9 @@ use crate::{
     DataValue, GLOBAL_SEARCH_INDEX_PATH, PopulateIndexError, RecreateIndexError, SEMAPHORE,
 };
 
+/// Trait for converting music models into search index data values.
 pub trait AsDataValues {
+    /// Converts the implementing type into a vector of field-value pairs for indexing.
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
 }
 
@@ -149,7 +151,9 @@ impl AsDataValues for Track {
     }
 }
 
+/// Trait for converting music models into delete terms for removing from the search index.
 pub trait AsDeleteTerm {
+    /// Converts the implementing type into a field-value pair for deletion.
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue);
 }
 
@@ -171,6 +175,7 @@ impl AsDeleteTerm for Track {
     }
 }
 
+/// Error type for failures when reindexing from a database.
 #[derive(Debug, Error)]
 pub enum ReindexFromDbError {
     #[error(transparent)]

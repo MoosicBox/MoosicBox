@@ -3,12 +3,19 @@ use std::{collections::BTreeMap, io};
 use simvar::switchy::tcp::TcpStream;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
+/// HTTP response with status code, headers, and body.
 pub struct HttpResponse {
+    /// HTTP status code.
     pub status_code: u16,
+    /// HTTP headers as key-value pairs.
     pub headers: BTreeMap<String, String>,
+    /// HTTP response body.
     pub body: String,
 }
 
+/// Checks if headers contain expected key-value pairs in order.
+///
+/// Returns `true` if all expected headers appear in the actual headers in the specified order.
 #[must_use]
 pub fn headers_contains_in_order(
     expected: &[(String, String)],

@@ -7,12 +7,16 @@ use thiserror::Error;
 
 use crate::{MissingValue, ParseError, ToValueType};
 
+/// Errors that can occur when fetching and converting database values.
 #[derive(Debug, Error)]
 pub enum DatabaseFetchError {
+    /// The database request was invalid.
     #[error("Invalid Request")]
     InvalidRequest,
+    /// A database error occurred.
     #[error(transparent)]
     Database(#[from] switchy_database::DatabaseError),
+    /// Failed to parse or convert a database value.
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -290,7 +294,13 @@ impl MissingValue<f64> for &Row {}
 impl MissingValue<NaiveDateTime> for &Row {}
 impl MissingValue<chrono::DateTime<chrono::Utc>> for &Row {}
 
+/// Trait for extracting typed values from database rows.
+///
+/// This trait provides methods to get values by column name from database rows
+/// and convert them to the desired Rust type.
 pub trait ToValue<Type> {
+    /// Extracts a value from a database column and converts it to type `T`.
+    ///
     /// # Errors
     ///
     /// * If the value failed to parse
@@ -299,6 +309,8 @@ pub trait ToValue<Type> {
         Type: ToValueType<T>,
         for<'a> &'a Row: MissingValue<T>;
 
+    /// Handles the case when a column value is missing.
+    ///
     /// # Errors
     ///
     /// * If the missing value failed to parse
@@ -609,40 +621,57 @@ impl ToValueType<chrono::DateTime<chrono::Utc>> for &DatabaseValue {
     }
 }
 
+/// Trait for converting database rows into model types.
 pub trait AsModel<T> {
+    /// Converts this database row into a model of type `T`.
     fn as_model(&self) -> T;
 }
 
+/// Trait for fallibly converting database rows into model types.
 pub trait AsModelResult<T, E> {
+    /// Attempts to convert this database row into a model of type `T`.
+    ///
     /// # Errors
     ///
     /// * If the model fails to be created
     fn as_model(&self) -> Result<T, E>;
 }
 
+/// Trait for converting multiple database rows into a vector of models.
 pub trait AsModelResultMapped<T, E> {
+    /// Converts a collection of database rows into a vector of models.
+    ///
     /// # Errors
     ///
     /// * If the model fails to be created
     fn as_model_mapped(&self) -> Result<Vec<T>, E>;
 }
 
+/// Trait for converting multiple database rows into a vector of models (mutable).
 pub trait AsModelResultMappedMut<T, E> {
+    /// Converts a mutable collection of database rows into a vector of models.
+    ///
     /// # Errors
     ///
     /// * If the model fails to be created
     fn as_model_mapped_mut(&mut self) -> Result<Vec<T>, E>;
 }
 
+/// Trait for converting database rows into models with database query support.
 #[async_trait]
 pub trait AsModelResultMappedQuery<T, E> {
+    /// Converts database rows into models, with access to the database for additional queries.
+    ///
     /// # Errors
     ///
     /// * If the model fails to be created
     async fn as_model_mapped_query(&self, db: Arc<Box<dyn Database>>) -> Result<Vec<T>, E>;
 }
 
+/// Trait for converting mutable database rows into a vector of models.
 pub trait AsModelResultMut<T, E> {
+    /// Converts mutable database rows into a vector of models.
+    ///
     /// # Errors
     ///
     /// * If the model fails to be created
@@ -678,8 +707,14 @@ where
     }
 }
 
+/// Trait for converting database rows into models with database query support.
 #[async_trait]
 pub trait AsModelQuery<T> {
+    /// Converts a database row into a model, with access to the database for additional queries.
+    ///
+    /// # Errors
+    ///
+    /// * If the model fails to be created
     async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<T, DatabaseFetchError>;
 }
 

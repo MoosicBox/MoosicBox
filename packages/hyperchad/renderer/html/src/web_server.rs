@@ -16,6 +16,10 @@ use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
 
 pub use hyperchad_renderer_html_web_server::*;
 
+/// Converts a hyperchad router to a web server-compatible HTML renderer.
+///
+/// Creates an HTML renderer configured for generic web servers with the provided
+/// tag renderer and router configuration.
 #[must_use]
 pub fn router_to_web_server<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     tag_renderer: T,
@@ -35,17 +39,28 @@ pub fn router_to_web_server<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
     .with_html_renderer_event_pub(publisher)
 }
 
+/// Web server response processor for HTML rendering.
+///
+/// Processes generic web server requests and generates HTML responses using the
+/// configured router and tag renderer.
 #[derive(Clone)]
 pub struct HtmlWebServerResponseProcessor<T: HtmlTagRenderer + Clone> {
+    /// The hyperchad router for handling navigation.
     pub router: Router,
+    /// The HTML tag renderer.
     pub tag_renderer: T,
+    /// Background color for the page.
     pub background: Option<Color>,
+    /// Page title.
     pub title: Option<String>,
+    /// Page description.
     pub description: Option<String>,
+    /// Viewport meta tag content.
     pub viewport: Option<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone> HtmlWebServerResponseProcessor<T> {
+    /// Creates a new web server response processor.
     #[must_use]
     pub const fn new(tag_renderer: T, router: Router) -> Self {
         Self {
@@ -141,6 +156,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 }
 
+/// Prepared request for web server processing.
+///
+/// Contains the parsed route request and flags indicating the request type.
 #[derive(Clone)]
 pub struct PreparedRequest {
     full: bool,

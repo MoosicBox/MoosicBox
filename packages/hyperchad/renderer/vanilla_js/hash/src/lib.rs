@@ -1,3 +1,9 @@
+//! Generates a unique hash based on enabled plugin features for the HyperChad Vanilla JS renderer.
+//!
+//! This crate computes a hash string from the set of enabled plugin features to ensure
+//! that different feature builds produce distinct output directories and don't overwrite
+//! each other. The hash is computed at compile time using the enabled feature flags.
+
 use const_hex::{Buffer, const_encode};
 use sha2_const_stable::Sha256;
 
@@ -116,6 +122,11 @@ const PLUGIN_ACTIONS_RESIZE_HASH: &str = "-actions-resize";
 #[cfg(not(feature = "plugin-actions-resize"))]
 const PLUGIN_ACTIONS_RESIZE_HASH: &str = "";
 
+/// Concatenated string of all enabled plugin feature names.
+///
+/// This string is built at compile time by concatenating the names of all enabled
+/// plugin features. It serves as the input for generating the hash that uniquely
+/// identifies this particular feature configuration.
 pub const PLUGIN_HASH: &str = const_format::concatcp!(
     "plugins",
     PLUGIN_IDIOMORPH_HASH,
@@ -143,8 +154,22 @@ pub const PLUGIN_HASH: &str = const_format::concatcp!(
     PLUGIN_HTTP_EVENTS_HASH,
 );
 
+/// SHA-256 hash of the plugin feature string as raw bytes.
+///
+/// This is the raw 32-byte SHA-256 digest computed from [`PLUGIN_HASH`].
+/// It uniquely identifies the current feature configuration at compile time.
 pub const RAW_HASH: [u8; Sha256::DIGEST_SIZE] =
     Sha256::new().update(PLUGIN_HASH.as_bytes()).finalize();
 
+/// Hexadecimal encoding buffer for the raw hash.
+///
+/// This buffer stores the hexadecimal representation of [`RAW_HASH`].
 pub const HEX_BUF: Buffer<{ Sha256::DIGEST_SIZE }> = const_encode(&RAW_HASH);
+
+/// Hexadecimal string representation of the plugin configuration hash.
+///
+/// This is the primary export of this crate - a compile-time constant string
+/// containing the hexadecimal encoding of the SHA-256 hash of all enabled plugin
+/// features. Use this value to construct unique paths or identifiers for different
+/// feature builds to prevent conflicts.
 pub const PLUGIN_HASH_HEX: &str = HEX_BUF.as_str();

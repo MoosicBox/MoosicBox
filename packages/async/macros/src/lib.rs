@@ -212,6 +212,12 @@ fn inject_item(item: &mut Item, injector: &mut YieldInjector) {
     }
 }
 
+/// Injects yield points after every `.await` in async functions when the `simulator` feature is enabled.
+///
+/// This macro transforms async functions to automatically call `switchy::unsync::task::yield_now().await`
+/// after each await point, enabling deterministic testing with the simulator runtime.
+///
+/// When the `simulator` feature is disabled, this macro has no effect and returns the input unchanged.
 #[allow(clippy::missing_const_for_fn)]
 #[proc_macro_attribute]
 pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -469,9 +475,16 @@ pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
     result.into()
 }
 
+/// Injects yield points into an entire module by reading and transforming the module's source file.
+///
+/// This macro reads the module file from disk, parses it, and applies yield injection to all async
+/// functions within. When the `simulator` feature is disabled, returns the input unchanged.
+///
 /// # Panics
 ///
-/// * If fails to get the `CARGO_MANIFEST_DIR` environment variable
+/// * If `CARGO_MANIFEST_DIR` environment variable is not set
+/// * If the module source file path cannot be constructed or read
+/// * If the module source file cannot be parsed as valid Rust code
 #[allow(clippy::missing_const_for_fn)]
 #[proc_macro]
 pub fn inject_yields_mod(input: TokenStream) -> TokenStream {

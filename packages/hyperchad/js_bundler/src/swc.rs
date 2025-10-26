@@ -23,6 +23,15 @@ use swc_ecma_transforms_base::{fixer::fixer, helpers::Helpers};
 use swc_ecma_transforms_typescript::strip;
 use swc_ecma_visit::VisitMutWith as _;
 
+/// Bundles a JavaScript or TypeScript file using SWC.
+///
+/// This function uses the SWC bundler to process the target file and its dependencies,
+/// producing a single bundled output file. Optionally minifies the output.
+///
+/// # Panics
+///
+/// * Panics if the bundler fails to bundle the modules.
+/// * Panics if file I/O operations fail.
 pub fn bundle(target: &Path, out: &Path, minify: bool) {
     let globals = Box::leak(Box::default());
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
@@ -163,7 +172,11 @@ impl swc_bundler::Hook for Hook {
     }
 }
 
+/// Custom loader for the SWC bundler.
+///
+/// Loads JavaScript and TypeScript modules for bundling.
 pub struct Loader {
+    /// The source map used for loading files.
     pub cm: Lrc<SourceMap>,
 }
 

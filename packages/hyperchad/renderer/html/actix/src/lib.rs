@@ -26,8 +26,11 @@ mod actions;
 #[cfg(feature = "sse")]
 mod sse;
 
+/// Processes Actix HTTP requests and converts content to responses.
 #[async_trait]
 pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
+    /// Prepares request data from the HTTP request and body.
+    ///
     /// # Errors
     ///
     /// * If the request fails to prepare
@@ -37,12 +40,23 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
         body: Option<Arc<Bytes>>,
     ) -> Result<T, actix_web::Error>;
 
+    /// Converts prepared data into an HTTP response.
+    ///
+    /// # Errors
+    ///
+    /// * If the response fails to construct
     async fn to_response(&self, data: T) -> Result<HttpResponse, actix_web::Error>;
 
+    /// Converts content and prepared data into response body bytes and content type.
+    ///
+    /// # Errors
+    ///
+    /// * If content conversion fails
     async fn to_body(&self, content: Content, data: T)
     -> Result<(Bytes, String), actix_web::Error>;
 }
 
+/// Actix web application for hyperchad rendering with configurable response processing.
 #[derive(Clone)]
 pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> {
     pub processor: R,
@@ -60,6 +74,8 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
 }
 
 impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> ActixApp<T, R> {
+    /// Creates a new Actix application with the given processor and event receiver.
+    #[must_use]
     pub const fn new(processor: R, renderer_event_rx: Receiver<RendererEvent>) -> Self {
         Self {
             processor,
@@ -72,6 +88,7 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         }
     }
 
+    /// Sets the action transmitter channel and returns the modified app.
     #[cfg(feature = "actions")]
     #[must_use]
     pub fn with_action_tx(
@@ -85,6 +102,7 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         self
     }
 
+    /// Sets the action transmitter channel in place.
     #[cfg(feature = "actions")]
     pub fn set_action_tx(
         &mut self,
@@ -108,6 +126,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
     }
 }
 
+/// Runner for executing the Actix application with a render handle.
 #[derive(Clone)]
 pub struct ActixAppRunner<
     T: Send + Sync + Clone,

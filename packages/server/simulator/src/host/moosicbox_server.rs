@@ -19,10 +19,14 @@ use simvar::{
 use switchy_async::util::CancellationToken;
 use switchy_env::var_or;
 
+/// Host identifier for the `MoosicBox` server.
 pub const HOST: &str = "moosicbox_server";
+/// Port number for the `MoosicBox` server simulation listener.
 pub const PORT: u16 = 1234;
+/// Cancellation token for the `MoosicBox` server.
 pub static CANCELLATION_TOKEN: LazyLock<Arc<Mutex<Option<CancellationToken>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
+/// Server handle for the `MoosicBox` server.
 pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
 

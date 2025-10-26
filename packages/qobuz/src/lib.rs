@@ -124,6 +124,9 @@ static CLIENT: LazyLock<switchy::http::Client> =
 pub static API_SOURCE: LazyLock<ApiSource> =
     LazyLock::new(|| ApiSource::register("Qobuz", "Qobuz"));
 
+/// Formats a title with an optional version string appended.
+///
+/// If a version is provided, it will be appended to the title with a dash separator.
 #[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {
     version.as_ref().map_or_else(
@@ -764,6 +767,15 @@ pub async fn artist(
     Ok(value.to_value_type()?)
 }
 
+/// Retrieves a paginated list of favorite artists from Qobuz.
+///
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while fetching the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -905,6 +917,15 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
+/// Retrieves a paginated list of albums for a specific artist from Qobuz.
+///
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while fetching the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -1252,6 +1273,15 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
+/// Retrieves a paginated list of tracks for a specific album from Qobuz.
+///
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while fetching the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1394,6 +1424,15 @@ pub async fn track(
     )?)
 }
 
+/// Retrieves a paginated list of favorite tracks from Qobuz.
+///
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while fetching the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1873,6 +1912,8 @@ impl QobuzMusicApiBuilder {
         self
     }
 
+    /// Builds a `QobuzMusicApi` instance with the configured settings.
+    ///
     /// # Errors
     ///
     /// * If the `db` is missing
@@ -1951,6 +1992,7 @@ impl QobuzMusicApiBuilder {
     }
 }
 
+/// Implementation of the `MusicApi` trait for Qobuz music service.
 pub struct QobuzMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
@@ -1958,6 +2000,7 @@ pub struct QobuzMusicApi {
 }
 
 impl QobuzMusicApi {
+    /// Creates a new builder for configuring and constructing a `QobuzMusicApi` instance.
     #[must_use]
     pub fn builder() -> QobuzMusicApiBuilder {
         QobuzMusicApiBuilder::default()

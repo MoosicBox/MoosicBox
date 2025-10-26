@@ -1,5 +1,6 @@
 use crate::Channels;
 
+/// Table of Contents (TOC) byte parsed from Opus packet header
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Toc {
     config: u8,
@@ -8,6 +9,7 @@ pub struct Toc {
 }
 
 impl Toc {
+    /// Parses TOC byte from Opus packet header
     #[must_use]
     pub const fn parse(toc_byte: u8) -> Self {
         Self {
@@ -17,11 +19,13 @@ impl Toc {
         }
     }
 
+    /// Returns configuration index (0-31)
     #[must_use]
     pub const fn config(self) -> u8 {
         self.config
     }
 
+    /// Returns channel configuration
     #[must_use]
     pub const fn channels(self) -> Channels {
         if self.stereo {
@@ -31,21 +35,25 @@ impl Toc {
         }
     }
 
+    /// Returns frame count code (0-3)
     #[must_use]
     pub const fn frame_count_code(self) -> u8 {
         self.frame_count_code
     }
 
+    /// Returns true if packet uses SILK codec (configs 0-15)
     #[must_use]
     pub const fn uses_silk(self) -> bool {
         self.config < 16
     }
 
+    /// Returns true if packet uses Hybrid mode (configs 12-15)
     #[must_use]
     pub const fn is_hybrid(self) -> bool {
         matches!(self.config, 12..=15)
     }
 
+    /// Returns audio bandwidth
     #[must_use]
     pub const fn bandwidth(self) -> Bandwidth {
         match self.config {
@@ -58,6 +66,7 @@ impl Toc {
         }
     }
 
+    /// Returns frame duration in milliseconds
     #[must_use]
     pub const fn frame_size_ms(self) -> u8 {
         let index = (self.config % 4) as usize;
@@ -69,6 +78,7 @@ impl Toc {
         }
     }
 
+    /// Returns frame duration in tenths of milliseconds
     #[must_use]
     pub const fn frame_duration_tenths_ms(self) -> u16 {
         let index = (self.config % 4) as usize;
@@ -80,35 +90,53 @@ impl Toc {
         }
     }
 
+    /// Returns complete configuration for this TOC
     #[must_use]
     pub const fn configuration(self) -> Configuration {
         CONFIGURATIONS[self.config as usize]
     }
 }
 
+/// Opus encoding mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpusMode {
+    /// SILK-only mode (voice-optimized, NB/MB/WB)
     SilkOnly,
+    /// Hybrid mode (SILK low frequencies + CELT high frequencies)
     Hybrid,
+    /// CELT-only mode (full-spectrum, all bandwidths)
     CeltOnly,
 }
 
+/// Audio bandwidth classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bandwidth {
+    /// Narrowband (4 kHz, 8 kHz sample rate)
     Narrowband,
+    /// Mediumband (6 kHz, 12 kHz sample rate)
     Mediumband,
+    /// Wideband (8 kHz, 16 kHz sample rate)
     Wideband,
+    /// Super-wideband (12 kHz, 24 kHz sample rate)
     SuperWideband,
+    /// Fullband (20 kHz, 48 kHz sample rate)
     Fullband,
 }
 
+/// Frame duration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameSize {
+    /// 2.5 milliseconds
     Ms2_5,
+    /// 5 milliseconds
     Ms5,
+    /// 10 milliseconds
     Ms10,
+    /// 20 milliseconds
     Ms20,
+    /// 40 milliseconds
     Ms40,
+    /// 60 milliseconds
     Ms60,
 }
 
@@ -132,13 +160,18 @@ impl FrameSize {
     }
 }
 
+/// Opus configuration combining mode, bandwidth, and frame size
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Configuration {
+    /// Encoding mode (SILK/CELT/Hybrid)
     pub mode: OpusMode,
+    /// Audio bandwidth
     pub bandwidth: Bandwidth,
+    /// Frame duration
     pub frame_size: FrameSize,
 }
 
+/// Lookup table of all 32 Opus configurations per RFC 6716 Table 2
 pub const CONFIGURATIONS: [Configuration; 32] = [
     Configuration {
         mode: OpusMode::SilkOnly,

@@ -11,6 +11,7 @@ use strum::{EnumDiscriminants, EnumIter, IntoEnumIterator as _};
 
 use crate::host::moosicbox_server::HOST;
 
+/// Context for fault injection interaction plan.
 pub struct InteractionPlanContext {}
 
 impl Default for InteractionPlanContext {
@@ -26,6 +27,9 @@ impl InteractionPlanContext {
     }
 }
 
+/// Interaction plan for fault injection testing.
+///
+/// Generates and executes fault injection interactions including sleeps and bounces.
 pub struct FaultInjectionInteractionPlan {
     #[allow(unused)]
     context: InteractionPlanContext,
@@ -50,11 +54,14 @@ impl FaultInjectionInteractionPlan {
     }
 }
 
+/// Fault injection interaction type.
 #[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(InteractionType))]
 pub enum Interaction {
+    /// Sleep for a duration.
     Sleep(Duration),
+    /// Bounce (restart) a host.
     Bounce(String),
 }
 

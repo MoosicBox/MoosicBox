@@ -183,10 +183,31 @@ impl ToValueType<MigrationStatus> for DatabaseValue {
 
 #[async_trait]
 pub trait Migration<'a>: Send + Sync + 'a {
+    /// Get the unique identifier for this migration
+    ///
+    /// The ID is used to track which migrations have been applied and to determine
+    /// migration order. IDs should be unique and sortable (e.g., timestamped).
     fn id(&self) -> &str;
 
+    /// Execute the migration (forward direction)
+    ///
+    /// This method applies the migration changes to the database. It should be
+    /// idempotent when possible, or the migration system will track execution to
+    /// prevent duplicate runs.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the migration execution fails
     async fn up(&self, db: &dyn Database) -> Result<()>;
 
+    /// Rollback the migration (reverse direction)
+    ///
+    /// This method reverses the changes made by `up()`. The default implementation
+    /// does nothing, making the migration non-reversible.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the rollback fails
     async fn down(&self, _db: &dyn Database) -> Result<()> {
         Ok(())
     }
@@ -211,10 +232,18 @@ pub trait Migration<'a>: Send + Sync + 'a {
         Ok(bytes::Bytes::from(vec![0u8; 32]))
     }
 
+    /// Get a human-readable description of this migration
+    ///
+    /// This is used for display purposes when listing migrations. The default
+    /// implementation returns `None`.
     fn description(&self) -> Option<&str> {
         None
     }
 
+    /// Get the list of database types this migration supports
+    ///
+    /// The default implementation returns all supported databases. Override this
+    /// to restrict a migration to specific database types.
     fn supported_databases(&self) -> Vec<&str> {
         vec!["sqlite", "postgres", "mysql"]
     }
@@ -222,6 +251,14 @@ pub trait Migration<'a>: Send + Sync + 'a {
 
 #[async_trait]
 pub trait MigrationSource<'a>: Send + Sync {
+    /// Get all available migrations from this source
+    ///
+    /// Returns a vector of migration trait objects that can be executed.
+    /// Migrations should be returned in the order they should be applied.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if migrations cannot be discovered or loaded
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
 
     /// List available migrations with their metadata
