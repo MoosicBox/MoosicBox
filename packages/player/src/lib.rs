@@ -1,3 +1,70 @@
+//! Audio playback engine for MoosicBox.
+//!
+//! This crate provides the core playback functionality for the MoosicBox music player,
+//! handling audio decoding, streaming, and playback control. It supports both local file
+//! playback and remote streaming from various audio sources.
+//!
+//! # Features
+//!
+//! * Playback session management with [`Playback`] and [`PlaybackHandler`]
+//! * Multiple audio formats (AAC, FLAC, MP3, Opus) via feature flags
+//! * Audio streaming and buffering with configurable quality settings
+//! * Retry logic for robust playback with [`PlaybackRetryOptions`]
+//! * Volume control and seeking capabilities
+//! * Support for both local and remote playback sources
+//!
+//! # Main Entry Points
+//!
+//! * [`PlaybackHandler`] - Manages playback operations for tracks and albums
+//! * [`Player`] - Trait for implementing custom playback players
+//! * [`Playback`] - Represents an active playback session
+//! * [`PlayerError`] - Error types for player operations
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_player::{PlaybackHandler, Player};
+//! # use moosicbox_music_models::{Track, PlaybackQuality};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # struct MyPlayer;
+//! # impl std::fmt::Debug for MyPlayer {
+//! #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//! #         write!(f, "MyPlayer")
+//! #     }
+//! # }
+//! # #[async_trait::async_trait]
+//! # impl Player for MyPlayer {
+//! #     async fn trigger_play(&self, _seek: Option<f64>) -> Result<(), moosicbox_player::PlayerError> { Ok(()) }
+//! #     async fn trigger_stop(&self) -> Result<(), moosicbox_player::PlayerError> { Ok(()) }
+//! #     async fn trigger_seek(&self, _seek: f64) -> Result<(), moosicbox_player::PlayerError> { Ok(()) }
+//! #     async fn trigger_pause(&self) -> Result<(), moosicbox_player::PlayerError> { Ok(()) }
+//! #     async fn trigger_resume(&self) -> Result<(), moosicbox_player::PlayerError> { Ok(()) }
+//! #     fn player_status(&self) -> Result<moosicbox_player::ApiPlaybackStatus, moosicbox_player::PlayerError> { unimplemented!() }
+//! #     fn get_source(&self) -> &moosicbox_player::PlayerSource { unimplemented!() }
+//! # }
+//! # let player = MyPlayer;
+//! # let session_id = 1;
+//! # let profile = "default".to_string();
+//! # let track = Track::default();
+//! # let quality = PlaybackQuality::default();
+//! // Create a playback handler with a custom player implementation
+//! let mut handler = PlaybackHandler::new(player);
+//!
+//! // Play a track
+//! handler.play_track(
+//!     session_id,
+//!     profile,
+//!     track,
+//!     None,           // seek position
+//!     Some(0.8),      // volume
+//!     quality,
+//!     None,           // playback target
+//!     None,           // retry options
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
