@@ -9,7 +9,7 @@ Session management library for the MoosicBox ecosystem, providing basic user ses
 - **Audio Zone Integration**: Associate sessions with audio zones and players
 - **Connection Management**: Track device connections and player registrations
 - **Database Integration**: Store session data with PostgreSQL and SQLite support
-- **Event System**: Optional event notifications for session changes
+- **Event System**: Optional event notifications for player updates
 
 ## Installation
 
