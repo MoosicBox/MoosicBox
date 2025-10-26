@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Managing Connections and Players
 
 ```rust
-use moosicbox_session::{register_connection, get_connections, create_player};
+use moosicbox_session::{register_connection, get_connections, delete_connection, delete_player};
 use moosicbox_session::models::{RegisterConnection, RegisterPlayer};
 use switchy_database::config::ConfigDatabase;
 
@@ -106,6 +106,18 @@ async fn setup_connections(db: &ConfigDatabase) -> Result<(), Box<dyn std::error
     for conn in connections {
         println!("Connection: {} with {} players", conn.name, conn.players.len());
     }
+
+    // Delete a player by ID
+    if let Some(conn) = connections.first() {
+        if let Some(player) = conn.players.first() {
+            delete_player(db, player.id).await?;
+            println!("Deleted player: {}", player.id);
+        }
+    }
+
+    // Delete a connection
+    delete_connection(db, "device-123").await?;
+    println!("Deleted connection");
 
     Ok(())
 }
