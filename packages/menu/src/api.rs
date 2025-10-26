@@ -1,3 +1,9 @@
+//! HTTP API endpoints for menu operations.
+//!
+//! This module provides actix-web HTTP endpoints for querying and managing music
+//! library content, including artists, albums, and tracks. It handles request
+//! parsing, validation, and delegates to the library module for business logic.
+
 #![allow(clippy::needless_for_each)]
 
 use std::str::FromStr;

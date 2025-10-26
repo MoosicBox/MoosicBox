@@ -1,3 +1,8 @@
+//! Artist management operations for the music library.
+//!
+//! This module provides functionality for querying, filtering, and sorting artists
+//! from the music library database.
+
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_json_utils::database::DatabaseFetchError;
