@@ -1,14 +1,52 @@
+//! Pure Rust Opus audio decoder implementation.
+//!
+//! This crate provides a native Rust implementation of the Opus audio decoder according to
+//! RFC 6716, supporting SILK (voice-optimized), CELT (full-spectrum), and Hybrid modes.
+//!
+//! # Features
+//!
+//! The crate supports optional feature flags for different codec modes:
+//! * `silk` - SILK codec for voice (Narrowband/Mediumband/Wideband)
+//! * `celt` - CELT codec for full-spectrum audio (all bandwidths)
+//! * `hybrid` - Hybrid mode (SILK low frequencies + CELT high frequencies)
+//! * `resampling` - Sample rate conversion support
+//!
+//! # Examples
+//!
+//! Basic usage:
+//!
+//! ```rust
+//! use moosicbox_opus_native::{Decoder, SampleRate, Channels};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a decoder for 48kHz stereo output
+//! let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
+//!
+//! // Decode an Opus packet
+//! let packet = vec![0x00; 100]; // Example packet data
+//! let mut output = vec![0i16; 960 * 2]; // 20ms at 48kHz stereo
+//! let samples = decoder.decode(Some(&packet), &mut output, false)?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// CELT decoder implementation (enabled with `celt` feature)
 #[cfg(feature = "celt")]
 pub mod celt;
+/// Error types for Opus decoder operations
 pub mod error;
+/// Opus packet framing and parsing according to RFC 6716
 pub mod framing;
+/// Range decoder for entropy decoding
 pub mod range;
+/// SILK decoder implementation (enabled with `silk` feature)
 #[cfg(feature = "silk")]
 pub mod silk;
+/// Table of Contents (TOC) byte parsing and configuration
 pub mod toc;
 mod util;
 
