@@ -1,3 +1,22 @@
+//! Tunneling protocol for HTTP and WebSocket requests over persistent connections.
+//!
+//! This crate provides types and utilities for tunneling HTTP and WebSocket requests through
+//! a persistent connection, enabling bidirectional communication between clients and servers.
+//! The tunnel protocol supports request streaming, packet ordering, and multiple encoding formats.
+//!
+//! # Main Components
+//!
+//! * [`TunnelRequest`] - Tagged enum for HTTP, WebSocket, or abort requests
+//! * [`TunnelHttpRequest`] - HTTP request metadata and payload
+//! * [`TunnelWsRequest`] - WebSocket request metadata and payload
+//! * [`TunnelResponse`] - Response packets with headers, status, and body bytes
+//! * [`TunnelStream`] - Async stream of response packets for a request
+//! * [`TunnelEncoding`] - Encoding format for response data (binary or base64)
+//!
+//! # Features
+//!
+//! * `base64` (default) - Enables base64 encoding support for text-safe transmission
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
