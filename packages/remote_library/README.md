@@ -56,13 +56,13 @@ async fn browse_remote_library() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Found {} artists", artists_page.items().len());
     for artist in artists_page.items() {
-        println!("Artist: {}", artist.name);
+        println!("Artist: {}", artist.title);
     }
 
     // Get specific artist
     let artist_id = Id::Number(123);
     if let Some(artist) = remote_api.artist(&artist_id).await? {
-        println!("Artist details: {}", artist.name);
+        println!("Artist details: {}", artist.title);
     }
 
     // Get albums for artist
@@ -137,7 +137,7 @@ async fn search_remote_library() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Artists found: {}", search_results.artists.len());
     for artist in search_results.artists {
-        println!("🎤 {}", artist.name);
+        println!("🎤 {}", artist.title);
     }
 
     println!("Albums found: {}", search_results.albums.len());
@@ -184,7 +184,7 @@ The client handles various error conditions:
 use moosicbox_music_api::Error as MusicApiError;
 
 match remote_api.artist(&artist_id).await {
-    Ok(Some(artist)) => println!("Found artist: {}", artist.name),
+    Ok(Some(artist)) => println!("Found artist: {}", artist.title),
     Ok(None) => println!("Artist not found"),
     Err(MusicApiError::Other(e)) => eprintln!("Network/API error: {}", e),
     Err(e) => eprintln!("Other error: {}", e),
