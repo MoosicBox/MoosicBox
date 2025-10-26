@@ -53,10 +53,10 @@ switchy_tcp = {
 
 ## Usage
 
-### Basic TCP Server (Tokio)
+### Basic TCP Server
 
 ```rust
-use switchy_tcp::tokio::{TcpListener, TcpStream};
+use switchy_tcp::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
@@ -100,7 +100,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 ### TCP Client
 
 ```rust
-use switchy_tcp::tokio::TcpStream;
+use switchy_tcp::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Stream Splitting
 
 ```rust
-use switchy_tcp::tokio::TcpStream;
+use switchy_tcp::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn handle_bidirectional_stream(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
