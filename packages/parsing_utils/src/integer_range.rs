@@ -1,3 +1,8 @@
+//! Integer parsing utilities for sequences and ranges.
+//!
+//! This module provides functions to parse comma-separated integers and hyphen-separated ranges
+//! from strings into vectors of `u64` values.
+
 use thiserror::Error;
 
 /// Errors that can occur when parsing integer sequences or ranges.
