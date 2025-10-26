@@ -21,7 +21,7 @@ The MoosicBox Tauri Application provides:
 
 - **Cross-platform**: Runs on Windows, macOS, and Linux
 - **Native Performance**: Rust backend with web frontend
-- **System Integration**: Media keys and notifications
+- **System Integration**: Notifications
 - **File Access**: Local file system access and management
 - **Window Management**: Multiple windows and advanced window controls
 
