@@ -225,11 +225,33 @@ jobs:
                         ||
                         format('# Rustdoc Accuracy Review for {0}
 
+                      ## 🎯 HIGHEST PRIORITY: Crate and Module Documentation
+
+                      **MOST CRITICAL** - These docs are the first thing users see:
+
+                      **Crate-Level Documentation (`lib.rs`):**
+                      - MUST have `//!` doc comments at the top of `lib.rs` explaining:
+                        * What this crate does (1-2 sentences)
+                        * Primary use cases
+                        * Basic usage example (if not trivial)
+                        * Links to main entry points (key structs/functions)
+                      - This is the landing page for `cargo doc` - it''s essential
+
+                      **Module-Level Documentation:**
+                      - Each public module (`pub mod`) MUST have `//!` doc comments at the top explaining:
+                        * What this module provides
+                        * When to use items from this module
+                        * Brief example if the module has a clear use case
+                      - Module docs in `lib.rs` or parent modules can use `/// Module description` on the `pub mod` line
+                      - Module docs in the module file itself use `//!` at the top of the file
+
                       ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ISSUES ONLY
 
                       You may ONLY make changes for these reasons:
 
                       **Fundamentally Missing Documentation:**
+                      - **Missing crate-level documentation** - `lib.rs` without `//!` comments at the top
+                      - **Missing module-level documentation** - Public modules without `//!` or `///` comments
                       - Public API items (`pub fn`, `pub struct`, `pub enum`, `pub trait`, `pub const`) without doc comments
                       - Missing `# Errors` sections when function returns `Result`
                       - Missing `# Panics` sections when function can panic
@@ -266,6 +288,8 @@ jobs:
                       Rustdoc is for **users of the crate**, not maintainers. Only document the public API.
 
                       **DO Document:**
+                      - ✅ **Crate-level docs** - `//!` comments at top of `lib.rs` (HIGHEST PRIORITY)
+                      - ✅ **Module-level docs** - `//!` comments at top of module files or `///` on `pub mod` declarations
                       - ✅ Public functions, structs, traits, enums, constants (items with `pub` visibility)
                       - ✅ Public struct fields and enum variants
                       - ✅ Function parameters and return values
@@ -308,6 +332,8 @@ jobs:
                       Example:
                       ```
                       COMMIT_MESSAGE_START
+                      - Added crate-level documentation to lib.rs explaining the purpose and main features of the crate
+                      - Added module-level documentation to `format` module describing supported audio formats
                       - Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
                       - Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
                       - Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
@@ -334,13 +360,20 @@ jobs:
                          - Check `pub use` statements and `pub mod` declarations
                          - Only consider items with plain `pub` visibility (not `pub(crate)`)
 
-                      3. **Check Documentation Against Code**
+                      3. **Check Crate and Module Documentation FIRST**
+                         - Verify `{1}/src/lib.rs` has `//!` doc comments at the very top
+                         - If missing or inadequate, add crate-level docs explaining what the crate does and its main use cases
+                         - Check each `pub mod` for module-level documentation
+                         - Module docs can be `///` on the `pub mod` line in `lib.rs`, or `//!` at top of the module file
+                         - These are the most important docs - they provide context for everything else
+
+                      4. **Check Documentation Against Code**
                          - Read the actual function implementations in `{1}/src/`
                          - Verify documented behavior matches actual code
                          - Check if documented errors match actual `Err` returns
                          - Ensure documented panics match actual `panic!` calls
 
-                      4. **Run Verification Commands**
+                      5. **Run Verification Commands**
                          - After making changes, run `cargo fmt` to format
                          - Run `cargo clippy --package {0} --all-targets -- -D warnings` to check for issues
                          - Run `cargo doc --package {0} --no-deps` to verify docs build correctly
@@ -348,6 +381,9 @@ jobs:
 
                       ## Scope
 
+                      - **FIRST PRIORITY**: Ensure `{1}/src/lib.rs` has crate-level `//!` documentation at the top
+                      - **SECOND PRIORITY**: Ensure all public modules have module-level documentation
+                      - **THIRD PRIORITY**: Document individual public API items
                       - Modify source files in `{1}/src/` to add/fix doc comments
                       - Focus on `lib.rs` first, then module files as needed
                       - Only modify `.rs` files, not Cargo.toml or other config
