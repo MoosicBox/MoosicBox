@@ -245,6 +245,70 @@ jobs:
                       - Module docs in `lib.rs` or parent modules can use `/// Module description` on the `pub mod` line
                       - Module docs in the module file itself use `//!` at the top of the file
 
+                      ## 📝 CODE EXAMPLES: Quality and Testability
+
+                      **CRITICAL**: All code examples MUST compile and run successfully.
+
+                      **Code Example Requirements:**
+
+                      **Use Rust Code Blocks (not text):**
+                      - ✅ Use ```rust for code that should compile
+                      - ❌ Never use ```text or plain ``` for Rust examples
+                      - Rust code blocks are automatically tested by `cargo test --doc`
+
+                      **Feature-Gated Examples:**
+                      When examples require specific features, use hidden lines with `#` prefix:
+                      ```rust
+                      //! # Example with feature-gated code:
+                      //! ```rust
+                      //! # #[cfg(feature = "embedded")]
+                      //! # {{
+                      //! # use crate::include_dir::include_dir;
+                      //! let dir = include_dir!("assets");
+                      //! # }}
+                      //! ```
+                      ```
+
+                      **Hidden Setup Code:**
+                      Use `#` prefix to hide boilerplate while keeping examples compilable:
+                      ```rust
+                      /// ```rust
+                      /// # use crate::Client;
+                      /// # fn main() -> Result<(), Box<dyn std::error::Error>> {{
+                      /// let client = Client::new("localhost:8080");
+                      /// let response = client.connect()?;
+                      /// # Ok(())
+                      /// # }}
+                      /// ```
+                      ```
+
+                      **no_run for Examples with Side Effects:**
+                      For examples that compile but shouldn''t execute (I/O, network, etc.):
+                      ```rust
+                      /// ```rust,no_run
+                      /// use crate::start_server;
+                      /// start_server("0.0.0.0:8080");  // Would actually bind a port
+                      /// ```
+                      ```
+
+                      **ignore for Platform-Specific:**
+                      Only use `ignore` for truly platform-specific code:
+                      ```rust
+                      /// ```rust,ignore
+                      /// #[cfg(target_os = "linux")]
+                      /// use crate::linux_specific_function;
+                      /// ```
+                      ```
+
+                      **Example Quality Checklist:**
+                      - Uses ```rust not ```text
+                      - Compiles without errors
+                      - Imports are shown or hidden with `#`
+                      - Feature gates use `# #[cfg(feature = "...")]` if needed
+                      - Side effects use `no_run` attribute
+                      - Error handling is shown (Result types, ?)
+                      - Example demonstrates actual API usage
+
                       ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ISSUES ONLY
 
                       You may ONLY make changes for these reasons:
@@ -262,7 +326,9 @@ jobs:
                       - Doc comments claim behavior that doesn''t match the actual code
                       - Function signatures documented don''t match actual implementation
                       - Error conditions documented don''t match actual `Err` returns
-                      - Examples in docs that would fail to compile or run
+                      - **Examples in docs that would fail to compile or run** (CRITICAL)
+                      - **Examples using ```text instead of ```rust** (prevents doc testing)
+                      - **Examples missing necessary feature gates or hidden setup code**
                       - Links to items that don''t exist
 
                       **FORBIDDEN Changes (even if you think they would be "better"):**
@@ -290,6 +356,7 @@ jobs:
                       **DO Document:**
                       - ✅ **Crate-level docs** - `//!` comments at top of `lib.rs` (HIGHEST PRIORITY)
                       - ✅ **Module-level docs** - `//!` comments at top of module files or `///` on `pub mod` declarations
+                      - ✅ **Compilable examples** - Use ```rust blocks that compile, hide boilerplate with `#`
                       - ✅ Public functions, structs, traits, enums, constants (items with `pub` visibility)
                       - ✅ Public struct fields and enum variants
                       - ✅ Function parameters and return values
@@ -316,6 +383,9 @@ jobs:
                       - Add `#[must_use]` attribute to constructors and getters (this is code, not just doc)
                       - Document ALL error conditions in `# Errors` sections
                       - Use proper markdown formatting in doc comments
+                      - **Always use ```rust for code examples, never ```text**
+                      - **Use `# ` prefix to hide boilerplate in examples (setup, imports, main wrapper)**
+                      - **Use ```rust,no_run for examples with side effects (I/O, network, etc.)**
 
                       ## 📝 Commit Message Instructions
 
@@ -334,6 +404,8 @@ jobs:
                       COMMIT_MESSAGE_START
                       - Added crate-level documentation to lib.rs explaining the purpose and main features of the crate
                       - Added module-level documentation to `format` module describing supported audio formats
+                      - Fixed code examples in `parse_config` to use compilable ```rust blocks with hidden setup code
+                      - Converted ```text examples to ```rust,no_run for I/O operations in `start_server`
                       - Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
                       - Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
                       - Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
@@ -376,8 +448,10 @@ jobs:
                       5. **Run Verification Commands**
                          - After making changes, run `cargo fmt` to format
                          - Run `cargo clippy --package {0} --all-targets -- -D warnings` to check for issues
+                         - **Run `cargo test --doc --package {0}` to verify all examples compile and run**
                          - Run `cargo doc --package {0} --no-deps` to verify docs build correctly
                          - These MUST pass before committing
+                         - **If doc tests fail, fix the examples or add appropriate attributes (no_run, ignore)**
 
                       ## Scope
 
