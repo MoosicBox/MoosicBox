@@ -1,3 +1,17 @@
+//! Time simulation for deterministic testing.
+//!
+//! This module provides a simulated time system where time progression is controlled
+//! programmatically via step counters and multipliers. This enables deterministic testing
+//! of time-dependent code.
+//!
+//! Time simulation is based on three components:
+//!
+//! * Epoch offset - The base Unix timestamp in milliseconds
+//! * Step counter - The current simulation step
+//! * Step multiplier - How many milliseconds of simulated time pass per step
+//!
+//! Simulated time is calculated as: `epoch_offset + (step * step_multiplier)`
+
 use std::{
     cell::RefCell,
     sync::{LazyLock, RwLock},
