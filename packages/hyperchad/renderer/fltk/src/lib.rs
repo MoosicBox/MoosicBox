@@ -1,3 +1,26 @@
+//! FLTK-based renderer for the Hyperchad UI framework.
+//!
+//! This crate provides a desktop GUI renderer implementation using the [FLTK](https://www.fltk.org/)
+//! (Fast Light Toolkit) library. It renders Hyperchad UI elements as native desktop widgets.
+//!
+//! # Main Types
+//!
+//! * [`FltkRenderer`] - The main renderer implementation for FLTK
+//! * [`FltkRenderRunner`] - Runner for executing the FLTK event loop
+//! * [`ImageSource`] - Specifies the source of images (bytes or URL)
+//! * [`AppEvent`] - Events that occur within the FLTK application
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hyperchad_renderer_fltk::FltkRenderer;
+//! # use flume::unbounded;
+//! # fn main() {
+//! let (tx, _rx) = unbounded();
+//! let mut renderer = FltkRenderer::new(tx);
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
