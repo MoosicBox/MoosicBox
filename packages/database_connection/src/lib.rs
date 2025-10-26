@@ -1,3 +1,50 @@
+//! Database connection initialization and credential management.
+//!
+//! This crate provides a unified interface for initializing database connections
+//! across multiple database backends, including `SQLite` (via rusqlite or sqlx),
+//! `PostgreSQL` (via tokio-postgres or sqlx), and Turso. It supports various TLS
+//! configurations and credential management through environment variables, URLs,
+//! or AWS SSM parameters.
+//!
+//! # Features
+//!
+//! * Multiple database backends: `SQLite`, `PostgreSQL`, `Turso`
+//! * TLS support for `PostgreSQL`: `OpenSSL`, native-tls, or no TLS
+//! * Flexible credential management from URLs or environment
+//! * Connection pooling with configurable pool sizes
+//! * Feature-gated compilation for minimal dependencies
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use switchy_database_connection::{Credentials, init};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Parse credentials from a database URL
+//! let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
+//!
+//! // Initialize a database connection (parameters vary by feature)
+//! # #[cfg(feature = "sqlite")]
+//! let db = init(None, Some(creds)).await?;
+//! # #[cfg(not(feature = "sqlite"))]
+//! # let db = init(Some(creds)).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Feature Flags
+//!
+//! The crate uses feature flags to control which database backend is compiled:
+//!
+//! * `sqlite-rusqlite` - `SQLite` via rusqlite
+//! * `sqlite-sqlx` - `SQLite` via sqlx
+//! * `postgres-raw` - `PostgreSQL` via tokio-postgres
+//! * `postgres-sqlx` - `PostgreSQL` via sqlx
+//! * `postgres-native-tls` - `PostgreSQL` with native-tls
+//! * `postgres-openssl` - `PostgreSQL` with `OpenSSL`
+//! * `turso` - Turso database support
+//! * `creds` - AWS SSM credential retrieval
+//! * `simulator` - Test database simulator
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

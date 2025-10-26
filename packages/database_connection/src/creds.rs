@@ -1,3 +1,26 @@
+//! Database credential retrieval from environment variables and AWS SSM.
+//!
+//! This module provides functionality to retrieve database credentials from
+//! multiple sources in order of precedence:
+//!
+//! 1. `DATABASE_URL` environment variable (full connection string)
+//! 2. Individual environment variables (`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+//! 3. AWS Systems Manager (SSM) Parameter Store (for cloud deployments)
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "creds")]
+//! # {
+//! # use switchy_database_connection::creds::get_db_creds;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Retrieve credentials from environment or AWS SSM
+//! let creds = get_db_creds().await?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+
 #![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;
