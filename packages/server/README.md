@@ -187,9 +187,7 @@ The server can automatically scan and index your music library:
 
 ```bash
 # Scan a directory
-curl -X POST "http://localhost:8001/scan" \
-  -H "Content-Type: application/json" \
-  -d '{"path": "/path/to/music"}'
+curl -X POST "http://localhost:8001/scan/run-scan-path?path=/path/to/music"
 ```
 
 ## Multi-Zone Audio
