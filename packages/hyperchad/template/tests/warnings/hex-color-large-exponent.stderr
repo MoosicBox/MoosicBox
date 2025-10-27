@@ -1,0 +1,5 @@
+error: Invalid hex color '#1e999'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+  --> tests/warnings/hex-color-large-exponent.rs:18:19
+   |
+18 |         div color=#1e999 { "5 characters - invalid length" }
+   |                   ^^^^^^

@@ -1,0 +1,5 @@
+error: expected at least one digit in exponent
+  --> tests/warnings/hex-color-uppercase-e-at-end.rs:13:20
+   |
+13 |         div color=#12E { "Uppercase E causes same lexer error as lowercase" }
+   |                    ^^^

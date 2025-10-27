@@ -1,0 +1,5 @@
+error: Invalid hex color '#1e2abcdef'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+  --> tests/warnings/hex-color-too-long.rs:16:19
+   |
+16 |         div color=#1e2abcdef { "9 characters - too long" }
+   |                   ^^^^^^^^^^

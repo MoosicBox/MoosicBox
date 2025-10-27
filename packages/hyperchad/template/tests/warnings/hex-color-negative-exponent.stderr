@@ -1,0 +1,14 @@
+error: Expected hex digits after '#' for hex color
+  --> tests/warnings/hex-color-negative-exponent.rs:14:19
+   |
+14 |         div color=#1e-2 { "Negative exponent with minus sign" }
+   |                   ^
+   |
+   = help: Note: Hex colors ending in 'e' without digits after (like #12e) must use string syntax: color="#12e"
+   = help: This is due to Rust treating 'e' as scientific notation (e.g., 1e2 = 100.0)
+
+error: expected one of: identifier, integer literal, string literal, `-`, `:`
+  --> tests/warnings/hex-color-negative-exponent.rs:14:20
+   |
+14 |         div color=#1e-2 { "Negative exponent with minus sign" }
+   |                    ^^^^
