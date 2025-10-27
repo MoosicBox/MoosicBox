@@ -1,0 +1,8 @@
+error: Expected hex digits after '#' for hex color
+ --> tests/warnings/invalid-hex-color-empty.rs:5:19
+  |
+5 |         div color=# { "Empty hex - invalid" }
+  |                   ^
+  |
+  = help: Note: Hex colors ending in 'e' without digits after (like #12e) must use string syntax: color="#12e"
+  = help: This is due to Rust treating 'e' as scientific notation (e.g., 1e2 = 100.0)

@@ -28,7 +28,7 @@ mod generate;
 
 use ast::DiagnosticParse;
 use proc_macro2::{Ident, Span, TokenStream};
-use proc_macro2_diagnostics::Diagnostic;
+use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::quote;
 use syn::parse::{ParseStream, Parser};
 
@@ -181,41 +181,11 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
     ) {
         Ok(data) => data,
         Err(err) => {
-            let err_str = err.to_string();
-
-            // Provide better error messages for common parsing failures
-            if err_str.contains("expected") && err_str.contains("found") {
-                return Err(format!(
-                    "Template syntax error in container! macro.\n\
-                    \n\
-                    Parsing failed: {err_str}\n\
-                    \n\
-                    Common issues:\n\
-                    - Element names must be lowercase: div, button, h1, h2, etc.\n\
-                    - Attributes: key=\"value\" or key=(expression)\n\
-                    - Control flow: @if condition {{ }} @else {{ }}\n\
-                    - Loops: @for item in collection {{ }}\n\
-                    - Variables: @let name = value;\n\
-                    - Expressions: (variable_name)\n\
-                    - Input elements need semicolons: input type=\"text\";\n\
-                    - Check for balanced braces {{ }}\n\
-                    - Make sure all strings are properly quoted"
-                ));
+            diagnostics.push(err.span().error(err.to_string()));
+            // Return empty markups so diagnostics can be emitted
+            ast::Markups {
+                markups: Vec::new(),
             }
-
-            return Err(format!(
-                "Failed to parse container! template.\n\
-                \n\
-                Error: {err_str}\n\
-                \n\
-                Common issues:\n\
-                - Element names must be lowercase (div, button, etc.)\n\
-                - Check attribute formatting: key=\"value\" or key=(expression)\n\
-                - Ensure braces {{}} are balanced\n\
-                - Control flow needs @ prefix: @if, @for, @match\n\
-                - Variables need @let: @let name = value;\n\
-                - Check for missing semicolons after Input elements"
-            ));
         }
     };
 

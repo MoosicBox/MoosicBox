@@ -1259,3 +1259,141 @@ fn raw_percentage_edge_cases() {
         })
     ); // 150% clamped to 100% = 255
 }
+
+#[test]
+fn hex_colors_starting_with_digit_containing_letters() {
+    let result = container! {
+        div {
+            div color=#1a2b3c { "Starts with 1, contains a,b,c" }
+            div color=#2fade3 { "Starts with 2, contains f,a,d,e" }
+            div color=#3ff { "Starts with 3, contains f" }
+            div color=#4d4d4d { "Starts with 4, contains d" }
+            div color=#5abcde { "Starts with 5, contains a,b,c,d,e" }
+            div color=#6f6f6f { "Starts with 6, contains f" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 6);
+
+    let expected_colors = [
+        Color::from_hex("#1a2b3c"),
+        Color::from_hex("#2fade3"),
+        Color::from_hex("#3ff"),
+        Color::from_hex("#4d4d4d"),
+        Color::from_hex("#5abcde"),
+        Color::from_hex("#6f6f6f"),
+    ];
+
+    for (i, expected_color) in expected_colors.iter().enumerate() {
+        assert_eq!(parent.children[i].color, Some(*expected_color));
+    }
+}
+
+#[test]
+fn hex_colors_8_digit_starting_with_digit_containing_letters() {
+    let result = container! {
+        div color=#1a2b3c4d background=#5f6a7b8c {
+            "8-digit hex colors starting with digit and containing letters"
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let container = &result[0];
+    assert_eq!(container.color, Some(Color::from_hex("#1a2b3c4d")));
+    assert_eq!(container.background, Some(Color::from_hex("#5f6a7b8c")));
+}
+
+#[test]
+fn hex_colors_scientific_notation_3_digit() {
+    let result = container! {
+        div {
+            div color=#1e2 { "1e2 - tokenizes as LitFloat(1e2)" }
+            div color=#3e8 { "3e8 - tokenizes as LitFloat(3e8)" }
+            div color=#9e1 { "9e1 - tokenizes as LitFloat(9e1)" }
+            div color=#5e0 { "5e0 - tokenizes as LitFloat(5e0)" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 4);
+
+    let expected_colors = [
+        Color::from_hex("#1e2"),
+        Color::from_hex("#3e8"),
+        Color::from_hex("#9e1"),
+        Color::from_hex("#5e0"),
+    ];
+
+    for (i, expected_color) in expected_colors.iter().enumerate() {
+        assert_eq!(parent.children[i].color, Some(*expected_color));
+    }
+}
+
+#[test]
+fn hex_colors_scientific_notation_6_digit() {
+    let result = container! {
+        div {
+            div color=#1e293b { "1e293b - tokenizes as LitFloat(1e293) + Ident(b)" }
+            div color=#3e8acc { "3e8acc - tokenizes as LitFloat(3e8) + Ident(acc)" }
+            div color=#2e5a3d { "2e5a3d - tokenizes as LitFloat(2e5) + Ident(a3d)" }
+            div color=#7e1f8a { "7e1f8a - tokenizes as LitFloat(7e1) + Ident(f8a)" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 4);
+
+    let expected_colors = [
+        Color::from_hex("#1e293b"),
+        Color::from_hex("#3e8acc"),
+        Color::from_hex("#2e5a3d"),
+        Color::from_hex("#7e1f8a"),
+    ];
+
+    for (i, expected_color) in expected_colors.iter().enumerate() {
+        assert_eq!(parent.children[i].color, Some(*expected_color));
+    }
+}
+
+#[test]
+fn hex_colors_scientific_notation_8_digit() {
+    let result = container! {
+        div {
+            div color=#1e293bff { "1e293bff with alpha" }
+            div color=#3e8accaa { "3e8accaa with alpha" }
+            div color=#2e5a3d80 { "2e5a3d80 with alpha" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 3);
+
+    let expected_colors = [
+        Color::from_hex("#1e293bff"),
+        Color::from_hex("#3e8accaa"),
+        Color::from_hex("#2e5a3d80"),
+    ];
+
+    for (i, expected_color) in expected_colors.iter().enumerate() {
+        assert_eq!(parent.children[i].color, Some(*expected_color));
+    }
+}
+
+#[test]
+fn hex_colors_scientific_notation_mixed() {
+    let result = container! {
+        div color=#1e2 background=#3e8acc {
+            "Mix 3-digit and 6-digit scientific notation patterns"
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let container = &result[0];
+    assert_eq!(container.color, Some(Color::from_hex("#1e2")));
+    assert_eq!(container.background, Some(Color::from_hex("#3e8acc")));
+}

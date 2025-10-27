@@ -1,14 +1,4 @@
-error: Failed to parse container! template.
-
-       Error: expected one of: identifier, literal, `.`, `#`, curly braces, `;`
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
+error: expected one of: identifier, literal, `.`, `#`, curly braces, `;`
  --> tests/warnings/dynamic-attribute-names.rs:5:5
   |
 5 | /     container! {
@@ -17,3 +7,11 @@ error: Failed to parse container! template.
   | |_____^
   |
   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `name`
+ --> tests/warnings/dynamic-attribute-names.rs:4:9
+  |
+4 |     let name = "href";
+  |         ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default

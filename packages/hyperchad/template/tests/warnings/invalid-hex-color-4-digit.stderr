@@ -1,0 +1,5 @@
+error: Invalid hex color '#1a2b'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-4-digit.rs:5:19
+  |
+5 |         div color=#1a2b { "4-digit hex - invalid" }
+  |                   ^^^^^

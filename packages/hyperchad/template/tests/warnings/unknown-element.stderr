@@ -1,22 +1,5 @@
-error: Failed to parse container! template.
-
-       Error: expected one of: curly braces, literal, parentheses, identifier, `.`, `#`, `@`, `;`, integer literal, floating point literal, `#`, identifier
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
- --> tests/warnings/unknown-element.rs:4:23
+error: expected one of: curly braces, literal, parentheses, identifier, `.`, `#`, `@`, `;`, integer literal, floating point literal, `#`, identifier
+ --> tests/warnings/unknown-element.rs:5:9
   |
-4 |       let _containers = container! {
-  |  _______________________^
-5 | |         <UnknownElement>
-6 | |             "Test"
-7 | |         </UnknownElement>
-8 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+5 |         <UnknownElement>
+  |         ^

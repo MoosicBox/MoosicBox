@@ -1,0 +1,5 @@
+error: expected at least one digit in exponent
+  --> tests/warnings/hex-color-ending-in-e-without-digits.rs:13:20
+   |
+13 |         div color=#12e { "This should cause a lexer error" }
+   |                    ^^^

@@ -1,0 +1,8 @@
+error: Invalid hex color '#abcde'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-5-digit.rs:5:19
+  |
+5 |         div color=#abcde { "5-digit hex - invalid" }
+  |                   ^^^^^^
+  |
+  = help: If you intended a hex color ending in 'e', use string syntax: color="#XXXe"
+  = help: Rust's lexer treats patterns like '12e' as incomplete scientific notation

@@ -1,0 +1,5 @@
+error: expected at least one digit in exponent
+ --> tests/warnings/hex-color-ending-in-e.rs:6:20
+  |
+6 |         div color=#12e { "test" }
+  |                    ^^^

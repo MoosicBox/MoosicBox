@@ -4,10 +4,10 @@ use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::ToTokens;
 use syn::{
-    Error, Expr, Ident, Lit, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed,
+    Error, Expr, Ident, Lit, LitFloat, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed,
     ext::IdentExt,
     parenthesized,
-    parse::{Lookahead1, Parse, ParseStream},
+    parse::{Lookahead1, Parse, ParseStream, discouraged::Speculative},
     parse_quote,
     punctuated::{Pair, Punctuated},
     spanned::Spanned,
@@ -302,62 +302,147 @@ impl<E: MaybeElement> Markup<E> {
                 |numeric_lit| Ok(Self::NumericLit(numeric_lit)),
             )
         } else if lookahead.peek(syn::Token![#]) {
-            // Handle hex colors like #fff, #ffffff, #123, #000
-            let _pound: syn::Token![#] = input.parse()?;
+            // Parse hex colors like #fff, #123456, #1e293b
+            //
+            // IMPORTANT: Hex colors are challenging to parse because Rust's lexer interprets
+            // certain patterns as scientific notation:
+            // - #1e2 is tokenized as: # + LitFloat(1e2) where 1e2 = 100.0
+            // - #1e293b is tokenized as: # + LitFloat(1e293, suffix="b")
+            // - #12e CANNOT be tokenized (invalid: missing exponent digits)
+            //
+            // For the last case (#12e), users must use string syntax: color="#12e"
+            //
+            // This parser handles scientific notation by:
+            // 1. Parsing LitFloat tokens and extracting their base digits
+            // 2. Including hex-valid suffixes as part of the color (e.g., "b" in "1e293b")
+            // 3. Combining multiple tokens when needed (though usually it's one token)
+            let pound: syn::Token![#] = input.parse()?;
 
-            // Try to parse as identifier first (for values like #fff, #abc)
-            if let Ok(hex_ident) = input.call(Ident::parse_any) {
-                let hex_str = hex_ident.to_string();
+            let mut hex_str = String::new();
+            let successful_fork = input.fork();
+            let mut last_span = pound.span();
 
-                // Validate that it's a valid hex color (3, 6, or 8 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6 || hex_str.len() == 8)
-                    && hex_str.chars().all(|c| c.is_ascii_hexdigit())
-                {
-                    // Create a string literal with the full hex color
-                    let full_hex = format!("#{hex_str}");
-                    let expr: Expr = parse_quote!(#full_hex);
-                    return Ok(Self::Splice {
-                        paren_token: Box::new(Paren::default()),
-                        expr: Box::new(expr),
-                    });
+            loop {
+                if hex_str.len() >= 8 {
+                    break;
                 }
 
-                return Err(Error::new(
-                    hex_ident.span(),
-                    format!(
-                        "Invalid hex color '{hex_str}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)"
-                    ),
-                ));
-            }
-            // Try to parse as integer literal (for values like #123, #000)
-            else if let Ok(hex_int) = input.parse::<syn::LitInt>() {
-                let hex_str = hex_int.to_string();
+                let mut found_token = false;
 
-                // Validate that it's a valid hex color (3, 6, or 8 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6 || hex_str.len() == 8)
-                    && hex_str.chars().all(|c| c.is_ascii_hexdigit())
-                {
-                    // Create a string literal with the full hex color
-                    let full_hex = format!("#{hex_str}");
-                    let expr: Expr = parse_quote!(#full_hex);
-                    return Ok(Self::Splice {
-                        paren_token: Box::new(Paren::default()),
-                        expr: Box::new(expr),
-                    });
+                // Try Ident - catches things like "abc", "def", "fff"
+                if !found_token {
+                    let fork_ident = successful_fork.fork();
+                    if let Ok(ident) = fork_ident.call(Ident::parse_any) {
+                        let ident_str = ident.to_string();
+                        // STRICT: Token must be ENTIRELY hex-valid
+                        if !ident_str.is_empty() && ident_str.chars().all(|c| c.is_ascii_hexdigit())
+                        {
+                            hex_str.push_str(&ident_str);
+                            last_span = ident.span();
+                            successful_fork.advance_to(&fork_ident);
+                            found_token = true;
+                        }
+                    }
                 }
 
-                return Err(Error::new(
-                    hex_int.span(),
-                    format!(
-                        "Invalid hex color '{hex_str}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)"
-                    ),
-                ));
+                // Try LitInt for purely numeric tokens like "123", "000", hex literals like "1a2"
+                if !found_token {
+                    let fork_int = successful_fork.fork();
+                    if let Ok(lit_int) = fork_int.parse::<LitInt>() {
+                        let int_str = lit_int.to_string();
+                        // STRICT: Token must be ENTIRELY hex-valid (no suffixes, no underscores in output)
+                        if !int_str.is_empty() && int_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                            hex_str.push_str(&int_str);
+                            last_span = lit_int.span();
+                            successful_fork.advance_to(&fork_int);
+                            found_token = true;
+                        }
+                    }
+                }
+
+                // Try LitFloat for scientific notation like "1e2" which gets tokenized as float
+                // This handles patterns like #1e2, #3e8, #1e293b
+                // Note: "1e293b" is tokenized as float 1e293 with suffix "b"
+                if !found_token {
+                    let fork_float = successful_fork.fork();
+                    if let Ok(lit_float) = fork_float.parse::<LitFloat>() {
+                        // For hex colors, the "suffix" might actually be part of the hex digits
+                        // e.g., "1e293b" is tokenized as float "1e293" with suffix "b"
+                        // We need to check if suffix is hex-valid and include it
+                        let base_digits = lit_float.base10_digits();
+                        let suffix = lit_float.suffix();
+
+                        // Check if base digits are hex-valid
+                        if !base_digits.is_empty()
+                            && base_digits.chars().all(|c| c.is_ascii_hexdigit())
+                        {
+                            // If there's a suffix, check if it's also hex-valid
+                            let suffix_hex_valid = suffix.chars().all(|c| c.is_ascii_hexdigit());
+
+                            if suffix.is_empty() || suffix_hex_valid {
+                                // Add base digits
+                                hex_str.push_str(base_digits);
+                                // Add suffix if it's hex-valid (e.g., "b", "ff", "a1")
+                                if !suffix.is_empty() && suffix_hex_valid {
+                                    hex_str.push_str(suffix);
+                                }
+                                last_span = lit_float.span();
+                                successful_fork.advance_to(&fork_float);
+                                found_token = true;
+                            }
+                        }
+                    }
+                }
+
+                if !found_token {
+                    break;
+                }
             }
 
-            Err(Error::new(
-                input.span(),
-                "Expected hex digits after '#' for hex color",
-            ))
+            if (hex_str.len() == 3 || hex_str.len() == 6 || hex_str.len() == 8)
+                && hex_str.chars().all(|c| c.is_ascii_hexdigit())
+            {
+                input.advance_to(&successful_fork);
+                let full_hex = format!("#{hex_str}");
+                let expr: Expr = parse_quote!(#full_hex);
+                return Ok(Self::Splice {
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(expr),
+                });
+            }
+
+            let error_span = pound.span().join(last_span).unwrap_or_else(|| pound.span());
+
+            if hex_str.is_empty() {
+                diagnostics.push(
+                    pound
+                        .span()
+                        .error("Expected hex digits after '#' for hex color")
+                        .help("Note: Hex colors ending in 'e' without digits after (like #12e) must use string syntax: color=\"#12e\"")
+                        .help("This is due to Rust treating 'e' as scientific notation (e.g., 1e2 = 100.0)"),
+                );
+                return Ok(Self::Splice {
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(parse_quote!("#000")),
+                });
+            }
+
+            let mut error = error_span.error(format!(
+                "Invalid hex color '#{hex_str}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)"
+            ));
+
+            // Detect if this might be a scientific notation issue (ends with 'e' but incomplete)
+            if hex_str.ends_with('e') || hex_str.ends_with('E') {
+                error = error.help("If you intended a hex color ending in 'e', use string syntax: color=\"#XXXe\"")
+                    .help("Rust's lexer treats patterns like '12e' as incomplete scientific notation");
+            }
+
+            diagnostics.push(error);
+            input.advance_to(&successful_fork);
+            Ok(Self::Splice {
+                paren_token: Box::new(Paren::default()),
+                expr: Box::new(parse_quote!("#000")),
+            })
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between

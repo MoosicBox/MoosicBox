@@ -1,34 +1,10 @@
-error: Failed to parse container! template.
+error: expected one of: curly braces, literal, parentheses, `@`, `;`, integer literal, floating point literal, `#`, identifier
+ --> tests/warnings/elements-in-attributes.rs:9:21
+  |
+9 |         anchor href=.pinkie-pie {} {}
+  |                     ^
 
-       Error: expected one of: curly braces, literal, parentheses, `@`, `;`, integer literal, floating point literal, `#`, identifier
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
-  --> tests/warnings/elements-in-attributes.rs:8:5
-   |
- 8 | /     container! {
- 9 | |         anchor href=.pinkie-pie {} {}
-10 | |     };
-   | |_____^
-   |
-   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error: Failed to parse container! template.
-
-       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
+error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
   --> tests/warnings/elements-in-attributes.rs:20:5
    |
 20 | /     container! {
@@ -41,17 +17,7 @@ error: Failed to parse container! template.
    |
    = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: Failed to parse container! template.
-
-       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
+error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
   --> tests/warnings/elements-in-attributes.rs:28:5
    |
 28 | /     container! {
@@ -63,17 +29,7 @@ error: Failed to parse container! template.
    |
    = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: Failed to parse container! template.
-
-       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
+error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
   --> tests/warnings/elements-in-attributes.rs:34:5
    |
 34 | /     container! {
@@ -85,17 +41,7 @@ error: Failed to parse container! template.
    |
    = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: Failed to parse container! template.
-
-       Error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
-
-       Common issues:
-       - Element names must be lowercase (div, button, etc.)
-       - Check attribute formatting: key="value" or key=(expression)
-       - Ensure braces {} are balanced
-       - Control flow needs @ prefix: @if, @for, @match
-       - Variables need @let: @let name = value;
-       - Check for missing semicolons after Input elements
+error: unexpected end of input, expected one of: identifier, literal, `.`, `#`, curly braces, `;`
   --> tests/warnings/elements-in-attributes.rs:40:5
    |
 40 | /     container! {

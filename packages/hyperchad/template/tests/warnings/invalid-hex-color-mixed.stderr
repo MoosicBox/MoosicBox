@@ -1,0 +1,23 @@
+error: Invalid hex color '#1a'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-mixed.rs:6:23
+  |
+6 |             div color=#1a { "2-digit hex - invalid" }
+  |                       ^^^
+
+error: Invalid hex color '#5abc'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-mixed.rs:7:23
+  |
+7 |             div color=#5abc { "4-digit hex - invalid" }
+  |                       ^^^^^
+
+error: Invalid hex color '#1234567'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-mixed.rs:8:23
+  |
+8 |             div color=#1234567 { "7-digit hex - invalid" }
+  |                       ^^^^^^^^
+
+error: Invalid hex color '#123456789'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)
+ --> tests/warnings/invalid-hex-color-mixed.rs:9:23
+  |
+9 |             div color=#123456789 { "9-digit hex - invalid" }
+  |                       ^^^^^^^^^^
