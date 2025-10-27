@@ -96,7 +96,7 @@ let app = AppBuilder::new()
     .with_title("My HyperChad App".to_string())
     .with_size(800.0, 600.0)
     .with_background(Color::from_hex("#1a1a1a"))
-    .build(renderer)?;
+    .build_default()?;
 
 // Run application
 app.run()?;
@@ -113,7 +113,7 @@ let app = AppBuilder::new()
     .with_title("App Title".to_string())
     .with_description("App description".to_string())
     .with_viewport("width=device-width, initial-scale=1".to_string())
-    .build(renderer)?;
+    .build_default()?;
 ```
 
 ### Action Handling
@@ -138,7 +138,7 @@ let app = AppBuilder::new()
         println!("Window resized to {}x{}", width, height);
         Ok(())
     })
-    .build(renderer)?;
+    .build_default()?;
 ```
 
 ### Static Asset Routes
@@ -163,7 +163,7 @@ let app = AppBuilder::new()
             Bytes::from(include_str!("../assets/app.js"))
         ),
     })
-    .build(renderer)?;
+    .build_default()?;
 ```
 
 ### CLI Usage
@@ -193,7 +193,7 @@ let runtime_handle = Handle::current();
 let app = AppBuilder::new()
     .with_router(router)
     .with_runtime_handle(runtime_handle)
-    .build(renderer)?;
+    .build_default()?;
 ```
 
 ### Error Handling
@@ -201,7 +201,7 @@ let app = AppBuilder::new()
 ```rust
 use hyperchad_app::{Error, BuilderError};
 
-match AppBuilder::new().build(renderer) {
+match AppBuilder::new().build_default() {
     Ok(app) => {
         // Application built successfully
         app.run()?;
