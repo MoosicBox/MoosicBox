@@ -129,7 +129,8 @@ fn example() {
 ```rust,no_run
 # #[cfg(all(feature = "free_log", feature = "api"))]
 # {
-use moosicbox_logging::free_log_client::{DynLayer, FreeLogLayer, InitError};
+use moosicbox_logging::free_log_client::{DynLayer, FreeLogLayer};
+use moosicbox_logging::InitError;
 
 pub fn init(
     filename: Option<&str>,
@@ -168,10 +169,11 @@ Initializes the logging system with optional file output and custom layers.
 # #[cfg(feature = "macros")]
 # {
 # use moosicbox_logging::debug_or_trace;
+// Conditionally logs at trace level if enabled, otherwise logs at debug level
 debug_or_trace!(
-    ($debug_message),
-    ($trace_message)
-)
+    ("Debug message"),
+    ("Trace message")
+);
 # }
 ```
 
