@@ -325,6 +325,14 @@ jobs:
             - name: Run ${{ matrix.package.name }} doctests
               shell: bash
               run: |
+                  # Check if package has a lib target
+                  PACKAGE_PATH="${{ matrix.package.path }}"
+                  PACKAGE_PATH="${PACKAGE_PATH#./}"
+                  if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+                      echo "Skipping doctests for ${{ matrix.package.name }} - no library target found"
+                      exit 0
+                  fi
+
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
                           command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --doc --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
