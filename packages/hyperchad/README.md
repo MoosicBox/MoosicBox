@@ -35,7 +35,7 @@ use hyperchad::template::container;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
-        .with_route(RoutePath::Literal("/"), |_req: RouteRequest| async move {
+        .with_route("/", |_req: RouteRequest| async move {
             let content = container! {
                 div {
                     h1 { "Welcome to HyperChad" }
@@ -79,19 +79,19 @@ let ui = container! {
 use hyperchad::router::{Router, RoutePath, RouteRequest};
 
 let router = Router::new()
-    .with_route(RoutePath::Literal("/"), |_req| async move {
+    .with_route("/", |_req| async move {
         let content = container! {
             div { "Home Page" }
         };
         Ok(content)
     })
-    .with_route(RoutePath::Literal("/about"), |_req| async move {
+    .with_route("/about", |_req| async move {
         let content = container! {
             div { "About Page" }
         };
         Ok(content)
     })
-    .with_route(RoutePath::LiteralPrefix("/user/"), |req| async move {
+    .with_route(RoutePath::LiteralPrefix("/user/".to_string()), |req| async move {
         let user_id = req.path.strip_prefix("/user/").unwrap_or("");
         let content = container! {
             div {
