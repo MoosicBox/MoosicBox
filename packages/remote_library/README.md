@@ -32,7 +32,7 @@ use moosicbox_music_models::ApiSource;
 // Create a remote library client
 let remote_api = RemoteLibraryMusicApi::new(
     "http://192.168.1.100:8080".to_string(),  // server host
-    ApiSource::Library,                        // API source
+    ApiSource::library(),                      // API source
     "default".to_string(),                     // profile name
 );
 ```
@@ -135,19 +135,20 @@ async fn search_remote_library() -> Result<(), Box<dyn std::error::Error>> {
         Some(20),  // limit
     ).await?;
 
-    println!("Artists found: {}", search_results.artists.len());
-    for artist in search_results.artists {
-        println!("🎤 {}", artist.title);
-    }
+    println!("Total results found: {}", search_results.results.len());
 
-    println!("Albums found: {}", search_results.albums.len());
-    for album in search_results.albums {
-        println!("💿 {}", album.title);
-    }
-
-    println!("Tracks found: {}", search_results.tracks.len());
-    for track in search_results.tracks {
-        println!("🎵 {} - {}", track.artist, track.title);
+    for result in search_results.results {
+        match result {
+            moosicbox_music_api::models::search::api::ApiGlobalSearchResult::Artist(artist) => {
+                println!("🎤 Artist: {}", artist.title);
+            }
+            moosicbox_music_api::models::search::api::ApiGlobalSearchResult::Album(album) => {
+                println!("💿 Album: {}", album.title);
+            }
+            moosicbox_music_api::models::search::api::ApiGlobalSearchResult::Track(track) => {
+                println!("🎵 Track: {} - {}", track.artist, track.title);
+            }
+        }
     }
 
     Ok(())
