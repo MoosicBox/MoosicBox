@@ -141,12 +141,12 @@ pub struct PlayerConfig {
 /// Get the path to a config file, preferring .json5 but also checking .json
 fn get_config_file_path(dir: &Path, filename: &str) -> Option<PathBuf> {
     let json5_path = dir.join(format!("{filename}.json5"));
-    if json5_path.exists() {
+    if switchy_fs::exists(&json5_path) {
         return Some(json5_path);
     }
 
     let json_path = dir.join(format!("{filename}.json"));
-    if json_path.exists() {
+    if switchy_fs::exists(&json_path) {
         return Some(json_path);
     }
 
@@ -155,7 +155,7 @@ fn get_config_file_path(dir: &Path, filename: &str) -> Option<PathBuf> {
 
 /// Load a config file from disk, parsing it with json5
 fn load_config_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, ConfigError> {
-    let content = std::fs::read_to_string(path)?;
+    let content = switchy_fs::sync::read_to_string(path)?;
     let config = json5::from_str(&content)?;
     Ok(config)
 }
@@ -295,8 +295,8 @@ mod tests {
         // Create both .json5 and .json files
         let json5_path = temp_path.join("config.json5");
         let json_path = temp_path.join("config.json");
-        std::fs::write(&json5_path, "{}").unwrap();
-        std::fs::write(&json_path, "{}").unwrap();
+        sync::write(&json5_path, "{}").unwrap();
+        sync::write(&json_path, "{}").unwrap();
 
         let result = get_config_file_path(temp_path, "config");
         assert_eq!(result, Some(json5_path));
@@ -309,7 +309,7 @@ mod tests {
 
         // Create only .json file
         let json_path = temp_path.join("config.json");
-        std::fs::write(&json_path, "{}").unwrap();
+        sync::write(&json_path, "{}").unwrap();
 
         let result = get_config_file_path(temp_path, "config");
         assert_eq!(result, Some(json_path));
@@ -331,7 +331,7 @@ mod tests {
         let temp_path = temp_dir.path();
 
         let config_path = temp_path.join("config.json5");
-        std::fs::write(
+        sync::write(
             &config_path,
             r#"{
             // Test global config
@@ -363,7 +363,7 @@ mod tests {
         let temp_path = temp_dir.path();
 
         let config_path = temp_path.join("malformed.json5");
-        std::fs::write(&config_path, "{ invalid json5: ").unwrap();
+        sync::write(&config_path, "{ invalid json5: ").unwrap();
 
         let result: Result<GlobalConfig, ConfigError> = load_config_file(&config_path);
         assert!(result.is_err());
@@ -380,7 +380,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json5");
-        std::fs::write(
+        sync::write(
             &config_path,
             r#"{
             server: {
@@ -413,7 +413,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json");
-        std::fs::write(
+        sync::write(
             &config_path,
             r#"{
             "defaultProfile": "staging"
@@ -456,7 +456,7 @@ mod tests {
         sync::create_dir_all(&app_dir).unwrap();
 
         let config_path = app_dir.join("config.json5");
-        std::fs::write(&config_path, "{ malformed: ").unwrap();
+        sync::write(&config_path, "{ malformed: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_global_config(AppType::Server);
@@ -479,7 +479,7 @@ mod tests {
         sync::create_dir_all(&profiles_dir).unwrap();
 
         let config_path = profiles_dir.join("config.json5");
-        std::fs::write(
+        sync::write(
             &config_path,
             r#"{
             libraryPaths: ["/music"],
@@ -533,7 +533,7 @@ mod tests {
         sync::create_dir_all(&profiles_dir).unwrap();
 
         let config_path = profiles_dir.join("config.json5");
-        std::fs::write(&config_path, "{ invalid: ").unwrap();
+        sync::write(&config_path, "{ invalid: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_profile_config(AppType::Server, "bad_profile");
@@ -555,7 +555,7 @@ mod tests {
 
         // Write global config
         let global_config_path = app_dir.join("config.json5");
-        std::fs::write(
+        sync::write(
             &global_config_path,
             r#"{
             server: {
@@ -569,7 +569,7 @@ mod tests {
 
         // Write profile config
         let profile_config_path = profiles_dir.join("config.json5");
-        std::fs::write(
+        sync::write(
             &profile_config_path,
             r#"{
             libraryPaths: ["/music/flac", "/music/mp3"],
@@ -639,7 +639,7 @@ mod tests {
 
         // Write malformed global config
         let global_config_path = app_dir.join("config.json5");
-        std::fs::write(&global_config_path, "{ bad: ").unwrap();
+        sync::write(&global_config_path, "{ bad: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_merged_config(AppType::Server, "test_profile");
@@ -660,11 +660,11 @@ mod tests {
 
         // Write valid global config
         let global_config_path = app_dir.join("config.json5");
-        std::fs::write(&global_config_path, "{ defaultProfile: \"test\" }").unwrap();
+        sync::write(&global_config_path, "{ defaultProfile: \"test\" }").unwrap();
 
         // Write malformed profile config
         let profile_config_path = profiles_dir.join("config.json5");
-        std::fs::write(&profile_config_path, "{ bad: ").unwrap();
+        sync::write(&profile_config_path, "{ bad: ").unwrap();
 
         crate::set_root_dir(temp_path.to_path_buf());
         let result = load_merged_config(AppType::Server, "test_profile");

@@ -31,13 +31,13 @@ utoipa    = { workspace = true, optional = true }
 serde      = { workspace = true }
 serde_with = { workspace = true, features = ["macros"] }
 
-home      = { workspace = true }
-json5     = { workspace = true }
-log       = { workspace = true }
-thiserror = { workspace = true }
+home       = { workspace = true }
+json5      = { workspace = true }
+log        = { workspace = true }
+switchy_fs = { workspace = true, features = ["std", "sync"] }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
-switchy_fs = { workspace = true, features = ["std", "sync"] }
 
 [features]
 default = ["api", "db", "file", "openapi"]
