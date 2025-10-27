@@ -164,8 +164,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Playing Tracks
 
 ```rust
-use moosicbox_player::{PlaybackHandler, PlaybackQuality};
-use moosicbox_music_models::{Track, AudioFormat};
+use moosicbox_player::PlaybackHandler;
+use moosicbox_music_models::{Track, AudioFormat, PlaybackQuality};
 
 async fn play_example(
     handler: &mut PlaybackHandler,
