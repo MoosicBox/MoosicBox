@@ -11,7 +11,7 @@ use moosicbox_opus_native::{Decoder, SampleRate, Channels};
 let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
 
 // Decode packet to i16 PCM
-let mut output = vec![0i16; 960 * 2]; // 10ms @ 48kHz stereo
+let mut output = vec![0i16; 960 * 2]; // 20ms @ 48kHz stereo
 let samples = decoder.decode(Some(&packet), &mut output, false)?;
 ```
 
