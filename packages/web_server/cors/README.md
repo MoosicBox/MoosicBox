@@ -54,8 +54,8 @@ use switchy_http_models::Method;
 let cors = Cors::default()
     .allow_origin("https://app.moosicbox.com")
     .allow_origin("https://moosicbox.com")
-    .allow_method(Method::GET)
-    .allow_method(Method::POST)
+    .allow_method(Method::Get)
+    .allow_method(Method::Post)
     .allow_header("Content-Type")
     .allow_header("Authorization")
     .support_credentials()
@@ -89,10 +89,10 @@ cors = cors.allowed_origins(vec![
 
 // Add multiple methods
 cors = cors.allowed_methods(vec![
-    Method::GET,
-    Method::POST,
-    Method::PUT,
-    Method::DELETE,
+    Method::Get,
+    Method::Post,
+    Method::Put,
+    Method::Delete,
 ]);
 
 // Add multiple headers
