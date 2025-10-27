@@ -98,47 +98,51 @@ impl hyperchad_renderer_egui::layout::EguiCalc for MyCalculator {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create communication channels
-    let (action_tx, action_rx) = unbounded();
-    let (resize_tx, resize_rx) = unbounded();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create async runtime
+    let runtime = switchy::unsync::runtime::Builder::new().build()?;
 
-    // Create router
-    let router = Router::new();
+    runtime.block_on(async {
+        // Create communication channels
+        let (action_tx, action_rx) = unbounded();
+        let (resize_tx, resize_rx) = unbounded();
 
-    // Create client info
-    let client_info = Arc::new(hyperchad_router::ClientInfo::default());
+        // Create router
+        let router = Router::new();
 
-    // Create layout calculator
-    let calculator = MyCalculator;
+        // Create client info
+        let client_info = Arc::new(hyperchad_router::ClientInfo::default());
 
-    // Create renderer
-    let mut renderer = EguiRenderer::new(
-        router,
-        action_tx,
-        resize_tx,
-        client_info,
-        calculator,
-    );
+        // Create layout calculator
+        let calculator = MyCalculator;
 
-    // Initialize window
-    renderer.init(
-        800.0,    // width
-        600.0,    // height
-        None,     // x position
-        None,     // y position
-        None,     // background color
-        Some("My App"), // title
-        Some("My HyperChad App"), // description
-        None,     // viewport
-    ).await?;
+        // Create renderer
+        let mut renderer = EguiRenderer::new(
+            router,
+            action_tx,
+            resize_tx,
+            client_info,
+            calculator,
+        );
 
-    // Create and run the application
-    let runner = renderer.to_runner(Handle::current())?;
-    runner.run()?;
+        // Initialize window
+        renderer.init(
+            800.0,    // width
+            600.0,    // height
+            None,     // x position
+            None,     // y position
+            None,     // background color
+            Some("My App"), // title
+            Some("My HyperChad App"), // description
+            None,     // viewport
+        ).await?;
 
-    Ok(())
+        // Create and run the application
+        let runner = renderer.to_runner(Handle::current())?;
+        runner.run()?;
+
+        Ok(())
+    })
 }
 ```
 
@@ -322,9 +326,10 @@ when the renderer starts.
 
 ```rust
 use hyperchad_actions::{ActionType, ActionEffect};
+use switchy_async::runtime::Handle;
 
 // Handle action events
-tokio::spawn(async move {
+Handle::current().spawn(async move {
     while let Ok((action_name, value)) = action_rx.recv_async().await {
         match action_name.as_str() {
             "submit_form" => {
@@ -345,7 +350,7 @@ tokio::spawn(async move {
 });
 
 // Handle resize events
-tokio::spawn(async move {
+Handle::current().spawn(async move {
     while let Ok((width, height)) = resize_rx.recv_async().await {
         println!("Window resized: {}x{}", width, height);
         // Handle window resize
@@ -403,7 +408,7 @@ renderer.render_canvas(canvas_update).await?;
 - **eframe**: egui application framework
 - **egui**: Immediate mode GUI library
 - **HyperChad Core**: Template, transformer, and action systems
-- **Tokio**: Async runtime for image loading and events
+- **switchy_async**: Runtime abstraction for async operations
 - **Image**: Image processing and loading
 
 ## Integration
