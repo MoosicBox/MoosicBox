@@ -59,6 +59,12 @@ pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
     pub description: Option<String>,
     /// Viewport meta tag content.
     pub viewport: Option<String>,
+    /// CSS URLs from CDN.
+    pub css_urls: Vec<String>,
+    /// CSS paths for static assets.
+    pub css_paths: Vec<String>,
+    /// Inline CSS content.
+    pub inline_css: Vec<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
@@ -72,6 +78,9 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
             title: None,
             description: None,
             viewport: None,
+            css_urls: vec![],
+            css_paths: vec![],
+            inline_css: vec![],
         }
     }
 }
@@ -155,6 +164,45 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         &self,
     ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
         self.static_asset_routes.iter()
+    }
+
+    fn with_css_url(mut self, url: impl Into<String>) -> Self {
+        self.processor.css_urls.push(url.into());
+        self
+    }
+
+    fn add_css_url(&mut self, url: impl Into<String>) {
+        self.processor.css_urls.push(url.into());
+    }
+
+    fn with_css_path(mut self, path: impl Into<String>) -> Self {
+        self.processor.css_paths.push(path.into());
+        self
+    }
+
+    fn add_css_path(&mut self, path: impl Into<String>) {
+        self.processor.css_paths.push(path.into());
+    }
+
+    fn with_inline_css(mut self, css: impl Into<String>) -> Self {
+        self.processor.inline_css.push(css.into());
+        self
+    }
+
+    fn add_inline_css(&mut self, css: impl Into<String>) {
+        self.processor.inline_css.push(css.into());
+    }
+
+    fn css_urls(&self) -> &[String] {
+        &self.processor.css_urls
+    }
+
+    fn css_paths(&self) -> &[String] {
+        &self.processor.css_paths
+    }
+
+    fn inline_css_blocks(&self) -> &[String] {
+        &self.processor.inline_css
     }
 }
 
@@ -308,6 +356,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                             self.background,
                             self.title.as_deref(),
                             self.description.as_deref(),
+                            &self.css_urls,
+                            &self.css_paths,
+                            &self.inline_css,
                         )
                     } else {
                         self.tag_renderer.partial_html(

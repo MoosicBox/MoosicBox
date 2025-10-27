@@ -362,6 +362,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         background: Option<Color>,
         title: Option<&str>,
         description: Option<&str>,
+        css_urls: &[String],
+        css_paths: &[String],
+        inline_css: &[String],
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
@@ -381,6 +384,12 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     }
                     @if let Some(description) = description {
                         meta name="description" content=(description);
+                    }
+                    @for url in css_urls {
+                        link rel="stylesheet" href=(url);
+                    }
+                    @for path in css_paths {
+                        link rel="stylesheet" href=(path);
                     }
                     style {(format!(r"
                         body {{
@@ -404,6 +413,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                         }}
                     "))}
                     (PreEscaped(responsive_css))
+                    @for css in inline_css {
+                        style {(PreEscaped(css))}
+                    }
                     @if let Some(content) = viewport {
                         meta name="viewport" content=(content);
                     }
@@ -535,6 +547,70 @@ pub trait HtmlApp {
     /// Sets the renderer event receiver.
     #[cfg(feature = "extend")]
     fn set_html_renderer_event_rx(&mut self, rx: Receiver<hyperchad_renderer::RendererEvent>);
+
+    /// Adds a CSS URL and returns the modified app.
+    #[must_use]
+    fn with_css_url(self, url: impl Into<String>) -> Self;
+    /// Adds a CSS URL to the app.
+    fn add_css_url(&mut self, url: impl Into<String>);
+
+    /// Adds multiple CSS URLs and returns the modified app.
+    #[must_use]
+    fn with_css_urls(mut self, urls: impl IntoIterator<Item = impl Into<String>>) -> Self
+    where
+        Self: Sized,
+    {
+        for url in urls {
+            self.add_css_url(url);
+        }
+        self
+    }
+
+    /// Adds a CSS path and returns the modified app.
+    #[must_use]
+    fn with_css_path(self, path: impl Into<String>) -> Self;
+    /// Adds a CSS path to the app.
+    fn add_css_path(&mut self, path: impl Into<String>);
+
+    /// Adds multiple CSS paths and returns the modified app.
+    #[must_use]
+    fn with_css_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self
+    where
+        Self: Sized,
+    {
+        for path in paths {
+            self.add_css_path(path);
+        }
+        self
+    }
+
+    /// Adds inline CSS and returns the modified app.
+    #[must_use]
+    fn with_inline_css(self, css: impl Into<String>) -> Self;
+    /// Adds inline CSS to the app.
+    fn add_inline_css(&mut self, css: impl Into<String>);
+
+    /// Adds multiple inline CSS blocks and returns the modified app.
+    #[must_use]
+    fn with_inline_css_blocks(
+        mut self,
+        css_blocks: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        for css in css_blocks {
+            self.add_inline_css(css);
+        }
+        self
+    }
+
+    /// Returns a slice of CSS URLs.
+    fn css_urls(&self) -> &[String];
+    /// Returns a slice of CSS paths.
+    fn css_paths(&self) -> &[String];
+    /// Returns a slice of inline CSS blocks.
+    fn inline_css_blocks(&self) -> &[String];
 }
 
 /// HTML renderer that wraps an HTML application and manages rendering state.
@@ -601,6 +677,51 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
+    }
+
+    /// Adds a CSS URL and returns the modified renderer.
+    #[must_use]
+    pub fn with_css_url(mut self, url: impl Into<String>) -> Self {
+        self.app = self.app.with_css_url(url);
+        self
+    }
+
+    /// Adds multiple CSS URLs and returns the modified renderer.
+    #[must_use]
+    pub fn with_css_urls(mut self, urls: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.app = self.app.with_css_urls(urls);
+        self
+    }
+
+    /// Adds a CSS path and returns the modified renderer.
+    #[must_use]
+    pub fn with_css_path(mut self, path: impl Into<String>) -> Self {
+        self.app = self.app.with_css_path(path);
+        self
+    }
+
+    /// Adds multiple CSS paths and returns the modified renderer.
+    #[must_use]
+    pub fn with_css_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.app = self.app.with_css_paths(paths);
+        self
+    }
+
+    /// Adds inline CSS and returns the modified renderer.
+    #[must_use]
+    pub fn with_inline_css(mut self, css: impl Into<String>) -> Self {
+        self.app = self.app.with_inline_css(css);
+        self
+    }
+
+    /// Adds multiple inline CSS blocks and returns the modified renderer.
+    #[must_use]
+    pub fn with_inline_css_blocks(
+        mut self,
+        css_blocks: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.app = self.app.with_inline_css_blocks(css_blocks);
+        self
     }
 
     /// Adds static asset routes and returns the modified renderer.

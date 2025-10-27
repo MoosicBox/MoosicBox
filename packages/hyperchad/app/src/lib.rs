@@ -143,6 +143,12 @@ pub struct AppBuilder {
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    #[cfg(feature = "html")]
+    css_urls: Vec<String>,
+    #[cfg(feature = "html")]
+    css_paths: Vec<String>,
+    #[cfg(feature = "html")]
+    inline_css: Vec<String>,
 }
 
 impl std::fmt::Debug for AppBuilder {
@@ -164,6 +170,14 @@ impl std::fmt::Debug for AppBuilder {
 
         #[cfg(feature = "assets")]
         builder.field("static_asset_routes", &self.static_asset_routes);
+
+        #[cfg(feature = "html")]
+        {
+            builder
+                .field("css_urls", &self.css_urls)
+                .field("css_paths", &self.css_paths)
+                .field("inline_css", &self.inline_css);
+        }
 
         builder.finish_non_exhaustive()
     }
@@ -195,6 +209,12 @@ impl AppBuilder {
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            #[cfg(feature = "html")]
+            css_urls: vec![],
+            #[cfg(feature = "html")]
+            css_paths: vec![],
+            #[cfg(feature = "html")]
+            inline_css: vec![],
         }
     }
 
@@ -448,6 +468,70 @@ impl AppBuilder {
     ) -> Result<&mut Self, Path::Error> {
         self.static_asset_routes.push(path.try_into()?);
         Ok(self)
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_css_url(mut self, url: impl Into<String>) -> Self {
+        self.css_urls.push(url.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    pub fn css_url(&mut self, url: impl Into<String>) -> &mut Self {
+        self.css_urls.push(url.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_css_urls(mut self, urls: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.css_urls.extend(urls.into_iter().map(Into::into));
+        self
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_css_path(mut self, path: impl Into<String>) -> Self {
+        self.css_paths.push(path.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    pub fn css_path(&mut self, path: impl Into<String>) -> &mut Self {
+        self.css_paths.push(path.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_css_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.css_paths.extend(paths.into_iter().map(Into::into));
+        self
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_inline_css(mut self, css: impl Into<String>) -> Self {
+        self.inline_css.push(css.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    pub fn inline_css(&mut self, css: impl Into<String>) -> &mut Self {
+        self.inline_css.push(css.into());
+        self
+    }
+
+    #[cfg(feature = "html")]
+    #[must_use]
+    pub fn with_inline_css_blocks(
+        mut self,
+        css_blocks: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.inline_css
+            .extend(css_blocks.into_iter().map(Into::into));
+        self
     }
 
     /// # Errors

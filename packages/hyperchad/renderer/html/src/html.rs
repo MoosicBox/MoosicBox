@@ -1243,7 +1243,11 @@ pub fn container_element_to_html(
 /// # Errors
 ///
 /// * If there were any IO errors writing the `Container` as an HTML response
-#[allow(clippy::similar_names, clippy::implicit_hasher)]
+#[allow(
+    clippy::similar_names,
+    clippy::implicit_hasher,
+    clippy::too_many_arguments
+)]
 pub fn container_element_to_html_response(
     headers: &BTreeMap<String, String>,
     container: &Container,
@@ -1252,6 +1256,9 @@ pub fn container_element_to_html_response(
     title: Option<&str>,
     description: Option<&str>,
     tag_renderer: &dyn HtmlTagRenderer,
+    css_urls: &[String],
+    css_paths: &[String],
+    inline_css: &[String],
 ) -> Result<String, std::io::Error> {
     Ok(tag_renderer.root_html(
         headers,
@@ -1261,5 +1268,8 @@ pub fn container_element_to_html_response(
         background,
         title,
         description,
+        css_urls,
+        css_paths,
+        inline_css,
     ))
 }

@@ -99,6 +99,9 @@ pub struct HttpApp<R: HtmlTagRenderer + Sync> {
     title: Option<String>,
     description: Option<String>,
     viewport: Option<String>,
+    css_urls: Vec<String>,
+    css_paths: Vec<String>,
+    inline_css: Vec<String>,
 }
 
 impl<R: HtmlTagRenderer + Sync> std::fmt::Debug for HttpApp<R> {
@@ -109,7 +112,10 @@ impl<R: HtmlTagRenderer + Sync> std::fmt::Debug for HttpApp<R> {
             .field("background", &self.background)
             .field("title", &self.title)
             .field("description", &self.description)
-            .field("viewport", &self.viewport);
+            .field("viewport", &self.viewport)
+            .field("css_urls", &self.css_urls)
+            .field("css_paths", &self.css_paths)
+            .field("inline_css", &self.inline_css);
 
         #[cfg(feature = "actions")]
         dbg.field("action_tx", &self.action_tx);
@@ -293,6 +299,9 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                             self.background,
                             self.title.as_deref(),
                             self.description.as_deref(),
+                            &self.css_urls,
+                            &self.css_paths,
+                            &self.inline_css,
                         )
                     }
                 } else {
@@ -350,6 +359,9 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             title: None,
             description: None,
             viewport: None,
+            css_urls: vec![],
+            css_paths: vec![],
+            inline_css: vec![],
         }
     }
 
@@ -378,6 +390,52 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description.replace(description.into());
+        self
+    }
+
+    /// Adds a CSS URL and returns the modified app.
+    #[must_use]
+    pub fn with_css_url(mut self, url: impl Into<String>) -> Self {
+        self.css_urls.push(url.into());
+        self
+    }
+
+    /// Adds multiple CSS URLs and returns the modified app.
+    #[must_use]
+    pub fn with_css_urls(mut self, urls: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.css_urls.extend(urls.into_iter().map(Into::into));
+        self
+    }
+
+    /// Adds a CSS path and returns the modified app.
+    #[must_use]
+    pub fn with_css_path(mut self, path: impl Into<String>) -> Self {
+        self.css_paths.push(path.into());
+        self
+    }
+
+    /// Adds multiple CSS paths and returns the modified app.
+    #[must_use]
+    pub fn with_css_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.css_paths.extend(paths.into_iter().map(Into::into));
+        self
+    }
+
+    /// Adds inline CSS and returns the modified app.
+    #[must_use]
+    pub fn with_inline_css(mut self, css: impl Into<String>) -> Self {
+        self.inline_css.push(css.into());
+        self
+    }
+
+    /// Adds multiple inline CSS blocks and returns the modified app.
+    #[must_use]
+    pub fn with_inline_css_blocks(
+        mut self,
+        css_blocks: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.inline_css
+            .extend(css_blocks.into_iter().map(Into::into));
         self
     }
 

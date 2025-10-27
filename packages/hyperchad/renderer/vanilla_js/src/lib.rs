@@ -933,6 +933,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         background: Option<Color>,
         title: Option<&str>,
         description: Option<&str>,
+        css_urls: &[String],
+        css_paths: &[String],
+        inline_css: &[String],
     ) -> String {
         let mut responsive_css = vec![];
         self.default
@@ -958,6 +961,12 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     @if let Some(description) = description {
                         meta name="description" content=(description);
                     }
+                    @for url in css_urls {
+                        link rel="stylesheet" href=(url);
+                    }
+                    @for path in css_paths {
+                        link rel="stylesheet" href=(path);
+                    }
                     style {(format!(r"
                         body {{
                             margin: 0;{background};
@@ -981,6 +990,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     "))}
                     (script)
                     (PreEscaped(responsive_css))
+                    @for css in inline_css {
+                        style {(PreEscaped(css))}
+                    }
                     @if let Some(content) = viewport {
                         meta name="viewport" content=(content);
                     }

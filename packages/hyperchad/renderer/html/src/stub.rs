@@ -20,6 +20,12 @@ pub struct StubApp<T: HtmlTagRenderer> {
     #[cfg(feature = "assets")]
     /// Static asset routes.
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    /// CSS URLs from CDN.
+    pub css_urls: Vec<String>,
+    /// CSS paths for static assets.
+    pub css_paths: Vec<String>,
+    /// Inline CSS content.
+    pub inline_css: Vec<String>,
 }
 
 impl<T: HtmlTagRenderer> StubApp<T> {
@@ -29,6 +35,9 @@ impl<T: HtmlTagRenderer> StubApp<T> {
             tag_renderer,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            css_urls: vec![],
+            css_paths: vec![],
+            inline_css: vec![],
         }
     }
 }
@@ -100,6 +109,45 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
         &mut self,
         _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
     ) {
+    }
+
+    fn with_css_url(mut self, url: impl Into<String>) -> Self {
+        self.css_urls.push(url.into());
+        self
+    }
+
+    fn add_css_url(&mut self, url: impl Into<String>) {
+        self.css_urls.push(url.into());
+    }
+
+    fn with_css_path(mut self, path: impl Into<String>) -> Self {
+        self.css_paths.push(path.into());
+        self
+    }
+
+    fn add_css_path(&mut self, path: impl Into<String>) {
+        self.css_paths.push(path.into());
+    }
+
+    fn with_inline_css(mut self, css: impl Into<String>) -> Self {
+        self.inline_css.push(css.into());
+        self
+    }
+
+    fn add_inline_css(&mut self, css: impl Into<String>) {
+        self.inline_css.push(css.into());
+    }
+
+    fn css_urls(&self) -> &[String] {
+        &self.css_urls
+    }
+
+    fn css_paths(&self) -> &[String] {
+        &self.css_paths
+    }
+
+    fn inline_css_blocks(&self) -> &[String] {
+        &self.inline_css
     }
 }
 

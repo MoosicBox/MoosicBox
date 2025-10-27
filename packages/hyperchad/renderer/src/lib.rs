@@ -560,5 +560,8 @@ pub trait HtmlTagRenderer {
         background: Option<Color>,
         title: Option<&str>,
         description: Option<&str>,
+        css_urls: &[String],
+        css_paths: &[String],
+        inline_css: &[String],
     ) -> String;
 }

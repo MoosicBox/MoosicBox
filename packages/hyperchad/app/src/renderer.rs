@@ -421,6 +421,9 @@ pub mod html {
                                     Some("MoosicBox"),
                                     Some("MoosicBox: A music app for cows"),
                                     self.app.tag_renderer(),
+                                    self.app.css_urls(),
+                                    self.app.css_paths(),
+                                    self.app.inline_css_blocks(),
                                 )?;
 
                                 log::debug!(
@@ -616,6 +619,12 @@ pub mod html {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
 
+                #[cfg(feature = "html")]
+                let renderer = renderer
+                    .with_css_urls(&self.css_urls)
+                    .with_css_paths(&self.css_paths)
+                    .with_inline_css_blocks(&self.inline_css);
+
                 self.build(renderer)
             }
         }
@@ -663,15 +672,23 @@ pub mod html {
                     )
                     .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
 
+                    #[cfg(feature = "assets")]
+                    #[allow(unused_mut)]
+                    let mut renderer =
+                        renderer.with_static_asset_routes(self.static_asset_routes.clone());
+
+                    #[cfg(feature = "html")]
+                    #[allow(unused_mut)]
+                    let mut renderer = renderer
+                        .with_css_urls(&self.css_urls)
+                        .with_css_paths(&self.css_paths)
+                        .with_inline_css_blocks(&self.inline_css);
+
                     #[cfg(feature = "actions")]
                     {
                         let action_tx = self.listen_actions(self.action_handlers.clone());
                         renderer.app.set_action_tx(action_tx);
                     }
-
-                    #[cfg(feature = "assets")]
-                    let renderer =
-                        renderer.with_static_asset_routes(self.static_asset_routes.clone());
 
                     self.build(renderer)
                 }
@@ -721,6 +738,12 @@ pub mod html {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
 
+                #[cfg(feature = "html")]
+                let renderer = renderer
+                    .with_css_urls(&self.css_urls)
+                    .with_css_paths(&self.css_paths)
+                    .with_inline_css_blocks(&self.inline_css);
+
                 self.build(renderer)
             }
         }
@@ -761,8 +784,7 @@ pub mod html {
 
                     let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
-                    #[allow(unused_mut)]
-                    let mut renderer = hyperchad_renderer_html::router_to_lambda(
+                    let renderer = hyperchad_renderer_html::router_to_lambda(
                         hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                         router,
                     )
@@ -771,6 +793,12 @@ pub mod html {
                     #[cfg(feature = "assets")]
                     let renderer =
                         renderer.with_static_asset_routes(self.static_asset_routes.clone());
+
+                    #[cfg(feature = "html")]
+                    let renderer = renderer
+                        .with_css_urls(&self.css_urls)
+                        .with_css_paths(&self.css_paths)
+                        .with_inline_css_blocks(&self.inline_css);
 
                     self.build(renderer)
                 }

@@ -1369,6 +1369,9 @@ mod native_app {
             background: Option<Color>,
             title: Option<&str>,
             description: Option<&str>,
+            css_urls: &[String],
+            css_paths: &[String],
+            inline_css: &[String],
         ) -> String {
             self.tag_renderer.lock().unwrap().root_html(
                 headers,
@@ -1378,6 +1381,9 @@ mod native_app {
                 background,
                 title,
                 description,
+                css_urls,
+                css_paths,
+                inline_css,
             )
         }
     }
