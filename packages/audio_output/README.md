@@ -238,7 +238,7 @@ For ASIO support:
 use moosicbox_audio_output::AudioOutputError;
 
 match audio_output.write(audio_buffer) {
-    Ok(bytes_written) => println!("Audio written successfully: {} bytes", bytes_written),
+    Ok(samples_written) => println!("Audio written successfully: {} samples", samples_written),
     Err(AudioOutputError::NoOutputs) => {
         eprintln!("No audio outputs available");
     },
