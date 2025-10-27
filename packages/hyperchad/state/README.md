@@ -17,7 +17,7 @@ A state management package for the HyperChad framework, providing in-memory cach
 ## Basic usage
 
 ```rust
-use hyperchad_state::{StateStore, persistence::sqlite::SqlitePersistence};
+use hyperchad_state::{StateStore, sqlite::SqlitePersistence};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
