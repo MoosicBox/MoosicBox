@@ -146,7 +146,6 @@ async fn download_album() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use moosicbox_downloader::queue::{DownloadQueue, ProgressEvent};
-use moosicbox_downloader::db::models::{DownloadTask, DownloadItem, DownloadTaskState};
 use std::sync::Arc;
 
 async fn queue_downloads() -> Result<(), Box<dyn std::error::Error>> {
