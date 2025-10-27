@@ -58,7 +58,11 @@ let context = Context::new(&handle);
 
 // Create and start the service
 let service = Service::new(context);
-service.start().await?;
+let service_handle = service.handle();
+let join_handle = service.start();
+
+// Send commands via the service handle
+service_handle.send_command_async(Command::WaitForStartup { sender }).await?;
 ```
 
 ### Event Handling
@@ -72,16 +76,16 @@ use tauri::RunEvent;
 
 // Handle Tauri run events
 let event = Arc::new(run_event);
-service.send(Command::RunEvent { event }).await?;
+service_handle.send_command_async(Command::RunEvent { event }).await?;
 
 // Wait for server startup
 let (sender, receiver) = switchy_async::sync::oneshot::channel();
-service.send(Command::WaitForStartup { sender }).await?;
+service_handle.send_command_async(Command::WaitForStartup { sender }).await?;
 receiver.await?;
 
 // Wait for server shutdown
 let (sender, receiver) = switchy_async::sync::oneshot::channel();
-service.send(Command::WaitForShutdown { sender }).await?;
+service_handle.send_command_async(Command::WaitForShutdown { sender }).await?;
 receiver.await?;
 ```
 
