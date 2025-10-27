@@ -322,6 +322,27 @@ jobs:
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
+            - name: Run ${{ matrix.package.name }} doctests
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --doc --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
+                          echo "RUNNING \`$command\`"
+                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --doc \
+                              ${{ runner.debug && '-vv' }} \
+                              --no-default-features \
+                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
             - name: Create coverage report
               id: create_coverage_report
               shell: bash
