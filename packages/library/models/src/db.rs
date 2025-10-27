@@ -1,3 +1,26 @@
+//! Database integration for library models.
+//!
+//! This module implements trait conversions for reading and writing library entities
+//! to and from database rows. It provides implementations for:
+//!
+//! * Row-to-model conversions (`AsModel`, `ToValueType`)
+//! * Model-to-row conversions (`AsId`)
+//! * Complex query operations with joined data (`AsModelQuery`, `AsModelResultMapped`)
+//!
+//! # Main Functions
+//!
+//! * [`get_album_version_qualities`] - Retrieves all quality versions for an album from the database
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! # use moosicbox_library_models::db::get_album_version_qualities;
+//! # async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! let versions = get_album_version_qualities(db, 123).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::str::FromStr as _;
 
 use moosicbox_json_utils::{

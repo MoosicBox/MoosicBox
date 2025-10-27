@@ -1,3 +1,9 @@
+//! JavaScript and TypeScript bundling using SWC.
+//!
+//! This module provides functionality to bundle JavaScript and TypeScript files
+//! using SWC as the underlying bundler. It supports minification, module loading,
+//! and TypeScript compilation with configurable options.
+
 use std::{collections::BTreeMap, fs::create_dir_all, path::Path};
 
 use anyhow::Error;

@@ -1,3 +1,9 @@
+//! HTTP endpoint handlers for music API operations.
+//!
+//! This module provides Actix-Web route handlers for managing music service providers,
+//! including listing APIs, authentication, library scanning, and search functionality.
+//! All endpoints are profile-aware and operate within the context of a MoosicBox profile.
+
 use std::collections::BTreeMap;
 
 use actix_web::{

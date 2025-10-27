@@ -1,3 +1,8 @@
+//! Profile management endpoints for the admin interface.
+//!
+//! Provides endpoints for creating, selecting, deleting, and listing `MoosicBox` profiles.
+//! Each profile represents a separate configuration and music library.
+
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
     Scope,

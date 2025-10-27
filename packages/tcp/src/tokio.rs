@@ -1,3 +1,8 @@
+//! Real TCP networking implementation using tokio.
+//!
+//! This module provides wrapper types around tokio's TCP primitives that implement
+//! the generic TCP traits defined in the parent module.
+
 use std::{marker::PhantomData, net::SocketAddr};
 
 use async_trait::async_trait;

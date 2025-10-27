@@ -1,3 +1,28 @@
+//! Event notification system for player updates.
+//!
+//! This module provides a simple event system that allows components to register listeners
+//! and be notified when players are updated. This is useful for keeping UI components or
+//! other subsystems in sync with player state changes.
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "events")]
+//! # {
+//! # use moosicbox_session::events::{on_players_updated_event, trigger_players_updated_event};
+//! # async fn example() {
+//! // Register a listener
+//! on_players_updated_event(|| async {
+//!     println!("Players were updated!");
+//!     Ok(())
+//! }).await;
+//!
+//! // Trigger the event
+//! let _ = trigger_players_updated_event().await;
+//! # }
+//! # }
+//! ```
+
 use std::{
     future::Future,
     pin::Pin,

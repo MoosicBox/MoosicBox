@@ -1,3 +1,11 @@
+//! Authentication types and handlers for music APIs.
+//!
+//! This module provides authentication configurations for different auth methods:
+//! * Poll-based authentication (requires `auth-poll` feature)
+//! * Username/password authentication (requires `auth-username-password` feature)
+//!
+//! The [`ApiAuth`] type manages authentication state and credentials validation.
+
 use std::{
     ops::{Deref, DerefMut},
     pin::Pin,

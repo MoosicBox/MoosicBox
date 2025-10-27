@@ -1,3 +1,36 @@
+//! `MoosicBox` marketing website implementation.
+//!
+//! This crate provides the web application infrastructure for the `MoosicBox` marketing site,
+//! including routing, static asset serving, and application initialization. It uses the
+//! hyperchad framework to render HTML pages and handle HTTP requests.
+//!
+//! # Features
+//!
+//! * Multiple renderer backends (HTML, FLTK, egui)
+//! * Static and dynamic routing
+//! * GitHub releases integration for download pages
+//! * Responsive design support
+//! * Optional AWS Lambda deployment
+//!
+//! # Usage
+//!
+//! Initialize and build the application:
+//!
+//! ```rust,no_run
+//! # use moosicbox_marketing_site::{init, build_app};
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let builder = init();
+//! let app = build_app(builder)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Main Entry Points
+//!
+//! * [`init`] - Initialize application builder with default configuration
+//! * [`build_app`] - Build the final application from a builder
+//! * [`ROUTER`] - Pre-configured router with all site routes
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

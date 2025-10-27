@@ -1,3 +1,15 @@
+//! Data models for `MoosicBox` application configuration.
+//!
+//! This crate provides the core data structures used by `MoosicBox` applications
+//! to manage connections, music API integrations, and library settings.
+//!
+//! # Main Types
+//!
+//! * [`Connection`] - Server connection configuration
+//! * [`MusicApiSettings`] - Music API integration settings
+//! * [`DownloadSettings`] - Download location management
+//! * [`ScanSettings`] - Library scanning configuration
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -55,6 +67,10 @@ impl AsRef<Self> for MusicApiSettings {
 }
 
 #[cfg(feature = "music-api-api")]
+/// Conversions between music API models.
+///
+/// Provides `From` trait implementations to convert from API-level
+/// music API models to application-level settings.
 pub mod music_api_api {
     use moosicbox_music_api_api::models::ApiMusicApi;
 

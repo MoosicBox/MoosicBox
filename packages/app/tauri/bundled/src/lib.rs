@@ -1,3 +1,22 @@
+//! Tauri bundled application service for `MoosicBox`.
+//!
+//! This crate provides the bundled Tauri application that runs the `MoosicBox`
+//! server embedded within a desktop application. It manages the lifecycle of
+//! the embedded server, including startup, shutdown, and event handling.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use moosicbox_app_tauri_bundled::{Context, service};
+//! use moosicbox_async_service::Arc;
+//!
+//! # fn main() {
+//! let runtime_handle = moosicbox_async_service::runtime::Handle::current();
+//! let ctx = Context::new(&runtime_handle);
+//! let service = service::Service::start(Arc::new(std::sync::RwLock::new(ctx).into()));
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -97,7 +116,11 @@ impl Context {
     ///
     /// # Panics
     ///
-    /// * If fails to get the `LibraryDatabase`
+    /// * If the default download path cannot be determined
+    /// * If the download directory cannot be created
+    /// * If the download path contains invalid UTF-8
+    /// * If database profiles cannot be accessed
+    /// * If scan paths cannot be added to the database
     #[must_use]
     pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
         let downloads_path = moosicbox_downloader::get_default_download_path().unwrap();

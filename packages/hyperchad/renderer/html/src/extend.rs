@@ -1,3 +1,9 @@
+//! Extensions for custom HTML renderer behavior.
+//!
+//! This module provides traits and utilities for extending the HTML renderer
+//! with custom event handling, server-sent events, WebSocket updates, or other
+//! real-time features. It enables publishing and subscribing to renderer events.
+
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use hyperchad_renderer::{

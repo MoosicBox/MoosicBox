@@ -1,3 +1,60 @@
+//! UPnP/DLNA device discovery and control library.
+//!
+//! This crate provides functionality for discovering and controlling UPnP/DLNA devices
+//! on the local network. It supports device scanning, media playback control, volume
+//! management, and event subscriptions for `UPnP` `AVTransport` and `RenderingControl` services.
+//!
+//! # Features
+//!
+//! * `api` - Actix-web API endpoints for `UPnP` operations
+//! * `listener` - Event listener service for monitoring `UPnP` device state changes
+//! * `player` - `UPnP` player implementation for media playback
+//! * `openapi` - OpenAPI/utoipa schema support
+//! * `simulator` - Simulated `UPnP` devices for testing
+//!
+//! # Examples
+//!
+//! Scanning for `UPnP` devices on the network:
+//!
+//! ```rust,no_run
+//! # use switchy_upnp::{scan_devices, devices};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Scan the network for UPnP devices
+//! scan_devices().await?;
+//!
+//! // Get the list of discovered devices
+//! let upnp_devices = devices().await;
+//! for device in upnp_devices {
+//!     println!("Found device: {} ({})", device.name, device.udn);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Controlling playback on a `UPnP` device:
+//!
+//! ```rust,no_run
+//! # use switchy_upnp::{get_device_and_service, play, pause, set_volume};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # let device_udn = "uuid:device-id";
+//! # let service_id = "urn:upnp-org:serviceId:AVTransport";
+//! // Get device and AVTransport service
+//! let (device, service) = get_device_and_service(device_udn, service_id)?;
+//! let url = device.url();
+//!
+//! // Start playback
+//! play(&service, url, 0, 1.0).await?;
+//!
+//! // Pause playback
+//! pause(&service, url, 0).await?;
+//!
+//! // Set volume to 50%
+//! # let rendering_control_service = service;
+//! set_volume(&rendering_control_service, url, 0, "Master", 50).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, clippy::struct_field_names)]

@@ -1,3 +1,43 @@
+//! Tunnel configuration information accessible via Actix-web request extraction.
+//!
+//! This module provides [`TunnelInfo`] which can be extracted in request handlers
+//! to access tunnel configuration such as the tunnel host.
+//!
+//! The configuration must be initialized once using [`init`] before the server starts.
+//!
+//! # Example
+//!
+//! ```rust
+//! use actix_web::{web, App, HttpResponse, HttpServer};
+//! use moosicbox_middleware::tunnel_info::TunnelInfo;
+//! use std::sync::Arc;
+//!
+//! async fn handler(info: TunnelInfo) -> HttpResponse {
+//!     match info.host.as_ref().as_ref() {
+//!         Some(host) => HttpResponse::Ok().body(format!("Tunnel host: {}", host)),
+//!         None => HttpResponse::Ok().body("No tunnel configured"),
+//!     }
+//! }
+//!
+//! # #[cfg(feature = "tunnel")]
+//! # async fn example() -> std::io::Result<()> {
+//! // Initialize before starting server
+//! moosicbox_middleware::tunnel_info::init(TunnelInfo {
+//!     host: Arc::new(Some("tunnel.example.com".to_string()))
+//! })
+//! .expect("Failed to initialize tunnel info");
+//!
+//! HttpServer::new(|| {
+//!     App::new()
+//!         .route("/", web::get().to(handler))
+//! })
+//! .bind(("127.0.0.1", 8080))?
+//! .run()
+//! # ;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::sync::{Arc, OnceLock};
 
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorInternalServerError};

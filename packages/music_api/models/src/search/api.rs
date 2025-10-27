@@ -1,3 +1,29 @@
+//! API models for global search results.
+//!
+//! This module defines the data structures for representing search results from global
+//! music searches, including artists, albums, and tracks. It provides both typed result
+//! structures for public APIs and conversion utilities for parsing raw search index
+//! documents (using Tantivy) into typed results.
+//!
+//! # Search Result Types
+//!
+//! * [`ApiGlobalArtistSearchResult`] - Artist search result with basic metadata
+//! * [`ApiGlobalAlbumSearchResult`] - Album search result with artist info and available versions
+//! * [`ApiGlobalTrackSearchResult`] - Track search result with full audio quality metadata
+//! * [`ApiGlobalSearchResult`] - Tagged enum containing any of the above result types
+//!
+//! # Examples
+//!
+//! Creating a search response:
+//!
+//! ```rust
+//! use moosicbox_music_api_models::search::api::{ApiSearchResultsResponse, ApiGlobalSearchResult};
+//!
+//! let results: Vec<ApiGlobalSearchResult> = vec![];
+//! let response: ApiSearchResultsResponse = results.into();
+//! assert_eq!(response.position, 0);
+//! ```
+
 use std::str::FromStr as _;
 
 use moosicbox_json_utils::{ParseError, ToValueType, tantivy::ToValue as _};

@@ -1,3 +1,32 @@
+//! Compile-time environment variable parsing utilities.
+//!
+//! This crate provides macros and const functions for parsing environment variables at compile
+//! time. It enables reading and converting environment variables to numeric types during
+//! compilation, useful for configuration that needs to be baked into the binary.
+//!
+//! # Features
+//!
+//! * Const functions for parsing strings to integers (`parse_usize`, `parse_isize`)
+//! * Macros for reading environment variables as numeric types at compile time
+//! * Support for optional environment variables with default values
+//! * Zero runtime overhead - all parsing happens at compile time
+//!
+//! # Examples
+//!
+//! ```rust
+//! # // This example can't actually run in doc tests because env vars are evaluated at compile time
+//! # // of the moosicbox_env_utils crate itself, not the doc test
+//! # use moosicbox_env_utils::{env_usize, default_env_usize, option_env_usize};
+//! // Read a required environment variable as usize (panics if not set or invalid)
+//! // const THREADS: usize = env_usize!("THREAD_COUNT");
+//!
+//! // Read with a default value
+//! // const BUFFER_SIZE: usize = default_env_usize!("BUFFER_SIZE", 4096);
+//!
+//! // Read as an Option (returns None if not set)
+//! // const MAX_RETRIES: Option<usize> = option_env_usize!("MAX_RETRIES");
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -39,6 +68,11 @@ pub(crate) const POW10: [u128; 20] = {
     array
 };
 
+/// Parses a string slice into a `usize` at compile time.
+///
+/// This is a const function that can be used in const contexts to parse string literals
+/// into numeric values during compilation.
+///
 /// # Errors
 ///
 /// * If encounters an invalid digit in the `&str`
@@ -72,6 +106,11 @@ pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
     Ok(result)
 }
 
+/// Parses a string slice into an `isize` at compile time.
+///
+/// This is a const function that can be used in const contexts to parse string literals
+/// (including those with leading `+` or `-` signs) into signed numeric values during compilation.
+///
 /// # Errors
 ///
 /// * If encounters an invalid digit in the `&str`

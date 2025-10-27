@@ -1,3 +1,34 @@
+//! CORS (Cross-Origin Resource Sharing) configuration for web servers.
+//!
+//! This crate provides types for configuring CORS policies, allowing you to control
+//! which origins, HTTP methods, and headers are permitted for cross-origin requests.
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_web_server_cors::Cors;
+//! use switchy_http_models::Method;
+//!
+//! let cors = Cors::default()
+//!     .allow_origin("https://example.com")
+//!     .allow_method(Method::Get)
+//!     .allow_method(Method::Post)
+//!     .allow_header("Content-Type")
+//!     .support_credentials()
+//!     .max_age(3600);
+//! ```
+//!
+//! For permissive CORS policies during development:
+//!
+//! ```rust
+//! use moosicbox_web_server_cors::Cors;
+//!
+//! let cors = Cors::default()
+//!     .allow_any_origin()
+//!     .allow_any_method()
+//!     .allow_any_header();
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

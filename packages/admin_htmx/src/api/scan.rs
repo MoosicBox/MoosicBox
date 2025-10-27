@@ -1,3 +1,7 @@
+//! Local music library scanning endpoints for the admin interface.
+//!
+//! Provides endpoints for managing scan paths and triggering local music library scans.
+
 #![allow(clippy::module_name_repetitions)]
 
 use actix_htmx::Htmx;

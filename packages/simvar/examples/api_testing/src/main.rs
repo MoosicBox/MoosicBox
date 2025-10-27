@@ -1,3 +1,24 @@
+//! API endpoint testing simulation using `simvar` and `moosicbox_web_server`.
+//!
+//! This example demonstrates how to use the `simvar` simulation framework to test
+//! REST API endpoints in a controlled, deterministic environment. It showcases:
+//!
+//! * Creating a REST API server with CRUD operations using `moosicbox_web_server`
+//! * Running multiple test scenarios (happy path, error handling, edge cases, concurrency)
+//! * Tracking and reporting test results with detailed metrics
+//! * Using simulation time for reproducible tests
+//!
+//! # Usage
+//!
+//! Run this example with:
+//!
+//! ```bash
+//! cargo run --package simvar_api_testing_example
+//! ```
+//!
+//! The simulation will run for 20 seconds of simulated time, executing various
+//! test scenarios against the API and reporting success rates at the end.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

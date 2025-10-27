@@ -1,3 +1,9 @@
+//! Audio encoders for compressing decoded audio into various formats.
+//!
+//! This module provides the [`AudioEncoder`] trait and implementations for encoding
+//! decoded audio samples into compressed formats like AAC, FLAC, MP3, and Opus.
+//! Each encoder is available through its corresponding feature flag.
+
 #![allow(clippy::module_name_repetitions)]
 
 use bytes::Bytes;

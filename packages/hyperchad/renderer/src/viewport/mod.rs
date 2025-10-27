@@ -1,3 +1,11 @@
+//! Viewport visibility calculations and rendering modes.
+//!
+//! This module provides utilities for determining widget visibility within a viewport,
+//! along with sub-modules for different viewport rendering strategies.
+//!
+//! * `immediate` - Immediate mode viewport rendering (enabled with `viewport-immediate` feature)
+//! * `retained` - Retained mode viewport rendering (enabled with `viewport-retained` feature)
+
 #[cfg(feature = "viewport-immediate")]
 pub mod immediate;
 #[cfg(feature = "viewport-retained")]

@@ -1,3 +1,8 @@
+//! Application state models.
+//!
+//! This module defines the core state structures for the `MoosicBox` application,
+//! including connection information and player state.
+
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_app_models::Connection;

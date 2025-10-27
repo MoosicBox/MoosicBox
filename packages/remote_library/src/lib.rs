@@ -1,3 +1,32 @@
+//! Remote `MoosicBox` server music library API client.
+//!
+//! This crate provides a [`MusicApi`] implementation that connects to a remote `MoosicBox`
+//! server over HTTP, allowing you to access and query a remote music library as if it were local.
+//!
+//! # Example
+//!
+//! ```rust
+//! # use moosicbox_remote_library::RemoteLibraryMusicApi;
+//! # use moosicbox_music_models::ApiSource;
+//! # use moosicbox_music_api::MusicApi;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let api = RemoteLibraryMusicApi::new(
+//!     "http://localhost:8000".to_string(),
+//!     ApiSource::library(),
+//!     "default".to_string(),
+//! );
+//!
+//! // Use the API to fetch artists, albums, tracks, etc.
+//! let artists = api.artists(None, None, None, None).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Main Components
+//!
+//! * [`RemoteLibraryMusicApi`] - The main client for accessing remote music libraries
+//! * [`RequestError`] - Error type for HTTP request failures
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

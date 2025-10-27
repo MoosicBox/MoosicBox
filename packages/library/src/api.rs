@@ -1,3 +1,9 @@
+//! HTTP API endpoints for library operations.
+//!
+//! This module provides Actix-web HTTP endpoints for accessing library functionality
+//! including querying artists, albums, and tracks, managing favorites, and searching
+//! library content.
+
 #![allow(clippy::needless_for_each)]
 #![allow(clippy::module_name_repetitions)]
 

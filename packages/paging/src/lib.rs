@@ -1,3 +1,59 @@
+//! Pagination utilities for handling paginated API responses.
+//!
+//! This crate provides types and utilities for working with paginated data, supporting
+//! two pagination styles:
+//!
+//! * **Total-based pagination** - When the total number of items is known upfront
+//! * **Cursor-based pagination** - When only the existence of more items is known
+//!
+//! # Core Types
+//!
+//! * [`Page`] - A single page of items from a paginated result
+//! * [`PagingResponse`] - A page with a function to fetch additional pages
+//! * [`PagingRequest`] - A request for a specific page of results
+//!
+//! # Examples
+//!
+//! Creating and using a page with known total:
+//!
+//! ```rust
+//! use moosicbox_paging::Page;
+//!
+//! let page = Page::WithTotal {
+//!     items: vec![1, 2, 3],
+//!     offset: 0,
+//!     limit: 3,
+//!     total: 10,
+//! };
+//!
+//! assert_eq!(page.items(), &[1, 2, 3]);
+//! assert_eq!(page.total(), Some(10));
+//! assert!(page.has_more());
+//! ```
+//!
+//! Fetching all remaining pages:
+//!
+//! ```rust,no_run
+//! use moosicbox_paging::{Page, PagingResponse};
+//!
+//! # async fn example() -> Result<(), String> {
+//! # let initial_page = Page::WithTotal {
+//! #     items: vec![1, 2, 3],
+//! #     offset: 0,
+//! #     limit: 3,
+//! #     total: 10,
+//! # };
+//! # let fetch_page = |offset: u32, limit: u32| {
+//! #     Box::pin(async move {
+//! #         Ok::<_, String>(PagingResponse::empty())
+//! #     }) as _
+//! # };
+//! let response = PagingResponse::new(initial_page, fetch_page);
+//! let all_items = response.with_rest_of_items().await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

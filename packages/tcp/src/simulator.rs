@@ -1,3 +1,16 @@
+//! In-memory TCP simulator for testing.
+//!
+//! This module provides an in-memory implementation of TCP streams and listeners that
+//! simulates network behavior without actual network I/O. It includes features like:
+//!
+//! * In-memory connection handling
+//! * DNS simulation for hostname resolution
+//! * Ephemeral port management
+//! * Connection queue management
+//!
+//! This is useful for deterministic testing, avoiding port conflicts, and testing
+//! network code without requiring actual network access.
+
 use std::{
     cell::RefCell,
     collections::BTreeMap,

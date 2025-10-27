@@ -1,3 +1,36 @@
+//! `MoosicBox` Qobuz integration providing client library for the Qobuz music streaming API.
+//!
+//! This crate implements the [`MusicApi`] trait for Qobuz, enabling access to high-resolution
+//! music streaming, user favorites, library management, and search functionality.
+//!
+//! # Features
+//!
+//! * `api` - HTTP API endpoints for Qobuz operations (requires actix-web)
+//! * `db` - Database persistence for authentication tokens and configuration
+//! * `openapi` - `OpenAPI` documentation support
+//! * `scan` - Library scanning capabilities
+//!
+//! # Basic Usage
+//!
+//! ```rust,no_run
+//! # use moosicbox_qobuz::QobuzMusicApi;
+//! # #[cfg(feature = "db")]
+//! # use switchy::database::profiles::LibraryDatabase;
+//! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! // Build a Qobuz client with database support
+//! let client = QobuzMusicApi::builder()
+//!     .with_db(db)
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Authentication
+//!
+//! Use [`user_login`] to authenticate with username and password credentials,
+//! which returns an access token for subsequent API calls.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -46,11 +79,24 @@ use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "db")]
 use switchy::database::{DatabaseError, profiles::LibraryDatabase};
 
+/// HTTP API endpoints for Qobuz operations.
+///
+/// Provides actix-web route handlers for album, artist, track, and search endpoints.
+/// Requires the `api` feature to be enabled.
 #[cfg(feature = "api")]
 pub mod api;
+
+/// Database operations for persisting Qobuz authentication and configuration.
+///
+/// Provides functions to store and retrieve access tokens, app configurations, and user settings.
+/// Requires the `db` feature to be enabled.
 #[cfg(feature = "db")]
 pub mod db;
 
+/// Data models for Qobuz API responses and internal representations.
+///
+/// Contains types for albums, artists, tracks, images, genres, and search results,
+/// along with conversions to standard `MoosicBox` music models.
 pub mod models;
 
 #[derive(Debug, thiserror::Error)]

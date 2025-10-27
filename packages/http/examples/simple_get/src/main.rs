@@ -1,3 +1,22 @@
+//! Simple HTTP GET request example using the `switchy_http` crate.
+//!
+//! This binary demonstrates basic HTTP GET request functionality by accepting a URL
+//! as a command-line argument, fetching the content, and printing the response text.
+//!
+//! # Usage
+//!
+//! ```bash
+//! cargo run --package http_simple_get -- https://example.com
+//! ```
+//!
+//! # Examples
+//!
+//! Fetch content from a URL:
+//!
+//! ```bash
+//! http_simple_get https://httpbin.org/get
+//! ```
+
 /// Errors that can occur when running the simple GET example.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

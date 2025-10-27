@@ -1,3 +1,42 @@
+//! Music library management functionality for `MoosicBox`.
+//!
+//! This crate provides core functionality for managing music libraries including:
+//!
+//! * Accessing and querying artists, albums, and tracks
+//! * Managing favorite items (artists, albums, tracks)
+//! * Searching library content
+//! * Filtering and sorting library items
+//! * Caching library data for performance
+//! * Database operations for library metadata
+//!
+//! The library supports both local music collections and integration with external
+//! music API sources.
+//!
+//! # Main Entry Points
+//!
+//! * [`favorite_artists`], [`favorite_albums`], [`favorite_tracks`] - Retrieve favorite items
+//! * [`artist`], [`album`], [`track`] - Get individual items by ID
+//! * [`artist_albums`], [`album_tracks`] - Get related items
+//! * [`search`] - Search library content
+//! * [`reindex_global_search_index`] - Rebuild search index
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_library::{favorite_albums, album_tracks};
+//! # use moosicbox_music_api_models::AlbumsRequest;
+//! # use moosicbox_music_models::id::Id;
+//! # use switchy_database::profiles::LibraryDatabase;
+//! # async fn example(db: &LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! // Get favorite albums
+//! let albums = favorite_albums(db, &AlbumsRequest::default()).await?;
+//!
+//! // Get tracks for a specific album
+//! let tracks = album_tracks(db, &Id::Number(123), None, None).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -27,11 +66,15 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 #[cfg(feature = "api")]
+/// HTTP API endpoints for library operations.
 pub mod api;
 
+/// Caching functionality for library data.
 pub mod cache;
+/// Database operations for library metadata.
 pub mod db;
 
+/// Library data models re-exported from `moosicbox_library_models`.
 pub mod models {
     pub use moosicbox_library_models::*;
 }

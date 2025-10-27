@@ -1,3 +1,46 @@
+//! Authentication and authorization for `MoosicBox` applications.
+//!
+//! This crate provides client authentication using access tokens and magic tokens for secure,
+//! temporary credential exchange. It supports client registration, token management, and
+//! request authorization guards for Actix-web applications.
+//!
+//! # Features
+//!
+//! * Client ID and access token generation and storage
+//! * Magic token creation and exchange for temporary authentication
+//! * Actix-web request guards for authorization
+//! * Optional tunnel integration for distributed authentication
+//! * `OpenAPI` documentation support
+//!
+//! # Main Entry Points
+//!
+//! * [`get_client_id_and_access_token`] - Obtain or create client credentials
+//! * [`fetch_signature_token`] - Get a signature token from the auth server
+//! * [`NonTunnelRequestAuthorized`] - Request guard to block tunnel requests
+//! * [`api::bind_services`] - Register authentication API endpoints (requires `api` feature)
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use moosicbox_auth::{get_client_id_and_access_token, fetch_signature_token};
+//! # use switchy_database::config::ConfigDatabase;
+//! # async fn example(db: &ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! // Get or create client credentials
+//! let (client_id, access_token) = get_client_id_and_access_token(
+//!     db,
+//!     "https://api.example.com"
+//! ).await?;
+//!
+//! // Fetch a signature token for signing requests
+//! let signature_token = fetch_signature_token(
+//!     "https://api.example.com",
+//!     &client_id,
+//!     &access_token
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

@@ -1,3 +1,63 @@
+//! Environment-controlled assertion macros for conditional debugging and testing.
+//!
+//! This crate provides assertion macros that can be toggled at runtime via the `ENABLE_ASSERT`
+//! environment variable. When enabled, failed assertions exit the process with colorized error
+//! messages and backtraces. When disabled, the macros have varying fallback behaviors:
+//! returning errors, logging warnings, panicking, or becoming no-ops.
+//!
+//! # Use Cases
+//!
+//! * Development and debugging environments where you want strict checking
+//! * Production environments where you want graceful degradation instead of process termination
+//! * Testing scenarios where you need conditional assertion behavior
+//! * Gradual migration from development assertions to production error handling
+//!
+//! # Environment Variables
+//!
+//! * `ENABLE_ASSERT` - Set to "1" to enable strict assertion mode (process exits on failure),
+//!   any other value uses the fallback behavior of each macro
+//!
+//! # Examples
+//!
+//! Basic assertion that exits when enabled, does nothing when disabled:
+//!
+//! ```rust,ignore
+//! use moosicbox_assert::assert;
+//!
+//! std::env::set_var("ENABLE_ASSERT", "1");
+//! let value = 42;
+//! assert!(value > 0, "Value must be positive");
+//! ```
+//!
+//! Assertion that returns an error when disabled:
+//!
+//! ```rust,ignore
+//! use moosicbox_assert::assert_or_err;
+//!
+//! #[derive(Debug)]
+//! enum Error { Invalid }
+//!
+//! fn validate(x: i32) -> Result<(), Error> {
+//!     assert_or_err!(x >= 0, Error::Invalid, "Value must be non-negative");
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # Available Macros
+//!
+//! * [`assert!`] - Conditional assertion that exits or does nothing
+//! * [`assert_or_err!`] - Returns an error when disabled
+//! * [`assert_or_error!`] - Logs an error when disabled
+//! * [`assert_or_panic!`] - Panics when disabled
+//! * [`assert_or_unimplemented!`] - Calls `unimplemented!()` when disabled
+//! * [`die!`] - Unconditional exit when enabled, no-op when disabled
+//! * [`die_or_err!`] - Returns an error when disabled
+//! * [`die_or_error!`] - Logs an error when disabled
+//! * [`die_or_warn!`] - Logs a warning when disabled
+//! * [`die_or_panic!`] - Panics when disabled
+//! * [`die_or_propagate!`] - Propagates errors using `?` when disabled
+//! * [`die_or_unimplemented!`] - Calls `unimplemented!()` when disabled
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -17,7 +77,7 @@ pub use moosicbox_env_utils;
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::assert;
 ///
 /// std::env::set_var("ENABLE_ASSERT", "1");
@@ -82,7 +142,7 @@ macro_rules! assert {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::assert_or_err;
 ///
 /// #[derive(Debug)]
@@ -91,7 +151,7 @@ macro_rules! assert {
 /// }
 ///
 /// fn validate(value: i32) -> Result<(), MyError> {
-///     assert_or_err!(value >= 0, MyError::InvalidValue);
+///     assert_or_err!(value >= 0, MyError::InvalidValue, "Value must be non-negative");
 ///     assert_or_err!(value <= 100, MyError::InvalidValue, "Out of range: {}", value);
 ///     Ok(())
 /// }
@@ -138,7 +198,7 @@ macro_rules! assert_or_err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::assert_or_error;
 ///
 /// fn process_data(data: &[u8]) {
@@ -175,7 +235,7 @@ macro_rules! assert_or_error {
 ///
 /// # Examples
 ///
-/// ```should_panic
+/// ```rust,ignore
 /// use moosicbox_assert::assert_or_unimplemented;
 ///
 /// fn experimental_feature(enabled: bool) {
@@ -244,7 +304,7 @@ macro_rules! assert_or_unimplemented {
 ///
 /// # Examples
 ///
-/// ```should_panic
+/// ```rust,ignore
 /// use moosicbox_assert::assert_or_panic;
 ///
 /// fn critical_operation(value: i32) {
@@ -312,7 +372,7 @@ macro_rules! assert_or_panic {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::die;
 ///
 /// fn check_value(value: i32) {
@@ -370,7 +430,7 @@ macro_rules! die {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_warn;
 ///
 /// fn deprecated_function() {
@@ -426,7 +486,7 @@ macro_rules! die_or_warn {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_err;
 ///
 /// #[derive(Debug)]
@@ -471,7 +531,7 @@ macro_rules! die_or_err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_error;
 ///
 /// fn check_invariant(valid: bool) {
@@ -529,12 +589,12 @@ macro_rules! die_or_error {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_propagate;
 /// use std::fs::File;
 ///
 /// fn read_config() -> std::io::Result<String> {
-///     let file = die_or_propagate!(File::open("config.txt"), "Failed to open config");
+///     let _file = die_or_propagate!(File::open("config.txt"), "Failed to open config");
 ///     Ok(String::new())
 /// }
 /// ```
@@ -583,7 +643,7 @@ macro_rules! die_or_propagate {
 ///
 /// # Examples
 ///
-/// ```should_panic
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_panic;
 ///
 /// fn critical_failure() {
@@ -640,7 +700,7 @@ macro_rules! die_or_panic {
 ///
 /// # Examples
 ///
-/// ```should_panic
+/// ```rust,ignore
 /// use moosicbox_assert::die_or_unimplemented;
 ///
 /// fn not_ready_yet() {

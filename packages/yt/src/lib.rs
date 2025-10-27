@@ -1,3 +1,40 @@
+//! `YouTube` Music API client for `MoosicBox`.
+//!
+//! This crate provides a Rust client for interacting with the `YouTube` Music API,
+//! enabling music streaming, library management, and playback features.
+//!
+//! # Features
+//!
+//! * OAuth device authorization flow for `YouTube` Music
+//! * Artist, album, and track browsing and search
+//! * Favorite/library management (add/remove artists, albums, tracks)
+//! * Track streaming with configurable audio quality
+//! * Integration with `MoosicBox`'s music API abstraction layer
+//!
+//! # Optional Features
+//!
+//! * `api` - Enables Actix-web HTTP API endpoints
+//! * `db` - Enables database storage for `YouTube` Music credentials and configuration
+//! * `scan` - Enables library scanning functionality
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "db")]
+//! # {
+//! use moosicbox_yt::YtMusicApi;
+//! # use switchy_database::profiles::LibraryDatabase;
+//!
+//! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a YouTube Music API client
+//! let api = YtMusicApi::builder()
+//!     .with_db(db)
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! # }
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -40,11 +77,22 @@ use switchy_database::DatabaseError;
 #[cfg(feature = "db")]
 use switchy_database::profiles::LibraryDatabase;
 
+/// Actix-web HTTP API endpoints for `YouTube` Music operations.
+///
+/// Provides REST endpoints for device authorization, track streaming, library management,
+/// and search functionality.
 #[cfg(feature = "api")]
 pub mod api;
+
+/// Database operations for `YouTube` Music configuration and credentials.
+///
+/// Handles persistent storage of OAuth tokens and `YouTube` Music user configuration.
 #[cfg(feature = "db")]
 pub mod db;
 
+/// Data models for `YouTube` Music entities.
+///
+/// Contains types for artists, albums, tracks, search results, and playback information.
 pub mod models;
 
 #[derive(Debug, thiserror::Error)]

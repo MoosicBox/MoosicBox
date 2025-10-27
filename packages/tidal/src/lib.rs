@@ -1,12 +1,55 @@
+//! Tidal music streaming service integration.
+//!
+//! This crate provides a Rust client for interacting with the Tidal music streaming API.
+//! It implements the [`MusicApi`] trait to enable fetching artists, albums, tracks, and
+//! search results from Tidal, as well as managing user favorites.
+//!
+//! # Features
+//!
+//! * OAuth 2.0 device authorization flow for authentication
+//! * Fetch and manage favorite artists, albums, and tracks
+//! * Search for music content across Tidal's catalog
+//! * Retrieve track playback URLs and metadata
+//! * Support for different audio quality levels (High, Lossless, Hi-Res Lossless)
+//! * Optional database persistence for authentication tokens
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "db")]
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # use switchy::database::profiles::LibraryDatabase;
+//! # let db: LibraryDatabase = panic!("This is example code");
+//! use moosicbox_tidal::TidalMusicApi;
+//!
+//! let api = TidalMusicApi::builder()
+//!     .with_db(db)
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(feature = "api")]
+/// HTTP API endpoints for Tidal integration.
+///
+/// Provides Actix Web route handlers for device authorization, favorites management,
+/// track retrieval, and search functionality.
 pub mod api;
 #[cfg(feature = "db")]
+/// Database operations for persisting Tidal authentication credentials.
+///
+/// Handles storage and retrieval of OAuth tokens and user configuration.
 pub mod db;
 
+/// Tidal API data models and type conversions.
+///
+/// Contains structs representing Tidal artists, albums, tracks, and search results,
+/// along with conversions to/from `MoosicBox` common types.
 pub mod models;
 
 use std::sync::{Arc, LazyLock};

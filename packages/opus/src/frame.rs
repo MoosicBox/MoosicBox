@@ -1,3 +1,8 @@
+//! Opus frame structures and frame length decoding.
+//!
+//! This module provides types and functions for working with Opus frames within
+//! packets, including frame packing modes and frame length decoding per RFC 6716.
+
 use crate::error::{Error, Result};
 
 /// Frame packing modes.

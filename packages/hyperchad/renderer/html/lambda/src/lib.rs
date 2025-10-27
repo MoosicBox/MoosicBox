@@ -1,3 +1,60 @@
+//! AWS Lambda renderer implementation for `HyperChad` HTML applications.
+//!
+//! This crate provides a Lambda-based runtime for `HyperChad` HTML renderers,
+//! enabling serverless deployment of `HyperChad` applications on AWS Lambda.
+//! It handles HTTP request/response processing, gzip compression, and
+//! integrates with the `HyperChad` renderer framework.
+//!
+//! # Features
+//!
+//! * `assets` - Enable static asset route support (enabled by default)
+//! * `json` - Enable JSON response content type (enabled by default)
+//! * `debug` - Enable debug logging (enabled by default)
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+//! use hyperchad_renderer::ToRenderRunner;
+//! use async_trait::async_trait;
+//! use std::sync::Arc;
+//! use bytes::Bytes;
+//! # use lambda_http::Request;
+//!
+//! #[derive(Clone)]
+//! struct MyProcessor;
+//!
+//! #[async_trait]
+//! impl LambdaResponseProcessor<String> for MyProcessor {
+//!     fn prepare_request(
+//!         &self,
+//!         req: Request,
+//!         body: Option<Arc<Bytes>>,
+//!     ) -> Result<String, lambda_runtime::Error> {
+//!         Ok(req.uri().path().to_string())
+//!     }
+//!
+//!     fn headers(&self, _content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
+//!         None
+//!     }
+//!
+//!     async fn to_response(
+//!         &self,
+//!         data: String,
+//!     ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
+//!         Ok(Some((Content::Html(format!("<h1>Path: {}</h1>", data)), None)))
+//!     }
+//!
+//!     async fn to_body(
+//!         &self,
+//!         _content: hyperchad_renderer::Content,
+//!         _data: String,
+//!     ) -> Result<Content, lambda_runtime::Error> {
+//!         Ok(Content::Html("<h1>Hello</h1>".to_string()))
+//!     }
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

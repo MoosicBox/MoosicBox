@@ -8,7 +8,7 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```rust
 //! use hyperchad_template_macros::container;
 //!
 //! let html = container! {
@@ -127,7 +127,7 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
 ///
 /// Basic usage:
 ///
-/// ```ignore
+/// ```rust
 /// use hyperchad_template_macros::container;
 ///
 /// let username = "Alice";

@@ -1,3 +1,74 @@
+//! SQL query builder types and expressions
+//!
+//! This module provides a type-safe query builder API for constructing SQL queries
+//! without writing raw SQL strings. It includes support for SELECT, INSERT, UPDATE,
+//! DELETE, and UPSERT operations with WHERE clauses, JOINs, and complex expressions.
+//!
+//! # Query Builder Pattern
+//!
+//! The query builders use a fluent API that mirrors SQL syntax:
+//!
+//! ```rust,ignore
+//! use switchy_database::{Database, DatabaseError};
+//!
+//! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
+//! // SELECT - methods like where_eq require importing FilterableQuery trait
+//! let users = db.select("users")
+//!     .columns(&["id", "name", "email"])
+//!     .limit(10)
+//!     .execute(db)
+//!     .await?;
+//!
+//! // INSERT with values
+//! let new_user = db.insert("users")
+//!     .value("name", "Alice")
+//!     .value("email", "alice@example.com")
+//!     .execute(db)
+//!     .await?;
+//!
+//! // UPDATE with values
+//! let updated = db.update("users")
+//!     .value("last_login", switchy_database::DatabaseValue::Now)
+//!     .execute(db)
+//!     .await?;
+//!
+//! // DELETE
+//! let deleted = db.delete("users")
+//!     .execute(db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Expression System
+//!
+//! The module provides an [`Expression`] trait and various expression types
+//! for building complex WHERE clauses and query conditions:
+//!
+//! * **Comparison**: `Eq`, `NotEq`, `Gt`, `Gte`, `Lt`, `Lte`
+//! * **Logical**: `And`, `Or`
+//! * **List operations**: `In`, `NotIn`, `InList`
+//! * **SQL functions**: `Coalesce`
+//! * **Raw SQL**: `Literal` for SQL expressions, `Identifier` for column names
+//!
+//! # JOINs
+//!
+//! The query builder supports INNER and LEFT JOINs:
+//!
+//! ```rust,ignore
+//! use switchy_database::{Database, DatabaseError};
+//!
+//! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
+//! let results = db.select("orders")
+//!     .columns(&["orders.id", "users.name"])
+//!     .join("users", "orders.user_id = users.id")  // INNER JOIN
+//!     .left_join("addresses", "users.address_id = addresses.id")  // LEFT JOIN
+//!     .execute(db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::fmt::Debug;
 
 use crate::{Database, DatabaseError, DatabaseValue, Row};

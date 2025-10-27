@@ -1,3 +1,39 @@
+//! Application state management for `MoosicBox`.
+//!
+//! This crate provides centralized state management for `MoosicBox` applications,
+//! including `WebSocket` connections, audio playback sessions, player management,
+//! and persistent storage.
+//!
+//! # Main Components
+//!
+//! * [`AppState`] - Central application state containing all runtime configuration
+//! * [`UpdateAppState`] - Update parameters for modifying application state
+//! * [`PlaybackTarget`] - Target destinations for audio playback (re-exported from `moosicbox_session`)
+//!
+//! # Features
+//!
+//! * `upnp` - Enables UPnP/DLNA device discovery and playback support
+//! * Audio codec features: `aac`, `flac`, `mp3`, `opus`
+//! * Music source features: `qobuz`, `tidal`, `yt`
+//!
+//! # Example
+//!
+//! ```rust
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use moosicbox_app_state::AppState;
+//!
+//! // Create new application state
+//! let state = AppState::new();
+//!
+//! // Configure with persistence
+//! # #[cfg(feature = "embedded")]
+//! # {
+//! let state = state.with_persistence_in_memory().await?;
+//! # }
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -31,6 +67,12 @@ use thiserror::Error;
 use tokio::sync::{RwLock, RwLockReadGuard};
 
 mod persistence;
+
+/// `WebSocket` connection management and message handling.
+///
+/// This module provides functionality for establishing and managing `WebSocket`
+/// connections to `MoosicBox` servers, handling incoming/outgoing messages, and
+/// synchronizing playback state across clients.
 pub mod ws;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);

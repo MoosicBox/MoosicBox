@@ -1,3 +1,26 @@
+//! HTTP API endpoints for `MoosicBox` configuration.
+//!
+//! This module provides `RESTful` API endpoints for managing `MoosicBox` profiles
+//! and configuration through HTTP requests.
+//!
+//! # Endpoints
+//!
+//! * `GET /profiles` - Retrieve all profiles
+//! * `POST /profiles?name=<name>` - Create or retrieve a profile by name
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "api")]
+//! # {
+//! use actix_web::App;
+//! use moosicbox_config::api::bind_services;
+//!
+//! let app = App::new()
+//!     .service(bind_services(actix_web::web::scope("/config")));
+//! # }
+//! ```
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{

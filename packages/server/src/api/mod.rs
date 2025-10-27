@@ -1,3 +1,8 @@
+//! HTTP API endpoints for the `MoosicBox` server.
+//!
+//! This module provides core HTTP endpoints including health checks and WebSocket connections.
+//! Additional API endpoints are registered from other crates based on enabled features.
+
 use crate::{WS_SERVER_HANDLE, ws::handler};
 use actix_web::{HttpResponse, route};
 use actix_web::{

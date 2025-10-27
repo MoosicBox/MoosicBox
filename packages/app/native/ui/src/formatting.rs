@@ -1,3 +1,8 @@
+//! Formatting utilities for displaying music metadata.
+//!
+//! This module provides traits and functions for formatting time values, audio quality information,
+//! album types, and other music-related data for display in the UI.
+
 use moosicbox_date_utils::chrono::{NaiveDateTime, parse_date_time};
 use moosicbox_music_models::{
     AlbumType, AlbumVersionQuality, ApiSource, AudioFormat, TrackApiSource,

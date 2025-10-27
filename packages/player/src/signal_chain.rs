@@ -1,3 +1,9 @@
+//! Audio signal processing chain for encoding and decoding.
+//!
+//! This module provides [`SignalChain`], which allows chaining together audio processing
+//! steps such as decoding, encoding, and resampling. The signal chain processes audio
+//! from a media source through multiple transformation stages.
+
 #![allow(clippy::module_name_repetitions)]
 
 use flume::Receiver;

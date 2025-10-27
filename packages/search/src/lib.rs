@@ -1,6 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+#![allow(clippy::doc_markdown)]
+#![doc = include_str!("../README.md")]
 
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
@@ -23,8 +25,14 @@ use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 
+/// API endpoints for search functionality.
+///
+/// Provides Actix-web REST API endpoints for global search operations.
 #[cfg(feature = "api")]
 pub mod api;
+/// Database integration and model conversion utilities.
+///
+/// Provides traits for converting music models to search index data values.
 #[cfg(feature = "db")]
 pub mod data;
 

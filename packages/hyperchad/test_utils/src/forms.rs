@@ -1,3 +1,8 @@
+//! Form handling utilities for test workflows.
+//!
+//! This module provides structures and methods for interacting with HTML forms
+//! in test scenarios, including field filling, option selection, and file uploads.
+
 use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +23,7 @@ impl FormData {
         }
     }
 
+    /// Adds a text field to the form data.
     #[must_use]
     pub fn text(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.fields
@@ -25,18 +31,21 @@ impl FormData {
         self
     }
 
+    /// Adds a numeric field to the form data.
     #[must_use]
     pub fn number(mut self, name: impl Into<String>, value: f64) -> Self {
         self.fields.insert(name.into(), FormValue::Number(value));
         self
     }
 
+    /// Adds a boolean checkbox field to the form data.
     #[must_use]
     pub fn boolean(mut self, name: impl Into<String>, value: bool) -> Self {
         self.fields.insert(name.into(), FormValue::Boolean(value));
         self
     }
 
+    /// Adds a single-select dropdown field to the form data.
     #[must_use]
     pub fn select(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.fields
@@ -44,6 +53,7 @@ impl FormData {
         self
     }
 
+    /// Adds a multi-select field to the form data.
     #[must_use]
     pub fn multi_select(mut self, name: impl Into<String>, values: Vec<String>) -> Self {
         self.fields
@@ -51,6 +61,7 @@ impl FormData {
         self
     }
 
+    /// Adds a file upload field to the form data.
     #[must_use]
     pub fn file(mut self, name: impl Into<String>, path: impl Into<std::path::PathBuf>) -> Self {
         self.fields
@@ -58,6 +69,7 @@ impl FormData {
         self
     }
 
+    /// Adds a field with a custom value to the form data.
     #[must_use]
     pub fn field(mut self, name: impl Into<String>, value: FormValue) -> Self {
         self.fields.insert(name.into(), value);

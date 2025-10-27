@@ -1,3 +1,8 @@
+//! Table of Contents (TOC) byte parsing and Opus configuration types.
+//!
+//! This module provides [`TocByte`] for parsing the TOC byte as defined in RFC 6716
+//! Section 3.1, along with related types for Opus mode and bandwidth.
+
 use crate::error::Result;
 
 /// TOC byte structure (RFC 6716 Section 3.1).

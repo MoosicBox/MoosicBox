@@ -1,3 +1,8 @@
+//! JSON-compatible value generators for property-based testing.
+//!
+//! Provides [`Arbitrary`] implementations for generating JSON values and JSON-safe
+//! floating-point numbers (finite `f32` and `f64` values).
+
 use quickcheck::{Arbitrary, Gen};
 use serde_json::Value;
 

@@ -1,3 +1,8 @@
+//! API-compatible serializable types for album version data.
+//!
+//! This module provides types that can be serialized/deserialized for use in
+//! HTTP APIs, with conversions to and from the core domain models.
+
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_music_models::{AlbumVersionQuality, AudioFormat, TrackApiSource, api::ApiTrack};

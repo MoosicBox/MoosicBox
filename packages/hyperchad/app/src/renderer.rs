@@ -1,3 +1,23 @@
+//! Renderer implementations and type aliases for different backends.
+//!
+//! This module provides the `DefaultRenderer` type alias which resolves to the appropriate
+//! renderer implementation based on enabled features. It also contains backend-specific modules
+//! for egui, fltk, HTML (with Actix/Lambda variants), and a stub renderer for testing.
+//!
+//! # Feature-based selection
+//!
+//! The default renderer is selected based on feature flags in the following priority order:
+//!
+//! * `egui` - Native GUI using egui
+//! * `fltk` - Native GUI using fltk
+//! * `actix` + `vanilla-js` - Web application using Actix with vanilla JavaScript
+//! * `lambda` + `vanilla-js` - Serverless web application using AWS Lambda
+//! * `actix` + `html` - Web application using Actix with plain HTML
+//! * `lambda` + `html` - Serverless web application using Lambda with plain HTML
+//! * `html` + `vanilla-js` - Standalone HTML with vanilla JavaScript (stub)
+//! * `html` - Plain HTML renderer (stub)
+//! * Default - Stub renderer (no-op implementation)
+
 use crate::AppBuilder;
 
 #[cfg(feature = "egui")]
@@ -278,6 +298,10 @@ mod fltk {
 }
 
 #[cfg(feature = "html")]
+/// HTML renderer implementations with support for static generation and multiple backends.
+///
+/// This module provides HTML rendering capabilities with support for Actix web server,
+/// AWS Lambda serverless deployment, and vanilla JavaScript interactivity.
 pub mod html {
     use std::{path::PathBuf, sync::LazyLock};
 
@@ -803,6 +827,10 @@ pub mod html {
     }
 }
 
+/// Stub renderer for testing and no-op scenarios.
+///
+/// This module provides a `StubRenderer` that implements all renderer traits but performs
+/// no actual rendering. Useful for testing, documentation examples, or as a placeholder.
 pub mod stub {
     use async_trait::async_trait;
     use hyperchad_renderer::{

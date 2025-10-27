@@ -1,3 +1,33 @@
+//! Music API abstraction layer for `MoosicBox`.
+//!
+//! This crate provides a unified trait-based interface for accessing music metadata and content
+//! from multiple sources (local files, streaming services, etc.). It handles artists, albums,
+//! tracks, authentication, and caching.
+//!
+//! # Core Components
+//!
+//! * [`MusicApi`] - Main trait for music API implementations
+//! * [`MusicApis`] - Collection of music APIs indexed by source
+//! * [`CachedMusicApi`] - Caching wrapper for any music API
+//! * [`auth`] - Authentication configurations (poll-based, username/password)
+//! * [`profiles`] - Profile-based music API registry
+//!
+//! # Example
+//!
+//! ```rust
+//! # use moosicbox_music_api::{MusicApi, MusicApis};
+//! # use moosicbox_music_models::ApiSource;
+//! # use std::sync::Arc;
+//! # use std::collections::BTreeMap;
+//! // Create a collection of music APIs
+//! let mut apis = MusicApis::new();
+//!
+//! // Add an API implementation for a specific source
+//! # /*
+//! apis.add_source(Arc::new(Box::new(my_music_api)));
+//! # */
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

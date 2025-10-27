@@ -1,3 +1,35 @@
+//! File-based configuration loading for `MoosicBox`.
+//!
+//! This module provides functionality for loading configuration from JSON5 files,
+//! supporting both global (application-wide) and profile-specific settings.
+//!
+//! Configuration files are loaded from the directory structure created by the root
+//! module's path functions. Files can be in either `.json5` or `.json` format,
+//! with `.json5` preferred.
+//!
+//! # Configuration Hierarchy
+//!
+//! * **Global Config** (`~/.local/moosicbox/{app}/config.json5`) - Application-wide settings
+//! * **Profile Config** (`~/.local/moosicbox/{app}/profiles/{name}/config.json5`) - Per-profile settings
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "file")]
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use moosicbox_config::{AppType, file::{load_global_config, load_merged_config}};
+//!
+//! // Load global configuration
+//! let global = load_global_config(AppType::Server)?;
+//! println!("Default profile: {:?}", global.default_profile);
+//!
+//! // Load merged configuration (global + profile-specific)
+//! let merged = load_merged_config(AppType::Server, "production")?;
+//! println!("Library paths: {:?}", merged.profile.library_paths);
+//! # Ok(())
+//! # }
+//! ```
+
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -6,12 +38,16 @@ use thiserror::Error;
 
 use crate::AppType;
 
+/// Errors that can occur when loading configuration files.
 #[derive(Debug, Error)]
 pub enum ConfigError {
+    /// Failed to read the configuration file from disk
     #[error("Failed to read config file: {0}")]
     ReadError(#[from] std::io::Error),
+    /// Failed to parse the configuration file as valid JSON5
     #[error("Failed to parse config file: {0}")]
     ParseError(#[from] json5::Error),
+    /// Configuration directory could not be found or determined
     #[error("Config directory not found")]
     ConfigDirNotFound,
 }

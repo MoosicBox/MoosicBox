@@ -1,3 +1,46 @@
+//! Feature propagation validation for workspace dependencies.
+//!
+//! This module validates that Cargo features are correctly propagated across workspace
+//! dependencies to ensure consistent builds and prevent feature-related compilation failures.
+//!
+//! # Purpose
+//!
+//! When a workspace package depends on another workspace package that has a specific feature,
+//! that feature should be propagated in the dependent package's feature definition. This
+//! validator ensures such propagation is correct and complete.
+//!
+//! # Features
+//!
+//! * Auto-detect features that need validation across the workspace
+//! * Validate specific features or all matching features
+//! * Detect missing feature propagations
+//! * Detect incorrect feature propagations
+//! * Support for optional dependencies with `?` syntax
+//! * JSON and human-readable output formats
+//!
+//! # Example
+//!
+//! ```rust
+//! use clippier::feature_validator::{FeatureValidator, ValidatorConfig};
+//! use clippier::OutputType;
+//!
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = ValidatorConfig {
+//!     features: Some(vec!["fail-on-warnings".to_string()]),
+//!     workspace_only: true,
+//!     output_format: OutputType::Json,
+//! };
+//!
+//! let validator = FeatureValidator::new(None, config)?;
+//! let result = validator.validate()?;
+//!
+//! if result.errors.is_empty() {
+//!     println!("All features correctly propagated!");
+//! }
+//! # Ok(())
+//! # }
+//! ```
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};

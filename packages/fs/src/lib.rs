@@ -1,11 +1,86 @@
+//! Switchy filesystem abstraction layer with support for real and simulated filesystems.
+//!
+//! This crate provides a unified filesystem API that can switch between different backends:
+//!
+//! * **Real filesystem** - Standard filesystem operations using `std::fs` or `tokio::fs`
+//! * **Simulated filesystem** - In-memory filesystem for testing without touching the disk
+//!
+//! # Features
+//!
+//! * `simulator` - Enables in-memory filesystem simulator (enabled by default)
+//! * `simulator-real-fs` - Allows temporarily using real filesystem within simulator mode
+//! * `std` - Standard library filesystem support (enabled by default)
+//! * `tokio` - Async filesystem operations using tokio (enabled by default)
+//! * `sync` - Synchronous filesystem operations (enabled by default)
+//! * `async` - Asynchronous filesystem operations (enabled by default)
+//!
+//! # Examples
+//!
+//! Basic file operations:
+//!
+//! ```rust
+//! use switchy_fs::sync::{OpenOptions, read_to_string, create_dir_all};
+//! # use switchy_fs::simulator::reset_fs;
+//! # reset_fs();
+//! # create_dir_all("/tmp").unwrap();
+//!
+//! // Create a directory and write to a file
+//! # #[cfg(feature = "sync")]
+//! # {
+//! let mut file = OpenOptions::new()
+//!     .create(true)
+//!     .write(true)
+//!     .open("/tmp/example.txt")
+//!     .unwrap();
+//!
+//! use std::io::Write;
+//! file.write_all(b"Hello, world!").unwrap();
+//! drop(file);
+//!
+//! // Read the file back
+//! let content = read_to_string("/tmp/example.txt").unwrap();
+//! assert_eq!(content, "Hello, world!");
+//! # }
+//! ```
+//!
+//! Using temporary directories:
+//!
+//! ```rust
+//! use switchy_fs::tempdir;
+//! # #[cfg(any(feature = "simulator", feature = "std"))]
+//! # {
+//!
+//! // Create a temporary directory that will be cleaned up when dropped
+//! let temp_dir = tempdir().unwrap();
+//! let temp_path = temp_dir.path();
+//!
+//! // Use the temporary directory
+//! println!("Temp directory: {}", temp_path.display());
+//!
+//! // Directory is automatically deleted when temp_dir goes out of scope
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// In-memory filesystem simulator for testing
+///
+/// Provides a complete filesystem simulation that runs entirely in memory, useful for testing
+/// filesystem operations without touching the actual disk.
 #[cfg(feature = "simulator")]
 pub mod simulator;
+
+/// Standard library filesystem operations
+///
+/// Thin wrappers around `std::fs` operations for consistency with the simulator API.
 #[cfg(feature = "std")]
 pub mod standard;
+
+/// Tokio async filesystem operations
+///
+/// Async filesystem operations using tokio runtime.
 #[cfg(feature = "tokio")]
 pub mod tokio;
 

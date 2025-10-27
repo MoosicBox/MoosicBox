@@ -1,3 +1,25 @@
+//! Native desktop application for `MoosicBox` music player.
+//!
+//! This crate provides the core functionality for the `MoosicBox` native desktop application,
+//! including routing, UI rendering, state management, and playback visualization. It serves
+//! as the main entry point for the desktop GUI application.
+//!
+//! # Features
+//!
+//! * **Router Management** - Global router instance for handling application navigation
+//! * **UI Rendering** - Support for multiple rendering backends (HTML, FLTK, egui)
+//! * **State Management** - Centralized application state with persistence
+//! * **Playback Visualization** - Real-time audio waveform visualization (with `_canvas` feature)
+//! * **Action Handling** - UI action dispatching for playback control and navigation
+//!
+//! # Main Entry Points
+//!
+//! * [`init()`] - Initialize the application router with all route handlers
+//! * [`init_app_state()`] - Initialize application state with persistence and event listeners
+//! * [`ROUTER`] - Global router instance for handling application routes
+//! * [`STATE`] - Global application state
+//! * [`actions::handle_action()`] - Handle UI actions (playback, navigation, etc.)
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

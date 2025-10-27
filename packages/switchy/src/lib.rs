@@ -24,8 +24,7 @@
 //! ```rust
 //! # #[cfg(feature = "async")]
 //! # async fn example() {
-//! use switchy::unsync::sleep;
-//! use switchy::unsync::Duration;
+//! use switchy::unsync::time::{sleep, Duration};
 //!
 //! // This code works with both Tokio and simulator runtimes
 //! sleep(Duration::from_secs(1)).await;
@@ -62,7 +61,7 @@ pub mod unsync {
     /// ```rust
     /// # #[cfg(all(feature = "async-macros", feature = "async-tokio"))]
     /// # async fn example() {
-    /// use switchy::unsync::{sleep, Duration};
+    /// use switchy::unsync::time::{sleep, Duration};
     ///
     /// switchy::unsync::select! {
     ///     _ = sleep(Duration::from_secs(1)) => println!("Timer elapsed"),
@@ -97,8 +96,6 @@ pub mod unsync {
     /// ```rust
     /// # #[cfg(all(feature = "async-macros", feature = "async-tokio"))]
     /// # async fn example() {
-    /// use switchy::unsync::{sleep, Duration};
-    ///
     /// let (a, b) = switchy::unsync::join!(
     ///     async { 1 },
     ///     async { 2 },

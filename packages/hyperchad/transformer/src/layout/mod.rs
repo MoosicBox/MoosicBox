@@ -1,3 +1,9 @@
+//! Layout calculation engine for UI containers.
+//!
+//! This module provides layout calculation functionality including flexbox layout, positioning,
+//! and size calculations. It includes utilities for floating-point comparisons, rectangle operations,
+//! and the [`Calc`] trait for implementing custom layout algorithms. Requires the `layout` feature.
+
 use std::sync::atomic::AtomicU16;
 
 use crate::Container;

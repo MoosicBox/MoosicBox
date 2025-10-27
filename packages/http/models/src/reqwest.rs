@@ -1,3 +1,8 @@
+//! Conversions to and from `reqwest` HTTP types.
+//!
+//! This module provides `From` implementations to convert between this crate's
+//! [`Method`] and [`StatusCode`] types and their `reqwest` equivalents.
+
 use crate::{Method, StatusCode};
 
 impl From<Method> for reqwest::Method {

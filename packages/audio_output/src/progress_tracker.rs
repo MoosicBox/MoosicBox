@@ -1,3 +1,9 @@
+//! Progress tracking for audio playback.
+//!
+//! This module provides [`ProgressTracker`], a reusable component for tracking audio playback
+//! progress and position. It can be used by any audio output implementation to monitor consumed
+//! samples and trigger callbacks when the playback position changes significantly.
+
 use atomic_float::AtomicF64;
 use std::sync::{
     Arc, RwLock,

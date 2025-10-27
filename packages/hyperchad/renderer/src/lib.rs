@@ -1,3 +1,41 @@
+//! `HyperChad` renderer abstractions and core types.
+//!
+//! This crate provides the core rendering infrastructure for `HyperChad` applications,
+//! including traits for implementing custom renderers, view composition types for
+//! building dynamic UIs, and utilities for asset management, canvas operations, and
+//! viewport handling.
+//!
+//! # Features
+//!
+//! * `assets` - Static asset serving and routing support
+//! * `canvas` - Canvas drawing operations and updates
+//! * `html` - HTML tag rendering with hyperchad transformations
+//! * `json` - JSON response content support
+//! * `viewport` - Viewport visibility calculations
+//! * `viewport-immediate` - Immediate mode viewport rendering
+//! * `viewport-retained` - Retained mode viewport rendering
+//!
+//! # Core Types
+//!
+//! * [`Renderer`] - Async trait for implementing custom renderers
+//! * [`View`] - Unified view structure for full pages and partial updates
+//! * [`Content`] - Response content enum (HTML views, JSON, or raw data)
+//! * [`RendererEvent`] - Events emitted by renderers
+//!
+//! # Examples
+//!
+//! Creating a view with primary content and fragments:
+//!
+//! ```rust
+//! use hyperchad_renderer::{View, transformer::Container};
+//!
+//! # fn main() {
+//! let view = View::builder()
+//!     .with_primary(Container::default())
+//!     .build();
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

@@ -1,3 +1,8 @@
+//! Audio zone management UI components.
+//!
+//! This module provides UI templates for displaying and managing audio zones
+//! and their associated players.
+
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::template::{self as hyperchad_template, Containers, container};

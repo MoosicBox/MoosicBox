@@ -1,3 +1,41 @@
+//! Request data extraction trait and implementations.
+//!
+//! This module provides the [`FromRequest`] trait, which enables type-safe extraction of data
+//! from HTTP requests. It supports both synchronous and asynchronous extraction to accommodate
+//! different backend requirements.
+//!
+//! # Overview
+//!
+//! The module includes:
+//!
+//! * [`FromRequest`] - Core trait for extracting typed data from requests
+//! * [`IntoHandlerError`] - Trait for converting errors into handler errors
+//! * [`RequestData`] - Send-safe wrapper for commonly needed request data
+//! * [`RequestInfo`] - Basic request information (method, path, query)
+//! * [`Headers`] - Send-safe header extraction
+//! * [`Query`] - Query parameter extraction (requires `serde` feature)
+//! * [`Json`] - JSON body extraction (requires `serde` feature)
+//!
+//! # Dual-Mode Support
+//!
+//! The trait supports both sync and async extraction:
+//!
+//! * **Actix backend**: Uses synchronous extraction to avoid Send bounds issues
+//! * **Simulator backend**: Can use either sync or async extraction
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use moosicbox_web_server::{HttpRequest, HttpResponse, Error};
+//! use moosicbox_web_server::from_request::{FromRequest, RequestData};
+//!
+//! async fn handler(data: RequestData) -> Result<HttpResponse, Error> {
+//!     println!("Method: {:?}", data.method);
+//!     println!("Path: {}", data.path);
+//!     Ok(HttpResponse::ok())
+//! }
+//! ```
+
 use std::{collections::HashMap, future::Future};
 
 use crate::{Error, HttpRequest, Method};

@@ -1,3 +1,17 @@
+//! Reqwest HTTP client backend implementation.
+//!
+//! This module provides a production-ready HTTP client backend using the `reqwest` crate.
+//! It implements the generic HTTP traits defined in the parent module, allowing real network
+//! requests to be made.
+//!
+//! This module is only available when the `reqwest` feature is enabled.
+//!
+//! # Usage
+//!
+//! Use the exported types from the parent crate (`switchy_http::Client`, etc.) rather than
+//! accessing this module directly. The parent crate automatically selects the appropriate
+//! backend based on enabled features.
+
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use async_trait::async_trait;

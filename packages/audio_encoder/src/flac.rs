@@ -1,3 +1,8 @@
+//! FLAC audio encoding.
+//!
+//! Provides functions to create and use FLAC encoders with configurable block sizes
+//! for lossless audio compression.
+
 #![allow(clippy::module_name_repetitions, clippy::struct_field_names)]
 
 use flacenc::{
@@ -19,12 +24,16 @@ pub struct Encoder {
     encoder: Verified<flacenc::config::Encoder>,
 }
 
+/// Errors that can occur during FLAC encoding operations.
 #[derive(Debug, Error)]
 pub enum EncoderError {
+    /// Error writing encoder output
     #[error(transparent)]
     Output(#[from] flacenc::error::OutputError<MemSink<u8>>),
+    /// Error verifying encoder configuration
     #[error(transparent)]
     Verify(#[from] flacenc::error::VerifyError),
+    /// Error during encoding
     #[error("Encode error")]
     Encode(flacenc::error::EncodeError),
 }
@@ -35,6 +44,10 @@ impl From<flacenc::error::EncodeError> for EncoderError {
     }
 }
 
+/// Creates a new FLAC encoder with default settings.
+///
+/// Configures the encoder with a block size of 512 samples for streaming encoding.
+///
 /// # Errors
 ///
 /// * If the encoder fails to initialize
@@ -52,6 +65,8 @@ pub fn encoder_flac() -> Result<Encoder, EncoderError> {
     })
 }
 
+/// Encodes PCM audio samples to FLAC format.
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the input bytes

@@ -1,3 +1,29 @@
+//! Event system for profile updates.
+//!
+//! Provides an event listener system that notifies registered callbacks when profiles
+//! are added or removed from the registry.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "events")]
+//! # {
+//! use moosicbox_profiles::events::on_profiles_updated_event;
+//!
+//! # async {
+//! // Register a listener for profile updates
+//! on_profiles_updated_event(|added, removed| {
+//!     let added = added.to_vec();
+//!     let removed = removed.to_vec();
+//!     async move {
+//!         println!("Added: {:?}, Removed: {:?}", added, removed);
+//!         Ok(())
+//!     }
+//! }).await;
+//! # };
+//! # }
+//! ```
+
 use std::{
     future::Future,
     pin::Pin,

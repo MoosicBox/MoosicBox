@@ -1,3 +1,40 @@
+//! Image resizing and format conversion utilities.
+//!
+//! This crate provides high-performance image resizing with support for multiple backends
+//! and output formats. It offers both synchronous and asynchronous APIs for image manipulation.
+//!
+//! # Backends
+//!
+//! * `libvips` - High-performance image processing using libvips (not available on Windows)
+//! * `image` - Pure Rust image processing using the `image` crate
+//!
+//! # Supported Formats
+//!
+//! * JPEG - Lossy compression with configurable quality
+//! * WebP - Modern image format with better compression
+//!
+//! # Features
+//!
+//! * `libvips` - Enable libvips backend for high-performance processing
+//! * `image` - Enable pure Rust image backend
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_image::{Encoding, image::try_resize_local_file};
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Resize an image to 800x600 JPEG with quality 85
+//! let resized = try_resize_local_file(
+//!     800,
+//!     600,
+//!     "/path/to/image.jpg",
+//!     Encoding::Jpeg,
+//!     85,
+//! )?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

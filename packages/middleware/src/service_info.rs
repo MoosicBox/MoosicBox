@@ -1,3 +1,36 @@
+//! Service configuration information accessible via Actix-web request extraction.
+//!
+//! This module provides [`ServiceInfo`] which can be extracted in request handlers
+//! to access service configuration like the port number.
+//!
+//! The configuration must be initialized once using [`init`] before the server starts.
+//!
+//! # Example
+//!
+//! ```rust
+//! use actix_web::{web, App, HttpResponse, HttpServer};
+//! use moosicbox_middleware::service_info::ServiceInfo;
+//!
+//! async fn handler(info: ServiceInfo) -> HttpResponse {
+//!     HttpResponse::Ok().body(format!("Running on port {}", info.port))
+//! }
+//!
+//! # async fn example() -> std::io::Result<()> {
+//! // Initialize before starting server
+//! moosicbox_middleware::service_info::init(ServiceInfo { port: 8080 })
+//!     .expect("Failed to initialize service info");
+//!
+//! HttpServer::new(|| {
+//!     App::new()
+//!         .route("/", web::get().to(handler))
+//! })
+//! .bind(("127.0.0.1", 8080))?
+//! .run()
+//! # ;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::sync::OnceLock;
 
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorInternalServerError};

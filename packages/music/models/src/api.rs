@@ -1,3 +1,9 @@
+//! API-specific model types for serialization and network transfer.
+//!
+//! This module provides lightweight versions of core types optimized for API responses.
+//! The main difference from the core types is the use of `contains_cover` boolean flags
+//! instead of full cover URLs, reducing payload size for network transfers.
+
 use moosicbox_date_utils::chrono::{self, parse_date_time};
 use serde::{Deserialize, Serialize};
 
@@ -6,6 +12,9 @@ use crate::{
     Track, TrackApiSource, id::Id,
 };
 
+/// API-optimized representation of an artist.
+///
+/// Uses `contains_cover` boolean instead of full cover URL to reduce payload size.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -45,6 +54,9 @@ impl From<ApiArtist> for Artist {
     }
 }
 
+/// API-optimized representation of album version quality characteristics.
+///
+/// Identical to [`AlbumVersionQuality`] but provided for API consistency.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +92,10 @@ impl From<AlbumVersionQuality> for ApiAlbumVersionQuality {
     }
 }
 
+/// API-optimized representation of a music track.
+///
+/// Uses `contains_cover` boolean instead of full artwork URL to reduce payload size.
+/// Does not include file path information which is only relevant server-side.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -172,6 +188,10 @@ impl From<ApiTrack> for Track {
     }
 }
 
+/// API-optimized representation of a music album.
+///
+/// Uses `contains_cover` boolean instead of full artwork URL to reduce payload size.
+/// Does not include directory path information which is only relevant server-side.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]

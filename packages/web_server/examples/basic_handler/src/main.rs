@@ -1,3 +1,27 @@
+//! Basic handler example demonstrating the `Route::with_handler()` method.
+//!
+//! This example shows how to use the clean async function syntax with
+//! `Route::with_handler1()` instead of the verbose `Box::pin(async move {...})`
+//! boilerplate. The example works with both Actix and Simulator backends,
+//! demonstrating backend-agnostic handler creation.
+//!
+//! # Features
+//!
+//! * `actix` - Run with Actix Web backend
+//! * `simulator` - Run with Simulator backend (default)
+//!
+//! # Example
+//!
+//! Run with the simulator backend:
+//! ```text
+//! cargo run --package basic_handler_example
+//! ```
+//!
+//! Run with the Actix backend:
+//! ```text
+//! cargo run --package basic_handler_example --features actix
+//! ```
+
 use moosicbox_web_server::{
     Error, FromRequest, HttpRequest, HttpResponse, Method, RequestData, Route,
 };

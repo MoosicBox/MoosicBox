@@ -1,3 +1,62 @@
+//! Generic HTTP client abstraction layer.
+//!
+//! This crate provides a unified interface for making HTTP requests across different backend
+//! implementations. It defines generic traits for HTTP clients, request builders, and responses,
+//! allowing you to write code that works with multiple HTTP client libraries.
+//!
+//! # Features
+//!
+//! * `reqwest` - Enable the reqwest HTTP client backend (real network requests)
+//! * `simulator` - Enable the simulator backend (no-op client for testing)
+//! * `json` - Enable JSON serialization/deserialization support
+//! * `stream` - Enable streaming response bodies
+//!
+//! # Backends
+//!
+//! The crate supports multiple HTTP client backends through feature flags:
+//!
+//! * **reqwest** - Production HTTP client using the `reqwest` crate
+//! * **simulator** - No-op client that returns empty responses, useful for testing
+//!
+//! # Examples
+//!
+//! Basic usage with the reqwest backend:
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "reqwest")]
+//! # {
+//! use switchy_http::{GenericClient, GenericRequestBuilder, GenericResponse};
+//!
+//! # async fn example() -> Result<(), switchy_http::Error> {
+//! let client = switchy_http::Client::new();
+//! let mut response = client.get("https://api.example.com/data").send().await?;
+//! let text = response.text().await?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+//!
+//! With JSON support:
+//!
+//! ```rust,no_run
+//! # #[cfg(all(feature = "reqwest", feature = "json"))]
+//! # {
+//! use switchy_http::{GenericClient, GenericRequestBuilder};
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct ApiResponse {
+//!     message: String,
+//! }
+//!
+//! # async fn example() -> Result<(), switchy_http::Error> {
+//! let client = switchy_http::Client::new();
+//! let response = client.get("https://api.example.com/data").send().await?;
+//! let data: ApiResponse = response.json().await?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -153,19 +212,48 @@ pub trait GenericResponse: Send + Sync {
 }
 
 /// Wrapper type for generic request builders.
+///
+/// This wrapper provides a unified interface for building HTTP requests across different
+/// backend implementations. It implements builder pattern methods for configuring requests.
+///
+/// Most users should use the type aliases exported by this crate (`ReqwestRequestBuilder`,
+/// `SimulatorRequestBuilder`, etc.) rather than using this wrapper directly.
 pub struct RequestBuilderWrapper<R, B: GenericRequestBuilder<R>>(
     pub(crate) B,
     pub(crate) PhantomData<R>,
 );
+
 /// Wrapper type for generic HTTP clients.
+///
+/// This wrapper provides a unified interface for creating HTTP requests across different
+/// backend implementations. It provides convenience methods for common HTTP methods like
+/// GET, POST, PUT, etc.
+///
+/// Most users should use the type aliases exported by this crate (`ReqwestClient`,
+/// `SimulatorClient`, etc.) rather than using this wrapper directly.
 pub struct ClientWrapper<RB, T: GenericClient<RB>>(pub(crate) T, pub(crate) PhantomData<RB>);
+
 /// Wrapper type for generic client builders.
+///
+/// This wrapper provides a unified interface for building HTTP clients across different
+/// backend implementations. Use the `build()` method to construct a configured client.
+///
+/// Most users should use the type aliases exported by this crate (`ReqwestClientBuilder`,
+/// `SimulatorClientBuilder`, etc.) rather than using this wrapper directly.
 pub struct ClientBuilderWrapper<RB, C: GenericClient<RB>, T: GenericClientBuilder<RB, C>>(
     pub(crate) T,
     PhantomData<RB>,
     PhantomData<C>,
 );
+
 /// Wrapper type for generic HTTP responses.
+///
+/// This wrapper provides a unified interface for accessing HTTP response data across different
+/// backend implementations. It provides methods for reading response status, headers, and body
+/// in various formats (text, bytes, JSON, streams).
+///
+/// Most users should use the type aliases exported by this crate (`ReqwestResponse`,
+/// `SimulatorResponse`, etc.) rather than using this wrapper directly.
 pub struct ResponseWrapper<T: GenericResponse>(pub(crate) T);
 
 #[allow(unused)]

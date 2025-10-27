@@ -1,3 +1,37 @@
+//! Action system for `HyperChad` UI framework
+//!
+//! This crate provides a comprehensive action system for building interactive UI behaviors
+//! in the `HyperChad` framework. It enables declarative definition of UI actions triggered by
+//! events such as clicks, hovers, and HTTP requests.
+//!
+//! # Main Components
+//!
+//! * [`Action`] - Combines a trigger event with an effect to execute
+//! * [`ActionTrigger`] - Event types that can trigger actions (click, hover, HTTP events, etc.)
+//! * [`ActionEffect`] - Wrapper for actions with timing modifiers (throttle, delay)
+//! * [`ActionType`] - Concrete action types (style changes, navigation, logging, custom actions)
+//! * [`Key`] - Keyboard key representations for key events
+//!
+//! # Feature Flags
+//!
+//! * `logic` - Enables conditional logic and dynamic value evaluation in actions
+//! * `handler` - Provides action handler implementation for processing actions
+//! * `arb` - Adds property-based testing support via `quickcheck`
+//! * `serde` - Enables serialization/deserialization support
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_actions::{Action, ActionTrigger, ActionType};
+//! use hyperchad_transformer_models::Visibility;
+//!
+//! // Create an action that hides an element when clicked
+//! let action = Action {
+//!     trigger: ActionTrigger::Click,
+//!     effect: ActionType::hide_str_id("my-element").into(),
+//! };
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -208,11 +242,17 @@ impl std::fmt::Display for Key {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HttpEventContext {
+    /// URL of the HTTP request
     pub url: String,
+    /// HTTP method (GET, POST, etc.)
     pub method: String,
+    /// HTTP status code if response received
     pub status: Option<u16>,
+    /// HTTP response headers if available
     pub headers: Option<BTreeMap<String, String>>,
+    /// Request duration in milliseconds
     pub duration_ms: Option<u64>,
+    /// Error message if request failed
     pub error: Option<String>,
 }
 

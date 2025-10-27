@@ -1,3 +1,14 @@
+//! Server-Sent Events (SSE) support for real-time `HyperChad` updates.
+//!
+//! This module implements SSE streaming endpoints that push renderer events to connected clients
+//! in real-time. Events include view updates, canvas updates, and custom application events.
+//!
+//! SSE connections are established via GET requests to the `/$sse` endpoint and remain open
+//! for continuous streaming of updates. The module supports optional content encoding (gzip,
+//! deflate, zstd) for efficient transmission.
+//!
+//! This module is only available when the `sse` feature is enabled.
+
 use std::{io::Write as _, sync::Arc};
 
 use actix_web::{

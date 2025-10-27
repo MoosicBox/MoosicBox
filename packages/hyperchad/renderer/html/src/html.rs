@@ -1,3 +1,9 @@
+//! HTML and CSS conversion utilities for `HyperChad` containers.
+//!
+//! This module provides low-level functions for converting `HyperChad` containers
+//! and elements into HTML markup with CSS styling. It handles element attributes,
+//! styles, classes, and supports various HTML elements and layout systems.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{collections::BTreeMap, io::Write};

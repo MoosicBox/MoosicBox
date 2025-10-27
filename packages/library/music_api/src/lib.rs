@@ -1,3 +1,25 @@
+//! Music API implementation for local library access.
+//!
+//! This crate provides a [`MusicApi`] implementation that operates against a local library
+//! database, allowing access to artists, albums, tracks, and search functionality without
+//! requiring external music services.
+//!
+//! # Main Types
+//!
+//! * [`LibraryMusicApi`] - Main API implementation for local library operations
+//! * [`profiles::LibraryMusicApiProfiles`] - Manager for multiple library profiles
+//!
+//! # Example
+//!
+//! ```rust
+//! # use moosicbox_library_music_api::LibraryMusicApi;
+//! # use switchy_database::profiles::LibraryDatabase;
+//! # fn example(db: LibraryDatabase) {
+//! let api = LibraryMusicApi::new(db);
+//! // Use the api for music operations...
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

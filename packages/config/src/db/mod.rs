@@ -1,3 +1,22 @@
+//! Database operations for `MoosicBox` configuration.
+//!
+//! This module provides database-backed storage for configuration data,
+//! including server identity and profile management.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "db")]
+//! # async fn example(db: &switchy_database::config::ConfigDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! use moosicbox_config::get_or_init_server_identity;
+//!
+//! // Get or create a unique server identity
+//! let identity = get_or_init_server_identity(db).await?;
+//! println!("Server identity: {}", identity);
+//! # Ok(())
+//! # }
+//! ```
+
 use moosicbox_json_utils::{ToValueType as _, database::DatabaseFetchError};
 use nanoid::nanoid;
 use switchy_database::{DatabaseError, config::ConfigDatabase, query::FilterableQuery as _};

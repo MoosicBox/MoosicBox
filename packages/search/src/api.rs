@@ -1,3 +1,9 @@
+//! API endpoints for search functionality.
+//!
+//! This module provides Actix-web REST API endpoints for performing global search
+//! operations. It includes endpoints for both structured search results and raw
+//! Tantivy document results.
+
 use actix_web::{
     Result, Scope,
     dev::{ServiceFactory, ServiceRequest},

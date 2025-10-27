@@ -1,3 +1,7 @@
+//! Server information endpoints for the admin interface.
+//!
+//! Provides endpoints for displaying `MoosicBox` server identity and configuration.
+
 use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},

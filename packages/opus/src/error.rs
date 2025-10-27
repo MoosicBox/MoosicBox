@@ -1,3 +1,8 @@
+//! Error types for Opus codec operations.
+//!
+//! This module defines the [`enum@Error`] enum for various failure modes in Opus
+//! packet parsing and decoding operations.
+
 use thiserror::Error;
 
 /// Opus codec errors.

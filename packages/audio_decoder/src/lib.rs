@@ -1,3 +1,30 @@
+//! Audio decoding using the Symphonia media framework.
+//!
+//! This crate provides audio decoding capabilities using [Symphonia](https://github.com/pdeljanov/Symphonia),
+//! supporting various audio formats including AAC, FLAC, MP3, and Opus (via feature flags).
+//! It enables streaming audio from files, byte streams, and remote sources.
+//!
+//! # Features
+//!
+//! * Decode audio from files and various media sources
+//! * Support for streaming audio from byte streams and remote sources
+//! * Optional format support via feature flags (`aac`, `flac`, `mp3`, `opus`)
+//! * Audio filtering and multiple output handlers
+//! * Seeking within audio tracks
+//! * Cancellation support for long-running decoding operations
+//!
+//! # Main Entry Points
+//!
+//! * [`decode_file_path_str`] - Decode audio from a file path (blocking)
+//! * [`decode_file_path_str_async`] - Decode audio from a file path (async)
+//! * [`decode_media_source_async`] - Decode from a custom media source (async)
+//! * [`AudioDecodeHandler`] - Manages decoding with filters and outputs
+//!
+//! # Modules
+//!
+//! * [`media_sources`] - Custom media source implementations
+//! * [`unsync`] - Unsynchronized decoder API
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

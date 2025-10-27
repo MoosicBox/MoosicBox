@@ -1,3 +1,37 @@
+//! Database schema migration management for `MoosicBox`.
+//!
+//! This crate provides migration functionality for `MoosicBox`'s `PostgreSQL` and `SQLite` databases,
+//! supporting both configuration and library schemas. Migrations are embedded at compile-time
+//! and executed using the `switchy_schema` migration framework.
+//!
+//! # Features
+//!
+//! * `postgres` - Enable `PostgreSQL` migration support
+//! * `sqlite` - Enable `SQLite` migration support (enabled by default)
+//!
+//! # Environment Variables
+//!
+//! * `MOOSICBOX_SKIP_MIGRATION_EXECUTION` - Set to "1" to mark migrations as completed without executing
+//! * `MOOSICBOX_DROP_MIGRATIONS_TABLE` - Set to "1" to drop the migrations tracking table before running
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use moosicbox_schema::{migrate_library, migrate_config};
+//!
+//! // Connect to database
+//! let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+//!
+//! // Run configuration migrations
+//! migrate_config(&*db).await?;
+//!
+//! // Run library migrations
+//! migrate_library(&*db).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

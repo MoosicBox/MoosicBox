@@ -1,3 +1,11 @@
+//! Seekable HTTP byte streaming with on-demand range requests.
+//!
+//! This module provides [`RemoteByteStream`], a seekable reader that fetches data
+//! from HTTP URLs on demand using range requests. It implements [`std::io::Read`]
+//! and [`std::io::Seek`] for transparent remote file access.
+//!
+//! Available when the `remote-bytestream` feature is enabled.
+
 use std::cmp::min;
 use std::io::{Read, Seek};
 

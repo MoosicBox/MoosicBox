@@ -1,3 +1,33 @@
+//! HTTP adapter for `HyperChad` HTML rendering.
+//!
+//! This crate provides an HTTP request processor that combines `HyperChad`'s
+//! HTML rendering capabilities with routing, optional action handling, and
+//! static asset serving. It converts `HyperChad` views into HTTP responses
+//! with support for both full page loads and partial updates (htmx).
+//!
+//! # Features
+//!
+//! * `actions` - Enable action request handling via channels
+//! * `assets` - Enable static asset serving from filesystem or embedded sources
+//! * `json` - Enable JSON response content type
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hyperchad_renderer_html_http::{HttpApp, http::Response};
+//! # use hyperchad_renderer::HtmlTagRenderer;
+//! # use hyperchad_router::{Router, RouteRequest, RequestInfo};
+//! # async fn example<R: HtmlTagRenderer + Sync>(renderer: R) -> Result<(), Box<dyn std::error::Error>> {
+//! let router = Router::new();
+//! let app = HttpApp::new(renderer, router)
+//!     .with_title("My App")
+//!     .with_viewport("width=device-width, initial-scale=1");
+//!
+//! let request = RouteRequest::from_path("/", RequestInfo::default());
+//! let response: Response<Vec<u8>> = app.process(&request).await?;
+//! # Ok(())
+//! # }
+//! ```
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

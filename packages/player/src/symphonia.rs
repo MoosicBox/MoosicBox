@@ -1,3 +1,9 @@
+//! Asynchronous audio file playback using Symphonia.
+//!
+//! This module provides functions for playing audio files asynchronously using the
+//! Symphonia decoder. It supports various audio formats and handles audio decoding
+//! with options for gapless playback and verification.
+
 use std::{fs::File, path::Path};
 
 use moosicbox_audio_decoder::{AudioDecodeHandler, DecodeError, decode};

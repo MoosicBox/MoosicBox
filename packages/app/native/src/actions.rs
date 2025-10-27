@@ -1,3 +1,10 @@
+//! UI action handling for the native application.
+//!
+//! This module provides the action dispatcher that handles user interactions from the UI,
+//! such as playback controls, album playback, volume adjustments, and visualization updates.
+//! Actions are dispatched to the appropriate handlers and communicate with the backend via
+//! WebSocket messages.
+
 use hyperchad::{
     actions::{self, logic::Value},
     renderer::View,

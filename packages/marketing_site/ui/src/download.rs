@@ -1,3 +1,8 @@
+//! Download page components for the `MoosicBox` marketing site.
+//!
+//! This module provides page generation for displaying software releases,
+//! download links, and operating system detection for the marketing website.
+
 use std::sync::LazyLock;
 
 use chrono::NaiveDateTime;

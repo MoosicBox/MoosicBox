@@ -1,3 +1,35 @@
+//! `MoosicBox` desktop and mobile application built with Tauri.
+//!
+//! This crate provides the core Tauri application for the `MoosicBox` music player,
+//! supporting desktop (Windows, macOS, Linux) and mobile (Android, iOS) platforms.
+//! It manages playback, WebSocket connections to `MoosicBox` servers, mDNS service
+//! discovery, and platform-specific integrations.
+//!
+//! # Features
+//!
+//! * **Multi-platform support**: Desktop and mobile platforms via Tauri
+//! * **Music playback**: Local playback with multiple audio output backends (CPAL, ASIO, JACK)
+//! * **Remote control**: WebSocket-based communication with `MoosicBox` servers
+//! * **Service discovery**: Automatic discovery of `MoosicBox` servers via mDNS/Zeroconf
+//! * **Multiple sources**: Support for local library, Tidal, Qobuz, and `YouTube` Music
+//! * **Native UI**: Optional native UI rendering with Hyperchad framework
+//! * **Bundled mode**: Optional embedded server for standalone operation
+//!
+//! # Main Entry Points
+//!
+//! * [`run`] - Main entry point to start the Tauri application
+//! * [`on_playback_event`] - Callback for playback state changes
+//! * [`mdns`] - Module for mDNS service discovery of `MoosicBox` servers
+//! * [`TauriUpdateAppState`] - Structure for updating application state via Tauri commands
+//! * [`TauriPlayerError`] - Error type for Tauri player operations
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
+//! moosicbox_lib::run();
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

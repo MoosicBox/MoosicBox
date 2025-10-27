@@ -1,3 +1,8 @@
+//! mDNS service scanner for discovering `MoosicBox` servers on the network.
+//!
+//! This module provides functionality to scan the local network for `MoosicBox` servers
+//! using mDNS service discovery, returning discovered servers through an async channel.
+
 use std::net::SocketAddr;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};

@@ -1,3 +1,11 @@
+//! Action handling for interactive `HyperChad` user events.
+//!
+//! This module provides HTTP endpoints for processing user-triggered actions from the frontend.
+//! Actions are sent via POST requests to the `/$action` endpoint and forwarded to the application
+//! through a channel for processing.
+//!
+//! This module is only available when the `actions` feature is enabled.
+
 use actix_web::{HttpRequest, HttpResponse, Responder, error::ErrorInternalServerError, web};
 use hyperchad_renderer::transformer::actions::logic::Value;
 use serde::{Deserialize, Serialize};

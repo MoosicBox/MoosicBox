@@ -1,3 +1,34 @@
+//! Music library scanning and indexing for `MoosicBox`.
+//!
+//! This crate provides functionality for scanning music libraries from both local
+//! filesystem sources and remote music API services (e.g., streaming platforms).
+//! It discovers music files, extracts metadata, downloads artwork, and updates
+//! the `MoosicBox` database with artists, albums, and tracks.
+//!
+//! # Features
+//!
+//! * Scan local music files with metadata extraction
+//! * Scan remote music services via API integrations
+//! * Progress tracking for long-running scan operations
+//! * Artwork downloading and caching
+//! * Database synchronization with deduplication
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use moosicbox_scan::{Scanner, ScanOrigin};
+//! # use moosicbox_music_api::MusicApis;
+//! # use switchy_database::profiles::LibraryDatabase;
+//! # async fn example(db: &LibraryDatabase, music_apis: MusicApis) -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a scanner for a specific origin
+//! let scanner = Scanner::from_origin(db, ScanOrigin::Local).await?;
+//!
+//! // Start scanning
+//! scanner.scan(music_apis, db).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -21,9 +52,13 @@ pub mod api;
 #[cfg(feature = "local")]
 pub mod local;
 
+/// Database operations for scan locations and origins.
 pub mod db;
+/// Progress event types and listener registration for scan operations.
 pub mod event;
+/// Music API scanning functionality for remote streaming services.
 pub mod music_api;
+/// Data structures and database update operations for scan results.
 pub mod output;
 
 pub use moosicbox_scan_models as models;

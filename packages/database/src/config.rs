@@ -1,3 +1,42 @@
+//! Global database configuration and initialization
+//!
+//! This module provides global database instance management for applications
+//! that need a singleton database connection. It includes integration with
+//! the actix-web framework for dependency injection.
+//!
+//! # Usage
+//!
+//! Initialize the global database instance at application startup:
+//!
+//! ```rust,ignore
+//! use switchy_database::config;
+//! use std::sync::Arc;
+//!
+//! # async fn example(db: Box<dyn switchy_database::Database>) {
+//! // Initialize global database
+//! config::init(Arc::new(db));
+//!
+//! // In actix-web handlers, use ConfigDatabase for dependency injection
+//! // It will automatically extract the global database instance
+//! # }
+//! ```
+//!
+//! # Actix-web Integration
+//!
+//! When the `api` feature is enabled, [`ConfigDatabase`] implements actix-web's
+//! `FromRequest` trait, allowing automatic extraction in handlers:
+//!
+//! ```rust,ignore
+//! use actix_web::{web, HttpResponse};
+//! use switchy_database::config::ConfigDatabase;
+//!
+//! async fn my_handler(db: ConfigDatabase) -> HttpResponse {
+//!     // Use db as &dyn Database via Deref
+//!     let results = db.select("users").execute(&*db).await?;
+//!     HttpResponse::Ok().json(results)
+//! }
+//! ```
+
 use std::{
     ops::Deref,
     sync::{Arc, LazyLock, RwLock},

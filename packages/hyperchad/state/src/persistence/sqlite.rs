@@ -1,3 +1,8 @@
+//! `SQLite`-backed persistence implementation
+//!
+//! This module provides a [`StatePersistence`] implementation using `SQLite` as the
+//! underlying storage backend. It supports both in-memory and file-based databases.
+
 use std::path::Path;
 
 use async_trait::async_trait;

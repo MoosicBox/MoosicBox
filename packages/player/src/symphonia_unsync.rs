@@ -1,3 +1,9 @@
+//! Synchronous audio decoding using Symphonia.
+//!
+//! This module provides synchronous (non-async) audio playback functions using the
+//! Symphonia decoder. It's used for environments that don't require async operations
+//! or when blocking playback is acceptable.
+
 use flume::Receiver;
 use moosicbox_audio_decoder::{DecodeError, unsync::decode};
 use symphonia::core::{

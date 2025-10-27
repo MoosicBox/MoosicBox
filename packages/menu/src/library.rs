@@ -1,3 +1,9 @@
+//! Core library functionality for managing music content.
+//!
+//! This module provides the business logic for working with music library content,
+//! including fetching artists, albums, and tracks from various API sources. It
+//! handles caching, database queries, and coordination with external music APIs.
+
 pub mod albums;
 pub mod artists;
 

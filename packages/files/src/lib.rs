@@ -1,3 +1,36 @@
+//! File handling utilities for `MoosicBox` music server.
+//!
+//! This crate provides comprehensive file operations for the `MoosicBox` music server, including:
+//!
+//! * **HTTP file operations** - Download and stream files from remote URLs with progress tracking
+//! * **Media cover images** - Fetch and cache album/artist cover artwork
+//! * **Audio file handling** - Process and serve audio tracks in various formats
+//! * **Byte range support** - Handle partial content requests for streaming media
+//!
+//! # Features
+//!
+//! * `api` - Actix-web HTTP endpoints for file services
+//! * `files` - Core file handling and track management
+//! * `range` - Byte range parsing for partial content requests
+//! * `image` / `libvips` - Image resizing and processing
+//! * Format-specific features: `format-aac`, `format-flac`, `format-mp3`, `format-opus`
+//!
+//! # Examples
+//!
+//! Download and save a file from a remote URL:
+//!
+//! ```rust,no_run
+//! # use moosicbox_files::{fetch_and_save_bytes_from_remote_url};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = switchy_http::Client::new();
+//! let file_path = std::path::Path::new("/tmp/audio.flac");
+//! let url = "https://example.com/audio.flac";
+//!
+//! fetch_and_save_bytes_from_remote_url(&client, file_path, url, None).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -20,12 +53,21 @@ use tokio::{
     pin,
 };
 
+/// HTTP API endpoints for file services using Actix-web.
+///
+/// Provides REST endpoints for streaming tracks, fetching cover images, and retrieving track metadata.
 #[cfg(feature = "api")]
 pub mod api;
 
+/// Core file handling operations for tracks, albums, and artists.
+///
+/// Includes functionality for managing track files, cover images, and audio visualization data.
 #[cfg(feature = "files")]
 pub mod files;
 
+/// Byte range parsing for HTTP partial content requests.
+///
+/// Supports parsing RFC 7233 byte range specifications for streaming media.
 #[cfg(feature = "range")]
 pub mod range;
 
@@ -40,10 +82,13 @@ pub fn sanitize_filename(string: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX.replace_all(string, "_").to_string()
 }
 
+/// Errors that can occur when retrieving content length from a remote URL.
 #[derive(Debug, Error)]
 pub enum GetContentLengthError {
+    /// HTTP request error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// Failed to parse content-length header as integer
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
 }
@@ -51,10 +96,14 @@ pub enum GetContentLengthError {
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
+/// Retrieves the content length of a remote resource via HTTP HEAD request.
+///
+/// Optionally supports byte range requests to get the size of a specific range.
+///
 /// # Errors
 ///
-/// * If the request fails
-/// * If the content-length value is not a valid `u64`
+/// * If the HTTP request fails
+/// * If the content-length header value is not a valid `u64`
 pub async fn get_content_length(
     url: &str,
     start: Option<u64>,
@@ -86,13 +135,17 @@ pub async fn get_content_length(
     )
 }
 
+/// Saves bytes to a file at the specified path, optionally starting at a byte offset.
+///
+/// Creates parent directories if they don't exist. If `start` is `None` or `0`, the file is truncated.
+///
 /// # Panics
 ///
 /// * If the path has no parent directory
 ///
 /// # Errors
 ///
-/// * If there is an IO error
+/// * If there is an IO error creating directories or writing the file
 pub fn save_bytes_to_file(
     bytes: &[u8],
     path: &Path,
@@ -115,27 +168,35 @@ pub fn save_bytes_to_file(
     writer.write_all(bytes)
 }
 
+/// Errors that can occur when saving a byte stream to a file.
 #[derive(Debug, Error)]
 pub enum SaveBytesStreamToFileError {
+    /// General IO error
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
+    /// Error reading from the stream after processing some bytes
     #[error("IO Error after read {bytes_read} bytes: {source:?}")]
     Read {
+        /// Number of bytes successfully read before error
         bytes_read: u64,
         #[source]
         source: tokio::io::Error,
     },
+    /// Error writing to file after reading some bytes
     #[error("IO Error after reading {bytes_read} bytes: {source:?}")]
     Write {
+        /// Number of bytes read before write error
         bytes_read: u64,
         #[source]
         source: tokio::io::Error,
     },
 }
 
+/// Saves a stream of bytes to a file, optionally starting at a byte offset.
+///
 /// # Errors
 ///
-/// * If there is an IO error
+/// * If there is an IO error reading from the stream or writing to the file
 pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::Error>> + Send>(
     stream: S,
     path: &Path,
@@ -149,9 +210,13 @@ type OnSpeed = Box<dyn (FnMut(f64) -> Pin<Box<dyn Future<Output = ()> + Send>>) 
 type OnProgressFut = Pin<Box<dyn Future<Output = ()> + Send>>;
 type OnProgress = Box<dyn (FnMut(usize, usize) -> OnProgressFut) + Send>;
 
+/// Saves a stream of bytes to a file with download speed and progress callbacks.
+///
+/// Tracks download speed in bytes per second and invokes callbacks for speed updates and progress.
+///
 /// # Errors
 ///
-/// * If there is an IO error
+/// * If there is an IO error reading from the stream or writing to the file
 pub async fn save_bytes_stream_to_file_with_speed_listener<
     S: Stream<Item = Result<Bytes, std::io::Error>> + Send,
 >(
@@ -216,13 +281,17 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
     .await
 }
 
+/// Saves a stream of bytes to a file with progress tracking.
+///
+/// Invokes the optional progress callback with bytes written per chunk and total bytes written.
+///
 /// # Panics
 ///
 /// * If the path has no parent directory
 ///
 /// # Errors
 ///
-/// * If there is an IO error
+/// * If there is an IO error reading from the stream or writing to the file
 pub async fn save_bytes_stream_to_file_with_progress_listener<
     S: Stream<Item = Result<Bytes, std::io::Error>> + Send,
 >(
@@ -285,14 +354,19 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
     Ok(())
 }
 
+/// Errors that can occur when fetching cover artwork.
 #[derive(Debug, Error)]
 pub enum FetchCoverError {
+    /// HTTP request error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// IO error reading or writing cover file
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Error getting content length
     #[error(transparent)]
     GetContentLength(#[from] GetContentLengthError),
+    /// Error fetching and saving bytes from remote URL
     #[error(transparent)]
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
@@ -375,22 +449,36 @@ async fn get_or_fetch_cover_from_remote_url(
     }
 }
 
+/// Errors that can occur when fetching and saving bytes from a remote URL.
 #[derive(Debug, Error)]
 pub enum FetchAndSaveBytesFromRemoteUrlError {
+    /// HTTP request error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// IO error writing to file
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Error saving byte stream to file
     #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
+    /// HTTP request returned non-success status code
     #[error("Request failed: (error {status})")]
-    RequestFailed { status: u16, message: String },
+    RequestFailed {
+        /// HTTP status code
+        status: u16,
+        /// Response body message
+        message: String,
+    },
 }
 
+/// Fetches bytes from a remote URL as a stream.
+///
+/// Returns a stream of byte chunks that can be processed incrementally.
+///
 /// # Errors
 ///
-/// * If the request fails
-/// * If there is an IO error
+/// * If the HTTP request fails
+/// * If the server returns a non-success status code
 pub async fn fetch_bytes_from_remote_url(
     client: &switchy_http::Client,
     url: &str,
@@ -426,10 +514,14 @@ pub async fn fetch_bytes_from_remote_url(
         .boxed())
 }
 
+/// Downloads bytes from a remote URL and saves them to a file.
+///
+/// Creates parent directories if they don't exist.
+///
 /// # Errors
 ///
-/// * If the request fails
-/// * If there is an IO error
+/// * If the HTTP request fails
+/// * If there is an IO error creating directories or writing the file
 pub async fn fetch_and_save_bytes_from_remote_url(
     client: &switchy_http::Client,
     file_path: &Path,
@@ -442,10 +534,14 @@ pub async fn fetch_and_save_bytes_from_remote_url(
     Ok(file_path.to_path_buf())
 }
 
+/// Searches for cover artwork in a directory or extracts it from audio file tags.
+///
+/// First searches the directory for files matching the filename pattern. If not found and a tag
+/// is provided, extracts embedded cover art and saves it to the `save_path`.
+///
 /// # Errors
 ///
-/// * If the request fails
-/// * If there is an IO error
+/// * If there is an IO error reading the directory or saving the cover file
 pub async fn search_for_cover(
     path: PathBuf,
     filename: &str,

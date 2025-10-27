@@ -1,3 +1,8 @@
+//! Caching functionality for library data to improve performance.
+//!
+//! This module provides a simple in-memory cache for library items such as albums,
+//! tracks, and artists. The cache supports expiration times and automatic cleanup.
+
 #![allow(clippy::module_name_repetitions)]
 
 use enum_as_inner::EnumAsInner;

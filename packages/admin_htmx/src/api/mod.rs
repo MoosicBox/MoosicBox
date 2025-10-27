@@ -1,3 +1,12 @@
+//! Actix-web endpoints for the `MoosicBox` admin interface.
+//!
+//! This module provides HTMX-based web endpoints for managing `MoosicBox` configuration
+//! including server info, profiles, and music service integrations.
+//!
+//! # Main Entry Point
+//!
+//! Use [`bind_services`] to register all admin endpoints on an Actix-web scope.
+
 #![allow(clippy::future_not_send)]
 
 use actix_htmx::Htmx;

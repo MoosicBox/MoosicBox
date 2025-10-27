@@ -1,3 +1,34 @@
+//! Test simulator for `HyperChad` applications across multiple renderer implementations.
+//!
+//! This crate provides simulation infrastructure to test `HyperChad` applications with different
+//! rendering backends (HTML, Vanilla JavaScript, Egui, FLTK) in an automated environment. It
+//! enables testing application behavior, routing, and UI interactions without manual intervention.
+//!
+//! # Features
+//!
+//! * Simulate multiple renderer types in a single test run
+//! * Mock application configuration, routes, and static assets
+//! * Provide simulated data (users, API responses, database state)
+//! * Integration with `simvar` for distributed simulation scenarios
+//! * Optional test utilities via the `test-utils` feature
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_simulator::{HyperChadSimulator, RendererType, AppConfig};
+//!
+//! # fn example() {
+//! let simulator = HyperChadSimulator::new()
+//!     .with_app_config(AppConfig {
+//!         name: "my-app".to_string(),
+//!         routes: vec!["/".to_string(), "/about".to_string()],
+//!         ..Default::default()
+//!     })
+//!     .with_renderer(RendererType::Html)
+//!     .with_renderer(RendererType::VanillaJs);
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

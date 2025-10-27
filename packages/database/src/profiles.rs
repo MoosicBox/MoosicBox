@@ -1,3 +1,52 @@
+//! Multi-database profile management
+//!
+//! This module provides functionality for managing multiple database connections
+//! identified by profile names. It enables applications to work with multiple
+//! databases simultaneously, switching between them based on user profiles or
+//! application contexts.
+//!
+//! # Usage
+//!
+//! Register database instances with profile names:
+//!
+//! ```rust,ignore
+//! use switchy_database::profiles::PROFILES;
+//! use std::sync::Arc;
+//!
+//! # async fn example(db1: Box<dyn switchy_database::Database>, db2: Box<dyn switchy_database::Database>) {
+//! // Register databases for different profiles
+//! PROFILES.add("user1".to_string(), Arc::new(db1));
+//! PROFILES.add("user2".to_string(), Arc::new(db2));
+//!
+//! // Retrieve a database by profile name
+//! if let Some(db) = PROFILES.get("user1") {
+//!     // Use db as &dyn Database via Deref
+//!     let results = db.select("users").execute(&*db).await?;
+//! }
+//!
+//! // List all profile names
+//! let profiles = PROFILES.names();
+//! # Ok::<(), switchy_database::DatabaseError>(())
+//! # }
+//! ```
+//!
+//! # Actix-web Integration
+//!
+//! When the `api` feature is enabled, [`LibraryDatabase`] implements actix-web's
+//! `FromRequest` trait, automatically extracting the database for the current
+//! profile from request headers:
+//!
+//! ```rust,ignore
+//! use actix_web::{web, HttpResponse};
+//! use switchy_database::profiles::LibraryDatabase;
+//!
+//! async fn my_handler(db: LibraryDatabase) -> HttpResponse {
+//!     // db is automatically resolved from the profile header
+//!     let results = db.select("tracks").execute(&*db).await?;
+//!     HttpResponse::Ok().json(results)
+//! }
+//! ```
+
 use std::{
     collections::BTreeMap,
     ops::Deref,

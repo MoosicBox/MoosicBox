@@ -1,3 +1,38 @@
+//! Minimal FFI bindings to libopus for test vector generation.
+//!
+//! This crate provides low-level FFI bindings to libopus along with safe Rust wrappers
+//! for encoding and decoding Opus audio. It is intended for internal use within `MoosicBox`
+//! for generating test vectors and is not published to crates.io.
+//!
+//! # Usage
+//!
+//! For most use cases, prefer the safe wrappers in the [`safe`] module:
+//!
+//! ```rust
+//! use moosicbox_opus_native_libopus::{OPUS_APPLICATION_AUDIO, safe::{Encoder, Decoder}};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create encoder and decoder
+//! let mut encoder = Encoder::new(48000, 1, OPUS_APPLICATION_AUDIO)?;
+//! let mut decoder = Decoder::new(48000, 1)?;
+//!
+//! // Encode PCM audio
+//! let input_pcm = vec![0i16; 960];
+//! let mut packet = vec![0u8; 4000];
+//! let packet_len = encoder.encode(&input_pcm, 960, &mut packet)?;
+//!
+//! // Decode back to PCM
+//! let mut output_pcm = vec![0i16; 960];
+//! let samples = decoder.decode(&packet[..packet_len], &mut output_pcm, 960, false)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # FFI Functions
+//!
+//! Raw FFI functions are also exported for advanced use cases requiring direct libopus access.
+//! These functions are unsafe and require careful memory management.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(
     clippy::cast_possible_truncation,

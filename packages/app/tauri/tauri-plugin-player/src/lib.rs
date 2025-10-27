@@ -1,3 +1,49 @@
+//! Tauri plugin for audio player control and media session management.
+//!
+//! This plugin provides platform-specific audio playback control for `MoosicBox` applications,
+//! supporting both desktop and mobile platforms with native media controls.
+//!
+//! # Features
+//!
+//! * Control playback state (play, pause, seek)
+//! * Manage playlists and track navigation
+//! * Handle platform media control events
+//! * Cross-platform support (desktop and mobile)
+//!
+//! # Usage
+//!
+//! Initialize the plugin in your Tauri application:
+//!
+//! ```rust,ignore
+//! use tauri_plugin_player::PlayerExt;
+//!
+//! tauri::Builder::default()
+//!     .plugin(tauri_plugin_player::init())
+//!     .setup(|app| {
+//!         // Access player through the extension trait
+//!         let player = app.player();
+//!         Ok(())
+//!     })
+//!     .run(tauri::generate_context!())
+//!     .expect("error while running tauri application");
+//! ```
+//!
+//! # Platform Support
+//!
+//! The plugin adapts to the target platform:
+//!
+//! * **Desktop**: Provides a lightweight player interface
+//! * **Mobile** (iOS/Android): Integrates with native media session APIs
+//!
+//! # Main Types
+//!
+//! * [`PlayerExt`] - Extension trait for accessing player functionality
+//! * [`init()`] - Plugin initialization function
+//! * [`Track`] - Music track with metadata
+//! * [`Playlist`] - Collection of tracks
+//! * [`UpdateState`] - Request for updating player state
+//! * [`Error`] - Error types for plugin operations
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

@@ -27,7 +27,7 @@ moosicbox_search = "0.1.4"
 
 ### Basic Search
 
-```rust
+```rust,no_run
 use moosicbox_search::{global_search, search_global_search_index};
 
 // High-level search (returns structured results)
@@ -40,11 +40,13 @@ for result in results.results {
 
 // Lower-level search (returns raw Tantivy documents)
 let documents = search_global_search_index("Pink Floyd", 0, 10)?;
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ### Populating the Index
 
-```rust
+```rust,no_run
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
 use moosicbox_search::{populate_global_search_index, DataValue};
 
 // Create data entries for indexing
@@ -64,11 +66,13 @@ let data = vec![
 
 // Populate index (delete=true clears existing data first)
 populate_global_search_index(&data, true).await?;
+# Ok(())
+# }
 ```
 
 ### Deleting from Index
 
-```rust
+```rust,no_run
 use moosicbox_search::{delete_from_global_search_index, DataValue};
 
 // Delete by track ID
@@ -77,21 +81,25 @@ let delete_terms = vec![
 ];
 
 delete_from_global_search_index(&delete_terms)?;
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ### Reindexing
 
-```rust
+```rust,no_run
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
 use moosicbox_search::reindex_global_search_index;
 
 // Rebuild the entire index with fresh data
 let fresh_data = vec![/* ... */];
 reindex_global_search_index(&fresh_data).await?;
+# Ok(())
+# }
 ```
 
 ### Working with Database Models (requires `db` feature)
 
-```rust
+```rust,ignore
 use moosicbox_search::data::{AsDataValues, AsDeleteTerm, recreate_global_search_index};
 use moosicbox_music_models::{Artist, Album, Track};
 
@@ -110,7 +118,7 @@ recreate_global_search_index().await?;
 
 ### Core Functions
 
-```rust
+```rust,ignore
 // Search the global index
 pub fn search_global_search_index(
     search: &str,
@@ -155,7 +163,7 @@ pub enum DataValue {
 
 ### Error Types
 
-```rust
+```rust,ignore
 pub enum SearchIndexError { /* ... */ }
 pub enum PopulateIndexError { /* ... */ }
 pub enum DeleteFromIndexError { /* ... */ }
@@ -181,7 +189,7 @@ Each field has variants for different search types (e.g., `artist_title_search` 
 
 When the `api` feature is enabled:
 
-```
+```text
 GET /global-search?query={query}&offset={offset}&limit={limit}
 GET /raw-global-search?query={query}&offset={offset}&limit={limit}
 ```
@@ -226,7 +234,7 @@ cargo test --features "api,db"
 
 ## Error Handling
 
-```rust
+```rust,no_run
 use moosicbox_search::{global_search, SearchIndexError};
 
 match global_search("query", Some(0), Some(10)) {

@@ -1,3 +1,41 @@
+//! Session and connection management for `MoosicBox`.
+//!
+//! This crate provides functionality for managing playback sessions, playlists, connections,
+//! and audio zones. It handles session state management, player registration, and coordination
+//! between audio outputs.
+//!
+//! # Features
+//!
+//! * `api` - Enables REST API endpoints for session management
+//! * `events` - Enables event notification system for player updates
+//! * `openapi` - Enables `OpenAPI` documentation generation
+//! * Audio format features: `aac`, `flac`, `mp3`, `opus`
+//!
+//! # Main Entry Points
+//!
+//! Session management:
+//! * [`get_session`] - Retrieve a session by ID
+//! * [`create_session`] - Create a new playback session
+//! * [`update_session`] - Update an existing session
+//! * [`delete_session`] - Delete a session
+//!
+//! Connection and player management:
+//! * [`register_connection`] - Register a new connection with players
+//! * [`create_player`] - Create a player for a connection
+//! * [`get_players`] - Get all players for a connection
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_session::{get_session, models::CreateSession};
+//! # use switchy_database::profiles::LibraryDatabase;
+//! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
+//! // Retrieve a session by ID
+//! let session = get_session(&db, 1).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

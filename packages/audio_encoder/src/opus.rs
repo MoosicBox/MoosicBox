@@ -1,3 +1,8 @@
+//! Opus audio encoding with Ogg container support.
+//!
+//! Provides functions for Opus encoding and Ogg stream writing, including both simple
+//! encoding functions and streaming writers for Ogg/Opus files.
+
 #![allow(clippy::module_name_repetitions)]
 
 use ogg::{PacketReader, PacketWriteEndInfo, PacketWriter};
@@ -6,10 +11,13 @@ use thiserror::Error;
 
 use crate::EncodeInfo;
 
+/// Errors that can occur during Opus encoding operations.
 #[derive(Debug, Error)]
 pub enum EncoderError {
+    /// Error from the audiopus encoder
     #[error("Encoder error")]
     AudiopusEncoder(#[from] audiopus::Error),
+    /// Error from the opus encoder
     #[error("Encoder error")]
     OpusEncoder(::opus::Error),
 }
@@ -20,6 +28,10 @@ impl From<::opus::Error> for EncoderError {
     }
 }
 
+/// Encodes audio samples using the audiopus encoder with custom framing.
+///
+/// Returns the sample rate and encoded data with length-prefixed packets.
+///
 /// # Panics
 ///
 /// * If the samples len fails to convert to u32 type
@@ -90,6 +102,10 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
     Ok((sample_rate as i32 as u32, output))
 }
 
+/// Creates a new Opus encoder with default settings.
+///
+/// Configures the encoder for 48kHz stereo audio.
+///
 /// # Errors
 ///
 /// * If the encoder fails to initialize
@@ -100,6 +116,8 @@ pub fn encoder_opus() -> Result<::opus::Encoder, EncoderError> {
     Ok(encoder)
 }
 
+/// Encodes floating-point PCM audio samples to Opus format.
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the samples
@@ -116,6 +134,8 @@ pub fn encode_opus_float(
     })
 }
 
+/// Copies an Ogg stream from one file to another, re-packaging all packets.
+///
 /// # Panics
 ///
 /// * If the packet reader fails to read the next packet
@@ -235,6 +255,8 @@ pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 23] = [
 ];
 
 impl OpusWrite<'_> {
+    /// Creates a new Ogg/Opus stream writer for the specified file path.
+    ///
     /// # Panics
     ///
     /// * If the output file fails to be opened

@@ -1,3 +1,28 @@
+//! HTTP models and types for Switchy.
+//!
+//! This crate provides common HTTP types including methods and status codes that work
+//! across different HTTP libraries. It includes optional conversions for popular frameworks
+//! like `actix-web` and `reqwest`.
+//!
+//! # Features
+//!
+//! * `actix` - Enables conversions to/from `actix-web` types
+//! * `reqwest` - Enables conversions to/from `reqwest` types
+//! * `serde` - Enables serialization/deserialization support
+//!
+//! # Example
+//!
+//! ```rust
+//! use switchy_http_models::{Method, StatusCode};
+//!
+//! let method = Method::Get;
+//! assert_eq!(method.to_string(), "GET");
+//!
+//! let status = StatusCode::Ok;
+//! assert_eq!(status.as_u16(), 200);
+//! assert!(status.is_success());
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

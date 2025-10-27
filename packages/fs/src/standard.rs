@@ -1,3 +1,9 @@
+//! Standard library filesystem operations.
+//!
+//! This module provides thin wrappers around `std::fs` operations for consistency
+//! with the simulator API. It allows you to use the same API whether you're working
+//! with the real filesystem or the simulator.
+
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::path::Path;

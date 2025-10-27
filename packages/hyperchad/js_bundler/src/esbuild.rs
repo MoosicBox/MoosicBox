@@ -1,3 +1,9 @@
+//! JavaScript and TypeScript bundling using esbuild.
+//!
+//! This module provides functionality to bundle JavaScript and TypeScript files
+//! using esbuild as the underlying bundler. It handles npm dependency installation
+//! and executes esbuild with minification and bundling enabled.
+
 use std::path::Path;
 
 use crate::{

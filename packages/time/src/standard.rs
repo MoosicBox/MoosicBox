@@ -1,3 +1,8 @@
+//! Standard time functions using real system time.
+//!
+//! This module provides functions that directly call the standard library's time APIs,
+//! returning actual system time without any simulation or mocking.
+
 use std::time::{Instant, SystemTime};
 
 /// Returns the current system time.

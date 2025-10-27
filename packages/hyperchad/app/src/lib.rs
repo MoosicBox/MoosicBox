@@ -1,3 +1,32 @@
+//! Application framework for building hyperchad applications with pluggable renderers.
+//!
+//! This crate provides the core [`App`] type and [`AppBuilder`] for constructing hyperchad
+//! applications that can render to multiple backends (egui, fltk, HTML/web).
+//!
+//! # Features
+//!
+//! * Multiple renderer backends: egui, fltk, HTML (Actix/Lambda), vanilla JS
+//! * Static site generation for HTML renderers
+//! * Router-based navigation
+//! * Asset management
+//! * Action handling and resize listeners
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hyperchad_app::AppBuilder;
+//! # use hyperchad_router::Router;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let router = Router::new();
+//! let app = AppBuilder::new()
+//!     .with_router(router)
+//!     .with_size(800.0, 600.0)
+//!     .build_default()?;
+//! app.run()?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

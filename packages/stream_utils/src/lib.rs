@@ -1,3 +1,31 @@
+//! Utilities for broadcasting and streaming data to multiple consumers.
+//!
+//! This crate provides primitives for writing data once and broadcasting it to multiple readers:
+//!
+//! * [`ByteWriter`] and [`ByteStream`] - Broadcast raw bytes to multiple streams implementing [`futures::Stream`]
+//! * [`TypedWriter`] and [`TypedStream`] - Broadcast typed values to multiple streams
+//! * [`remote_bytestream::RemoteByteStream`] - Seekable HTTP streaming with on-demand range requests (requires `remote-bytestream` feature)
+//! * [`stalled_monitor::StalledReadMonitor`] - Timeout and throttling for streams (requires `stalled-monitor` feature)
+//!
+//! # Examples
+//!
+//! Broadcasting bytes to multiple readers:
+//!
+//! ```rust
+//! use moosicbox_stream_utils::ByteWriter;
+//! use std::io::Write;
+//!
+//! # fn main() -> std::io::Result<()> {
+//! let mut writer = ByteWriter::default();
+//! let stream1 = writer.stream();
+//! let stream2 = writer.stream();
+//!
+//! writer.write_all(b"hello world")?;
+//! // Both stream1 and stream2 will receive the same data
+//! # Ok(())
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

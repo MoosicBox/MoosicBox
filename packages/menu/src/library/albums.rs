@@ -1,3 +1,9 @@
+//! Album management operations for the music library.
+//!
+//! This module provides functionality for working with albums, including fetching
+//! albums from various sources, managing album versions, and adding/removing albums
+//! from the library. It coordinates between external music APIs and the local database.
+
 use std::sync::{Arc, PoisonError};
 
 use moosicbox_date_utils::chrono;

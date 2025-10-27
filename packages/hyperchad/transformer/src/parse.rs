@@ -1,3 +1,8 @@
+//! Parsing utilities for numeric values and CSS calculation expressions.
+//!
+//! This module provides functions to parse strings into [`Number`] and [`Calculation`] types,
+//! supporting CSS units (px, %, vw, vh, dvw, dvh) and `calc()` expressions with arithmetic operations.
+
 #![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;

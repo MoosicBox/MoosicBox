@@ -1,3 +1,47 @@
+//! Actix web server renderer for `HyperChad` HTML applications.
+//!
+//! This crate provides an Actix Web integration for the `HyperChad` renderer framework,
+//! enabling server-side rendering of `HyperChad` applications with support for:
+//!
+//! * Server-sent events (SSE) for real-time updates (with `sse` feature)
+//! * Action handling for interactive user events (with `actions` feature)
+//! * Static asset serving (with `assets` feature)
+//! * Custom response processing through the [`ActixResponseProcessor`] trait
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hyperchad_renderer_html_actix::{ActixApp, ActixResponseProcessor};
+//! # use hyperchad_renderer::{RendererEvent, Content};
+//! # use actix_web::{HttpRequest, HttpResponse};
+//! # use bytes::Bytes;
+//! # use std::sync::Arc;
+//! # use async_trait::async_trait;
+//! #
+//! # #[derive(Clone)]
+//! # struct MyProcessor;
+//! #
+//! # #[async_trait]
+//! # impl ActixResponseProcessor<()> for MyProcessor {
+//! #     fn prepare_request(&self, _req: HttpRequest, _body: Option<Arc<Bytes>>) -> Result<(), actix_web::Error> {
+//! #         Ok(())
+//! #     }
+//! #     async fn to_response(&self, _data: ()) -> Result<HttpResponse, actix_web::Error> {
+//! #         Ok(HttpResponse::Ok().finish())
+//! #     }
+//! #     async fn to_body(&self, _content: Content, _data: ()) -> Result<(Bytes, String), actix_web::Error> {
+//! #         Ok((Bytes::new(), "text/html".to_string()))
+//! #     }
+//! # }
+//! #
+//! # fn main() {
+//! let (tx, rx) = flume::unbounded::<RendererEvent>();
+//! let processor = MyProcessor;
+//! let app = ActixApp::new(processor, rx);
+//! // Use app.to_runner() to create a RenderRunner
+//! # }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
