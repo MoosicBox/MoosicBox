@@ -529,6 +529,31 @@ pub mod sync {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
+    /// Writes a slice as the entire contents of a file
+    ///
+    /// # Errors
+    ///
+    /// * If the file cannot be created
+    /// * If the file cannot be written to
+    /// * If the `FILES` `RwLock` fails to write to
+    pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> std::io::Result<()> {
+        use std::io::Write;
+
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::write(path, contents);
+        }
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)?;
+
+        file.write_all(contents.as_ref())?;
+        Ok(())
+    }
+
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
@@ -1063,6 +1088,35 @@ pub mod unsync {
 
         // Fallback to sync simulator implementation
         super::sync::read_to_string(path)
+    }
+
+    /// Writes a slice as the entire contents of a file
+    ///
+    /// # Errors
+    ///
+    /// * If the file cannot be created
+    /// * If the file cannot be written to
+    /// * If the `FILES` `RwLock` fails to write to
+    pub async fn write<P: AsRef<Path> + Send + Sync, C: AsRef<[u8]> + Send>(
+        path: P,
+        contents: C,
+    ) -> std::io::Result<()> {
+        use switchy_async::io::AsyncWriteExt;
+
+        #[cfg(all(feature = "simulator-real-fs", feature = "tokio"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::tokio::unsync::write(path, contents).await;
+        }
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .await?;
+
+        file.write_all(contents.as_ref()).await?;
+        Ok(())
     }
 
     /// # Errors

@@ -13,6 +13,18 @@ pub mod unsync {
         ::tokio::fs::read_to_string(path).await
     }
 
+    /// Writes a slice as the entire contents of a file
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::write` fails
+    pub async fn write<P: AsRef<Path>, C: AsRef<[u8]>>(
+        path: P,
+        contents: C,
+    ) -> std::io::Result<()> {
+        ::tokio::fs::write(path, contents).await
+    }
+
     /// # Errors
     ///
     /// * If underlying `tokio::fs::create_dir_all` fails

@@ -13,6 +13,15 @@ pub mod sync {
         ::std::fs::read_to_string(path)
     }
 
+    /// Writes a slice as the entire contents of a file
+    ///
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::write` fails
+    pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> std::io::Result<()> {
+        ::std::fs::write(path, contents)
+    }
+
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails
