@@ -684,7 +684,7 @@ pub mod html {
                         .with_css_paths(&self.css_paths)
                         .with_inline_css_blocks(&self.inline_css);
 
-                    #[cfg(feature = "actions")]
+                    #[cfg(all(feature = "logic", feature = "actions"))]
                     {
                         let action_tx = self.listen_actions(self.action_handlers.clone());
                         renderer.app.set_action_tx(action_tx);
