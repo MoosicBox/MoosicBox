@@ -37,7 +37,7 @@ The MoosicBox Tunnel Server provides:
 ```bash
 # Install dependencies
 sudo apt update
-sudo apt install build-essential libssl-dev pkg-config postgresql-dev
+sudo apt install build-essential libssl-dev pkg-config libpq-dev
 
 # Clone and build
 git clone https://github.com/MoosicBox/MoosicBox.git
