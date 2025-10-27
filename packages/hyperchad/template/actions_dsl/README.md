@@ -252,13 +252,13 @@ use hyperchad_template::container;
 
 // Use in template event handlers
 let my_template = container! {
-    button fx-click=fx {
+    div fx-key-down=fx {
         if get_event_value() == Key::Escape {
             hide("search");
             show("search-button");
         }
     } {
-        "Toggle Search"
+        "Press Escape to toggle search"
     }
 };
 ```
