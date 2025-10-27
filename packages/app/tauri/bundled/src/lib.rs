@@ -9,11 +9,12 @@
 //! ```rust,no_run
 //! use moosicbox_app_tauri_bundled::{Context, service};
 //! use moosicbox_async_service::Arc;
+//! use std::sync::RwLock;
 //!
 //! # fn main() {
 //! let runtime_handle = moosicbox_async_service::runtime::Handle::current();
 //! let ctx = Context::new(&runtime_handle);
-//! let service = service::Service::start(Arc::new(std::sync::RwLock::new(ctx).into()));
+//! let service = service::Service::start(Arc::new(RwLock::new(ctx)));
 //! # }
 //! ```
 

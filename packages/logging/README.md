@@ -47,6 +47,8 @@ moosicbox_logging = {
 ### Initializing Free Log
 
 ```rust
+# #[cfg(feature = "free_log")]
+# {
 use moosicbox_logging::{init, InitError};
 
 fn setup_logging() -> Result<(), InitError> {
@@ -57,12 +59,16 @@ fn setup_logging() -> Result<(), InitError> {
     let _layer = init(None, None)?;
 
     // Or initialize with custom layers
+    # #[cfg(feature = "api")]
+    # {
     use moosicbox_logging::free_log_client::DynLayer;
     let custom_layers: Vec<DynLayer> = vec![/* your layers */];
     let _layer = init(Some("app.log"), Some(custom_layers))?;
+    # }
 
     Ok(())
 }
+# }
 ```
 
 The `init` function:
@@ -75,19 +81,27 @@ The `init` function:
 ### Using Logging Macros
 
 ```rust
-use moosicbox_logging::{log, debug_or_trace};
+# #[cfg(feature = "macros")]
+# {
+use moosicbox_logging::log;
+# #[cfg(feature = "free_log")]
+use moosicbox_logging::debug_or_trace;
 
 fn example() {
     // Standard log macros (re-exported from `log` crate)
     log::info!("Application started");
     log::debug!("Debug information");
 
+    # #[cfg(feature = "free_log")]
+    # {
     // Conditional macro: logs at trace level if enabled, otherwise debug
     debug_or_trace!(
         ("Short debug message"),
         ("Detailed trace message with extra context")
     );
+    # }
 }
+# }
 ```
 
 ## Implementation Notes
@@ -112,11 +126,19 @@ fn example() {
 
 #### `init` Function
 
-```rust
+```rust,no_run
+# #[cfg(all(feature = "free_log", feature = "api"))]
+# {
+use moosicbox_logging::free_log_client::{DynLayer, FreeLogLayer, InitError};
+
 pub fn init(
     filename: Option<&str>,
     layers: Option<Vec<DynLayer>>,
 ) -> Result<FreeLogLayer, InitError>
+# {
+#     todo!()
+# }
+# }
 ```
 
 Initializes the logging system with optional file output and custom layers.
@@ -142,11 +164,15 @@ Initializes the logging system with optional file output and custom layers.
 
 #### `debug_or_trace!` Macro
 
-```rust
+```rust,no_run
+# #[cfg(feature = "macros")]
+# {
+# use moosicbox_logging::debug_or_trace;
 debug_or_trace!(
     ($debug_message),
     ($trace_message)
 )
+# }
 ```
 
 Conditionally logs at trace level if enabled, otherwise logs at debug level.

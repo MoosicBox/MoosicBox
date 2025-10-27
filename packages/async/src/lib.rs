@@ -18,6 +18,8 @@
 //! use switchy_async::{Builder, GenericRuntime};
 //!
 //! # fn main() -> Result<(), switchy_async::Error> {
+//! # #[cfg(feature = "_any_backend")]
+//! # {
 //! let runtime = Builder::new().build()?;
 //!
 //! let result = runtime.block_on(async {
@@ -27,6 +29,7 @@
 //!
 //! assert_eq!(result, 42);
 //! runtime.wait()?;
+//! # }
 //! # Ok(())
 //! # }
 //! ```
@@ -34,9 +37,13 @@
 //! Spawning tasks:
 //!
 //! ```rust,no_run
-//! use switchy_async::{Builder, GenericRuntime, task};
+//! use switchy_async::{Builder, GenericRuntime};
+//! # #[cfg(feature = "_any_backend")]
+//! use switchy_async::task;
 //!
 //! # fn main() -> Result<(), switchy_async::Error> {
+//! # #[cfg(feature = "_any_backend")]
+//! # {
 //! let runtime = Builder::new().build()?;
 //!
 //! runtime.block_on(async {
@@ -50,6 +57,7 @@
 //! });
 //!
 //! runtime.wait()?;
+//! # }
 //! # Ok(())
 //! # }
 //! ```

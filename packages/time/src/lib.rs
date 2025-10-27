@@ -13,11 +13,14 @@
 //! # Examples
 //!
 //! ```rust
+//! # #[cfg(any(feature = "simulator", feature = "std"))]
+//! # {
 //! use switchy_time::now;
 //! use std::time::SystemTime;
 //!
 //! let current_time = now();
 //! # let _ = current_time; // Suppress unused variable warning
+//! # }
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]

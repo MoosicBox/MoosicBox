@@ -21,7 +21,10 @@
 //! # Examples
 //!
 //! ```rust,no_run
-//! # use moosicbox_image::{Encoding, image::try_resize_local_file};
+//! # #[cfg(feature = "image")]
+//! # {
+//! # use moosicbox_image::Encoding;
+//! use moosicbox_image::image::try_resize_local_file;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Resize an image to 800x600 JPEG with quality 85
 //! let resized = try_resize_local_file(
@@ -32,6 +35,7 @@
 //!     85,
 //! )?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 

@@ -20,6 +20,8 @@
 //!
 //! ```rust
 //! use switchy_fs::sync::{OpenOptions, read_to_string, create_dir_all};
+//! # #[cfg(feature = "simulator")]
+//! # {
 //! # use switchy_fs::simulator::reset_fs;
 //! # reset_fs();
 //! # create_dir_all("/tmp").unwrap();
@@ -40,6 +42,7 @@
 //! // Read the file back
 //! let content = read_to_string("/tmp/example.txt").unwrap();
 //! assert_eq!(content, "Hello, world!");
+//! # }
 //! # }
 //! ```
 //!
