@@ -66,6 +66,8 @@ pub use hyperchad_app as app;
 pub use hyperchad_color as color;
 #[cfg(feature = "js-bundler")]
 pub use hyperchad_js_bundler as js_bundler;
+#[cfg(feature = "markdown")]
+pub use hyperchad_markdown as markdown;
 #[cfg(feature = "renderer")]
 pub use hyperchad_renderer as renderer;
 #[cfg(feature = "renderer-egui")]

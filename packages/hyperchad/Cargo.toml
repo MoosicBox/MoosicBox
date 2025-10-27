@@ -18,6 +18,7 @@ hyperchad_actions                  = { workspace = true, optional = true }
 hyperchad_app                      = { workspace = true, optional = true }
 hyperchad_color                    = { workspace = true, optional = true }
 hyperchad_js_bundler               = { workspace = true, optional = true }
+hyperchad_markdown                 = { workspace = true, optional = true }
 hyperchad_renderer                 = { workspace = true, optional = true }
 hyperchad_renderer_egui            = { workspace = true, optional = true }
 hyperchad_renderer_fltk            = { workspace = true, optional = true }
@@ -44,6 +45,7 @@ fail-on-warnings = [
     "hyperchad_app?/fail-on-warnings",
     "hyperchad_color?/fail-on-warnings",
     "hyperchad_js_bundler?/fail-on-warnings",
+    "hyperchad_markdown?/fail-on-warnings",
     "hyperchad_renderer?/fail-on-warnings",
     "hyperchad_renderer_egui?/fail-on-warnings",
     "hyperchad_renderer_fltk?/fail-on-warnings",
@@ -69,6 +71,7 @@ all = [
     "color",
     "js-bundler",
     "json",
+    "markdown",
     "renderer",
     "renderer-egui",
     "renderer-fltk",
@@ -109,6 +112,14 @@ actions-serde = ["hyperchad_actions?/serde"]
 color = ["dep:hyperchad_color"]
 
 js-bundler = ["dep:hyperchad_js_bundler"]
+
+markdown = ["dep:hyperchad_markdown"]
+markdown-emoji = ["hyperchad_markdown?/emoji", "markdown"]
+markdown-syntax-highlighting = [
+    "hyperchad_markdown?/syntax-highlighting",
+    "markdown",
+]
+markdown-xss-protection = ["hyperchad_markdown?/xss-protection", "markdown"]
 
 renderer = ["dep:hyperchad_renderer"]
 renderer-assets = [

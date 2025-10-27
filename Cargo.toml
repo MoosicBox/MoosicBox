@@ -55,6 +55,7 @@ members = [
     "packages/hyperchad/examples/details_summary",
     "packages/hyperchad/examples/http_events",
     "packages/hyperchad/js_bundler",
+    "packages/hyperchad/markdown",
     "packages/hyperchad/renderer",
     "packages/hyperchad/renderer/egui",
     "packages/hyperchad/renderer/fltk",
@@ -306,6 +307,7 @@ hyperchad_actions                  = { version = "0.1.0", default-features = fal
 hyperchad_app                      = { version = "0.1.0", default-features = false, path = "packages/hyperchad/app" }
 hyperchad_color                    = { version = "0.1.0", default-features = false, path = "packages/hyperchad/color" }
 hyperchad_js_bundler               = { version = "0.1.0", default-features = false, path = "packages/hyperchad/js_bundler" }
+hyperchad_markdown                 = { version = "0.1.0", default-features = false, path = "packages/hyperchad/markdown" }
 hyperchad_renderer                 = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer" }
 hyperchad_renderer_egui            = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/egui" }
 hyperchad_renderer_fltk            = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/fltk" }
@@ -413,6 +415,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
     "std",
 ] }
 getrandom = "0.3.4"
+gh-emoji = { version = "1.0.8", default-features = false }
 git2 = "0.20.2"
 glob = "0.3.3"
 globset = { version = "0.4.18", default-features = false }
@@ -479,6 +482,7 @@ proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
 puffin = "0.19.1"
 puffin_http = "0.16.1"
+pulldown-cmark = { version = "0.13.0", default-features = false }
 qstring = "0.7.2"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.1.0"

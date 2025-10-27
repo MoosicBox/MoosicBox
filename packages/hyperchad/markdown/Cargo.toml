@@ -1,0 +1,40 @@
+[package]
+authors     = { workspace = true }
+categories  = ["rendering", "text-processing"]
+description = "Markdown to HyperChad Container conversion with GitHub Flavored Markdown support"
+edition     = { workspace = true }
+keywords    = ["gfm", "hyperchad", "markdown", "rendering"]
+license     = { workspace = true }
+name        = "hyperchad_markdown"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_color              = { workspace = true }
+hyperchad_transformer        = { workspace = true, default-features = false }
+hyperchad_transformer_models = { workspace = true, default-features = false }
+moosicbox_assert             = { workspace = true }
+
+log       = { workspace = true }
+thiserror = { workspace = true }
+
+gh-emoji       = { workspace = true, optional = true }
+pulldown-cmark = { workspace = true }
+
+[features]
+default = ["emoji", "xss-protection"]
+
+fail-on-warnings = [
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "hyperchad_transformer_models/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+]
+
+emoji               = ["dep:gh-emoji"]
+syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
+xss-protection      = []
