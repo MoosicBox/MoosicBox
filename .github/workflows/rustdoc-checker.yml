@@ -223,7 +223,7 @@ jobs:
                         ||
                         (vars.RUSTDOC_UPDATE_PROMPT != '' && vars.RUSTDOC_UPDATE_PROMPT)
                         ||
-                        format('# Rustdoc Accuracy Review for {0}
+                        format('# Rustdoc Completeness Review for {0}
 
                       ## 🎯 HIGHEST PRIORITY: Crate and Module Documentation
 
@@ -309,20 +309,70 @@ jobs:
                       - Error handling is shown (Result types, ?)
                       - Example demonstrates actual API usage
 
-                      ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ISSUES ONLY
+                      ## 📐 DOCUMENTATION COMPLETENESS REQUIREMENTS
 
-                      You may ONLY make changes for these reasons:
+                      **CRITICAL**: Every public API item MUST have complete documentation.
 
-                      **Fundamentally Missing Documentation:**
+                      **Minimum Requirements for ALL public items:**
+                      1. **Summary line**: One-line description of what it is/does (REQUIRED for everything)
+                      2. **Additional context**: More detailed explanation if the item is non-trivial
+                      3. **Type-specific sections** (see below)
+
+                      **Functions/Methods MUST have:**
+                      - Summary describing what the function does
+                      - Explanation of parameters if non-obvious
+                      - Return value explanation if non-obvious
+                      - `# Errors` section if returns `Result` (list ALL error variants with asterisks)
+                      - `# Panics` section if can panic (including `.unwrap()`, `.expect()`, indexing, arithmetic overflow, etc.)
+                      - `# Safety` section for `unsafe` functions
+                      - `# Examples` section for complex/non-obvious functions (optional for simple ones)
+
+                      **Structs MUST have:**
+                      - Summary describing what the struct represents
+                      - Purpose and typical use cases
+                      - Document public fields individually (what each field represents)
+                      - `# Examples` showing how to construct and use (if not trivial)
+
+                      **Enums MUST have:**
+                      - Summary describing what the enum represents
+                      - Document variants individually (what each variant means)
+                      - When to use each variant (if not obvious)
+
+                      **Traits MUST have:**
+                      - Summary describing the trait''s purpose
+                      - Contract/requirements for implementers
+                      - Associated types/constants explained
+                      - Required methods explained
+
+                      **Constants MUST have:**
+                      - Summary describing what the constant represents
+                      - Why this specific value
+                      - Units if applicable (seconds, bytes, etc.)
+
+                      ## ⚠️ REQUIRED CHANGES: Missing and Incomplete Documentation
+
+                      You MUST make changes for these reasons:
+
+                      **Missing Documentation (MUST be added):**
+                      - **ANY public API item without a doc comment summary** - Every `pub fn`, `pub struct`, `pub enum`, `pub trait`, `pub const`, `pub type` MUST have at least a one-line summary explaining its purpose
                       - **Missing crate-level documentation** - `lib.rs` without `//!` comments at the top
                       - **Missing module-level documentation** - Public modules without `//!` or `///` comments
-                      - Public API items (`pub fn`, `pub struct`, `pub enum`, `pub trait`, `pub const`) without doc comments
                       - Missing `# Errors` sections when function returns `Result`
-                      - Missing `# Panics` sections when function can panic
+                      - Missing `# Panics` sections when function can panic (or uses `.unwrap()`, `.expect()`, indexing, etc.)
                       - Missing `# Safety` sections on `unsafe` functions
-                      - Critical parameters or return values not documented
+                      - Public struct fields without individual documentation
+                      - Public enum variants without individual documentation
+                      - Function parameters not explained when non-obvious
 
-                      **Fundamentally Incorrect Documentation:**
+                      **Incomplete Documentation (MUST be completed):**
+                      - Doc comments that ONLY have `# Errors`, `# Panics`, or other sections without ANY summary text above them
+                      - Structs with a summary but public fields lacking individual docs
+                      - Enums with a summary but variants lacking individual docs
+                      - Functions with `# Errors` but missing specific error conditions (must list ALL error variants)
+                      - Functions with `# Panics` but missing specific panic conditions
+                      - Re-exported items (via `pub use`) that lack docs at re-export site
+
+                      **Incorrect Documentation (MUST be fixed):**
                       - Doc comments claim behavior that doesn''t match the actual code
                       - Function signatures documented don''t match actual implementation
                       - Error conditions documented don''t match actual `Err` returns
@@ -331,23 +381,57 @@ jobs:
                       - **Examples missing necessary feature gates or hidden setup code**
                       - Links to items that don''t exist
 
-                      **FORBIDDEN Changes (even if you think they would be "better"):**
-                      - ❌ Rewording existing docs for clarity, style, or tone
+                      ## 🔍 DETECTION PATTERNS FOR MISSING DOCS
+
+                      When scanning code, look for these patterns that indicate missing/incomplete documentation:
+
+                      **Functions that MUST have `# Panics` sections:**
+                      - Uses `.unwrap()` or `.expect()` on `Option` or `Result`
+                      - Uses array/slice indexing (`foo[i]`)
+                      - Uses arithmetic that could overflow
+                      - Calls functions that can panic
+                      - Locks mutexes/RwLocks (can panic if poisoned)
+
+                      **Functions that MUST have `# Errors` sections:**
+                      - Returns `Result<T, E>`
+                      - Propagates errors with `?` operator
+                      - List EVERY error variant that can be returned (check match arms, function calls)
+
+                      **Code patterns requiring documentation:**
+                      - `pub fn` without `///` above it - ALWAYS needs docs
+                      - `pub struct` without `///` above it - ALWAYS needs docs
+                      - `pub enum` without `///` above it - ALWAYS needs docs
+                      - `pub const` without `///` above it - ALWAYS needs docs
+                      - `pub trait` without `///` above it - ALWAYS needs docs
+                      - `pub type` without `///` above it - ALWAYS needs docs
+                      - Doc comment with `# Errors` or `# Panics` but NO text before the first `#` - INCOMPLETE
+
+                      ## ✅ PERMITTED Changes vs ❌ FORBIDDEN Changes
+
+                      **PERMITTED (Required for completeness):**
+                      - ✅ Adding summary descriptions to ANY public item without one
+                      - ✅ Adding summary text to doc comments that only have `# Errors`/`# Panics` sections
+                      - ✅ Adding missing `# Errors`, `# Panics`, `# Safety` sections
+                      - ✅ Adding docs to public struct fields and enum variants
+                      - ✅ Completing incomplete error/panic documentation
+                      - ✅ Fixing incorrect documentation
+                      - ✅ Adding `#[must_use]` to constructors and getters (per AGENTS.md)
+
+                      **FORBIDDEN (Do not change existing adequate docs):**
+                      - ❌ Rewording existing adequate docs for clarity, style, or tone
                       - ❌ Reorganizing doc structure when already clear
                       - ❌ Expanding descriptions that are already adequate
-                      - ❌ Adding more examples when basics are already covered
                       - ❌ Documenting internal/private items (`pub(crate)`, `pub(super)`, or non-`pub`)
-                      - ❌ Over-documenting obvious functions (e.g., simple getters)
                       - ❌ Changing doc formatting when already correct
-                      - ❌ Adding `# Examples` to trivial functions
                       - ❌ Including specific line numbers in references (e.g., `lib.rs:123`) - line numbers change frequently
 
                       **Decision Rule:**
                       Before making ANY change, ask yourself:
-                      1. "Would a user of this API be MISLED or UNABLE TO USE this function because of this documentation issue?"
-                      2. "Is this a PUBLIC item that MUST be documented, currently lacking any docs?"
-                      - If both are NO → Leave it alone
-                      - If either is YES → Fix it (it''s fundamental)
+                      1. "Is this a PUBLIC API item (plain `pub`, not `pub(crate)`)?"
+                      2. "Does it have a clear summary description of what it does/is?"
+                      3. "Are all required sections present (`# Errors` for Result, `# Panics` for panicking functions, etc.)?"
+                      - If any answer is NO → Document it
+                      - If all are YES → Leave it alone
 
                       ## 📖 PUBLIC API FOCUS - Do Not Document Internals
 
@@ -453,20 +537,53 @@ jobs:
                          - These MUST pass before committing
                          - **If doc tests fail, fix the examples or add appropriate attributes (no_run, ignore)**
 
-                      ## Scope
+                      6. **Completeness Check**
+                         - After documenting, search for patterns in all files under `{1}/src/`:
+                           * `pub fn` - verify EVERY match has a `///` comment with summary
+                           * `pub struct` - verify EVERY match has a `///` comment with summary
+                           * `pub enum` - verify EVERY match has a `///` comment with summary
+                           * `pub trait` - verify EVERY match has a `///` comment with summary
+                           * `pub const` - verify EVERY match has a `///` comment with summary
+                           * `pub type` - verify EVERY match has a `///` comment with summary
+                         - If any public items are missing docs, document them
+                         - Special attention to items in `api.rs`, `lib.rs`, and `mod.rs` files
 
-                      - **FIRST PRIORITY**: Ensure `{1}/src/lib.rs` has crate-level `//!` documentation at the top
-                      - **SECOND PRIORITY**: Ensure all public modules have module-level documentation
-                      - **THIRD PRIORITY**: Document individual public API items
+                      ## Scope and Execution Order
+
+                      Execute in this STRICT order:
+
+                      **PHASE 1 - Crate/Module Level (REQUIRED):**
+                      - Ensure `{1}/src/lib.rs` has comprehensive crate-level `//!` documentation at the top
+                      - Ensure all public modules have module-level documentation
+                      - DO NOT proceed to phase 2 until phase 1 is complete
+
+                      **PHASE 2 - Top-Level Public Items (REQUIRED):**
+                      - Document all public items directly in `lib.rs`
+                      - Document all items in top-level public modules
+
+                      **PHASE 3 - All Other Public Items (REQUIRED):**
+                      - Document remaining public structs, enums, traits across all files
+                      - Document remaining public functions across all files
+                      - Document all public struct fields and enum variants
+                      - Pay special attention to:
+                        * Items in `api.rs` files (endpoint functions, query structs, response types)
+                        * Items in `models.rs` or `models/` directories
+                        * Re-exported items
+
+                      **PHASE 4 - Completion Check (REQUIRED):**
+                      - Verify NO public item lacks documentation (use patterns in step 6 above)
+                      - Run all verification commands
+                      - Generate commit message listing ALL changes
+
+                      **Scope:**
                       - Modify source files in `{1}/src/` to add/fix doc comments
-                      - Focus on `lib.rs` first, then module files as needed
                       - Only modify `.rs` files, not Cargo.toml or other config
+                      - Focus on ALL public items, not just obvious ones
 
                       ## Output
 
-                      - If public APIs are fundamentally well-documented: **Make NO changes**
-                      - If you find fundamental doc issues: Fix them with minimal edits
-                      - Do not "improve" docs that are already adequate
+                      - If ALL public APIs have complete documentation: **Make NO changes**
+                      - If you find ANY missing or incomplete docs: Fix them
                       - After changes, MUST run verification commands before considering work complete',
                           matrix.package.name, matrix.package.path)
                       }}
