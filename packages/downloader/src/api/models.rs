@@ -182,7 +182,7 @@ impl From<ApiDownloadTaskState> for DownloadTaskState {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadApiSource {
-    /// MoosicBox server source
+    /// `MoosicBox` server source
     MoosicBox(String),
     /// Third-party API source
     Api(ApiSource),

@@ -61,7 +61,7 @@ impl TestVector {
     /// Loads a test vector from a directory containing the required test data files.
     ///
     /// Expects the directory to contain `packet.bin` (Opus packet), `expected.pcm` (decoded PCM),
-    /// and `meta.json` (metadata with sample_rate and channels).
+    /// and `meta.json` (metadata with `sample_rate` and channels).
     ///
     /// # Errors
     ///

@@ -45,7 +45,7 @@ pub fn bind_services<
 
 /// `OpenAPI` specification generator for `UPnP` API endpoints.
 ///
-/// This struct is used with `utoipa` to generate OpenAPI documentation
+/// This struct is used with `utoipa` to generate `OpenAPI` documentation
 /// for all `UPnP` control endpoints when the `openapi` feature is enabled.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
