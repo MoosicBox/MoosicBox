@@ -112,10 +112,13 @@ static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> = Calculator::
 /// Errors that can occur when loading an image.
 #[derive(Debug, Error)]
 pub enum LoadImageError {
+    /// HTTP request error occurred while fetching the image.
     #[error(transparent)]
     Reqwest(#[from] switchy_http::Error),
+    /// Image decoding or processing error.
     #[error(transparent)]
     Image(#[from] image::ImageError),
+    /// FLTK rendering error.
     #[error(transparent)]
     Fltk(#[from] FltkError),
 }
@@ -1243,6 +1246,8 @@ impl ToRenderRunner for FltkRenderer {
 impl Renderer for FltkRenderer {
     fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
 
+    /// Initializes the FLTK application window and sets up the rendering environment.
+    ///
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
@@ -1371,6 +1376,8 @@ impl Renderer for FltkRenderer {
         Ok(())
     }
 
+    /// Emits a custom event with an optional value.
+    ///
     /// # Errors
     ///
     /// Will error if FLTK app fails to emit the event.
@@ -1384,6 +1391,8 @@ impl Renderer for FltkRenderer {
         Ok(())
     }
 
+    /// Renders the given view elements to the FLTK window.
+    ///
     /// # Errors
     ///
     /// Will error if FLTK fails to render the elements.
@@ -1410,6 +1419,8 @@ impl Renderer for FltkRenderer {
         Ok(())
     }
 
+    /// Renders canvas drawing updates to the FLTK window.
+    ///
     /// # Errors
     ///
     /// Will error if FLTK fails to render the canvas update.
