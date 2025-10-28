@@ -63,10 +63,15 @@ pub mod db;
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Artist {
+    /// Unique identifier for the artist
     pub id: Id,
+    /// Artist name
     pub title: String,
+    /// Optional cover artwork URL
     pub cover: Option<String>,
+    /// The primary API source for this artist
     pub api_source: ApiSource,
+    /// All API sources where this artist is available
     pub api_sources: ApiSources,
 }
 
@@ -448,29 +453,53 @@ impl ToValueType<TrackApiSource> for &serde_json::Value {
 #[derive(Default, Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
+    /// Unique identifier for the track
     pub id: Id,
+    /// Track number within the album
     pub number: u32,
+    /// Track title
     pub title: String,
+    /// Track duration in seconds
     pub duration: f64,
+    /// Album name
     pub album: String,
+    /// Album identifier
     pub album_id: Id,
+    /// Album type (LP, Live, etc.)
     pub album_type: AlbumType,
+    /// Release date as ISO 8601 string
     pub date_released: Option<String>,
+    /// Date added to library as ISO 8601 string
     pub date_added: Option<String>,
+    /// Artist name
     pub artist: String,
+    /// Artist identifier
     pub artist_id: Id,
+    /// File path to the audio file
     pub file: Option<String>,
+    /// Artwork URL
     pub artwork: Option<String>,
+    /// Whether to blur the artwork
     pub blur: bool,
+    /// File size in bytes
     pub bytes: u64,
+    /// Audio format (FLAC, MP3, etc.)
     pub format: Option<AudioFormat>,
+    /// Audio bit depth (16, 24, etc.)
     pub bit_depth: Option<u8>,
+    /// Audio bitrate in bits per second
     pub audio_bitrate: Option<u32>,
+    /// Overall bitrate including container overhead
     pub overall_bitrate: Option<u32>,
+    /// Sample rate in Hz (44100, 48000, etc.)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels (1 = mono, 2 = stereo, etc.)
     pub channels: Option<u8>,
+    /// Source of this track (Local or API)
     pub track_source: TrackApiSource,
+    /// The primary API source for this track
     pub api_source: ApiSource,
+    /// All API sources where this track is available
     pub sources: ApiSources,
 }
 
@@ -569,10 +598,15 @@ impl Track {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumVersionQuality {
+    /// Audio format (FLAC, MP3, etc.)
     pub format: Option<AudioFormat>,
+    /// Audio bit depth (16, 24, etc.)
     pub bit_depth: Option<u8>,
+    /// Sample rate in Hz (44100, 48000, etc.)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels (1 = mono, 2 = stereo, etc.)
     pub channels: Option<u8>,
+    /// Source of this version (Local or API)
     pub source: TrackApiSource,
 }
 
@@ -693,20 +727,35 @@ impl std::fmt::Display for AlbumType {
 /// Represents a music album with its metadata and available versions.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Album {
+    /// Unique identifier for the album
     pub id: Id,
+    /// Album title
     pub title: String,
+    /// Artist name
     pub artist: String,
+    /// Artist identifier
     pub artist_id: Id,
+    /// Album type (LP, Live, etc.)
     pub album_type: AlbumType,
+    /// Release date
     pub date_released: Option<NaiveDateTime>,
+    /// Date added to library
     pub date_added: Option<NaiveDateTime>,
+    /// Artwork URL
     pub artwork: Option<String>,
+    /// Directory path containing album files
     pub directory: Option<String>,
+    /// Whether to blur the artwork
     pub blur: bool,
+    /// Available quality versions of this album
     pub versions: Vec<AlbumVersionQuality>,
+    /// Source of this album (Local or API)
     pub album_source: AlbumSource,
+    /// The primary API source for this album
     pub api_source: ApiSource,
+    /// All API sources where the artist is available
     pub artist_sources: ApiSources,
+    /// All API sources where this album is available
     pub album_sources: ApiSources,
 }
 
@@ -917,14 +966,19 @@ pub fn from_extension_to_audio_format(extension: &str) -> Option<AudioFormat> {
 #[derive(Copy, Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackQuality {
+    /// Desired audio format for playback
     pub format: AudioFormat,
 }
 
 /// Represents the size of a track in a specific format.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct TrackSize {
+    /// Unique identifier for this track size record
     pub id: u64,
+    /// Identifier of the track
     pub track_id: u64,
+    /// File size in bytes
     pub bytes: Option<u64>,
+    /// Audio format identifier
     pub format: String,
 }

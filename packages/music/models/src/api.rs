@@ -19,10 +19,15 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiArtist {
+    /// Unique identifier for the artist
     pub artist_id: Id,
+    /// Artist name
     pub title: String,
+    /// Whether cover artwork is available
     pub contains_cover: bool,
+    /// The primary API source for this artist
     pub api_source: ApiSource,
+    /// All API sources where this artist is available
     pub api_sources: ApiSources,
 }
 
@@ -61,10 +66,15 @@ impl From<ApiArtist> for Artist {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbumVersionQuality {
+    /// Audio format (FLAC, MP3, etc.)
     pub format: Option<AudioFormat>,
+    /// Audio bit depth (16, 24, etc.)
     pub bit_depth: Option<u8>,
+    /// Sample rate in Hz (44100, 48000, etc.)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels (1 = mono, 2 = stereo, etc.)
     pub channels: Option<u8>,
+    /// Source of this version (Local or API)
     pub source: TrackApiSource,
 }
 
@@ -100,27 +110,49 @@ impl From<AlbumVersionQuality> for ApiAlbumVersionQuality {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiTrack {
+    /// Unique identifier for the track
     pub track_id: Id,
+    /// Track number within the album
     pub number: u32,
+    /// Track title
     pub title: String,
+    /// Track duration in seconds
     pub duration: f64,
+    /// Album name
     pub album: String,
+    /// Album identifier
     pub album_id: Id,
+    /// Album type (LP, Live, etc.)
     pub album_type: AlbumType,
+    /// Release date as ISO 8601 string
     pub date_released: Option<String>,
+    /// Date added to library as ISO 8601 string
     pub date_added: Option<String>,
+    /// Artist name
     pub artist: String,
+    /// Artist identifier
     pub artist_id: Id,
+    /// Whether cover artwork is available
     pub contains_cover: bool,
+    /// Whether to blur the artwork
     pub blur: bool,
+    /// Audio format (FLAC, MP3, etc.)
     pub format: Option<AudioFormat>,
+    /// Audio bit depth (16, 24, etc.)
     pub bit_depth: Option<u8>,
+    /// Audio bitrate in bits per second
     pub audio_bitrate: Option<u32>,
+    /// Overall bitrate including container overhead
     pub overall_bitrate: Option<u32>,
+    /// Sample rate in Hz (44100, 48000, etc.)
     pub sample_rate: Option<u32>,
+    /// Number of audio channels (1 = mono, 2 = stereo, etc.)
     pub channels: Option<u8>,
+    /// Source of this track (Local or API)
     pub track_source: TrackApiSource,
+    /// The primary API source for this track
     pub api_source: ApiSource,
+    /// All API sources where this track is available
     pub sources: ApiSources,
 }
 
@@ -196,19 +228,33 @@ impl From<ApiTrack> for Track {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbum {
+    /// Unique identifier for the album
     pub album_id: Id,
+    /// Album title
     pub title: String,
+    /// Artist name
     pub artist: String,
+    /// Artist identifier
     pub artist_id: Id,
+    /// Album type (LP, Live, etc.)
     pub album_type: AlbumType,
+    /// Release date as ISO 8601 string
     pub date_released: Option<String>,
+    /// Date added to library as ISO 8601 string
     pub date_added: Option<String>,
+    /// Whether cover artwork is available
     pub contains_cover: bool,
+    /// Whether to blur the artwork
     pub blur: bool,
+    /// Available quality versions of this album
     pub versions: Vec<AlbumVersionQuality>,
+    /// Source of this album (Local or API)
     pub album_source: AlbumSource,
+    /// The primary API source for this album
     pub api_source: ApiSource,
+    /// All API sources where the artist is available
     pub artist_sources: ApiSources,
+    /// All API sources where this album is available
     pub album_sources: ApiSources,
 }
 
