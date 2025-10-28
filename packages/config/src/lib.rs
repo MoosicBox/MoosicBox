@@ -202,6 +202,10 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
     None
 }
 
+/// Returns a unique temporary directory path for test isolation.
+///
+/// Each call generates a unique directory name based on process ID and timestamp
+/// to prevent test interference. The directory is created in the system's temp directory.
 #[must_use]
 pub fn get_tests_dir_path() -> PathBuf {
     use std::time::SystemTime;
@@ -224,6 +228,10 @@ mod db_impl {
 
     use crate::db::{GetOrInitServerIdentityError, models};
 
+    /// Retrieves the server identity from the database.
+    ///
+    /// Returns `None` if no server identity has been initialized.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
@@ -231,16 +239,26 @@ mod db_impl {
         crate::db::get_server_identity(db).await
     }
 
+    /// Retrieves the server identity from the database, creating it if it doesn't exist.
+    ///
+    /// This function ensures a unique server identity exists by creating one if needed.
+    /// The identity is generated using a random nanoid.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
-    /// * If the server server identity has not been initialized
+    /// * If the server identity cannot be created or retrieved
     pub async fn get_or_init_server_identity(
         db: &ConfigDatabase,
     ) -> Result<String, GetOrInitServerIdentityError> {
         crate::db::get_or_init_server_identity(db).await
     }
 
+    /// Creates or retrieves a profile by name.
+    ///
+    /// If a profile with the given name already exists, returns it. Otherwise, creates
+    /// a new profile and triggers a profile update event.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
@@ -266,6 +284,11 @@ mod db_impl {
         create_profile(db, name).await
     }
 
+    /// Deletes a profile by name.
+    ///
+    /// Returns the list of deleted profiles and triggers a profile update event.
+    /// If no profile with the given name exists, returns an empty list.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
@@ -291,6 +314,10 @@ mod db_impl {
         Ok(profiles)
     }
 
+    /// Creates a new profile with the given name.
+    ///
+    /// After creation, triggers a profile update event to notify other components.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
@@ -312,6 +339,8 @@ mod db_impl {
         Ok(profile)
     }
 
+    /// Retrieves all profiles from the database.
+    ///
     /// # Errors
     ///
     /// * If a database error occurs
