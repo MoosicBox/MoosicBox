@@ -324,6 +324,8 @@ pub fn profile(profile: &str) -> Markup {
     }
 }
 
+/// Renders a list of all configured profiles with delete buttons.
+///
 /// # Errors
 ///
 /// * If fails to fetch the profiles from the database

@@ -257,6 +257,8 @@ pub fn settings_logged_out() -> Markup {
     }
 }
 
+/// Renders the Tidal settings UI based on authentication status.
+///
 /// # Errors
 ///
 /// * If fails to fetch the Tidal config from the database
