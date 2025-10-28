@@ -15,6 +15,27 @@ fn max_f32(a: f32, b: f32) -> f32 {
     if a > b { a } else { b }
 }
 
+/// Checks if a widget is visible within a viewport.
+///
+/// Calculates whether a rectangular widget intersects with a viewport's visible area
+/// and returns both the visibility status and the distance from the viewport if not visible.
+///
+/// # Parameters
+///
+/// * `viewport_x` - X coordinate of the viewport's top-left corner
+/// * `viewport_y` - Y coordinate of the viewport's top-left corner
+/// * `viewport_w` - Width of the viewport
+/// * `viewport_h` - Height of the viewport
+/// * `widget_x` - X coordinate of the widget's top-left corner
+/// * `widget_y` - Y coordinate of the widget's top-left corner
+/// * `widget_w` - Width of the widget
+/// * `widget_h` - Height of the widget
+///
+/// # Returns
+///
+/// A tuple containing:
+/// * `bool` - Whether the widget is visible (within the viewport)
+/// * `f32` - Distance from the viewport if not visible, 0.0 if visible
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn is_visible(

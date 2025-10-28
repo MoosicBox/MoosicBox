@@ -1,8 +1,16 @@
+/// Viewport for immediate mode rendering with hierarchical positioning.
+///
+/// Represents a viewport in immediate mode, which recalculates visibility
+/// on every frame. Viewports can be nested via the `parent` field to create
+/// hierarchical visibility calculations.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct Viewport {
+    /// Parent viewport in the hierarchy, if any
     pub parent: Option<Box<Viewport>>,
+    /// Position and dimensions of this viewport's content
     pub pos: Pos,
+    /// Viewport's visible area position and dimensions
     pub viewport: Pos,
 }
 
@@ -22,27 +30,50 @@ impl Viewport {
     }
 }
 
+/// Position and dimensions for immediate mode viewport calculations.
+///
+/// Represents a rectangular area with x, y coordinates and width, height dimensions.
 #[derive(Debug, Clone, Copy)]
 pub struct Pos {
+    /// X coordinate
     pub x: f32,
+    /// Y coordinate
     pub y: f32,
+    /// Width
     pub w: f32,
+    /// Height
     pub h: f32,
 }
 
+/// Tracks visibility changes for a position within a viewport in immediate mode.
+///
+/// Monitors whether a specific position is visible within its viewport and tracks
+/// changes in visibility state and distance from the viewport. Used in immediate
+/// mode rendering where visibility is checked every frame.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct ViewportListener {
+    /// The viewport to check visibility against
     pub viewport: Option<Viewport>,
     visible: bool,
     prev_visible: Option<bool>,
     initialized: bool,
     dist: f32,
     prev_dist: Option<f32>,
+    /// The position and dimensions to check for visibility
     pub pos: Pos,
 }
 
 impl ViewportListener {
+    /// Creates a new viewport listener with the specified viewport and position.
+    ///
+    /// # Parameters
+    ///
+    /// * `viewport` - Optional viewport to check visibility against
+    /// * `x` - X coordinate of the position to monitor
+    /// * `y` - Y coordinate of the position to monitor
+    /// * `w` - Width of the area to monitor
+    /// * `h` - Height of the area to monitor
     #[must_use]
     pub const fn new(viewport: Option<Viewport>, x: f32, y: f32, w: f32, h: f32) -> Self {
         Self {
@@ -81,6 +112,15 @@ impl ViewportListener {
         }
     }
 
+    /// Checks current visibility status and returns changes since last check.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of two tuples:
+    /// * First tuple: `(current_visible, previous_visible_if_changed)` - Current visibility
+    ///   and the previous visibility state if it changed, otherwise `None`
+    /// * Second tuple: `(current_distance, previous_distance_if_changed)` - Current distance
+    ///   from viewport and the previous distance if it changed significantly, otherwise `None`
     pub fn check(&mut self) -> ((bool, Option<bool>), (f32, Option<f32>)) {
         let (visible, dist) = self.is_visible();
         log::trace!("check: pos={:?} visible={visible} dist={dist}", self.pos);
