@@ -15,6 +15,8 @@
 //! # Examples
 //!
 //! ```rust,no_run
+//! # #[cfg(all(feature = "app", feature = "router", feature = "template"))]
+//! # {
 //! use hyperchad::app::{App, AppBuilder};
 //! use hyperchad::router::{Router, RoutePath, RouteRequest};
 //! use hyperchad::template::container;
@@ -38,6 +40,7 @@
 //!
 //! app.run()?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!
