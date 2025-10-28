@@ -11,21 +11,27 @@ pub struct Range {
     pub end: Option<usize>,
 }
 
+/// Errors that can occur when parsing byte range specifications.
 #[derive(Debug, Error)]
 pub enum ParseRangesError {
+    /// Failed to parse a range value as a number
     #[error("Could not parse range value: {0}")]
     Parse(String),
+    /// Range specification has too few values (expected 2)
     #[error("Too few range values: {0}")]
     TooFewValues(String),
+    /// Range specification has too many values (expected 2)
     #[error("Too many range values: {0}")]
     TooManyValues(String),
 }
 
+/// Parses a single byte range specification (e.g., "0-1023" or "-100" or "500-").
+///
 /// # Errors
 ///
-/// * If fails to parse a `usize`
-/// * If too few values in the range
-/// * If too many values in the range
+/// * `ParseRangesError::Parse` - If fails to parse a `usize`
+/// * `ParseRangesError::TooFewValues` - If too few values in the range
+/// * `ParseRangesError::TooManyValues` - If too many values in the range
 pub fn parse_range(range: &str) -> std::result::Result<Range, ParseRangesError> {
     let ends = range
         .split('-')
@@ -52,11 +58,13 @@ pub fn parse_range(range: &str) -> std::result::Result<Range, ParseRangesError> 
     }
 }
 
+/// Parses multiple comma-separated byte range specifications (e.g., "0-1023,2048-4095").
+///
 /// # Errors
 ///
-/// * If fails to parse a `usize`
-/// * If too few values in the range
-/// * If too many values in the range
+/// * `ParseRangesError::Parse` - If fails to parse a `usize`
+/// * `ParseRangesError::TooFewValues` - If too few values in any range
+/// * `ParseRangesError::TooManyValues` - If too many values in any range
 pub fn parse_ranges(ranges: &str) -> std::result::Result<Vec<Range>, ParseRangesError> {
     ranges.split(',').map(parse_range).collect()
 }
