@@ -83,21 +83,57 @@ pub mod standard;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
-/// Environment variable error types
+/// Error types for environment variable operations.
+///
+/// These errors can occur when accessing or parsing environment variables.
 #[derive(Debug, thiserror::Error)]
 pub enum EnvError {
+    /// Environment variable was not found
     #[error("Environment variable '{0}' not found")]
     NotFound(String),
+    /// Environment variable has an invalid value
     #[error("Environment variable '{0}' has invalid value: {1}")]
     InvalidValue(String, String),
+    /// Failed to parse environment variable value
     #[error("Parse error for '{0}': {1}")]
     ParseError(String, String),
 }
 
-/// Result type for environment operations
+/// Result type for environment variable operations.
+///
+/// A convenience type alias that uses [`EnvError`] as the error type.
 pub type Result<T> = std::result::Result<T, EnvError>;
 
-/// Trait for environment variable access
+/// Trait for environment variable access.
+///
+/// This trait provides a unified interface for accessing environment variables
+/// from different sources (system environment, simulator, custom implementations).
+/// All providers must be thread-safe (`Send + Sync`).
+///
+/// # Examples
+///
+/// Implementing a custom provider:
+///
+/// ```rust
+/// use switchy_env::{EnvProvider, EnvError, Result};
+/// use std::collections::BTreeMap;
+///
+/// struct CustomEnv {
+///     vars: BTreeMap<String, String>,
+/// }
+///
+/// impl EnvProvider for CustomEnv {
+///     fn var(&self, name: &str) -> Result<String> {
+///         self.vars.get(name)
+///             .cloned()
+///             .ok_or_else(|| EnvError::NotFound(name.to_string()))
+///     }
+///
+///     fn vars(&self) -> BTreeMap<String, String> {
+///         self.vars.clone()
+///     }
+/// }
+/// ```
 pub trait EnvProvider: Send + Sync {
     /// Get an environment variable as a string
     ///
