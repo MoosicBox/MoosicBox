@@ -327,6 +327,8 @@ impl StatusCode {
         (*self).into_u16()
     }
 
+    /// Attempts to create a `StatusCode` from a `u16` value.
+    ///
     /// # Errors
     ///
     /// * If the `u16` is not a valid HTTP status code
@@ -334,6 +336,8 @@ impl StatusCode {
         code.try_into()
     }
 
+    /// Creates a `StatusCode` from a `u16` value.
+    ///
     /// # Panics
     ///
     /// * If the `u16` is not a valid HTTP status code
