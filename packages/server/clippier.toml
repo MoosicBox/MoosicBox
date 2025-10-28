@@ -1,6 +1,9 @@
 [env]
 STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
 
+[[ci-steps]]
+toolchain = "free_disk_space"
+
 [[config]]
 os = "ubuntu"
 
