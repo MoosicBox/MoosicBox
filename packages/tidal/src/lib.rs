@@ -250,6 +250,12 @@ macro_rules! tidal_api_endpoint {
     };
 }
 
+/// Initiates the OAuth 2.0 device authorization flow for Tidal.
+///
+/// Returns a JSON object containing the verification URL and device code that the user
+/// needs to authorize the application. Optionally opens the verification URL in the
+/// default browser if `open` is `true`.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -286,6 +292,11 @@ pub async fn device_authorization(client_id: String, open: bool) -> Result<Value
     }))
 }
 
+/// Exchanges a device code for an access token in the OAuth 2.0 flow.
+///
+/// Polls the Tidal API to check if the user has authorized the device. If successful,
+/// returns the access token and optionally persists it to the database if `persist` is `true`.
+///
 /// # Panics
 ///
 /// * If failed to serialize user `Value` to string
@@ -774,6 +785,8 @@ pub async fn favorite_artists(
     })
 }
 
+/// Adds an artist to the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -832,6 +845,8 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
+/// Removes an artist from the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1044,6 +1059,10 @@ pub async fn favorite_albums(
     })
 }
 
+/// Retrieves all favorite albums from Tidal by paginating through results.
+///
+/// Automatically handles pagination to fetch all albums, making multiple requests if necessary.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1093,6 +1112,8 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
+/// Adds an album to the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1151,6 +1172,8 @@ pub async fn add_favorite_album(
     Ok(())
 }
 
+/// Removes an album from the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1348,6 +1371,8 @@ pub async fn favorite_tracks(
     })
 }
 
+/// Adds a track to the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1406,6 +1431,8 @@ pub async fn add_favorite_track(
     Ok(())
 }
 
+/// Removes a track from the user's favorites on Tidal.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1716,6 +1743,8 @@ pub async fn album_tracks(
     })
 }
 
+/// Retrieves album metadata from Tidal by album ID.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1757,6 +1786,8 @@ pub async fn album(
     Ok(value.as_model()?)
 }
 
+/// Retrieves artist metadata from Tidal by artist ID.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1800,6 +1831,8 @@ pub async fn artist(
     Ok(value.as_model()?)
 }
 
+/// Retrieves track metadata from Tidal by track ID.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1882,6 +1915,11 @@ pub enum TidalSearchType {
     UserProfiles,
 }
 
+/// Searches for content on Tidal by query string and content types.
+///
+/// Returns search results containing matching artists, albums, and tracks based on the
+/// specified query and search types.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1987,6 +2025,10 @@ impl From<TrackAudioQuality> for TidalAudioQuality {
     }
 }
 
+/// Retrieves the playback URLs for a track at the specified audio quality.
+///
+/// Returns a list of URLs that can be used to stream or download the track.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2041,6 +2083,11 @@ pub struct TidalTrackPlaybackInfo {
     pub track_replay_gain: f64,
 }
 
+/// Retrieves detailed playback information for a track including audio metadata.
+///
+/// Returns information such as replay gain, bit depth, sample rate, and manifest data
+/// needed for playback.
+///
 /// # Errors
 ///
 /// * If the HTTP request failed

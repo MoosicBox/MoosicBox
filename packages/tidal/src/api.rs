@@ -30,6 +30,10 @@ use crate::{
     remove_favorite_track, search, track, track_file_url, track_playback_info,
 };
 
+/// Binds all Tidal API endpoints to an Actix Web service scope.
+///
+/// This function registers all available Tidal endpoints including authentication,
+/// favorites management, track retrieval, and search functionality.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -94,8 +98,10 @@ pub fn bind_services<
         TidalTrackOrderDirection,
     ))
 )]
+/// `OpenAPI` documentation configuration for Tidal API endpoints.
 pub struct Api;
 
+/// Tidal album representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalAlbum {
@@ -116,6 +122,7 @@ pub struct ApiTidalAlbum {
     pub api_source: ApiSource,
 }
 
+/// Track representation for API responses supporting different music sources.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -147,6 +154,7 @@ impl From<TidalTrack> for ApiTrack {
     }
 }
 
+/// Tidal track representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalTrack {
@@ -198,6 +206,7 @@ impl From<ApiTidalTrack> for moosicbox_music_models::api::ApiTrack {
     }
 }
 
+/// Tidal artist representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
@@ -238,6 +247,7 @@ impl From<Error> for actix_web::Error {
 
 static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
+/// Query parameters for initiating Tidal device authorization.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalDeviceAuthorizationQuery {
@@ -274,6 +284,7 @@ pub async fn device_authorization_endpoint(
     ))
 }
 
+/// Query parameters for exchanging device code for access token.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalDeviceAuthorizationTokenQuery {
@@ -324,6 +335,7 @@ pub async fn device_authorization_token_endpoint(
     ))
 }
 
+/// Query parameters for fetching track playback URLs.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackFileUrlQuery {
@@ -372,6 +384,7 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
+/// Query parameters for fetching track playback information.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackPlaybackInfoQuery {
@@ -420,6 +433,7 @@ pub async fn track_playback_info_endpoint(
     ))
 }
 
+/// Query parameters for fetching favorite artists.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalFavoriteArtistsQuery {
@@ -488,6 +502,7 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
+/// Query parameters for adding an artist to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAddFavoriteArtistsQuery {
@@ -547,6 +562,7 @@ pub async fn add_favorite_artist_endpoint(
     })))
 }
 
+/// Query parameters for removing an artist from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteArtistsQuery {
@@ -606,6 +622,7 @@ pub async fn remove_favorite_artist_endpoint(
     })))
 }
 
+/// Query parameters for fetching favorite albums.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalFavoriteAlbumsQuery {
@@ -680,6 +697,7 @@ pub async fn favorite_albums_endpoint(
     ))
 }
 
+/// Query parameters for adding an album to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAddFavoriteAlbumsQuery {
@@ -739,6 +757,7 @@ pub async fn add_favorite_album_endpoint(
     })))
 }
 
+/// Query parameters for removing an album from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteAlbumsQuery {
@@ -798,6 +817,7 @@ pub async fn remove_favorite_album_endpoint(
     })))
 }
 
+/// Query parameters for adding a track to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAddFavoriteTracksQuery {
@@ -857,6 +877,7 @@ pub async fn add_favorite_track_endpoint(
     })))
 }
 
+/// Query parameters for removing a track from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteTracksQuery {
@@ -916,6 +937,7 @@ pub async fn remove_favorite_track_endpoint(
     })))
 }
 
+/// Query parameters for fetching favorite tracks.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalFavoriteTracksQuery {
@@ -983,6 +1005,7 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for fetching albums by an artist.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtistAlbumsQuery {
@@ -995,6 +1018,7 @@ pub struct TidalArtistAlbumsQuery {
     device_type: Option<TidalDeviceType>,
 }
 
+/// Album type filter for artist album queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -1067,6 +1091,7 @@ pub async fn artist_albums_endpoint(
     Ok(Json(albums.try_into().map_err(ErrorInternalServerError)?))
 }
 
+/// Query parameters for fetching tracks from an album.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumTracksQuery {
@@ -1128,6 +1153,7 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for fetching album metadata.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumQuery {
@@ -1182,6 +1208,7 @@ pub async fn album_endpoint(
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
+/// Query parameters for fetching artist metadata.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtistQuery {
@@ -1236,6 +1263,7 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
+/// Query parameters for fetching track metadata.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackQuery {
@@ -1290,6 +1318,7 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
+/// Query parameters for searching Tidal content.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchQuery {
