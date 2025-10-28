@@ -30,6 +30,8 @@ impl ToNested<Value> for &Value {
     }
 }
 
+/// Navigates to a nested value in a JSON structure using a path of keys.
+///
 /// # Errors
 ///
 /// * If the value failed to parse
@@ -260,6 +262,8 @@ impl ToNestedValue for &Value {
     }
 }
 
+/// Navigates to a nested value in a JSON structure and converts it to type `T`.
+///
 /// # Errors
 ///
 /// * If the value failed to parse
