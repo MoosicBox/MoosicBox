@@ -1,20 +1,31 @@
 use serde::{Deserialize, Serialize};
 
+/// A package entry in a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLockPackage {
+    /// Package name
     pub name: String,
+    /// Package version
     pub version: String,
+    /// Package source (registry, git, etc.)
     pub source: Option<String>,
+    /// Package dependencies
     pub dependencies: Option<Vec<String>>,
 }
 
+/// Representation of a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLock {
+    /// Cargo.lock format version
     pub version: u32,
+    /// List of packages in the lockfile
     pub package: Vec<CargoLockPackage>,
 }
 
-// Basic parsing function available without git-diff
+/// Parse dependency name from a dependency specification string
+///
+/// Removes version constraints, features, and other metadata from a dependency
+/// specification, extracting only the package name.
 #[must_use]
 pub fn parse_dependency_name(dep_spec: &str) -> String {
     // Parse dependency name (remove version constraints, features, etc.)
@@ -25,7 +36,9 @@ pub fn parse_dependency_name(dep_spec: &str) -> String {
         .to_string()
 }
 
-// Basic parsing function for cargo lock changes
+/// Parse Cargo.lock diff changes into a list of affected package names
+///
+/// Analyzes diff operations to identify packages with version changes.
 #[must_use]
 pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
     let mut changed_packages = std::collections::BTreeSet::new();
@@ -67,9 +80,12 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
     result
 }
 
-// Basic TOML parsing function
+/// Parse Cargo.lock TOML content into a structured representation
+///
 /// # Errors
-/// Returns an error if the TOML content cannot be parsed
+///
+/// * If the content is not valid TOML
+/// * If the version field is not a valid integer
 pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
     let toml_value: toml::Value = toml::from_str(content)?;
 
