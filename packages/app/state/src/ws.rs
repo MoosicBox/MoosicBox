@@ -13,45 +13,65 @@ use thiserror::Error;
 
 use crate::{AppState, AppStateError};
 
+/// `WebSocket` connection initialization message.
+///
+/// Contains the connection identifier and `WebSocket` URL needed to establish
+/// a connection to the `MoosicBox` server.
 #[derive(Clone, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WsConnectMessage {
+    /// Unique identifier for this connection
     pub connection_id: String,
+    /// `WebSocket` URL to connect to
     pub ws_url: String,
 }
 
+/// Errors that can occur during `WebSocket` initialization.
 #[derive(Debug, Error)]
 pub enum InitWsError {
+    /// Audio output scanner error
     #[error(transparent)]
     AudioOutputScanner(#[from] AudioOutputScannerError),
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// Error closing existing `WebSocket` connection
     #[error(transparent)]
     CloseWs(#[from] CloseWsError),
+    /// Required `MoosicBox` profile is missing
     #[error("Missing profile")]
     MissingProfile,
 }
 
+/// Errors that can occur when closing a `WebSocket` connection.
 #[derive(Debug, Error)]
 pub enum CloseWsError {
+    /// Error from the underlying `WebSocket` close operation
     #[error(transparent)]
     Close(#[from] CloseError),
+    /// Error joining async task handles
     #[error(transparent)]
     Join(#[from] JoinError),
 }
 
+/// Errors that can occur when sending a `WebSocket` message.
 #[derive(Debug, Error)]
 pub enum SendWsMessageError {
+    /// Error from the underlying `WebSocket` send operation
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
+    /// Error handling the `WebSocket` message
     #[error(transparent)]
     HandleWsMessage(#[from] HandleWsMessageError),
 }
 
+/// Errors that can occur when handling incoming `WebSocket` messages.
 #[derive(Debug, Error)]
 pub enum HandleWsMessageError {
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// Audio player error
     #[error(transparent)]
     Player(#[from] PlayerError),
 }
