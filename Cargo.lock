@@ -8659,6 +8659,7 @@ name = "moosicbox_opus_native_libopus"
 version = "0.1.0"
 dependencies = [
  "cmake",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

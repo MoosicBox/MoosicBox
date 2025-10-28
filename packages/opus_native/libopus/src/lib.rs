@@ -153,19 +153,25 @@ pub mod safe {
     use std::ffi::c_int;
 
     /// Error types returned by safe Opus operations.
-    #[derive(Debug)]
+    #[derive(thiserror::Error, Debug)]
     pub enum OpusError {
         /// Failed to create an encoder, with libopus error code.
+        #[error("Failed to create an encoder, with libopus error code: {0}")]
         EncoderCreateFailed(c_int),
         /// Failed to create a decoder, with libopus error code.
+        #[error("Failed to create a decoder, with libopus error code: {0}")]
         DecoderCreateFailed(c_int),
         /// Failed to encode audio, with libopus error code.
+        #[error("Failed to encode audio, with libopus error code: {0}")]
         EncodeFailed(c_int),
         /// Failed to decode audio, with libopus error code.
+        #[error("Failed to decode audio, with libopus error code: {0}")]
         DecodeFailed(c_int),
         /// Sample rate not one of 8000, 12000, 16000, 24000, or 48000 Hz.
+        #[error("Sample rate not one of 8000, 12000, 16000, 24000, or 48000 Hz")]
         InvalidSampleRate,
         /// Channel count not 1 or 2.
+        #[error("Channel count not 1 or 2")]
         InvalidChannels,
     }
 

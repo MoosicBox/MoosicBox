@@ -10,6 +10,9 @@ version     = "0.1.0"
 [package.metadata.cargo-machete]
 ignored = ["cmake"]
 
+[dependencies]
+thiserror = { workspace = true }
+
 [build-dependencies]
 cmake = { workspace = true }
 
