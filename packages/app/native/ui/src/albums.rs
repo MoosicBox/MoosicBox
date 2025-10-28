@@ -107,7 +107,7 @@ pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Co
 
 /// Renders a loading placeholder for an album page.
 ///
-/// Shows a skeleton UI that will be replaced by the actual album content via HTMX.
+/// Shows a skeleton UI that will be replaced by the actual album content via HyperChad.
 #[must_use]
 pub fn album_page_immediate(
     album_id: &str,
@@ -484,7 +484,7 @@ pub fn album(
 
 /// Renders the initial album list with lazy loading triggers.
 ///
-/// Sets up HTMX requests for parallel loading of additional album pages.
+/// Sets up HyperChad requests for parallel loading of additional album pages.
 #[must_use]
 pub fn albums_list_start(
     state: &State,
@@ -963,7 +963,7 @@ pub fn albums(
 
 /// Renders the album grid container with loading placeholders.
 ///
-/// Sets up HTMX to load actual album data on page load.
+/// Sets up HyperChad to load actual album data on page load.
 #[must_use]
 pub fn load_albums(
     size: u16,

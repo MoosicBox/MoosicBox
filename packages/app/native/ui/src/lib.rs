@@ -729,7 +729,7 @@ pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 /// Renders the audio zones modal dialog.
 ///
-/// Displays a modal that loads audio zone content via HTMX.
+/// Displays a modal that loads audio zone content via HyperChad.
 #[must_use]
 pub fn audio_zones() -> Containers {
     modal(
@@ -755,7 +755,7 @@ pub static PLAY_QUEUE_ID: &str = "play-queue";
 
 /// Renders the playback sessions modal dialog.
 ///
-/// Displays a modal that loads playback session content via HTMX.
+/// Displays a modal that loads playback session content via HyperChad.
 #[must_use]
 pub fn playback_sessions() -> Containers {
     modal(
