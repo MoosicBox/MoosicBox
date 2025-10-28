@@ -574,9 +574,9 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TransportInfo {
-    /// Current transport status (e.g., "OK", "ERROR_OCCURRED").
+    /// Current transport status (e.g., "OK", "`ERROR_OCCURRED`").
     current_transport_status: String,
-    /// Current transport state (e.g., "PLAYING", "PAUSED_PLAYBACK", "STOPPED").
+    /// Current transport state (e.g., "PLAYING", "`PAUSED_PLAYBACK`", "STOPPED").
     current_transport_state: String,
     /// Current playback speed (typically "1" for normal speed).
     current_speed: String,
@@ -783,9 +783,9 @@ pub async fn set_volume(
 pub struct MediaInfo {
     /// Total duration of the media in seconds.
     media_duration: u32,
-    /// Recording medium type (e.g., "NOT_IMPLEMENTED").
+    /// Recording medium type (e.g., "`NOT_IMPLEMENTED`").
     record_medium: String,
-    /// Write status of the media (e.g., "NOT_IMPLEMENTED").
+    /// Write status of the media (e.g., "`NOT_IMPLEMENTED`").
     write_status: String,
     /// Metadata for the current media URI.
     current_uri_metadata: TrackMetadata,

@@ -1,7 +1,7 @@
 //! HTTP API endpoints for managing audio outputs.
 //!
 //! This module provides REST API endpoints for querying available audio output devices
-//! and their configurations. The API is built on Actix-web and includes OpenAPI documentation.
+//! and their configurations. The API is built on Actix-web and includes `OpenAPI` documentation.
 
 #![allow(clippy::needless_for_each)]
 
@@ -30,7 +30,7 @@ pub fn bind_services<
 }
 
 #[cfg(feature = "openapi")]
-/// OpenAPI documentation for the audio output API.
+/// `OpenAPI` documentation for the audio output API.
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Audio Output")),

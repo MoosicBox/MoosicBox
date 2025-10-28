@@ -132,7 +132,7 @@ pub struct DownloadQuery {
     quality: Option<TrackAudioQuality>,
     /// API source identifier
     source: String,
-    /// MoosicBox server URL
+    /// `MoosicBox` server URL
     url: Option<String>,
 }
 
