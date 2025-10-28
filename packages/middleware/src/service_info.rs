@@ -38,9 +38,14 @@ use futures::future::{Ready, err, ok};
 
 static SERVICE_INFO: OnceLock<ServiceInfo> = OnceLock::new();
 
+/// Initializes the global service configuration.
+///
+/// This must be called once before starting the server, and before any request handlers
+/// attempt to extract [`ServiceInfo`].
+///
 /// # Errors
 ///
-/// Will error if `SERVICE_INFO` has already been initialized
+/// * Returns `Err(ServiceInfo)` if `SERVICE_INFO` has already been initialized
 pub fn init(service_info: ServiceInfo) -> Result<(), ServiceInfo> {
     SERVICE_INFO.set(service_info)
 }
