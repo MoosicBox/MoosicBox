@@ -1,3 +1,15 @@
+//! OpenAPI example for MoosicBox web server.
+//!
+//! This example demonstrates how to create and serve an OpenAPI specification
+//! using the MoosicBox web server framework with utoipa integration.
+//!
+//! # Features
+//!
+//! * Creates an OpenAPI specification with example endpoints
+//! * Serves the specification through the `/openapi` path
+//! * Demonstrates path definition using the `path!` macro
+//! * Includes example endpoint with parameters and response documentation
+
 use moosicbox_web_server::{HttpResponse, Scope, path, utoipa};
 use utoipa::{OpenApi as _, openapi::OpenApi};
 
@@ -34,6 +46,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Static OpenAPI specification for the example endpoint.
+///
+/// This lazy-initialized specification defines the `/example` endpoint with:
+/// * Tags for API categorization
+/// * Path definitions for the example endpoint
+/// * Component schemas
+///
+/// The specification is constructed using the utoipa builder pattern and is
+/// merged with other API definitions in the [`init`] function.
 pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> = std::sync::LazyLock::new(|| {
     OpenApi::builder()
         .tags(Some([utoipa::openapi::Tag::builder()
@@ -52,6 +73,16 @@ pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> = std::sync::LazyL
 #[openapi()]
 struct ApiDoc;
 
+/// Initializes and returns the complete OpenAPI specification.
+///
+/// This function combines the base API documentation from `ApiDoc` with
+/// the custom [`API`] specification, nesting them together to create a
+/// complete OpenAPI document.
+///
+/// # Returns
+///
+/// Returns a fully constructed [`OpenApi`] specification that includes all
+/// endpoint definitions, schemas, and metadata for the example web server.
 pub fn init() -> OpenApi {
     #[allow(unused)]
     fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
