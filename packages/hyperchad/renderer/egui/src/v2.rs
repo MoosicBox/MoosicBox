@@ -98,6 +98,9 @@ pub struct EguiRenderRunner<C: EguiCalc + Clone + Send + Sync> {
 impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunner
     for EguiRenderRunner<C>
 {
+    /// # Errors
+    ///
+    /// Will error if egui fails to run the event loop.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         let mut viewport =
             egui::ViewportBuilder::default().with_inner_size([self.width, self.height]);
@@ -151,6 +154,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
 impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::ToRenderRunner
     for EguiRenderer<C>
 {
+    /// # Errors
+    ///
+    /// Will error if egui fails to run the event loop.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if width or height were not set during initialization.
     fn to_runner(
         self,
         _handle: hyperchad_renderer::Handle,
@@ -663,6 +673,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         // Simplified - implement if needed
     }
 
+    /// # Errors
+    ///
+    /// Will error if egui app fails to start.
     async fn init(
         &mut self,
         width: f32,
@@ -698,6 +711,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will error if egui app fails to emit the event.
     async fn emit_event(
         &self,
         event_name: String,
@@ -708,6 +724,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will error if egui fails to render the view.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
     async fn render(
         &self,
         view: hyperchad_renderer::View,
@@ -751,6 +774,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will error if egui fails to render the canvas update.
     async fn render_canvas(
         &self,
         _update: CanvasUpdate,
