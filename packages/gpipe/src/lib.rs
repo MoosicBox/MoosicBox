@@ -18,6 +18,12 @@
 //! * Local execution without containerization
 //! * Backend-agnostic workflow definitions
 
-// Re-export core types from ast
+/// Abstract syntax tree types for workflow definitions.
+///
+/// Re-exported from the `gpipe_ast` crate. Provides core data structures for
+/// workflows, jobs, steps, and expressions that can be parsed from various CI/CD
+/// formats and executed locally or translated to different backend formats.
+///
+/// Enable the `ast` feature to access this module.
 #[cfg(feature = "ast")]
 pub use gpipe_ast as ast;
