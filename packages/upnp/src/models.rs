@@ -10,9 +10,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpDevice {
+    /// Friendly name of the `UPnP` device.
     pub name: String,
+    /// Unique device name (UDN) identifying the device.
     pub udn: String,
+    /// Current volume level of the device, if available.
     pub volume: Option<String>,
+    /// List of services provided by this device.
     pub services: Vec<UpnpService>,
 }
 
@@ -52,7 +56,9 @@ impl UpnpDevice {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpnpService {
+    /// Service identifier (e.g., "urn:upnp-org:serviceId:AVTransport").
     pub id: String,
+    /// Service type (e.g., "urn:schemas-upnp-org:service:AVTransport:1").
     pub r#type: String,
 }
 

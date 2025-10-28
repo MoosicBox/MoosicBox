@@ -42,14 +42,20 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 /// `UPnP` player implementation that controls playback on `UPnP`/DLNA devices.
 #[derive(Clone)]
 pub struct UpnpPlayer {
+    /// Music API provider for retrieving track information and URLs.
     pub source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
+    /// Unique identifier for this player instance.
     pub id: u64,
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
+    /// Current playback state and information.
     pub playback: Arc<RwLock<Option<Playback>>>,
+    /// Handler for managing playback operations.
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
+    /// Receiver for playback completion notifications.
     pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     handle: Handle,
+    /// The `UPnP` device being controlled.
     pub device: Device,
     service: Service,
     instance_id: u32,
@@ -657,7 +663,9 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
 /// Represents a `UPnP` `AVTransport` service for audio output.
 #[derive(Clone)]
 pub struct UpnpAvTransportService {
+    /// The `UPnP` device providing the `AVTransport` service.
     pub device: Device,
+    /// The `AVTransport` service instance.
     pub service: Service,
 }
 
