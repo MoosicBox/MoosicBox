@@ -1,3 +1,8 @@
+//! Database operations for audio zone management.
+//!
+//! This module provides low-level database functions for managing audio zones, including
+//! CRUD operations, player associations, and conversions between database models and domain models.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::Arc;
@@ -18,6 +23,11 @@ use self::models::AudioZoneModel;
 
 pub mod models;
 
+/// Updates an existing audio zone in the database and manages its player associations.
+///
+/// This function updates the zone's properties and synchronizes the associated players by
+/// adding new players and removing players that are no longer in the zone.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -73,6 +83,8 @@ pub async fn update_audio_zone(
     Ok(inserted)
 }
 
+/// Retrieves all audio zones from the database as raw database models.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -86,6 +98,11 @@ pub async fn get_zones(
         .to_value_type()?)
 }
 
+/// Retrieves all audio zones with their associated playback sessions.
+///
+/// This function joins data from the config database (zones) and library database (sessions)
+/// to provide zones that currently have active playback sessions.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -125,6 +142,8 @@ pub async fn get_zone_with_sessions(
         .collect())
 }
 
+/// Creates a new audio zone in the database.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -140,6 +159,10 @@ pub async fn create_audio_zone(
         .to_value_type()?)
 }
 
+/// Deletes an audio zone from the database by its ID.
+///
+/// Returns the deleted zone if it existed, or `None` if no zone with the given ID was found.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -156,6 +179,10 @@ pub async fn delete_audio_zone(
         .transpose()?)
 }
 
+/// Retrieves a specific audio zone from the database by its ID.
+///
+/// Returns `None` if no audio zone exists with the given ID.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -172,6 +199,8 @@ pub async fn get_zone(
         .transpose()?)
 }
 
+/// Retrieves all players associated with a specific audio zone.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -192,6 +221,11 @@ pub async fn get_players(
         .to_value_type()?)
 }
 
+/// Converts a database audio zone model into the domain `AudioZone` type.
+///
+/// This function fetches the associated players for the zone and constructs a complete
+/// `AudioZone` object.
+///
 /// # Errors
 ///
 /// * If there is a database error
@@ -206,6 +240,11 @@ pub async fn audio_zone_try_from_db(
     })
 }
 
+/// Converts a database audio zone with session model into the domain `AudioZoneWithSession` type.
+///
+/// This function fetches the associated players for the zone and constructs a complete
+/// `AudioZoneWithSession` object.
+///
 /// # Errors
 ///
 /// * If there is a database error

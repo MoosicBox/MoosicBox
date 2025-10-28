@@ -6,8 +6,13 @@ use std::{
 
 use tokio::sync::RwLock;
 
+/// A boxed error type that implements `Send` for thread-safe error handling.
 pub type BoxErrorSend = Box<dyn std::error::Error + Send>;
 
+/// A boxed function that returns a future for handling audio zone update events.
+///
+/// This type represents an event listener callback that can be invoked when audio zones
+/// are updated. The function must be `Send + Sync` to support concurrent execution.
 pub type AudioZonesUpdatedSubscriptionAction = Box<
     dyn (Fn() -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + Send>>)
         + Send
