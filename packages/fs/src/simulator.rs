@@ -108,6 +108,10 @@ thread_local! {
         const { RefCell::new(RwLock::new(BTreeSet::new())) };
 }
 
+/// Resets the simulated filesystem to an empty state
+///
+/// Clears all files and directories from the in-memory filesystem simulator.
+///
 /// # Panics
 ///
 /// * If the `FILES` `RwLock` fails to write to
@@ -116,6 +120,10 @@ pub fn reset_fs() {
     reset_directories();
 }
 
+/// Resets all directories in the simulated filesystem
+///
+/// Clears the directory registry, removing all tracked directories from the in-memory filesystem.
+///
 /// # Panics
 ///
 /// * If the `DIRECTORIES` `RwLock` fails to write to
@@ -407,6 +415,9 @@ pub mod sync {
 
     use super::{DIRECTORIES, FILES};
 
+    /// File handle for synchronous operations in the simulated filesystem
+    ///
+    /// Provides read, write, and seek operations on files stored in the in-memory filesystem.
     pub struct File {
         pub(crate) path: PathBuf,
         pub(crate) data: Arc<Mutex<BytesMut>>,
@@ -946,6 +957,9 @@ pub mod unsync {
 
     use crate::unsync::OpenOptions;
 
+    /// File handle for asynchronous operations in the simulated filesystem
+    ///
+    /// Provides async read, write, and seek operations on files stored in the in-memory filesystem.
     pub struct File {
         pub(crate) path: PathBuf,
         pub(crate) data: Arc<Mutex<BytesMut>>,
