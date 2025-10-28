@@ -74,40 +74,71 @@ macro_rules! public_img {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Action {
+    /// Requests the visualization canvas to refresh with current dimensions.
     RefreshVisualization,
+    /// Toggles between play and pause states.
     TogglePlayback,
+    /// Skips to the previous track in the playlist.
     PreviousTrack,
+    /// Skips to the next track in the playlist.
     NextTrack,
+    /// Sets the playback volume.
     SetVolume,
+    /// Seeks to a specific position in the current track as a percentage.
     SeekCurrentTrackPercent,
+    /// Filters the album list by source and sort order.
     FilterAlbums {
+        /// The sources to include in the filtered results.
         filtered_sources: Vec<TrackApiSource>,
+        /// The sort order to apply.
         sort: AlbumSort,
     },
+    /// Plays an album from the beginning.
     PlayAlbum {
+        /// The album identifier.
         album_id: Id,
+        /// The API source for the album.
         api_source: ApiSource,
+        /// The specific version source to use.
         version_source: Option<TrackApiSource>,
+        /// The desired sample rate in Hz.
         sample_rate: Option<u32>,
+        /// The desired bit depth.
         bit_depth: Option<u8>,
     },
+    /// Adds an album to the end of the current queue.
     AddAlbumToQueue {
+        /// The album identifier.
         album_id: Id,
+        /// The API source for the album.
         api_source: ApiSource,
+        /// The specific version source to use.
         version_source: Option<TrackApiSource>,
+        /// The desired sample rate in Hz.
         sample_rate: Option<u32>,
+        /// The desired bit depth.
         bit_depth: Option<u8>,
     },
+    /// Plays an album starting from a specific track.
     PlayAlbumStartingAtTrackId {
+        /// The album identifier.
         album_id: Id,
+        /// The track to start playback from.
         start_track_id: Id,
+        /// The API source for the album.
         api_source: ApiSource,
+        /// The specific version source to use.
         version_source: Option<TrackApiSource>,
+        /// The desired sample rate in Hz.
         sample_rate: Option<u32>,
+        /// The desired bit depth.
         bit_depth: Option<u8>,
     },
+    /// Plays a list of specific tracks.
     PlayTracks {
+        /// The track identifiers to play.
         track_ids: Vec<Id>,
+        /// The API source for the tracks.
         api_source: ApiSource,
     },
 }
@@ -139,6 +170,9 @@ impl From<Action> for ActionType {
 }
 
 impl std::fmt::Display for Action {
+    /// # Panics
+    ///
+    /// * Panics if the action cannot be serialized to JSON
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -177,6 +211,9 @@ impl<'a> TryFrom<&'a str> for Action {
     }
 }
 
+/// Renders the sidebar navigation menu.
+///
+/// Includes the application logo, settings link, and navigation links to main sections.
 #[must_use]
 pub fn sidebar_navigation() -> Containers {
     container! {
@@ -243,6 +280,9 @@ pub fn sidebar_navigation() -> Containers {
     }
 }
 
+/// Renders the player control panel.
+///
+/// Includes visualization canvas, playback controls, current track information, and volume controls.
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn player(state: &State) -> Containers {
@@ -545,6 +585,10 @@ fn player_current_progress_from_state(state: &State) -> Containers {
     }
 }
 
+/// Renders UI updates when a playback session changes.
+///
+/// Returns partial DOM updates for the current playing track, play/pause button,
+/// progress indicator, and volume slider based on what changed in the session.
 #[must_use]
 pub fn session_updated(
     state: &State,
@@ -596,6 +640,7 @@ pub fn session_updated(
     partials
 }
 
+/// Renders the footer section containing the player controls.
 #[must_use]
 pub fn footer(state: &State) -> Containers {
     container! {
@@ -605,6 +650,9 @@ pub fn footer(state: &State) -> Containers {
     }
 }
 
+/// Renders the main content area wrapper.
+///
+/// Wraps the provided slot content in a scrollable main element.
 #[must_use]
 pub fn main(slot: &Containers) -> Containers {
     container! {
@@ -614,6 +662,7 @@ pub fn main(slot: &Containers) -> Containers {
     }
 }
 
+/// Renders the home page.
 #[must_use]
 pub fn home(state: &State) -> Containers {
     page(
@@ -624,6 +673,7 @@ pub fn home(state: &State) -> Containers {
     )
 }
 
+/// Renders the downloads page.
 #[must_use]
 pub fn downloads(state: &State) -> Containers {
     page(
@@ -677,6 +727,9 @@ pub static AUDIO_ZONES_ID: &str = "audio-zones";
 /// DOM element ID for the audio zones modal content.
 pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
+/// Renders the audio zones modal dialog.
+///
+/// Displays a modal that loads audio zone content via HTMX.
 #[must_use]
 pub fn audio_zones() -> Containers {
     modal(
@@ -700,6 +753,9 @@ pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
 /// DOM element ID for the play queue panel.
 pub static PLAY_QUEUE_ID: &str = "play-queue";
 
+/// Renders the playback sessions modal dialog.
+///
+/// Displays a modal that loads playback session content via HTMX.
 #[must_use]
 pub fn playback_sessions() -> Containers {
     modal(
@@ -716,6 +772,9 @@ pub fn playback_sessions() -> Containers {
     )
 }
 
+/// Renders a reusable modal dialog component.
+///
+/// Creates a centered modal overlay with a close button and click-outside-to-close behavior.
 #[must_use]
 pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers {
     container! {
