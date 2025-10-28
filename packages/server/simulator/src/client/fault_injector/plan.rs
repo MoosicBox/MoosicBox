@@ -21,6 +21,7 @@ impl Default for InteractionPlanContext {
 }
 
 impl InteractionPlanContext {
+    /// Creates a new `InteractionPlanContext`.
     #[must_use]
     pub const fn new() -> Self {
         Self {}
@@ -44,6 +45,7 @@ impl Default for FaultInjectionInteractionPlan {
 }
 
 impl FaultInjectionInteractionPlan {
+    /// Creates a new `FaultInjectionInteractionPlan`.
     #[must_use]
     pub const fn new() -> Self {
         Self {

@@ -30,6 +30,8 @@ pub static CANCELLATION_TOKEN: LazyLock<Arc<Mutex<Option<CancellationToken>>>> =
 pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(None)));
 
+/// Starts the `MoosicBox` server in the simulation.
+///
 /// # Panics
 ///
 /// * If fails to find and open port within the specified range
