@@ -59,17 +59,28 @@ thread_local! {
     static DNS: RefCell<BTreeMap<String, Ipv4Addr>> = const { RefCell::new(BTreeMap::new()) };
 }
 
+/// Returns the starting port number for ephemeral port allocation.
+///
+/// Ephemeral ports are automatically assigned to client connections when no specific port
+/// is requested.
 #[must_use]
 pub fn ephemeral_port_start() -> u16 {
     EPHEMERAL_PORT_START.with_borrow(|x| x.load(Ordering::SeqCst))
 }
 
+/// Resets the ephemeral port counter to its starting value.
+///
+/// This is useful for test isolation to ensure deterministic port allocation.
 pub fn reset_next_port() {
     NEXT_PORT.with_borrow(|x| {
         x.store(ephemeral_port_start(), Ordering::SeqCst);
     });
 }
 
+/// Allocates and returns the next available ephemeral port number.
+///
+/// Port numbers automatically wrap around to the ephemeral port start when reaching
+/// the maximum port value.
 #[must_use]
 pub fn next_port() -> u16 {
     NEXT_PORT.with_borrow(|x| {
@@ -84,6 +95,11 @@ pub fn next_port() -> u16 {
     })
 }
 
+/// Allocates and returns the next available IP address.
+///
+/// IP addresses are allocated sequentially starting from the configured IP start value.
+/// This is useful for simulating multiple hosts in tests.
+///
 /// # Panics
 ///
 /// * If ran out of 3rd octet available IPs
@@ -109,21 +125,34 @@ pub fn next_ip() -> Ipv4Addr {
     })
 }
 
+/// Returns the starting IP address for IP allocation.
+///
+/// This is the first IP address that will be allocated when simulating connections.
 #[must_use]
 pub fn ip_start() -> Ipv4Addr {
     IP_START.with_borrow(|x| *x)
 }
 
+/// Resets the IP address counter to its starting value.
+///
+/// This is useful for test isolation to ensure deterministic IP allocation.
 pub fn reset_next_ip() {
     NEXT_IP.with_borrow_mut(|x| {
         *x = ip_start();
     });
 }
 
+/// Clears all DNS hostname-to-IP mappings.
+///
+/// This is useful for test isolation to ensure a clean DNS state.
 pub fn reset_dns() {
     DNS.with_borrow_mut(BTreeMap::clear);
 }
 
+/// Resets all simulator state.
+///
+/// This includes ephemeral ports, IP addresses, and DNS mappings. Useful for ensuring
+/// a clean state between tests.
 pub fn reset() {
     reset_next_port();
     reset_next_ip();
@@ -138,6 +167,9 @@ scoped_thread_local! {
     static HOST: Host
 }
 
+/// Returns the current host address if one is set in the current scope.
+///
+/// This is used by [`with_host`] to provide scoped hostname context for connections.
 #[must_use]
 pub fn current_host() -> Option<String> {
     if HOST.is_set() {
@@ -147,6 +179,10 @@ pub fn current_host() -> Option<String> {
     }
 }
 
+/// Executes a closure with a specific host address set in the current scope.
+///
+/// This allows connections to localhost addresses within the closure to be resolved
+/// to the specified host address instead.
 pub fn with_host<T>(addr: String, f: impl FnOnce(&str) -> T) -> T {
     let host = Host { addr };
     HOST.set(&host, || f(&host.addr))
@@ -207,6 +243,11 @@ fn parse_addr(mut addr: String, host: bool) -> Result<(SocketAddr, Option<String
     })
 }
 
+/// In-memory TCP listener for the simulator.
+///
+/// Listens for incoming TCP connections in the simulator without actual network I/O.
+/// Maintains a queue of pending connections and automatically manages the listener
+/// lifecycle through a cancellation token.
 pub struct TcpListener {
     token: CancellationToken,
     addr: SocketAddr,
@@ -320,6 +361,10 @@ impl GenericTcpListener<crate::SimulatorTcpStream> for TcpListener {
     }
 }
 
+/// In-memory TCP stream for the simulator.
+///
+/// Represents a bidirectional TCP connection in the simulator. Data is transferred
+/// through in-memory channels rather than actual network sockets.
 pub struct TcpStream {
     local_addr: SocketAddr,
     peer_addr: SocketAddr,
@@ -417,6 +462,10 @@ impl GenericTcpStream<TcpStreamReadHalf, TcpStreamWriteHalf> for TcpStream {
     }
 }
 
+/// Read half of an in-memory TCP stream.
+///
+/// Receives data from the peer through an in-memory channel. Implements buffering
+/// to handle partial reads efficiently.
 pub struct TcpStreamReadHalf {
     /// Receiver for receiving data from the peer
     rx: Receiver<Bytes>,
@@ -424,6 +473,9 @@ pub struct TcpStreamReadHalf {
 }
 impl GenericTcpStreamReadHalf for TcpStreamReadHalf {}
 
+/// Write half of an in-memory TCP stream.
+///
+/// Sends data to the peer through an in-memory channel.
 pub struct TcpStreamWriteHalf {
     /// Sender for sending data to the peer
     tx: Sender<Bytes>,
