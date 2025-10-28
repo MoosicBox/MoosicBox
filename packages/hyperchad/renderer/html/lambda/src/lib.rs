@@ -75,10 +75,18 @@ pub use lambda_http;
 pub use lambda_runtime;
 
 /// HTTP response content types for Lambda responses.
+///
+/// Represents the different types of content that can be returned from a Lambda
+/// function, each with appropriate MIME type handling.
 pub enum Content {
     /// HTML content with UTF-8 encoding.
+    ///
+    /// The content will be sent with `Content-Type: text/html; charset=utf-8`.
     Html(String),
     /// Raw binary content with a custom content type.
+    ///
+    /// Use this variant for serving any binary data (images, PDFs, etc.) or
+    /// non-HTML text formats with a specific MIME type.
     Raw {
         /// The binary data to send.
         data: Bytes,
@@ -86,18 +94,32 @@ pub enum Content {
         content_type: String,
     },
     /// JSON content (requires `json` feature).
+    ///
+    /// The content will be sent with `Content-Type: application/json`.
+    /// Automatically serializes the value to JSON string format.
     #[cfg(feature = "json")]
     Json(serde_json::Value),
 }
 
 /// Processes Lambda HTTP requests and generates responses.
+///
+/// This trait defines the interface for handling Lambda HTTP events, allowing
+/// custom request processing, response generation, and content transformation.
+/// Implementors control how requests are parsed, what content is generated,
+/// and how it's formatted for the HTTP response.
 #[async_trait]
 pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     /// Prepares request data for processing.
     ///
+    /// Extracts and transforms the incoming Lambda HTTP request and optional
+    /// body into the application's request type `T`.
+    ///
     /// # Errors
     ///
-    /// * If the request fails to prepare
+    /// Implementations may return errors for:
+    /// * Invalid request format or missing required data
+    /// * Request parsing or validation failures
+    /// * Authentication or authorization failures
     fn prepare_request(
         &self,
         req: Request,
@@ -105,13 +127,23 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     ) -> Result<T, lambda_runtime::Error>;
 
     /// Returns additional HTTP headers for the response based on content.
+    ///
+    /// Allows adding custom headers like `Cache-Control`, `ETag`, or
+    /// `Content-Security-Policy` based on the rendered content.
     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>>;
 
     /// Generates the response content and headers from processed data.
     ///
+    /// Produces the final response content and optional headers from the
+    /// prepared request data. Returns `None` to indicate no response should
+    /// be sent (for handling by other middleware or routes).
+    ///
     /// # Errors
     ///
-    /// * If response generation fails
+    /// Implementations may return errors for:
+    /// * Data fetching or database query failures
+    /// * Business logic validation errors
+    /// * Template rendering failures
     async fn to_response(
         &self,
         data: T,
@@ -119,9 +151,15 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
 
     /// Converts rendered content to the appropriate response body type.
     ///
+    /// Transforms `hyperchad_renderer::Content` into the Lambda response
+    /// `Content` format, allowing customization of how rendered content
+    /// is serialized for HTTP responses.
+    ///
     /// # Errors
     ///
-    /// * If content conversion fails
+    /// Implementations may return errors for:
+    /// * Content serialization or encoding failures
+    /// * Resource loading failures when building the response
     async fn to_body(
         &self,
         content: hyperchad_renderer::Content,
@@ -130,11 +168,18 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
 }
 
 /// Lambda application with configurable response processing.
+///
+/// The main entry point for creating a Lambda-based `HyperChad` application.
+/// Combines a custom `LambdaResponseProcessor` with optional static asset
+/// routing to handle HTTP requests in AWS Lambda environment.
 #[derive(Clone)]
 pub struct LambdaApp<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone> {
     /// The response processor for handling requests.
     pub processor: R,
     /// Static asset routes (requires `assets` feature).
+    ///
+    /// Defines routes that serve embedded static files like CSS, JavaScript,
+    /// or images. Only available when the `assets` feature is enabled.
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
     _phantom: PhantomData<T>,
@@ -142,6 +187,24 @@ pub struct LambdaApp<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Sen
 
 impl<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone> LambdaApp<T, R> {
     /// Creates a new Lambda application with the given response processor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor};
+    /// # use async_trait::async_trait;
+    /// # #[derive(Clone)]
+    /// # struct MyProcessor;
+    /// # #[async_trait]
+    /// # impl LambdaResponseProcessor<String> for MyProcessor {
+    /// #     fn prepare_request(&self, req: lambda_http::Request, body: Option<std::sync::Arc<bytes::Bytes>>) -> Result<String, lambda_runtime::Error> { Ok(String::new()) }
+    /// #     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> { None }
+    /// #     async fn to_response(&self, data: String) -> Result<Option<(hyperchad_renderer_html_lambda::Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> { Ok(None) }
+    /// #     async fn to_body(&self, content: hyperchad_renderer::Content, data: String) -> Result<hyperchad_renderer_html_lambda::Content, lambda_runtime::Error> { Ok(hyperchad_renderer_html_lambda::Content::Html(String::new())) }
+    /// # }
+    /// let processor = MyProcessor;
+    /// let app = LambdaApp::new(processor);
+    /// ```
     #[must_use]
     pub const fn new(to_html: R) -> Self {
         Self {
@@ -167,6 +230,10 @@ impl<
 }
 
 /// Runtime handler for executing the Lambda application.
+///
+/// Wraps a `LambdaApp` with a runtime handle to execute the Lambda event loop.
+/// This type is created automatically when converting a `LambdaApp` to a
+/// `RenderRunner` via the `ToRenderRunner` trait.
 pub struct LambdaAppRunner<
     T: Send + Sync + Clone,
     R: LambdaResponseProcessor<T> + Send + Sync + Clone,
@@ -174,6 +241,8 @@ pub struct LambdaAppRunner<
     /// The Lambda application configuration.
     pub app: LambdaApp<T, R>,
     /// Runtime handle for async execution.
+    ///
+    /// Provides the async runtime context for executing Lambda handlers.
     pub handle: Handle,
 }
 
@@ -182,9 +251,16 @@ impl<
     R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
 > RenderRunner for LambdaAppRunner<T, R>
 {
+    /// Runs the Lambda runtime event loop to handle incoming HTTP requests.
+    ///
     /// # Errors
     ///
-    /// Will error if html fails to run the event loop.
+    /// * If the Lambda runtime fails to start or process events
+    /// * If request preparation fails via `prepare_request`
+    /// * If response generation fails via `to_response`
+    /// * If gzip compression fails during encoding
+    /// * If JSON serialization fails (when using `json` feature)
+    /// * If response building fails
     #[allow(clippy::too_many_lines)]
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting");

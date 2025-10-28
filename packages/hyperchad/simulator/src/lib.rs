@@ -44,8 +44,17 @@ use web_server_simulator::SimulationWebServer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Test utilities for `HyperChad` applications.
+///
+/// This module provides testing infrastructure including test plans and test results.
+/// Only available when the `test-utils` feature is enabled.
 #[cfg(feature = "test-utils")]
 pub use hyperchad_test_utils as test_utils;
+
+/// Web server simulator for testing.
+///
+/// This module provides a simulated web server environment for testing `HyperChad` applications
+/// without requiring actual network operations.
 pub use web_server_simulator as web_server;
 
 /// Errors that can occur during `HyperChad` simulation operations.

@@ -45,8 +45,10 @@ use thiserror::Error;
 /// Error type for database migration operations
 #[derive(Debug, Error)]
 pub enum MigrateError {
+    /// Database connection or query error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Schema migration execution error
     #[error(transparent)]
     Schema(#[from] SwitchyMigrationError),
 }
@@ -151,6 +153,12 @@ pub async fn migrate_config_sqlite(
     Ok(())
 }
 
+/// Run configuration migrations for both `PostgreSQL` and `SQLite` databases
+///
+/// This function attempts to run configuration migrations for both database types
+/// if their respective features are enabled. `PostgreSQL` failures are logged but
+/// don't prevent `SQLite` migrations from running.
+///
 /// # Panics
 ///
 /// * If the db connection fails to establish
@@ -297,6 +305,12 @@ pub async fn migrate_library_sqlite_until(
     Ok(())
 }
 
+/// Run library migrations for both `PostgreSQL` and `SQLite` databases
+///
+/// This function attempts to run all library migrations for both database types
+/// if their respective features are enabled. `PostgreSQL` failures are logged but
+/// don't prevent `SQLite` migrations from running.
+///
 /// # Panics
 ///
 /// * If the db connection fails to establish
@@ -309,6 +323,13 @@ pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), 
     migrate_library_until(db, None).await
 }
 
+/// Run library migrations up to a specific migration for both `PostgreSQL` and `SQLite`
+///
+/// This function attempts to run library migrations up to the specified migration name
+/// for both database types if their respective features are enabled. If `migration_name`
+/// is `None`, all migrations are run. `PostgreSQL` failures are logged but don't prevent
+/// `SQLite` migrations from running.
+///
 /// # Panics
 ///
 /// * If the db connection fails to establish

@@ -154,6 +154,10 @@ impl ProxyHttp for Router {
     ///
     /// Returns an error if:
     /// * The upstream request path contains invalid UTF-8
+    ///
+    /// # Panics
+    ///
+    /// Panics if inserting the `Host` header fails (which should not occur in normal operation).
     async fn upstream_request_filter(
         &self,
         session: &mut Session,

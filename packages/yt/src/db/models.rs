@@ -5,21 +5,37 @@ use moosicbox_json_utils::{
 use serde::{Deserialize, Serialize};
 use switchy_database::{AsId, DatabaseValue, Row};
 
+/// `YouTube` Music API configuration stored in the database.
+///
+/// Contains OAuth tokens and user information for authenticating with `YouTube` Music.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtConfig {
+    /// Database record ID
     pub id: u32,
+    /// `YouTube` Music client ID
     pub client_id: String,
+    /// OAuth access token
     pub access_token: String,
+    /// OAuth refresh token
     pub refresh_token: String,
+    /// Client application name
     pub client_name: String,
+    /// Token expiration time in seconds
     pub expires_in: u32,
+    /// Unix timestamp when the token was issued
     pub issued_at: u64,
+    /// OAuth scope permissions
     pub scope: String,
+    /// Token type (e.g., "Bearer")
     pub token_type: String,
+    /// JSON-encoded user information
     pub user: String,
+    /// `YouTube` Music user ID
     pub user_id: u64,
+    /// Timestamp when the record was created
     pub created: String,
+    /// Timestamp when the record was last updated
     pub updated: String,
 }
 

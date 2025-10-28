@@ -19,10 +19,13 @@ use thiserror::Error;
 
 use super::symphonia_unsync::{PlaybackError, play_media_source};
 
+/// Errors that can occur during signal chain processing.
 #[derive(Debug, Error)]
 pub enum SignalChainError {
+    /// Error from the underlying playback system
     #[error(transparent)]
     Playback(#[from] PlaybackError),
+    /// Signal chain has no processing steps
     #[error("SignalChain is empty")]
     Empty,
 }
@@ -30,6 +33,10 @@ pub enum SignalChainError {
 type CreateAudioDecodeStream = Box<dyn (FnOnce() -> AudioDecodeHandler) + Send + 'static>;
 type CreateAudioEncoder = Box<dyn (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>;
 
+/// A chain of audio processing steps for encoding and decoding.
+///
+/// This allows building a pipeline of audio transformations, such as
+/// decoding from one format and encoding to another.
 pub struct SignalChain {
     steps: Vec<SignalChainStep>,
 }
@@ -145,6 +152,9 @@ impl Default for SignalChain {
     }
 }
 
+/// A single step in a signal processing chain.
+///
+/// Each step can perform audio decoding, encoding, or resampling operations.
 pub struct SignalChainStep {
     hint: Option<Hint>,
     audio_output_handler: Option<CreateAudioDecodeStream>,
@@ -247,6 +257,10 @@ impl Default for SignalChainStep {
     }
 }
 
+/// Processes audio through a signal chain step.
+///
+/// This reads audio buffers, applies transformations (resampling, encoding),
+/// and outputs the processed audio data.
 pub struct SignalChainStepProcessor {
     encoder: Option<Box<dyn AudioEncoder>>,
     resampler: Option<Resampler<f32>>,
@@ -337,10 +351,13 @@ impl MediaSource for SignalChainStepProcessor {
     }
 }
 
+/// Errors that can occur during signal chain step processing.
 #[derive(Debug, Error)]
 pub enum SignalChainProcessorError {
+    /// Error from the underlying playback system
     #[error(transparent)]
     Playback(#[from] PlaybackError),
+    /// Error from audio decoding
     #[error(transparent)]
     AudioDecode(#[from] AudioDecodeError),
 }

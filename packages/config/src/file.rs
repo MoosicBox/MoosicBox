@@ -94,83 +94,114 @@ pub struct ProfileConfig {
     pub player: Option<PlayerConfig>,
 }
 
+/// Server network configuration.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerConfig {
+    /// Server host address
     pub host: Option<String>,
+    /// Server port number
     pub port: Option<u16>,
 }
 
+/// Backup and data retention configuration.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupConfig {
+    /// Whether backups are enabled
     pub enabled: Option<bool>,
+    /// Cron-style schedule string for automated backups
     pub schedule: Option<String>,
+    /// Number of days to retain backup data
     pub retention_days: Option<u32>,
 }
 
+/// Logging configuration.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
+    /// Log level (e.g., "debug", "info", "warn", "error")
     pub level: Option<String>,
+    /// Path to log file
     pub file: Option<String>,
 }
 
+/// Feature flag configuration for enabling or disabling functionality.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureFlags {
+    /// Enable experimental features (unstable or in-development functionality)
     pub experimental: Option<bool>,
 }
 
+/// Credentials for external music streaming services.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceCredentials {
+    /// Tidal service credentials
     pub tidal: Option<TidalCredentials>,
+    /// Qobuz service credentials
     pub qobuz: Option<QobuzCredentials>,
 }
 
+/// Authentication credentials for Tidal streaming service.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalCredentials {
+    /// OAuth access token for API authentication
     pub access_token: String,
+    /// OAuth refresh token for renewing access tokens
     pub refresh_token: Option<String>,
 }
 
+/// Authentication credentials for Qobuz streaming service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzCredentials {
+    /// Qobuz application ID
     pub app_id: String,
+    /// User authentication token
     pub user_auth_token: String,
 }
 
+/// Audio playback behavior configuration.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackConfig {
+    /// Enable gapless playback (seamless transitions between tracks)
     pub gapless: Option<bool>,
+    /// Duration of crossfade between tracks in seconds
     pub crossfade_duration: Option<f32>,
 }
 
+/// Audio quality and format preferences.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioQualityConfig {
+    /// Preferred audio format (e.g., "FLAC", "MP3", "AAC")
     pub preferred_format: Option<String>,
+    /// Bit depth in bits (e.g., 16, 24)
     pub bit_depth: Option<u8>,
+    /// Sample rate in Hz (e.g., 44100, 48000, 96000)
     pub sample_rate: Option<u32>,
 }
 
+/// Audio player configuration.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerConfig {
+    /// Default volume level (0.0 to 1.0)
     pub volume: Option<f32>,
+    /// Audio buffer size in bytes
     pub buffer_size: Option<u32>,
 }
 

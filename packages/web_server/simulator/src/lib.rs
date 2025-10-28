@@ -63,6 +63,7 @@ pub struct SimulatedRequest {
 }
 
 impl SimulatedRequest {
+    /// Creates a new simulated request with the specified HTTP method and path.
     #[must_use]
     pub fn new(method: HttpMethod, path: impl Into<String>) -> Self {
         Self {
@@ -74,24 +75,28 @@ impl SimulatedRequest {
         }
     }
 
+    /// Sets the query string for this request.
     #[must_use]
     pub fn with_query_string(mut self, query: impl Into<String>) -> Self {
         self.query_string = query.into();
         self
     }
 
+    /// Adds a single header to this request.
     #[must_use]
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
+    /// Adds multiple headers to this request.
     #[must_use]
     pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Self {
         self.headers.extend(headers);
         self
     }
 
+    /// Sets the body for this request.
     #[must_use]
     pub fn with_body(mut self, body: impl Into<Bytes>) -> Self {
         self.body = Some(body.into());
@@ -124,6 +129,7 @@ pub struct SimulatedResponse {
 }
 
 impl SimulatedResponse {
+    /// Creates a new simulated response with the specified status code.
     #[must_use]
     pub const fn new(status_code: StatusCode) -> Self {
         Self {
@@ -133,27 +139,32 @@ impl SimulatedResponse {
         }
     }
 
+    /// Creates a new response with 200 OK status.
     #[must_use]
     pub const fn ok() -> Self {
         Self::new(StatusCode::Ok)
     }
 
+    /// Creates a new response with 404 Not Found status.
     #[must_use]
     pub const fn not_found() -> Self {
         Self::new(StatusCode::NotFound)
     }
 
+    /// Creates a new response with 500 Internal Server Error status.
     #[must_use]
     pub const fn internal_server_error() -> Self {
         Self::new(StatusCode::InternalServerError)
     }
 
+    /// Adds a single header to this response.
     #[must_use]
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
+    /// Sets the body for this response.
     #[must_use]
     pub fn with_body(mut self, body: impl Into<Bytes>) -> Self {
         self.body = Some(body.into());
@@ -173,6 +184,7 @@ impl SimulatedResponse {
         Ok(self)
     }
 
+    /// Sets the body as plain text and sets the appropriate content type header.
     #[must_use]
     pub fn with_text_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into().into_bytes().into());
@@ -181,6 +193,7 @@ impl SimulatedResponse {
         self
     }
 
+    /// Sets the body as HTML and sets the appropriate content type header.
     #[must_use]
     pub fn with_html_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into().into_bytes().into());
@@ -243,6 +256,7 @@ impl RouteHandler {
         (self.handler)(request).await
     }
 
+    /// Checks if this handler matches the given HTTP method and path.
     #[must_use]
     pub fn matches(&self, method: &HttpMethod, path: &str) -> bool {
         self.method == *method && self.path_matches(path)
@@ -265,6 +279,7 @@ pub struct SimulationWebServer {
 }
 
 impl SimulationWebServer {
+    /// Creates a new simulation web server.
     #[must_use]
     pub fn new() -> Self {
         Self {

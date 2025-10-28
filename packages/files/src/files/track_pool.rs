@@ -45,30 +45,48 @@ impl From<SendError<TrackBytes>> for TrackPoolError {
     }
 }
 
+/// Errors that can occur in the track pool service.
 #[derive(Debug, Error)]
 pub enum TrackPoolError {
+    /// Error retrieving track bytes
     #[error(transparent)]
     GetTrackBytes(#[from] GetTrackBytesError),
+    /// Failed to send message through channel
     #[error("Failed to send")]
     Send,
 }
 
+/// Commands that can be sent to the track pool service.
 #[derive(AsRefStr)]
 pub enum Command {
+    /// Fetch track bytes from cache or source
     FetchTrackBytes {
+        /// Channel to send the result
         tx: Sender<TrackBytes>,
+        /// Track source location
         source: TrackSource,
+        /// Desired output audio format
         output_format: AudioFormat,
+        /// Optional total size in bytes
         size: Option<u64>,
+        /// Optional start byte offset
         start: Option<u64>,
+        /// Optional end byte offset
         end: Option<u64>,
+        /// Function to fetch track bytes if not cached
         fetch: FetchTrackBytesFunc,
     },
+    /// Start fetching and distributing track bytes to writers
     StartFetchTrackBytes {
+        /// Cache key for the track
         key: String,
+        /// Stream of incoming bytes
         stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
+        /// Optional total size in bytes
         size: Option<u64>,
+        /// Optional start byte offset
         start: Option<u64>,
+        /// Optional end byte offset
         end: Option<u64>,
     },
 }
@@ -79,6 +97,7 @@ impl Display for Command {
     }
 }
 
+/// Service context for managing the track byte pool and caching.
 #[derive(Default)]
 pub struct Context {
     handle: Option<service::Handle>,
@@ -88,6 +107,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Creates a new track pool context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -419,6 +439,10 @@ impl TrackBytesSource {
     }
 }
 
+/// Generates a unique cache key for a track based on its source and output format.
+///
+/// The key includes the source type (local/remote), API source, format, track ID or path,
+/// output format, and any HTTP headers for remote sources.
 #[must_use]
 pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
     match source {

@@ -58,6 +58,7 @@ pub fn bind_services<
         .service(album_artwork_endpoint)
 }
 
+/// `OpenAPI` documentation for file service endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -103,12 +104,16 @@ impl From<TrackInfoError> for actix_web::Error {
     }
 }
 
+/// Query parameters for retrieving track visualization data.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackVisualizationQuery {
+    /// Track ID to visualize
     pub track_id: u64,
+    /// Maximum number of visualization data points to return
     pub max: Option<u16>,
+    /// API source for the track
     pub source: Option<ApiSource>,
 }
 
@@ -163,11 +168,14 @@ impl From<GetSilenceBytesError> for actix_web::Error {
     }
 }
 
+/// Query parameters for generating silent audio.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetSilenceQuery {
+    /// Duration in seconds of silent audio to generate
     pub duration: Option<u64>,
+    /// Audio format for the generated silence
     pub format: Option<AudioFormat>,
 }
 
@@ -253,13 +261,18 @@ impl From<GetTrackBytesError> for actix_web::Error {
     }
 }
 
+/// Query parameters for streaming track audio.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackQuery {
+    /// Track ID to stream
     pub track_id: u64,
+    /// Audio format to return
     pub format: Option<AudioFormat>,
+    /// Audio quality level
     pub quality: Option<TrackAudioQuality>,
+    /// API source for the track
     pub source: Option<ApiSource>,
 }
 
@@ -452,11 +465,14 @@ pub async fn track_endpoint(
     }
 }
 
+/// Query parameters for retrieving track metadata.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackInfoQuery {
+    /// Track ID to query
     pub track_id: Id,
+    /// API source for the track
     pub source: Option<ApiSource>,
 }
 
@@ -497,11 +513,14 @@ pub async fn track_info_endpoint(
     ))
 }
 
+/// Query parameters for retrieving multiple tracks' metadata.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTracksInfoQuery {
+    /// Comma-separated list of track IDs or ranges (e.g., "1,2,3-5")
     pub track_ids: String,
+    /// API source for the tracks
     pub source: Option<ApiSource>,
 }
 
@@ -554,13 +573,18 @@ pub async fn tracks_info_endpoint(
     ))
 }
 
+/// Query parameters for retrieving track streaming URLs.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetTrackUrlQuery {
+    /// Single track ID to get URL for
     pub track_id: Option<String>,
+    /// Comma-separated list of track IDs or ranges (e.g., "1,2,3-5")
     pub track_ids: Option<String>,
+    /// API source for the tracks
     pub source: Option<ApiSource>,
+    /// Audio quality level for the URL
     pub quality: TrackAudioQuality,
 }
 
@@ -649,10 +673,12 @@ impl From<ArtistCoverError> for actix_web::Error {
     }
 }
 
+/// Query parameters for retrieving artist cover artwork.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ArtistCoverQuery {
+    /// API source for the artist
     pub source: Option<ApiSource>,
 }
 
@@ -803,10 +829,12 @@ impl From<AlbumCoverError> for actix_web::Error {
     }
 }
 
+/// Query parameters for retrieving album cover artwork.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AlbumCoverQuery {
+    /// API source for the album
     pub source: Option<ApiSource>,
 }
 
@@ -942,16 +970,22 @@ pub async fn album_artwork_endpoint(
         .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
 
+/// Errors that can occur when resizing images.
 #[derive(Debug, Error)]
 pub enum ResizeImageError {
+    /// Failed to read image file at path
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
+    /// No image processing features enabled (requires `image` or `libvips` feature)
     #[error("No image resize features enabled")]
     NoImageResizeFeaturesEnabled,
+    /// Image file has invalid or missing file extension
     #[error("Invalid image extension")]
     InvalidExtension,
+    /// Tokio task join error
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    /// IO error
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }

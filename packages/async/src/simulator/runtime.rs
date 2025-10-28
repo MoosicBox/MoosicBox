@@ -96,16 +96,23 @@ type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 static TASK_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 
+/// A handle to a simulator runtime that provides task spawning and execution capabilities.
 #[derive(Debug, Clone)]
 pub struct Handle {
     runtime: Arc<Runtime>,
 }
 
 impl Handle {
+    /// Runs a future to completion on the runtime.
+    ///
+    /// This blocks the current thread until the future completes.
     pub fn block_on<F: Future>(&self, f: F) -> F::Output {
         self.runtime.block_on(f)
     }
 
+    /// Spawns a future onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn<T: Send + 'static>(
         &self,
         future: impl Future<Output = T> + Send + 'static,
@@ -113,7 +120,9 @@ impl Handle {
         self.runtime.spawn(future)
     }
 
-    /// Spawn a named future onto the runtime
+    /// Spawns a named future onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_with_name<T: Send + 'static>(
         &self,
         name: &str,
@@ -133,6 +142,9 @@ impl Handle {
         }
     }
 
+    /// Spawns a blocking task onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the task's result.
     pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -141,7 +153,9 @@ impl Handle {
         self.runtime.spawn_blocking(func)
     }
 
-    /// Spawn a named blocking task onto the runtime
+    /// Spawns a named blocking task onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_blocking_with_name<F, R>(&self, name: &str, func: F) -> JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -161,6 +175,10 @@ impl Handle {
         }
     }
 
+    /// Spawns a non-Send future onto the runtime.
+    ///
+    /// This allows spawning futures that are not `Send`, which must run on the current thread.
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn_local<T: 'static>(
         &self,
         future: impl Future<Output = T> + 'static,
@@ -168,7 +186,9 @@ impl Handle {
         self.runtime.spawn_local(future)
     }
 
-    /// Spawn a named local future onto the runtime
+    /// Spawns a named non-Send future onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_local_with_name<T: 'static>(
         &self,
         name: &str,
@@ -188,6 +208,8 @@ impl Handle {
         }
     }
 
+    /// Returns a handle to the currently running runtime.
+    ///
     /// # Panics
     ///
     /// * If no runtime is currently running
@@ -201,6 +223,11 @@ scoped_thread_local! {
     static RUNTIME: Runtime
 }
 
+/// A simulator-based async runtime.
+///
+/// This provides a deterministic simulator runtime for testing async code with controlled
+/// time advancement and reproducible behavior. Tasks are executed in a simulated environment
+/// where time only advances when explicitly controlled.
 #[derive(Debug, Clone)]
 pub struct Runtime {
     id: u64,
@@ -400,6 +427,10 @@ impl Runtime {
     }
 }
 
+/// A handle to a spawned task that can be awaited for its result.
+///
+/// This handle allows you to wait for a task to complete and retrieve its output.
+/// Dropping the handle will not cancel the task.
 pub struct JoinHandle<T> {
     rx: futures::channel::oneshot::Receiver<T>,
     #[allow(clippy::option_option)]
@@ -410,6 +441,9 @@ pub struct JoinHandle<T> {
 }
 
 impl<T: Send + Unpin> JoinHandle<T> {
+    /// Checks if the task has completed.
+    ///
+    /// Returns `true` if the task has finished executing, `false` otherwise.
     pub fn is_finished(&mut self) -> bool {
         if self.finished {
             return true;
@@ -550,14 +584,36 @@ impl Spawner {
     }
 }
 
+/// Spawns a future onto the current runtime.
+///
+/// Returns a `JoinHandle` that can be awaited to get the future's result.
+///
+/// # Panics
+///
+/// * If no runtime is currently running
 pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> JoinHandle<T> {
     RUNTIME.with(|runtime| runtime.spawn(future))
 }
 
+/// Spawns a non-Send future onto the current runtime.
+///
+/// This allows spawning futures that are not `Send`, which must run on the current thread.
+/// Returns a `JoinHandle` that can be awaited to get the future's result.
+///
+/// # Panics
+///
+/// * If no runtime is currently running
 pub fn spawn_local<T: 'static>(future: impl Future<Output = T> + 'static) -> JoinHandle<T> {
     RUNTIME.with(|runtime| runtime.spawn_local(future))
 }
 
+/// Spawns a blocking task onto the current runtime.
+///
+/// Returns a `JoinHandle` that can be awaited to get the task's result.
+///
+/// # Panics
+///
+/// * If no runtime is currently running
 pub fn spawn_blocking<F, R>(func: F) -> JoinHandle<R>
 where
     F: FnOnce() -> R + Send + 'static,
@@ -566,13 +622,26 @@ where
     RUNTIME.with(|runtime| runtime.spawn_blocking(func))
 }
 
+/// Runs a future to completion on the current runtime.
+///
+/// This blocks the current thread until the future completes.
+///
+/// # Panics
+///
+/// * If no runtime is currently running
 pub fn block_on<F: Future>(future: F) -> F::Output {
     RUNTIME.with(|runtime| runtime.block_on(future))
 }
 
+/// Waits for the current runtime to finish all pending tasks.
+///
 /// # Errors
 ///
 /// * If the thread fails to join
+///
+/// # Panics
+///
+/// * If no runtime is currently running
 pub fn wait() -> Result<(), Error> {
     RUNTIME.with(|runtime| runtime.clone().wait())
 }

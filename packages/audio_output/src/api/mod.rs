@@ -1,3 +1,8 @@
+//! HTTP API endpoints for managing audio outputs.
+//!
+//! This module provides REST API endpoints for querying available audio output devices
+//! and their configurations. The API is built on Actix-web and includes `OpenAPI` documentation.
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{
@@ -13,6 +18,9 @@ use crate::api::models::ApiAudioOutput;
 
 pub mod models;
 
+/// Binds audio output API endpoints to an Actix-web scope.
+///
+/// This function registers all audio output-related HTTP endpoints with the provided scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -22,6 +30,7 @@ pub fn bind_services<
 }
 
 #[cfg(feature = "openapi")]
+/// `OpenAPI` documentation for the audio output API.
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags((name = "Audio Output")),
@@ -30,10 +39,13 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for retrieving audio outputs.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAudioOutputs {
+    /// Page offset for pagination
     offset: Option<u32>,
+    /// Maximum number of items to return
     limit: Option<u32>,
 }
 
@@ -58,6 +70,13 @@ pub struct GetAudioOutputs {
     )
 )]
 #[route("/audio-outputs", method = "GET")]
+/// HTTP endpoint for retrieving available audio outputs.
+///
+/// Returns a paginated list of available audio output devices.
+///
+/// # Errors
+///
+/// * If pagination parameters are invalid
 pub async fn audio_outputs_endpoint(
     query: web::Query<GetAudioOutputs>,
 ) -> Result<Json<Page<ApiAudioOutput>>> {

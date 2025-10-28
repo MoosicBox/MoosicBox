@@ -30,17 +30,29 @@ struct ProgressUpdate {
     playback_target: moosicbox_session::models::PlaybackTarget,
 }
 
+/// Local audio player implementation using Symphonia decoder.
+///
+/// This player handles local audio playback with support for various formats,
+/// volume control, seeking, and pause/resume functionality. It manages audio
+/// output through the `AudioOutputFactory` and coordinates playback state
+/// across threads using shared atomics and channels.
 #[derive(Clone)]
 pub struct LocalPlayer {
+    /// Unique identifier for this player instance
     pub id: u64,
     playback_type: PlaybackType,
     source: PlayerSource,
+    /// Audio output factory for creating audio streams
     pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
 
+    /// Current playback session state
     pub playback: Arc<RwLock<Option<Playback>>>,
+    /// Playback handler for this player
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
-    pub shared_volume: Arc<AtomicF64>, // Shared volume for immediate audio output updates
-    pub audio_handle: Arc<RwLock<Option<AudioHandle>>>, // Handle for immediate audio control
+    /// Shared volume for immediate audio output updates
+    pub shared_volume: Arc<AtomicF64>,
+    /// Handle for immediate audio control
+    pub audio_handle: Arc<RwLock<Option<AudioHandle>>>,
     session_command_forwarder:
         Arc<RwLock<Option<flume::Sender<moosicbox_audio_output::CommandMessage>>>>,
     session_coordinator_handle: Arc<RwLock<Option<switchy_async::task::JoinHandle<()>>>>,
@@ -333,6 +345,8 @@ impl Player for LocalPlayer {
 }
 
 impl LocalPlayer {
+    /// Creates a new local player instance.
+    ///
     /// # Errors
     ///
     /// * If failed to generate a `LocalPlayer` `id`
@@ -364,6 +378,7 @@ impl LocalPlayer {
         })
     }
 
+    /// Sets the audio output factory for this player.
     #[must_use]
     pub fn with_output(mut self, output: AudioOutputFactory) -> Self {
         self.output.replace(Arc::new(Mutex::new(output)));

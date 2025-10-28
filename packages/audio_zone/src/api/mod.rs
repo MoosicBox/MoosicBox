@@ -59,10 +59,13 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for listing audio zones.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAudioZones {
+    /// The number of items to skip (for pagination).
     offset: Option<u32>,
+    /// The maximum number of items to return (for pagination).
     limit: Option<u32>,
 }
 
@@ -111,10 +114,13 @@ pub async fn audio_zones_endpoint(
     }))
 }
 
+/// Query parameters for listing audio zones with their sessions.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAudioZoneWithSessions {
+    /// The number of items to skip (for pagination).
     offset: Option<u32>,
+    /// The maximum number of items to return (for pagination).
     limit: Option<u32>,
 }
 
@@ -166,9 +172,11 @@ pub async fn audio_zone_with_sessions_endpoint(
     }))
 }
 
+/// Query parameters for creating a new audio zone.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAudioZoneQuery {
+    /// The name of the audio zone to create.
     pub name: String,
 }
 
@@ -207,9 +215,11 @@ pub async fn create_audio_zone_endpoint(
     Ok(Json(zone))
 }
 
+/// Query parameters for deleting an audio zone.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteAudioZoneQuery {
+    /// The ID of the audio zone to delete.
     pub id: u64,
 }
 
@@ -246,6 +256,9 @@ pub async fn delete_audio_zone_endpoint(
     Ok(Json(zone))
 }
 
+/// Query parameters for updating an audio zone.
+///
+/// The actual update data is provided in the request body.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAudioZoneQuery {}

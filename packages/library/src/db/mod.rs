@@ -76,12 +76,16 @@ pub async fn delete_library_config(
     Ok(())
 }
 
+/// Errors that can occur when retrieving library configuration.
 #[derive(Debug, Error)]
 pub enum LibraryConfigError {
+    /// Database operation failed.
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to parse configuration data.
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
+    /// No library configurations are available.
     #[error("No configs available")]
     NoConfigsAvailable,
 }

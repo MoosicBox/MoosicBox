@@ -61,9 +61,14 @@ use opentelemetry::KeyValue;
 use opentelemetry_otlp::ExporterBuildError;
 use opentelemetry_sdk::Resource;
 
+/// Initializes an OpenTelemetry tracer layer for the given service.
+///
+/// In simulator mode, returns a no-op layer. Otherwise, creates a tracer that exports
+/// spans to an OTLP endpoint via gRPC.
+///
 /// # Errors
 ///
-/// * If the otlp fails to build
+/// * If the OTLP exporter fails to build
 pub fn init_tracer(#[allow(unused)] name: &'static str) -> Result<DynLayer, ExporterBuildError> {
     #[cfg(feature = "simulator")]
     {

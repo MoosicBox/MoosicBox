@@ -7,13 +7,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use switchy::database::Row;
 
+/// Qobuz app secret for a specific timezone, used for signing API requests.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAppSecret {
+    /// Database record identifier.
     pub id: u32,
+    /// Timezone identifier (e.g., "berlin", "london").
     pub timezone: String,
+    /// Secret key for request signing.
     pub secret: String,
+    /// Timestamp when the record was created.
     pub created: String,
+    /// Timestamp when the record was last updated.
     pub updated: String,
 }
 
@@ -41,13 +47,19 @@ impl ToValueType<QobuzAppSecret> for &Value {
     }
 }
 
+/// Qobuz application configuration extracted from the web bundle.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAppConfig {
+    /// Database record identifier.
     pub id: u32,
+    /// Version of the Qobuz web bundle (e.g., "7.1.3-b011").
     pub bundle_version: String,
+    /// Application ID for API requests.
     pub app_id: String,
+    /// Timestamp when the record was created.
     pub created: String,
+    /// Timestamp when the record was last updated.
     pub updated: String,
 }
 
@@ -75,15 +87,23 @@ impl ToValueType<QobuzAppConfig> for &Value {
     }
 }
 
+/// User authentication configuration for Qobuz.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzConfig {
+    /// Database record identifier.
     pub id: u32,
+    /// User access token for authenticated API requests.
     pub access_token: String,
+    /// Unique user identifier.
     pub user_id: u64,
+    /// User's email address.
     pub user_email: String,
+    /// User's public identifier.
     pub user_public_id: String,
+    /// Timestamp when the record was created.
     pub created: String,
+    /// Timestamp when the record was last updated.
     pub updated: String,
 }
 

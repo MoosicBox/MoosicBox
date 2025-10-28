@@ -1,3 +1,8 @@
+//! Data structures and database update operations for scan results.
+//!
+//! This module provides types for accumulating scanned music metadata
+//! (artists, albums, tracks) and writing them to the database in batch operations.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
@@ -101,6 +106,7 @@ pub struct ScanTrack {
 }
 
 impl ScanTrack {
+    /// Creates a new scanned track with the specified metadata.
     #[allow(unused, clippy::too_many_arguments, clippy::ref_option_ref)]
     #[must_use]
     pub fn new(
@@ -137,6 +143,9 @@ impl ScanTrack {
         }
     }
 
+    /// Converts this track to `SQLite` values for the `api_sources` table.
+    ///
+    /// Returns `None` for library sources that don't need API source mapping.
     #[must_use]
     pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
         if self.api_source.is_library() {
@@ -168,6 +177,7 @@ pub struct ScanAlbum {
 }
 
 impl ScanAlbum {
+    /// Creates a new scanned album with the specified metadata.
     #[allow(unused, clippy::ref_option_ref)]
     #[must_use]
     pub fn new(
@@ -191,6 +201,7 @@ impl ScanAlbum {
         }
     }
 
+    /// Adds a track to this album or returns an existing track with the same path/number.
     #[allow(unused, clippy::too_many_arguments, clippy::ref_option_ref)]
     #[must_use]
     pub async fn add_track(
@@ -296,6 +307,8 @@ impl ScanAlbum {
         Ok(self.cover.clone())
     }
 
+    /// Converts this album to `SQLite` values for the `albums` table.
+    ///
     /// # Panics
     ///
     /// * If failed to convert `artist_id` to a `i64`
@@ -316,6 +329,9 @@ impl ScanAlbum {
         ]
     }
 
+    /// Converts this album to `SQLite` values for the `api_sources` table.
+    ///
+    /// Returns `None` for library sources that don't need API source mapping.
     #[must_use]
     pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
         if self.api_source.is_library() {
@@ -344,6 +360,7 @@ pub struct ScanArtist {
 }
 
 impl ScanArtist {
+    /// Creates a new scanned artist with the specified metadata.
     #[allow(unused, clippy::ref_option_ref)]
     #[must_use]
     pub fn new(name: &str, id: &Option<&Id>, api_source: ApiSource) -> Self {
@@ -357,6 +374,7 @@ impl ScanArtist {
         }
     }
 
+    /// Adds an album to this artist or returns an existing album with the same name.
     #[allow(unused, clippy::ref_option_ref)]
     pub async fn add_album(
         &mut self,
@@ -436,6 +454,7 @@ impl ScanArtist {
         Ok(self.cover.clone())
     }
 
+    /// Converts this artist to `SQLite` values for the `artists` table.
     #[must_use]
     pub fn to_sqlite_values<'a>(self) -> Vec<(&'a str, DatabaseValue)> {
         vec![
@@ -444,6 +463,9 @@ impl ScanArtist {
         ]
     }
 
+    /// Converts this artist to `SQLite` values for the `api_sources` table.
+    ///
+    /// Returns `None` for library sources that don't need API source mapping.
     #[must_use]
     pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
         if self.api_source.is_library() {
@@ -461,9 +483,14 @@ impl ScanArtist {
 }
 
 /// Results from updating the database with scanned items.
+///
+/// Contains only the newly added items (items not previously in the database).
 pub struct UpdateDatabaseResults {
+    /// Newly added artists.
     pub artists: Vec<LibraryArtist>,
+    /// Newly added albums.
     pub albums: Vec<LibraryAlbum>,
+    /// Newly added tracks.
     pub tracks: Vec<LibraryTrack>,
 }
 
@@ -498,6 +525,7 @@ pub struct ScanOutput {
 }
 
 impl ScanOutput {
+    /// Creates a new empty scan output accumulator.
     #[allow(unused)]
     #[must_use]
     pub fn new() -> Self {
@@ -507,6 +535,7 @@ impl ScanOutput {
         }
     }
 
+    /// Adds an artist to the scan output or returns an existing artist with the same name.
     #[allow(unused, clippy::ref_option_ref)]
     pub async fn add_artist(
         &mut self,

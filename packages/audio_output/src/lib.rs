@@ -78,8 +78,11 @@ pub mod progress_tracker;
 /// This struct handles audio resampling when the decoded sample rate doesn't match the output
 /// specification, and delegates the actual writing to an `AudioWrite` implementation.
 pub struct AudioOutput {
+    /// Unique identifier for this audio output
     pub id: String,
+    /// Human-readable name for this audio output
     pub name: String,
+    /// Audio signal specification (sample rate, channels, etc.)
     pub spec: SignalSpec,
     resampler: Option<Resampler<f32>>,
     writer: Box<dyn AudioWrite>,
@@ -225,6 +228,11 @@ impl AudioDecode for AudioOutput {
 }
 
 type InnerType = Box<dyn AudioWrite>;
+
+/// Function type for creating audio writer instances on demand.
+///
+/// This function type is used by [`AudioOutputFactory`] to defer the creation
+/// of audio writers until they are actually needed.
 pub type GetWriter = Box<dyn Fn() -> Result<InnerType, AudioOutputError> + Send>;
 
 /// A factory for creating `AudioOutput` instances.
@@ -233,8 +241,11 @@ pub type GetWriter = Box<dyn Fn() -> Result<InnerType, AudioOutputError> + Send>
 /// until the output is actually needed, which is useful for managing audio device resources.
 #[derive(Clone)]
 pub struct AudioOutputFactory {
+    /// Unique identifier for this audio output factory
     pub id: String,
+    /// Human-readable name for this audio output
     pub name: String,
+    /// Audio signal specification (sample rate, channels, etc.)
     pub spec: SignalSpec,
     get_writer: Arc<std::sync::Mutex<GetWriter>>,
 }
@@ -436,24 +447,34 @@ impl From<Box<dyn AudioWrite>> for Box<dyn AudioDecode> {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum AudioOutputError {
+    /// No audio output devices are available
     #[error("No audio outputs")]
     NoOutputs,
+    /// The requested audio output configuration is not supported
     #[error("Unsupported output configuration")]
     UnsupportedOutputConfiguration,
+    /// The requested number of audio channels is not supported
     #[error("Unsupported channels: {0}")]
     UnsupportedChannels(usize),
+    /// Failed to open the audio output stream
     #[error("OpenStreamError")]
     OpenStream,
+    /// Failed to start playing the audio stream
     #[error("PlayStreamError")]
     PlayStream,
+    /// The audio stream was closed unexpectedly
     #[error("StreamClosedError")]
     StreamClosed,
+    /// The audio stream reached its end
     #[error("StreamEndError")]
     StreamEnd,
+    /// Audio playback was interrupted
     #[error("InterruptError")]
     Interrupt,
+    /// An I/O error occurred
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Failed to query supported stream configurations (CPAL-specific)
     #[cfg(feature = "cpal")]
     #[error(transparent)]
     SupportedStreamConfigs(#[from] ::cpal::SupportedStreamConfigsError),
@@ -516,7 +537,9 @@ pub async fn default_output() -> Result<AudioOutput, AudioOutputScannerError> {
 
 /// Scans and manages available audio output devices.
 pub struct AudioOutputScanner {
+    /// All available audio output factories
     pub outputs: Vec<AudioOutputFactory>,
+    /// The default audio output factory, if available
     pub default_output: Option<AudioOutputFactory>,
 }
 
@@ -525,15 +548,21 @@ pub struct AudioOutputScanner {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum AudioOutputScannerError {
+    /// No audio output devices were found during scanning
     #[error("No outputs available")]
     NoOutputs,
+    /// An error occurred while working with an audio output
     #[error(transparent)]
     AudioOutput(#[from] AudioOutputError),
+    /// A spawned task failed to join
     #[error(transparent)]
     Join(#[from] JoinError),
 }
 
 impl AudioOutputScanner {
+    /// Creates a new `AudioOutputScanner` with no outputs.
+    ///
+    /// Call [`scan()`](Self::scan) to populate the list of available outputs.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -623,6 +652,7 @@ impl AudioOutputScanner {
         Ok(())
     }
 
+    /// Returns a reference to the default audio output factory, if available.
     #[must_use]
     pub const fn default_output_factory(&self) -> Option<&AudioOutputFactory> {
         self.default_output.as_ref()

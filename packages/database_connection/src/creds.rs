@@ -51,6 +51,13 @@ pub enum GetDbCredsError {
     MissingSsmParameter(&'static str),
 }
 
+/// Retrieves database credentials from environment variables or AWS SSM.
+///
+/// Attempts to retrieve credentials in the following order:
+/// 1. `DATABASE_URL` environment variable (parsed as connection string)
+/// 2. Individual environment variables (`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+/// 3. AWS Systems Manager Parameter Store (requires AWS credentials)
+///
 /// # Errors
 ///
 /// * If invalid connection options were given

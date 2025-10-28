@@ -64,6 +64,7 @@ use tokio_tungstenite::{
 /// Error type for sending bytes over a websocket connection.
 #[derive(Debug, Error)]
 pub enum SendBytesError {
+    /// An unknown error occurred during the send operation.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -71,6 +72,7 @@ pub enum SendBytesError {
 /// Error type for sending messages over a websocket connection.
 #[derive(Debug, Error)]
 pub enum SendMessageError {
+    /// An unknown error occurred during the send operation.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -78,6 +80,7 @@ pub enum SendMessageError {
 /// Error type for websocket connection failures.
 #[derive(Debug, Error)]
 pub enum ConnectWsError {
+    /// The websocket connection was rejected with an HTTP 401 Unauthorized response.
     #[error("Unauthorized")]
     Unauthorized,
 }
@@ -95,6 +98,7 @@ pub enum WsMessage {
 /// Error type for websocket send operations.
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
+    /// An unknown error occurred during the send operation.
     #[error("Unknown: {0}")]
     Unknown(String),
 }
@@ -126,6 +130,7 @@ impl core::fmt::Debug for dyn WebsocketSender {
 /// Error type for closing websocket connections.
 #[derive(Debug, Error)]
 pub enum CloseError {
+    /// An unknown error occurred during the close operation.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -146,6 +151,9 @@ impl WsHandle {
 
 #[async_trait]
 impl WebsocketSender for WsHandle {
+    /// # Panics
+    ///
+    /// * Panics if the internal `RwLock` is poisoned
     async fn send(&self, data: &str) -> Result<(), WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
@@ -155,6 +163,9 @@ impl WebsocketSender for WsHandle {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * Panics if the internal `RwLock` is poisoned
     async fn ping(&self) -> Result<(), WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender

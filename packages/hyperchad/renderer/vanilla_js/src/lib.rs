@@ -1014,9 +1014,14 @@ pub struct VanillaJsRenderer {}
 
 #[async_trait]
 impl ExtendHtmlRenderer for VanillaJsRenderer {
+    /// Emits a custom event through the renderer's event publisher.
+    ///
+    /// Publishes a [`RendererEvent::Event`] with the specified event name and optional value
+    /// to all subscribed listeners via server-sent events or other transport mechanisms.
+    ///
     /// # Errors
     ///
-    /// Will error if `VanillaJsRenderer` fails to emit the event.
+    /// Returns an error if publishing the event fails (e.g., channel closed or disconnected).
     async fn emit_event(
         &self,
         publisher: HtmlRendererEventPub,
@@ -1034,9 +1039,14 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         Ok(())
     }
 
+    /// Renders and publishes a view update through the renderer's event publisher.
+    ///
+    /// Converts the provided [`View`] into a [`RendererEvent::View`] and publishes it to all
+    /// subscribed clients, enabling dynamic UI updates without full page reloads.
+    ///
     /// # Errors
     ///
-    /// Will error if `VanillaJsRenderer` fails to render the view.
+    /// Returns an error if publishing the view fails (e.g., channel closed or disconnected).
     async fn render(
         &self,
         publisher: HtmlRendererEventPub,
@@ -1050,9 +1060,14 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         Ok(())
     }
 
+    /// Renders and publishes a canvas update through the renderer's event publisher.
+    ///
+    /// Converts the provided [`canvas::CanvasUpdate`] into a [`RendererEvent::CanvasUpdate`]
+    /// and publishes it to subscribed clients, enabling real-time canvas rendering updates.
+    ///
     /// # Errors
     ///
-    /// Will error if `VanillaJsRenderer` fails to render the canvas update.
+    /// Returns an error if publishing the canvas update fails (e.g., channel closed or disconnected).
     async fn render_canvas(
         &self,
         publisher: HtmlRendererEventPub,

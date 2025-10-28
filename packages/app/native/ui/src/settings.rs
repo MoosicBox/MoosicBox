@@ -187,13 +187,19 @@ pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
     }
 }
 
+/// Authentication state for music API services.
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AuthState {
+    /// Initial state before authentication starts.
     #[default]
     Initial,
+    /// Currently polling for authentication completion.
     Polling,
 }
 
+/// Renders the music API settings section content.
+///
+/// Displays authentication forms, scan controls, and status information for a music API.
 #[must_use]
 pub fn music_api_settings_content(
     settings: &MusicApiSettings,
@@ -289,6 +295,9 @@ pub fn music_api_settings_content(
     }
 }
 
+/// Renders a scan error message container.
+///
+/// Displays an error message if provided, or an empty container for dynamic updates.
 #[must_use]
 pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
@@ -301,6 +310,9 @@ pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Contai
     }
 }
 
+/// Renders an authentication error message container.
+///
+/// Displays an error message if provided, or an empty container for dynamic updates.
 #[must_use]
 pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
@@ -313,6 +325,9 @@ pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Contai
     }
 }
 
+/// Renders the connections list with edit and delete controls.
+///
+/// Displays all configured server connections with forms to modify or remove them.
 #[must_use]
 pub fn connections_content(
     connections: &[Connection],
@@ -384,10 +399,13 @@ pub fn connections_content(
     }
 }
 
+/// Connection form input field types.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, EnumString, AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ConnectionInput {
+    /// Connection name field.
     Name,
+    /// API URL field.
     ApiUrl,
 }
 
@@ -411,6 +429,7 @@ fn connection_input(
     }
 }
 
+/// Renders the complete settings page within the application layout.
 #[must_use]
 pub fn settings(
     state: &State,

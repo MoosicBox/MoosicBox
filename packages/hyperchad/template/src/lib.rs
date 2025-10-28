@@ -129,10 +129,10 @@ pub mod prelude {
 /// The `container!` macro expands to an expression of this type.
 pub type Containers = Vec<Container>;
 
-/// Extension methods for Vec<Container> that are automatically available.
+/// Extension methods for `Vec<Container>` that are automatically available.
 ///
 /// This trait is automatically implemented and in scope, so you can call
-/// these methods on any Vec<Container> without importing anything.
+/// these methods on any `Vec<Container>` without importing anything.
 pub trait ContainerVecMethods {
     /// # Errors
     ///
@@ -188,7 +188,7 @@ impl ContainerVecMethods for Vec<Container> {
     }
 }
 
-/// Convert a Vec<Container> to an HTML string without requiring trait imports.
+/// Convert a `Vec<Container>` to an HTML string without requiring trait imports.
 ///
 /// This is a convenience function that works with the result of the `container!` macro.
 ///
@@ -209,7 +209,7 @@ pub fn to_html(containers: &[Container]) -> String {
         .collect::<String>()
 }
 
-/// Convert a Vec<Container> to an HTML string, consuming the vector.
+/// Convert a `Vec<Container>` to an HTML string, consuming the vector.
 ///
 /// This is a convenience function that works with the result of the `container!` macro.
 ///
@@ -230,7 +230,7 @@ pub fn into_html(containers: &[Container]) -> String {
         .collect::<String>()
 }
 
-/// Extension trait to add missing methods to Vec<Container>
+/// Extension trait to add missing methods to `Vec<Container>`
 pub trait ContainerVecExt {
     /// # Errors
     ///
@@ -537,7 +537,7 @@ impl RenderContainer for Vec<Container> {
     }
 }
 
-/// A wrapper around Vec<Container> that provides convenient methods without requiring trait imports.
+/// A wrapper around `Vec<Container>` that provides convenient methods without requiring trait imports.
 ///
 /// This is what the `container!` macro returns, providing `to_string()` and other
 /// methods without needing to import `ContainerVecExt`.
@@ -570,13 +570,13 @@ impl ContainerList {
         self.0.iter()
     }
 
-    /// Get the inner Vec<Container>
+    /// Get the inner `Vec<Container>`
     #[must_use]
     pub fn into_inner(self) -> Vec<Container> {
         self.0
     }
 
-    /// Get a reference to the inner Vec<Container>
+    /// Get a reference to the inner `Vec<Container>`
     #[must_use]
     pub const fn as_inner(&self) -> &Vec<Container> {
         &self.0
@@ -1536,12 +1536,16 @@ pub mod color_functions {
 
     /// Helper type for alpha values that can be converted from various numeric types
     pub enum AlphaValue {
-        Float(f32),      // 0.0 - 1.0
-        Integer(u8),     // 0 - 255
-        Percentage(f32), // 0% - 100%
+        /// Float value in the range 0.0 - 1.0 representing opacity
+        Float(f32),
+        /// Integer value in the range 0 - 255 representing opacity
+        Integer(u8),
+        /// Percentage value in the range 0% - 100% representing opacity
+        Percentage(f32),
     }
 
     impl AlphaValue {
+        /// Convert the alpha value to a u8 in the range 0-255
         #[must_use]
         pub fn to_u8(self) -> u8 {
             match self {
@@ -1652,8 +1656,9 @@ pub mod color_functions {
         }
     }
 
-    // Helper trait for converting RGB values from various numeric types to u8
+    /// Helper trait for converting RGB values from various numeric types to u8
     pub trait ToRgbValue {
+        /// Convert the value to an RGB component in the range 0-255
         fn to_rgb_value(self) -> u8;
     }
 

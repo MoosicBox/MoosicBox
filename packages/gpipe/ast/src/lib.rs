@@ -9,7 +9,10 @@
 //! that can be parsed from various CI/CD formats and executed locally or translated to
 //! different backend formats.
 
-// Re-export for convenience
+/// Re-exported [`serde_yaml`] crate for convenience when working with YAML workflow files.
+///
+/// This allows users to serialize and deserialize workflow definitions without adding
+/// `serde_yaml` as a separate dependency.
 pub use serde_yaml;
 
 mod expression;

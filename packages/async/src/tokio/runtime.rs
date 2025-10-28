@@ -9,6 +9,10 @@ use crate::{Error, GenericRuntime};
 
 pub use crate::Builder;
 
+/// A handle to a tokio runtime that provides task spawning and execution capabilities.
+///
+/// This wrapper around tokio's Handle maintains a weak reference to the parent runtime
+/// to enable proper I/O and timer driver access, particularly for signal handling.
 #[derive(Debug, Clone)]
 pub struct Handle {
     inner: tokio::runtime::Handle,
@@ -145,6 +149,10 @@ impl Handle {
     }
 }
 
+/// A tokio-based async runtime.
+///
+/// This provides a wrapper around tokio's Runtime with additional utilities for task spawning,
+/// blocking execution, and graceful shutdown.
 #[derive(Debug)]
 pub struct Runtime {
     inner: Arc<tokio::runtime::Runtime>,
@@ -157,6 +165,8 @@ impl Default for Runtime {
 }
 
 impl Runtime {
+    /// Creates a new runtime with default settings.
+    ///
     /// # Panics
     ///
     /// * If `build_runtime` fails
@@ -165,6 +175,9 @@ impl Runtime {
         build_runtime(&Builder::new()).unwrap()
     }
 
+    /// Spawns a future onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn<T: Send + 'static>(
         &self,
         future: impl std::future::Future<Output = T> + Send + 'static,
@@ -172,7 +185,9 @@ impl Runtime {
         self.inner.spawn(future)
     }
 
-    /// Spawn a named future onto the runtime
+    /// Spawns a named future onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_with_name<T: Send + 'static>(
         &self,
         name: &str,
@@ -181,7 +196,9 @@ impl Runtime {
         self.handle().spawn_with_name(name, future)
     }
 
-    /// Spawn a blocking task onto the runtime
+    /// Spawns a blocking task onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the task's result.
     pub fn spawn_blocking<T: Send + 'static>(
         &self,
         f: impl FnOnce() -> T + Send + 'static,
@@ -189,7 +206,9 @@ impl Runtime {
         self.inner.spawn_blocking(f)
     }
 
-    /// Spawn a named blocking task onto the runtime
+    /// Spawns a named blocking task onto the runtime.
+    ///
+    /// The name is used for logging when trace-level logging is enabled.
     pub fn spawn_blocking_with_name<T: Send + 'static>(
         &self,
         name: &str,
@@ -198,6 +217,7 @@ impl Runtime {
         self.handle().spawn_blocking_with_name(name, f)
     }
 
+    /// Returns a handle to this runtime.
     #[must_use]
     pub fn handle(&self) -> Handle {
         Handle::new(&self.inner)

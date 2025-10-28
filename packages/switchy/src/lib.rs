@@ -262,22 +262,67 @@ pub mod unsync_macros {
     ))]
     pub use switchy_async_macros::test_internal;
 }
+
+/// Database abstraction layer.
+///
+/// Provides runtime-agnostic database operations that work with different backends.
+/// Enable the `database` feature to use this module.
 #[cfg(feature = "database")]
 pub use switchy_database as database;
+
+/// Database connection management.
+///
+/// Provides connection pooling and management utilities for database operations.
+/// Enable the `database-connection` feature to use this module.
 #[cfg(feature = "database-connection")]
 pub use switchy_database_connection as database_connection;
+
+/// Filesystem abstraction layer.
+///
+/// Provides runtime-agnostic filesystem operations for reading and writing files.
+/// Enable the `fs` feature to use this module.
 #[cfg(feature = "fs")]
 pub use switchy_fs as fs;
+
+/// `mDNS` service discovery.
+///
+/// Provides multicast DNS service discovery and announcement capabilities.
+/// Enable the `mdns` feature to use this module.
 #[cfg(feature = "mdns")]
 pub use switchy_mdns as mdns;
+
+/// Random number generation.
+///
+/// Provides runtime-agnostic random number generation utilities.
+/// Enable the `random` feature to use this module.
 #[cfg(feature = "random")]
 pub use switchy_random as random;
+
+/// TCP networking abstraction.
+///
+/// Provides runtime-agnostic TCP client and server implementations.
+/// Enable the `tcp` feature to use this module.
 #[cfg(feature = "tcp")]
 pub use switchy_tcp as tcp;
+
+/// Telemetry and observability.
+///
+/// Provides tracing, metrics, and logging infrastructure for observability.
+/// Enable the `telemetry` feature to use this module.
 #[cfg(feature = "telemetry")]
 pub use switchy_telemetry as telemetry;
+
+/// Time and timing abstractions.
+///
+/// Provides runtime-agnostic time operations including delays, timeouts, and intervals.
+/// Enable the `time` feature to use this module.
 #[cfg(feature = "time")]
 pub use switchy_time as time;
+
+/// `UPnP` port mapping and discovery.
+///
+/// Provides Universal Plug and Play functionality for port mapping and device discovery.
+/// Enable the `upnp` feature to use this module.
 #[cfg(feature = "upnp")]
 pub use switchy_upnp as upnp;
 

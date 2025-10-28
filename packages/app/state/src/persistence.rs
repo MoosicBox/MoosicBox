@@ -6,13 +6,22 @@ use strum::{AsRefStr, EnumString};
 
 use crate::{AppState, AppStateError, UpdateAppState};
 
+/// Keys used for persisting application state to storage.
+///
+/// These keys are used to store and retrieve various pieces of state
+/// from the persistence layer (`SQLite` database).
 #[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum PersistenceKey {
+    /// Unique identifier for the current connection
     ConnectionId,
+    /// Display name for the current connection
     ConnectionName,
+    /// Currently active connection configuration
     Connection,
+    /// List of all saved connections
     Connections,
+    /// Default location for downloaded files
     DefaultDownloadLocation,
 }
 

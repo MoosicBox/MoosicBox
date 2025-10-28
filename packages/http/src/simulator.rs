@@ -28,6 +28,10 @@ use crate::{
     StatusCode,
 };
 
+/// Simulator HTTP client.
+///
+/// This client provides a no-op implementation that doesn't make any real network requests.
+/// All requests succeed immediately and return empty responses with a 200 OK status.
 #[derive(Default)]
 pub struct Client;
 
@@ -44,6 +48,10 @@ impl GenericClient<crate::SimulatorRequestBuilder> for Client {
     }
 }
 
+/// Builder for constructing a simulator HTTP client.
+///
+/// This builder always succeeds when building a client since the simulator
+/// requires no configuration or initialization.
 pub struct ClientBuilder;
 
 impl crate::SimulatorClientBuilder {
@@ -61,6 +69,10 @@ impl GenericClientBuilder<crate::SimulatorRequestBuilder, crate::SimulatorClient
     }
 }
 
+/// Request builder for simulator HTTP client.
+///
+/// This builder ignores all configuration (headers, query parameters, body) and
+/// always returns an empty successful response when sent.
 pub struct RequestBuilder;
 
 #[async_trait]
@@ -83,6 +95,9 @@ impl GenericRequestBuilder<crate::SimulatorResponse> for RequestBuilder {
     }
 }
 
+/// HTTP response from simulator client.
+///
+/// This response always returns a 200 OK status with empty headers and body.
 #[derive(Default)]
 pub struct Response {
     headers: BTreeMap<String, String>,

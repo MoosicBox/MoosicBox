@@ -35,6 +35,10 @@
 #[derive(Clone, Copy, Debug)]
 pub enum ParseIntError {
     /// An invalid digit was encountered in the input string.
+    ///
+    /// This error occurs when the input contains a character that is not a valid decimal digit
+    /// (0-9), or in the case of signed integers, when a sign character (+/-) appears in an
+    /// invalid position.
     InvalidDigit,
 }
 

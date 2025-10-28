@@ -78,6 +78,11 @@ impl LibraryMusicApiProfiles {
     }
 }
 
+/// Actix-web integration for library music API profiles.
+///
+/// This module provides `FromRequest` implementation for `LibraryMusicApi`, enabling
+/// automatic extraction of the appropriate library music API instance based on the
+/// profile specified in HTTP requests.
 #[cfg(feature = "api")]
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};

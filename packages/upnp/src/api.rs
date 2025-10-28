@@ -43,7 +43,10 @@ pub fn bind_services<
         .service(seek_endpoint)
 }
 
-/// `OpenAPI` specification for `UPnP` API endpoints.
+/// `OpenAPI` specification generator for `UPnP` API endpoints.
+///
+/// This struct is used with `utoipa` to generate `OpenAPI` documentation
+/// for all `UPnP` control endpoints when the `openapi` feature is enabled.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -123,6 +126,7 @@ pub async fn scan_devices_endpoint() -> Result<Json<Vec<UpnpDevice>>> {
     Ok(Json(devices().await))
 }
 
+/// Query parameters for retrieving `UPnP` transport information.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransportInfoQuery {
@@ -168,6 +172,7 @@ pub async fn get_transport_info_endpoint(
     ))
 }
 
+/// Query parameters for retrieving `UPnP` media information.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetMediaInfoQuery {
@@ -213,6 +218,7 @@ pub async fn get_media_info_endpoint(
     ))
 }
 
+/// Query parameters for retrieving `UPnP` position information.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPositionInfoQuery {
@@ -258,6 +264,7 @@ pub async fn get_position_info_endpoint(
     ))
 }
 
+/// Query parameters for retrieving `UPnP` volume information.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetVolumeQuery {
@@ -311,6 +318,7 @@ pub async fn get_volume_endpoint(
     ))
 }
 
+/// Query parameters for setting `UPnP` volume.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetVolumeQuery {
@@ -367,6 +375,7 @@ pub async fn set_volume_endpoint(
     ))
 }
 
+/// Query parameters for subscribing to `UPnP` service events.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeQuery {
@@ -423,6 +432,7 @@ pub async fn subscribe_endpoint(query: web::Query<SubscribeQuery>) -> Result<Jso
     Ok(Json(sid))
 }
 
+/// Query parameters for pausing `UPnP` playback.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PauseQuery {
@@ -468,6 +478,7 @@ pub async fn pause_endpoint(
     ))
 }
 
+/// Query parameters for starting `UPnP` playback.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayQuery {
@@ -519,6 +530,7 @@ pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<BTreeMap
     ))
 }
 
+/// Query parameters for seeking within `UPnP` playback.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekQuery {

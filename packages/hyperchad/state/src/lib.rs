@@ -59,15 +59,19 @@ pub use store::StateStore;
 /// Errors that can occur when working with state storage
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Database operation failed
     #[cfg(feature = "persistence-sqlite")]
     #[error(transparent)]
     Database(#[from] switchy::database::DatabaseError),
+    /// Database initialization failed
     #[cfg(feature = "persistence-sqlite")]
     #[error(transparent)]
     InitDb(#[from] switchy::database_connection::InitDbError),
+    /// Database configuration is invalid or missing required fields
     #[cfg(feature = "persistence-sqlite")]
     #[error("Invalid database configuration")]
     InvalidDbConfiguration,
+    /// JSON serialization or deserialization failed
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }

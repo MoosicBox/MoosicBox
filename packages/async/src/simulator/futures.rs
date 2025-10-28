@@ -227,6 +227,7 @@ impl Interval {
     }
 }
 
+/// Error returned when a timeout operation exceeds its deadline.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Elapsed;
 

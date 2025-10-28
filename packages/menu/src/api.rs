@@ -43,6 +43,10 @@ use crate::library::{
     get_album_from_source, get_artist, get_artist_albums,
 };
 
+/// Binds all menu API endpoints to the provided actix-web scope.
+///
+/// This function registers all HTTP endpoints for menu operations, including
+/// artist queries, album management, track retrieval, and album version management.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -87,6 +91,7 @@ pub fn bind_services<
         moosicbox_music_models::TrackApiSource,
     ))
 )]
+/// `OpenAPI` documentation configuration for menu API endpoints.
 pub struct Api;
 
 fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Error> {
@@ -99,22 +104,37 @@ fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Er
     })
 }
 
+/// Error types that can occur during menu API operations.
 #[derive(Debug, Error)]
 pub enum MenuError {
+    /// Bad request from client
     #[error(transparent)]
     BadRequest(#[from] actix_web::Error),
+    /// Internal server error
     #[error("Internal server error: {error:?}")]
-    InternalServerError { error: String },
+    InternalServerError {
+        /// Error message
+        error: String,
+    },
+    /// Resource not found
     #[error("Not Found Error: {error:?}")]
-    NotFound { error: String },
+    NotFound {
+        /// Error message
+        error: String,
+    },
 }
 
+/// Query parameters for retrieving artists.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetArtistsQuery {
+    /// Comma-separated list of API sources to filter by
     sources: Option<String>,
+    /// Sort order for the results
     sort: Option<String>,
+    /// Filter by artist name
     name: Option<String>,
+    /// Generic search query
     search: Option<String>,
 }
 
@@ -184,19 +204,31 @@ pub async fn get_artists_endpoint(
     ))
 }
 
+/// Query parameters for retrieving albums.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumsQuery {
+    /// API source to fetch albums from
     source: Option<ApiSource>,
+    /// Filter by album type
     album_type: Option<AlbumType>,
+    /// Comma-separated list of API sources to filter by
     sources: Option<String>,
+    /// Sort order for the results
     sort: Option<String>,
+    /// Filter by album name
     name: Option<String>,
+    /// Filter by artist name
     artist: Option<String>,
+    /// Generic search query
     search: Option<String>,
+    /// Filter by artist ID
     artist_id: Option<String>,
+    /// API source for artist ID lookup
     api_source: Option<ApiSource>,
+    /// Page offset for pagination
     offset: Option<u32>,
+    /// Page limit for pagination
     limit: Option<u32>,
 }
 
@@ -305,9 +337,11 @@ pub async fn get_albums_endpoint(
     ))
 }
 
+/// Query parameters for retrieving tracks.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTracksQuery {
+    /// Comma-separated list of track IDs to fetch
     track_ids: String,
 }
 
@@ -365,9 +399,11 @@ pub async fn get_tracks_endpoint(
     Ok(Json(sorted_tracks))
 }
 
+/// Query parameters for retrieving album tracks.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumTracksQuery {
+    /// Album ID to fetch tracks for
     album_id: i32,
 }
 
@@ -405,10 +441,13 @@ pub async fn get_album_tracks_endpoint(
     ))
 }
 
+/// Query parameters for retrieving album versions.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumVersionsQuery {
+    /// Album ID to fetch versions for
     album_id: String,
+    /// API source for the album
     source: Option<ApiSource>,
 }
 
@@ -451,9 +490,11 @@ pub async fn get_album_versions_endpoint(
     ))
 }
 
+/// Query parameters for retrieving artist albums.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetArtistAlbumsQuery {
+    /// Artist ID to fetch albums for
     artist_id: i32,
 }
 
@@ -503,11 +544,15 @@ impl From<GetArtistError> for actix_web::Error {
     }
 }
 
+/// Query parameters for retrieving an artist.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetArtistQuery {
+    /// Artist ID to fetch
     artist_id: Option<String>,
+    /// Album ID to fetch artist from
     album_id: Option<String>,
+    /// API source for the artist
     source: Option<ApiSource>,
 }
 
@@ -561,10 +606,13 @@ pub async fn get_artist_endpoint(
     ))
 }
 
+/// Query parameters for retrieving an album.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumQuery {
+    /// Album ID to fetch
     album_id: String,
+    /// API source for the album
     source: Option<ApiSource>,
 }
 
@@ -606,10 +654,13 @@ pub async fn get_album_endpoint(
     ))
 }
 
+/// Query parameters for adding an album to the library.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AddAlbumQuery {
+    /// Album ID to add
     album_id: String,
+    /// API source for the album
     source: ApiSource,
 }
 
@@ -656,10 +707,13 @@ pub async fn add_album_endpoint(
     ))
 }
 
+/// Query parameters for removing an album from the library.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveAlbumQuery {
+    /// Album ID to remove
     album_id: String,
+    /// API source for the album
     source: ApiSource,
 }
 
@@ -706,10 +760,13 @@ pub async fn remove_album_endpoint(
     ))
 }
 
+/// Query parameters for re-favoriting an album.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ReFavoriteAlbumQuery {
+    /// Album ID to re-favorite
     album_id: String,
+    /// API source for the album
     source: ApiSource,
 }
 

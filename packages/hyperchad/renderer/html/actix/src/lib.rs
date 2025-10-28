@@ -103,8 +103,11 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
 /// Actix web application for hyperchad rendering with configurable response processing.
 #[derive(Clone)]
 pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> {
+    /// The response processor that handles HTTP request/response conversion.
     pub processor: R,
+    /// Receiver channel for renderer events from the hyperchad application.
     pub renderer_event_rx: Receiver<RendererEvent>,
+    /// Optional sender channel for user-triggered actions (requires `actions` feature).
     #[cfg(feature = "actions")]
     pub action_tx: Option<
         flume::Sender<(
@@ -112,6 +115,7 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
             Option<hyperchad_renderer::transformer::actions::logic::Value>,
         )>,
     >,
+    /// Static asset routes for serving files and directories (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
     _phantom: PhantomData<T>,
@@ -176,7 +180,9 @@ pub struct ActixAppRunner<
     T: Send + Sync + Clone,
     R: ActixResponseProcessor<T> + Send + Sync + Clone,
 > {
+    /// The Actix application configuration and state.
     pub app: ActixApp<T, R>,
+    /// The async runtime handle for executing the server.
     pub handle: Handle,
 }
 

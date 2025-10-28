@@ -27,6 +27,10 @@ use crate::{
     track_file_url, user_login,
 };
 
+/// Binds all Qobuz API endpoints to an actix-web scope.
+///
+/// This function registers route handlers for authentication, favorites, albums, artists,
+/// tracks, and search operations.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -46,6 +50,7 @@ pub fn bind_services<
         .service(search_endpoint)
 }
 
+/// `OpenAPI` documentation for Qobuz API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -109,11 +114,15 @@ impl From<Error> for actix_web::Error {
     }
 }
 
+/// Query parameters for Qobuz user login endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzUserLoginQuery {
+    /// Qobuz account username or email.
     username: String,
+    /// Qobuz account password.
     password: String,
+    /// Whether to persist credentials to database (requires `db` feature).
     #[cfg(feature = "db")]
     persist: Option<bool>,
 }
@@ -160,45 +169,71 @@ pub async fn user_login_endpoint(
     ))
 }
 
+/// API response type for Qobuz album with simplified metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzAlbum {
+    /// Album identifier.
     pub id: String,
+    /// Primary artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Release type.
     pub album_type: QobuzAlbumReleaseType,
+    /// Whether album artwork is available.
     pub contains_cover: bool,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album has explicit content.
     pub parental_warning: bool,
+    /// Number of tracks on the album.
     pub number_of_tracks: u32,
+    /// Release date as string.
     pub date_released: String,
+    /// Album title.
     pub title: String,
+    /// Source API identifier.
     pub api_source: ApiSource,
 }
 
+/// API response type for Qobuz album release with simplified metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzRelease {
+    /// Album identifier.
     pub id: String,
+    /// Primary artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Release type.
     pub album_type: QobuzAlbumReleaseType,
+    /// Whether album artwork is available.
     pub contains_cover: bool,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the release has explicit content.
     pub parental_warning: bool,
+    /// Number of tracks on the release.
     pub number_of_tracks: u32,
+    /// Release date as string.
     pub date_released: String,
+    /// Album title.
     pub title: String,
+    /// Source API identifier.
     pub api_source: ApiSource,
 }
 
+/// Tagged union for API album releases from different sources.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiRelease {
+    /// Qobuz album release.
     Qobuz(ApiQobuzRelease),
 }
 
@@ -220,10 +255,12 @@ impl From<QobuzRelease> for ApiRelease {
     }
 }
 
+/// Tagged union for API tracks from different sources.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiTrack {
+    /// Qobuz track.
     Qobuz(ApiQobuzTrack),
 }
 

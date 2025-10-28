@@ -26,15 +26,25 @@ use strum_macros::AsRefStr;
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum InboundPayload {
+    /// Ping message to keep connection alive.
     Ping(EmptyPayload),
+    /// Request to retrieve the connection ID.
     GetConnectionId(EmptyPayload),
+    /// Request to retrieve all sessions.
     GetSessions(EmptyPayload),
+    /// Request to create a new session.
     CreateSession(CreateSessionPayload),
+    /// Request to update an existing session.
     UpdateSession(UpdateSessionPayload),
+    /// Request to delete a session.
     DeleteSession(DeleteSessionPayload),
+    /// Request to register a connection.
     RegisterConnection(RegisterConnectionPayload),
+    /// Request to register multiple players.
     RegisterPlayers(RegisterPlayersPayload),
+    /// Request to create a new audio zone.
     CreateAudioZone(CreateAudioZonePayload),
+    /// Request to set seek position.
     SetSeek(SetSeekPayload),
 }
 
@@ -49,13 +59,21 @@ impl std::fmt::Display for InboundPayload {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum OutboundPayload {
+    /// Connection ID response.
     ConnectionId(ConnectionIdPayload),
+    /// List of sessions.
     Sessions(SessionsPayload),
+    /// Notification that a session was updated.
     SessionUpdated(SessionUpdatedPayload),
+    /// Audio zones with their associated sessions.
     AudioZoneWithSessions(AudioZoneWithSessionsPayload),
+    /// Download progress event notification.
     DownloadEvent(DownloadEventPayload),
+    /// Scan progress event notification.
     ScanEvent(ScanEventPayload),
+    /// List of connections.
     Connections(ConnectionsPayload),
+    /// Seek position update.
     SetSeek(SetSeekPayload),
 }
 
@@ -179,8 +197,12 @@ pub struct SetSeekPayload {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {
+    /// Session ID to seek within.
     pub session_id: u64,
+    /// Profile name associated with the session.
     pub profile: String,
+    /// Playback target for the session.
     pub playback_target: ApiPlaybackTarget,
+    /// Seek position in seconds.
     pub seek: u64,
 }

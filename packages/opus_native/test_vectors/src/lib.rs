@@ -58,6 +58,11 @@ pub struct TestVector {
 }
 
 impl TestVector {
+    /// Loads a test vector from a directory containing the required test data files.
+    ///
+    /// Expects the directory to contain `packet.bin` (Opus packet), `expected.pcm` (decoded PCM),
+    /// and `meta.json` (metadata with `sample_rate` and channels).
+    ///
     /// # Errors
     ///
     /// Returns error if:
@@ -99,6 +104,11 @@ impl TestVector {
         })
     }
 
+    /// Loads all test vectors from subdirectories within the specified directory.
+    ///
+    /// Scans the directory for subdirectories and attempts to load a test vector from each.
+    /// Subdirectories that don't contain valid test vector data are silently skipped.
+    ///
     /// # Errors
     ///
     /// Returns error if directory cannot be read or accessed

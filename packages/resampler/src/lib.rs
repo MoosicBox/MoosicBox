@@ -134,7 +134,9 @@ where
 
     /// Resamples a planar/non-interleaved input.
     ///
-    /// Returns the resampled samples in an interleaved format.
+    /// Returns the resampled samples in an interleaved format. Returns `None`
+    /// if the internal buffer does not yet contain enough samples to produce output
+    /// (requires at least `duration` samples accumulated).
     pub fn resample(&mut self, input: &AudioBuffer<f32>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
         convert_samples(input, &mut self.input);
@@ -149,7 +151,9 @@ where
 
     /// Resamples a planar/non-interleaved input and returns an `AudioBuffer`.
     ///
-    /// Returns the resampled samples as an `AudioBuffer`.
+    /// Returns the resampled samples as an `AudioBuffer`. Returns `None` if the
+    /// internal buffer does not yet contain enough samples to produce output
+    /// (requires at least `duration` samples accumulated).
     pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
@@ -157,6 +161,12 @@ where
     }
 
     /// Resample any remaining samples in the resample buffer.
+    ///
+    /// This method should be called at the end of a stream to process any buffered
+    /// samples that haven't been resampled yet. It pads the input with silence to
+    /// meet the required `duration` and produces the final resampled output.
+    ///
+    /// Returns `None` if the internal buffer is empty (no samples to flush).
     #[allow(unused)]
     pub fn flush(&mut self) -> Option<&[T]> {
         let len = self.input[0].len();
@@ -194,6 +204,10 @@ where
 ///
 /// **Note**: Currently only supports stereo (2-channel) audio. The function will panic
 /// or produce incorrect results if used with mono or multi-channel audio.
+///
+/// # Panics
+///
+/// * If the audio is not stereo (2-channel) - the `chan_pair_mut()` call will panic
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
 where

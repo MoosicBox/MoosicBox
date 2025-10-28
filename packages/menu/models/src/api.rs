@@ -33,6 +33,10 @@ pub struct ApiAlbumVersion {
     pub source: TrackApiSource,
 }
 
+/// Converts a reference to an API album version into quality metadata.
+///
+/// This extracts only the audio quality information (format, bit depth, sample rate,
+/// channels, and source) from an [`ApiAlbumVersion`], discarding the track list.
 impl From<&ApiAlbumVersion> for AlbumVersionQuality {
     fn from(value: &ApiAlbumVersion) -> Self {
         Self {
@@ -45,6 +49,10 @@ impl From<&ApiAlbumVersion> for AlbumVersionQuality {
     }
 }
 
+/// Converts an API album version into quality metadata.
+///
+/// This extracts only the audio quality information (format, bit depth, sample rate,
+/// channels, and source) from an [`ApiAlbumVersion`], discarding the track list.
 impl From<ApiAlbumVersion> for AlbumVersionQuality {
     fn from(value: ApiAlbumVersion) -> Self {
         Self {
@@ -57,6 +65,10 @@ impl From<ApiAlbumVersion> for AlbumVersionQuality {
     }
 }
 
+/// Converts an API album version into a domain model album version.
+///
+/// This conversion transforms the API representation (with [`ApiTrack`]s) into the
+/// internal domain model (with `Track`s). All quality metadata is preserved.
 impl From<ApiAlbumVersion> for AlbumVersion {
     fn from(value: ApiAlbumVersion) -> Self {
         Self {
@@ -70,6 +82,10 @@ impl From<ApiAlbumVersion> for AlbumVersion {
     }
 }
 
+/// Converts a domain model album version into an API album version.
+///
+/// This conversion transforms the internal domain model (with `Track`s) into the
+/// API representation (with [`ApiTrack`]s). All quality metadata is preserved.
 impl From<AlbumVersion> for ApiAlbumVersion {
     fn from(value: AlbumVersion) -> Self {
         Self {

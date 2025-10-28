@@ -22,13 +22,19 @@ struct PlayTrackOptions {
     seek_ts: u64,
 }
 
-/// # Panics
+/// Decodes audio from a format reader, returning a channel receiver for decoded buffers.
 ///
-/// * If fails to get the first supported track
+/// This function spawns a separate thread to decode audio packets and sends the decoded
+/// buffers through a channel, allowing the caller to consume audio at their own pace.
 ///
 /// # Errors
 ///
-/// * If the audio fails to decode
+/// * Returns [`DecodeError::AudioDecode`] if no supported track is found or decoding fails
+/// * Returns [`DecodeError::Symphonia`] if reading packets or seeking fails
+///
+/// # Panics
+///
+/// * Panics if the reader requires reset but no supported track is available
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn decode(
     mut reader: Box<dyn FormatReader>,

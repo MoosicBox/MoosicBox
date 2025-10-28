@@ -176,6 +176,13 @@ fn try_get_backtrace() -> Option<String> {
     Some(String::from_utf8_lossy(buffer.as_slice()).to_string())
 }
 
+/// Executes one or more simulation runs using the provided bootstrap implementation.
+///
+/// This is the main entry point for running simulations. It sets up the environment,
+/// handles parallel execution if configured, and returns the results of all runs.
+/// The number of runs and parallelism level can be controlled via the `SIMULATOR_RUNS`
+/// and `SIMULATOR_MAX_PARALLEL` environment variables.
+///
 /// # Panics
 ///
 /// * If system time went backwards

@@ -91,11 +91,15 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for fetching session playlist tracks.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionPlaylistTracks {
+    /// The ID of the session playlist to fetch tracks for.
     session_playlist_id: u64,
+    /// Optional pagination offset.
     offset: Option<u32>,
+    /// Optional pagination limit.
     limit: Option<u32>,
 }
 
@@ -145,9 +149,11 @@ pub async fn session_playlist_tracks_endpoint(
     }))
 }
 
+/// Query parameters for fetching a session playlist.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionPlaylist {
+    /// The ID of the session playlist to fetch.
     session_playlist_id: u64,
 }
 
@@ -183,9 +189,11 @@ pub async fn session_playlist_endpoint(
     Ok(Json(playlist))
 }
 
+/// Query parameters for fetching a session's audio zone.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionActivePlayers {
+    /// The ID of the session to fetch the audio zone for.
     session_id: u64,
 }
 
@@ -221,9 +229,11 @@ pub async fn session_audio_zone_endpoint(
     Ok(Json(zone))
 }
 
+/// Query parameters for checking if a session is playing.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionPlaying {
+    /// The ID of the session to check.
     session_id: u64,
 }
 
@@ -258,9 +268,11 @@ pub async fn session_playing_endpoint(
     Ok(Json(playing))
 }
 
+/// Query parameters for fetching a session.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSession {
+    /// The ID of the session to fetch.
     session_id: u64,
 }
 
@@ -296,10 +308,13 @@ pub async fn session_endpoint(
     Ok(Json(session))
 }
 
+/// Query parameters for fetching all sessions.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSessions {
+    /// Optional pagination offset.
     offset: Option<u32>,
+    /// Optional pagination limit.
     limit: Option<u32>,
 }
 
@@ -349,9 +364,11 @@ pub async fn sessions_endpoint(
     }))
 }
 
+/// Query parameters for registering players to a connection.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterPlayers {
+    /// The ID of the connection to register players to.
     connection_id: String,
 }
 

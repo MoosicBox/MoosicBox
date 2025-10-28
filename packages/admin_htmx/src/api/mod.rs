@@ -159,6 +159,8 @@ pub async fn index_endpoint(
     })
 }
 
+/// Renders the complete profile information page including server info, profiles, and service integrations.
+///
 /// # Errors
 ///
 /// * If any parts of the page fail to load

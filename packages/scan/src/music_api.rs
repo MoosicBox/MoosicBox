@@ -1,3 +1,8 @@
+//! Music API scanning functionality for remote streaming services.
+//!
+//! This module provides functions to scan music libraries from remote music API services
+//! (e.g., Tidal, Qobuz) by fetching albums, tracks, and artwork metadata.
+
 use std::sync::Arc;
 
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
@@ -28,6 +33,8 @@ pub enum ScanError {
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
+/// Scans a music API origin for all albums and tracks.
+///
 /// # Panics
 ///
 /// * If the page total is missing
@@ -109,6 +116,8 @@ pub async fn scan(
     Ok(())
 }
 
+/// Scans a batch of albums from a music API, fetching tracks and artwork.
+///
 /// # Panics
 ///
 /// * If the page total is missing
@@ -253,6 +262,8 @@ pub async fn scan_albums(
     Ok(())
 }
 
+/// Scans a batch of tracks from a music API album.
+///
 /// # Errors
 ///
 /// * If the tracks scan fails

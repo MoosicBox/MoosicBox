@@ -18,10 +18,13 @@ use crate::{
     state::State,
 };
 
+/// Download page tab selection.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum DownloadTab {
+    /// Currently active download tasks.
     Current,
+    /// Historical download tasks.
     History,
 }
 
@@ -156,6 +159,9 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
     }
 }
 
+/// Renders the downloads page content.
+///
+/// Displays download tasks with tabs for current and historical tasks.
 #[must_use]
 pub fn downloads_page_content(
     host: &str,
@@ -213,6 +219,7 @@ pub fn downloads_page_content(
     }
 }
 
+/// Renders the complete downloads page within the application layout.
 #[must_use]
 pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Containers {
     let Some(connection) = &state.connection else {

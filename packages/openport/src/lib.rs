@@ -42,6 +42,14 @@ fn test_bind_tcp<A: ToSocketAddrs>(addr: A) -> Option<Port> {
 }
 
 /// Check if a port is free on UDP
+///
+/// # Parameters
+///
+/// * `port` - The port number to check for availability
+///
+/// # Returns
+///
+/// Returns `true` if the port is free on both IPv4 and IPv6, `false` otherwise
 #[must_use]
 pub fn is_free_udp(port: Port) -> bool {
     let ipv4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
@@ -51,6 +59,14 @@ pub fn is_free_udp(port: Port) -> bool {
 }
 
 /// Check if a port is free on TCP
+///
+/// # Parameters
+///
+/// * `port` - The port number to check for availability
+///
+/// # Returns
+///
+/// Returns `true` if the port is free on both IPv4 and IPv6, `false` otherwise
 #[must_use]
 pub fn is_free_tcp(port: Port) -> bool {
     let ipv4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
@@ -60,6 +76,14 @@ pub fn is_free_tcp(port: Port) -> bool {
 }
 
 /// Check if a port is free on both TCP and UDP
+///
+/// # Parameters
+///
+/// * `port` - The port number to check for availability
+///
+/// # Returns
+///
+/// Returns `true` if the port is free on both TCP and UDP (for both IPv4 and IPv6), `false` otherwise
 #[must_use]
 pub fn is_free(port: Port) -> bool {
     is_free_tcp(port) && is_free_udp(port)
@@ -75,9 +99,23 @@ fn ask_free_tcp_port() -> Option<Port> {
 }
 
 /// Picks an available port that is available on both TCP and UDP
+///
+/// This function first tries to find a random port in the range `15000..25000`,
+/// then falls back to asking the OS for a free port if no random port is available.
+///
+/// # Returns
+///
+/// Returns `Some(port)` if a free port is found, or `None` if no ports are available
+/// after 20 attempts (10 random attempts + 10 OS-provided attempts)
+///
+/// # Examples
+///
 /// ```rust
+/// # #[cfg(feature = "rand")]
+/// # {
 /// use openport::pick_random_unused_port;
 /// let port: u16 = pick_random_unused_port().expect("No ports free");
+/// # }
 /// ```
 #[cfg(feature = "rand")]
 #[must_use]
@@ -128,6 +166,18 @@ impl PortRange for RangeInclusive<u16> {
 }
 
 /// Picks an available port that is available on both TCP and UDP within a range
+///
+/// # Parameters
+///
+/// * `range` - A port range to search within (can be exclusive `start..end` or inclusive `start..=end`)
+///
+/// # Returns
+///
+/// Returns `Some(port)` with the first free port found in the range, or `None` if no free ports
+/// are available in the specified range
+///
+/// # Examples
+///
 /// ```rust
 /// use openport::pick_unused_port;
 /// let port: u16 = pick_unused_port(15000..16000).expect("No ports free");

@@ -11,7 +11,12 @@ use tokio_stream::StreamExt as _;
 
 use super::track::TrackBytes;
 
+/// Media source adapter that wraps `TrackBytes` for use with Symphonia decoder.
+///
+/// Implements `Read`, `Seek`, and `MediaSource` traits to allow streaming track bytes
+/// to be used as a decoder input. Buffers incoming bytes and provides them on-demand.
 pub struct TrackBytesMediaSource {
+    /// Unique identifier for this media source
     pub id: usize,
     inner: Arc<Mutex<TrackBytes>>,
     started: bool,
@@ -22,6 +27,7 @@ pub struct TrackBytesMediaSource {
 }
 
 impl TrackBytesMediaSource {
+    /// Creates a new media source from track bytes.
     pub fn new(track_bytes: TrackBytes) -> Self {
         let (sender, receiver) = flume::unbounded();
         Self {

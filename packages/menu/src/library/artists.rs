@@ -81,8 +81,10 @@ pub fn sort_artists(
     artists
 }
 
+/// Error types that can occur when retrieving artists.
 #[derive(Debug, Error)]
 pub enum GetArtistsError {
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }

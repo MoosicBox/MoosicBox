@@ -16,12 +16,19 @@ pub struct TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
+    /// The unique identifier for this tunnel sender instance.
     pub id: u64,
+    /// The connection ID to propagate messages to through the tunnel.
     pub propagate_id: u64,
+    /// The tunnel request identifier associated with this sender.
     pub request_id: u64,
+    /// The packet sequence number for this sender's messages.
     pub packet_id: u32,
+    /// The underlying local WebSocket sender.
     pub root_sender: T,
+    /// The channel sender for tunnel response messages.
     pub tunnel_sender: PrioritizedSender<TunnelResponseMessage>,
+    /// Optional profile identifier for connection context.
     pub profile: Option<String>,
 }
 

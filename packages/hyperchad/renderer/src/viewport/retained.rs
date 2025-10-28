@@ -1,9 +1,17 @@
 use std::sync::Arc;
 
+/// Trait for types that provide widget position and dimensions.
+///
+/// Used in retained mode viewport rendering to query the current position
+/// and size of widgets for visibility calculations.
 pub trait WidgetPosition: Send + Sync {
+    /// Returns the X coordinate of the widget
     fn widget_x(&self) -> i32;
+    /// Returns the Y coordinate of the widget
     fn widget_y(&self) -> i32;
+    /// Returns the width of the widget
     fn widget_w(&self) -> i32;
+    /// Returns the height of the widget
     fn widget_h(&self) -> i32;
 }
 
@@ -19,6 +27,11 @@ impl std::fmt::Debug for dyn WidgetPosition {
     }
 }
 
+/// Viewport for retained mode rendering with hierarchical positioning.
+///
+/// Represents a viewport in retained mode, where widget positions are stored
+/// and reused across frames. Viewports can be nested via the `parent` field
+/// to create hierarchical visibility calculations.
 #[derive(Clone)]
 pub struct Viewport {
     widget: Arc<Box<dyn WidgetPosition>>,
@@ -44,6 +57,12 @@ impl std::fmt::Debug for Viewport {
 }
 
 impl Viewport {
+    /// Creates a new viewport with the given parent and position.
+    ///
+    /// # Parameters
+    ///
+    /// * `parent` - Optional parent viewport for hierarchical visibility checking
+    /// * `position` - The position provider for this viewport
     pub fn new(
         parent: Option<Self>,
         position: impl ViewportPosition + Send + Sync + 'static,
@@ -96,13 +115,34 @@ impl Viewport {
 }
 
 #[allow(clippy::module_name_repetitions)]
+/// Trait for types that provide viewport position and dimensions.
+///
+/// Used in retained mode viewport rendering to query the viewport's visible
+/// area and perform visibility checks for widgets within that area.
 pub trait ViewportPosition {
+    /// Returns the X coordinate of the viewport
     fn viewport_x(&self) -> i32;
+    /// Returns the Y coordinate of the viewport
     fn viewport_y(&self) -> i32;
+    /// Returns the width of the viewport
     fn viewport_w(&self) -> i32;
+    /// Returns the height of the viewport
     fn viewport_h(&self) -> i32;
+    /// Converts this viewport position to a widget position
     fn as_widget_position(&self) -> Box<dyn WidgetPosition>;
 
+    /// Checks if a widget is visible within this viewport.
+    ///
+    /// # Parameters
+    ///
+    /// * `this_widget` - The widget representing this viewport's position
+    /// * `widget` - The widget to check for visibility
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// * `bool` - Whether the widget is visible
+    /// * `u32` - Distance from the viewport if not visible, 0 if visible
     fn is_widget_visible(
         &self,
         this_widget: &dyn WidgetPosition,
@@ -148,6 +188,11 @@ impl std::fmt::Debug for Box<dyn ViewportPosition + Send + Sync> {
     }
 }
 
+/// Tracks visibility changes for a widget within a viewport in retained mode.
+///
+/// Monitors whether a specific widget is visible within its viewport and invokes
+/// a callback when visibility state or distance changes. Used in retained mode
+/// rendering where widget positions are stored and reused across frames.
 #[allow(clippy::module_name_repetitions)]
 pub struct ViewportListener {
     widget: Box<dyn WidgetPosition>,
@@ -168,6 +213,16 @@ impl std::fmt::Debug for ViewportListener {
 }
 
 impl ViewportListener {
+    /// Creates a new viewport listener for the given widget.
+    ///
+    /// The callback is invoked immediately with the initial visibility state,
+    /// and then subsequently whenever the visibility or distance changes.
+    ///
+    /// # Parameters
+    ///
+    /// * `widget` - The widget to monitor for visibility
+    /// * `viewport` - Optional viewport to check visibility against
+    /// * `callback` - Function called with `(visible, distance)` when changes occur
     pub fn new(
         widget: impl WidgetPosition + 'static,
         viewport: Option<Viewport>,
@@ -204,6 +259,10 @@ impl ViewportListener {
         (self.callback)(visible, dist);
     }
 
+    /// Checks current visibility status and invokes callback if changed.
+    ///
+    /// Recalculates the widget's visibility within its viewport and calls
+    /// the callback if either the visibility state or distance has changed.
     pub fn check(&mut self) {
         let (visible, dist) = self.is_visible();
 

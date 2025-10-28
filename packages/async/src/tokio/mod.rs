@@ -1,3 +1,8 @@
+//! Tokio runtime implementation.
+//!
+//! This module provides the Tokio-based async runtime implementation, including
+//! task spawning, runtime management, and I/O utilities.
+
 pub mod runtime;
 pub mod task;
 

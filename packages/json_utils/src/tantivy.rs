@@ -137,6 +137,8 @@ impl ToValue<Vec<OwnedValue>> for &NamedFieldDocument {
     }
 }
 
+/// Extracts values from a tantivy document field and converts them to type `T`.
+///
 /// # Errors
 ///
 /// * If the value failed to parse
@@ -154,6 +156,8 @@ where
     Err(ParseError::Parse(format!("Missing value: '{index}'")))
 }
 
+/// Extracts the first value from a tantivy document field and converts it to type `T`.
+///
 /// # Errors
 ///
 /// * If the value failed to parse

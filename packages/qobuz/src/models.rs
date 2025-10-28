@@ -28,23 +28,35 @@ use crate::{API_SOURCE, QobuzAlbumReleaseType, format_title};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzImage {
+    /// Thumbnail size image URL (100x100).
     pub thumbnail: Option<String>,
+    /// Small size image URL (300x300).
     pub small: Option<String>,
+    /// Medium size image URL (600x600).
     pub medium: Option<String>,
+    /// Large size image URL (1200x1200).
     pub large: Option<String>,
+    /// Extra large size image URL (2400x2400).
     pub extralarge: Option<String>,
+    /// Mega size image URL (4800x4800).
     pub mega: Option<String>,
 }
 
 /// Image size variants for Qobuz artwork, with pixel dimensions indicated in comments.
 #[derive(Clone, Copy, Debug)]
 pub enum QobuzImageSize {
-    Mega,       // 4800
-    ExtraLarge, // 2400
-    Large,      // 1200
-    Medium,     // 600
-    Small,      // 300
-    Thumbnail,  // 100
+    /// Mega size (4800x4800 pixels).
+    Mega,
+    /// Extra large size (2400x2400 pixels).
+    ExtraLarge,
+    /// Large size (1200x1200 pixels).
+    Large,
+    /// Medium size (600x600 pixels).
+    Medium,
+    /// Small size (300x300 pixels).
+    Small,
+    /// Thumbnail size (100x100 pixels).
+    Thumbnail,
 }
 
 impl From<ImageCoverSize> for QobuzImageSize {
@@ -179,8 +191,11 @@ impl AsModelResult<QobuzImage, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzGenre {
+    /// Unique genre identifier.
     pub id: u64,
+    /// Human-readable genre name.
     pub name: String,
+    /// URL-safe genre slug for routing.
     pub slug: String,
 }
 
@@ -204,23 +219,41 @@ impl AsModelResult<QobuzGenre, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbum {
+    /// Album identifier as string.
     pub id: String,
+    /// Primary artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Release type (album, live, compilation, etc.).
     pub album_type: QobuzAlbumReleaseType,
+    /// Maximum audio bit depth available (16 or 24).
     pub maximum_bit_depth: u16,
+    /// Album artwork URLs at various sizes.
     pub image: Option<QobuzImage>,
+    /// Album title.
     pub title: String,
+    /// Album version or edition (e.g., "Deluxe Edition").
     pub version: Option<String>,
+    /// Internal Qobuz numeric identifier.
     pub qobuz_id: u64,
+    /// Unix timestamp of release date (milliseconds).
     pub released_at: i64,
+    /// Original release date as ISO 8601 string.
     pub release_date_original: String,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album has explicit content.
     pub parental_warning: bool,
+    /// Popularity score.
     pub popularity: u32,
+    /// Number of tracks on the album.
     pub tracks_count: u32,
+    /// Music genre metadata.
     pub genre: QobuzGenre,
+    /// Maximum number of audio channels (typically 2 for stereo).
     pub maximum_channel_count: u16,
+    /// Maximum sampling rate in kHz (e.g., 44.1, 96, 192).
     pub maximum_sampling_rate: f32,
 }
 
@@ -393,20 +426,35 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzRelease {
+    /// Album identifier as string.
     pub id: String,
+    /// Primary artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Release type (album, live, compilation, etc.).
     pub album_type: QobuzAlbumReleaseType,
+    /// Maximum audio bit depth available (16 or 24).
     pub maximum_bit_depth: u16,
+    /// Album artwork URLs at various sizes.
     pub image: Option<QobuzImage>,
+    /// Album title.
     pub title: String,
+    /// Album version or edition (e.g., "Deluxe Edition").
     pub version: Option<String>,
+    /// Original release date as ISO 8601 string.
     pub release_date_original: String,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album has explicit content.
     pub parental_warning: bool,
+    /// Number of tracks on the album.
     pub tracks_count: u32,
+    /// Music genre name.
     pub genre: String,
+    /// Maximum number of audio channels (typically 2 for stereo).
     pub maximum_channel_count: u16,
+    /// Maximum sampling rate in kHz (e.g., 44.1, 96, 192).
     pub maximum_sampling_rate: f32,
 }
 
@@ -456,19 +504,33 @@ impl AsModelResult<QobuzRelease, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct QobuzTrack {
+    /// Track identifier.
     pub id: u64,
+    /// Track number on the album.
     pub track_number: u32,
+    /// Artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Album title.
     pub album: String,
+    /// Album identifier.
     pub album_id: String,
+    /// Album release type.
     pub album_type: QobuzAlbumReleaseType,
+    /// Album/track artwork URLs at various sizes.
     pub image: Option<QobuzImage>,
+    /// Copyright notice.
     pub copyright: Option<String>,
+    /// Track duration in seconds.
     pub duration: u32,
+    /// Whether the track has explicit content.
     pub parental_warning: bool,
+    /// International Standard Recording Code.
     pub isrc: String,
+    /// Track title.
     pub title: String,
+    /// Track version (e.g., "Radio Edit", "Remix").
     pub version: Option<String>,
 }
 
@@ -605,8 +667,11 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtist {
+    /// Artist identifier.
     pub id: u64,
+    /// Artist photo URLs at various sizes.
     pub image: Option<QobuzImage>,
+    /// Artist name.
     pub name: String,
 }
 
@@ -718,9 +783,13 @@ impl TryFrom<QobuzRelease> for ApiAlbum {
 /// Represents a paginated list of search results from Qobuz.
 #[derive(Serialize, Deserialize)]
 pub struct QobuzSearchResultList<T> {
+    /// List of result items.
     pub items: Vec<T>,
+    /// Starting offset of this page.
     pub offset: usize,
+    /// Maximum number of items per page.
     pub limit: usize,
+    /// Total number of matching results.
     pub total: usize,
 }
 
@@ -751,8 +820,11 @@ where
 /// Contains search results across albums, artists, and tracks from Qobuz.
 #[derive(Serialize, Deserialize)]
 pub struct QobuzSearchResults {
+    /// Paginated list of matching albums.
     pub albums: QobuzSearchResultList<QobuzAlbum>,
+    /// Paginated list of matching artists.
     pub artists: QobuzSearchResultList<QobuzArtist>,
+    /// Paginated list of matching tracks.
     pub tracks: QobuzSearchResultList<QobuzTrack>,
 }
 

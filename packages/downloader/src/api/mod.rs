@@ -39,6 +39,7 @@ use switchy_database::profiles::LibraryDatabase;
 
 pub mod models;
 
+/// Binds download API service endpoints to an actix-web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -75,6 +76,7 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Adds a progress listener to the global download queue.
 pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
     let mut queue = DOWNLOAD_QUEUE.write().await;
     *queue = queue.clone().add_progress_listener(listener);
@@ -108,18 +110,29 @@ impl From<ProcessDownloadQueueError> for actix_web::Error {
     }
 }
 
+/// Query parameters for the download endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadQuery {
+    /// Download location ID
     location_id: Option<u64>,
+    /// Single track ID to download
     track_id: Option<String>,
+    /// Multiple track IDs to download (comma-separated)
     track_ids: Option<String>,
+    /// Single album ID to download
     album_id: Option<String>,
+    /// Multiple album IDs to download (comma-separated)
     album_ids: Option<String>,
+    /// Whether to download album cover
     download_album_cover: Option<bool>,
+    /// Whether to download artist cover
     download_artist_cover: Option<bool>,
+    /// Audio quality for tracks
     quality: Option<TrackAudioQuality>,
+    /// API source identifier
     source: String,
+    /// `MoosicBox` server URL
     url: Option<String>,
 }
 
@@ -239,9 +252,11 @@ pub async fn download_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+/// Query parameters for the retry download endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RetryDownloadQuery {
+    /// Task ID to retry
     task_id: u64,
 }
 
@@ -287,9 +302,11 @@ pub async fn retry_download_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+/// Query parameters for the delete download task endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteDownloadTaskQuery {
+    /// Task ID to delete
     task_id: u64,
 }
 
@@ -326,11 +343,15 @@ pub async fn delete_download_endpoint(
     ))
 }
 
+/// Query parameters for the get download tasks endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDownloadTasks {
+    /// Filter by task state (comma-separated)
     state: Option<String>,
+    /// Page offset
     offset: Option<u32>,
+    /// Page limit
     limit: Option<u32>,
 }
 
@@ -438,10 +459,13 @@ pub async fn download_tasks_endpoint(
     }))
 }
 
+/// Query parameters for the get download locations endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDownloadLocations {
+    /// Page offset
     offset: Option<u32>,
+    /// Page limit
     limit: Option<u32>,
 }
 
@@ -491,9 +515,11 @@ pub async fn get_download_locations_endpoint(
     }))
 }
 
+/// Query parameters for the add download location endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddDownloadLocation {
+    /// Filesystem path for the location
     path: String,
 }
 
@@ -547,9 +573,11 @@ pub async fn add_download_location_endpoint(
     Ok(Json(location.into()))
 }
 
+/// Query parameters for the delete download location endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteDownloadLocation {
+    /// Filesystem path to delete
     path: String,
 }
 

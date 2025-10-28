@@ -304,9 +304,17 @@ pub enum DataValue {
     Number(u64),
 }
 
+/// Populates the global search index with the provided data.
+///
+/// This function adds documents to the search index asynchronously. If `delete` is true,
+/// all existing documents in the index are cleared before adding the new data.
+///
 /// # Errors
 ///
-/// * If failed to populate the global search index
+/// * `PopulateIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
+/// * `PopulateIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
+/// * `PopulateIndexError::Tantivy` if Tantivy encounters an indexing error
+/// * `PopulateIndexError::Join` if the blocking task fails to join
 pub async fn populate_global_search_index(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -341,13 +349,21 @@ pub async fn populate_global_search_index(
     Ok(())
 }
 
+/// Populates the global search index with the provided data synchronously.
+///
+/// This is the synchronous version of [`populate_global_search_index`]. It adds documents
+/// to the search index in a blocking manner. If `delete` is true, all existing documents
+/// in the index are cleared before adding the new data.
+///
 /// # Panics
 ///
 /// * If any `RwLock`s are poisoned
 ///
 /// # Errors
 ///
-/// * If failed to populate the global search index
+/// * `PopulateIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
+/// * `PopulateIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
+/// * `PopulateIndexError::Tantivy` if Tantivy encounters an indexing error
 pub fn populate_global_search_index_sync(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -580,9 +596,17 @@ pub enum ReindexError {
     Join(#[from] JoinError),
 }
 
+/// Reindexes the global search index by recreating it from scratch with new data.
+///
+/// This function completely rebuilds the search index by first deleting the existing index,
+/// then populating it with the provided data. This operation is performed asynchronously
+/// in a blocking task.
+///
 /// # Errors
 ///
-/// * If failed to reindex the global search index
+/// * `ReindexError::RecreateIndex` if failed to recreate the index
+/// * `ReindexError::PopulateIndex` if failed to populate the index with data
+/// * `ReindexError::Join` if the blocking task fails to join
 pub async fn reindex_global_search_index(
     data: &[Vec<(&str, DataValue)>],
 ) -> Result<(), ReindexError> {
@@ -889,13 +913,22 @@ fn construct_global_search_query(
     DisjunctionMaxQuery::new(queries)
 }
 
+/// Searches the global search index and returns raw Tantivy documents.
+///
+/// This function performs a full-text search across the global search index using
+/// the provided query string. Results are returned as raw Tantivy documents with
+/// support for pagination via offset and limit parameters.
+///
 /// # Panics
 ///
 /// * If any `RwLock`s are poisoned
 ///
 /// # Errors
 ///
-/// * If failed to search the global search index
+/// * `SearchIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
+/// * `SearchIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
+/// * `SearchIndexError::Tantivy` if Tantivy encounters a search error
+/// * `SearchIndexError::QueryParser` if the query string is invalid
 pub fn search_global_search_index(
     search: &str,
     offset: u32,
@@ -987,9 +1020,19 @@ pub fn search_global_search_index(
     Ok(results)
 }
 
+/// Performs a global search and returns structured API results.
+///
+/// This is a higher-level search function that performs a full-text search across the
+/// global search index and returns results as structured API types. It automatically
+/// deduplicates results and provides pagination support. Default values are used for
+/// offset (0) and limit (10) when not specified.
+///
 /// # Errors
 ///
-/// * If failed to search the global search index
+/// * `SearchIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
+/// * `SearchIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
+/// * `SearchIndexError::Tantivy` if Tantivy encounters a search error
+/// * `SearchIndexError::QueryParser` if the query string is invalid
 pub fn global_search(
     query: &str,
     offset: Option<u32>,

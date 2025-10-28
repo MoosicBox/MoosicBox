@@ -141,6 +141,33 @@ pub mod simulator;
 
 pub mod test_client;
 
+/// Builder for configuring and creating web servers.
+///
+/// The `WebServerBuilder` uses a fluent API to configure server settings before building
+/// the final [`WebServer`] instance. It supports different backends (Actix or Simulator)
+/// selected via feature flags.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use moosicbox_web_server::{WebServerBuilder, Scope, Method, HttpResponse};
+/// use moosicbox_web_server_core::WebServer;
+///
+/// # async fn example() {
+/// let server = WebServerBuilder::new()
+///     .with_addr("127.0.0.1")
+///     .with_port(8080_u16)
+///     .with_scope(
+///         Scope::new("/api")
+///             .get("/hello", |_req| {
+///                 Box::pin(async { Ok(HttpResponse::text("Hello!")) })
+///             })
+///     )
+///     .build();
+///
+/// server.start().await;
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct WebServerBuilder {
     addr: String,
@@ -159,6 +186,12 @@ impl Default for WebServerBuilder {
 }
 
 impl WebServerBuilder {
+    /// Creates a new `WebServerBuilder` with default settings.
+    ///
+    /// Default configuration:
+    /// * Address: `0.0.0.0` (all interfaces)
+    /// * Port: `8080`
+    /// * No scopes configured
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -172,18 +205,38 @@ impl WebServerBuilder {
         }
     }
 
+    /// Adds a [`Scope`] to the server configuration.
+    ///
+    /// Scopes group related routes under a common path prefix. Multiple scopes
+    /// can be added by chaining calls to this method.
     #[must_use]
     pub fn with_scope<S: Into<Scope>>(mut self, scope: S) -> Self {
         self.scopes.push(scope.into());
         self
     }
 
+    /// Sets the bind address for the server.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use moosicbox_web_server::WebServerBuilder;
+    /// let builder = WebServerBuilder::new().with_addr("127.0.0.1");
+    /// ```
     #[must_use]
     pub fn with_addr<T: Into<String>>(mut self, addr: T) -> Self {
         self.addr = addr.into();
         self
     }
 
+    /// Sets the port number for the server.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use moosicbox_web_server::WebServerBuilder;
+    /// let builder = WebServerBuilder::new().with_port(3000_u16);
+    /// ```
     #[must_use]
     pub fn with_port<T: Into<u16>>(mut self, port: T) -> Self {
         self.port = port.into();
@@ -193,6 +246,9 @@ impl WebServerBuilder {
 
 #[cfg(feature = "cors")]
 impl WebServerBuilder {
+    /// Configures CORS (Cross-Origin Resource Sharing) settings.
+    ///
+    /// Only available when the `cors` feature is enabled.
     #[must_use]
     pub fn with_cors(mut self, cors: cors::Cors) -> Self {
         self.cors = cors;
@@ -202,6 +258,9 @@ impl WebServerBuilder {
 
 #[cfg(feature = "compress")]
 impl WebServerBuilder {
+    /// Enables or disables response compression.
+    ///
+    /// Only available when the `compress` feature is enabled.
     #[must_use]
     pub const fn with_compress(mut self, compress: bool) -> Self {
         self.compress = compress;
@@ -209,6 +268,10 @@ impl WebServerBuilder {
     }
 }
 
+/// Handle to a running web server instance.
+///
+/// Currently a placeholder for future functionality. In the future, this will
+/// provide methods to control the running server (start, stop, restart).
 pub struct WebServerHandle {}
 
 impl WebServerHandle {
@@ -220,6 +283,16 @@ impl WebServerHandle {
     // }
 }
 
+/// Backend-agnostic HTTP request wrapper.
+///
+/// This enum wraps different backend request types (Actix or Stub) and provides
+/// a unified interface for accessing request data. It includes request context
+/// for storing path parameters and other request-scoped data.
+///
+/// # Variants
+///
+/// * `Actix` - Wraps an Actix web request (requires `actix` feature)
+/// * `Stub` - Test/simulator request stub
 #[derive(Debug, Clone)]
 pub enum HttpRequest {
     #[cfg(feature = "actix")]
@@ -231,6 +304,10 @@ pub enum HttpRequest {
 }
 
 impl HttpRequest {
+    /// Returns a reference to the request as an [`HttpRequestRef`].
+    ///
+    /// This method provides a borrowed view of the request that can be used
+    /// to access request data without moving the request.
     #[must_use]
     pub const fn as_ref(&self) -> HttpRequestRef<'_> {
         match self {
@@ -242,7 +319,10 @@ impl HttpRequest {
 }
 
 impl HttpRequest {
-    /// Get path parameters from request context
+    /// Returns all path parameters extracted from route matching.
+    ///
+    /// Path parameters are extracted from dynamic route segments like `/users/{id}`.
+    /// Returns an empty map if no path parameters are present.
     #[must_use]
     pub fn path_params(&self) -> &PathParams {
         match self {
@@ -256,13 +336,18 @@ impl HttpRequest {
         }
     }
 
-    /// Get a specific path parameter by name
+    /// Returns a specific path parameter by name.
+    ///
+    /// Returns `None` if the parameter doesn't exist.
     #[must_use]
     pub fn path_param(&self, name: &str) -> Option<&str> {
         self.path_params().get(name).map(String::as_str)
     }
 
-    /// Get the request context (for advanced use)
+    /// Returns the request context for advanced use cases.
+    ///
+    /// The request context contains request-scoped data such as path parameters.
+    /// Returns `None` for stub requests.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn context(&self) -> Option<&RequestContext> {
@@ -273,6 +358,9 @@ impl HttpRequest {
         }
     }
 
+    /// Returns a header value by name.
+    ///
+    /// Header name lookup is case-insensitive. Returns `None` if the header doesn't exist.
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
         match self {
@@ -285,6 +373,7 @@ impl HttpRequest {
         }
     }
 
+    /// Returns the request path (e.g., `/api/users`).
     #[must_use]
     pub fn path(&self) -> &str {
         match self {
@@ -297,6 +386,7 @@ impl HttpRequest {
         }
     }
 
+    /// Returns the query string without the leading `?` (e.g., `name=john&age=30`).
     #[must_use]
     pub fn query_string(&self) -> &str {
         match self {
@@ -309,6 +399,7 @@ impl HttpRequest {
         }
     }
 
+    /// Returns the HTTP method (GET, POST, etc.).
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn method(&self) -> Method {
@@ -335,6 +426,10 @@ impl HttpRequest {
         }
     }
 
+    /// Returns the request body as bytes if available.
+    ///
+    /// Note: For Actix backend, the body is consumed during extraction and may not be available.
+    /// For Simulator backend, the body is accessible.
     #[must_use]
     pub const fn body(&self) -> Option<&Bytes> {
         match self {
@@ -347,6 +442,9 @@ impl HttpRequest {
         }
     }
 
+    /// Returns a cookie value by name.
+    ///
+    /// Returns `None` if the cookie doesn't exist.
     #[must_use]
     pub fn cookie(&self, name: &str) -> Option<String> {
         match self {
@@ -359,6 +457,7 @@ impl HttpRequest {
         }
     }
 
+    /// Returns all cookies as a map of name-value pairs.
     #[must_use]
     pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
         match self {
@@ -379,6 +478,7 @@ impl HttpRequest {
         }
     }
 
+    /// Returns the remote client address if available.
     #[must_use]
     pub fn remote_addr(&self) -> Option<String> {
         match self {
@@ -394,14 +494,25 @@ impl HttpRequest {
         }
     }
 
+    /// Parses the query string into a typed structure.
+    ///
     /// # Errors
     ///
-    /// * If the query string parsing fails
+    /// * Returns `qs::Error` if the query string parsing fails
     pub fn parse_query<'a, T: serde::Deserialize<'a>>(&'a self) -> Result<T, qs::Error> {
         qs::from_str(self.query_string(), qs::ParseMode::UrlEncoded)
     }
 }
 
+/// Request stub for testing and simulation.
+///
+/// This enum provides different stub implementations for testing HTTP handlers
+/// without requiring a real HTTP server.
+///
+/// # Variants
+///
+/// * `Empty` - Minimal stub with no data
+/// * `Simulator` - Full simulator stub with request data
 #[derive(Debug, Clone)]
 pub enum Stub {
     Empty,
@@ -414,6 +525,16 @@ impl Default for Stub {
     }
 }
 
+/// Borrowed reference to an HTTP request.
+///
+/// This enum provides a lightweight, borrowed view of an [`HttpRequest`] that can be
+/// used to access request data without moving the request. It mirrors the structure
+/// of [`HttpRequest`] but holds references instead of owned values.
+///
+/// # Variants
+///
+/// * `Actix` - Reference to an Actix web request (requires `actix` feature)
+/// * `Stub` - Reference to a test/simulator request stub
 #[derive(Debug, Clone, Copy)]
 pub enum HttpRequestRef<'a> {
     #[cfg(feature = "actix")]
@@ -422,6 +543,9 @@ pub enum HttpRequestRef<'a> {
 }
 
 impl<'a> HttpRequestRef<'a> {
+    /// Returns a header value by name.
+    ///
+    /// Header name lookup is case-insensitive. Returns `None` if the header doesn't exist.
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
         match self {
@@ -434,6 +558,7 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns the request path (e.g., `/api/users`).
     #[must_use]
     pub fn path(&self) -> &str {
         match self {
@@ -446,6 +571,7 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns the query string without the leading `?` (e.g., `name=john&age=30`).
     #[must_use]
     pub fn query_string(&self) -> &str {
         match self {
@@ -458,6 +584,7 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns the HTTP method (GET, POST, etc.).
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn method(&self) -> Method {
@@ -484,6 +611,10 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns the request body as bytes if available.
+    ///
+    /// Note: For Actix backend, the body is consumed during extraction and may not be available.
+    /// For Simulator backend, the body is accessible.
     #[must_use]
     pub const fn body(&self) -> Option<&Bytes> {
         match self {
@@ -496,6 +627,9 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns a cookie value by name.
+    ///
+    /// Returns `None` if the cookie doesn't exist.
     #[must_use]
     pub fn cookie(&self, name: &str) -> Option<String> {
         match self {
@@ -508,6 +642,7 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns all cookies as a map of name-value pairs.
     #[must_use]
     pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
         match self {
@@ -528,6 +663,7 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Returns the remote client address if available.
     #[must_use]
     pub fn remote_addr(&self) -> Option<String> {
         match self {
@@ -543,20 +679,33 @@ impl<'a> HttpRequestRef<'a> {
         }
     }
 
+    /// Parses the query string into a typed structure.
+    ///
     /// # Errors
     ///
-    /// * If the query string parsing fails
+    /// * Returns `qs::Error` if the query string parsing fails
     pub fn parse_query<T: serde::Deserialize<'a>>(&'a self) -> Result<T, qs::Error> {
         qs::from_str(self.query_string(), qs::ParseMode::UrlEncoded)
     }
 }
 
+/// HTTP response body container.
+///
+/// Wraps response body data in a backend-agnostic way. Currently only supports
+/// byte sequences, but designed to be extensible for streaming responses in the future.
+///
+/// # Variants
+///
+/// * `Bytes` - Raw byte sequence response body
 #[derive(Debug)]
 pub enum HttpResponseBody {
     Bytes(Bytes),
 }
 
 impl HttpResponseBody {
+    /// Creates a response body from a static string slice.
+    ///
+    /// This is more efficient than converting through `String` for static content.
     #[must_use]
     pub fn from_static(value: &'static str) -> Self {
         Self::Bytes(Bytes::from(value.as_bytes()))
@@ -617,6 +766,27 @@ impl From<String> for HttpResponseBody {
     }
 }
 
+/// Backend-agnostic HTTP response.
+///
+/// Represents an HTTP response with status code, headers, and optional body.
+/// Provides a fluent builder API for constructing responses.
+///
+/// # Fields
+///
+/// * `status_code` - HTTP status code (200, 404, etc.)
+/// * `location` - Optional location header for redirects
+/// * `headers` - Response headers as key-value pairs
+/// * `body` - Optional response body
+///
+/// # Example
+///
+/// ```rust
+/// use moosicbox_web_server::HttpResponse;
+///
+/// let response = HttpResponse::ok()
+///     .with_header("X-Custom", "value")
+///     .with_body("Hello, World!");
+/// ```
 #[derive(Debug)]
 pub struct HttpResponse {
     pub status_code: StatusCode,
@@ -626,26 +796,31 @@ pub struct HttpResponse {
 }
 
 impl HttpResponse {
+    /// Creates a response with HTTP 200 OK status.
     #[must_use]
     pub fn ok() -> Self {
         Self::new(StatusCode::Ok)
     }
 
+    /// Creates a response with the specified status code.
     #[must_use]
     pub fn from_status_code(status_code: StatusCode) -> Self {
         Self::new(status_code)
     }
 
+    /// Creates a response with HTTP 307 Temporary Redirect status.
     #[must_use]
     pub fn temporary_redirect() -> Self {
         Self::new(StatusCode::TemporaryRedirect)
     }
 
+    /// Creates a response with HTTP 308 Permanent Redirect status.
     #[must_use]
     pub fn permanent_redirect() -> Self {
         Self::new(StatusCode::PermanentRedirect)
     }
 
+    /// Creates a response with HTTP 404 Not Found status.
     #[must_use]
     pub fn not_found() -> Self {
         Self::new(StatusCode::NotFound)
@@ -653,6 +828,7 @@ impl HttpResponse {
 }
 
 impl HttpResponse {
+    /// Creates a new response with the specified status code.
     #[must_use]
     pub fn new(status_code: impl Into<StatusCode>) -> Self {
         Self {
@@ -663,6 +839,9 @@ impl HttpResponse {
         }
     }
 
+    /// Sets the Location header for redirects.
+    ///
+    /// The location is set both in the `location` field and as a header for compatibility.
     #[must_use]
     pub fn with_location<T: Into<String>, O: Into<Option<T>>>(mut self, location: O) -> Self {
         if let Some(loc) = location.into() {
@@ -673,6 +852,7 @@ impl HttpResponse {
         self
     }
 
+    /// Sets the response body.
     #[must_use]
     pub fn with_body<T: Into<HttpResponseBody>, B: Into<Option<T>>>(mut self, body: B) -> Self {
         self.body = body.into().map(Into::into);
@@ -733,6 +913,33 @@ impl HttpResponse {
     }
 }
 
+/// Groups related routes under a common path prefix.
+///
+/// Scopes provide a way to organize routes hierarchically and apply common
+/// path prefixes. Scopes can contain routes and nested sub-scopes.
+///
+/// # Fields
+///
+/// * `path` - Path prefix for all routes in this scope (e.g., `/api`)
+/// * `routes` - Routes directly under this scope
+/// * `scopes` - Nested sub-scopes
+///
+/// # Example
+///
+/// ```rust
+/// use moosicbox_web_server::{Scope, Method, HttpResponse};
+///
+/// let api_scope = Scope::new("/api")
+///     .get("/users", |_req| {
+///         Box::pin(async { Ok(HttpResponse::ok()) })
+///     })
+///     .with_scope(
+///         Scope::new("/admin")
+///             .get("/dashboard", |_req| {
+///                 Box::pin(async { Ok(HttpResponse::ok()) })
+///             })
+///     );
+/// ```
 #[derive(Debug, Clone)]
 pub struct Scope {
     pub path: String,
@@ -741,6 +948,7 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Creates a new scope with the specified path prefix.
     #[must_use]
     pub fn new(path: impl Into<String>) -> Self {
         Self {
@@ -750,18 +958,23 @@ impl Scope {
         }
     }
 
+    /// Adds a single route to this scope.
     #[must_use]
     pub fn with_route(mut self, route: Route) -> Self {
         self.routes.push(route);
         self
     }
 
+    /// Adds multiple routes to this scope.
     #[must_use]
     pub fn with_routes(mut self, routes: impl IntoIterator<Item = Route>) -> Self {
         self.routes.extend(routes);
         self
     }
 
+    /// Adds a route with the specified method, path, and handler.
+    ///
+    /// This is a convenience method that creates and adds a route in one call.
     #[must_use]
     pub fn route<F>(mut self, method: Method, path: impl Into<String>, handler: F) -> Self
     where
@@ -774,6 +987,7 @@ impl Scope {
         self
     }
 
+    /// Adds a GET route to this scope.
     #[must_use]
     pub fn get<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -785,6 +999,7 @@ impl Scope {
         self.route(Method::Get, path, handler)
     }
 
+    /// Adds a POST route to this scope.
     #[must_use]
     pub fn post<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -796,6 +1011,7 @@ impl Scope {
         self.route(Method::Post, path, handler)
     }
 
+    /// Adds a PUT route to this scope.
     #[must_use]
     pub fn put<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -807,6 +1023,7 @@ impl Scope {
         self.route(Method::Put, path, handler)
     }
 
+    /// Adds a DELETE route to this scope.
     #[must_use]
     pub fn delete<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -818,6 +1035,7 @@ impl Scope {
         self.route(Method::Delete, path, handler)
     }
 
+    /// Adds a PATCH route to this scope.
     #[must_use]
     pub fn patch<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -829,6 +1047,7 @@ impl Scope {
         self.route(Method::Patch, path, handler)
     }
 
+    /// Adds a HEAD route to this scope.
     #[must_use]
     pub fn head<F>(self, path: impl Into<String>, handler: F) -> Self
     where
@@ -840,12 +1059,14 @@ impl Scope {
         self.route(Method::Head, path, handler)
     }
 
+    /// Adds a nested sub-scope to this scope.
     #[must_use]
     pub fn with_scope(mut self, scope: impl Into<Self>) -> Self {
         self.scopes.push(scope.into());
         self
     }
 
+    /// Adds multiple nested sub-scopes to this scope.
     #[must_use]
     pub fn with_scopes<T: Into<Self>>(mut self, scopes: impl IntoIterator<Item = T>) -> Self {
         self.scopes.extend(scopes.into_iter().map(Into::into));
@@ -853,6 +1074,14 @@ impl Scope {
     }
 }
 
+/// Web server error types.
+///
+/// This enum represents errors that can occur during HTTP request processing.
+/// All variants include a status code and source error for detailed error reporting.
+///
+/// # Variants
+///
+/// * `Http` - HTTP error with associated status code and source error
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("HTTP Error {status_code}: {source:?}")]
@@ -863,6 +1092,7 @@ pub enum Error {
 }
 
 impl Error {
+    /// Creates an HTTP error with the specified status code and source error.
     pub fn from_http_status_code(
         status_code: StatusCode,
         source: impl std::error::Error + Send + Sync + 'static,
@@ -873,6 +1103,7 @@ impl Error {
         }
     }
 
+    /// Creates an HTTP error with the specified status code (as u16) and source error.
     pub fn from_http_status_code_u16(
         status_code: u16,
         source: impl std::error::Error + Send + Sync + 'static,
@@ -880,6 +1111,7 @@ impl Error {
         Self::from_http_status_code(StatusCode::from_u16(status_code), source)
     }
 
+    /// Creates a 400 Bad Request error.
     pub fn bad_request(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::BadRequest,
@@ -887,6 +1119,7 @@ impl Error {
         }
     }
 
+    /// Creates a 401 Unauthorized error.
     pub fn unauthorized(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::Unauthorized,
@@ -894,6 +1127,7 @@ impl Error {
         }
     }
 
+    /// Creates a 404 Not Found error.
     pub fn not_found(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::NotFound,
@@ -901,6 +1135,7 @@ impl Error {
         }
     }
 
+    /// Creates a 500 Internal Server Error.
     pub fn internal_server_error(
         error: impl Into<Box<dyn std::error::Error + Send + Sync>>,
     ) -> Self {
@@ -919,6 +1154,11 @@ impl From<qs::Error> for Error {
 
 // FromRequest trait moved to from_request.rs module
 
+/// Type alias for route handler functions.
+///
+/// A route handler is an async function that takes an [`HttpRequest`] and returns
+/// a future that resolves to a `Result<HttpResponse, Error>`. Handlers must be
+/// `Send + Sync + 'static` to work across different async runtimes.
 pub type RouteHandler = Box<
     dyn Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
         + Send
@@ -926,6 +1166,32 @@ pub type RouteHandler = Box<
         + 'static,
 >;
 
+/// Represents an HTTP route with method, path, and handler.
+///
+/// Routes define individual endpoints in the web server. Each route specifies
+/// an HTTP method, a path pattern, and a handler function that processes requests.
+///
+/// # Fields
+///
+/// * `path` - URL path pattern (e.g., `/users/{id}`)
+/// * `method` - HTTP method (GET, POST, etc.)
+/// * `handler` - Function that processes requests to this route
+///
+/// # Example
+///
+/// ```rust
+/// use moosicbox_web_server::{Route, Method, HttpRequest, HttpResponse, Error};
+/// use std::future::Future;
+/// use std::pin::Pin;
+///
+/// let route = Route::new(
+///     Method::Get,
+///     "/hello",
+///     |_req: HttpRequest| -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>> {
+///         Box::pin(async { Ok(HttpResponse::text("Hello!")) })
+///     }
+/// );
+/// ```
 #[derive(Clone)]
 pub struct Route {
     pub path: String,
@@ -934,6 +1200,7 @@ pub struct Route {
 }
 
 impl Route {
+    /// Creates a new route with the specified method, path, and handler.
     #[must_use]
     pub fn new<F>(method: Method, path: impl Into<String>, handler: F) -> Self
     where
@@ -949,6 +1216,9 @@ impl Route {
         }
     }
 
+    /// Creates a new route using the `IntoHandler` trait for type-safe extraction.
+    ///
+    /// This method allows handlers to use extractors for automatic request data extraction.
     #[must_use]
     pub fn with_handler<H>(method: Method, path: impl Into<String>, handler: H) -> Self
     where
@@ -963,8 +1233,10 @@ impl Route {
         }
     }
 
-    // TODO: Remove this method once Step 8 (Routing Macro System) is complete
-    // This is technical debt - should be replaced with clean macro API
+    /// Creates a new route with a handler that extracts one parameter.
+    ///
+    /// TODO: Remove this method once Step 8 (Routing Macro System) is complete.
+    /// This is technical debt - should be replaced with clean macro API.
     #[must_use]
     pub fn with_handler1<H, T1>(method: Method, path: impl Into<String>, handler: H) -> Self
     where
@@ -980,8 +1252,10 @@ impl Route {
         }
     }
 
-    // TODO: Remove this method once Step 8 (Routing Macro System) is complete
-    // This is technical debt - should be replaced with clean macro API
+    /// Creates a new route with a handler that extracts two parameters.
+    ///
+    /// TODO: Remove this method once Step 8 (Routing Macro System) is complete.
+    /// This is technical debt - should be replaced with clean macro API.
     #[must_use]
     pub fn with_handler2<H, T1, T2>(method: Method, path: impl Into<String>, handler: H) -> Self
     where
@@ -998,6 +1272,7 @@ impl Route {
         }
     }
 
+    /// Creates a GET route with the specified path and handler.
     #[must_use]
     pub fn get<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -1009,6 +1284,7 @@ impl Route {
         Self::new(Method::Get, path, handler)
     }
 
+    /// Creates a POST route with the specified path and handler.
     #[must_use]
     pub fn post<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -1020,6 +1296,7 @@ impl Route {
         Self::new(Method::Post, path, handler)
     }
 
+    /// Creates a PUT route with the specified path and handler.
     #[must_use]
     pub fn put<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -1031,6 +1308,7 @@ impl Route {
         Self::new(Method::Put, path, handler)
     }
 
+    /// Creates a DELETE route with the specified path and handler.
     #[must_use]
     pub fn delete<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -1042,6 +1320,7 @@ impl Route {
         Self::new(Method::Delete, path, handler)
     }
 
+    /// Creates a PATCH route with the specified path and handler.
     #[must_use]
     pub fn patch<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -1053,6 +1332,7 @@ impl Route {
         Self::new(Method::Patch, path, handler)
     }
 
+    /// Creates a HEAD route with the specified path and handler.
     #[must_use]
     pub fn head<F>(path: impl Into<String>, handler: F) -> Self
     where

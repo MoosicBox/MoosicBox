@@ -158,6 +158,12 @@ pub mod api {
     }
 
     /// Profile name extracted from request without verification.
+    ///
+    /// This struct extracts a profile name from either HTTP request headers
+    /// (`moosicbox-profile`) or query parameters (`moosicboxProfile`) but does not
+    /// verify that the profile exists in the registry.
+    ///
+    /// Use [`ProfileName`] if you need to ensure the profile exists before proceeding.
     #[derive(Debug)]
     pub struct ProfileNameUnverified(pub String);
 
@@ -193,6 +199,12 @@ pub mod api {
     }
 
     /// Verified profile name extracted from request.
+    ///
+    /// This struct extracts a profile name from either HTTP request headers
+    /// (`moosicbox-profile`) or query parameters (`moosicboxProfile`) and verifies
+    /// that the profile exists in the global [`PROFILES`] registry.
+    ///
+    /// If you don't need verification, use [`ProfileNameUnverified`] instead.
     pub struct ProfileName(pub String);
 
     impl From<ProfileName> for String {

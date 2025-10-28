@@ -114,6 +114,19 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 /// * If the server fails during initialization or execution
 /// * If database initialization or migration fails
 /// * If required services fail to start
+///
+/// # Panics
+///
+/// * If the config database path cannot be created (with `sqlite` feature, non-simulator mode)
+/// * If database initialization fails
+/// * If database migration fails (with `sqlite` or `postgres` features)
+/// * If the static `CONFIG_DB` lock is poisoned
+/// * If server identity cannot be retrieved or initialized
+/// * If profile initialization fails
+/// * If tunnel setup fails (with `tunnel` feature)
+/// * If config directory path cannot be determined (with `tls` feature)
+/// * If `TLS` directory creation fails (with `tls` feature)
+/// * If `TLS` certificate generation or loading fails (with `tls` feature)
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn run_basic<T>(
     #[allow(unused)] app_type: AppType,

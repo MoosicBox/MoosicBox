@@ -51,6 +51,8 @@ pub mod events;
 pub mod db;
 pub use moosicbox_audio_zone_models as models;
 
+/// Retrieves all audio zones from the database.
+///
 /// # Errors
 ///
 /// * If fails to fetch `AudioZone`s from the database
@@ -63,6 +65,8 @@ pub async fn zones(db: &ConfigDatabase) -> Result<Vec<AudioZone>, DatabaseFetchE
     Ok(results)
 }
 
+/// Retrieves all audio zones along with their active playback sessions.
+///
 /// # Errors
 ///
 /// * If fails to fetch `AudioZoneWithSession`s from the database
@@ -78,6 +82,10 @@ pub async fn zones_with_sessions(
     Ok(results)
 }
 
+/// Retrieves a specific audio zone by its ID.
+///
+/// Returns `None` if no audio zone exists with the given ID.
+///
 /// # Errors
 ///
 /// * If fails to fetch the `AudioZone` from the database
@@ -92,6 +100,10 @@ pub async fn get_zone(
     })
 }
 
+/// Creates a new audio zone with the specified configuration.
+///
+/// If the `events` feature is enabled, triggers an audio zones updated event after creation.
+///
 /// # Errors
 ///
 /// * If fails to create the `AudioZone` in the database
@@ -117,6 +129,10 @@ pub async fn create_audio_zone(
     Ok(resp)
 }
 
+/// Updates an existing audio zone with new configuration values.
+///
+/// If the `events` feature is enabled, triggers an audio zones updated event after the update.
+///
 /// # Errors
 ///
 /// * If fails to update the `AudioZone` in the database
@@ -142,6 +158,11 @@ pub async fn update_audio_zone(
     Ok(resp)
 }
 
+/// Deletes an audio zone by its ID.
+///
+/// Returns the deleted audio zone if it existed, or `None` if no zone with the given ID was found.
+/// If the `events` feature is enabled, triggers an audio zones updated event after deletion.
+///
 /// # Errors
 ///
 /// * If fails to delete the `AudioZone` from the database

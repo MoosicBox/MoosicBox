@@ -13,24 +13,33 @@ use ::cpal::traits::StreamTrait;
 /// Commands that can be sent to control the CPAL stream
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
+    /// Pause the stream
     Pause,
+    /// Resume playback
     Resume,
+    /// Reset the stream (pause it)
     Reset,
+    /// Set the volume to the specified level (0.0 to 1.0)
     SetVolume(f64),
 }
 
 /// Response from stream command execution
 #[derive(Debug, Clone)]
 pub enum StreamResponse {
+    /// Command executed successfully
     Success,
+    /// Command execution failed with an error message
     Error(String),
 }
 
 /// Error type for stream daemon operations
 #[derive(Debug, Clone)]
 pub enum StreamDaemonError {
+    /// Stream creation failed with the given error message
     StreamCreationFailed(String),
+    /// Stream operation failed with the given error message
     StreamOperationFailed(String),
+    /// The daemon has stopped and is no longer accepting commands
     DaemonStopped,
 }
 

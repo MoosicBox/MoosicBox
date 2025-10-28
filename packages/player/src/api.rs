@@ -21,6 +21,10 @@ use crate::{
     ApiPlaybackStatus, DEFAULT_PLAYBACK_RETRY_OPTIONS, PlaybackHandler, PlaybackStatus, PlayerError,
 };
 
+/// Binds all player API endpoints to the given service scope.
+///
+/// This function registers all playback control endpoints including play, pause,
+/// resume, stop, seek, and status endpoints.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -63,6 +67,7 @@ pub fn bind_services<
         PlaybackStatus,
     ))
 )]
+/// `OpenAPI` documentation structure for player API endpoints.
 pub struct Api;
 
 impl From<PlayerError> for actix_web::Error {
@@ -233,6 +238,7 @@ pub async fn get_track_or_ids_from_track_id_ranges(
         .map_err(|e| ErrorInternalServerError(format!("Failed to get tracks: {e:?}")))
 }
 
+/// Query parameters for playing an album.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
@@ -309,6 +315,7 @@ pub async fn play_album_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for playing a single track.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
@@ -386,6 +393,7 @@ pub async fn play_track_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for playing multiple tracks.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTracksQuery {
@@ -463,6 +471,7 @@ pub async fn play_tracks_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for stopping playback.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StopTrackQuery {
@@ -500,6 +509,7 @@ pub async fn stop_track_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for seeking playback position.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekTrackQuery {
@@ -538,6 +548,7 @@ pub async fn seek_track_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for updating playback state.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePlaybackQuery {
@@ -630,6 +641,7 @@ pub async fn update_playback_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for skipping to the next track.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NextTrackQuery {
@@ -669,6 +681,7 @@ pub async fn next_track_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for pausing playback.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PauseQuery {
@@ -706,6 +719,7 @@ pub async fn pause_playback_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for resuming playback.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ResumeQuery {
@@ -743,6 +757,7 @@ pub async fn resume_playback_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for skipping to the previous track.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviousTrackQuery {
@@ -782,6 +797,7 @@ pub async fn previous_track_endpoint(
     Ok(Json(PlaybackStatus { success: true }))
 }
 
+/// Query parameters for getting player status.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerStatusQuery {

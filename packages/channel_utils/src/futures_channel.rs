@@ -68,6 +68,10 @@ impl<T: Send> PrioritizedSender<T> {
 }
 
 impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
+    /// # Panics
+    ///
+    /// * If the internal priority buffer lock is poisoned (when another thread panicked while
+    ///   holding the lock)
     fn send(&self, msg: T) -> Result<(), TrySendError<T>> {
         if !self
             .ready_to_send

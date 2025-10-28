@@ -20,7 +20,7 @@ pub use hyperchad::template as hyperchad_template;
 /// Generates the downloads page.
 ///
 /// Returns a page container with a header and a container that will be
-/// dynamically populated with release information via HTMX.
+/// dynamically populated with release information via `HyperChad`.
 #[must_use]
 pub fn download() -> Containers {
     page(&container! {

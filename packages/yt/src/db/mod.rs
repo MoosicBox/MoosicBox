@@ -2,13 +2,20 @@ use moosicbox_json_utils::ToValueType;
 use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 
+/// Data models for `YouTube` Music database entities.
+///
+/// Contains the `YtConfig` type for storing `YouTube` Music authentication and configuration.
 pub mod models;
 
 use crate::db::models::YtConfig;
 
+/// Creates or updates `YouTube` Music configuration in the database.
+///
+/// Stores OAuth tokens and user information for `YouTube` Music authentication.
+///
 /// # Errors
 ///
-/// * If a database error occurs
+/// * `DatabaseError` - If a database operation fails
 #[allow(clippy::too_many_arguments)]
 pub async fn create_yt_config(
     db: &LibraryDatabase,
@@ -39,9 +46,11 @@ pub async fn create_yt_config(
     Ok(())
 }
 
+/// Deletes `YouTube` Music configuration from the database.
+///
 /// # Errors
 ///
-/// * If a database error occurs
+/// * `DatabaseError` - If a database operation fails
 pub async fn delete_yt_config(
     db: &LibraryDatabase,
     refresh_token: &str,
@@ -54,19 +63,29 @@ pub async fn delete_yt_config(
     Ok(())
 }
 
+/// Errors that can occur when retrieving `YouTube` Music configuration.
 #[derive(Debug, Error)]
 pub enum GetYtConfigError {
+    /// Database operation failed
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// JSON parsing failed
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
+    /// No `YouTube` Music configuration is available in the database
     #[error("No configs available")]
     NoConfigsAvailable,
 }
 
+/// Retrieves `YouTube` Music configuration from the database.
+///
+/// Returns the most recent configuration based on the `issued_at` timestamp.
+///
 /// # Errors
 ///
-/// * If a database error occurs
+/// * `GetYtConfigError::Database` - If a database operation fails
+/// * `GetYtConfigError::Parse` - If parsing the configuration fails
+/// * `GetYtConfigError::NoConfigsAvailable` - If no configuration exists
 pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, GetYtConfigError> {
     let mut configs = db
         .select("yt_config")
@@ -83,9 +102,15 @@ pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, Get
     Ok(configs.first().cloned())
 }
 
+/// Retrieves `YouTube` Music access and refresh tokens from the database.
+///
+/// Returns a tuple of `(access_token, refresh_token)` if configuration exists.
+///
 /// # Errors
 ///
-/// * If a database error occurs
+/// * `GetYtConfigError::Database` - If a database operation fails
+/// * `GetYtConfigError::Parse` - If parsing the configuration fails
+/// * `GetYtConfigError::NoConfigsAvailable` - If no configuration exists
 pub async fn get_yt_access_tokens(
     db: &LibraryDatabase,
 ) -> Result<Option<(String, String)>, GetYtConfigError> {
@@ -94,9 +119,13 @@ pub async fn get_yt_access_tokens(
         .map(|c| (c.access_token.clone(), c.refresh_token)))
 }
 
+/// Retrieves the `YouTube` Music access token from the database.
+///
 /// # Errors
 ///
-/// * If a database error occurs
+/// * `GetYtConfigError::Database` - If a database operation fails
+/// * `GetYtConfigError::Parse` - If parsing the configuration fails
+/// * `GetYtConfigError::NoConfigsAvailable` - If no configuration exists
 pub async fn get_yt_access_token(db: &LibraryDatabase) -> Result<Option<String>, GetYtConfigError> {
     Ok(get_yt_access_tokens(db).await?.map(|c| c.0))
 }

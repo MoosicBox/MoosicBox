@@ -44,11 +44,18 @@ use crate::files::{
 
 use super::track_pool::service::CommanderError;
 
+/// Converts a track source to its HTTP content-type header value.
+///
+/// Returns the appropriate MIME type based on the track's audio format.
 #[must_use]
 pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
     audio_format_to_content_type(&source.format())
 }
 
+/// Converts an audio format to its HTTP content-type header value.
+///
+/// Returns the appropriate MIME type for the given audio format. Returns `None` for
+/// `AudioFormat::Source` as the format is determined by the source file.
 #[must_use]
 #[allow(clippy::missing_const_for_fn)]
 pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
@@ -65,12 +72,16 @@ pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
     }
 }
 
+/// Errors that can occur when retrieving track source information.
 #[derive(Debug, Error)]
 pub enum TrackSourceError {
+    /// Track not found with the specified ID
     #[error("Track not found: {0}")]
     NotFound(Id),
+    /// Invalid or unsupported API source
     #[error("Invalid source")]
     InvalidSource,
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
 }
@@ -157,47 +168,71 @@ pub async fn get_track_source(
     .ok_or_else(|| TrackSourceError::NotFound(track.id.clone()))
 }
 
+/// Errors that can occur when retrieving track audio bytes.
 #[derive(Debug, Error)]
 pub enum GetTrackBytesError {
+    /// Failed to parse integer value
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
+    /// IO error reading or writing track data
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// HTTP request error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// Tokio task join error
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    /// Semaphore acquire error
     #[error(transparent)]
     Acquire(#[from] tokio::sync::AcquireError),
+    /// Channel receive error
     #[error(transparent)]
     Recv(#[from] RecvError),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Track info retrieval error
     #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
+    /// Commander service error
     #[error(transparent)]
     Commander(#[from] CommanderError),
+    /// Track not found
     #[error("Track not found")]
     NotFound,
+    /// Unsupported audio format
     #[error("Unsupported format")]
     UnsupportedFormat,
 }
 
+/// Errors that can occur when processing track byte streams.
 #[derive(Debug, Error)]
 pub enum TrackByteStreamError {
+    /// Unsupported audio format encountered during stream processing
     #[error("Unknown {0:?}")]
     UnsupportedFormat(Box<dyn std::error::Error>),
 }
 
+/// A single item from a byte stream, either bytes or an IO error.
 pub type BytesStreamItem = Result<Bytes, std::io::Error>;
+
+/// A pinned, sendable stream of byte chunks.
 pub type BytesStream = Pin<Box<dyn Stream<Item = BytesStreamItem> + Send>>;
 
+/// Represents a stream of track audio bytes with metadata.
 pub struct TrackBytes {
+    /// Unique identifier for this byte stream
     pub id: usize,
+    /// Monitored stream of audio bytes
     pub stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
+    /// Size of the audio data in bytes (may be unknown for some sources)
     pub size: Option<u64>,
+    /// Original size before any transformations (e.g., before encoding)
     pub original_size: Option<u64>,
+    /// Audio format of the stream
     pub format: AudioFormat,
+    /// Filename of the track file (if available)
     pub filename: Option<String>,
 }
 
@@ -279,10 +314,13 @@ pub async fn get_track_bytes(
     get_audio_bytes(source, format, size, start, end).await
 }
 
+/// Errors that can occur when generating silent audio bytes.
 #[derive(Debug, Error)]
 pub enum GetSilenceBytesError {
+    /// Invalid or unsupported audio source
     #[error("Invalid source")]
     InvalidSource,
+    /// Audio output encoding error
     #[error(transparent)]
     AudioOutput(#[from] AudioOutputError),
 }
@@ -810,37 +848,56 @@ async fn request_track_bytes_from_url(
     })
 }
 
+/// Errors that can occur when retrieving track metadata information.
 #[derive(Debug, Error)]
 pub enum TrackInfoError {
+    /// Audio format is not supported for this operation
     #[error("Format not supported: {0:?}")]
     UnsupportedFormat(AudioFormat),
+    /// Track source type is not supported for this operation
     #[error("Source not supported: {0:?}")]
     UnsupportedSource(TrackSource),
+    /// Track not found with the specified ID
     #[error("Track not found: {0}")]
     NotFound(Id),
+    /// Tokio task join error
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    /// Audio decoding error
     #[error(transparent)]
     Decode(#[from] DecodeError),
+    /// Error retrieving track bytes
     #[error(transparent)]
     GetTrackBytes(#[from] Box<GetTrackBytesError>),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
 }
 
+/// Track metadata information including ID, title, artist, album, and duration.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TrackInfo {
+    /// Unique track identifier
     pub id: Id,
+    /// Track number within the album
     pub number: u32,
+    /// Track title
     pub title: String,
+    /// Track duration in seconds
     pub duration: f64,
+    /// Album name
     pub album: String,
+    /// Album identifier
     pub album_id: Id,
+    /// Release date (ISO 8601 format if available)
     pub date_released: Option<String>,
+    /// Artist name
     pub artist: String,
+    /// Artist identifier
     pub artist_id: Id,
+    /// Whether the track should be blurred (e.g., explicit content)
     pub blur: bool,
 }
 
@@ -911,6 +968,11 @@ pub async fn get_track_info(
 
 const DIV: u16 = u16::MAX / u8::MAX as u16;
 
+/// Generates visualization data from an audio buffer by averaging sample amplitudes.
+///
+/// Converts audio samples to visual data points by calculating absolute values and averaging
+/// across channels. Each output byte represents the amplitude at that point in time.
+///
 /// # Panics
 ///
 /// * If fails to convert sample into `u16`

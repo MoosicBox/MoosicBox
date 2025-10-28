@@ -37,6 +37,8 @@ pub fn headers_contains_in_order(
     true
 }
 
+/// Makes an HTTP request over a simulated TCP stream.
+///
 /// # Errors
 ///
 /// * If fails to read/write any bytes from/to the `TcpStream`
@@ -65,6 +67,8 @@ pub async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> i
     Ok(response)
 }
 
+/// Parses a raw HTTP response string into structured components.
+///
 /// # Errors
 ///
 /// * If invalid HTTP response format

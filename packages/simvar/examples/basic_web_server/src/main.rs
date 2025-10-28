@@ -1,3 +1,29 @@
+//! Basic web server simulation example using `simvar` and `moosicbox_web_server`.
+//!
+//! This example demonstrates how to use the `simvar` simulation framework to test
+//! a web server application with multiple concurrent clients. The simulation includes:
+//!
+//! * A web server host that serves HTTP requests on multiple endpoints
+//! * Multiple client actors that make periodic requests to the server
+//! * Automatic metrics collection and reporting
+//!
+//! # Example Endpoints
+//!
+//! The web server provides three endpoints:
+//!
+//! * `GET /api/v1/health` - Health check endpoint
+//! * `GET /api/v1/status` - Server status with uptime information
+//! * `POST /api/v1/echo` - Echo endpoint that returns the request with server timestamp
+//!
+//! # Running the Example
+//!
+//! ```bash
+//! cargo run --package simvar_basic_web_server_example
+//! ```
+//!
+//! The simulation runs for 10 seconds with 3 concurrent clients making requests
+//! at 500ms intervals.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

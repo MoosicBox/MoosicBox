@@ -55,6 +55,10 @@ pub enum CanvasAction {
 }
 
 impl CanvasAction {
+    /// Returns whether this action performs drawing (as opposed to configuration or clearing).
+    ///
+    /// Drawing actions include lines and filled rectangles, while configuration actions
+    /// like setting stroke size/color and clearing operations return `false`.
     #[must_use]
     pub const fn is_draw_action(&self) -> bool {
         !matches!(

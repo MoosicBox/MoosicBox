@@ -101,50 +101,72 @@ pub mod db;
 /// along with conversions to standard `MoosicBox` music models.
 pub mod models;
 
+/// Errors that can occur when interacting with the Qobuz API.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// No user ID available for the operation.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// JSON parsing error.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// HTTP request error.
     #[error(transparent)]
     Http(#[from] switchy::http::Error),
+    /// Database error (requires `db` feature).
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Database fetch error (requires `db` feature).
     #[cfg(feature = "db")]
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// No access token available for authentication.
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    /// No App ID found in the Qobuz bundle output.
     #[error("No App ID found in output")]
     NoAppId,
+    /// No seed and timezone found in the Qobuz bundle output.
     #[error("No seed and timezone found in output")]
     NoSeedAndTimezone,
+    /// No info and extras found in the Qobuz bundle output.
     #[error("No info and extras found in output")]
     NoInfoAndExtras,
+    /// No matching info for timezone in the Qobuz bundle.
     #[error("No matching info for timezone")]
     NoMatchingInfoForTimezone,
+    /// UTF-8 string conversion error.
     #[error(transparent)]
     Utf8(#[from] Utf8Error),
+    /// Failed to fetch the Qobuz app ID from the bundle.
     #[error("Failed to fetch app id")]
     FailedToFetchAppId,
+    /// No app secret available for signing requests.
     #[error("No app secret available")]
     NoAppSecretAvailable,
+    /// Authentication failed (401 Unauthorized).
     #[error("Unauthorized")]
     Unauthorized,
+    /// Generic request failure with error message.
     #[error("Request failed (error {0})")]
     RequestFailed(String),
+    /// HTTP request failed with status code and message.
     #[error("Request failed (error {0}): {1}")]
     HttpRequestFailed(u16, String),
+    /// Maximum number of retry attempts exceeded.
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
+    /// HTTP response had no body.
     #[error("No response body")]
     NoResponseBody,
+    /// JSON serialization/deserialization error.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// Base64 decoding error.
     #[error(transparent)]
     Base64Decode(#[from] base64::DecodeError),
+    /// Qobuz configuration error.
     #[error(transparent)]
     Config(#[from] QobuzConfigError),
 }
@@ -152,10 +174,12 @@ pub enum Error {
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";
 
+/// Device type for Qobuz API requests.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum QobuzDeviceType {
+    /// Browser-based client.
     Browser,
 }
 
@@ -526,19 +550,28 @@ macro_rules! qobuz_api_endpoint {
     };
 }
 
+/// Album release type categories used by Qobuz.
 #[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum QobuzAlbumReleaseType {
+    /// Standard studio album.
     #[default]
     Album,
+    /// Live recording.
     Live,
+    /// Compilation album.
     Compilation,
+    /// Extended play (EP).
     Ep,
+    /// Single release.
     Single,
+    /// EP or Single (combined category).
     EpSingle,
+    /// Other release type.
     Other,
+    /// Download-only release.
     Download,
 }
 
@@ -601,25 +634,32 @@ impl ToValueType<QobuzAlbumReleaseType> for &Value {
     }
 }
 
+/// Sort options for album listings in Qobuz.
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum QobuzAlbumSort {
+    /// Sort by release date.
     ReleaseDate,
+    /// Sort by relevance.
     Relevant,
+    /// Sort by release date with priority weighting (default).
     #[default]
     ReleaseDateByPriority,
 }
 
+/// Sort order direction for album listings in Qobuz.
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
 )]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
 pub enum QobuzAlbumOrder {
+    /// Ascending order.
     Asc,
+    /// Descending order (default).
     #[default]
     Desc,
 }
@@ -1616,15 +1656,20 @@ pub async fn remove_favorite_track(
     Ok(())
 }
 
+/// Audio quality options for Qobuz track streaming.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum QobuzAudioQuality {
-    Low,            // MP3 320
-    FlacLossless,   // FLAC 16 bit 44.1kHz
-    FlacHiRes,      // FLAC 24 bit <= 96kHz
-    FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
+    /// MP3 320 kbps.
+    Low,
+    /// FLAC 16-bit 44.1kHz lossless.
+    FlacLossless,
+    /// FLAC 24-bit up to 96kHz high-resolution.
+    FlacHiRes,
+    /// FLAC 24-bit above 96kHz up to 192kHz highest resolution.
+    FlacHighestRes,
 }
 
 impl QobuzAudioQuality {
@@ -1928,25 +1973,32 @@ impl From<Error> for moosicbox_music_api::Error {
     }
 }
 
+/// Errors that can occur during Qobuz API configuration and initialization.
 #[derive(Debug, thiserror::Error)]
 pub enum QobuzConfigError {
+    /// Database connection is missing (requires `db` feature).
     #[cfg(feature = "db")]
     #[error("Missing Db")]
     MissingDb,
+    /// Database fetch error (requires `db` feature).
     #[cfg(feature = "db")]
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API error.
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
 }
 
+/// Builder for constructing a `QobuzMusicApi` instance with configuration options.
 #[derive(Default)]
 pub struct QobuzMusicApiBuilder {
+    /// Database connection for persisting authentication tokens and configuration (requires `db` feature).
     #[cfg(feature = "db")]
     db: Option<LibraryDatabase>,
 }
 
 impl QobuzMusicApiBuilder {
+    /// Sets the database connection (builder pattern, consumes self).
     #[cfg(feature = "db")]
     #[must_use]
     pub fn with_db(mut self, db: LibraryDatabase) -> Self {
@@ -1954,6 +2006,7 @@ impl QobuzMusicApiBuilder {
         self
     }
 
+    /// Sets the database connection (mutable reference pattern).
     #[cfg(feature = "db")]
     pub fn db(&mut self, db: LibraryDatabase) -> &mut Self {
         self.db = Some(db);
@@ -2042,8 +2095,10 @@ impl QobuzMusicApiBuilder {
 
 /// Implementation of the `MusicApi` trait for Qobuz music service.
 pub struct QobuzMusicApi {
+    /// Database connection for storing authentication and configuration (requires `db` feature).
     #[cfg(feature = "db")]
     db: LibraryDatabase,
+    /// Authentication manager for handling login and credential validation.
     auth: ApiAuth,
 }
 

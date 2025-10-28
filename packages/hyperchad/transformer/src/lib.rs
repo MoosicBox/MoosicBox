@@ -885,62 +885,117 @@ pub enum OverrideItem {
     StrId(String),
     /// CSS class list override.
     Classes(Vec<String>),
+    /// Layout direction override (row, column, etc.).
     Direction(LayoutDirection),
+    /// Horizontal overflow behavior override.
     OverflowX(LayoutOverflow),
+    /// Vertical overflow behavior override.
     OverflowY(LayoutOverflow),
+    /// Grid cell size override for grid layouts.
     GridCellSize(Number),
+    /// Main axis alignment override (flex-start, center, space-between, etc.).
     JustifyContent(JustifyContent),
+    /// Cross axis alignment override (flex-start, center, stretch, etc.).
     AlignItems(AlignItems),
+    /// Text alignment override (left, center, right, justify).
     TextAlign(TextAlign),
+    /// White space handling override (normal, nowrap, pre, etc.).
     WhiteSpace(WhiteSpace),
+    /// Text decoration styling override (underline, line-through, etc.).
     TextDecoration(TextDecoration),
+    /// Font family list override.
     FontFamily(Vec<String>),
+    /// Font weight override (normal, bold, numeric values).
     FontWeight(FontWeight),
+    /// Width override.
     Width(Number),
+    /// Minimum width override.
     MinWidth(Number),
+    /// Maximum width override.
     MaxWidth(Number),
+    /// Height override.
     Height(Number),
+    /// Minimum height override.
     MinHeight(Number),
+    /// Maximum height override.
     MaxHeight(Number),
+    /// Flex sizing override (grow, shrink, basis).
     Flex(Flex),
+    /// Column gap override for flex/grid layouts.
     ColumnGap(Number),
+    /// Row gap override for flex/grid layouts.
     RowGap(Number),
+    /// Opacity override (0.0 to 1.0).
     Opacity(Number),
+    /// Left position override for positioned elements.
     Left(Number),
+    /// Right position override for positioned elements.
     Right(Number),
+    /// Top position override for positioned elements.
     Top(Number),
+    /// Bottom position override for positioned elements.
     Bottom(Number),
+    /// Horizontal translation transform override.
     TranslateX(Number),
+    /// Vertical translation transform override.
     TranslateY(Number),
+    /// Cursor style override (pointer, default, text, etc.).
     Cursor(Cursor),
+    /// User selection behavior override (auto, none, text, all).
     UserSelect(UserSelect),
+    /// Text wrapping behavior override (normal, break-word, anywhere).
     OverflowWrap(OverflowWrap),
+    /// Text overflow handling override (clip, ellipsis).
     TextOverflow(TextOverflow),
+    /// Position type override (static, relative, absolute, fixed).
     Position(Position),
+    /// Background color override.
     Background(Color),
+    /// Top border override (color and width).
     BorderTop((Color, Number)),
+    /// Right border override (color and width).
     BorderRight((Color, Number)),
+    /// Bottom border override (color and width).
     BorderBottom((Color, Number)),
+    /// Left border override (color and width).
     BorderLeft((Color, Number)),
+    /// Top-left border radius override.
     BorderTopLeftRadius(Number),
+    /// Top-right border radius override.
     BorderTopRightRadius(Number),
+    /// Bottom-left border radius override.
     BorderBottomLeftRadius(Number),
+    /// Bottom-right border radius override.
     BorderBottomRightRadius(Number),
+    /// Left margin override.
     MarginLeft(Number),
+    /// Right margin override.
     MarginRight(Number),
+    /// Top margin override.
     MarginTop(Number),
+    /// Bottom margin override.
     MarginBottom(Number),
+    /// Left padding override.
     PaddingLeft(Number),
+    /// Right padding override.
     PaddingRight(Number),
+    /// Top padding override.
     PaddingTop(Number),
+    /// Bottom padding override.
     PaddingBottom(Number),
+    /// Font size override.
     FontSize(Number),
+    /// Text color override.
     Color(Color),
+    /// Visibility toggle override (true = hidden, false = visible).
     Hidden(bool),
+    /// CSS visibility property override (visible, hidden, collapse).
     Visibility(Visibility),
 }
 
 impl OverrideItem {
+    /// Serializes this override item to a JSON string.
+    ///
     /// # Errors
     ///
     /// * If the serialization fails
@@ -1001,6 +1056,8 @@ impl OverrideItem {
         }
     }
 
+    /// Converts this override item to a JSON value.
+    ///
     /// # Errors
     ///
     /// * If the serialization fails
@@ -1061,9 +1118,7 @@ impl OverrideItem {
         }
     }
 
-    /// # Errors
-    ///
-    /// * If the serialization fails
+    /// Returns a type-erased reference to the inner value as a trait object.
     #[must_use]
     pub fn as_any<'a>(&'a self) -> Box<dyn Any + 'a> {
         match self {
@@ -1475,135 +1530,229 @@ pub struct Container {
     pub children: Vec<Self>,
     /// Layout direction (row or column).
     pub direction: LayoutDirection,
+    /// Horizontal overflow behavior.
     pub overflow_x: LayoutOverflow,
+    /// Vertical overflow behavior.
     pub overflow_y: LayoutOverflow,
+    /// Grid cell size for grid layouts.
     pub grid_cell_size: Option<Number>,
+    /// Main axis alignment (flex-start, center, space-between, etc.).
     pub justify_content: Option<JustifyContent>,
+    /// Cross axis alignment (flex-start, center, stretch, etc.).
     pub align_items: Option<AlignItems>,
+    /// Text alignment (left, center, right, justify).
     pub text_align: Option<TextAlign>,
+    /// White space handling (normal, nowrap, pre, etc.).
     pub white_space: Option<WhiteSpace>,
+    /// Text decoration styling.
     pub text_decoration: Option<TextDecoration>,
+    /// Font family list.
     pub font_family: Option<Vec<String>>,
+    /// Font weight.
     pub font_weight: Option<FontWeight>,
+    /// Width of the container.
     pub width: Option<Number>,
+    /// Minimum width constraint.
     pub min_width: Option<Number>,
+    /// Maximum width constraint.
     pub max_width: Option<Number>,
+    /// Height of the container.
     pub height: Option<Number>,
+    /// Minimum height constraint.
     pub min_height: Option<Number>,
+    /// Maximum height constraint.
     pub max_height: Option<Number>,
+    /// Flex sizing (grow, shrink, basis).
     pub flex: Option<Flex>,
+    /// Gap between columns in flex/grid layouts.
     pub column_gap: Option<Number>,
+    /// Gap between rows in flex/grid layouts.
     pub row_gap: Option<Number>,
+    /// Opacity (0.0 to 1.0).
     pub opacity: Option<Number>,
+    /// Left position for positioned elements.
     pub left: Option<Number>,
+    /// Right position for positioned elements.
     pub right: Option<Number>,
+    /// Top position for positioned elements.
     pub top: Option<Number>,
+    /// Bottom position for positioned elements.
     pub bottom: Option<Number>,
+    /// Horizontal translation transform.
     pub translate_x: Option<Number>,
+    /// Vertical translation transform.
     pub translate_y: Option<Number>,
+    /// Cursor style.
     pub cursor: Option<Cursor>,
+    /// User selection behavior.
     pub user_select: Option<UserSelect>,
+    /// Text wrapping behavior.
     pub overflow_wrap: Option<OverflowWrap>,
+    /// Text overflow handling.
     pub text_overflow: Option<TextOverflow>,
+    /// Position type (static, relative, absolute, fixed).
     pub position: Option<Position>,
+    /// Background color.
     pub background: Option<Color>,
+    /// Top border (color and width).
     pub border_top: Option<(Color, Number)>,
+    /// Right border (color and width).
     pub border_right: Option<(Color, Number)>,
+    /// Bottom border (color and width).
     pub border_bottom: Option<(Color, Number)>,
+    /// Left border (color and width).
     pub border_left: Option<(Color, Number)>,
+    /// Top-left border radius.
     pub border_top_left_radius: Option<Number>,
+    /// Top-right border radius.
     pub border_top_right_radius: Option<Number>,
+    /// Bottom-left border radius.
     pub border_bottom_left_radius: Option<Number>,
+    /// Bottom-right border radius.
     pub border_bottom_right_radius: Option<Number>,
+    /// Left margin.
     pub margin_left: Option<Number>,
+    /// Right margin.
     pub margin_right: Option<Number>,
+    /// Top margin.
     pub margin_top: Option<Number>,
+    /// Bottom margin.
     pub margin_bottom: Option<Number>,
+    /// Left padding.
     pub padding_left: Option<Number>,
+    /// Right padding.
     pub padding_right: Option<Number>,
+    /// Top padding.
     pub padding_top: Option<Number>,
+    /// Bottom padding.
     pub padding_bottom: Option<Number>,
+    /// Font size.
     pub font_size: Option<Number>,
+    /// Text color.
     pub color: Option<Color>,
+    /// Custom state data for dynamic behavior.
     pub state: Option<Value>,
+    /// Whether the container is hidden.
     pub hidden: Option<bool>,
+    /// Whether to render debug information.
     pub debug: Option<bool>,
+    /// CSS visibility property.
     pub visibility: Option<Visibility>,
+    /// Associated route for navigation.
     pub route: Option<Route>,
+    /// Interactive actions bound to this container.
     pub actions: Vec<Action>,
+    /// Conditional style overrides.
     pub overrides: Vec<ConfigOverride>,
+    /// Calculated left margin in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_margin_left: Option<f32>,
+    /// Calculated right margin in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_margin_right: Option<f32>,
+    /// Calculated top margin in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_margin_top: Option<f32>,
+    /// Calculated bottom margin in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_margin_bottom: Option<f32>,
+    /// Calculated left padding in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_padding_left: Option<f32>,
+    /// Calculated right padding in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_padding_right: Option<f32>,
+    /// Calculated top padding in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_padding_top: Option<f32>,
+    /// Calculated bottom padding in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_padding_bottom: Option<f32>,
+    /// Calculated minimum width in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_min_width: Option<f32>,
+    /// Calculated minimum width based on children (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_child_min_width: Option<f32>,
+    /// Calculated maximum width in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_max_width: Option<f32>,
+    /// Calculated preferred width in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_preferred_width: Option<f32>,
+    /// Calculated final width in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_width: Option<f32>,
+    /// Calculated minimum height in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_min_height: Option<f32>,
+    /// Calculated minimum height based on children (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_child_min_height: Option<f32>,
+    /// Calculated maximum height in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_max_height: Option<f32>,
+    /// Calculated preferred height in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_preferred_height: Option<f32>,
+    /// Calculated final height in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_height: Option<f32>,
+    /// Calculated x-coordinate position in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_x: Option<f32>,
+    /// Calculated y-coordinate position in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_y: Option<f32>,
+    /// Calculated layout position (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_position: Option<hyperchad_transformer_models::LayoutPosition>,
+    /// Calculated top border with resolved color and pixel width (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_top: Option<(Color, f32)>,
+    /// Calculated right border with resolved color and pixel width (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_right: Option<(Color, f32)>,
+    /// Calculated bottom border with resolved color and pixel width (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_bottom: Option<(Color, f32)>,
+    /// Calculated left border with resolved color and pixel width (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_left: Option<(Color, f32)>,
+    /// Calculated top-left border radius in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_top_left_radius: Option<f32>,
+    /// Calculated top-right border radius in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_top_right_radius: Option<f32>,
+    /// Calculated bottom-left border radius in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_bottom_left_radius: Option<f32>,
+    /// Calculated bottom-right border radius in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_border_bottom_right_radius: Option<f32>,
+    /// Calculated column gap in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_column_gap: Option<f32>,
+    /// Calculated row gap in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_row_gap: Option<f32>,
+    /// Calculated opacity value (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_opacity: Option<f32>,
+    /// Calculated font size in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_font_size: Option<f32>,
+    /// Right scrollbar offset in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub scrollbar_right: Option<f32>,
+    /// Bottom scrollbar offset in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub scrollbar_bottom: Option<f32>,
+    /// Calculated x-axis offset for scrolling (requires `layout-offset` feature).
     #[cfg(feature = "layout-offset")]
     pub calculated_offset_x: Option<f32>,
+    /// Calculated y-axis offset for scrolling (requires `layout-offset` feature).
     #[cfg(feature = "layout-offset")]
     pub calculated_offset_y: Option<f32>,
 }
@@ -1615,6 +1764,11 @@ impl AsRef<Self> for Container {
 }
 
 impl Container {
+    /// Returns an iterator over config overrides for this container and optionally its children.
+    ///
+    /// # Parameters
+    ///
+    /// * `recurse` - If true, includes overrides from all descendant containers
     pub fn iter_overrides(&self, recurse: bool) -> impl Iterator<Item = (&Self, &ConfigOverride)> {
         let mut iter: Box<dyn Iterator<Item = (&Self, &ConfigOverride)>> =
             if self.overrides.is_empty() {
@@ -1632,6 +1786,9 @@ impl Container {
         iter
     }
 
+    /// Creates a breadth-first search iterator for traversing the container tree.
+    ///
+    /// Returns a `BfsPaths` structure that can be used to traverse containers level by level.
     #[must_use]
     pub fn bfs(&self) -> BfsPaths {
         // Collect nodes in pre-order, recording their path
@@ -1670,6 +1827,9 @@ impl Container {
         BfsPaths { levels, paths }
     }
 
+    /// Performs a breadth-first search traversal with a visitor function.
+    ///
+    /// Calls the visitor function for each container in breadth-first order.
     #[must_use]
     pub fn bfs_visit(&self, mut visitor: impl FnMut(&Self)) -> BfsPaths {
         // Collect nodes in pre-order, recording their path
@@ -1712,6 +1872,9 @@ impl Container {
         BfsPaths { levels, paths }
     }
 
+    /// Performs a breadth-first search traversal with a mutable visitor function.
+    ///
+    /// Calls the visitor function for each container in breadth-first order, allowing mutation.
     #[must_use]
     pub fn bfs_visit_mut(&mut self, mut visitor: impl FnMut(&mut Self)) -> BfsPaths {
         // Collect nodes in pre-order, recording their path
@@ -1770,6 +1933,7 @@ pub struct BfsPaths {
 }
 
 impl BfsPaths {
+    /// Traverses containers in breadth-first order using the visitor function.
     pub fn traverse(&self, root: &Container, mut visitor: impl FnMut(&Container)) {
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
@@ -1788,6 +1952,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in breadth-first order using the mutable visitor function.
     pub fn traverse_mut(&self, root: &mut Container, mut visitor: impl FnMut(&mut Container)) {
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
@@ -1806,6 +1971,9 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in breadth-first order, propagating parent data.
+    ///
+    /// The visitor function receives references to both the current container and accumulated parent data.
     pub fn traverse_with_parents<R: Clone>(
         &self,
         inclusive: bool,
@@ -1837,6 +2005,9 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in breadth-first order, propagating parent data with mutable access.
+    ///
+    /// The visitor function receives mutable references to both the current container and accumulated parent data.
     pub fn traverse_with_parents_mut<R: Clone>(
         &self,
         inclusive: bool,
@@ -1868,6 +2039,9 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in breadth-first order, propagating parent data by reference.
+    ///
+    /// Similar to `traverse_with_parents` but doesn't require `Clone`.
     pub fn traverse_with_parents_ref<R>(
         &self,
         inclusive: bool,
@@ -1898,6 +2072,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in breadth-first order, propagating parent data by reference with mutable container access.
     pub fn traverse_with_parents_ref_mut<R>(
         &self,
         inclusive: bool,
@@ -1928,6 +2103,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order (bottom-up).
     pub fn traverse_rev(&self, root: &Container, mut visitor: impl FnMut(&Container)) {
         // Follow paths to apply visitor to each node
         for level_nodes in self.levels.iter().rev() {
@@ -1946,6 +2122,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order with mutable access.
     pub fn traverse_rev_mut(&self, root: &mut Container, mut visitor: impl FnMut(&mut Container)) {
         // Follow paths to apply visitor to each node
         for level_nodes in self.levels.iter().rev() {
@@ -1964,6 +2141,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order, propagating parent data.
     pub fn traverse_rev_with_parents<R: Clone>(
         &self,
         inclusive: bool,
@@ -1995,6 +2173,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order, propagating parent data with mutable access.
     pub fn traverse_rev_with_parents_mut<R: Clone>(
         &self,
         inclusive: bool,
@@ -2026,6 +2205,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order, propagating parent data by reference.
     pub fn traverse_rev_with_parents_ref<R>(
         &self,
         inclusive: bool,
@@ -2058,6 +2238,7 @@ impl BfsPaths {
         }
     }
 
+    /// Traverses containers in reverse breadth-first order, propagating parent data by reference with mutable container access.
     pub fn traverse_rev_with_parents_ref_mut<R>(
         &self,
         inclusive: bool,
@@ -2153,16 +2334,19 @@ impl Container {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
+    /// Checks if this container is visible (not hidden).
     #[must_use]
     pub fn is_visible(&self) -> bool {
         self.hidden != Some(true)
     }
 
+    /// Checks if this container is hidden.
     #[must_use]
     pub fn is_hidden(&self) -> bool {
         self.hidden == Some(true)
     }
 
+    /// Checks if this container is a span element.
     #[must_use]
     pub fn is_span(&self) -> bool {
         matches!(
@@ -2176,6 +2360,7 @@ impl Container {
         ) && self.children.iter().all(Self::is_span)
     }
 
+    /// Checks if this container uses flexbox layout.
     #[must_use]
     pub fn is_flex_container(&self) -> bool {
         self.direction == LayoutDirection::Row
@@ -2185,38 +2370,47 @@ impl Container {
             || self.column_gap.is_some()
     }
 
+    /// Returns an iterator over visible child elements.
     pub fn visible_elements(&self) -> impl Iterator<Item = &Self> {
         visible_elements(&self.children)
     }
 
+    /// Returns a mutable iterator over visible child elements.
     pub fn visible_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         visible_elements_mut(&mut self.children)
     }
 
+    /// Returns an iterator over relatively positioned child elements.
     pub fn relative_positioned_elements(&self) -> impl Iterator<Item = &Self> {
         relative_positioned_elements(&self.children)
     }
 
+    /// Returns a mutable iterator over relatively positioned child elements.
     pub fn relative_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         relative_positioned_elements_mut(&mut self.children)
     }
 
+    /// Returns an iterator over absolutely positioned child elements.
     pub fn absolute_positioned_elements(&self) -> impl Iterator<Item = &Self> {
         absolute_positioned_elements(&self.children)
     }
 
+    /// Returns a mutable iterator over absolutely positioned child elements.
     pub fn absolute_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         absolute_positioned_elements_mut(&mut self.children)
     }
 
+    /// Returns an iterator over fixed positioned child elements.
     pub fn fixed_positioned_elements(&self) -> impl Iterator<Item = &Self> {
         fixed_positioned_elements(&self.children)
     }
 
+    /// Returns a mutable iterator over fixed positioned child elements.
     pub fn fixed_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         fixed_positioned_elements_mut(&mut self.children)
     }
 
+    /// Finds a descendant container by its numeric ID.
     #[must_use]
     pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
         if self.id == id {
@@ -2225,6 +2419,7 @@ impl Container {
         self.children.iter().find_map(|x| x.find_element_by_id(id))
     }
 
+    /// Finds a descendant container by its numeric ID (mutable).
     #[must_use]
     pub fn find_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.id == id {
@@ -2235,6 +2430,7 @@ impl Container {
             .find_map(|x| x.find_element_by_id_mut(id))
     }
 
+    /// Finds a descendant container by its string ID.
     #[must_use]
     pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
         if self.str_id.as_ref().is_some_and(|x| x == str_id) {
@@ -2245,6 +2441,7 @@ impl Container {
             .find_map(|x| x.find_element_by_str_id(str_id))
     }
 
+    /// Finds a descendant container by CSS class name.
     #[must_use]
     pub fn find_element_by_class(&self, class: &str) -> Option<&Self> {
         if self.classes.iter().any(|x| x == class) {
@@ -2255,6 +2452,7 @@ impl Container {
             .find_map(|x| x.find_element_by_class(class))
     }
 
+    /// Finds a descendant container by its string ID (mutable).
     #[must_use]
     pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
         if self.str_id.as_ref().is_some_and(|x| x == str_id) {
@@ -2265,6 +2463,7 @@ impl Container {
             .find_map(|x| x.find_element_by_str_id_mut(str_id))
     }
 
+    /// Finds the parent container of this container within the root tree.
     #[must_use]
     pub fn find_parent<'a>(&self, root: &'a mut Self) -> Option<&'a Self> {
         if root.children.iter().any(|x| x.id == self.id) {
@@ -2276,6 +2475,7 @@ impl Container {
         }
     }
 
+    /// Finds the parent container of a child with the given numeric ID.
     #[must_use]
     pub fn find_parent_by_id(&self, id: usize) -> Option<&Self> {
         if self.children.iter().any(|x| x.id == id) {
@@ -2285,6 +2485,7 @@ impl Container {
         }
     }
 
+    /// Finds the parent container of a child with the given numeric ID (mutable).
     #[must_use]
     pub fn find_parent_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.children.iter().any(|x| x.id == id) {
@@ -2296,6 +2497,7 @@ impl Container {
         }
     }
 
+    /// Finds the parent container of a child with the given string ID (mutable).
     #[must_use]
     pub fn find_parent_by_str_id_mut(&mut self, id: &str) -> Option<&mut Self> {
         if self
@@ -2512,6 +2714,7 @@ impl Container {
         element
     }
 
+    /// Performs a partial layout calculation starting from the specified container (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub fn partial_calc(&mut self, calculator: &impl layout::Calc, id: usize) {
         let Some(parent) = self.find_parent_by_id_mut(id) else {
@@ -2542,61 +2745,107 @@ pub enum Element {
     Aside,
     /// Main content element.
     Main,
+    /// Header element for page or section headers.
     Header,
+    /// Footer element for page or section footers.
     Footer,
+    /// Section element for thematic grouping of content.
     Section,
+    /// Form element for user input.
     Form,
+    /// Inline span element for text styling.
     Span,
+    /// Input element for form fields.
     Input {
+        /// The input type and configuration.
         input: Input,
+        /// Form field name for submission.
         name: Option<String>,
+        /// Whether the input should automatically receive focus.
         autofocus: Option<bool>,
     },
+    /// Button element for user interaction.
     Button {
+        /// Button type (submit, reset, button).
         r#type: Option<String>,
     },
+    /// Image element with responsive loading support.
     Image {
+        /// Image source URL.
         source: Option<String>,
+        /// Alternative text for accessibility.
         alt: Option<String>,
+        /// How the image should fit its container.
         fit: Option<ImageFit>,
+        /// Responsive image source set.
         source_set: Option<String>,
+        /// Sizes attribute for responsive images.
         sizes: Option<Number>,
+        /// Loading strategy (lazy, eager).
         loading: Option<ImageLoading>,
     },
+    /// Anchor element for hyperlinks.
     Anchor {
+        /// Link target behavior (_blank, _self, etc.).
         target: Option<LinkTarget>,
+        /// Link destination URL.
         href: Option<String>,
     },
+    /// Heading element (h1-h6).
     Heading {
+        /// Heading level (1-6).
         size: HeaderSize,
     },
+    /// Unordered list element (ul).
     UnorderedList,
+    /// Ordered list element (ol).
     OrderedList,
+    /// List item element (li).
     ListItem,
+    /// Table element for tabular data.
     Table,
+    /// Table head element (thead).
     THead,
+    /// Table header cell element (th).
     TH {
+        /// Row span for multi-row headers.
         rows: Option<Number>,
+        /// Column span for multi-column headers.
         columns: Option<Number>,
     },
+    /// Table body element (tbody).
     TBody,
+    /// Table row element (tr).
     TR,
+    /// Table data cell element (td).
     TD {
+        /// Row span for multi-row cells.
         rows: Option<Number>,
+        /// Column span for multi-column cells.
         columns: Option<Number>,
     },
+    /// Canvas element for drawing graphics (requires `canvas` feature).
     #[cfg(feature = "canvas")]
     Canvas,
+    /// Textarea element for multi-line text input.
     Textarea {
+        /// Current text value.
         value: String,
+        /// Placeholder text when empty.
         placeholder: Option<String>,
+        /// Form field name for submission.
         name: Option<String>,
+        /// Visible number of text rows.
         rows: Option<Number>,
+        /// Visible number of text columns.
         cols: Option<Number>,
     },
+    /// Details disclosure element for expandable content.
     Details {
+        /// Whether the details are initially open.
         open: Option<bool>,
     },
+    /// Summary element for details disclosure heading.
     Summary,
 }
 

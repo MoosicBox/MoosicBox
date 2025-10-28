@@ -37,7 +37,9 @@ impl std::fmt::Display for IdType {
 /// Represents an ID that is unique within a specific API source.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ApiId {
+    /// The API source this ID belongs to
     pub source: ApiSource,
+    /// The identifier within that source
     pub id: Id,
 }
 
@@ -508,6 +510,10 @@ mod db {
     }
 }
 
+/// Parses integer ranges into a vector of numeric IDs.
+///
+/// Supports ranges like "1,2,5-10" where hyphens indicate ranges.
+///
 /// # Errors
 ///
 /// * If a number fails to parse to an `Id`
