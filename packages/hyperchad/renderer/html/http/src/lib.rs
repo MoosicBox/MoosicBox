@@ -48,16 +48,22 @@ mod actions;
 /// Errors that can occur during HTTP request processing.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// HTTP response construction error.
     #[error(transparent)]
     Http(#[from] http::Error),
+    /// File I/O error during asset serving.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// HTML rendering error from the renderer.
     #[error(transparent)]
     Renderer(Box<dyn std::error::Error + Send>),
+    /// Channel receive error when handling actions.
     #[error(transparent)]
     Recv(#[from] flume::RecvError),
+    /// Router navigation error.
     #[error(transparent)]
     Navigate(#[from] hyperchad_router::NavigateError),
+    /// JSON serialization error (requires `json` feature).
     #[cfg(feature = "_json")]
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
