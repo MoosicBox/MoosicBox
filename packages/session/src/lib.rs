@@ -61,6 +61,8 @@ pub mod api;
 #[cfg(feature = "events")]
 pub mod events;
 
+/// Retrieves all tracks in a session playlist.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -71,6 +73,8 @@ pub async fn get_session_playlist_tracks(
     crate::db::get_session_playlist_tracks(db, session_playlist_id).await
 }
 
+/// Retrieves the playlist associated with a session.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -81,6 +85,8 @@ pub async fn get_session_playlist(
     crate::db::get_session_playlist(db, session_id).await
 }
 
+/// Retrieves the audio zone configuration for a session.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -97,6 +103,8 @@ pub async fn get_session_audio_zone(
     )
 }
 
+/// Sets the audio zone configuration for a session.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -107,6 +115,8 @@ pub async fn set_session_audio_zone(
     crate::db::set_session_audio_zone(db, set_session_audio_zone).await
 }
 
+/// Checks whether a session is currently playing.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -117,6 +127,8 @@ pub async fn get_session_playing(
     crate::db::get_session_playing(db, id).await
 }
 
+/// Retrieves a session by its ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -127,6 +139,8 @@ pub async fn get_session(
     crate::db::get_session(db, id).await
 }
 
+/// Retrieves all sessions.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -134,6 +148,8 @@ pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, Database
     crate::db::get_sessions(db).await
 }
 
+/// Creates a new playback session.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -144,6 +160,8 @@ pub async fn create_session(
     crate::db::create_session(db, session).await
 }
 
+/// Updates an existing session with new settings.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -154,6 +172,8 @@ pub async fn update_session(
     crate::db::update_session(db, session).await
 }
 
+/// Deletes a session by its ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -164,6 +184,8 @@ pub async fn delete_session(
     crate::db::delete_session(db, session_id).await
 }
 
+/// Retrieves all registered connections.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -173,6 +195,8 @@ pub async fn get_connections(
     crate::db::get_connections(db).await
 }
 
+/// Registers a new connection with its associated players.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -197,6 +221,8 @@ pub async fn register_connection(
     })
 }
 
+/// Deletes a connection by its ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -207,6 +233,8 @@ pub async fn delete_connection(
     crate::db::delete_connection(db, connection_id).await
 }
 
+/// Retrieves all players associated with a connection.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -217,6 +245,8 @@ pub async fn get_players(
     crate::db::get_players(db, connection_id).await
 }
 
+/// Creates a new player for a connection.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -242,14 +272,19 @@ pub async fn create_player(
     Ok(result)
 }
 
+/// Error type for player creation operations.
 #[derive(Debug, Error)]
 pub enum CreatePlayersError {
+    /// Database operation failed.
     #[error(transparent)]
     Db(#[from] DatabaseFetchError),
+    /// The specified connection ID does not exist.
     #[error("Invalid connection")]
     InvalidConnection,
 }
 
+/// Creates multiple players for a connection.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -285,6 +320,8 @@ pub async fn create_players(
     Ok(results)
 }
 
+/// Deletes a player by its ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -306,6 +343,8 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Da
     Ok(())
 }
 
+/// Deletes a track from a session playlist by track ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -316,6 +355,8 @@ pub async fn delete_session_playlist_track_by_track_id(
     crate::db::delete_session_playlist_track_by_track_id(db, id).await
 }
 
+/// Deletes multiple tracks from session playlists by track IDs.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -326,6 +367,8 @@ pub async fn delete_session_playlist_tracks_by_track_id(
     crate::db::delete_session_playlist_tracks_by_track_id(db, ids).await
 }
 
+/// Updates the audio output IDs for a session based on its playback target.
+///
 /// # Errors
 ///
 /// * If the audio zone fails to be fetched
