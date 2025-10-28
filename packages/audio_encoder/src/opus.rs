@@ -139,6 +139,7 @@ pub fn encode_opus_float(
 /// # Panics
 ///
 /// * If the packet reader fails to read the next packet
+/// * If the packet writer fails to write a packet
 pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
     let mut pck_rdr = PacketReader::new(&mut read);
 
@@ -182,7 +183,7 @@ pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
 /// Writes a single Ogg packet to a file.
 ///
 /// Creates an Ogg packet writer and writes the provided content as a single packet
-/// with stream end marker.
+/// with stream end marker. Errors during writing are logged but not propagated.
 pub fn write_ogg(file: std::fs::File, content: &[u8]) {
     let mut writer = PacketWriter::new(file);
 

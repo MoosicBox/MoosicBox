@@ -15,16 +15,18 @@
 //!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```rust
 //! # #[cfg(feature = "aac")]
 //! # {
-//! use moosicbox_audio_encoder::aac::{encoder_aac, encode_aac};
-//!
+//! # use moosicbox_audio_encoder::aac::{encoder_aac, encode_aac};
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let encoder = encoder_aac()?;
 //! let input: Vec<i16> = vec![0; 2048];
 //! let mut output = vec![0u8; 8192];
 //! let info = encode_aac(&encoder, &input, &mut output)?;
 //! println!("Encoded {} samples into {} bytes", info.input_consumed, info.output_size);
+//! # Ok(())
+//! # }
 //! # }
 //! ```
 
