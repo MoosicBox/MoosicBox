@@ -13,7 +13,7 @@
 //! # fn main() {
 //! let runtime_handle = moosicbox_async_service::runtime::Handle::current();
 //! let ctx = Context::new(&runtime_handle);
-//! let service = service::Service::new(Arc::new(RwLock::new(ctx)));
+//! let service = service::Service::new(ctx);
 //! let _handle = service.start();
 //! # }
 //! ```
