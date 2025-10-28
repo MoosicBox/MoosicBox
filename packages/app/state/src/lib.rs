@@ -79,10 +79,18 @@ type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
 
 static PROXY_CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Client::new);
 
+/// Global `UPnP` listener handle for managing `UPnP` device discovery and events.
+///
+/// This handle is initialized once when `UPnP` support is enabled and used throughout
+/// the application to interact with `UPnP`/DLNA devices on the network.
 #[cfg(feature = "upnp")]
 pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<switchy_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
+/// Adapter for mapping music sources to remote library API instances.
+///
+/// Used with `UPnP` players to provide access to the music library via
+/// the remote library API.
 #[cfg(feature = "upnp")]
 pub struct SourceToRemoteLibrary {
     host: String,
@@ -105,82 +113,119 @@ impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
     }
 }
 
+/// Errors that can occur during proxied API requests.
 #[derive(Debug, Error)]
 pub enum ProxyRequestError {
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// HTTP client error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// Non-success HTTP response from the server
     #[error("Failure response ({status}): {text}")]
     FailureResponse { status: u16, text: String },
 }
 
+/// Errors that can occur when fetching audio zones from the server.
 #[derive(Debug, Error)]
 pub enum FetchAudioZonesError {
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// Required `MoosicBox` profile is missing
     #[error("Missing profile")]
     MissingProfile,
 }
 
+/// Errors that can occur when scanning for audio outputs.
 #[derive(Debug, Error)]
 pub enum ScanOutputsError {
+    /// Audio output scanner error
     #[error(transparent)]
     AudioOutputScanner(#[from] AudioOutputScannerError),
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
 
+/// Errors that can occur during `UPnP` player initialization.
 #[cfg(feature = "upnp")]
 #[derive(Debug, Error)]
 pub enum InitUpnpError {
+    /// `UPnP` device scanner error
     #[error(transparent)]
     UpnpDeviceScanner(#[from] switchy_upnp::UpnpDeviceScannerError),
+    /// Audio output configuration error
     #[error(transparent)]
     AudioOutput(#[from] moosicbox_audio_output::AudioOutputError),
+    /// Error registering players with the server
     #[error(transparent)]
     RegisterPlayers(#[from] RegisterPlayersError),
 }
 
+/// Errors that can occur when registering players with the server.
 #[derive(Debug, Error)]
 pub enum RegisterPlayersError {
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// Required `MoosicBox` profile is missing
     #[error("Missing profile")]
     MissingProfile,
 }
 
+/// Primary error type for application state operations.
+///
+/// This error type encompasses all possible errors that can occur during
+/// application state management, including player operations, `WebSocket`
+/// communication, persistence, and API requests.
 #[derive(Debug, Error)]
 pub enum AppStateError {
+    /// Unknown error with custom message
     #[error("Unknown({0})")]
     Unknown(String),
+    /// Action is missing required parameter
     #[error("Action missing param")]
     ActionMissingParam,
+    /// Action has invalid parameter value
     #[error("Action invalid param")]
     ActionInvalidParam,
+    /// Audio player error
     #[error(transparent)]
     Player(#[from] PlayerError),
+    /// `UPnP` initialization error
     #[cfg(feature = "upnp")]
     #[error(transparent)]
     InitUpnp(#[from] InitUpnpError),
+    /// Player registration error
     #[error(transparent)]
     RegisterPlayers(#[from] RegisterPlayersError),
+    /// Audio output scanning error
     #[error(transparent)]
     ScanOutputs(#[from] ScanOutputsError),
+    /// `WebSocket` initialization error
     #[error(transparent)]
     InitWs(#[from] ws::InitWsError),
+    /// `WebSocket` close error
     #[error(transparent)]
     CloseWs(#[from] ws::CloseWsError),
+    /// `WebSocket` message send error
     #[error(transparent)]
     SendWsMessage(#[from] ws::SendWsMessageError),
+    /// Audio zones fetch error
     #[error(transparent)]
     FetchAudioZones(#[from] FetchAudioZonesError),
+    /// Proxied API request error
     #[error(transparent)]
     ProxyRequest(#[from] ProxyRequestError),
+    /// `WebSocket` connection error
     #[error(transparent)]
     ConnectWs(#[from] ConnectWsError),
+    /// Async task join error
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    /// Persistence layer error
     #[error(transparent)]
     Persistence(#[from] hyperchad::state::Error),
 }
@@ -191,17 +236,33 @@ impl AppStateError {
     }
 }
 
+/// Parameters for updating application state.
+///
+/// This struct contains optional fields for updating various aspects of the application
+/// state. Each field is doubly-optional (`Option<Option<T>>`) where:
+/// * `None` means don't update this field
+/// * `Some(None)` means clear/remove the value
+/// * `Some(Some(value))` means set to the specified value
 #[derive(Debug, Clone, Default, Error, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAppState {
+    /// Connection identifier
     pub connection_id: Option<Option<String>>,
+    /// Connection display name
     pub connection_name: Option<Option<String>>,
+    /// `MoosicBox` API server URL
     pub api_url: Option<Option<String>>,
+    /// Client identifier for authentication
     pub client_id: Option<Option<String>>,
+    /// Signature token for authentication
     pub signature_token: Option<Option<String>>,
+    /// API authentication token
     pub api_token: Option<Option<String>>,
+    /// `MoosicBox` profile name
     pub profile: Option<Option<String>>,
+    /// Target for audio playback
     pub playback_target: Option<Option<PlaybackTarget>>,
+    /// Currently active session identifier
     pub current_session_id: Option<Option<u64>>,
 }
 
@@ -211,14 +272,24 @@ impl std::fmt::Display for UpdateAppState {
     }
 }
 
+/// Type of audio player.
+///
+/// Distinguishes between local audio players and remote `UPnP`/DLNA players,
+/// each with their own configuration and requirements.
 #[derive(Clone)]
 pub enum PlayerType {
+    /// Local audio player using system audio outputs
     Local,
+    /// `UPnP`/DLNA network player
     #[cfg(feature = "upnp")]
     Upnp {
+        /// Music API adapter for accessing the library
         source_to_music_api: Arc<Box<dyn moosicbox_music_api::SourceToMusicApi + Send + Sync>>,
+        /// `UPnP` device information
         device: Box<switchy_upnp::Device>,
+        /// `UPnP` service interface
         service: Box<switchy_upnp::Service>,
+        /// Handle for `UPnP` event listener
         handle: switchy_upnp::listener::Handle,
     },
 }
@@ -239,44 +310,87 @@ impl std::fmt::Debug for PlayerType {
     }
 }
 
+/// Association between a playback target, session, and player.
+///
+/// Represents an active player instance that is bound to a specific playback
+/// target (audio zone or connection output) and session.
 #[derive(Debug, Clone)]
 pub struct PlaybackTargetSessionPlayer {
+    /// Target destination for audio playback
     pub playback_target: ApiPlaybackTarget,
+    /// Session identifier
     pub session_id: u64,
+    /// Player handler for controlling playback
     pub player: PlaybackHandler,
+    /// Type of player (local or `UPnP`)
     pub player_type: PlayerType,
 }
 
+/// Central application state container.
+///
+/// This struct holds all runtime state for a `MoosicBox` application, including:
+/// * Server connection configuration (API URL, tokens, profile)
+/// * `WebSocket` connection state and message handling
+/// * Active audio players and playback sessions
+/// * Audio zones and connection outputs
+/// * Persistence layer for storing configuration
+/// * Event listeners for state changes
+///
+/// All fields are wrapped in `Arc<RwLock<_>>` for thread-safe shared access.
 #[derive(Clone, Default)]
 pub struct AppState {
+    /// `SQLite` persistence layer for storing configuration
     pub persistence: Arc<RwLock<Option<Arc<SqlitePersistence>>>>,
+    /// `MoosicBox` API server URL
     pub api_url: Arc<RwLock<Option<String>>>,
+    /// `MoosicBox` profile name
     pub profile: Arc<RwLock<Option<String>>>,
+    /// `WebSocket` server URL
     pub ws_url: Arc<RwLock<Option<String>>>,
+    /// `WebSocket` connection identifier
     pub ws_connection_id: Arc<RwLock<Option<String>>>,
+    /// Connection identifier
     pub connection_id: Arc<RwLock<Option<String>>>,
+    /// Connection display name
     pub connection_name: Arc<RwLock<Option<String>>>,
+    /// Signature token for authentication
     pub signature_token: Arc<RwLock<Option<String>>>,
+    /// Client identifier for authentication
     pub client_id: Arc<RwLock<Option<String>>>,
+    /// API authentication token
     pub api_token: Arc<RwLock<Option<String>>>,
+    /// Cancellation token for `WebSocket` connection
     pub ws_token: Arc<RwLock<Option<CancellationToken>>>,
+    /// Handle for `WebSocket` connection
     pub ws_handle: Arc<RwLock<Option<WsHandle>>>,
+    /// Join handle for `WebSocket` task
     #[allow(clippy::type_complexity)]
     pub ws_join_handle:
         Arc<RwLock<Option<switchy_async::task::JoinHandle<Result<(), AppStateError>>>>>,
+    /// Active players for each audio zone
     pub audio_zone_active_api_players: Arc<RwLock<BTreeMap<u64, Vec<ApiPlayersMap>>>>,
+    /// Currently active players
     pub active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
+    /// Current playback quality setting
     pub playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
+    /// Buffer for `WebSocket` messages sent before connection is established
     pub ws_message_buffer: Arc<RwLock<Vec<InboundPayload>>>,
+    /// Currently selected playback target
     pub current_playback_target: Arc<RwLock<Option<PlaybackTarget>>>,
+    /// List of all connections
     pub current_connections: Arc<RwLock<Vec<ApiConnection>>>,
+    /// Mapping of player IDs to session IDs for players awaiting session info
     pub pending_player_sessions: Arc<RwLock<BTreeMap<u64, u64>>>,
+    /// List of all active sessions
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
+    /// Default location for downloaded files
     pub default_download_location: Arc<std::sync::RwLock<Option<String>>>,
+    /// Listeners called when sessions are updated
     #[allow(clippy::type_complexity)]
     pub on_current_sessions_updated_listeners: Vec<
         Arc<Box<dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
+    /// Listeners called when audio zones are updated
     #[allow(clippy::type_complexity)]
     pub on_audio_zone_with_sessions_updated_listeners: Vec<
         Arc<
@@ -287,18 +401,24 @@ pub struct AppState {
             >,
         >,
     >,
+    /// Listeners called when connections are updated
     #[allow(clippy::type_complexity)]
     pub on_connections_updated_listeners: Vec<
         Arc<
             Box<dyn Fn(&[ApiConnection]) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
         >,
     >,
+    /// Currently selected session identifier
     pub current_session_id: Arc<RwLock<Option<u64>>>,
+    /// List of all audio zones with their sessions
     pub current_audio_zones: Arc<RwLock<Vec<ApiAudioZoneWithSession>>>,
+    /// List of all available players
     #[allow(clippy::type_complexity)]
     pub current_players: Arc<RwLock<Vec<ApiPlayersMap>>>,
+    /// `UPnP` AV transport services for DLNA playback
     #[cfg(feature = "upnp")]
     pub upnp_av_transport_services: Arc<RwLock<Vec<switchy_upnp::player::UpnpAvTransportService>>>,
+    /// Listeners called before handling playback updates
     #[allow(clippy::type_complexity)]
     pub on_before_handle_playback_update_listeners: Vec<
         Arc<
@@ -307,6 +427,7 @@ pub struct AppState {
             >,
         >,
     >,
+    /// Listeners called after handling playback updates
     #[allow(clippy::type_complexity)]
     pub on_after_handle_playback_update_listeners: Vec<
         Arc<
@@ -315,29 +436,35 @@ pub struct AppState {
             >,
         >,
     >,
+    /// Listeners called before updating playlist
     #[allow(clippy::type_complexity)]
     pub on_before_update_playlist_listeners:
         Vec<Arc<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>>,
+    /// Listeners called after updating playlist
     #[allow(clippy::type_complexity)]
     pub on_after_update_playlist_listeners: Vec<
         Arc<Box<dyn Fn(&ApiSession) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
+    /// Listeners called before handling `WebSocket` messages
     #[allow(clippy::type_complexity)]
     pub on_before_handle_ws_message_listeners: Vec<
         Arc<
             Box<dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
         >,
     >,
+    /// Listeners called after handling `WebSocket` messages
     #[allow(clippy::type_complexity)]
     pub on_after_handle_ws_message_listeners: Vec<
         Arc<
             Box<dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
         >,
     >,
+    /// Listeners called before updating application state
     #[allow(clippy::type_complexity)]
     pub on_before_set_state_listeners: Vec<
         Arc<Box<dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
+    /// Listeners called after updating application state
     #[allow(clippy::type_complexity)]
     pub on_after_set_state_listeners: Vec<
         Arc<Box<dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
