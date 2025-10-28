@@ -30,9 +30,14 @@ pub struct StreamableFileAsync {
 }
 
 impl StreamableFileAsync {
+    /// Creates a new streamable file from a URL.
+    ///
+    /// This function performs a HEAD request to determine the file size before streaming begins.
+    ///
     /// # Panics
     ///
-    /// * If the client fails to send the request and get the Content-Length response header
+    /// * Panics if the HTTP request fails
+    /// * Panics if the Content-Length header is missing or cannot be parsed
     #[must_use]
     pub async fn new(url: String) -> Self {
         // Get the size of the file we are streaming.

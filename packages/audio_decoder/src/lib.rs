@@ -57,18 +57,25 @@ pub mod unsync;
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum AudioDecodeError {
+    /// Failed to open the audio stream.
     #[error("OpenStreamError")]
     OpenStream,
+    /// Failed to play the audio stream.
     #[error("PlayStreamError")]
     PlayStream,
+    /// The audio stream was closed unexpectedly.
     #[error("StreamClosedError")]
     StreamClosed,
+    /// Reached the end of the audio stream.
     #[error("StreamEndError")]
     StreamEnd,
+    /// Decoding was interrupted by a cancellation signal.
     #[error("InterruptError")]
     Interrupt,
+    /// An I/O error occurred while reading audio data.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// An error from another source.
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -111,6 +118,9 @@ type AudioFilter =
 /// This struct coordinates the decoding process, applying filters to decoded audio
 /// and distributing it to registered output handlers.
 pub struct AudioDecodeHandler {
+    /// Optional cancellation token to stop decoding operations.
+    ///
+    /// When the token is cancelled, the decoding loop will terminate gracefully.
     pub cancellation_token: Option<CancellationToken>,
     filters: Vec<AudioFilter>,
     open_decode_handlers: Vec<OpenAudioDecodeHandler>,
@@ -252,14 +262,19 @@ impl From<std::io::Error> for DecodeError {
 /// Errors that can occur during the complete decoding process.
 #[derive(Debug, Error)]
 pub enum DecodeError {
+    /// An error occurred in audio decoding operations.
     #[error(transparent)]
     AudioDecode(#[from] AudioDecodeError),
+    /// An error from the Symphonia media framework.
     #[error(transparent)]
     Symphonia(#[from] Error),
+    /// Failed to join an async task.
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// No audio output handlers were provided.
     #[error("No audio outputs")]
     NoAudioOutputs,
+    /// The media source is invalid or unsupported.
     #[error("Invalid source")]
     InvalidSource,
 }
@@ -270,9 +285,15 @@ struct PlayTrackOptions {
     seek_ts: u64,
 }
 
+/// Decodes audio from a file path asynchronously.
+///
+/// This function runs the decoding in a blocking task to avoid blocking the async runtime.
+///
 /// # Errors
 ///
-/// * If the audio fails to decode
+/// * Returns [`DecodeError::Symphonia`] if the file cannot be opened or format detection fails
+/// * Returns [`DecodeError::AudioDecode`] if audio decoding fails
+/// * Returns [`DecodeError::Join`] if the blocking task fails to complete
 pub async fn decode_file_path_str_async(
     path_str: &str,
     get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
@@ -297,9 +318,14 @@ pub async fn decode_file_path_str_async(
         .await?
 }
 
+/// Decodes audio from a file path (blocking).
+///
+/// This function synchronously decodes audio from the specified file path.
+///
 /// # Errors
 ///
-/// * If the audio fails to decode
+/// * Returns [`DecodeError::Symphonia`] if the file cannot be opened or format detection fails
+/// * Returns [`DecodeError::AudioDecode`] if audio decoding fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_arguments)]
 pub fn decode_file_path_str(
@@ -341,9 +367,15 @@ pub fn decode_file_path_str(
 /// Return type for functions that construct an audio decode handler.
 pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, DecodeError>;
 
+/// Decodes audio from a custom media source asynchronously.
+///
+/// This function runs the decoding in a blocking task to avoid blocking the async runtime.
+///
 /// # Errors
 ///
-/// * If the audio fails to decode
+/// * Returns [`DecodeError::Symphonia`] if format detection or probing fails
+/// * Returns [`DecodeError::AudioDecode`] if audio decoding fails
+/// * Returns [`DecodeError::Join`] if the blocking task fails to complete
 pub async fn decode_media_source_async(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
@@ -421,13 +453,19 @@ fn decode_media_source(
     }
 }
 
-/// # Panics
+/// Decodes audio from a format reader.
 ///
-/// * If fails to get the first supported track
+/// This is the core decoding function that processes packets from a format reader
+/// and sends decoded audio to the provided handler.
 ///
 /// # Errors
 ///
-/// * If the audio fails to decode
+/// * Returns [`DecodeError::Symphonia`] if reading packets or seeking fails
+/// * Returns [`DecodeError::AudioDecode`] if audio output handling fails
+///
+/// # Panics
+///
+/// * Panics if the reader requires reset but no supported track is available
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn decode(
     mut reader: Box<dyn FormatReader>,
