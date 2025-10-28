@@ -79,33 +79,44 @@ pub mod models {
     pub use moosicbox_library_models::*;
 }
 
+/// Sort order for artist listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryArtistOrder {
+    /// Sort by date added.
     Date,
 }
 
+/// Sort direction for artist listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryArtistOrderDirection {
+    /// Ascending order.
     Asc,
+    /// Descending order.
     Desc,
 }
 
+/// Errors that can occur when retrieving favorite artists.
 #[derive(Debug, Error)]
 pub enum LibraryFavoriteArtistsError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves a paginated list of favorite artists from the library.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -146,16 +157,22 @@ pub async fn favorite_artists(
     })
 }
 
+/// Errors that can occur when adding a favorite artist.
 #[derive(Debug, Error)]
 pub enum LibraryAddFavoriteArtistError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Adds an artist to the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -169,16 +186,22 @@ pub const fn add_favorite_artist(
     Ok(())
 }
 
+/// Errors that can occur when removing a favorite artist.
 #[derive(Debug, Error)]
 pub enum LibraryRemoveFavoriteArtistError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Removes an artist from the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -192,20 +215,25 @@ pub const fn remove_favorite_artist(
     Ok(())
 }
 
+/// Sort order for album listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryAlbumOrder {
+    /// Sort by date added.
     Date,
 }
 
+/// Sort direction for album listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryAlbumOrderDirection {
+    /// Ascending order.
     Asc,
+    /// Descending order.
     Desc,
 }
 
@@ -331,16 +359,22 @@ pub fn sort_albums<'a>(
     albums
 }
 
+/// Errors that can occur when retrieving favorite albums.
 #[derive(Debug, Error)]
 pub enum LibraryFavoriteAlbumsError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves a paginated list of favorite albums from the library with filtering and sorting.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -392,16 +426,22 @@ pub async fn favorite_albums(
     })
 }
 
+/// Errors that can occur when adding a favorite album.
 #[derive(Debug, Error)]
 pub enum LibraryAddFavoriteAlbumError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Adds an album to the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -415,16 +455,22 @@ pub const fn add_favorite_album(
     Ok(())
 }
 
+/// Errors that can occur when removing a favorite album.
 #[derive(Debug, Error)]
 pub enum LibraryRemoveFavoriteAlbumError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Removes an album from the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -438,33 +484,44 @@ pub const fn remove_favorite_album(
     Ok(())
 }
 
+/// Sort order for track listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryTrackOrder {
+    /// Sort by date added.
     Date,
 }
 
+/// Sort direction for track listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryTrackOrderDirection {
+    /// Ascending order.
     Asc,
+    /// Descending order.
     Desc,
 }
 
+/// Errors that can occur when retrieving favorite tracks.
 #[derive(Debug, Error)]
 pub enum LibraryFavoriteTracksError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves a paginated list of favorite tracks from the library.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -518,16 +575,22 @@ pub async fn favorite_tracks(
     })
 }
 
+/// Errors that can occur when adding a favorite track.
 #[derive(Debug, Error)]
 pub enum LibraryAddFavoriteTrackError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Adds a track to the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -541,16 +604,22 @@ pub const fn add_favorite_track(
     Ok(())
 }
 
+/// Errors that can occur when removing a favorite track.
 #[derive(Debug, Error)]
 pub enum LibraryRemoveFavoriteTrackError {
+    /// No user ID is available for the request.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Removes a track from the user's favorites.
+///
 /// # Errors
 ///
 /// * If no user id is available for the request
@@ -564,14 +633,19 @@ pub const fn remove_favorite_track(
     Ok(())
 }
 
+/// Errors that can occur when retrieving albums for an artist.
 #[derive(Debug, Error)]
 pub enum LibraryArtistAlbumsError {
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves a paginated list of albums for a specific artist.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -622,14 +696,19 @@ pub async fn artist_albums(
     })
 }
 
+/// Errors that can occur when retrieving tracks for an album.
 #[derive(Debug, Error)]
 pub enum LibraryAlbumTracksError {
+    /// The request failed with an error message.
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves a paginated list of tracks for a specific album.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -669,12 +748,16 @@ pub async fn album_tracks(
     })
 }
 
+/// Errors that can occur when retrieving an album.
 #[derive(Debug, Error)]
 pub enum LibraryAlbumError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves album information by ID from a specific API source.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -686,6 +769,8 @@ pub async fn album_from_source(
     Ok(db::get_album(db, source, album_id).await?)
 }
 
+/// Retrieves album information by ID from the library.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -711,6 +796,8 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| a.source.cmp(&b.source));
 }
 
+/// Retrieves all available versions of an album with different audio qualities.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -768,14 +855,19 @@ pub async fn album_versions(
     Ok(versions)
 }
 
+/// Errors that can occur when retrieving an artist.
 #[derive(Debug, Error)]
 pub enum LibraryArtistError {
+    /// The requested artist was not found.
     #[error("Not found")]
     NotFound,
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves artist information by ID from the library.
+///
 /// # Errors
 ///
 /// * If the artist was not found
@@ -790,14 +882,19 @@ pub async fn artist(
         .ok_or(LibraryArtistError::NotFound)
 }
 
+/// Errors that can occur when retrieving a track.
 #[derive(Debug, Error)]
 pub enum LibraryTrackError {
+    /// The requested track was not found.
     #[error("Not found")]
     NotFound,
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves track information by ID from the library.
+///
 /// # Errors
 ///
 /// * If the track was not found
@@ -809,16 +906,23 @@ pub async fn track(
     Ok(db::get_track(db, track_id).await?)
 }
 
+/// Types of content that can be searched in the library.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SearchType {
+    /// Search for artists.
     Artists,
+    /// Search for albums.
     Albums,
+    /// Search for tracks.
     Tracks,
+    /// Search for videos.
     Videos,
+    /// Search for playlists.
     Playlists,
+    /// Search for user profiles.
     UserProfiles,
 }
 
@@ -835,26 +939,38 @@ impl From<SearchType> for LibrarySearchType {
     }
 }
 
+/// Internal representation of search types for library queries.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum LibrarySearchType {
+    /// Search for artists.
     Artists,
+    /// Search for albums.
     Albums,
+    /// Search for tracks.
     Tracks,
+    /// Search for videos.
     Videos,
+    /// Search for playlists.
     Playlists,
+    /// Search for user profiles.
     UserProfiles,
 }
 
+/// Errors that can occur during library search operations.
 #[derive(Debug, Error)]
 pub enum SearchError {
+    /// Search index operation failed.
     #[error(transparent)]
     SearchIndex(#[from] SearchIndexError),
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Searches the library for content matching the query string.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -871,24 +987,33 @@ pub fn search(
     Ok(results)
 }
 
+/// Audio quality levels for library tracks.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LibraryAudioQuality {
+    /// High quality compressed audio.
     High,
+    /// Lossless audio quality.
     Lossless,
+    /// High-resolution lossless audio quality.
     HiResLossless,
 }
 
+/// Errors that can occur when retrieving a track file URL.
 #[derive(Debug, Error)]
 pub enum LibraryTrackFileUrlError {
+    /// The track has no associated file.
     #[error("Track has no file")]
     NoFile,
+    /// Track retrieval error.
     #[error(transparent)]
     LibraryTrack(#[from] LibraryTrackError),
 }
 
+/// Retrieves the file URL for a track at the specified audio quality.
+///
 /// # Errors
 ///
 /// * If the track has no associated file
@@ -958,32 +1083,44 @@ impl From<TrackOrderDirection> for LibraryTrackOrderDirection {
     }
 }
 
+/// Errors that can occur when converting album types.
 #[derive(Debug, Error)]
 pub enum TryFromAlbumTypeError {
+    /// The album type is not supported.
     #[error("Unsupported AlbumType")]
     UnsupportedAlbumType,
 }
 
+/// Errors that can occur when determining track size.
 #[derive(Debug, Error)]
 pub enum TrackSizeError {
+    /// The audio format is not supported.
     #[error("Unsupported audio format: {0:?}")]
     UnsupportedFormat(AudioFormat),
+    /// The track source is not supported.
     #[error("Unsupported track source: {0:?}")]
     UnsupportedSource(TrackSource),
 }
 
+/// Errors that can occur when reindexing the search database.
 #[derive(Debug, Error)]
 pub enum ReindexError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to recreate the search index.
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
+    /// Failed to populate the search index.
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    /// Failed to get albums.
     #[error("Failed to get albums: {0:?}")]
     GetAlbums(Box<dyn std::error::Error>),
 }
 
+/// Rebuilds the global search index with all library content.
+///
 /// # Panics
 ///
 /// * If time went backwards

@@ -37,6 +37,7 @@ use crate::{
     track_file_url,
 };
 
+/// Binds all library API service endpoints to an Actix-web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -109,26 +110,37 @@ pub fn bind_services<
         LibraryAudioQuality,
     ))
 )]
+/// `OpenAPI` documentation structure for the library API.
 pub struct Api;
 
+/// API representation of a library album.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryAlbum {
+    /// Album ID.
     pub id: u64,
+    /// Album artist name.
     pub artist: String,
+    /// Artist ID.
     pub artist_id: u64,
+    /// Whether the album has cover artwork.
     pub contains_cover: bool,
+    /// Whether the album contains explicit content.
     pub explicit: bool,
+    /// Album release date.
     pub date_released: Option<String>,
+    /// Album title.
     pub title: String,
 }
 
+/// API representation of a track from any source.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiTrack {
+    /// A track from the local library.
     Library(ApiLibraryTrack),
 }
 
@@ -149,27 +161,40 @@ impl From<LibraryTrack> for ApiTrack {
     }
 }
 
+/// API representation of a library track.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryTrack {
+    /// Track ID.
     pub id: u64,
+    /// Track number on album.
     pub number: u32,
+    /// Album name.
     pub album: String,
+    /// Album ID.
     pub album_id: u64,
+    /// Artist name.
     pub artist: String,
+    /// Artist ID.
     pub artist_id: u64,
+    /// Whether the track has cover artwork.
     pub contains_cover: bool,
+    /// Track duration in seconds.
     pub duration: f64,
+    /// Whether the track contains explicit content.
     pub explicit: bool,
+    /// Track title.
     pub title: String,
 }
 
+/// API representation of an artist from any source.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiArtist {
+    /// An artist from the local library.
     Library(ApiLibraryArtist),
 }
 
@@ -183,12 +208,16 @@ impl From<LibraryArtist> for ApiArtist {
     }
 }
 
+/// API representation of a library artist.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryArtist {
+    /// Artist ID.
     pub id: u64,
+    /// Whether the artist has cover artwork.
     pub contains_cover: bool,
+    /// Artist name.
     pub title: String,
 }
 
@@ -201,10 +230,13 @@ impl From<LibraryTrackFileUrlError> for actix_web::Error {
     }
 }
 
+/// Query parameters for track file URL endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrackFileUrlQuery {
+    /// Track ID.
     track_id: u64,
+    /// Desired audio quality.
     audio_quality: LibraryAudioQuality,
 }
 
@@ -251,12 +283,17 @@ impl From<LibraryFavoriteAlbumsError> for actix_web::Error {
     }
 }
 
+/// Query parameters for favorite albums endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryFavoriteAlbumsQuery {
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
+    /// Sort order.
     order: Option<LibraryAlbumOrder>,
+    /// Sort direction.
     order_direction: Option<LibraryAlbumOrderDirection>,
 }
 
@@ -333,12 +370,17 @@ impl From<LibraryFavoriteArtistsError> for actix_web::Error {
     }
 }
 
+/// Query parameters for favorite artists endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryFavoriteArtistsQuery {
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
+    /// Sort order.
     order: Option<LibraryArtistOrder>,
+    /// Sort direction.
     order_direction: Option<LibraryArtistOrderDirection>,
 }
 
@@ -389,9 +431,11 @@ impl From<LibraryAddFavoriteArtistError> for actix_web::Error {
     }
 }
 
+/// Query parameters for adding favorite artist endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAddFavoriteArtistsQuery {
+    /// Artist ID.
     artist_id: u64,
 }
 
@@ -433,9 +477,11 @@ impl From<LibraryRemoveFavoriteArtistError> for actix_web::Error {
     }
 }
 
+/// Query parameters for removing favorite artist endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryRemoveFavoriteArtistsQuery {
+    /// Artist ID.
     artist_id: u64,
 }
 
@@ -477,9 +523,11 @@ impl From<LibraryAddFavoriteAlbumError> for actix_web::Error {
     }
 }
 
+/// Query parameters for adding favorite album endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAddFavoriteAlbumsQuery {
+    /// Album ID.
     album_id: u64,
 }
 
@@ -521,9 +569,11 @@ impl From<LibraryRemoveFavoriteAlbumError> for actix_web::Error {
     }
 }
 
+/// Query parameters for removing favorite album endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryRemoveFavoriteAlbumsQuery {
+    /// Album ID.
     album_id: u64,
 }
 
@@ -565,9 +615,11 @@ impl From<LibraryAddFavoriteTrackError> for actix_web::Error {
     }
 }
 
+/// Query parameters for adding favorite track endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAddFavoriteTracksQuery {
+    /// Track ID.
     track_id: u64,
 }
 
@@ -609,9 +661,11 @@ impl From<LibraryRemoveFavoriteTrackError> for actix_web::Error {
     }
 }
 
+/// Query parameters for removing favorite track endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryRemoveFavoriteTracksQuery {
+    /// Track ID.
     track_id: u64,
 }
 
@@ -653,13 +707,19 @@ impl From<LibraryFavoriteTracksError> for actix_web::Error {
     }
 }
 
+/// Query parameters for favorite tracks endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryFavoriteTracksQuery {
+    /// Comma-separated list of track IDs to filter.
     track_ids: Option<String>,
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
+    /// Sort order.
     order: Option<LibraryTrackOrder>,
+    /// Sort direction.
     order_direction: Option<LibraryTrackOrderDirection>,
 }
 
@@ -719,22 +779,31 @@ impl From<LibraryArtistAlbumsError> for actix_web::Error {
     }
 }
 
+/// Query parameters for artist albums endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryArtistAlbumsQuery {
+    /// Artist ID.
     artist_id: u64,
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
+    /// Filter by album type.
     album_type: Option<AlbumType>,
 }
 
+/// Album type categories.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
+    /// Full-length albums (LPs).
     Lp,
+    /// Extended plays and singles.
     EpsAndSingles,
+    /// Compilation albums.
     Compilations,
 }
 
@@ -796,11 +865,15 @@ impl From<LibraryAlbumTracksError> for actix_web::Error {
     }
 }
 
+/// Query parameters for album tracks endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAlbumTracksQuery {
+    /// Album ID.
     album_id: u64,
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
 }
 
@@ -847,9 +920,11 @@ impl From<LibraryAlbumError> for actix_web::Error {
     }
 }
 
+/// Query parameters for album endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAlbumQuery {
+    /// Album ID.
     album_id: u64,
 }
 
@@ -891,9 +966,11 @@ impl From<LibraryArtistError> for actix_web::Error {
     }
 }
 
+/// Query parameters for artist endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryArtistQuery {
+    /// Artist ID.
     artist_id: u64,
 }
 
@@ -933,10 +1010,12 @@ impl From<LibraryTrackError> for actix_web::Error {
     }
 }
 
+/// Query parameters for track endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct LibraryTrackQuery {
+    /// Track ID.
     track_id: u64,
 }
 
@@ -971,12 +1050,17 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
+/// Query parameters for search endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibrarySearchQuery {
+    /// Search query string.
     query: String,
+    /// Page offset.
     offset: Option<u32>,
+    /// Page limit.
     limit: Option<u32>,
+    /// Content types to search.
     types: Option<Vec<SearchType>>,
 }
 
@@ -1033,6 +1117,7 @@ impl From<ReindexError> for actix_web::Error {
     }
 }
 
+/// Query parameters for reindex endpoint (no parameters required).
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReindexQuery {}
