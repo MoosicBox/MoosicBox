@@ -116,6 +116,9 @@ pub mod sync {
     }
 }
 
+/// Checks if a path exists on the filesystem
+///
+/// Returns `true` if the path exists, `false` otherwise.
 pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
     path.as_ref().exists()
 }
