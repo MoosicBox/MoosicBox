@@ -106,6 +106,10 @@ pub struct LinkInfo {
 }
 
 impl NetworkGraph {
+    /// Create a new empty network graph
+    ///
+    /// Returns a graph with no nodes or links. Nodes and connections can be added
+    /// using [`add_node`](Self::add_node) and [`connect_nodes`](Self::connect_nodes).
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -217,11 +221,17 @@ impl NetworkGraph {
         }
     }
 
+    /// Get mutable reference to a node by its ID
+    ///
+    /// Returns `None` if the node does not exist in the graph.
     #[must_use]
     pub fn get_node_mut(&mut self, node_id: &SimulatorNodeId) -> Option<&mut NodeInfo> {
         self.nodes.get_mut(node_id)
     }
 
+    /// Get immutable reference to a node by its ID
+    ///
+    /// Returns `None` if the node does not exist in the graph.
     #[must_use]
     pub fn get_node(&self, node_id: &SimulatorNodeId) -> Option<&NodeInfo> {
         self.nodes.get(node_id)
