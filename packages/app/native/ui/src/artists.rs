@@ -78,7 +78,7 @@ fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Containers {
 
 /// Renders the artist detail page content.
 ///
-/// Displays artist information and albums grouped by type and source, loaded via HTMX.
+/// Displays artist information and albums grouped by type and source, loaded via HyperChad.
 #[must_use]
 pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
     fn source_html(
