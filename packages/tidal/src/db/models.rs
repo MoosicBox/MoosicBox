@@ -5,6 +5,7 @@ use moosicbox_json_utils::{
 use serde::{Deserialize, Serialize};
 use switchy::database::{AsId, DatabaseValue, Row};
 
+/// Tidal OAuth configuration stored in the database.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalConfig {

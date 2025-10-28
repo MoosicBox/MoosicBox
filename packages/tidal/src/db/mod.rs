@@ -6,6 +6,8 @@ pub mod models;
 
 use crate::db::models::TidalConfig;
 
+/// Creates or updates Tidal OAuth configuration in the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -39,6 +41,8 @@ pub async fn create_tidal_config(
     Ok(())
 }
 
+/// Deletes a Tidal OAuth configuration from the database by refresh token.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -54,6 +58,7 @@ pub async fn delete_tidal_config(
     Ok(())
 }
 
+/// Errors that can occur when retrieving Tidal configuration from the database.
 #[derive(Debug, Error)]
 pub enum GetTidalConfigError {
     #[error(transparent)]
@@ -62,6 +67,8 @@ pub enum GetTidalConfigError {
     Parse(#[from] moosicbox_json_utils::ParseError),
 }
 
+/// Retrieves the most recent Tidal OAuth configuration from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -79,6 +86,8 @@ pub async fn get_tidal_config(
     Ok(configs.first().cloned())
 }
 
+/// Retrieves the access and refresh tokens from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -90,6 +99,8 @@ pub async fn get_tidal_access_tokens(
         .map(|c| (c.access_token.clone(), c.refresh_token)))
 }
 
+/// Retrieves only the access token from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
