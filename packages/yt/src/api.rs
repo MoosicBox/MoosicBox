@@ -30,6 +30,9 @@ use crate::{
     track_file_url, track_playback_info,
 };
 
+/// Binds all `YouTube` Music API endpoints to the provided Actix-web scope.
+///
+/// Registers routes for device authorization, favorites, tracks, albums, artists, and search.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -57,6 +60,7 @@ pub fn bind_services<
         .service(search_endpoint)
 }
 
+/// `OpenAPI` specification for `YouTube` Music API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -96,6 +100,7 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// `YouTube` Music album representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtAlbum {
@@ -115,10 +120,12 @@ pub struct ApiYtAlbum {
     pub api_source: ApiSource,
 }
 
+/// Track type wrapper for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiTrack {
+    /// `YouTube` Music track
     Yt(ApiYtTrack),
 }
 
@@ -153,6 +160,7 @@ impl From<ApiTrack> for moosicbox_music_models::api::ApiTrack {
     }
 }
 
+/// `YouTube` Music track representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtTrack {
@@ -204,6 +212,7 @@ impl From<ApiYtTrack> for moosicbox_music_models::api::ApiTrack {
     }
 }
 
+/// `YouTube` Music artist representation for API responses.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtArtist {
@@ -992,13 +1001,17 @@ pub struct YtArtistAlbumsQuery {
     device_type: Option<YtDeviceType>,
 }
 
+/// Album type classification for API queries.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
+    /// Full-length album
     Lp,
+    /// EPs and singles
     EpsAndSingles,
+    /// Compilation albums
     Compilations,
 }
 
