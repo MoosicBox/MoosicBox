@@ -21,9 +21,13 @@ moosicbox_opus_native_test_vectors = { workspace = true }
 test-case                          = { workspace = true }
 
 [features]
-celt             = []
-default          = ["celt", "hybrid", "silk"]
+default = ["celt", "hybrid", "silk"]
+
 fail-on-warnings = []
-hybrid           = ["celt", "silk"]
-resampling       = ["dep:moosicbox_resampler", "dep:symphonia"]
-silk             = []
+
+resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
+
+_any-decoder = []
+celt         = ["_any-decoder"]
+hybrid       = ["celt", "silk"]
+silk         = ["_any-decoder"]
