@@ -1,3 +1,41 @@
+//! Markdown to `HyperChad` `Container` conversion library.
+//!
+//! This crate provides conversion from Markdown text to `HyperChad` `Container` structures,
+//! supporting GitHub Flavored Markdown (GFM) features including tables, strikethrough,
+//! task lists, footnotes, and smart punctuation.
+//!
+//! # Features
+//!
+//! * **GitHub Flavored Markdown**: Full support for GFM extensions
+//! * **Emoji support**: Convert emoji shortcodes (`:rocket:`) when the `emoji` feature is enabled
+//! * **XSS protection**: Optional sanitization of dangerous HTML and URLs when the `xss-protection` feature is enabled
+//! * **Customizable parsing**: Configure which markdown features to enable via [`MarkdownOptions`]
+//!
+//! # Examples
+//!
+//! Basic conversion:
+//!
+//! ```rust
+//! use hyperchad_markdown::markdown_to_container;
+//!
+//! let markdown = "**bold** and *italic*";
+//! let container = markdown_to_container(markdown);
+//! ```
+//!
+//! Conversion with custom options:
+//!
+//! ```rust
+//! use hyperchad_markdown::{markdown_to_container_with_options, MarkdownOptions};
+//!
+//! let markdown = "| Header |\n|--------|\n| Cell   |";
+//! let options = MarkdownOptions {
+//!     enable_tables: true,
+//!     enable_strikethrough: false,
+//!     ..Default::default()
+//! };
+//! let container = markdown_to_container_with_options(markdown, options);
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -11,10 +49,18 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::VecDeque;
 use thiserror::Error;
 
+/// Errors that can occur during markdown processing.
 #[derive(Debug, Error)]
 pub enum MarkdownError {
+    /// Stack underflow occurred while processing nested markdown elements.
+    ///
+    /// This error indicates an internal parsing error where the container stack
+    /// became empty unexpectedly during markdown processing.
     #[error("Stack underflow while processing markdown")]
     StackUnderflow,
+    /// An unexpected tag end was encountered during parsing.
+    ///
+    /// This error occurs when a closing tag is found without a matching opening tag.
     #[error("Unexpected tag end: {0}")]
     UnexpectedTagEnd(String),
 }
@@ -60,15 +106,48 @@ struct MarkdownContext {
     options: MarkdownOptions,
 }
 
+/// Configuration options for markdown parsing and rendering.
+///
+/// Controls which markdown features are enabled during parsing and whether
+/// security features like XSS protection are active.
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_markdown::MarkdownOptions;
+///
+/// // Create options with only basic markdown features
+/// let options = MarkdownOptions {
+///     enable_tables: false,
+///     enable_strikethrough: false,
+///     enable_tasklists: false,
+///     enable_footnotes: false,
+///     enable_smart_punctuation: false,
+///     emoji_enabled: false,
+///     xss_protection: true,
+/// };
+/// ```
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone)]
 pub struct MarkdownOptions {
+    /// Enable GitHub Flavored Markdown table support.
     pub enable_tables: bool,
+    /// Enable strikethrough text using `~~text~~` syntax.
     pub enable_strikethrough: bool,
+    /// Enable task list support with `- [ ]` and `- [x]` syntax.
     pub enable_tasklists: bool,
+    /// Enable footnote support.
     pub enable_footnotes: bool,
+    /// Enable smart punctuation conversion (e.g., `...` to `…`, `--` to `—`).
     pub enable_smart_punctuation: bool,
+    /// Enable emoji shortcode conversion (`:rocket:` to 🚀).
+    ///
+    /// Requires the `emoji` feature to be enabled at compile time.
     pub emoji_enabled: bool,
+    /// Enable XSS protection by sanitizing dangerous HTML tags and URLs.
+    ///
+    /// When enabled, dangerous tags like `<script>` and URLs with `javascript:` schemes
+    /// are escaped or filtered out.
     pub xss_protection: bool,
 }
 
@@ -127,11 +206,69 @@ impl MarkdownContext {
     }
 }
 
+/// Converts markdown text to a `HyperChad` `Container` with default options.
+///
+/// This is a convenience function that uses default markdown options, which enable
+/// all GitHub Flavored Markdown features, emoji support (if the `emoji` feature is enabled),
+/// and XSS protection (if the `xss-protection` feature is enabled).
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_markdown::markdown_to_container;
+///
+/// let markdown = "# Hello World\n\nThis is **bold** and *italic* text.";
+/// let container = markdown_to_container(markdown);
+/// ```
+///
+/// For more control over parsing options, use [`markdown_to_container_with_options`].
 #[must_use]
 pub fn markdown_to_container(markdown: &str) -> Container {
     markdown_to_container_with_options(markdown, MarkdownOptions::default())
 }
 
+/// Converts markdown text to a `HyperChad` `Container` with custom options.
+///
+/// This function provides full control over markdown parsing features through the
+/// [`MarkdownOptions`] parameter. You can selectively enable or disable GitHub Flavored
+/// Markdown features, emoji conversion, and XSS protection.
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_markdown::{markdown_to_container_with_options, MarkdownOptions};
+///
+/// // Create a custom configuration
+/// let options = MarkdownOptions {
+///     enable_tables: true,
+///     enable_strikethrough: true,
+///     enable_tasklists: false,
+///     enable_footnotes: false,
+///     enable_smart_punctuation: true,
+///     emoji_enabled: false,
+///     xss_protection: true,
+/// };
+///
+/// let markdown = "~~strikethrough~~ text";
+/// let container = markdown_to_container_with_options(markdown, options);
+/// ```
+///
+/// With emoji support:
+///
+/// ```rust
+/// # #[cfg(feature = "emoji")]
+/// # {
+/// use hyperchad_markdown::{markdown_to_container_with_options, MarkdownOptions};
+///
+/// let options = MarkdownOptions {
+///     emoji_enabled: true,
+///     ..Default::default()
+/// };
+///
+/// let markdown = ":rocket: Launch!";
+/// let container = markdown_to_container_with_options(markdown, options);
+/// # }
+/// ```
 #[must_use]
 pub fn markdown_to_container_with_options(markdown: &str, options: MarkdownOptions) -> Container {
     let markdown = if options.emoji_enabled {
