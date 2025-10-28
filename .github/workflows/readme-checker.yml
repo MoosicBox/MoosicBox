@@ -184,7 +184,7 @@ jobs:
 
             - name: Update README with Claude
               if: steps.check_readme.outputs.exists == 'true'
-              uses: anthropics/claude-code-action@v1
+              uses: BSteffaniak/claude-code-action@dev
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
@@ -512,7 +512,7 @@ jobs:
                   git config user.email "MoosicBoxBot@gmail.com"
 
             - name: Update root README with Claude
-              uses: anthropics/claude-code-action@v1
+              uses: BSteffaniak/claude-code-action@dev
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
