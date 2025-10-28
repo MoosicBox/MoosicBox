@@ -1,12 +1,21 @@
+//! Data models for audio output API responses.
+//!
+//! This module defines the serializable data structures used in HTTP API responses
+//! for audio output information.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{AudioOutputFactory, SignalSpec};
 
+/// API representation of an audio output device.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAudioOutput {
+    /// Unique identifier for the audio output
     pub id: String,
+    /// Human-readable name of the audio output
     pub name: String,
+    /// Audio signal specification
     pub spec: ApiSignalSpec,
 }
 

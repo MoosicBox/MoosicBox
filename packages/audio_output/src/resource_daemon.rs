@@ -9,13 +9,21 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+/// The current state of a resource daemon.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DaemonState<QuitReason> {
+    /// The daemon is holding the resource and running normally
     Holding,
+    /// The daemon is in the process of quitting with an optional reason
     Quitting(Option<QuitReason>),
+    /// The daemon has quit with an optional reason
     Quit(Option<QuitReason>),
 }
 
+/// A daemon that manages a !Send resource in a dedicated thread.
+///
+/// This allows Send+Sync wrappers around !Send resources by keeping the resource
+/// confined to a single thread and providing a thread-safe interface for control.
 #[derive(Debug)]
 pub struct ResourceDaemon<T, QuitReason: Clone + Send + 'static> {
     phantom: PhantomData<T>,
@@ -28,12 +36,19 @@ pub struct ResourceDaemon<T, QuitReason: Clone + Send + 'static> {
 unsafe impl<T, QuitReason: Clone + Send + 'static> Send for ResourceDaemon<T, QuitReason> {}
 unsafe impl<T, QuitReason: Clone + Send + 'static> Sync for ResourceDaemon<T, QuitReason> {}
 
+/// A signal for requesting the daemon to quit.
+///
+/// This can be used from within the resource provider to signal that the daemon
+/// should shut down, for example when an error occurs.
 #[derive(Debug, Clone)]
 pub struct QuitSignal<QuitReason: Clone + Send + 'static>(
     Arc<(Mutex<DaemonState<QuitReason>>, Condvar)>,
 );
 
 impl<QuitReason: Clone + Send + 'static> QuitSignal<QuitReason> {
+    /// Dispatches a quit signal with the given reason.
+    ///
+    /// This will cause the daemon to transition to the quitting state and eventually shut down.
     pub fn dispatch(&self, reason: QuitReason) {
         wake_to_quit(&self.0, Some(reason));
     }
