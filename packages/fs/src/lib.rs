@@ -19,7 +19,7 @@
 //! Basic file operations:
 //!
 //! ```rust
-//! # #[cfg(feature = "sync")]
+//! # #[cfg(all(feature = "sync", any(feature = "simulator", feature = "std")))]
 //! # {
 //! use switchy_fs::sync::{OpenOptions, read_to_string, create_dir_all};
 //! # #[cfg(feature = "simulator")]
