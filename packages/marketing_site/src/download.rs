@@ -9,6 +9,17 @@ use serde::Deserialize;
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
+/// Handles the `/releases` route to display GitHub releases for download.
+///
+/// Fetches release information from the GitHub API, parses assets for different
+/// operating systems, and renders the download page with appropriate assets for
+/// the requesting client's OS.
+///
+/// # Errors
+///
+/// * If fetching GitHub releases fails after retries
+/// * If parsing the GitHub API response fails
+/// * If parsing release published dates fails
 #[allow(clippy::too_many_lines)]
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
     #[derive(Deserialize)]
