@@ -35,7 +35,9 @@ use crate::models::{
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
+    /// HTTP-style status code indicating operation result.
     pub status_code: u16,
+    /// Response message body.
     pub body: String,
 }
 
@@ -45,8 +47,11 @@ pub type PlayerAction = fn(&UpdateSession) -> Pin<Box<dyn Future<Output = ()> + 
 /// Context for a websocket connection.
 #[derive(Clone, Default, Debug)]
 pub struct WebsocketContext {
+    /// Unique identifier for this connection.
     pub connection_id: String,
+    /// Optional profile name associated with this connection.
     pub profile: Option<String>,
+    /// Registered player actions that execute when sessions are updated.
     pub player_actions: Vec<(u64, PlayerAction)>,
 }
 
@@ -67,6 +72,7 @@ pub enum WebsocketSendError {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebsocketConnectionData {
+    /// Whether the connection is currently playing audio.
     pub playing: bool,
 }
 
@@ -143,6 +149,8 @@ pub enum WebsocketDisconnectError {
     Serde(#[from] serde_json::Error),
 }
 
+/// Handles a websocket disconnection and cleans up connection state.
+///
 /// # Errors
 ///
 /// * If the list of connections fails to serialize
@@ -179,6 +187,8 @@ pub async fn disconnect(
     })
 }
 
+/// Processes an incoming websocket message and routes it to the appropriate handler.
+///
 /// # Errors
 ///
 /// * If the message is an invalid type
@@ -222,6 +232,8 @@ pub enum WebsocketMessageError {
     Serde(#[from] serde_json::Error),
 }
 
+/// Routes a parsed websocket message to its appropriate handler.
+///
 /// # Errors
 ///
 /// * If the message fails to process
@@ -325,6 +337,8 @@ pub async fn message(
     })
 }
 
+/// Broadcasts audio zones with their associated sessions to websocket clients.
+///
 /// # Errors
 ///
 /// * If the db fails to return the zones with sessions
@@ -359,6 +373,8 @@ pub async fn broadcast_audio_zones(
     }
 }
 
+/// Broadcasts session information to websocket clients.
+///
 /// # Errors
 ///
 /// * If the db fails to return the sessions
@@ -427,6 +443,8 @@ async fn get_connections(db: &ConfigDatabase) -> Result<String, WebsocketSendErr
     Ok(connections_json)
 }
 
+/// Registers a new websocket connection in the database and connection state.
+///
 /// # Errors
 ///
 /// * If the db fails to register the connection
@@ -449,6 +467,8 @@ pub async fn register_connection(
     Ok(connection)
 }
 
+/// Registers multiple players associated with a websocket connection.
+///
 /// # Errors
 ///
 /// * If the db fails to create the players
@@ -466,6 +486,8 @@ pub async fn register_players(
     Ok(players)
 }
 
+/// Broadcasts the list of connections to all websocket clients.
+///
 /// # Errors
 ///
 /// * If the db fails to get the connections
@@ -491,6 +513,8 @@ async fn create_audio_zone(
     Ok(())
 }
 
+/// Broadcasts a download event to websocket clients.
+///
 /// # Errors
 ///
 /// * If the `OutboundPayload::DownloadEvent` fails to serialize
@@ -517,6 +541,8 @@ pub async fn send_download_event<ProgressEvent: Serialize + Send>(
     Ok(())
 }
 
+/// Broadcasts a scan event to websocket clients.
+///
 /// # Errors
 ///
 /// * If the `OutboundPayload::ScanEvent` fails to serialize
@@ -555,6 +581,8 @@ pub enum UpdateSessionError {
     Serde(#[from] serde_json::Error),
 }
 
+/// Updates a session and broadcasts the changes to websocket clients.
+///
 /// # Errors
 ///
 /// * If the db fails to update the session
