@@ -57,6 +57,33 @@ use crate::Database;
 
 pub static PROFILES: LazyLock<DatabaseProfiles> = LazyLock::new(DatabaseProfiles::default);
 
+/// Manager for multiple database connections indexed by profile names
+///
+/// This struct maintains a thread-safe mapping of profile names to database instances,
+/// enabling applications to manage multiple databases for different users or contexts.
+///
+/// ## Thread Safety
+///
+/// All methods use internal `RwLock` for thread-safe concurrent access. Write operations
+/// (add/remove) are serialized, while read operations (get) can occur concurrently.
+///
+/// ## Examples
+///
+/// ```rust,ignore
+/// use switchy_database::profiles::PROFILES;
+/// use std::sync::Arc;
+///
+/// # async fn example(db1: Box<dyn switchy_database::Database>, db2: Box<dyn switchy_database::Database>) {
+/// // Register databases for different profiles
+/// PROFILES.add("user1".to_string(), Arc::new(db1));
+/// PROFILES.add("user2".to_string(), Arc::new(db2));
+///
+/// // Retrieve by profile
+/// if let Some(db) = PROFILES.get("user1") {
+///     // Use database
+/// }
+/// # }
+/// ```
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
 pub struct DatabaseProfiles {
@@ -113,6 +140,29 @@ impl DatabaseProfiles {
     }
 }
 
+/// Wrapper for a profile-specific database instance
+///
+/// This struct wraps a database instance associated with a specific user profile.
+/// It provides `Deref` to `dyn Database` for convenient access and implements
+/// actix-web's `FromRequest` when the `api` feature is enabled.
+///
+/// ## Actix-web Integration
+///
+/// When the `api` feature is enabled, this implements `FromRequest` to automatically
+/// extract the database for the current profile from request headers.
+///
+/// ## Examples
+///
+/// ```rust,ignore
+/// use actix_web::{web, HttpResponse};
+/// use switchy_database::profiles::LibraryDatabase;
+///
+/// async fn my_handler(db: LibraryDatabase) -> HttpResponse {
+///     // db is automatically resolved from the profile header
+///     let tracks = db.select("tracks").execute(&*db).await.unwrap();
+///     HttpResponse::Ok().json(tracks)
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct LibraryDatabase {
     pub database: Arc<Box<dyn Database>>,

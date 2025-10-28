@@ -55,6 +55,27 @@ pub fn init(database: Arc<Box<dyn Database>>) {
     *DATABASE.write().unwrap() = Some(database);
 }
 
+/// Wrapper for the global database instance that implements actix-web's `FromRequest`
+///
+/// This struct provides access to the global database configured via [`init`].
+/// It dereferences to `dyn Database` for convenient access.
+///
+/// ## Actix-web Integration
+///
+/// When the `api` feature is enabled, this implements `FromRequest` for automatic
+/// dependency injection in actix-web handlers.
+///
+/// ## Examples
+///
+/// ```rust,ignore
+/// use actix_web::{web, HttpResponse};
+/// use switchy_database::config::ConfigDatabase;
+///
+/// async fn my_handler(db: ConfigDatabase) -> HttpResponse {
+///     let users = db.select("users").execute(&*db).await.unwrap();
+///     HttpResponse::Ok().json(users)
+/// }
+/// ```
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct ConfigDatabase {

@@ -219,6 +219,67 @@ use std::collections::BTreeMap;
 
 use crate::{Database, DatabaseError, DatabaseValue};
 
+/// Represents common database column data types
+///
+/// This enum provides a unified representation of column types across different
+/// database backends (`SQLite`, `PostgreSQL`, `MySQL`). Each variant maps to appropriate
+/// native types for each backend.
+///
+/// ## Cross-Database Type Mapping
+///
+/// | `DataType` | `SQLite` | `PostgreSQL` | `MySQL` |
+/// |------------|---------|------------|-------|
+/// | `Text` | `TEXT` | `TEXT` | `TEXT` |
+/// | `VarChar(n)` | `VARCHAR(n)` | `VARCHAR(n)` | `VARCHAR(n)` |
+/// | `Int` | `INTEGER` | `INTEGER` | `INT` |
+/// | `BigInt` | `INTEGER` | `BIGINT` | `BIGINT` |
+/// | `Real` | `REAL` | `REAL` | `FLOAT` |
+/// | `Double` | `REAL` | `DOUBLE PRECISION` | `DOUBLE` |
+/// | `Bool` | `INTEGER` (0/1) | `BOOLEAN` | `BOOLEAN` |
+/// | `DateTime` | `TEXT` (ISO8601) | `TIMESTAMP` | `DATETIME` |
+/// | `Uuid` | `TEXT` | `UUID` | `CHAR(36)` |
+/// | `Json` | `TEXT` | `JSON` | `JSON` |
+///
+/// ## Examples
+///
+/// ```rust
+/// use switchy_database::schema::{DataType, Column};
+/// use switchy_database::DatabaseValue;
+///
+/// // Text types
+/// let short_code = Column {
+///     name: "code".to_string(),
+///     data_type: DataType::VarChar(10),
+///     nullable: false,
+///     auto_increment: false,
+///     default: None,
+/// };
+///
+/// let description = Column {
+///     name: "description".to_string(),
+///     data_type: DataType::Text,
+///     nullable: true,
+///     auto_increment: false,
+///     default: None,
+/// };
+///
+/// // Numeric types
+/// let id = Column {
+///     name: "id".to_string(),
+///     data_type: DataType::BigInt,
+///     nullable: false,
+///     auto_increment: true,
+///     default: None,
+/// };
+///
+/// let price = Column {
+///     name: "price".to_string(),
+///     data_type: DataType::Decimal(10, 2),
+///     nullable: false,
+///     auto_increment: false,
+///     default: Some(DatabaseValue::Real64(0.0)),
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
     // Text types
@@ -274,6 +335,53 @@ pub enum DataType {
     Custom(String), // For types we don't explicitly handle
 }
 
+/// Represents a database column definition
+///
+/// This struct defines all properties of a database column including its name,
+/// data type, constraints, and default value. Used when creating tables via
+/// [`CreateTableStatement`].
+///
+/// ## Fields
+///
+/// * `name` - Column name (must be valid SQL identifier)
+/// * `nullable` - Whether column allows NULL values
+/// * `auto_increment` - Whether column auto-increments (typically for primary keys)
+/// * `data_type` - Column data type from [`DataType`] enum
+/// * `default` - Optional default value for the column
+///
+/// ## Examples
+///
+/// ```rust
+/// use switchy_database::schema::{Column, DataType};
+/// use switchy_database::DatabaseValue;
+///
+/// // Auto-incrementing ID column
+/// let id_column = Column {
+///     name: "id".to_string(),
+///     nullable: false,
+///     auto_increment: true,
+///     data_type: DataType::BigInt,
+///     default: None,
+/// };
+///
+/// // Nullable email column with VARCHAR type
+/// let email_column = Column {
+///     name: "email".to_string(),
+///     nullable: true,
+///     auto_increment: false,
+///     data_type: DataType::VarChar(255),
+///     default: None,
+/// };
+///
+/// // Timestamp column with NOW() default
+/// let created_column = Column {
+///     name: "created_at".to_string(),
+///     nullable: false,
+///     auto_increment: false,
+///     data_type: DataType::DateTime,
+///     default: Some(DatabaseValue::Now),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct Column {
     pub name: String,
@@ -283,6 +391,39 @@ pub struct Column {
     pub default: Option<DatabaseValue>,
 }
 
+/// Builder for CREATE TABLE SQL statements
+///
+/// Provides a fluent API for constructing table creation statements with columns,
+/// primary keys, and foreign key constraints. Use [`create_table`] to construct.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::{create_table, Column, DataType};
+/// use switchy_database::{Database, DatabaseValue};
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// create_table("users")
+///     .column(Column {
+///         name: "id".to_string(),
+///         nullable: false,
+///         auto_increment: true,
+///         data_type: DataType::BigInt,
+///         default: None,
+///     })
+///     .column(Column {
+///         name: "username".to_string(),
+///         nullable: false,
+///         auto_increment: false,
+///         data_type: DataType::VarChar(50),
+///         default: None,
+///     })
+///     .primary_key("id")
+///     .execute(db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct CreateTableStatement<'a> {
     pub table_name: &'a str,
     pub if_not_exists: bool,
@@ -291,6 +432,27 @@ pub struct CreateTableStatement<'a> {
     pub foreign_keys: Vec<(&'a str, &'a str)>,
 }
 
+/// Creates a new CREATE TABLE statement builder
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::{create_table, Column, DataType};
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// let stmt = create_table("users")
+///     .if_not_exists(true)
+///     .column(Column {
+///         name: "id".to_string(),
+///         nullable: false,
+///         auto_increment: true,
+///         data_type: DataType::BigInt,
+///         default: None,
+///     });
+/// # Ok(())
+/// # }
+/// ```
 #[must_use]
 pub const fn create_table(table_name: &str) -> CreateTableStatement<'_> {
     CreateTableStatement {
@@ -432,6 +594,35 @@ impl DropTableStatement<'_> {
     }
 }
 
+/// Builder for CREATE INDEX SQL statements
+///
+/// Provides a fluent API for creating database indexes with optional uniqueness
+/// constraints. Use [`create_index`] to construct.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::create_index;
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// // Create a simple index
+/// create_index("idx_email")
+///     .table("users")
+///     .column("email")
+///     .execute(db)
+///     .await?;
+///
+/// // Create a unique index on multiple columns
+/// create_index("idx_username_email")
+///     .table("users")
+///     .columns(vec!["username", "email"])
+///     .unique(true)
+///     .execute(db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct CreateIndexStatement<'a> {
     pub index_name: &'a str,
     pub table_name: &'a str,
@@ -440,6 +631,18 @@ pub struct CreateIndexStatement<'a> {
     pub if_not_exists: bool,
 }
 
+/// Creates a new CREATE INDEX statement builder
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_database::schema::create_index;
+///
+/// let stmt = create_index("idx_user_email")
+///     .table("users")
+///     .column("email")
+///     .unique(true);
+/// ```
 #[must_use]
 pub const fn create_index(index_name: &str) -> CreateIndexStatement<'_> {
     CreateIndexStatement {
@@ -507,12 +710,45 @@ impl<'a> CreateIndexStatement<'a> {
     }
 }
 
+/// Builder for DROP INDEX SQL statements
+///
+/// Provides a fluent API for dropping database indexes. Use [`drop_index`] to construct.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::drop_index;
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// drop_index("idx_email", "users")
+///     .if_exists()
+///     .execute(db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct DropIndexStatement<'a> {
     pub index_name: &'a str,
     pub table_name: &'a str,
     pub if_exists: bool,
 }
 
+/// Creates a new DROP INDEX statement builder
+///
+/// # Arguments
+///
+/// * `index_name` - Name of the index to drop
+/// * `table_name` - Name of the table containing the index
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_database::schema::drop_index;
+///
+/// let stmt = drop_index("idx_user_email", "users")
+///     .if_exists();
+/// ```
 #[must_use]
 pub const fn drop_index<'a>(index_name: &'a str, table_name: &'a str) -> DropIndexStatement<'a> {
     DropIndexStatement {
@@ -539,6 +775,38 @@ impl DropIndexStatement<'_> {
     }
 }
 
+/// Represents operations that can be performed in an ALTER TABLE statement
+///
+/// This enum defines the various table modification operations supported by the
+/// database abstraction layer, including adding, dropping, renaming, and modifying columns.
+///
+/// ## Variants
+///
+/// * `AddColumn` - Add a new column to the table
+/// * `DropColumn` - Remove an existing column (with optional CASCADE/RESTRICT behavior)
+/// * `RenameColumn` - Rename an existing column
+/// * `ModifyColumn` - Change column data type, nullability, or default value
+///
+/// ## Examples
+///
+/// ```rust
+/// use switchy_database::schema::{AlterOperation, DataType};
+/// use switchy_database::DatabaseValue;
+///
+/// // Add a new column
+/// let add_op = AlterOperation::AddColumn {
+///     name: "email".to_string(),
+///     data_type: DataType::VarChar(255),
+///     nullable: true,
+///     default: None,
+/// };
+///
+/// // Rename a column
+/// let rename_op = AlterOperation::RenameColumn {
+///     old_name: "name".to_string(),
+///     new_name: "full_name".to_string(),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub enum AlterOperation {
     AddColumn {
@@ -564,11 +832,58 @@ pub enum AlterOperation {
     },
 }
 
+/// Builder for ALTER TABLE SQL statements
+///
+/// Provides a fluent API for modifying existing database tables including adding,
+/// dropping, renaming, and modifying columns. Use [`alter_table`] to construct.
+///
+/// ## Backend-Specific Notes
+///
+/// * **`SQLite`**: Limited ALTER TABLE support. Some operations use table recreation workarounds.
+/// * **Column Order**: Modified columns may be added at the end of the table in `SQLite`.
+/// * **Transactions**: All operations are wrapped in transactions for atomicity.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::{alter_table, DataType};
+/// use switchy_database::{Database, DatabaseValue};
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// // Add a column
+/// alter_table("users")
+///     .add_column(
+///         "phone".to_string(),
+///         DataType::VarChar(20),
+///         true,
+///         None
+///     )
+///     .execute(db)
+///     .await?;
+///
+/// // Rename a column
+/// alter_table("users")
+///     .rename_column("name".to_string(), "full_name".to_string())
+///     .execute(db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct AlterTableStatement<'a> {
     pub table_name: &'a str,
     pub operations: Vec<AlterOperation>,
 }
 
+/// Creates a new ALTER TABLE statement builder
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_database::schema::{alter_table, DataType};
+///
+/// let stmt = alter_table("users")
+///     .add_column("email".to_string(), DataType::VarChar(255), true, None);
+/// ```
 #[must_use]
 pub const fn alter_table(table_name: &str) -> AlterTableStatement<'_> {
     AlterTableStatement {
