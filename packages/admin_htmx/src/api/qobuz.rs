@@ -178,6 +178,8 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     }
 }
 
+/// Renders the Qobuz settings UI based on authentication status.
+///
 /// # Errors
 ///
 /// * If fails to fetch the qobuz config from the database
