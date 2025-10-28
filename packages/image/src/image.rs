@@ -1,3 +1,34 @@
+//! Image manipulation utilities using the `image` crate.
+//!
+//! This module provides a pure Rust implementation for image resizing and encoding
+//! using the [`image`](https://docs.rs/image) crate. It supports both synchronous
+//! and asynchronous operations.
+//!
+//! # Features
+//!
+//! * Synchronous image resizing with [`try_resize_local_file`](crate::image::try_resize_local_file)
+//! * Asynchronous image resizing with [`try_resize_local_file_async`](crate::image::try_resize_local_file_async)
+//! * Support for JPEG and WebP output formats
+//! * High-quality Lanczos3 filtering for image resizing
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_image::Encoding;
+//! use moosicbox_image::image::try_resize_local_file;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Resize an image to 800x600 JPEG with quality 85
+//! let resized = try_resize_local_file(
+//!     800,
+//!     600,
+//!     "/path/to/image.jpg",
+//!     Encoding::Jpeg,
+//!     85,
+//! )?;
+//! # Ok(())
+//! # }
+//! ```
+
 use bytes::Bytes;
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType};
 use thiserror::Error;
@@ -8,7 +39,8 @@ use crate::Encoding;
 ///
 /// # Errors
 ///
-/// * If the image encoder fails to encode the resized image
+/// * [`image::error::ImageError`] - If the image file cannot be opened or decoded
+/// * [`image::error::ImageError`] - If the image encoder fails to encode the resized image
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn try_resize_local_file(
     width: u32,
@@ -47,10 +79,13 @@ pub enum ResizeImageError {
 
 /// Asynchronously resizes an image file and encodes it in the specified format.
 ///
+/// This function offloads the image processing to a blocking thread pool to avoid
+/// blocking the async runtime.
+///
 /// # Errors
 ///
-/// * If the image encoder fails to encode the resized image
-/// * If the `tokio` task fails to join
+/// * [`ResizeImageError::Image`] - If the image file cannot be opened, decoded, or encoded
+/// * [`ResizeImageError::Join`] - If the blocking task fails to complete
 pub async fn try_resize_local_file_async(
     width: u32,
     height: u32,

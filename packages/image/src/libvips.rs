@@ -1,3 +1,35 @@
+//! Image manipulation utilities using `libvips`.
+//!
+//! This module provides high-performance image processing using the libvips library.
+//! Libvips is a demand-driven, horizontally threaded image processing library that
+//! is significantly faster than pure Rust implementations for large images.
+//!
+//! # Features
+//!
+//! * High-performance image resizing with [`resize_local_file`](crate::libvips::resize_local_file)
+//! * Resize from byte buffers with [`resize_bytes`](crate::libvips::resize_bytes)
+//! * Error handling utilities with [`get_error`](crate::libvips::get_error)
+//! * Automatic color profile management (sRGB)
+//! * Thread-safe operations with lazy initialization
+//!
+//! # Platform Support
+//!
+//! This module is not available on Windows platforms.
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # #[cfg(all(not(target_os = "windows"), feature = "libvips"))]
+//! # {
+//! use moosicbox_image::libvips::resize_local_file;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Resize an image to 800x600
+//! let resized = resize_local_file(800, 600, "/path/to/image.jpg")?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+
 use std::sync::LazyLock;
 
 use bytes::Bytes;
@@ -25,7 +57,9 @@ pub fn get_error() -> String {
 ///
 /// # Errors
 ///
-/// * If the libvips image encoder fails to encode the resized image
+/// * [`libvips::error::Error`] - If the image file cannot be loaded
+/// * [`libvips::error::Error`] - If the thumbnail generation fails
+/// * [`libvips::error::Error`] - If the image encoding to JPEG fails
 pub fn resize_local_file(
     width: u32,
     height: u32,
@@ -53,7 +87,9 @@ pub fn resize_local_file(
 ///
 /// # Errors
 ///
-/// * If the libvips image encoder fails to encode the resized image
+/// * [`libvips::error::Error`] - If the image buffer cannot be decoded
+/// * [`libvips::error::Error`] - If the thumbnail generation fails
+/// * [`libvips::error::Error`] - If the image encoding to JPEG fails
 pub fn resize_bytes(width: u32, height: u32, bytes: &[u8]) -> Result<Bytes, libvips::error::Error> {
     let _app = &VIPS;
     let options = ops::ThumbnailBufferOptions {
