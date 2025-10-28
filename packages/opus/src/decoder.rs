@@ -100,6 +100,16 @@ impl Decoder for OpusDecoder {
         &self.params
     }
 
+    /// Decode an Opus packet into audio samples.
+    ///
+    /// # Errors
+    ///
+    /// * `DecodeError` - If the packet contains invalid Opus data or decoding fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal decoder mutex is poisoned (only possible if another thread
+    /// panicked while holding the lock).
     fn decode(&mut self, packet: &Packet) -> Result<AudioBufferRef<'_>> {
         self.output_buf.clear();
 
@@ -160,6 +170,12 @@ impl Decoder for OpusDecoder {
         self.output_buf.as_audio_buffer_ref()
     }
 
+    /// Reset the decoder state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal decoder mutex is poisoned (only possible if another thread
+    /// panicked while holding the lock).
     fn reset(&mut self) {
         debug!("Resetting Opus decoder state");
         let result = self.decoder.lock().unwrap().reset_state();
