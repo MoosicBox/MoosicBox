@@ -12,9 +12,24 @@ use crate::{
     GenericTcpStreamWriteHalf, impl_read_inner, impl_write_inner,
 };
 
+/// TCP listener backed by tokio's networking.
+///
+/// Wraps `tokio::net::TcpListener` to provide the generic TCP listener interface.
 pub struct TcpListener(tokio::net::TcpListener);
+
+/// TCP stream backed by tokio's networking.
+///
+/// Wraps `tokio::net::TcpStream` to provide the generic TCP stream interface.
 pub struct TcpStream(tokio::net::TcpStream);
+
+/// Read half of a tokio TCP stream.
+///
+/// Wraps `tokio::net::tcp::OwnedReadHalf` to provide the generic read half interface.
 pub struct TcpStreamReadHalf(tokio::net::tcp::OwnedReadHalf);
+
+/// Write half of a tokio TCP stream.
+///
+/// Wraps `tokio::net::tcp::OwnedWriteHalf` to provide the generic write half interface.
 pub struct TcpStreamWriteHalf(tokio::net::tcp::OwnedWriteHalf);
 
 impl TcpListener {

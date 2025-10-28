@@ -54,12 +54,16 @@ pub mod simulator;
 /// Error types for TCP operations.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// I/O error from the underlying stream or listener.
     #[error(transparent)]
     IO(#[from] ::std::io::Error),
+    /// Failed to parse a socket address.
     #[error(transparent)]
     AddrParse(#[from] ::std::net::AddrParseError),
+    /// Failed to parse an integer (typically a port number).
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
+    /// Failed to send data over a channel (simulator only).
     #[cfg(feature = "simulator")]
     #[error("Send error")]
     Send,
@@ -83,6 +87,9 @@ pub trait GenericTcpListener<T>: Send + Sync {
 }
 
 /// Generic trait for TCP streams that can be split into read and write halves.
+///
+/// Provides methods for splitting a stream into separate read and write halves, and for
+/// querying the local and remote addresses of the connection.
 pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWriteHalf>:
     AsyncRead + AsyncWrite + Send + Sync + Unpin
 {
@@ -103,9 +110,15 @@ pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWrite
     /// * If the underlying `TcpStream` fails to get the `peer_addr`
     fn peer_addr(&self) -> std::io::Result<SocketAddr>;
 }
+
 /// Generic trait for the read half of a TCP stream.
+///
+/// This trait marks types that represent the readable half of a split TCP stream.
 pub trait GenericTcpStreamReadHalf: AsyncRead + Send + Sync + Unpin {}
+
 /// Generic trait for the write half of a TCP stream.
+///
+/// This trait marks types that represent the writable half of a split TCP stream.
 pub trait GenericTcpStreamWriteHalf: AsyncWrite + Send + Sync + Unpin {}
 
 /// Wrapper type for generic TCP listeners.
