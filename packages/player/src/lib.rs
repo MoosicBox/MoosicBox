@@ -211,16 +211,27 @@ impl std::fmt::Debug for PlayableTrack {
 /// Represents an active playback session.
 #[derive(Debug, Clone)]
 pub struct Playback {
+    /// Unique identifier for this playback session
     pub id: u64,
+    /// Session ID this playback belongs to
     pub session_id: u64,
+    /// Profile name for this playback
     pub profile: String,
+    /// List of tracks in the playback queue
     pub tracks: Vec<Track>,
+    /// Whether playback is currently active
     pub playing: bool,
+    /// Current position in the track list
     pub position: u16,
+    /// Audio quality settings for playback
     pub quality: PlaybackQuality,
+    /// Current playback progress in seconds
     pub progress: f64,
+    /// Playback volume (0.0 to 1.0)
     pub volume: Arc<AtomicF64>,
+    /// Target device or zone for playback
     pub playback_target: Option<PlaybackTarget>,
+    /// Cancellation token for stopping playback
     pub abort: CancellationToken,
 }
 
@@ -257,9 +268,13 @@ impl Playback {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayback {
+    /// IDs of tracks in the playback queue
     pub track_ids: Vec<String>,
+    /// Whether playback is currently active
     pub playing: bool,
+    /// Current position in the track list
     pub position: u16,
+    /// Current seek position in seconds
     pub seek: f64,
 }
 
@@ -279,6 +294,7 @@ impl From<Playback> for ApiPlayback {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlaybackStatus {
+    /// Currently active playback session, if any
     pub active_playbacks: Option<ApiPlayback>,
 }
 
@@ -287,9 +303,15 @@ pub struct ApiPlaybackStatus {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PlaybackStatus {
+    /// Whether the operation succeeded
     pub success: bool,
 }
 
+/// Constructs the URL for streaming a track.
+///
+/// This function builds the complete URL for accessing a track's audio stream,
+/// including query parameters for format, quality, and authentication.
+///
 /// # Panics
 ///
 /// * If the `SERVICE_PORT` `RwLock` is poisoned
@@ -394,6 +416,8 @@ pub async fn get_track_url(
     Ok((format!("{host}/files/track{query_string}"), headers))
 }
 
+/// Retrieves the playlist ID associated with a session ID.
+///
 /// # Errors
 ///
 /// * If the session playlist is missing
@@ -418,8 +442,11 @@ pub async fn get_session_playlist_id_from_session_id(
 
 /// A track ready for playback with its media source.
 pub struct PlayableTrack {
+    /// ID of the track
     pub track_id: Id,
+    /// Media source for reading audio data
     pub source: Box<dyn MediaSource>,
+    /// Format hint for the decoder
     pub hint: Hint,
 }
 
@@ -427,8 +454,11 @@ pub struct PlayableTrack {
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlaybackType {
+    /// Play from local file on disk
     File,
+    /// Stream from remote source
     Stream,
+    /// Use default playback method based on source
     #[default]
     Default,
 }
@@ -436,17 +466,24 @@ pub enum PlaybackType {
 /// Configuration for retry behavior during playback operations.
 #[derive(Copy, Clone)]
 pub struct PlaybackRetryOptions {
+    /// Maximum number of retry attempts
     pub max_attempts: u32,
+    /// Delay between retry attempts
     pub retry_delay: std::time::Duration,
 }
 
 /// Identifies the source of playback.
 #[derive(Debug, Clone)]
 pub enum PlayerSource {
+    /// Local playback using the service port
     Local,
+    /// Remote playback from a specified host
     Remote {
+        /// Remote host URL
         host: String,
+        /// Optional query parameters
         query: Option<BTreeMap<String, String>>,
+        /// Optional HTTP headers
         headers: Option<BTreeMap<String, String>>,
     },
 }
@@ -454,9 +491,13 @@ pub enum PlayerSource {
 /// Manages playback operations for a player.
 #[derive(Debug, Clone)]
 pub struct PlaybackHandler {
+    /// Unique identifier for this handler
     pub id: u64,
+    /// Current playback session state
     pub playback: Arc<std::sync::RwLock<Option<Playback>>>,
+    /// Audio output factory for creating audio streams
     pub output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
+    /// The underlying player implementation
     pub player: Arc<Box<dyn Player + Sync>>,
 }
 
@@ -1313,6 +1354,11 @@ type PlaybackEventCallback = fn(&UpdateSession, &Playback);
 static PLAYBACK_EVENT_LISTENERS: LazyLock<Arc<RwLock<Vec<PlaybackEventCallback>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
+/// Registers a callback to be invoked when playback state changes.
+///
+/// The callback receives updates about playback events like play, pause,
+/// seek, and volume changes.
+///
 /// # Panics
 ///
 /// * If the `PLAYBACK_EVENT_LISTENERS` `RwLock` is poisoned
@@ -1713,6 +1759,11 @@ async fn handle_retry<
     }
 }
 
+/// Notifies all registered listeners of a playback event.
+///
+/// This function is called internally when playback state changes to broadcast
+/// the update to all registered event listeners.
+///
 /// # Panics
 ///
 /// * If the `PLAYBACK_EVENT_LISTENERS` `RwLock` is poisoned
