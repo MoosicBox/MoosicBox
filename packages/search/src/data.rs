@@ -193,10 +193,16 @@ pub enum ReindexFromDbError {
     Join(#[from] JoinError),
 }
 
+/// Recreates the global search index from scratch.
+///
+/// This function deletes the existing index and creates a new empty index. This operation
+/// is performed asynchronously in a blocking task.
+///
 /// # Errors
 ///
-/// * If failed to recreate the global search index
-/// * If the tokio task failed to join
+/// * `RecreateIndexError::CreateIndex` if failed to create the new index
+/// * `RecreateIndexError::GetIndexReader` if failed to get the index reader
+/// * `RecreateIndexError::Join` if the tokio task failed to join
 pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
     let permit = SEMAPHORE.acquire().await;
     switchy_async::runtime::Handle::current()
