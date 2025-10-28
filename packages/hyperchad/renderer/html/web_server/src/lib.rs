@@ -152,6 +152,11 @@ impl<
     R: WebServerResponseProcessor<T> + Send + Sync + Clone + 'static,
 > ToRenderRunner for WebServerApp<T, R>
 {
+    /// Converts the web server application into a render runner.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_runner(
         self,
         handle: Handle,
@@ -179,6 +184,12 @@ impl<
     R: WebServerResponseProcessor<T> + Send + Sync + Clone + 'static,
 > RenderRunner for WebServerAppRunner<T, R>
 {
+    /// Starts the web server and runs the event loop.
+    ///
+    /// Binds to the address and port specified by the `BIND_ADDR` and `PORT`
+    /// environment variables, configures CORS, and starts the web server to handle
+    /// incoming HTTP requests.
+    ///
     /// # Errors
     ///
     /// Will error if web server fails to run the event loop.
