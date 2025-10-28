@@ -865,8 +865,13 @@ impl RouteRequest {
     ///
     /// # Errors
     ///
-    /// * If the `Content-Type` header is missing
-    /// * If the form is missing
+    /// * [`ParseError::MissingBody`] - The request body is missing
+    /// * [`ParseError::InvalidContentType`] - The Content-Type header is missing or invalid
+    /// * [`ParseError::Multipart`] - Failed to parse multipart form data
+    /// * [`ParseError::InvalidContentDisposition`] - Content-Disposition header is invalid or missing
+    /// * [`ParseError::ParseUtf8`] - Failed to parse form field as UTF-8
+    /// * [`ParseError::IO`] - I/O error reading uploaded file
+    /// * [`ParseError::CustomDeserialize`] - Failed to deserialize form data into the target type
     #[cfg(feature = "form")]
     pub fn parse_form<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         use std::io::{Cursor, Read as _};
@@ -973,8 +978,8 @@ impl RouteRequest {
     ///
     /// # Errors
     ///
-    /// * If the `Content-Type` is not `application/json` or `application/x-www-form-urlencoded`
-    /// * If the body is missing
+    /// * [`ParseError::MissingBody`] - The request body is missing
+    /// * [`ParseError::SerdeJson`] - Failed to deserialize JSON data
     #[cfg(feature = "serde")]
     pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         if let Some(body) = &self.body {
@@ -1551,7 +1556,8 @@ impl Router {
     ///
     /// # Panics
     ///
-    /// * If the `routes` `RwLock` is poisoned
+    /// * Will panic if `routes` `RwLock` is poisoned
+    /// * Will panic if `static_routes` `RwLock` is poisoned (when `static-routes` feature is enabled)
     #[must_use]
     pub fn get_route_func(&self, path: &str) -> Option<RouteFunc> {
         let dyn_route = self
