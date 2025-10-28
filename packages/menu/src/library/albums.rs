@@ -33,8 +33,10 @@ use tokio::sync::RwLock;
 
 use super::{GetAlbumError, get_albums};
 
+/// Error types that can occur when retrieving album tracks.
 #[derive(Debug, Error)]
 pub enum GetAlbumTracksError {
+    /// Lock poisoning error
     #[error("Poison error")]
     Poison,
 }
@@ -69,10 +71,13 @@ pub fn propagate_api_sources_from_library_album<'a>(
     album
 }
 
+/// Error types that can occur when retrieving albums from a source.
 #[derive(Debug, Error)]
 pub enum GetAlbumsError {
+    /// Error retrieving albums
     #[error(transparent)]
     GetAlbums(#[from] super::GetAlbumsError),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
 }
@@ -112,14 +117,21 @@ pub async fn get_albums_from_source(
     Ok(albums)
 }
 
+/// Error types that can occur when retrieving album versions.
 #[derive(Debug, Error)]
 pub enum GetAlbumVersionsError {
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Error retrieving library album tracks
     #[error(transparent)]
     LibraryAlbumTracks(#[from] LibraryAlbumTracksError),
+    /// Unknown API source
     #[error("Unknown source: {album_source:?}")]
-    UnknownSource { album_source: String },
+    UnknownSource {
+        /// The unknown source name
+        album_source: String,
+    },
 }
 
 /// # Errors
@@ -164,22 +176,31 @@ pub async fn get_album_versions_from_source(
     })
 }
 
+/// Error types that can occur when adding an album to the library.
 #[derive(Debug, Error)]
 pub enum AddAlbumError {
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Error retrieving album
     #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
+    /// Error updating database
     #[error(transparent)]
     UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
+    /// Scan error
     #[error(transparent)]
     Scan(#[from] ScanError),
+    /// Error populating search index
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    /// Date/time parsing error
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
+    /// Album not found
     #[error("No album")]
     NoAlbum,
+    /// Invalid album ID type
     #[error("Invalid album_id type")]
     InvalidAlbumIdType,
 }
@@ -296,22 +317,31 @@ pub async fn add_album(
         .ok_or(AddAlbumError::NoAlbum)
 }
 
+/// Error types that can occur when removing an album from the library.
 #[derive(Debug, Error)]
 pub enum RemoveAlbumError {
+    /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Error deleting from search index
     #[error(transparent)]
     DeleteFromIndex(#[from] DeleteFromIndexError),
+    /// Date/time parsing error
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
+    /// Album not found
     #[error("No album")]
     NoAlbum,
+    /// Invalid album ID type
     #[error("Invalid album_id type")]
     InvalidAlbumIdType,
+    /// Error converting ID types
     #[error(transparent)]
     TryFromId(#[from] TryFromIdError),
 }
@@ -438,24 +468,34 @@ pub async fn remove_album(
     Ok(album)
 }
 
+/// Error types that can occur when re-favoriting an album.
 #[derive(Debug, Error)]
 pub enum ReFavoriteAlbumError {
+    /// Error adding album
     #[error(transparent)]
     AddAlbum(#[from] AddAlbumError),
+    /// Error removing album
     #[error(transparent)]
     RemoveAlbum(#[from] RemoveAlbumError),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Date/time parsing error
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
+    /// Album not found in current favorites
     #[error("Missing album")]
     MissingAlbum,
+    /// Artist not found for album
     #[error("Missing artist")]
     MissingArtist,
+    /// Artist not found
     #[error("No artist")]
     NoArtist,
+    /// Album not found
     #[error("No album")]
     NoAlbum,
+    /// Invalid album ID type
     #[error("Invalid album_id type")]
     InvalidAlbumIdType,
 }

@@ -24,10 +24,13 @@ use std::{
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 
+/// Error types that can occur when retrieving an artist.
 #[derive(Debug, Error)]
 pub enum GetArtistError {
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Invalid request parameters
     #[error("Invalid request")]
     InvalidRequest,
 }
@@ -50,22 +53,37 @@ pub async fn get_artist(
     }
 }
 
+/// Error types that can occur when retrieving an album.
 #[derive(Debug, Error)]
 pub enum GetAlbumError {
+    /// Multiple albums found when only one expected
     #[error("Too many albums found with ID {album_id:?}")]
-    TooManyAlbumsFound { album_id: i32 },
+    TooManyAlbumsFound {
+        /// Album ID that matched multiple albums
+        album_id: i32,
+    },
+    /// Unknown API source
     #[error("Unknown source: {album_source:?}")]
-    UnknownSource { album_source: String },
+    UnknownSource {
+        /// The unknown source name
+        album_source: String,
+    },
+    /// Lock poisoning error
     #[error("Poison error")]
     PoisonError,
+    /// Error retrieving albums
     #[error(transparent)]
     GetAlbums(#[from] GetAlbumsError),
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Invalid request parameters
     #[error("Invalid request")]
     InvalidRequest,
+    /// Date/time parsing error
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
 }
@@ -144,10 +162,13 @@ pub async fn get_library_album(
     })
 }
 
+/// Error types that can occur when retrieving albums.
 #[derive(Debug, Error)]
 pub enum GetAlbumsError {
+    /// Lock poisoning error
     #[error("Poison error")]
     Poison,
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
@@ -189,10 +210,13 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, 
     Ok(albums)
 }
 
+/// Error types that can occur when retrieving artist albums.
 #[derive(Debug, Error)]
 pub enum GetArtistAlbumsError {
+    /// Lock poisoning error
     #[error("Poison error")]
     Poison,
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
 }
