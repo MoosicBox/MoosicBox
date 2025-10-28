@@ -66,6 +66,9 @@ fn auth_method(value: &Auth) -> Option<AuthMethod> {
         Auth::UsernamePassword(..) => Some(AuthMethod::UsernamePassword),
         #[cfg(feature = "auth-poll")]
         Auth::Poll(..) => Some(AuthMethod::Poll),
+        #[cfg(not(feature = "_auth"))]
+        _ => None,
+        #[cfg(feature = "_auth")]
         Auth::None => None,
     }
 }

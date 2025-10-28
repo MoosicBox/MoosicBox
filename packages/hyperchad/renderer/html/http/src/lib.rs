@@ -275,6 +275,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             None
         };
 
+        #[allow(unreachable_patterns)]
         let html = match content {
             Content::View(boxed_view) => {
                 let view = boxed_view.primary.as_ref();
@@ -323,6 +324,10 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     .status(200)
                     .header("Content-Type", "application/json")
                     .body(bytes)?);
+            }
+            #[cfg(not(feature = "json"))]
+            _ => {
+                unimplemented!("JSON serialization is not enabled");
             }
         };
 

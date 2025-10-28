@@ -79,6 +79,7 @@ pub trait AudioFormatFormat {
 
 impl AudioFormatFormat for AudioFormat {
     fn into_formatted(self) -> String {
+        #[allow(unreachable_patterns)]
         match self {
             #[cfg(feature = "aac")]
             Self::Aac => "AAC".to_string(),
@@ -89,6 +90,10 @@ impl AudioFormatFormat for AudioFormat {
             #[cfg(feature = "opus")]
             Self::Opus => "OPUS".to_string(),
             Self::Source => "N/A".to_string(),
+            #[cfg(not(feature = "_any-format"))]
+            _ => {
+                unimplemented!("Audio format is not enabled");
+            }
         }
     }
 }
