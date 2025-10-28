@@ -8,10 +8,19 @@ use thiserror::Error;
 /// Errors that can occur when parsing integer sequences or ranges.
 #[derive(Debug, Error)]
 pub enum ParseIntegersError {
+    /// Failed to parse a string segment as a `u64` integer.
+    ///
+    /// Contains the invalid string that could not be parsed.
     #[error("Could not parse integers: {0}")]
     ParseId(String),
+    /// Range specification has an invalid format (odd number of range separators).
+    ///
+    /// Contains the invalid range string.
     #[error("Unmatched range: {0}")]
     UnmatchedRange(String),
+    /// Range span exceeds the maximum allowed size of 100,000 items.
+    ///
+    /// Contains the range specification that was too large.
     #[error("Range too large: {0}")]
     RangeTooLarge(String),
 }
@@ -40,6 +49,11 @@ pub fn parse_integer_sequences(
 /// * If a number fails to parse to a u64
 /// * If a range is unmatched (odd number of range separators)
 /// * If a range is too large (> 100,000)
+///
+/// # Panics
+///
+/// * If the input string contains empty comma-separated segments that result in empty vectors
+/// * If indexing operations on internal vectors fail (should not happen with valid input)
 pub fn parse_integer_ranges(
     integer_ranges: &str,
 ) -> std::result::Result<Vec<u64>, ParseIntegersError> {
