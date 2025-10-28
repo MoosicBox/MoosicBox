@@ -15,6 +15,7 @@ impl Default for InteractionPlanContext {
 }
 
 impl InteractionPlanContext {
+    /// Creates a new `InteractionPlanContext`.
     #[must_use]
     pub const fn new() -> Self {
         Self {}
@@ -38,6 +39,7 @@ impl Default for HealthCheckInteractionPlan {
 }
 
 impl HealthCheckInteractionPlan {
+    /// Creates a new `HealthCheckInteractionPlan`.
     #[must_use]
     pub const fn new() -> Self {
         Self {
