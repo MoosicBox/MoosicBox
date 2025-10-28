@@ -50,6 +50,12 @@ static PROFILES_UPDATED_EVENT_LISTENERS: LazyLock<
 > = LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
 /// Registers a listener for profile update events.
+///
+/// The listener callback receives two parameters:
+/// * `added` - Slice of profile names that were added
+/// * `removed` - Slice of profile names that were removed
+///
+/// The callback must return a future that resolves to `Result<(), BoxErrorSend>`.
 pub async fn on_profiles_updated_event<
     F: Send + Future<Output = Result<(), Box<dyn std::error::Error + Send>>> + 'static,
 >(
