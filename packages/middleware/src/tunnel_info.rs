@@ -45,9 +45,14 @@ use futures::future::{Ready, err, ok};
 
 static TUNNEL_INFO: OnceLock<TunnelInfo> = OnceLock::new();
 
+/// Initializes the global tunnel configuration.
+///
+/// This must be called once before starting the server, and before any request handlers
+/// attempt to extract [`TunnelInfo`].
+///
 /// # Errors
 ///
-/// Will error if `TUNNEL_INFO` has already been initialized
+/// * Returns `Err(TunnelInfo)` if `TUNNEL_INFO` has already been initialized
 pub fn init(tunnel_info: TunnelInfo) -> Result<(), TunnelInfo> {
     TUNNEL_INFO.set(tunnel_info)
 }
