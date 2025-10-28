@@ -60,10 +60,15 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for retrieving music APIs.
+///
+/// Used to paginate the list of enabled music APIs for a profile.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetMusicApis {
+    /// Starting offset for pagination (default: 0)
     offset: Option<u32>,
+    /// Maximum number of items to return (default: 30)
     limit: Option<u32>,
 }
 
@@ -127,9 +132,13 @@ pub async fn music_apis_endpoint(
     }))
 }
 
+/// Query parameters for authenticating a music API.
+///
+/// Specifies which music API source to authenticate with.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthMusicApi {
+    /// The music API source to authenticate
     api_source: ApiSource,
 }
 
@@ -223,9 +232,13 @@ pub async fn auth_music_api_endpoint(
     ))
 }
 
+/// Query parameters for scanning a music API.
+///
+/// Specifies which music API source to scan.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanMusicApi {
+    /// The music API source to scan
     api_source: ApiSource,
 }
 
@@ -274,9 +287,13 @@ pub async fn scan_music_api_endpoint(
     ))
 }
 
+/// Query parameters for enabling scan for a music API.
+///
+/// Specifies which music API source to enable for library scanning.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnableScanMusicApi {
+    /// The music API source to enable for scanning
     api_source: ApiSource,
 }
 
@@ -328,12 +345,19 @@ pub async fn enable_scan_origin_music_api_endpoint(
     ))
 }
 
+/// Query parameters for searching music APIs.
+///
+/// Specifies the search query, optional API source filters, and pagination options.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMusicApis {
+    /// The search query string
     query: String,
+    /// Comma-separated list of API sources to search (searches all if not specified)
     api_source: Option<String>,
+    /// Starting offset for pagination
     offset: Option<u32>,
+    /// Maximum number of results to return
     limit: Option<u32>,
 }
 
