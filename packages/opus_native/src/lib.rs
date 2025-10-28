@@ -13,20 +13,57 @@
 //!
 //! # Examples
 //!
-//! Basic usage:
+//! ## CELT-only decoding (48kHz)
 //!
 //! ```rust
+//! # #[cfg(feature = "celt")]
+//! # {
 //! use moosicbox_opus_native::{Decoder, SampleRate, Channels};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create a decoder for 48kHz stereo output
 //! let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
 //!
-//! // Decode an Opus packet
-//! let packet = vec![0x00; 100]; // Example packet data
-//! let mut output = vec![0i16; 960 * 2]; // 20ms at 48kHz stereo
+//! let packet = vec![0x7C; 100];
+//! let mut output = vec![0i16; 480 * 2];
 //! let samples = decoder.decode(Some(&packet), &mut output, false)?;
 //! # Ok(())
+//! # }
+//! # }
+//! ```
+//!
+//! ## SILK-only decoding (16kHz)
+//!
+//! ```rust
+//! # #[cfg(feature = "silk")]
+//! # {
+//! use moosicbox_opus_native::{Decoder, SampleRate, Channels};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let mut decoder = Decoder::new(SampleRate::Hz16000, Channels::Stereo)?;
+//!
+//! let packet = vec![0x44; 100];
+//! let mut output = vec![0i16; 160 * 2];
+//! let samples = decoder.decode(Some(&packet), &mut output, false)?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
+//!
+//! ## Hybrid decoding (48kHz with resampling)
+//!
+//! ```rust
+//! # #[cfg(all(feature = "hybrid", feature = "resampling"))]
+//! # {
+//! use moosicbox_opus_native::{Decoder, SampleRate, Channels};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
+//!
+//! let packet = vec![0x74; 100];
+//! let mut output = vec![0i16; 480 * 2];
+//! let samples = decoder.decode(Some(&packet), &mut output, false)?;
+//! # Ok(())
+//! # }
 //! # }
 //! ```
 

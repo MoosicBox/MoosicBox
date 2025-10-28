@@ -15,6 +15,7 @@
 //! ```rust,no_run
 //! # use moosicbox_qobuz::QobuzMusicApi;
 //! # #[cfg(feature = "db")]
+//! # {
 //! # use switchy::database::profiles::LibraryDatabase;
 //! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
 //! // Build a Qobuz client with database support
@@ -23,6 +24,7 @@
 //!     .build()
 //!     .await?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!

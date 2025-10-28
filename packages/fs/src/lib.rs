@@ -19,14 +19,16 @@
 //! Basic file operations:
 //!
 //! ```rust
+//! # #[cfg(all(feature = "sync", any(feature = "simulator", feature = "std")))]
+//! # {
 //! use switchy_fs::sync::{OpenOptions, read_to_string, create_dir_all};
+//! # #[cfg(feature = "simulator")]
+//! # {
 //! # use switchy_fs::simulator::reset_fs;
 //! # reset_fs();
 //! # create_dir_all("/tmp").unwrap();
 //!
 //! // Create a directory and write to a file
-//! # #[cfg(feature = "sync")]
-//! # {
 //! let mut file = OpenOptions::new()
 //!     .create(true)
 //!     .write(true)
@@ -41,14 +43,15 @@
 //! let content = read_to_string("/tmp/example.txt").unwrap();
 //! assert_eq!(content, "Hello, world!");
 //! # }
+//! # }
 //! ```
 //!
 //! Using temporary directories:
 //!
 //! ```rust
-//! use switchy_fs::tempdir;
 //! # #[cfg(any(feature = "simulator", feature = "std"))]
 //! # {
+//! use switchy_fs::tempdir;
 //!
 //! // Create a temporary directory that will be cleaned up when dropped
 //! let temp_dir = tempdir().unwrap();

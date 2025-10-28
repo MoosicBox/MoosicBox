@@ -48,45 +48,53 @@ moosicbox_app_tauri_bundled = { path = "../app/tauri/bundled" }
 
 ### Service Creation and Management
 
-```rust
-use moosicbox_app_tauri_bundled::{service::Service, Context, Command};
-use moosicbox_async_service::runtime::Handle;
+```rust,no_run
+use moosicbox_app_tauri_bundled::{service::Service, Context};
+use moosicbox_async_service::{runtime::Handle, Arc, sync::RwLock};
 
 // Create the service context
 let handle = Handle::current();
 let context = Context::new(&handle);
 
 // Create and start the service
-let service = Service::new(context);
+let service = Service::new(Arc::new(RwLock::new(context)));
 let service_handle = service.handle();
-let join_handle = service.start();
+let _join_handle = service.start();
 
-// Send commands via the service handle
+// Send commands via the service handle (example - requires sender in scope)
+# /*
 service_handle.send_command_async(Command::WaitForStartup { sender }).await?;
+# */
 ```
 
 ### Event Handling
 
 The service processes commands through an async service framework:
 
-```rust
+```rust,no_run
 use moosicbox_app_tauri_bundled::Command;
 use moosicbox_async_service::Arc;
-use tauri::RunEvent;
+# use switchy_async::sync::oneshot;
+# use tauri::RunEvent;
+#
+# async fn example_event_handling(service_handle: moosicbox_app_tauri_bundled::service::ServiceHandle, run_event: RunEvent) -> Result<(), Box<dyn std::error::Error>> {
 
 // Handle Tauri run events
 let event = Arc::new(run_event);
 service_handle.send_command_async(Command::RunEvent { event }).await?;
 
 // Wait for server startup
-let (sender, receiver) = switchy_async::sync::oneshot::channel();
+let (sender, receiver) = oneshot::channel();
 service_handle.send_command_async(Command::WaitForStartup { sender }).await?;
 receiver.await?;
 
 // Wait for server shutdown
-let (sender, receiver) = switchy_async::sync::oneshot::channel();
+let (sender, receiver) = oneshot::channel();
 service_handle.send_command_async(Command::WaitForShutdown { sender }).await?;
 receiver.await?;
+
+# Ok(())
+# }
 ```
 
 ## Dependencies
