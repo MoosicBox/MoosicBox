@@ -20,12 +20,24 @@
 
 use crate::AppBuilder;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(feature = "egui")]
 pub type DefaultRenderer = egui::EguiRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(feature = "fltk", not(feature = "egui")))]
 pub type DefaultRenderer = fltk::FltkRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "actix",
     feature = "vanilla-js",
@@ -33,6 +45,10 @@ pub type DefaultRenderer = fltk::FltkRenderer;
 ))]
 pub type DefaultRenderer = html::actix::vanilla_js::HtmlVanillaJsActixRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "lambda",
     feature = "vanilla-js",
@@ -40,6 +56,10 @@ pub type DefaultRenderer = html::actix::vanilla_js::HtmlVanillaJsActixRenderer;
 ))]
 pub type DefaultRenderer = html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "actix",
     feature = "html",
@@ -52,6 +72,10 @@ pub type DefaultRenderer = html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer
 ))]
 pub type DefaultRenderer = html::actix::HtmlActixRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "lambda",
     feature = "html",
@@ -64,6 +88,10 @@ pub type DefaultRenderer = html::actix::HtmlActixRenderer;
 ))]
 pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "html",
     feature = "vanilla-js",
@@ -76,6 +104,10 @@ pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
 ))]
 pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(all(
     feature = "html",
     not(any(
@@ -88,6 +120,10 @@ pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
 ))]
 pub type DefaultRenderer = html::HtmlStubRenderer;
 
+/// The default renderer type based on enabled features.
+///
+/// This type alias resolves to the appropriate renderer implementation depending on which
+/// features are enabled (see module documentation for priority order).
 #[cfg(not(any(
     feature = "html",
     feature = "egui",
@@ -107,9 +143,11 @@ mod egui {
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
+    /// Calculator for egui font metrics and layout calculations.
     #[derive(Clone)]
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
+    /// Type alias for the egui renderer with custom calculator.
     pub type EguiRenderer = hyperchad_renderer_egui::EguiRenderer<EguiCalculator>;
 
     impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
@@ -172,18 +210,22 @@ mod egui {
     }
 
     impl AppBuilder {
+        /// Builds an `App` with an egui renderer.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_egui(self, renderer: EguiRenderer) -> Result<App<EguiRenderer>, BuilderError> {
             log::debug!("build_egui");
 
             self.build(renderer)
         }
 
+        /// Builds an `App` with a default egui renderer configuration.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_default_egui(self) -> Result<App<EguiRenderer>, BuilderError> {
             log::debug!("build_default_egui");
 
@@ -231,6 +273,7 @@ mod fltk {
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
+    /// Type alias for the fltk renderer.
     pub type FltkRenderer = hyperchad_renderer_fltk::FltkRenderer;
 
     #[async_trait]
@@ -254,18 +297,22 @@ mod fltk {
     }
 
     impl AppBuilder {
+        /// Builds an `App` with a fltk renderer.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_fltk(self, renderer: FltkRenderer) -> Result<App<FltkRenderer>, BuilderError> {
             log::debug!("build_fltk");
 
             self.build(renderer)
         }
 
+        /// Builds an `App` with a default fltk renderer configuration.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_default_fltk(self) -> Result<App<FltkRenderer>, BuilderError> {
             log::debug!("build_default_fltk");
 
@@ -313,6 +360,7 @@ pub mod html {
     use crate::{App, AppBuilder, BuilderError};
     use crate::{Cleaner, Error, Generator};
 
+    /// Type alias for a stub HTML renderer (no backend server).
     pub type HtmlStubRenderer = hyperchad_renderer_html::HtmlRenderer<
         hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_html::DefaultHtmlTagRenderer>,
     >;
@@ -546,9 +594,11 @@ pub mod html {
     }
 
     impl AppBuilder {
+        /// Builds an `App` with an HTML stub renderer.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_html(
             self,
             renderer: HtmlStubRenderer,
@@ -558,9 +608,11 @@ pub mod html {
             self.build(renderer)
         }
 
+        /// Builds an `App` with a default HTML stub renderer configuration.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_default_html(self) -> Result<App<HtmlStubRenderer>, BuilderError> {
             log::debug!("build_default_html");
             log::debug!(
@@ -581,6 +633,7 @@ pub mod html {
     pub mod actix {
         use crate::{App, AppBuilder, BuilderError};
 
+        /// Type alias for an HTML renderer with Actix web server backend.
         pub type HtmlActixRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::actix::ActixApp<
                 hyperchad_renderer_html::actix::PreparedRequest,
@@ -591,9 +644,11 @@ pub mod html {
         >;
 
         impl AppBuilder {
+            /// Builds an `App` with an HTML Actix renderer.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_html_actix(
                 self,
                 renderer: HtmlActixRenderer,
@@ -603,9 +658,11 @@ pub mod html {
                 self.build(renderer)
             }
 
+            /// Builds an `App` with a default HTML Actix renderer configuration.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_default_html_actix(self) -> Result<App<HtmlActixRenderer>, BuilderError> {
                 log::debug!("build_default_html_actix");
 
@@ -633,6 +690,7 @@ pub mod html {
         pub mod vanilla_js {
             use crate::{App, AppBuilder, BuilderError};
 
+            /// Type alias for an HTML renderer with vanilla JavaScript and Actix web server backend.
             pub type HtmlVanillaJsActixRenderer = hyperchad_renderer_html::HtmlRenderer<
                 hyperchad_renderer_html::actix::ActixApp<
                     hyperchad_renderer_html::actix::PreparedRequest,
@@ -643,9 +701,11 @@ pub mod html {
             >;
 
             impl AppBuilder {
+                /// Builds an `App` with an HTML vanilla JavaScript Actix renderer.
+                ///
                 /// # Errors
                 ///
-                /// * If the `AppBuilder` is missing a router
+                /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
                 pub fn build_html_vanilla_js_actix(
                     self,
                     renderer: HtmlVanillaJsActixRenderer,
@@ -655,9 +715,11 @@ pub mod html {
                     self.build(renderer)
                 }
 
+                /// Builds an `App` with a default HTML vanilla JavaScript Actix renderer configuration.
+                ///
                 /// # Errors
                 ///
-                /// * If the `AppBuilder` is missing a router
+                /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
                 pub fn build_default_html_vanilla_js_actix(
                     self,
                 ) -> Result<App<HtmlVanillaJsActixRenderer>, BuilderError> {
@@ -700,6 +762,7 @@ pub mod html {
     pub mod lambda {
         use crate::{App, AppBuilder, BuilderError};
 
+        /// Type alias for an HTML renderer with AWS Lambda backend.
         pub type HtmlLambdaRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::lambda::LambdaApp<
                 hyperchad_renderer_html::lambda::PreparedRequest,
@@ -710,9 +773,11 @@ pub mod html {
         >;
 
         impl AppBuilder {
+            /// Builds an `App` with an HTML Lambda renderer.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_html_lambda(
                 self,
                 renderer: HtmlLambdaRenderer,
@@ -720,9 +785,11 @@ pub mod html {
                 self.build(renderer)
             }
 
+            /// Builds an `App` with a default HTML Lambda renderer configuration.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_default_html_lambda(
                 self,
             ) -> Result<App<HtmlLambdaRenderer>, BuilderError> {
@@ -752,6 +819,7 @@ pub mod html {
         pub mod vanilla_js {
             use crate::{App, AppBuilder, BuilderError};
 
+            /// Type alias for an HTML renderer with vanilla JavaScript and AWS Lambda backend.
             pub type HtmlVanillaJsLambdaRenderer = hyperchad_renderer_html::HtmlRenderer<
                 hyperchad_renderer_html::lambda::LambdaApp<
                     hyperchad_renderer_html::lambda::PreparedRequest,
@@ -762,9 +830,11 @@ pub mod html {
             >;
 
             impl AppBuilder {
+                /// Builds an `App` with an HTML vanilla JavaScript Lambda renderer.
+                ///
                 /// # Errors
                 ///
-                /// * If the `AppBuilder` is missing a router
+                /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
                 pub fn build_html_vanilla_js_lambda(
                     self,
                     renderer: HtmlVanillaJsLambdaRenderer,
@@ -774,9 +844,11 @@ pub mod html {
                     self.build(renderer)
                 }
 
+                /// Builds an `App` with a default HTML vanilla JavaScript Lambda renderer configuration.
+                ///
                 /// # Errors
                 ///
-                /// * If the `AppBuilder` is missing a router
+                /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
                 pub fn build_default_html_vanilla_js_lambda(
                     self,
                 ) -> Result<App<HtmlVanillaJsLambdaRenderer>, BuilderError> {
@@ -810,6 +882,7 @@ pub mod html {
     pub mod vanilla_js {
         use crate::{App, AppBuilder, BuilderError};
 
+        /// Type alias for an HTML renderer with vanilla JavaScript (no backend server).
         pub type HtmlVanillaJsRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::stub::StubApp<
                 hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
@@ -817,9 +890,11 @@ pub mod html {
         >;
 
         impl AppBuilder {
+            /// Builds an `App` with an HTML vanilla JavaScript renderer.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_html_vanilla_js(
                 self,
                 renderer: HtmlVanillaJsRenderer,
@@ -829,9 +904,11 @@ pub mod html {
                 self.build(renderer)
             }
 
+            /// Builds an `App` with a default HTML vanilla JavaScript renderer configuration.
+            ///
             /// # Errors
             ///
-            /// * If the `AppBuilder` is missing a router
+            /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
             pub fn build_default_html_vanilla_js(
                 self,
             ) -> Result<App<HtmlVanillaJsRenderer>, BuilderError> {
@@ -867,6 +944,7 @@ pub mod stub {
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
+    /// No-op stub renderer for testing and documentation.
     #[derive(Debug, Clone)]
     pub struct StubRenderer;
 
@@ -932,6 +1010,7 @@ pub mod stub {
         }
     }
 
+    /// No-op stub runner for testing.
     pub struct StubRunner;
 
     impl RenderRunner for StubRunner {
@@ -941,9 +1020,11 @@ pub mod stub {
     }
 
     impl ToRenderRunner for StubRenderer {
+        /// Converts the stub renderer to a runner.
+        ///
         /// # Errors
         ///
-        /// Will error if `Renderer` implementation fails to run
+        /// * Infallible (always succeeds for stub renderer)
         fn to_runner(
             self,
             _handle: Handle,
@@ -954,18 +1035,22 @@ pub mod stub {
     }
 
     impl AppBuilder {
+        /// Builds an `App` with a stub renderer.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_stub(self, renderer: StubRenderer) -> Result<App<StubRenderer>, BuilderError> {
             log::debug!("build_stub");
 
             self.build(renderer)
         }
 
+        /// Builds an `App` with a default stub renderer configuration.
+        ///
         /// # Errors
         ///
-        /// * If the `AppBuilder` is missing a router
+        /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
         pub fn build_default_stub(self) -> Result<App<StubRenderer>, BuilderError> {
             log::debug!("build_default_stub");
 
@@ -977,25 +1062,31 @@ pub mod stub {
 }
 
 impl AppBuilder {
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(feature = "egui")]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_egui()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(feature = "fltk", not(feature = "egui")))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_fltk()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "actix",
         feature = "vanilla-js",
@@ -1005,9 +1096,11 @@ impl AppBuilder {
         self.build_default_html_vanilla_js_actix()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "lambda",
         feature = "vanilla-js",
@@ -1017,9 +1110,11 @@ impl AppBuilder {
         self.build_default_html_vanilla_js_lambda()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "actix",
         feature = "html",
@@ -1034,9 +1129,11 @@ impl AppBuilder {
         self.build_default_html_actix()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "lambda",
         feature = "html",
@@ -1051,9 +1148,11 @@ impl AppBuilder {
         self.build_default_html_lambda()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "html",
         feature = "vanilla-js",
@@ -1068,9 +1167,11 @@ impl AppBuilder {
         self.build_default_html_vanilla_js()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "html",
         not(any(
@@ -1085,9 +1186,11 @@ impl AppBuilder {
         self.build_default_html()
     }
 
+    /// Builds an `App` with the default renderer based on enabled features.
+    ///
     /// # Errors
     ///
-    /// * If fails to build the default renderer
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(not(any(
         feature = "html",
         feature = "egui",
