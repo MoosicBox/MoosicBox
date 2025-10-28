@@ -1,3 +1,9 @@
+//! Database operations for scan locations and origins.
+//!
+//! This module provides functions to manage scan locations in the database,
+//! including adding/removing scan paths, enabling/disabling scan origins,
+//! and querying configured scan locations.
+
 use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
 use switchy_database::{profiles::LibraryDatabase, query::FilterableQuery};
 
@@ -7,6 +13,8 @@ use self::models::ScanLocation;
 
 pub mod models;
 
+/// Adds a local filesystem path to the database as a scan location.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -23,6 +31,8 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Datab
     Ok(())
 }
 
+/// Removes a local filesystem path from the database scan locations.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -37,6 +47,8 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Da
     Ok(())
 }
 
+/// Enables a scan origin in the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -53,6 +65,8 @@ pub async fn enable_scan_origin(
     Ok(())
 }
 
+/// Disables a scan origin in the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -68,6 +82,8 @@ pub async fn disable_scan_origin(
     Ok(())
 }
 
+/// Retrieves all enabled scan origins from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -83,6 +99,8 @@ pub async fn get_enabled_scan_origins(
         .to_value_type()?)
 }
 
+/// Retrieves all scan locations from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -96,6 +114,8 @@ pub async fn get_scan_locations(
         .to_value_type()?)
 }
 
+/// Retrieves scan locations for a specific origin from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs

@@ -1,3 +1,8 @@
+//! Local filesystem scanning functionality.
+//!
+//! This module provides functions to scan music files from local filesystem paths,
+//! extracting metadata from audio files using tag libraries and audio file parsers.
+
 use async_recursion::async_recursion;
 use futures::Future;
 use moosicbox_audiotags::Tag;
@@ -27,6 +32,7 @@ use crate::{
     output::{ScanOutput, UpdateDatabaseError},
 };
 
+/// Errors that can occur during local filesystem scanning.
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
@@ -45,6 +51,8 @@ pub enum ScanError {
     Lofty(#[from] moosicbox_lofty::LoftyError),
 }
 
+/// Scans a local filesystem directory for music files.
+///
 /// # Errors
 ///
 /// * If the scan fails
@@ -64,6 +72,8 @@ pub async fn scan(
     scan_items(items, db, token, scanner).await
 }
 
+/// Processes scanned items and updates the database with extracted metadata.
+///
 /// # Errors
 ///
 /// * If the scan fails
