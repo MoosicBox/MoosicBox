@@ -22,6 +22,10 @@ use crate::{
     StatusCode,
 };
 
+/// Reqwest HTTP client wrapper.
+///
+/// This client wraps a `reqwest::Client` to provide the generic HTTP client interface
+/// for making real network requests.
 pub struct Client(reqwest::Client);
 
 impl Client {
@@ -40,6 +44,10 @@ impl GenericClient<crate::ReqwestRequestBuilder> for Client {
     }
 }
 
+/// Builder for constructing a reqwest HTTP client.
+///
+/// This builder creates a default `reqwest::Client` configuration that can be used
+/// for making real HTTP requests.
 pub struct ClientBuilder;
 
 impl crate::ReqwestClientBuilder {
@@ -58,6 +66,10 @@ impl GenericClientBuilder<crate::ReqwestRequestBuilder, crate::ReqwestClient> fo
     }
 }
 
+/// Request builder for reqwest HTTP client.
+///
+/// This builder wraps a `reqwest::RequestBuilder` and provides methods for configuring
+/// HTTP requests before sending them.
 pub struct RequestBuilder(Option<reqwest::RequestBuilder>);
 
 #[async_trait]
@@ -104,6 +116,10 @@ impl GenericRequestBuilder<crate::ReqwestResponse> for RequestBuilder {
     }
 }
 
+/// HTTP response from reqwest client.
+///
+/// This response wraps a `reqwest::Response` and provides methods for accessing
+/// the response status, headers, and body in various formats.
 pub struct Response {
     headers: Option<BTreeMap<String, String>>,
     inner: Option<reqwest::Response>,
