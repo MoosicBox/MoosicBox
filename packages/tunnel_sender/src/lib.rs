@@ -73,6 +73,7 @@ pub mod websocket_sender;
 /// Error type for sending bytes through the tunnel.
 #[derive(Debug, Error)]
 pub enum SendBytesError {
+    /// Unknown error occurred during byte transmission.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -80,6 +81,7 @@ pub enum SendBytesError {
 /// Error type for sending messages through the tunnel.
 #[derive(Debug, Error)]
 pub enum SendMessageError {
+    /// Unknown error occurred during message transmission.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -87,36 +89,52 @@ pub enum SendMessageError {
 /// Error type for tunnel request processing.
 #[derive(Debug, Error)]
 pub enum TunnelRequestError {
+    /// Request contained invalid or malformed data.
     #[error("Bad request: {0}")]
     BadRequest(String),
+    /// Requested resource was not found.
     #[error("Not found: {0}")]
     NotFound(String),
+    /// Query parameters were invalid or malformed.
     #[error("Invalid Query: {0}")]
     InvalidQuery(String),
+    /// Generic request error occurred.
     #[error("Request error: {0}")]
     Request(String),
+    /// Other unspecified error occurred.
     #[error("Other: {0}")]
     Other(String),
+    /// HTTP method is not supported for this route.
     #[error("Unsupported Method")]
     UnsupportedMethod,
+    /// Requested route is not supported.
     #[error("Unsupported Route")]
     UnsupportedRoute,
+    /// Required profile was not provided or not found.
     #[error("Missing profile")]
     MissingProfile,
+    /// Internal server error with underlying cause.
     #[error("Internal server error: {0:?}")]
     InternalServerError(Box<dyn std::error::Error + Send>),
+    /// WebSocket message processing error.
     #[error("Websocket Message Error")]
     WebsocketMessage(#[from] WebsocketMessageError),
+    /// I/O operation error.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Tokio task join error.
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    /// HTTP request error from `switchy_http`.
     #[error(transparent)]
     Reqwest(#[from] switchy_http::Error),
+    /// Regular expression parsing or matching error.
     #[error(transparent)]
     Regex(#[from] regex::Error),
+    /// JSON serialization/deserialization error.
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+    /// Music API operation error.
     #[error(transparent)]
     MusicApi(#[from] Error),
 }
@@ -141,10 +159,16 @@ struct GetTrackInfoQuery {
 
 /// Message type received from the tunnel websocket.
 pub enum TunnelMessage {
+    /// Text message with UTF-8 string content.
     Text(String),
+    /// Binary message with raw bytes.
     Binary(Bytes),
+    /// Ping control frame with optional payload.
     Ping(Vec<u8>),
+    /// Pong control frame with optional payload.
     Pong(Vec<u8>),
+    /// Close control frame indicating connection closure.
     Close,
+    /// Raw WebSocket frame.
     Frame(Frame),
 }

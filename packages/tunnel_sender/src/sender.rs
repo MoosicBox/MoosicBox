@@ -66,6 +66,7 @@ use crate::websocket_sender::TunnelWebsocketSender;
 /// Error type for closing tunnel connections.
 #[derive(Debug, Error)]
 pub enum CloseError {
+    /// Unknown error occurred during connection close.
     #[error("Unknown {0:?}")]
     Unknown(String),
 }
@@ -163,25 +164,37 @@ impl WebsocketSender for TunnelSenderHandle {
 
 /// Message types that can be sent through the tunnel.
 pub enum TunnelResponseMessage {
+    /// A packet response for a specific tunnel request.
     Packet(TunnelResponsePacket),
+    /// A WebSocket message with connection filtering.
     Ws(TunnelResponseWs),
+    /// A ping control message.
     Ping,
 }
 
 /// A packet response for a specific tunnel request.
 pub struct TunnelResponsePacket {
+    /// The unique identifier for the tunnel request.
     pub request_id: u64,
+    /// The sequence number of this packet in the response stream.
     pub packet_id: u32,
+    /// The WebSocket message to send.
     pub message: Message,
+    /// Whether to broadcast this packet to all connections.
     pub broadcast: bool,
+    /// Optional connection ID to exclude from broadcast.
     pub except_id: Option<u64>,
+    /// Optional connection ID to send exclusively to.
     pub only_id: Option<u64>,
 }
 
 /// A websocket response with connection filtering options.
 pub struct TunnelResponseWs {
+    /// The WebSocket message to send.
     pub message: Message,
+    /// Connection IDs to exclude from receiving this message.
     pub exclude_connection_ids: Option<Vec<u64>>,
+    /// Connection IDs that should exclusively receive this message.
     pub to_connection_ids: Option<Vec<u64>>,
 }
 
