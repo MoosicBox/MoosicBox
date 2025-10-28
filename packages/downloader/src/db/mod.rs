@@ -1,3 +1,8 @@
+//! Database operations for download management.
+//!
+//! Provides functions for creating, retrieving, and managing download tasks and
+//! download locations in the database.
+
 use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
 use switchy_database::{
     profiles::LibraryDatabase,

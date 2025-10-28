@@ -11,12 +11,17 @@ use switchy_database::{AsId, DatabaseValue};
 
 use crate::DownloadApiSource;
 
+/// Represents a configured download location in the database.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadLocation {
+    /// Unique identifier for the download location
     pub id: u64,
+    /// Filesystem path where downloads will be saved
     pub path: String,
+    /// Timestamp when the location was created
     pub created: String,
+    /// Timestamp when the location was last updated
     pub updated: String,
 }
 
@@ -49,18 +54,25 @@ impl AsId for DownloadLocation {
     }
 }
 
+/// State of a download task in the queue.
 #[derive(
     Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Eq, Default,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum DownloadTaskState {
+    /// Task is waiting to be processed
     #[default]
     Pending,
+    /// Task has been paused
     Paused,
+    /// Task has been cancelled
     Cancelled,
+    /// Task is currently being processed
     Started,
+    /// Task has completed successfully
     Finished,
+    /// Task encountered an error
     Error,
 }
 
@@ -103,35 +115,59 @@ impl ToValueType<DownloadApiSource> for &serde_json::Value {
     }
 }
 
+/// Type of item to be downloaded.
 #[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum DownloadItem {
+    /// An audio track download
     Track {
+        /// API source to download from
         source: DownloadApiSource,
+        /// Unique track identifier
         track_id: Id,
+        /// Audio quality to download
         quality: TrackAudioQuality,
+        /// Artist identifier
         artist_id: Id,
+        /// Artist name
         artist: String,
+        /// Album identifier
         album_id: Id,
+        /// Album title
         album: String,
+        /// Track title
         title: String,
+        /// Whether album artwork is available
         contains_cover: bool,
     },
+    /// An album cover image download
     AlbumCover {
+        /// API source to download from
         source: DownloadApiSource,
+        /// Artist identifier
         artist_id: Id,
+        /// Artist name
         artist: String,
+        /// Album identifier
         album_id: Id,
+        /// Album title
         title: String,
+        /// Whether cover artwork is available
         contains_cover: bool,
     },
+    /// An artist cover image download
     ArtistCover {
+        /// API source to download from
         source: DownloadApiSource,
+        /// Artist identifier
         artist_id: Id,
+        /// Album identifier used to locate artist
         album_id: Id,
+        /// Artist name
         title: String,
+        /// Whether cover artwork is available
         contains_cover: bool,
     },
 }
@@ -288,22 +324,33 @@ impl ToValueType<DownloadItem> for &switchy_database::Row {
     }
 }
 
+/// Parameters for creating a new download task.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDownloadTask {
+    /// The item to be downloaded
     pub item: DownloadItem,
+    /// Destination filesystem path for the download
     pub file_path: String,
 }
 
+/// A download task stored in the database.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadTask {
+    /// Unique identifier for the task
     pub id: u64,
+    /// Current state of the download
     pub state: DownloadTaskState,
+    /// The item being downloaded
     pub item: DownloadItem,
+    /// Destination filesystem path
     pub file_path: String,
+    /// Total size of the download in bytes, if known
     pub total_bytes: Option<u64>,
+    /// Timestamp when the task was created
     pub created: String,
+    /// Timestamp when the task was last updated
     pub updated: String,
 }
 
