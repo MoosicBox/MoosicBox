@@ -8,10 +8,15 @@ use crate::ScanOrigin;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanLocation {
+    /// Unique identifier for this scan location.
     pub id: u32,
+    /// The scan origin type (e.g., Local, Tidal, Qobuz).
     pub origin: ScanOrigin,
+    /// Filesystem path for local scan locations, `None` for remote origins.
     pub path: Option<String>,
+    /// Timestamp when this location was created.
     pub created: String,
+    /// Timestamp when this location was last updated.
     pub updated: String,
 }
 

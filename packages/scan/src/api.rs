@@ -1,3 +1,8 @@
+//! HTTP API endpoints for music library scanning.
+//!
+//! This module provides REST API endpoints for initiating scans, managing
+//! scan origins, and configuring scan paths.
+
 #![allow(clippy::needless_for_each)]
 
 use std::str::FromStr;
@@ -17,6 +22,7 @@ use switchy_database::profiles::LibraryDatabase;
 
 use crate::{ScanError, ScanOrigin, disable_scan_origin, enable_scan_origin, run_scan};
 
+/// Binds all scan-related API endpoints to an Actix-Web scope.
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
@@ -61,9 +67,11 @@ pub fn bind_services<
 )]
 pub struct Api;
 
+/// Query parameters for scan endpoints.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanQuery {
+    /// Comma-separated list of scan origins to scan.
     origins: Option<String>,
 }
 
@@ -168,10 +176,12 @@ pub async fn start_scan_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+/// Query parameters for local path scan endpoint.
 #[cfg(feature = "local")]
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanPathQuery {
+    /// Filesystem path to scan.
     path: String,
 }
 
@@ -218,6 +228,7 @@ pub async fn run_scan_path_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+/// Query parameters for getting scan origins endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetScanOriginsQuery {}
