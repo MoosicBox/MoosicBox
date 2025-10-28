@@ -74,6 +74,7 @@ use mobile::Player;
 /// Extensions to [`tauri::App`], [`tauri::AppHandle`] and [`tauri::Window`] to access the player APIs.
 pub trait PlayerExt<R: Runtime> {
     /// Gets a reference to the player instance.
+    #[must_use]
     fn player(&self) -> &Player<R>;
 }
 
