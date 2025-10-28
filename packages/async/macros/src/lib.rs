@@ -423,7 +423,29 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
     result.into()
 }
 
-/// Internal test attribute macro for `switchy_async` - uses crate path for internal usage
+/// Internal test attribute macro for `switchy_async` - uses crate path for internal usage.
+///
+/// This macro is used within the `switchy_async` crate itself for internal testing. It sets up
+/// a simulator runtime and runs the test function within it, using `crate` as the path.
+///
+/// Supports optional parameters:
+/// * `real_time` - Use real time instead of simulated time
+/// * `real_fs` - Use real filesystem instead of simulated filesystem
+/// * `no_simulator` - Skip test when simulator feature is enabled, run normally otherwise
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// #[internal_test]
+/// async fn my_internal_test() {
+///     // Test code here
+/// }
+///
+/// #[internal_test(real_time)]
+/// async fn test_with_real_time() {
+///     // Uses real time
+/// }
+/// ```
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -446,7 +468,33 @@ pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
     test_internal(input_tokens.into())
 }
 
-/// External test attribute macro for `switchy_async` - uses `switchy_async` path for external usage
+/// Test attribute macro for `switchy_async` runtime tests (simulator feature only).
+///
+/// This macro sets up a simulator runtime and runs the test function within it. It's designed
+/// for testing code that uses the `switchy_async` runtime. Only available when the `simulator`
+/// feature is enabled.
+///
+/// Supports optional parameters:
+/// * `real_time` - Use real time instead of simulated time
+/// * `real_fs` - Use real filesystem instead of simulated filesystem
+/// * `no_simulator` - Skip test when simulator feature is enabled, run normally otherwise
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::test;
+///
+/// #[test]
+/// async fn my_async_test() {
+///     // Test code using switchy_async runtime
+///     assert_eq!(2 + 2, 4);
+/// }
+///
+/// #[test(real_time, real_fs)]
+/// async fn test_with_real_resources() {
+///     // Uses real time and filesystem
+/// }
+/// ```
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -469,7 +517,33 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     test_internal(input_tokens.into())
 }
 
-/// Test attribute macro for `switchy::unsync` - accepts optional `real_time` parameter
+/// Test attribute macro for `switchy::unsync` runtime tests (simulator feature only).
+///
+/// This macro sets up a `switchy::unsync` runtime and runs the test function within it. It's
+/// designed for testing code that uses the `switchy::unsync` runtime. Only available when the
+/// `simulator` feature is enabled.
+///
+/// Supports optional parameters:
+/// * `real_time` - Use real time instead of simulated time
+/// * `real_fs` - Use real filesystem instead of simulated filesystem
+/// * `no_simulator` - Skip test when simulator feature is enabled, run normally otherwise
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::unsync_test;
+///
+/// #[unsync_test]
+/// async fn my_unsync_test() {
+///     // Test code using switchy::unsync runtime
+///     assert_eq!(2 + 2, 4);
+/// }
+///
+/// #[unsync_test(real_time)]
+/// async fn test_with_real_time() {
+///     // Uses real time for this test
+/// }
+/// ```
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -492,7 +566,32 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
     test_internal(input_tokens.into())
 }
 
-/// Tokio-compatible test attribute macro - accepts `real_time` parameter but treats it as no-op
+/// Tokio-compatible test attribute macro (always available).
+///
+/// This macro provides a Tokio-compatible test wrapper that simply delegates to `#[tokio::test]`.
+/// Unlike the other test macros in this crate, this macro is always available regardless of
+/// feature flags, making it suitable for tests that need to work with or without the simulator.
+///
+/// Any arguments passed to this macro are ignored - it's designed to be a drop-in replacement
+/// for `#[tokio::test]` with a compatible signature.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::tokio_test_wrapper;
+///
+/// #[tokio_test_wrapper]
+/// async fn my_tokio_test() {
+///     // Test code using tokio runtime
+///     assert_eq!(2 + 2, 4);
+/// }
+///
+/// // Parameters are accepted but ignored for compatibility
+/// #[tokio_test_wrapper(real_time)]
+/// async fn test_with_ignored_args() {
+///     // Still runs as a standard tokio test
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
     // Parse and ignore the real_time parameter - tokio doesn't support it
