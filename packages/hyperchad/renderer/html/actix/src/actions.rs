@@ -12,13 +12,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ActixApp, ActixResponseProcessor};
 
+/// Payload for action requests sent from the frontend.
+///
+/// This structure represents the data sent in POST requests to the `/$action` endpoint.
+/// It contains the action identifier and an optional value associated with the action.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ActionPayload {
+    /// The action identifier, can be a string or complex JSON value.
     action: serde_json::Value,
+    /// Optional value data associated with the action.
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<Value>,
 }
 
+/// Handles POST requests to the `/$action` endpoint for user-triggered actions.
+///
+/// This function receives action payloads from the frontend, extracts the action name
+/// and optional value, and forwards them through the action channel for processing
+/// by the application.
+///
+/// # Errors
+///
+/// * Returns an error if the action channel fails to send the action
 #[allow(clippy::future_not_send)]
 pub async fn handle_action<
     T: Send + Sync + Clone + 'static,

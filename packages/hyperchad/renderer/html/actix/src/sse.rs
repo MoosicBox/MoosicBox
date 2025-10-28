@@ -27,15 +27,26 @@ use hyperchad_renderer::{Content, RendererEvent};
 
 use crate::{ActixApp, ActixResponseProcessor};
 
+/// Server-sent event data message with optional event type and ID fields.
+///
+/// This structure represents a single SSE message that will be sent to connected clients.
+/// It can include an event type name, an ID for tracking, and the actual data payload.
 #[must_use]
 #[derive(Debug, Clone)]
 pub struct EventData {
+    /// Optional event type name (maps to SSE `event:` field).
     event: Option<String>,
+    /// Optional event ID for tracking (maps to SSE `id:` field).
     id: Option<String>,
+    /// The data payload (maps to SSE `data:` field).
     data: String,
 }
 
 impl EventData {
+    /// Creates a new event data message with the specified data payload.
+    ///
+    /// The event type and ID are initially unset and can be added using
+    /// the [`event`](Self::event) and [`id`](Self::id) methods.
     pub fn new(data: impl Into<String>) -> Self {
         Self {
             event: None,
@@ -67,6 +78,7 @@ impl From<EventData> for Event {
 #[must_use]
 #[derive(Debug, Clone)]
 pub enum Event {
+    /// A data event containing event data with optional event type and ID.
     Data(EventData),
 }
 
@@ -112,6 +124,20 @@ impl Event {
     }
 }
 
+/// Handles GET requests to the `/$sse` endpoint for server-sent events streaming.
+///
+/// This function establishes a long-lived SSE connection that streams renderer events
+/// (view updates, canvas updates, custom events) to the connected client in real-time.
+/// The connection remains open until closed by the client or server.
+///
+/// Events are formatted according to the SSE specification with optional compression
+/// (gzip, deflate, zstd) based on client capabilities.
+///
+/// # Errors
+///
+/// * Returns an error if request preparation fails via `prepare_request`
+/// * Returns an error if content conversion fails via `to_body`
+/// * Returns an error if UTF-8 conversion of body content fails
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn handle_sse<
     T: Send + Sync + Clone + 'static,
