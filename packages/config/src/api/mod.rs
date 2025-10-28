@@ -100,8 +100,8 @@ pub async fn get_profiles_endpoint(db: ConfigDatabase) -> Result<Json<Vec<ApiPro
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateProfileQuery {
-    /// Name of the profile to create
-    name: String,
+    /// Name of the profile to create or retrieve
+    pub name: String,
 }
 
 /// API endpoint to create a new `MoosicBox` profile.
