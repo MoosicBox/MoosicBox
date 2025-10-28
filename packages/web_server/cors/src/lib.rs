@@ -33,6 +33,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Re-exported HTTP models from the `switchy_http_models` crate.
+///
+/// This includes types like [`switchy_http_models::Method`] used in CORS configuration.
 pub use switchy_http_models;
 
 use switchy_http_models::Method;
