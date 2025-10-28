@@ -14,16 +14,24 @@ use crate::{
     command::{AudioCommand, AudioHandle, AudioResponse, CommandMessage},
 };
 
-// Stream command types for immediate processing
+/// Stream commands for immediate processing of CPAL audio streams.
 #[derive(Debug, Clone)]
 pub enum StreamCommand {
+    /// Pause the audio stream
     Pause,
+    /// Resume the audio stream
     Resume,
+    /// Reset the audio stream to its initial state
     Reset,
 }
 
 const INITIAL_BUFFER_SECONDS: usize = 10;
 
+/// A CPAL-based audio output implementation.
+///
+/// This struct wraps a CPAL audio device and provides audio output functionality
+/// through the [`AudioWrite`] trait. It handles different sample formats by
+/// delegating to the appropriate `CpalAudioOutputImpl` implementation.
 pub struct CpalAudioOutput {
     #[allow(unused)]
     device: cpal::Device,
@@ -100,6 +108,8 @@ impl AudioOutputSample for u32 {}
 impl AudioOutputSample for f64 {}
 
 impl CpalAudioOutput {
+    /// Creates a new CPAL audio output for the specified device and sample format.
+    ///
     /// # Errors
     ///
     /// * If the relevant `CpalAudioOutputImpl` fails to initialize
@@ -853,6 +863,9 @@ fn list_devices(host: &Host) {
     }
 }
 
+/// Scans for the default CPAL audio output device.
+///
+/// Returns an [`AudioOutputFactory`] for the default output device, if available.
 #[must_use]
 pub fn scan_default_output() -> Option<AudioOutputFactory> {
     cpal::default_host()
@@ -860,6 +873,9 @@ pub fn scan_default_output() -> Option<AudioOutputFactory> {
         .and_then(|x| x.try_into().ok())
 }
 
+/// Scans for all available CPAL audio output devices across all hosts.
+///
+/// Returns an iterator over [`AudioOutputFactory`] instances for each discovered output device.
 pub fn scan_available_outputs() -> impl Iterator<Item = AudioOutputFactory> {
     cpal::ALL_HOSTS
         .iter()
