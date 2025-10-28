@@ -21,11 +21,13 @@ use crate::{
     state::State,
 };
 
+/// Constructs a URL for a specific artist page.
 #[must_use]
 pub fn artist_page_url(artist_id: &str) -> String {
     format!("/artists?artistId={artist_id}")
 }
 
+/// Constructs a URL for an artist cover image from an `ApiArtist`.
 #[must_use]
 pub fn artist_cover_url_from_artist(
     host: &str,
@@ -43,6 +45,9 @@ pub fn artist_cover_url_from_artist(
     )
 }
 
+/// Constructs a URL for an artist cover image.
+///
+/// Returns a placeholder image URL if the artist does not contain cover art.
 #[must_use]
 pub fn artist_cover_url(
     host: &str,
@@ -71,6 +76,9 @@ fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Containers {
     }
 }
 
+/// Renders the artist detail page content.
+///
+/// Displays artist information and albums grouped by type and source, loaded via HTMX.
 #[must_use]
 pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
     fn source_html(
@@ -142,11 +150,15 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
     }
 }
 
+/// Renders a complete artist page within the application layout.
 #[must_use]
 pub fn artist(state: &State, artist: &ApiArtist) -> Containers {
     page(state, &artist_page_content(state, artist))
 }
 
+/// Renders the artists list page content.
+///
+/// Displays artists in a grid layout with cover images.
 #[must_use]
 pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers {
     let Some(connection) = &state.connection else {
@@ -185,11 +197,15 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers 
     }
 }
 
+/// Renders the complete artists page within the application layout.
 #[must_use]
 pub fn artists(state: &State, artists: &[ApiArtist]) -> Containers {
     page(state, &artists_page_content(state, artists))
 }
 
+/// Renders an album list section for an artist page.
+///
+/// Groups albums by type and source with a descriptive header.
 #[must_use]
 pub fn albums_list(
     host: &str,

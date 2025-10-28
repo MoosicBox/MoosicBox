@@ -30,6 +30,9 @@ use crate::{
     state::State,
 };
 
+/// Constructs a URL for an album cover image.
+///
+/// Returns a placeholder image URL if the album does not contain cover art.
 #[must_use]
 pub fn album_cover_url(
     host: &str,
@@ -48,6 +51,7 @@ pub fn album_cover_url(
     }
 }
 
+/// Constructs a URL for an album cover image from an `ApiAlbum`.
 #[must_use]
 pub fn album_cover_url_from_album(host: &str, album: &ApiAlbum, width: u16, height: u16) -> String {
     album_cover_url(
@@ -60,6 +64,7 @@ pub fn album_cover_url_from_album(host: &str, album: &ApiAlbum, width: u16, heig
     )
 }
 
+/// Constructs a URL for an album cover image from an `ApiTrack`.
 #[must_use]
 pub fn album_cover_url_from_track(host: &str, track: &ApiTrack, width: u16, height: u16) -> String {
     album_cover_url(
@@ -72,6 +77,9 @@ pub fn album_cover_url_from_track(host: &str, track: &ApiTrack, width: u16, heig
     )
 }
 
+/// Renders an album cover image element from an `ApiAlbum`.
+///
+/// Uses lazy loading and requests a higher resolution image for better display quality.
 #[must_use]
 pub fn album_cover_img_from_album(host: &str, album: &ApiAlbum, size: u16) -> Containers {
     #[allow(clippy::cast_sign_loss)]
@@ -83,6 +91,9 @@ pub fn album_cover_img_from_album(host: &str, album: &ApiAlbum, size: u16) -> Co
     }
 }
 
+/// Renders an album cover image element from an `ApiTrack`.
+///
+/// Uses lazy loading and requests a higher resolution image for better display quality.
 #[must_use]
 pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Containers {
     #[allow(clippy::cast_sign_loss)]
@@ -94,6 +105,9 @@ pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Co
     }
 }
 
+/// Renders a loading placeholder for an album page.
+///
+/// Shows a skeleton UI that will be replaced by the actual album content via HTMX.
 #[must_use]
 pub fn album_page_immediate(
     album_id: &str,
@@ -151,6 +165,9 @@ pub fn album_page_immediate(
     }
 }
 
+/// Renders the full album detail page content.
+///
+/// Displays album information, cover art, version selector, and track listing.
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn album_page_content(
@@ -344,6 +361,9 @@ pub fn album_page_content(
     }
 }
 
+/// Renders the track list table body for an album version.
+///
+/// Includes interactive hover effects and playback controls for each track.
 #[must_use]
 pub fn album_page_tracks_table_body(
     version: &ApiAlbumVersion,
@@ -427,6 +447,9 @@ pub fn album_page_tracks_table_body(
     }
 }
 
+/// Renders the track list table body with current playback state.
+///
+/// Highlights the currently playing track if it belongs to this album.
 #[must_use]
 pub fn album_page_tracks_table_body_from_state(
     state: &State,
@@ -443,6 +466,7 @@ pub fn album_page_tracks_table_body_from_state(
     album_page_tracks_table_body(version, None)
 }
 
+/// Renders a complete album page within the application layout.
 #[must_use]
 pub fn album(
     state: &State,
@@ -458,6 +482,9 @@ pub fn album(
     )
 }
 
+/// Renders the initial album list with lazy loading triggers.
+///
+/// Sets up HTMX requests for parallel loading of additional album pages.
 #[must_use]
 pub fn albums_list_start(
     state: &State,
@@ -572,11 +599,15 @@ pub fn albums_list_start(
     }
 }
 
+/// Renders a page of albums without lazy loading setup.
 #[must_use]
 pub fn albums_list(host: &str, albums: &Page<ApiAlbum>, size: u16) -> Containers {
     show_albums(host, albums.iter(), size)
 }
 
+/// Renders a single album card with cover art and optional details.
+///
+/// Can include playback controls and album metadata based on flags.
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn album_display(
@@ -732,6 +763,7 @@ fn build_query(start: char, values: &[(&str, &str)]) -> String {
     query
 }
 
+/// Constructs a URL for the albums page with filters and sort order.
 #[must_use]
 pub fn albums_page_url(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> String {
     format!(
@@ -746,6 +778,7 @@ pub fn albums_page_url(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> 
     )
 }
 
+/// Constructs a URL for a specific album page with version parameters.
 #[must_use]
 pub fn album_page_url(
     album_id: &str,
@@ -765,6 +798,9 @@ pub fn album_page_url(
     )
 }
 
+/// Renders a collection of album cards.
+///
+/// Displays albums with details and media controls enabled.
 pub fn show_albums<'a>(
     host: &str,
     albums: impl Iterator<Item = &'a ApiAlbum>,
@@ -777,6 +813,9 @@ pub fn show_albums<'a>(
     }
 }
 
+/// Renders the albums page content with filters and sort controls.
+///
+/// Includes a filter menu, search box, and album grid with lazy loading.
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn albums_page_content(
@@ -911,6 +950,7 @@ pub fn albums_page_content(
     }
 }
 
+/// Renders the complete albums page within the application layout.
 #[must_use]
 pub fn albums(
     state: &State,
@@ -921,6 +961,9 @@ pub fn albums(
     page(state, &albums_page_content(filtered_sources, sort, search))
 }
 
+/// Renders the album grid container with loading placeholders.
+///
+/// Sets up HTMX to load actual album data on page load.
 #[must_use]
 pub fn load_albums(
     size: u16,

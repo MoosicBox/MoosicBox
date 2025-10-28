@@ -1,7 +1,16 @@
+//! Tidal API integration functions.
+//!
+//! Provides utilities for managing Tidal authentication and library scanning.
+
 use moosicbox_tidal::{device_authorization, device_authorization_token, db::models::TidalConfig};
 use switchy_database::profiles::LibraryDatabase;
 use log::error;
 
+/// Retrieves the stored Tidal configuration from the database.
+///
+/// # Errors
+///
+/// Returns `None` if the configuration cannot be retrieved or does not exist.
 pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
     match moosicbox_tidal::db::get_tidal_config(db).await {
         Ok(config) => config,
@@ -12,6 +21,15 @@ pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
     }
 }
 
+/// Initiates the Tidal device authorization flow.
+///
+/// Returns a URL that the user should visit to complete authentication.
+/// Starts a background task that polls for authorization completion.
+///
+/// # Errors
+///
+/// Returns `None` if authentication cannot be started due to missing credentials,
+/// network errors, or invalid responses from the Tidal API.
 pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
     let client_id = match switchy_env::var("TIDAL_CLIENT_ID") {
         Ok(id) => id,
@@ -78,6 +96,9 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
     Some(url.to_string())
 }
 
+/// Runs a library scan for Tidal content.
+///
+/// Returns `true` if the scan completed successfully, `false` otherwise.
 pub async fn run_scan(db: &LibraryDatabase) -> bool {
     match moosicbox_scan::run_scan(
         Some(vec![moosicbox_scan::ScanOrigin::Tidal]),
