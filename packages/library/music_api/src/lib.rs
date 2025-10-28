@@ -59,6 +59,11 @@ use regex::{Captures, Regex};
 use switchy_async::sync::Mutex;
 use switchy_database::profiles::LibraryDatabase;
 
+/// Profile management for library music API instances.
+///
+/// This module provides functionality for managing multiple library music API instances
+/// across different profiles, allowing applications to work with multiple library databases
+/// simultaneously.
 pub mod profiles;
 
 /// Music API implementation for local library access.
