@@ -458,6 +458,7 @@ pub async fn set_av_transport_uri(
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadata {
+    /// List of track metadata items parsed from the XML.
     items: Vec<TrackMetadataItem>,
 }
 
@@ -466,12 +467,19 @@ pub struct TrackMetadata {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadataItem {
+    /// `UPnP` class of the item (e.g., "object.item.audioItem.musicTrack").
     upnp_class: Option<String>,
+    /// Artist name from `UPnP` metadata.
     upnp_artist: Option<String>,
+    /// Album name from `UPnP` metadata.
     upnp_album: Option<String>,
+    /// Original track number from `UPnP` metadata.
     upnp_original_track_number: Option<String>,
+    /// Track title from Dublin Core metadata.
     dc_title: Option<String>,
+    /// Creator name from Dublin Core metadata.
     dc_creator: Option<String>,
+    /// Resource information for the track.
     res: TrackMetadataItemResource,
 }
 
@@ -480,8 +488,11 @@ pub struct TrackMetadataItem {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TrackMetadataItemResource {
+    /// Duration of the track in seconds.
     duration: Option<u32>,
+    /// Protocol information describing the resource format.
     protocol_info: Option<String>,
+    /// URI of the media resource.
     source: String,
 }
 
@@ -563,8 +574,11 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TransportInfo {
+    /// Current transport status (e.g., "OK", "ERROR_OCCURRED").
     current_transport_status: String,
+    /// Current transport state (e.g., "PLAYING", "PAUSED_PLAYBACK", "STOPPED").
     current_transport_state: String,
+    /// Current playback speed (typically "1" for normal speed).
     current_speed: String,
 }
 
@@ -610,13 +624,21 @@ pub async fn get_transport_info(
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PositionInfo {
+    /// Current track number in the playlist (1-based).
     track: u32,
+    /// Relative playback position in seconds within the current track.
     rel_time: u32,
+    /// Absolute playback position in seconds across the entire playlist.
     abs_time: u32,
+    /// URI of the current track.
     track_uri: String,
+    /// Metadata for the current track.
     track_metadata: TrackMetadata,
+    /// Relative counter value.
     rel_count: u32,
+    /// Absolute counter value.
     abs_count: u32,
+    /// Total duration of the current track in seconds.
     track_duration: u32,
 }
 
@@ -759,12 +781,19 @@ pub async fn set_volume(
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MediaInfo {
+    /// Total duration of the media in seconds.
     media_duration: u32,
+    /// Recording medium type (e.g., "NOT_IMPLEMENTED").
     record_medium: String,
+    /// Write status of the media (e.g., "NOT_IMPLEMENTED").
     write_status: String,
+    /// Metadata for the current media URI.
     current_uri_metadata: TrackMetadata,
+    /// Number of tracks in the current playlist.
     nr_tracks: u32,
+    /// Playback medium type (e.g., "NETWORK", "NONE").
     play_medium: String,
+    /// URI of the current media.
     current_uri: String,
 }
 
@@ -1053,6 +1082,7 @@ pub async fn devices() -> Vec<UpnpDevice> {
 #[derive(Default)]
 pub struct UpnpDeviceScanner {
     scanning: bool,
+    /// List of discovered `UPnP` devices from the most recent scan.
     pub devices: Vec<UpnpDevice>,
 }
 
