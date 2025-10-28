@@ -210,6 +210,12 @@ pub enum InitDbError {
     Database(#[from] switchy_database::DatabaseError),
 }
 
+/// Initializes a database connection based on active feature flags.
+///
+/// This function selects the appropriate database backend based on compile-time
+/// features (e.g., `sqlite-rusqlite`, `postgres-raw`, `turso`) and returns a
+/// boxed trait object implementing the `Database` interface.
+///
 /// # Panics
 ///
 /// * If invalid features are specified for the crate
@@ -297,6 +303,12 @@ pub async fn init(
     }
 }
 
+/// Initializes a non-SQLite database connection based on active feature flags.
+///
+/// This function is similar to `init` but specifically for non-SQLite backends
+/// (e.g., `PostgreSQL`). It selects the appropriate database based on compile-time
+/// features and returns a boxed trait object implementing the `Database` interface.
+///
 /// # Panics
 ///
 /// * If invalid features are specified for the crate
