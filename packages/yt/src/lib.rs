@@ -26,7 +26,7 @@
 //! # use switchy_database::profiles::LibraryDatabase;
 //!
 //! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
-//! // Create a YouTube Music API client
+//! // Create a `YouTube` Music API client
 //! let api = YtMusicApi::builder()
 //!     .with_db(db)
 //!     .build()
@@ -95,45 +95,62 @@ pub mod db;
 /// Contains types for artists, albums, tracks, search results, and playback information.
 pub mod models;
 
+/// Errors that can occur when interacting with the `YouTube` Music API.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// No user ID is available for the current session
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// JSON parsing error
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// HTTP client error
     #[error(transparent)]
     Http(#[from] switchy_http::Error),
+    /// Database operation error (requires `db` feature)
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// `YouTube` Music configuration error (requires `db` feature)
     #[cfg(feature = "db")]
     #[error(transparent)]
     YtConfig(#[from] db::GetYtConfigError),
+    /// No access token is available for authentication
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    /// The request was not authorized
     #[error("Unauthorized")]
     Unauthorized,
+    /// The API request failed
     #[error("Request failed (error {0})")]
     RequestFailed(String),
+    /// The HTTP request failed with a specific status code
     #[error("Request failed (error {0}): {1}")]
     HttpRequestFailed(u16, String),
+    /// Maximum retry attempts exceeded
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
+    /// The response body was missing
     #[error("No response body")]
     NoResponseBody,
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// The API returned an empty response
     #[error("Empty response")]
     EmptyResponse,
+    /// Configuration error
     #[error(transparent)]
     Config(#[from] YtConfigError),
 }
 
+/// Device type for `YouTube` Music API requests.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtDeviceType {
+    /// Browser-based client
     Browser,
 }
 
@@ -168,8 +185,9 @@ static CLIENT: LazyLock<switchy_http::Client> =
 
 static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 
+/// The API source identifier for `YouTube` Music.
 pub static API_SOURCE: LazyLock<ApiSource> =
-    LazyLock::new(|| ApiSource::register("Yt", "YouTube Music"));
+    LazyLock::new(|| ApiSource::register("Yt", "`YouTube` Music"));
 
 impl ToUrl for YtApiEndpoint {
     fn to_url(&self) -> String {
@@ -249,10 +267,15 @@ macro_rules! yt_api_endpoint {
     };
 }
 
+/// Initiates the OAuth device authorization flow for `YouTube` Music.
+///
+/// Returns a verification URL and device code for completing authentication.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Serde` - If JSON serialization failed
 pub async fn device_authorization(client_id: String, open: bool) -> Result<Value, Error> {
     let url = yt_api_endpoint!(DeviceAuthorization);
 
@@ -357,15 +380,20 @@ async fn request_inner(
     }
 }
 
-/// # Panics
+/// Exchanges a device code for OAuth access and refresh tokens.
 ///
-/// * If failed to serialize user `Value` to string
+/// Completes the device authorization flow by exchanging the device code for tokens.
+/// Optionally persists the tokens to the database if the `persist` parameter is true.
 ///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+///
+/// # Panics
+///
+/// * If failed to serialize user `Value` to string
 pub async fn device_authorization_token(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: String,
@@ -689,23 +717,39 @@ async fn refetch_access_token(
     Ok(access_token.to_string())
 }
 
+/// Sort order for artist listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtArtistOrder {
+    /// Sort by date added
     Date,
 }
 
+/// Sort direction for artist listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtArtistOrderDirection {
+    /// Ascending order
     Asc,
+    /// Descending order
     Desc,
 }
 
+/// Fetches the user's favorite artists from `YouTube` Music.
+///
+/// Returns a paginated list of artists the user has favorited.
+///
+/// # Errors
+///
+/// * `Error::NoUserIdAvailable` - If no user ID is available
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -817,11 +861,14 @@ pub async fn favorite_artists(
     })
 }
 
+/// Adds an artist to the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -875,11 +922,14 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
+/// Removes an artist from the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -934,11 +984,13 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
+/// Sort order for album listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAlbumOrder {
+    /// Sort by date added
     Date,
 }
 
@@ -948,12 +1000,15 @@ impl From<AlbumSort> for YtAlbumOrder {
     }
 }
 
+/// Sort direction for album listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAlbumOrderDirection {
+    /// Ascending order
     Asc,
+    /// Descending order
     Desc,
 }
 
@@ -972,6 +1027,17 @@ impl From<AlbumSort> for YtAlbumOrderDirection {
     }
 }
 
+/// Fetches the user's favorite albums from `YouTube` Music.
+///
+/// Returns a paginated list of albums the user has favorited.
+///
+/// # Errors
+///
+/// * `Error::NoUserIdAvailable` - If no user ID is available
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -1083,11 +1149,17 @@ pub async fn favorite_albums(
     })
 }
 
+/// Fetches all favorite albums from `YouTube` Music across all pages.
+///
+/// Automatically handles pagination to retrieve the complete list of favorite albums.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::NoUserIdAvailable` - If no user ID is available
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1132,11 +1204,14 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
+/// Adds an album to the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1190,11 +1265,14 @@ pub async fn add_favorite_album(
     Ok(())
 }
 
+/// Removes an album from the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1249,23 +1327,39 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
+/// Sort order for track listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtTrackOrder {
+    /// Sort by date added
     Date,
 }
 
+/// Sort direction for track listings.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtTrackOrderDirection {
+    /// Ascending order
     Asc,
+    /// Descending order
     Desc,
 }
 
+/// Fetches the user's favorite tracks from `YouTube` Music.
+///
+/// Returns a paginated list of tracks the user has favorited.
+///
+/// # Errors
+///
+/// * `Error::NoUserIdAvailable` - If no user ID is available
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1377,11 +1471,14 @@ pub async fn favorite_tracks(
     })
 }
 
+/// Adds a track to the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1435,11 +1532,14 @@ pub async fn add_favorite_track(
     Ok(())
 }
 
+/// Removes a track from the user's favorites on `YouTube` Music.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1494,15 +1594,19 @@ pub async fn remove_favorite_track(
     Ok(())
 }
 
+/// `YouTube` Music album type classification.
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone, PartialEq, Eq,
 )]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum YtAlbumType {
+    /// Full-length album (LP)
     #[default]
     Lp,
+    /// EPs and singles
     EpsAndSingles,
+    /// Compilation albums
     Compilations,
 }
 
@@ -1529,6 +1633,16 @@ impl ToValueType<YtAlbumType> for &Value {
     }
 }
 
+/// Fetches albums for a specific artist from `YouTube` Music.
+///
+/// Returns a paginated list of albums by the specified artist, optionally filtered by album type.
+///
+/// # Errors
+///
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -1634,6 +1748,16 @@ pub async fn artist_albums(
     })
 }
 
+/// Fetches tracks for a specific album from `YouTube` Music.
+///
+/// Returns a paginated list of tracks in the specified album.
+///
+/// # Errors
+///
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::Unauthorized` - If the access token is invalid
+/// * `Error::Database` - If a database error occurred (with `db` feature)
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1720,11 +1844,16 @@ pub async fn album_tracks(
     })
 }
 
+/// Fetches album metadata from `YouTube` Music.
+///
+/// Returns detailed information about the specified album.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1761,11 +1890,16 @@ pub async fn album(
     Ok(value.as_model()?)
 }
 
+/// Fetches artist metadata from `YouTube` Music.
+///
+/// Returns detailed information about the specified artist.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1804,11 +1938,16 @@ pub async fn artist(
     Ok(value.as_model()?)
 }
 
+/// Fetches track metadata from `YouTube` Music.
+///
+/// Returns detailed information about the specified track.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 pub async fn track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -1846,11 +1985,16 @@ pub async fn track(
     Ok(value.as_model()?)
 }
 
+/// Searches `YouTube` Music for artists, albums, and tracks matching the query.
+///
+/// Returns search results containing artists, albums, and tracks that match the search query.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the response JSON failed to parse
+/// * `Error::EmptyResponse` - If the API returned an empty response
+/// * `Error::Serde` - If JSON serialization failed
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     query: &str,
@@ -1884,13 +2028,17 @@ pub async fn search(
     Ok(value.as_model()?)
 }
 
+/// Audio quality levels for `YouTube` Music track streaming.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum YtAudioQuality {
+    /// High quality lossy audio
     High,
+    /// Lossless audio quality
     Lossless,
+    /// High-resolution lossless audio
     HiResLossless,
 }
 
@@ -1904,11 +2052,16 @@ impl From<TrackAudioQuality> for YtAudioQuality {
     }
 }
 
+/// Retrieves the streaming URL for a `YouTube` Music track.
+///
+/// Returns URLs for streaming the track at the specified audio quality.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
@@ -1938,30 +2091,52 @@ pub async fn track_file_url(
     Ok(value.to_value("urls")?)
 }
 
+/// Metadata and playback information for a `YouTube` Music track.
+///
+/// Contains audio quality parameters, replay gain values, and manifest information
+/// needed for track playback.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct YtTrackPlaybackInfo {
+    /// Peak amplitude for the album
     pub album_peak_amplitude: f64,
+    /// Replay gain adjustment for the album
     pub album_replay_gain: f64,
+    /// Asset presentation mode
     pub asset_presentation: String,
+    /// Audio mode (e.g., stereo, mono)
     pub audio_mode: String,
+    /// Audio quality level
     pub audio_quality: String,
+    /// Bit depth of the audio (if available)
     pub bit_depth: Option<u8>,
+    /// Playback manifest data
     pub manifest: String,
+    /// Hash of the manifest
     pub manifest_hash: String,
+    /// MIME type of the manifest
     pub manifest_mime_type: String,
+    /// Sample rate in Hz (if available)
     pub sample_rate: Option<u32>,
+    /// `YouTube` Music track ID
     pub track_id: u64,
+    /// Peak amplitude for the track
     pub track_peak_amplitude: f64,
+    /// Replay gain adjustment for the track
     pub track_replay_gain: f64,
 }
 
+/// Retrieves detailed playback information for a `YouTube` Music track.
+///
+/// Returns metadata including audio quality, replay gain, and manifest information.
+///
 /// # Errors
 ///
-/// * If the HTTP request failed
-/// * If the JSON response failed to parse
-/// * If a database error occurred
+/// * `Error::Http` - If the HTTP request failed
+/// * `Error::Parse` - If the JSON response failed to parse
+/// * `Error::Database` - If a database error occurred (with `db` feature)
+/// * `Error::Unauthorized` - If the access token is invalid
 pub async fn track_playback_info(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
@@ -2042,6 +2217,7 @@ impl From<TrackOrderDirection> for YtTrackOrderDirection {
     }
 }
 
+/// Error returned when attempting to convert an unsupported album type to `YtAlbumType`.
 #[derive(Debug, thiserror::Error)]
 #[error("Unsupported AlbumType")]
 pub struct TryFromAlbumTypeError;
@@ -2071,16 +2247,23 @@ impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     }
 }
 
+/// Errors that can occur when working with `YouTube` Music configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum YtConfigError {
+    /// Database connection is missing (requires `db` feature)
     #[cfg(feature = "db")]
     #[error("Missing Db")]
     MissingDb,
+    /// Failed to retrieve `YouTube` Music configuration (requires `db` feature)
     #[cfg(feature = "db")]
     #[error(transparent)]
     GetYtConfig(#[from] crate::db::GetYtConfigError),
 }
 
+/// Builder for creating a `YtMusicApi` instance.
+///
+/// Allows configuration of database connections and other settings before
+/// creating the API client.
 #[derive(Default)]
 pub struct YtMusicApiBuilder {
     #[cfg(feature = "db")]
@@ -2088,6 +2271,9 @@ pub struct YtMusicApiBuilder {
 }
 
 impl YtMusicApiBuilder {
+    /// Sets the database connection for the API client (builder pattern).
+    ///
+    /// Returns the builder for method chaining.
     #[cfg(feature = "db")]
     #[must_use]
     pub fn with_db(mut self, db: LibraryDatabase) -> Self {
@@ -2095,15 +2281,20 @@ impl YtMusicApiBuilder {
         self
     }
 
+    /// Sets the database connection for the API client (mutable reference).
+    ///
+    /// Returns a mutable reference to the builder for method chaining.
     #[cfg(feature = "db")]
     pub fn db(&mut self, db: LibraryDatabase) -> &mut Self {
         self.db = Some(db);
         self
     }
 
+    /// Builds the `YtMusicApi` instance.
+    ///
     /// # Errors
     ///
-    /// * If the `db` is missing
+    /// * `YtConfigError::MissingDb` - If the database connection is missing (with `db` feature)
     #[allow(clippy::unused_async)]
     pub async fn build(self) -> Result<YtMusicApi, YtConfigError> {
         #[cfg(feature = "db")]
@@ -2129,6 +2320,10 @@ impl YtMusicApiBuilder {
     }
 }
 
+/// `YouTube` Music API client implementing the `MusicApi` trait.
+///
+/// Provides access to `YouTube` Music's streaming service including artists, albums,
+/// tracks, favorites, and search functionality.
 pub struct YtMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
@@ -2136,6 +2331,7 @@ pub struct YtMusicApi {
 }
 
 impl YtMusicApi {
+    /// Creates a new builder for constructing a `YtMusicApi` instance.
     #[must_use]
     pub fn builder() -> YtMusicApiBuilder {
         YtMusicApiBuilder::default()
