@@ -190,6 +190,7 @@ impl Default for AppBuilder {
 }
 
 impl AppBuilder {
+    /// Creates a new empty `AppBuilder`.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -218,116 +219,139 @@ impl AppBuilder {
         }
     }
 
+    /// Sets the router for the application (builder pattern).
     #[must_use]
     pub fn with_router(mut self, router: Router) -> Self {
         self.router = Some(router);
         self
     }
 
+    /// Sets the router for the application (mutable reference pattern).
     pub fn router(&mut self, router: Router) -> &mut Self {
         self.router = Some(router);
         self
     }
 
+    /// Sets the initial route to navigate to when the application starts (builder pattern).
     #[must_use]
     pub fn with_initial_route(mut self, initial_route: impl Into<Navigation>) -> Self {
         self.initial_route = Some(initial_route.into());
         self
     }
 
+    /// Sets the initial route to navigate to when the application starts (mutable reference pattern).
     pub fn initial_route(&mut self, initial_route: impl Into<Navigation>) -> &mut Self {
         self.initial_route = Some(initial_route.into());
         self
     }
 
+    /// Sets the window width in pixels (builder pattern).
     #[must_use]
     pub const fn with_width(mut self, width: f32) -> Self {
         self.width.replace(width);
         self
     }
 
+    /// Sets the window width in pixels (mutable reference pattern).
     pub const fn width(&mut self, width: f32) -> &mut Self {
         self.width = Some(width);
         self
     }
 
+    /// Sets the window height in pixels (builder pattern).
     #[must_use]
     pub const fn with_height(mut self, height: f32) -> Self {
         self.height.replace(height);
         self
     }
 
+    /// Sets the window height in pixels (mutable reference pattern).
     pub const fn height(&mut self, height: f32) -> &mut Self {
         self.height = Some(height);
         self
     }
 
+    /// Sets both window width and height in pixels (builder pattern).
     #[must_use]
     pub const fn with_size(self, width: f32, height: f32) -> Self {
         self.with_width(width).with_height(height)
     }
 
+    /// Sets both window width and height in pixels (mutable reference pattern).
     pub const fn size(&mut self, width: f32, height: f32) -> &mut Self {
         self.width(width).height(height);
         self
     }
 
+    /// Sets the window X position in pixels (builder pattern).
     #[must_use]
     pub const fn with_x(mut self, x: i32) -> Self {
         self.x.replace(x);
         self
     }
 
+    /// Sets the window X position in pixels (mutable reference pattern).
     pub const fn x(&mut self, x: i32) -> &mut Self {
         self.x = Some(x);
         self
     }
 
+    /// Sets the window Y position in pixels (builder pattern).
     #[must_use]
     pub const fn with_y(mut self, y: i32) -> Self {
         self.y.replace(y);
         self
     }
 
+    /// Sets the window Y position in pixels (mutable reference pattern).
     pub const fn y(&mut self, y: i32) -> &mut Self {
         self.y = Some(y);
         self
     }
 
+    /// Sets both window X and Y position in pixels (builder pattern).
     #[must_use]
     pub const fn with_position(self, x: i32, y: i32) -> Self {
         self.with_x(x).with_y(y)
     }
 
+    /// Sets both window X and Y position in pixels (mutable reference pattern).
     pub const fn position(&mut self, x: i32, y: i32) -> &mut Self {
         self.x(x).y(y);
         self
     }
 
+    /// Sets the HTML viewport meta tag content for HTML renderers (builder pattern).
     #[must_use]
     pub fn with_viewport(mut self, content: String) -> Self {
         self.viewport.replace(content);
         self
     }
 
+    /// Sets the background color for the application window (builder pattern).
     #[must_use]
     pub const fn with_background(mut self, color: Color) -> Self {
         self.background.replace(color);
         self
     }
 
+    /// Sets the window or page title (builder pattern).
     #[must_use]
     pub fn with_title(mut self, title: String) -> Self {
         self.title.replace(title);
         self
     }
 
+    /// Sets the page description meta tag for HTML renderers (builder pattern).
     #[must_use]
     pub fn with_description(mut self, description: String) -> Self {
         self.description.replace(description);
         self
     }
 
+    /// Adds a handler function for application actions (builder pattern).
+    ///
+    /// The handler receives an action name and optional value, and returns whether the action was handled.
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
@@ -343,12 +367,16 @@ impl AppBuilder {
         self
     }
 
+    /// Sets a custom async runtime handle (builder pattern).
     #[must_use]
     pub fn with_runtime_handle(mut self, handle: Handle) -> Self {
         self.runtime_handle.replace(handle);
         self
     }
 
+    /// Adds a callback to be invoked when the window is resized (builder pattern).
+    ///
+    /// The callback receives the new width and height in pixels.
     #[must_use]
     pub fn with_on_resize<E: std::error::Error + 'static>(
         mut self,
@@ -421,6 +449,7 @@ impl AppBuilder {
             .unwrap_or_else(switchy::unsync::runtime::Handle::current)
     }
 
+    /// Adds a static asset route for serving files (builder pattern).
     #[cfg(feature = "assets")]
     #[must_use]
     pub fn with_static_asset_route(
@@ -431,6 +460,7 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a static asset route for serving files (mutable reference pattern).
     #[cfg(feature = "assets")]
     pub fn static_asset_route(
         &mut self,
@@ -440,10 +470,12 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a static asset route for serving files, returning a `Result` (builder pattern).
+    ///
     /// # Errors
     ///
-    /// * If the asset path type is a not found
-    /// * If the asset path type is an invalid path type (not a file or directory)
+    /// * If the asset path is not found
+    /// * If the asset path is an invalid path type (not a file or directory)
     #[cfg(feature = "assets")]
     pub fn with_static_asset_route_result<
         Path: TryInto<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -455,10 +487,12 @@ impl AppBuilder {
         Ok(self)
     }
 
+    /// Adds a static asset route for serving files, returning a `Result` (mutable reference pattern).
+    ///
     /// # Errors
     ///
-    /// * If the asset path type is a not found
-    /// * If the asset path type is an invalid path type (not a file or directory)
+    /// * If the asset path is not found
+    /// * If the asset path is an invalid path type (not a file or directory)
     #[cfg(feature = "assets")]
     pub fn static_asset_route_result<
         Path: TryInto<hyperchad_renderer::assets::StaticAssetRoute>,
@@ -470,6 +504,7 @@ impl AppBuilder {
         Ok(self)
     }
 
+    /// Adds a CSS URL to be linked in the HTML head for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_css_url(mut self, url: impl Into<String>) -> Self {
@@ -477,12 +512,14 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a CSS URL to be linked in the HTML head for HTML renderers (mutable reference pattern).
     #[cfg(feature = "html")]
     pub fn css_url(&mut self, url: impl Into<String>) -> &mut Self {
         self.css_urls.push(url.into());
         self
     }
 
+    /// Adds multiple CSS URLs to be linked in the HTML head for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_css_urls(mut self, urls: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -490,6 +527,7 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a CSS file path to be served and linked for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_css_path(mut self, path: impl Into<String>) -> Self {
@@ -497,12 +535,14 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a CSS file path to be served and linked for HTML renderers (mutable reference pattern).
     #[cfg(feature = "html")]
     pub fn css_path(&mut self, path: impl Into<String>) -> &mut Self {
         self.css_paths.push(path.into());
         self
     }
 
+    /// Adds multiple CSS file paths to be served and linked for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_css_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -510,6 +550,7 @@ impl AppBuilder {
         self
     }
 
+    /// Adds inline CSS to be included in a style tag for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_inline_css(mut self, css: impl Into<String>) -> Self {
@@ -517,12 +558,14 @@ impl AppBuilder {
         self
     }
 
+    /// Adds inline CSS to be included in a style tag for HTML renderers (mutable reference pattern).
     #[cfg(feature = "html")]
     pub fn inline_css(&mut self, css: impl Into<String>) -> &mut Self {
         self.inline_css.push(css.into());
         self
     }
 
+    /// Adds multiple inline CSS blocks to be included in style tags for HTML renderers (builder pattern).
     #[cfg(feature = "html")]
     #[must_use]
     pub fn with_inline_css_blocks(
@@ -534,9 +577,11 @@ impl AppBuilder {
         self
     }
 
+    /// Builds an `App` instance with the specified renderer.
+    ///
     /// # Errors
     ///
-    /// * If the `AppBuilder` is missing a router
+    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     pub fn build<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static>(
         self,
         renderer: R,
@@ -564,9 +609,12 @@ impl AppBuilder {
 /// Represents a hyperchad application with a specific renderer.
 #[derive(Debug)]
 pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> {
+    /// The renderer used to display the application.
     pub renderer: R,
+    /// The router managing navigation and routes.
     pub router: Router,
     runtime: Option<switchy::unsync::runtime::Runtime>,
+    /// Optional handle to the async runtime.
     pub runtime_handle: Option<switchy::unsync::runtime::Handle>,
     x: Option<i32>,
     y: Option<i32>,
@@ -677,9 +725,11 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             .block_on(async move { self.generate(output).await })
     }
 
+    /// Generates static output for all routes (async version).
+    ///
     /// # Errors
     ///
-    /// * If the `Renderer` fails to generate the output
+    /// * [`Error::Builder`] if the renderer fails to generate the output
     pub async fn generate(&self, output: Option<String>) -> Result<(), Error> {
         self.renderer.generate(&self.router, output).await?;
         Ok(())
@@ -693,9 +743,11 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             .block_on(async move { self.clean(output).await })
     }
 
+    /// Cleans the generated output directory (async version).
+    ///
     /// # Errors
     ///
-    /// * If the `Renderer` fails to clean the output
+    /// * [`Error::IO`] if the renderer fails to clean the output directory
     pub async fn clean(&self, output: Option<String>) -> Result<(), Error> {
         self.renderer.clean(output).await?;
         Ok(())
@@ -713,9 +765,12 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             .block_on(async move { self.serve().await })
     }
 
+    /// Starts serving the application and returns a runner (async version).
+    ///
     /// # Errors
     ///
-    /// * If the `App` fails to serve
+    /// * [`Error::Builder`] if the app fails to initialize the runtime
+    /// * [`Error::OtherSend`] if the renderer fails to initialize
     #[allow(clippy::unused_async)]
     pub async fn serve(&mut self) -> Result<Box<dyn RenderRunner>, Error> {
         let router = self.router.clone();
