@@ -71,16 +71,26 @@ use tokio::sync::Mutex;
 /// * `WithHasMore` - When only whether there are more items is known
 #[derive(Debug)]
 pub enum Page<T> {
+    /// Pagination with a known total number of items.
     WithTotal {
+        /// The items in this page.
         items: Vec<T>,
+        /// The offset of this page from the start of the result set.
         offset: u32,
+        /// The maximum number of items per page.
         limit: u32,
+        /// The total number of items across all pages.
         total: u32,
     },
+    /// Pagination with only knowledge of whether more items exist.
     WithHasMore {
+        /// The items in this page.
         items: Vec<T>,
+        /// The offset of this page from the start of the result set.
         offset: u32,
+        /// The maximum number of items per page.
         limit: u32,
+        /// Whether there are more items available after this page.
         has_more: bool,
     },
 }
@@ -208,6 +218,8 @@ impl<T: Serialize> Serialize for Page<T> {
 }
 
 impl<T, E> Page<Result<T, E>> {
+    /// Transposes a `Page<Result<T, E>>` into a `Result<Page<T>, E>`.
+    ///
     /// # Errors
     ///
     /// * If any of the items are `Err`, they will bubble up to the top-level
@@ -422,7 +434,9 @@ impl<T> Page<T> {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PagingRequest {
+    /// The offset from the start of the result set.
     pub offset: u32,
+    /// The maximum number of items to return.
     pub limit: u32,
 }
 
@@ -431,7 +445,9 @@ type FetchPagingResponse<T, E> = Box<dyn FnMut(u32, u32) -> FuturePagingResponse
 
 /// A paginated response containing a page of items and a function to fetch additional pages.
 pub struct PagingResponse<T, E> {
+    /// The current page of items.
     pub page: Page<T>,
+    /// A function to fetch additional pages.
     pub fetch: Arc<Mutex<FetchPagingResponse<T, E>>>,
 }
 
@@ -444,6 +460,8 @@ impl<T: std::fmt::Debug, E> std::fmt::Debug for PagingResponse<T, E> {
 }
 
 impl<T: Send, E: Send> PagingResponse<Result<T, E>, E> {
+    /// Transposes a `PagingResponse<Result<T, E>, E>` into a `Result<PagingResponse<T, E>, E>`.
+    ///
     /// # Errors
     ///
     /// * If any of the items are `Err`, they will bubble up to the top-level
@@ -501,6 +519,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Fetches all remaining pages concurrently in batches.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -550,6 +570,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         Ok(responses)
     }
 
+    /// Fetches all remaining items concurrently in batches, excluding the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -562,6 +584,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
             .collect::<Vec<_>>())
     }
 
+    /// Fetches all pages concurrently in batches, including the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -569,6 +593,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         self.rest_of_pages_in_batches_inner(true).await
     }
 
+    /// Fetches all items concurrently in batches, including the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -581,6 +607,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
             .collect::<Vec<_>>())
     }
 
+    /// Fetches all remaining pages sequentially, excluding the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -616,6 +644,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         Ok(responses)
     }
 
+    /// Fetches all remaining items sequentially, excluding the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -628,6 +658,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
             .collect::<Vec<_>>())
     }
 
+    /// Fetches all pages sequentially, including the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
@@ -635,6 +667,8 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         self.rest_of_pages_inner(true).await
     }
 
+    /// Fetches all items sequentially, including the current page.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
