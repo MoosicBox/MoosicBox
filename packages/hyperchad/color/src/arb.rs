@@ -7,6 +7,9 @@ use quickcheck::{Arbitrary, Gen};
 
 use crate::Color;
 
+/// Implementation of [`Arbitrary`] for [`Color`] to support property-based testing.
+///
+/// Generates random colors with arbitrary RGB values and optional alpha channel.
 impl Arbitrary for Color {
     fn arbitrary(g: &mut Gen) -> Self {
         Self {

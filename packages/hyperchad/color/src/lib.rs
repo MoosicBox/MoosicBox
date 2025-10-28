@@ -35,6 +35,18 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Re-export of the `color_from_hex!` macro from the `color-hex` crate.
+///
+/// This macro provides compile-time hex color parsing. Use it when you need
+/// to parse hex colors at compile time rather than runtime.
+///
+/// # Examples
+///
+/// ```rust
+/// use hyperchad_color::color_from_hex;
+///
+/// let color = color_from_hex!("#FF5733");
+/// ```
 pub use color_hex::color_from_hex;
 use thiserror::Error;
 
@@ -212,6 +224,10 @@ impl Color {
     }
 }
 
+/// Converts [`Color`] to [`egui::Color32`].
+///
+/// If the color has an alpha channel, it creates an RGBA color; otherwise,
+/// it creates an opaque RGB color.
 #[cfg(feature = "egui")]
 impl From<Color> for egui::Color32 {
     fn from(value: Color) -> Self {
@@ -222,6 +238,10 @@ impl From<Color> for egui::Color32 {
     }
 }
 
+/// Converts a reference to [`Color`] to [`egui::Color32`].
+///
+/// If the color has an alpha channel, it creates an RGBA color; otherwise,
+/// it creates an opaque RGB color.
 #[cfg(feature = "egui")]
 impl From<&Color> for egui::Color32 {
     fn from(value: &Color) -> Self {
@@ -232,6 +252,11 @@ impl From<&Color> for egui::Color32 {
     }
 }
 
+/// Converts [`Color`] to a hex string representation.
+///
+/// Outputs uppercase hex format with '#' prefix:
+/// * RGB colors: `#RRGGBB` (6 characters)
+/// * RGBA colors: `#RRGGBBAA` (8 characters)
 impl std::fmt::Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(a) = self.a {
@@ -245,18 +270,33 @@ impl std::fmt::Display for Color {
     }
 }
 
+/// Converts a hex string to [`Color`].
+///
+/// # Panics
+///
+/// * If the string contains invalid hex characters or has an invalid format.
 impl From<&str> for Color {
     fn from(s: &str) -> Self {
         Self::from_hex(s)
     }
 }
 
+/// Converts an owned [`String`] containing a hex color to [`Color`].
+///
+/// # Panics
+///
+/// * If the string contains invalid hex characters or has an invalid format.
 impl From<String> for Color {
     fn from(s: String) -> Self {
         Self::from_hex(&s)
     }
 }
 
+/// Converts a reference to [`String`] containing a hex color to [`Color`].
+///
+/// # Panics
+///
+/// * If the string contains invalid hex characters or has an invalid format.
 impl From<&String> for Color {
     fn from(s: &String) -> Self {
         Self::from_hex(s)
