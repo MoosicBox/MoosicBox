@@ -489,6 +489,29 @@ impl From<SimulationRequest> for SimulationStub {
     }
 }
 
+/// In-memory web server for deterministic testing and simulation.
+///
+/// This struct provides a lightweight, in-process HTTP server simulator that can be used
+/// for testing without starting an actual HTTP server. It implements the [`WebServer`]
+/// trait and stores routes, scopes, and application state for request processing.
+///
+/// # Structure
+///
+/// * `scopes` - All registered scopes with their routes
+/// * `routes` - Flattened route map for efficient lookup
+/// * `state` - Shared application state accessible via extractors
+///
+/// # Example
+///
+/// ```rust
+/// use moosicbox_web_server::simulator::SimulatorWebServer;
+/// use moosicbox_web_server::{Scope, Method, HttpResponse};
+///
+/// # async fn example() {
+/// let server = SimulatorWebServer::with_test_routes();
+/// // Use server for testing
+/// # }
+/// ```
 pub struct SimulatorWebServer {
     pub scopes: Vec<crate::Scope>,
     pub routes: BTreeMap<(Method, String), RouteHandler>,
