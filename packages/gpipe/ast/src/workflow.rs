@@ -1,3 +1,9 @@
+//! Workflow definition types for the generic pipeline AST.
+//!
+//! This module provides the core data structures for representing complete workflows,
+//! including triggers, jobs, actions, and matrix strategies. These types form the
+//! top-level structure of workflow definitions that can be parsed from YAML files.
+
 use crate::Expression;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

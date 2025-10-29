@@ -1,3 +1,9 @@
+//! Step definition types for workflow jobs.
+//!
+//! This module provides the `Step` enum and related types for representing individual
+//! steps within a workflow job. Steps can either use predefined actions or run shell
+//! commands, with support for conditions, environment variables, and error handling.
+
 use crate::Expression;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
