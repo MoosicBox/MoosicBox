@@ -151,6 +151,12 @@ impl WsHandle {
 
 #[async_trait]
 impl WebsocketSender for WsHandle {
+    /// Sends a text message over the websocket connection.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WebsocketSendError::Unknown`] if the send operation fails
+    ///
     /// # Panics
     ///
     /// * Panics if the internal `RwLock` is poisoned
@@ -163,6 +169,12 @@ impl WebsocketSender for WsHandle {
         Ok(())
     }
 
+    /// Sends a ping message over the websocket connection.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WebsocketSendError::Unknown`] if the send operation fails
+    ///
     /// # Panics
     ///
     /// * Panics if the internal `RwLock` is poisoned
