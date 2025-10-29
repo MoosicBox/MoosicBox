@@ -228,7 +228,7 @@ pub async fn run_scan_path_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
-/// Query parameters for getting scan origins endpoint.
+/// Query parameters for the get scan origins endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetScanOriginsQuery {}
@@ -265,9 +265,11 @@ pub async fn get_scan_origins_endpoint(
     Ok(Json(serde_json::json!({"origins": origins})))
 }
 
+/// Query parameters for the enable scan origin endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EnableScanOriginQuery {
+    /// The scan origin to enable.
     origin: ScanOrigin,
 }
 
@@ -303,9 +305,11 @@ pub async fn enable_scan_origin_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+/// Query parameters for the disable scan origin endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DisableScanOriginQuery {
+    /// The scan origin to disable.
     origin: ScanOrigin,
 }
 
@@ -342,6 +346,7 @@ pub async fn disable_scan_origin_endpoint(
 }
 
 #[cfg(feature = "local")]
+/// Query parameters for the get scan paths endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetScanPathsQuery {}
@@ -382,9 +387,11 @@ pub async fn get_scan_paths_endpoint(
 }
 
 #[cfg(feature = "local")]
+/// Query parameters for the add scan path endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AddScanPathQuery {
+    /// The filesystem path to add.
     path: String,
 }
 
@@ -435,9 +442,11 @@ pub async fn add_scan_path_endpoint(
 }
 
 #[cfg(feature = "local")]
+/// Query parameters for the remove scan path endpoint.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveScanPathQuery {
+    /// The filesystem path to remove.
     path: String,
 }
 
