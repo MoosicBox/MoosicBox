@@ -10,6 +10,9 @@ use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;
 
+/// Renders the playback sessions list content.
+///
+/// Displays all active playback sessions with their current and upcoming tracks.
 #[must_use]
 pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Containers {
     container! {

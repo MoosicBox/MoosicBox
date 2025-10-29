@@ -21,6 +21,10 @@ use crate::{
     public_img, state::State,
 };
 
+/// Renders the global search interface.
+///
+/// Displays a search modal with input field, results tabs for different API sources,
+/// and a floating search button when closed.
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bool) -> Containers {
@@ -134,6 +138,10 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
     }
 }
 
+/// Renders the search results container with source tabs.
+///
+/// Displays tabbed results organized by API source, with the first source
+/// or specified source selected by default.
 #[must_use]
 pub fn search_results(
     host: &str,
@@ -179,16 +187,25 @@ pub fn search_results(
     }
 }
 
+/// Generates the DOM element ID for a search results container.
+///
+/// Creates a unique ID for the container holding search results from a specific API source.
 #[must_use]
 pub fn results_content_container_id(api_source: &ApiSource) -> String {
     format!("search-results-container-{}", classify_name(api_source))
 }
 
+/// Generates the DOM element ID for search results content.
+///
+/// Creates a unique ID for the search results list from a specific API source.
 #[must_use]
 pub fn results_content_id(api_source: &ApiSource) -> String {
     format!("search-results-{}", classify_name(api_source))
 }
 
+/// Renders search results for a specific API source.
+///
+/// Displays artists, albums, and tracks matching the search query with clickable links.
 #[must_use]
 pub fn results_content(
     host: &str,

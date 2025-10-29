@@ -11,6 +11,9 @@ use moosicbox_session_models::ApiConnection;
 
 use crate::{AUDIO_ZONES_CONTENT_ID, public_img};
 
+/// Renders the audio zones list content.
+///
+/// Displays all configured audio zones and available players grouped by connection.
 #[must_use]
 pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) -> Containers {
     container! {
