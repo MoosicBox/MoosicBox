@@ -149,6 +149,28 @@ mod openapi_spec {
     }
 }
 
+/// Binds `OpenAPI` documentation UI services to a scope.
+///
+/// This function adds routes for various `OpenAPI` documentation UIs based on enabled features.
+/// The available UIs include `Swagger UI`, `ReDoc`, `RapiDoc`, and `Scalar`.
+///
+/// # Features
+///
+/// * `openapi-swagger-ui` - Adds `Swagger UI` routes at `/swagger-ui`
+/// * `openapi-redoc` - Adds `ReDoc` route at `/redoc`
+/// * `openapi-rapidoc` - Adds `RapiDoc` route at `/rapidoc`
+/// * `openapi-scalar` - Adds `Scalar` route at `/scalar`
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use moosicbox_web_server::openapi::bind_services;
+/// use moosicbox_web_server::Scope;
+///
+/// let scope = Scope::new("/openapi");
+/// let scope_with_docs = bind_services(scope);
+/// // Now scope has routes for enabled documentation UIs
+/// ```
 #[allow(clippy::let_and_return, clippy::missing_const_for_fn)]
 #[must_use]
 pub fn bind_services(#[allow(unused_mut)] mut scope: Scope) -> Scope {
