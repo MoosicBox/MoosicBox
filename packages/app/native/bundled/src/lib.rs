@@ -69,6 +69,13 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
+    /// Processes commands for the bundled native application service.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if handling a `RunEvent` fails (propagated from `handle_event`)
+    /// * Returns an error if the server task panicked when waiting for shutdown
+    /// * Returns an error if the server returned an I/O error during shutdown
     async fn process_command(
         ctx: Arc<RwLock<Context>>,
         command: Command,
@@ -112,7 +119,9 @@ impl service::Processor for service::Service {
 
 /// Application context managing the embedded server and startup lifecycle.
 pub struct Context {
+    /// Handle to the server task, used to wait for completion or abort the server.
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
+    /// Oneshot receiver for server startup notification.
     receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
 }
 
