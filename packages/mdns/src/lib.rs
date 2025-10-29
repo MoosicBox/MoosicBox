@@ -41,8 +41,10 @@ pub const SERVICE_TYPE: &str = "_moosicboxserver._tcp.local.";
 /// Errors that can occur when registering an mDNS service.
 #[derive(Debug, Error)]
 pub enum RegisterServiceError {
+    /// Error from the underlying mDNS service daemon during initialization or registration.
     #[error(transparent)]
     MdnsSd(#[from] mdns_sd::Error),
+    /// IO error when attempting to get the hostname.
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
@@ -69,8 +71,8 @@ fn get_service_daemon() -> Result<Box<dyn MdnsServiceDaemon>, mdns_sd::Error> {
 ///
 /// # Errors
 ///
-/// * If `mdns_sd` has an error initializing the mdns service
-/// * If there is an IO error
+/// * [`RegisterServiceError::MdnsSd`] - If `mdns_sd` has an error initializing the mdns service
+/// * [`RegisterServiceError::IO`] - If there is an IO error when getting the hostname
 pub async fn register_service(
     instance_name: &str,
     ip: &str,

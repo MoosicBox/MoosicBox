@@ -26,10 +26,13 @@ pub struct MoosicBox {
 /// Errors that can occur during mDNS scanning operations.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Error from the underlying mDNS service daemon during browsing or service resolution.
     #[error(transparent)]
     MdnsSd(#[from] mdns_sd::Error),
+    /// Error sending discovered servers through the channel.
     #[error(transparent)]
     Send(#[from] kanal::SendError),
+    /// Error joining the scanner background task.
     #[error(transparent)]
     Join(#[from] JoinError),
 }
