@@ -28,53 +28,86 @@ use crate::ws::{ConnId, Msg};
 use self::service::{Commander, CommanderError};
 
 /// A command received by the [`WsServer`].
+///
+/// Commands are used to communicate with the WebSocket server asynchronously.
+/// Each variant represents a different operation that can be performed on the server.
 #[derive(Debug, AsRefStr)]
 pub enum Command {
+    /// Establish a new WebSocket connection.
     Connect {
+        /// Channel sender for messages to this connection.
         conn_tx: mpsc::UnboundedSender<Msg>,
+        /// Response channel to send back the connection ID.
         res_tx: oneshot::Sender<ConnId>,
+        /// The unique identifier for the client.
         client_id: String,
+        /// Whether this connection is acting as a sender.
         sender: bool,
     },
 
+    /// Close an existing WebSocket connection.
     Disconnect {
+        /// The connection ID to disconnect.
         conn: ConnId,
     },
 
+    /// Start tracking a new HTTP request being tunneled.
     RequestStart {
+        /// The unique identifier for this request.
         request_id: u64,
+        /// Channel to send response data chunks.
         sender: UnboundedSender<TunnelResponse>,
+        /// Channel to send response headers.
         headers_sender: oneshot::Sender<RequestHeaders>,
+        /// Token used to abort the request if needed.
         abort_request_token: CancellationToken,
     },
 
+    /// Mark an HTTP request as completed and clean up resources.
     RequestEnd {
+        /// The unique identifier for the request that ended.
         request_id: u64,
     },
 
+    /// Receive a response from a tunneled HTTP request.
     Response {
+        /// The response data from the client.
         response: TunnelResponse,
+        /// The connection ID that sent this response.
         conn_id: ConnId,
     },
 
+    /// Send a WebSocket request to a client.
     WsRequest {
+        /// The unique identifier for this WebSocket request.
         request_id: u64,
+        /// The connection ID that initiated this request.
         conn_id: ConnId,
+        /// The unique identifier for the target client.
         client_id: String,
+        /// The request body as a JSON string.
         body: String,
+        /// Optional profile identifier for request routing.
         profile: Option<String>,
     },
 
+    /// Broadcast or send a WebSocket message to clients.
     WsMessage {
+        /// The WebSocket message to send.
         message: TunnelWsResponse,
     },
 
+    /// Send a WebSocket response back to the originating connection.
     WsResponse {
+        /// The WebSocket response to send.
         response: TunnelWsResponse,
     },
 
+    /// Send a direct message to a specific connection.
     Message {
+        /// The message content to send.
         msg: Msg,
+        /// The target connection ID.
         conn: ConnId,
     },
 }
@@ -324,36 +357,51 @@ impl service::Processor for service::Service {
     }
 }
 
+/// HTTP response headers from a tunneled request.
+///
+/// Contains the status code and headers that were received from the client
+/// handling the tunneled HTTP request.
 #[derive(Debug)]
 pub struct RequestHeaders {
+    /// HTTP status code of the response.
     pub status: u16,
+    /// HTTP headers of the response as key-value pairs.
     pub headers: BTreeMap<String, String>,
 }
 
-/// A multi-room ws server.
+/// WebSocket server managing tunnel connections and HTTP request proxying.
 ///
-/// Contains the logic of how connections ws with each other plus room management.
-///
-/// Call and spawn [`run`](Self::run) to start processing commands.
+/// The server maintains active WebSocket connections from clients and routes HTTP
+/// requests through those connections. It handles both sender connections (which
+/// respond to HTTP requests) and client connections (which can initiate WebSocket
+/// requests).
 #[derive(Debug)]
 pub struct WsServer {
-    /// Map of connection IDs to their message receivers.
+    /// Map of all connection IDs to their message senders (both senders and clients).
     sessions: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    /// Map of client connection IDs to their message senders.
     clients: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    /// Map of request IDs to their response data senders.
     senders: BTreeMap<u64, UnboundedSender<TunnelResponse>>,
+    /// Map of request IDs to their response headers senders.
     headers_senders: BTreeMap<u64, oneshot::Sender<RequestHeaders>>,
+    /// Map of request IDs to their abort tokens for cancellation.
     abort_request_tokens: BTreeMap<u64, CancellationToken>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
 
+    /// Map of WebSocket request IDs to the connection IDs that initiated them.
     ws_requests: BTreeMap<u64, ConnId>,
 }
 
+/// Errors that can occur when sending WebSocket messages.
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
+    /// The specified connection ID is not currently connected.
     #[error("Session {0} not connected")]
     NoSession(ConnId),
+    /// Failed to send a message through the WebSocket channel.
     #[error(transparent)]
     WebsocketSend(#[from] SendError<String>),
 }
@@ -496,18 +544,24 @@ impl WsServer {
     }
 }
 
+/// Errors that can occur when processing WebSocket requests.
 #[derive(Debug, Error)]
 pub enum WsRequestError {
+    /// Database operation failed.
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
 
+/// Errors that can occur when looking up a connection ID.
 #[derive(Error, Debug)]
 pub enum ConnectionIdError {
+    /// The connection ID string could not be parsed.
     #[error("Invalid Connection ID '{0}'")]
     Invalid(String),
+    /// No connection was found for the specified client ID.
     #[error("Connection ID not found for client_id '{0}'")]
     NotFound(String),
+    /// Database operation failed.
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
@@ -588,6 +642,20 @@ impl service::Handle {
     }
 }
 
+/// Look up the connection ID for a given client ID.
+///
+/// This function first checks an in-memory cache, and if not found, queries the
+/// database to find the connection ID associated with the client ID.
+///
+/// # Errors
+///
+/// * [`ConnectionIdError::NotFound`] - No connection exists for the given client ID.
+/// * [`ConnectionIdError::Invalid`] - The stored connection ID could not be parsed.
+/// * [`ConnectionIdError::Database`] - Database query failed.
+///
+/// # Panics
+///
+/// Panics if the connection cache lock is poisoned.
 pub async fn get_connection_id(client_id: &str) -> Result<ConnId, ConnectionIdError> {
     let existing = {
         let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
