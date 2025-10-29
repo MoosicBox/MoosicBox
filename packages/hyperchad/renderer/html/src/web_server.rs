@@ -1,3 +1,16 @@
+//! Generic web server integration for HTML rendering.
+//!
+//! This module provides integration with generic web servers, enabling HTML
+//! rendering in custom server implementations. It converts `HyperChad` routers to
+//! web server-compatible handlers that process HTTP requests and generate HTML responses.
+//!
+//! # Features
+//!
+//! * Generic HTTP request processing
+//! * HTML response generation for custom web servers
+//! * Support for static assets and CSS
+//! * Framework-agnostic design for maximum flexibility
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, LazyLock},
