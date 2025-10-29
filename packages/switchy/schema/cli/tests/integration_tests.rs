@@ -1,10 +1,10 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use switchy_fs::{TempDir, sync::read_dir_sorted};
 
 #[switchy_async::test(no_simulator)]
 async fn test_cli_help_command() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.arg("--help");
     cmd.assert()
         .success()
@@ -19,7 +19,7 @@ async fn test_cli_help_command() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_cli_version_command() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.arg("--version");
     cmd.assert()
         .success()
@@ -28,7 +28,7 @@ async fn test_cli_version_command() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_create_command_help() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["create", "--help"]);
     cmd.assert()
         .success()
@@ -38,7 +38,7 @@ async fn test_create_command_help() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_status_command_help() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["status", "--help"]);
     cmd.assert()
         .success()
@@ -50,7 +50,7 @@ async fn test_status_command_help() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_migrate_command_help() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["migrate", "--help"]);
     cmd.assert()
         .success()
@@ -64,7 +64,7 @@ async fn test_migrate_command_help() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_rollback_command_help() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["rollback", "--help"]);
     cmd.assert()
         .success()
@@ -80,7 +80,7 @@ async fn test_create_migration_file() {
     let temp_dir = TempDir::new().unwrap();
     let migrations_dir = temp_dir.path().join("migrations");
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "create",
         "test_migration",
@@ -106,7 +106,7 @@ async fn test_create_migration_file() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_status_command_missing_database_url() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["status"]);
 
     cmd.assert()
@@ -116,7 +116,7 @@ async fn test_status_command_missing_database_url() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_migrate_command_missing_database_url() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["migrate"]);
 
     cmd.assert()
@@ -126,7 +126,7 @@ async fn test_migrate_command_missing_database_url() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_rollback_command_missing_database_url() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["rollback"]);
 
     cmd.assert()
@@ -139,7 +139,7 @@ async fn test_create_migration_with_custom_dir() {
     let temp_dir = TempDir::new().unwrap();
     let custom_migrations_dir = temp_dir.path().join("custom_migrations");
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "create",
         "custom_dir_test",
@@ -164,7 +164,7 @@ async fn test_create_migration_with_custom_dir() {
 
 #[switchy_async::test(no_simulator)]
 async fn test_invalid_command() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.arg("invalid-command");
 
     cmd.assert()
@@ -177,7 +177,7 @@ async fn test_environment_variable_support() {
     let temp_dir = TempDir::new().unwrap();
     let migrations_dir = temp_dir.path().join("env_migrations");
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.env("SWITCHY_MIGRATIONS_DIR", migrations_dir.to_str().unwrap());
     cmd.args(["create", "env_test"]);
 

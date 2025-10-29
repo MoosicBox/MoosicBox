@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use insta::assert_snapshot;
 use regex::Regex;
 use std::path::Path;
@@ -31,7 +31,7 @@ fn create_test_db_url() -> String {
 
 #[test]
 fn test_validate_command_help() {
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["validate", "--help"]);
 
     let output = cmd.output().expect("Failed to run command");
@@ -47,7 +47,7 @@ fn test_validate_empty_migrations_directory() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "validate",
         "-d",
@@ -84,7 +84,7 @@ fn test_validate_with_verbose_flag() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "validate",
         "-d",
@@ -116,7 +116,7 @@ fn test_validate_with_strict_flag() {
     let migrations_dir = load_test_migrations("empty");
     let db_url = create_test_db_url();
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "validate",
         "-d",
@@ -147,7 +147,7 @@ fn test_validate_with_strict_flag() {
 async fn test_validate_nonexistent_database() {
     let migrations_dir = load_test_migrations("empty");
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "validate",
         "-d",
@@ -174,7 +174,7 @@ async fn test_validate_nonexistent_database() {
 async fn test_validate_nonexistent_migrations_directory() {
     let db_url = create_test_db_url();
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args(["validate", "-d", &db_url, "-m", "/nonexistent/migrations"]);
 
     let output = cmd.output().expect("Failed to run command");

@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use std::io::Write;
 use switchy_fs::{
@@ -15,7 +15,7 @@ async fn test_status_with_sqlite_empty_database() {
 
     let database_url = format!("sqlite://{}", db_path.display());
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "status",
         "--database-url",
@@ -39,7 +39,7 @@ async fn test_create_and_status_workflow() {
     let database_url = format!("sqlite://{}", db_path.display());
 
     // Step 1: Create a migration
-    let mut create_cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut create_cmd = cargo_bin_cmd!("switchy-migrate");
     create_cmd.args([
         "create",
         "initial_schema",
@@ -53,7 +53,7 @@ async fn test_create_and_status_workflow() {
         .stdout(predicate::str::contains("Created migration:"));
 
     // Step 2: Check status shows pending migration
-    let mut status_cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut status_cmd = cargo_bin_cmd!("switchy-migrate");
     status_cmd.args([
         "status",
         "--database-url",
@@ -101,7 +101,7 @@ async fn test_migrate_dry_run() {
 
     let database_url = format!("sqlite://{}", db_path.display());
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "migrate",
         "--database-url",
@@ -123,7 +123,7 @@ async fn test_invalid_database_url() {
     let migrations_dir = temp_dir.path().join("migrations");
     create_dir_all(&migrations_dir).unwrap();
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "status",
         "--database-url",
@@ -146,7 +146,7 @@ async fn test_missing_migrations_directory() {
 
     let database_url = format!("sqlite://{}", db_path.display());
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "status",
         "--database-url",
@@ -171,7 +171,7 @@ async fn test_rollback_dry_run() {
 
     let database_url = format!("sqlite://{}", db_path.display());
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "rollback",
         "--database-url",
@@ -200,7 +200,7 @@ async fn test_custom_migration_table() {
 
     let database_url = format!("sqlite://{}", db_path.display());
 
-    let mut cmd = Command::cargo_bin("switchy-migrate").unwrap();
+    let mut cmd = cargo_bin_cmd!("switchy-migrate");
     cmd.args([
         "status",
         "--database-url",

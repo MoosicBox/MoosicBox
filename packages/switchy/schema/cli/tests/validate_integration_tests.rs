@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use insta::assert_snapshot;
 use regex::Regex;
 use std::path::{Path, PathBuf};
@@ -34,8 +34,7 @@ async fn test_validate_with_valid_migrations() {
     let migrations_dir = load_test_migrations("valid");
     let db_url = create_test_db_url();
 
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "validate",
             "-d",
@@ -67,8 +66,7 @@ async fn test_validate_empty_database() {
     let migrations_dir = load_test_migrations("valid");
     let db_url = create_test_db_url();
 
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "validate",
             "-d",
@@ -100,8 +98,7 @@ async fn test_validate_verbose_mode() {
     let migrations_dir = load_test_migrations("valid");
     let db_url = create_test_db_url();
 
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "validate",
             "-d",

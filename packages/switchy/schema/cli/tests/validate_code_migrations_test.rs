@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use insta::assert_snapshot;
 use switchy_async::test;
 use switchy_fs::TempDir;
@@ -8,8 +8,7 @@ use switchy_schema::migration::Migration;
 
 #[test(no_simulator)]
 async fn test_code_migrations_help() {
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args(["validate", "--help"])
         .output()
         .expect("Failed to run command");
@@ -30,8 +29,7 @@ async fn test_code_migrations_with_empty_directory() {
     let migrations_dir = temp_dir.path().join("migrations");
     std::fs::create_dir_all(&migrations_dir).unwrap();
 
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "validate",
             "-d",

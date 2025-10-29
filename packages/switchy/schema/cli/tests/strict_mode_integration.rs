@@ -6,7 +6,7 @@
 //! - Configuration priority (CLI > env var)
 //! - Warning messages when CLI overrides env var
 
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -55,8 +55,7 @@ async fn test_cli_flag_enables_strict_mode() {
     let migrations_path = temp_dir.path().join("migrations");
 
     // First run: establish checksums with regular migration
-    Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
@@ -71,8 +70,7 @@ async fn test_cli_flag_enables_strict_mode() {
     create_modified_migrations(&temp_dir).expect("Failed to create modified migrations");
 
     // Second run: with strict mode enabled should fail due to checksum mismatch
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
@@ -102,8 +100,7 @@ async fn test_env_var_enables_strict_mode() {
     let migrations_path = temp_dir.path().join("migrations");
 
     // First run: establish checksums with regular migration
-    Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
@@ -118,8 +115,7 @@ async fn test_env_var_enables_strict_mode() {
     create_modified_migrations(&temp_dir).expect("Failed to create modified migrations");
 
     // Second run: with environment variable should fail due to checksum mismatch
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .env("MIGRATION_REQUIRE_CHECKSUM_VALIDATION", "true")
         .args([
             "migrate",
@@ -149,8 +145,7 @@ async fn test_cli_flag_overrides_env_var() {
     let migrations_path = temp_dir.path().join("migrations");
 
     // First run: establish checksums with regular migration
-    Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
@@ -165,8 +160,7 @@ async fn test_cli_flag_overrides_env_var() {
     create_modified_migrations(&temp_dir).expect("Failed to create modified migrations");
 
     // Run with both CLI flag and env var set
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .env("MIGRATION_REQUIRE_CHECKSUM_VALIDATION", "true")
         .args([
             "migrate",
@@ -225,8 +219,7 @@ async fn test_error_message_shows_all_mismatches() {
     let migrations_path = temp_dir.path().join("migrations");
 
     // First run: establish checksums
-    Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
@@ -250,8 +243,7 @@ async fn test_error_message_shows_all_mismatches() {
     .expect("Write failed"); // Different!
 
     // Run with strict mode - should show multiple mismatches
-    let output = Command::cargo_bin("switchy-migrate")
-        .unwrap()
+    let output = cargo_bin_cmd!("switchy-migrate")
         .args([
             "migrate",
             "--database-url",
