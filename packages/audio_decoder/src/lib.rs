@@ -84,6 +84,11 @@ pub enum AudioDecodeError {
 ///
 /// Implementors of this trait receive decoded audio data and can process, filter, or output it.
 pub trait AudioDecode {
+    /// Processes a decoded audio buffer.
+    ///
+    /// This method is called for each successfully decoded audio packet, allowing the
+    /// implementor to process, filter, or output the audio data.
+    ///
     /// # Errors
     ///
     /// * If the audio failed to decode
@@ -94,6 +99,11 @@ pub trait AudioDecode {
         track: &Track,
     ) -> Result<(), AudioDecodeError>;
 
+    /// Flushes any buffered audio data.
+    ///
+    /// This method is called at the end of the audio stream to ensure all buffered
+    /// audio is processed. The default implementation does nothing.
+    ///
     /// # Errors
     ///
     /// * If the audio failed to flush
@@ -180,6 +190,12 @@ impl AudioDecodeHandler {
         Ok(())
     }
 
+    /// Writes decoded audio to all registered output handlers.
+    ///
+    /// This method applies all registered filters and then distributes the decoded audio
+    /// to all output handlers. The last output receives ownership of the buffer to avoid
+    /// an unnecessary clone.
+    ///
     /// # Errors
     ///
     /// * If the audio failed to write
@@ -205,9 +221,14 @@ impl AudioDecodeHandler {
         Ok(())
     }
 
+    /// Flushes all output handlers.
+    ///
+    /// This method calls `flush()` on all registered output handlers to ensure all
+    /// buffered audio data is processed and played back completely.
+    ///
     /// # Errors
     ///
-    /// * If the audio failed to write
+    /// * If the audio failed to flush
     pub fn flush(&mut self) -> Result<(), AudioDecodeError> {
         let outputs_count = self.outputs.len();
         log::debug!("🔊 AudioDecodeHandler::flush() called - flushing {outputs_count} outputs");
@@ -232,6 +253,12 @@ impl AudioDecodeHandler {
         !self.open_decode_handlers.is_empty()
     }
 
+    /// Opens all pending output handlers with the audio format specification.
+    ///
+    /// This method initializes all registered output handlers by calling them with the
+    /// audio stream's signal specification and duration. After this call, the handlers
+    /// are ready to receive decoded audio data.
+    ///
     /// # Errors
     ///
     /// * If any of the `open_func`s fail to open the `Box<dyn AudioDecode>` decoders
