@@ -268,6 +268,22 @@ build_clippier_command() {
         [[ -n "$INPUT_REQUIRED_FEATURES" ]] && cmd="$cmd --required-features $INPUT_REQUIRED_FEATURES"
         [[ -n "$INPUT_PACKAGES" ]] && cmd="$cmd --packages $INPUT_PACKAGES"
 
+        # Handle skip-if filters - can be newline or comma-separated
+        if [[ -n "$INPUT_SKIP_IF" ]]; then
+            while IFS= read -r filter; do
+                # Skip empty lines
+                [[ -n "$filter" ]] && cmd="$cmd --skip-if \"$filter\""
+            done < <(echo "$INPUT_SKIP_IF" | tr ',' '\n')
+        fi
+
+        # Handle include-if filters - can be newline or comma-separated
+        if [[ -n "$INPUT_INCLUDE_IF" ]]; then
+            while IFS= read -r filter; do
+                # Skip empty lines
+                [[ -n "$filter" ]] && cmd="$cmd --include-if \"$filter\""
+            done < <(echo "$INPUT_INCLUDE_IF" | tr ',' '\n')
+        fi
+
         if ! should_force_full_matrix; then
             [[ -n "$INPUT_CHANGED_FILES" ]] && cmd="$cmd --changed-files \"$INPUT_CHANGED_FILES\""
             [[ -n "$GIT_BASE" ]] && cmd="$cmd --git-base \"$GIT_BASE\""
@@ -307,6 +323,22 @@ build_clippier_command() {
         [[ -n "$INPUT_OS" ]] && cmd="$cmd --os $INPUT_OS"
         [[ -n "$INPUT_PACKAGES" ]] && cmd="$cmd --packages $INPUT_PACKAGES"
         [[ -n "$INPUT_MAX_PARALLEL" ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
+
+        # Handle skip-if filters - can be newline or comma-separated
+        if [[ -n "$INPUT_SKIP_IF" ]]; then
+            while IFS= read -r filter; do
+                # Skip empty lines
+                [[ -n "$filter" ]] && cmd="$cmd --skip-if \"$filter\""
+            done < <(echo "$INPUT_SKIP_IF" | tr ',' '\n')
+        fi
+
+        # Handle include-if filters - can be newline or comma-separated
+        if [[ -n "$INPUT_INCLUDE_IF" ]]; then
+            while IFS= read -r filter; do
+                # Skip empty lines
+                [[ -n "$filter" ]] && cmd="$cmd --include-if \"$filter\""
+            done < <(echo "$INPUT_INCLUDE_IF" | tr ',' '\n')
+        fi
 
         if ! should_force_full_matrix; then
             [[ -n "$INPUT_CHANGED_FILES" ]] && cmd="$cmd --changed-files \"$INPUT_CHANGED_FILES\""

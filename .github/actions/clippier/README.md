@@ -103,6 +103,63 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 | `skip-features`     | Features to exclude (comma-separated)          | No       | -       |
 | `required-features` | Always-required features (comma-separated)     | No       | -       |
 | `packages`          | Specific packages to process (comma-separated) | No       | -       |
+| `skip-if`           | Skip packages matching Cargo.toml filters      | No       | -       |
+| `include-if`        | Include only packages matching filters         | No       | -       |
+
+### Property-Based Package Filtering
+
+Filter packages based on their Cargo.toml properties using `skip-if` and `include-if`:
+
+**Format:** `property[.nested]<operator>value`
+
+**Supported Operators:**
+
+- **Scalar**: `=`, `!=`, `^=`, `$=`, `*=`, `~=` (equals, not equals, starts with, ends with, contains, regex)
+- **Array**: `@=`, `@*=`, `@^=`, `@~=`, `@!`, `@#=`, `@#>`, `@#<`, `!@=` (contains, substring, starts with, regex, empty, length comparisons, not contains)
+- **Existence**: `?`, `!?` (exists, not exists)
+
+**Examples:**
+
+```yaml
+# Skip unpublished packages
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      skip-if: 'publish=false'
+
+# Include only moosicbox packages, exclude examples
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      include-if: 'name^=moosicbox_'
+      skip-if: 'name$=_example,publish=false'
+
+# Multiple filters (newline-separated)
+- uses: ./.github/actions/clippier
+  with:
+      command: packages
+      include-if: |
+          categories@=audio
+          readme?
+          keywords@#>2
+      skip-if: |
+          publish=false
+          name$=_example
+
+# Nested metadata access
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      include-if: 'metadata.workspaces.independent=true'
+```
+
+**Common Use Cases:**
+
+- Skip unpublished/internal packages in CI
+- Filter by categories or keywords
+- Require documentation quality (README, keywords)
+- Filter by custom metadata flags
+- Component isolation by naming conventions
 
 ## Enhanced Features
 

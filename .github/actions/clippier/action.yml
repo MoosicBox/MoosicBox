@@ -62,6 +62,14 @@ inputs:
         description: "Specific packages to process (comma-separated)"
         required: false
 
+    skip-if:
+        description: "Skip packages matching Cargo.toml property filters (can be specified multiple times, comma or newline-separated)"
+        required: false
+
+    include-if:
+        description: "Include only packages matching Cargo.toml property filters (can be specified multiple times, comma or newline-separated)"
+        required: false
+
     changed-files:
         description: "List of changed files (comma-separated)"
         required: false
@@ -385,6 +393,8 @@ runs:
               INPUT_SKIP_FEATURES: ${{ inputs.skip-features }}
               INPUT_REQUIRED_FEATURES: ${{ inputs.required-features }}
               INPUT_PACKAGES: ${{ inputs.packages }}
+              INPUT_SKIP_IF: ${{ inputs.skip-if }}
+              INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_CHANGED_FILES: ${{ inputs.changed-files }}
               INPUT_GIT_STRATEGY: ${{ inputs.git-strategy }}
               INPUT_GIT_BASE: ${{ inputs.git-base }}
