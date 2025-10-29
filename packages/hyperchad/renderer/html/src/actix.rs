@@ -1,3 +1,16 @@
+//! Actix Web framework integration for HTML rendering.
+//!
+//! This module provides integration with the Actix Web framework, enabling HTML
+//! rendering within Actix web applications. It converts `HyperChad` routers to
+//! Actix-compatible handlers that process HTTP requests and generate HTML responses.
+//!
+//! # Features
+//!
+//! * Request processing with user agent detection
+//! * HTML response generation with Actix Web integration
+//! * Support for static assets and CSS
+//! * Server-sent events support (with `sse` feature)
+
 use std::{
     collections::BTreeMap,
     str::FromStr as _,
