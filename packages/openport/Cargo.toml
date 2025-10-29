@@ -25,7 +25,7 @@ switchy_random = { workspace = true, features = ["rand"], optional = true }
 ### FEATURES #################################################################
 
 [features]
-default = []
+default = ["reservation"]
 
 # Enable CLI binary with argument parsing
 cli = ["dep:clap"]
@@ -35,3 +35,6 @@ fail-on-warnings = ["switchy_random?/fail-on-warnings"]
 # Add `pick_random_unused_port` pub fn that allows finding a random port
 # within the range 15000..25000
 rand = ["dep:switchy_random"]
+
+# Enable port reservation functionality
+reservation = []

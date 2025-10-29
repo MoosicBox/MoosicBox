@@ -28,8 +28,14 @@ use std::{
     ops::{Range, RangeInclusive},
 };
 
+#[cfg(feature = "reservation")]
+mod reservation;
+
 /// A network port number
 pub type Port = u16;
+
+#[cfg(feature = "reservation")]
+pub type PortReservation = reservation::PortReservation<Range<Port>>;
 
 // Try to bind to a socket using UDP
 fn test_bind_udp<A: ToSocketAddrs>(addr: A) -> Option<Port> {
@@ -149,6 +155,9 @@ pub fn pick_random_unused_port() -> Option<Port> {
 pub trait PortRange {
     /// Converts the range into an iterator of port numbers
     fn into_iter(self) -> impl Iterator<Item = u16>;
+
+    /// Converts the range into an iterator of port numbers
+    fn iter(&self) -> impl Iterator<Item = u16>;
 }
 
 impl PortRange for Range<u16> {
@@ -156,12 +165,22 @@ impl PortRange for Range<u16> {
     fn into_iter(self) -> impl Iterator<Item = u16> {
         <Self as IntoIterator>::into_iter(self)
     }
+
+    #[inline]
+    fn iter(&self) -> impl Iterator<Item = u16> {
+        self.clone()
+    }
 }
 
 impl PortRange for RangeInclusive<u16> {
     #[inline]
     fn into_iter(self) -> impl Iterator<Item = u16> {
         <Self as IntoIterator>::into_iter(self)
+    }
+
+    #[inline]
+    fn iter(&self) -> impl Iterator<Item = u16> {
+        self.clone()
     }
 }
 
