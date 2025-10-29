@@ -328,6 +328,8 @@ impl Player for UpnpPlayer {
 }
 
 impl UpnpPlayer {
+    /// Creates a new `UPnP` player instance for controlling a `UPnP` device.
+    #[must_use]
     pub fn new(
         source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
         device: Device,
