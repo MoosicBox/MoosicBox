@@ -62,7 +62,20 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Re-export of the [`colored::Colorize`] trait for colorizing terminal output.
+///
+/// This trait is used internally by the assertion macros to format error messages
+/// with colored backgrounds (red for errors, yellow for warnings). It's re-exported
+/// to allow users to access colorization utilities without adding `colored` as a
+/// separate dependency.
 pub use colored::Colorize;
+
+/// Re-export of the `moosicbox_env_utils` crate for environment variable utilities.
+///
+/// This module provides the `default_env!` macro used internally by assertion macros
+/// to read the `ENABLE_ASSERT` environment variable. It's re-exported to allow users
+/// to access environment utilities without adding `moosicbox_env_utils` as a separate
+/// dependency.
 pub use moosicbox_env_utils;
 
 /// Conditional assertion that exits the process on failure when assertions are enabled.
