@@ -39,12 +39,14 @@ impl From<&Device> for UpnpDevice {
 }
 
 impl UpnpDevice {
+    /// Sets the volume level for this device.
     #[must_use]
     pub fn with_volume(mut self, volume: Option<String>) -> Self {
         self.volume = volume;
         self
     }
 
+    /// Sets the services for this device.
     #[must_use]
     pub fn with_services(mut self, services: Vec<UpnpService>) -> Self {
         self.services = services;

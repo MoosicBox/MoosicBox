@@ -1100,6 +1100,7 @@ pub enum UpnpDeviceScannerError {
 }
 
 impl UpnpDeviceScanner {
+    /// Creates a new `UPnP` device scanner.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
