@@ -16,6 +16,20 @@ use serde_json::{Value, json};
 #[cfg(feature = "openapi")]
 pub mod openapi;
 
+/// Health check endpoint for monitoring server status.
+///
+/// This endpoint is typically used by load balancers and monitoring systems to verify that
+/// the server is running and responsive.
+///
+/// # Returns
+///
+/// Returns a JSON object containing:
+/// * `healthy` - Always `true` when the server is responding
+/// * `hash` - The Git commit hash of the running server version
+///
+/// # Errors
+///
+/// This function does not currently return errors.
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
@@ -25,6 +39,20 @@ pub async fn health_endpoint() -> Result<Json<Value>> {
     })))
 }
 
+/// WebSocket connection endpoint for real-time client-server communication.
+///
+/// Upgrades an HTTP request to a WebSocket connection, allowing bidirectional communication
+/// for features like playback control, library updates, and player status notifications.
+///
+/// # Errors
+///
+/// * If the WebSocket upgrade handshake fails
+/// * If the `WS_SERVER_HANDLE` is not initialized
+///
+/// # Panics
+///
+/// * If the `WS_SERVER_HANDLE` lock is poisoned
+/// * If `WS_SERVER_HANDLE` is not initialized when a connection is attempted
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::future_not_send)]
 #[get("/ws")]

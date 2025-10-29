@@ -14,6 +14,10 @@ use crate::{CONFIG_DB, ws::server::WsServerHandle};
 pub static PLAYBACK_EVENT_HANDLE: LazyLock<Arc<std::sync::RwLock<Option<service::Handle>>>> =
     LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
+/// Event handler for playback state changes.
+///
+/// This function is called when playback state changes occur (play, pause, seek, track change,
+/// etc.) and dispatches the update to connected WebSocket clients via the playback event service.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn on_event(update: &UpdateSession, _current: &Playback) {
     let update = update.clone();
@@ -27,9 +31,14 @@ pub fn on_event(update: &UpdateSession, _current: &Playback) {
     }
 }
 
+/// Commands processed by the playback event service.
 #[derive(Debug, EnumString, AsRefStr)]
 pub enum Command {
-    UpdateSession { update: UpdateSession },
+    /// Updates the playback session and broadcasts changes to clients.
+    UpdateSession {
+        /// The session update to process and broadcast.
+        update: UpdateSession,
+    },
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
@@ -81,11 +90,16 @@ impl service::Processor for service::Service {
     }
 }
 
+/// Context for the playback event service.
+///
+/// Contains the WebSocket sender for broadcasting playback updates to clients.
 pub struct Context<Sender: WebsocketSender> {
     sender: Sender,
 }
 
 impl<Sender: WebsocketSender> Context<Sender> {
+    /// Creates a new playback event context with the given WebSocket sender.
+    #[must_use]
     pub const fn new(sender: Sender) -> Self {
         Self { sender }
     }
