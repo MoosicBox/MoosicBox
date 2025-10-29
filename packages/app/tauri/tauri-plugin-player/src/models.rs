@@ -1,3 +1,8 @@
+//! Data models for the player plugin.
+//!
+//! This module defines the data structures used for player state management,
+//! including tracks, playlists, state updates, and media control events.
+
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 
