@@ -111,7 +111,7 @@ use crate::{
 #[cfg(feature = "api")]
 /// HTTP API endpoints for playback control.
 ///
-/// This module provides RESTful API endpoints for controlling playback, including
+/// This module provides `RESTful` API endpoints for controlling playback, including
 /// play, pause, stop, seek, and status operations. It uses Actix-web for HTTP handling
 /// and integrates with the core playback functionality.
 pub mod api;

@@ -19,7 +19,7 @@ struct ApiDoc;
 /// # Returns
 ///
 /// A complete `OpenAPI` specification document that can be served via Swagger UI, Redoc,
-/// RapiDoc, or Scalar interfaces.
+/// `RapiDoc`, or Scalar interfaces.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn init() -> OpenApi {
     #[allow(unused)]
@@ -90,7 +90,7 @@ pub fn init() -> OpenApi {
 
 /// Binds `OpenAPI` documentation services to an Actix-web scope.
 ///
-/// This function registers multiple `OpenAPI` UI services (Swagger UI, Redoc, RapiDoc, Scalar)
+/// This function registers multiple `OpenAPI` UI services (Swagger UI, Redoc, `RapiDoc`, Scalar)
 /// that all serve the same `OpenAPI` specification document.
 ///
 /// # Returns
@@ -98,7 +98,7 @@ pub fn init() -> OpenApi {
 /// The modified scope with all documentation UI services registered:
 /// * `/swagger-ui/` - Interactive Swagger UI documentation
 /// * `/redoc` - Redoc documentation viewer
-/// * `/rapidoc` - RapiDoc documentation viewer
+/// * `/rapidoc` - `RapiDoc` documentation viewer
 /// * `/scalar` - Scalar documentation viewer
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn bind_services<
