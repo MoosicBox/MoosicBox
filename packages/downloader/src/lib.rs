@@ -811,28 +811,43 @@ async fn download_track(
     }
 }
 
+/// Internal error type for track download operations.
+///
+/// Used internally to handle timeout retries. The `Timeout` variant contains
+/// the byte offset for resuming downloads.
 #[derive(Debug, Error)]
 pub enum DownloadTrackInnerError {
+    /// Database fetch operation failed
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API operation failed
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Failed to get track source
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
+    /// Failed to get track bytes
     #[error(transparent)]
     GetTrackBytes(#[from] GetTrackBytesError),
+    /// I/O operation failed
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Failed to get content length
     #[error(transparent)]
     GetContentLength(#[from] GetContentLengthError),
+    /// Failed to save bytes stream to file
     #[error(transparent)]
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
+    /// Failed to tag track file
     #[error(transparent)]
     TagTrackFile(#[from] TagTrackFileError),
+    /// Invalid track source
     #[error("Invalid source")]
     InvalidSource,
+    /// Track not found
     #[error("Not found")]
     NotFound,
+    /// Download timed out, contains byte offset for resume
     #[error("Timeout")]
     Timeout(Option<u64>),
 }
