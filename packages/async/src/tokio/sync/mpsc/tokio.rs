@@ -62,8 +62,10 @@ impl<T> Receiver<T> {
     }
 }
 
+/// Error returned when sending to a channel fails.
 #[derive(Debug, thiserror::Error)]
 pub enum SendError<T> {
+    /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
 }
@@ -74,10 +76,13 @@ impl<T> From<mpmc::SendError<T>> for SendError<T> {
     }
 }
 
+/// Error returned when trying to send to a channel without blocking.
 #[derive(Debug, thiserror::Error)]
 pub enum TrySendError<T> {
+    /// The channel is full.
     #[error("Full")]
     Full(T),
+    /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
 }

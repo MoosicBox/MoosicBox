@@ -2,6 +2,7 @@ pub use super::runtime::{JoinHandle, spawn, spawn_blocking, spawn_local};
 
 pub use tokio::task::yield_now;
 
+/// Error returned when a task fails to join.
 #[derive(Debug, Clone, thiserror::Error, Default)]
 pub struct JoinError;
 
