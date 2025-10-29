@@ -68,6 +68,12 @@ impl<T: Send> PrioritizedSender<T> {
 }
 
 impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
+    /// Sends a message through the prioritized channel.
+    ///
+    /// If a priority function is configured and the receiver is not ready, the message
+    /// is buffered and will be sent in priority order when the receiver polls for items.
+    /// Otherwise, the message is sent immediately.
+    ///
     /// # Panics
     ///
     /// * If the internal priority buffer lock is poisoned (when another thread panicked while
@@ -116,6 +122,10 @@ impl<T: Send> Clone for PrioritizedSender<T> {
 }
 
 impl<T: Send> PrioritizedSender<T> {
+    /// Sends a message directly through the underlying unbounded channel.
+    ///
+    /// This bypasses the priority buffering mechanism and sends the message immediately.
+    ///
     /// # Errors
     ///
     /// * If the send failed

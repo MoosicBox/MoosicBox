@@ -12,6 +12,8 @@ pub mod futures_channel;
 
 /// A trait for sending messages of type `T` with error type `E`.
 pub trait MoosicBoxSender<T, E> {
+    /// Sends a message through the channel.
+    ///
     /// # Errors
     ///
     /// * If the send failed
