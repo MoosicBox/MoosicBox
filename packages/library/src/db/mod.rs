@@ -878,9 +878,9 @@ pub struct InsertApiSource {
     pub source_id: String,
 }
 
-/// API source mapping.
+/// API source mapping between library entities and external API sources.
 pub struct ApiSourceMapping {
-    /// Entity type.
+    /// Entity type (e.g., "artists", "albums", "tracks").
     pub entity_type: String,
     /// Entity ID.
     pub entity_id: u64,
