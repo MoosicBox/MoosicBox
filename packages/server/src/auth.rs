@@ -10,12 +10,25 @@ use std::{
     future::{Ready, ready},
 };
 
+/// Static token authentication middleware factory.
+///
+/// This middleware validates requests using a static bearer token. It's enabled with the
+/// `static-token-auth` feature and is intended for simple authentication scenarios where
+/// a single shared token is sufficient.
+///
+/// Requests are authenticated via:
+/// * `Authorization` header (with or without "Bearer" prefix)
+/// * `authorization` query parameter
+///
+/// Health check and OPTIONS requests bypass authentication.
 #[allow(clippy::module_name_repetitions)]
 pub struct StaticTokenAuth {
     token: String,
 }
 
 impl StaticTokenAuth {
+    /// Creates a new static token authentication middleware.
+    #[must_use]
     pub const fn new(token: String) -> Self {
         Self { token }
     }
@@ -44,6 +57,9 @@ where
     }
 }
 
+/// The actual middleware service that performs static token authentication.
+///
+/// This is created by the [`StaticTokenAuth`] factory and processes individual requests.
 pub struct StaticTokenAuthMiddleware<S> {
     service: S,
     token: String,

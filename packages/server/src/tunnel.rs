@@ -13,12 +13,32 @@ use url::Url;
 
 use crate::{CANCELLATION_TOKEN, WS_SERVER_HANDLE};
 
+/// Errors that can occur during tunnel setup.
 #[derive(Debug, Error)]
 pub enum SetupTunnelError {
+    /// I/O error during tunnel initialization.
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
 
+/// Sets up a tunnel connection to the remote `MoosicBox` server for remote access.
+///
+/// This function establishes a WebSocket connection to a remote tunnel server specified by
+/// the `WS_HOST` environment variable. The tunnel enables remote clients to access this server
+/// instance without requiring port forwarding or direct network access.
+///
+/// # Returns
+///
+/// A tuple containing:
+/// * `Option<String>` - The tunnel host URL if a tunnel was configured
+/// * `Option<JoinHandle<()>>` - The join handle for the tunnel message processing task
+/// * `Option<TunnelSenderHandle>` - The handle for sending messages through the tunnel
+///
+/// All values are `None` if the `WS_HOST` environment variable is not set or empty.
+///
+/// # Errors
+///
+/// * [`SetupTunnelError::IO`] - If authentication with the tunnel server fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
 pub async fn setup_tunnel(
