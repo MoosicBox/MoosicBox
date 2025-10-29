@@ -9,18 +9,31 @@ use switchy::database::{AsId, DatabaseValue, Row};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalConfig {
+    /// Database record ID.
     pub id: u32,
+    /// Tidal OAuth client ID.
     pub client_id: String,
+    /// OAuth access token for API authentication.
     pub access_token: String,
+    /// OAuth refresh token for obtaining new access tokens.
     pub refresh_token: String,
+    /// Client name associated with this OAuth application.
     pub client_name: String,
+    /// Token expiration time in seconds.
     pub expires_in: u32,
+    /// Unix timestamp when the token was issued.
     pub issued_at: u64,
+    /// OAuth scope permissions (e.g., "`r_usr` `w_usr` `w_sub`").
     pub scope: String,
+    /// OAuth token type (e.g., "`Bearer`").
     pub token_type: String,
+    /// Serialized user information as JSON.
     pub user: String,
+    /// Tidal user ID.
     pub user_id: u64,
+    /// Database record creation timestamp.
     pub created: String,
+    /// Database record last update timestamp.
     pub updated: String,
 }
 
