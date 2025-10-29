@@ -102,13 +102,40 @@ use alloc::string::ToString;
 use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt::{Arguments, Write};
 
+/// The main template macro for creating HTML-like containers.
+///
+/// This macro provides the DSL syntax for building UIs. See the crate-level
+/// documentation for usage examples.
 pub use hyperchad_template_macros::container;
+
+/// The core container type that represents a single UI element.
+///
+/// Containers are created by the [`container!`] macro and can be converted to HTML.
 pub use hyperchad_transformer::Container;
 
+/// Re-export of the actions module for defining interactive behaviors.
+///
+/// Use this to access action-related types when implementing custom actions.
 pub use hyperchad_actions as actions;
+
+/// Re-export of the color module for working with colors.
+///
+/// Use this to access color utilities like `Color::from_hex()`.
 pub use hyperchad_color as color;
+
+/// Re-export of the template actions DSL module.
+///
+/// This module provides the DSL parser for action expressions used in templates.
 pub use hyperchad_template_actions_dsl as template_actions_dsl;
+
+/// Re-export of the transformer module for container manipulation.
+///
+/// This module provides the core transformation and rendering logic.
 pub use hyperchad_transformer as transformer;
+
+/// Re-export of transformer model types.
+///
+/// This module provides the data structures used in container transformations.
 pub use hyperchad_transformer_models as transformer_models;
 
 /// Prelude module that re-exports commonly used traits.
@@ -627,10 +654,16 @@ impl core::ops::DerefMut for ContainerList {
     }
 }
 
-// Re-export for convenience
+/// Re-export all transformer model types for convenience.
+///
+/// This includes types like `Element`, `Attribute`, and other core data structures
+/// used in the template system.
 pub use hyperchad_transformer_models::*;
 
-// Add responsive support infrastructure
+/// Re-export logic types for responsive and conditional rendering (requires `logic` feature).
+///
+/// This includes `IfExpression` for conditional logic, `Responsive` for responsive design,
+/// and the `if_responsive` helper function.
 #[cfg(feature = "logic")]
 pub use hyperchad_actions::logic::{IfExpression, Responsive, if_responsive};
 
