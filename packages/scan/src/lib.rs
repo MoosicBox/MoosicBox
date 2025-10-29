@@ -119,6 +119,8 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// Creates a scanner from a scan origin by looking up its configured locations.
+    ///
     /// # Panics
     ///
     /// * If the scan location path is missing
@@ -229,6 +231,8 @@ impl Scanner {
         }
     }
 
+    /// Executes the scan operation for this scanner's configured task.
+    ///
     /// # Errors
     ///
     /// * If the scan fails
@@ -257,6 +261,8 @@ impl Scanner {
         Ok(())
     }
 
+    /// Scans all local filesystem paths configured for this scanner.
+    ///
     /// # Errors
     ///
     /// * If the scan fails
@@ -278,6 +284,8 @@ impl Scanner {
         Ok(())
     }
 
+    /// Scans the specified local filesystem paths for music files.
+    ///
     /// # Errors
     ///
     /// * If the scan fails
@@ -306,6 +314,8 @@ impl Scanner {
         Ok(())
     }
 
+    /// Checks if a scan origin is enabled in the database.
+    ///
     /// # Errors
     ///
     /// * If fails to fetch the enabled scan origins
@@ -317,6 +327,8 @@ impl Scanner {
         is_scan_origin_enabled(db, origin).await
     }
 
+    /// Scans a music API source for albums and tracks.
+    ///
     /// # Errors
     ///
     /// * If fails to fetch the enabled scan origins
@@ -345,6 +357,8 @@ impl Scanner {
     }
 }
 
+/// Checks if a scan origin is enabled in the database.
+///
 /// # Errors
 ///
 /// * If fails to fetch the enabled scan origins
@@ -355,6 +369,8 @@ pub async fn is_scan_origin_enabled(
     Ok(get_enabled_scan_origins(db).await?.contains(origin))
 }
 
+/// Retrieves all enabled scan origins from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -362,6 +378,8 @@ pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, D
     get_enabled_scan_origins(db).await
 }
 
+/// Enables a scan origin in the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -383,6 +401,8 @@ pub async fn enable_scan_origin(
     db::enable_scan_origin(db, origin).await
 }
 
+/// Disables a scan origin in the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -399,6 +419,8 @@ pub async fn disable_scan_origin(
     db::disable_scan_origin(db, origin).await
 }
 
+/// Runs a scan for the specified origins (or all enabled origins if none specified).
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -423,6 +445,8 @@ pub async fn run_scan(
     Ok(())
 }
 
+/// Retrieves all configured local scan paths from the database.
+///
 /// # Panics
 ///
 /// * If the download location path is missing
@@ -446,6 +470,8 @@ pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, Databas
         .collect::<Vec<_>>())
 }
 
+/// Adds a local filesystem path to the scan locations.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -463,6 +489,8 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Datab
     db::add_scan_path(db, path).await
 }
 
+/// Removes a local filesystem path from the scan locations.
+///
 /// # Errors
 ///
 /// * If a database error occurs
