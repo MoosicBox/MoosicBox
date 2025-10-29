@@ -56,6 +56,8 @@ pub async fn on_players_updated_event<
         .push(Box::new(move || Box::pin(listener())));
 }
 
+/// Triggers the players updated event, notifying all registered listeners.
+///
 /// # Errors
 ///
 /// * If any of the event handlers produce errors
@@ -63,6 +65,10 @@ pub async fn trigger_players_updated_event() -> Result<(), Vec<Box<dyn std::erro
     send_players_updated_event().await
 }
 
+/// Sends the players updated event to all registered listeners.
+///
+/// This is the internal implementation that executes all listener callbacks.
+///
 /// # Errors
 ///
 /// * If any of the event handlers produce errors
