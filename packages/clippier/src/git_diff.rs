@@ -39,17 +39,25 @@ fn parse_dependency_name(dep_spec: &str) -> String {
         .unwrap_or(dep_spec)
         .to_string()
 }
+/// A package entry in a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLockPackage {
+    /// Package name
     pub name: String,
+    /// Package version
     pub version: String,
+    /// Package source (registry, git, etc.)
     pub source: Option<String>,
+    /// Package dependencies
     pub dependencies: Option<Vec<String>>,
 }
 
+/// Representation of a Cargo.lock file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLock {
+    /// Cargo.lock format version
     pub version: u32,
+    /// List of packages in the lockfile
     pub package: Vec<CargoLockPackage>,
 }
 
