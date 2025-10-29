@@ -174,6 +174,8 @@ pub enum DownloadItem {
 
 #[allow(clippy::uninhabited_references)]
 impl DownloadItem {
+    /// Returns the download API source for this item.
+    #[must_use]
     pub const fn source(&self) -> &DownloadApiSource {
         match self {
             Self::Track { source, .. }
@@ -182,6 +184,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the audio quality if this is a track download.
+    ///
+    /// Returns `None` for album and artist cover downloads.
+    #[must_use]
     pub const fn quality(&self) -> Option<&TrackAudioQuality> {
         match self {
             Self::Track { quality, .. } => Some(quality),
@@ -189,6 +195,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the track title if this is a track download.
+    ///
+    /// Returns `None` for album and artist cover downloads.
+    #[must_use]
     pub const fn track(&self) -> Option<&String> {
         match self {
             Self::Track { title, .. } => Some(title),
@@ -196,6 +206,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the track ID if this is a track download.
+    ///
+    /// Returns `None` for album and artist cover downloads.
+    #[must_use]
     pub const fn track_id(&self) -> Option<&Id> {
         match self {
             Self::Track { track_id, .. } => Some(track_id),
@@ -203,6 +217,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the album title if this item is associated with an album.
+    ///
+    /// Returns `None` for artist cover downloads.
+    #[must_use]
     pub const fn album(&self) -> Option<&String> {
         match self {
             Self::Track { album, .. } => Some(album),
@@ -211,6 +229,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the album ID for this item.
+    ///
+    /// All download items are associated with an album.
+    #[must_use]
     pub const fn album_id(&self) -> &Id {
         match self {
             Self::Track { album_id, .. }
@@ -219,6 +241,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the artist name for this item.
+    ///
+    /// For artist covers, returns the artist's title field.
+    #[must_use]
     pub const fn artist(&self) -> &String {
         match self {
             Self::Track { artist, .. } | Self::AlbumCover { artist, .. } => artist,
@@ -226,6 +252,10 @@ impl DownloadItem {
         }
     }
 
+    /// Returns the artist ID for this item.
+    ///
+    /// All download items are associated with an artist.
+    #[must_use]
     pub const fn artist_id(&self) -> &Id {
         match self {
             Self::Track { artist_id, .. }
@@ -234,6 +264,8 @@ impl DownloadItem {
         }
     }
 
+    /// Returns whether cover artwork is available for this item.
+    #[must_use]
     pub const fn contains_cover(&self) -> bool {
         match self {
             Self::Track { contains_cover, .. }
