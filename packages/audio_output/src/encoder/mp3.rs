@@ -1,3 +1,5 @@
+//! MP3 audio encoder implementation.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::RwLock;
@@ -20,6 +22,10 @@ use moosicbox_resampler::Resampler;
 
 use super::AudioEncoder;
 
+/// MP3 audio encoder that converts decoded audio to MP3 format.
+///
+/// This encoder uses the LAME library to encode audio samples
+/// and supports automatic resampling to a target sample rate.
 pub struct Mp3Encoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
@@ -31,6 +37,10 @@ pub struct Mp3Encoder {
 }
 
 impl Mp3Encoder {
+    /// Creates a new MP3 encoder with default settings.
+    ///
+    /// Default output sample rate is 44100 Hz.
+    ///
     /// # Panics
     ///
     /// * If fails to get the mp3 encoder
@@ -47,6 +57,11 @@ impl Mp3Encoder {
         }
     }
 
+    /// Creates a new MP3 encoder with a custom writer.
+    ///
+    /// # Arguments
+    /// * `writer` - Output writer for encoded MP3 data
+    ///
     /// # Panics
     ///
     /// * If fails to get the mp3 encoder
@@ -62,6 +77,11 @@ impl Mp3Encoder {
         }
     }
 
+    /// Initializes the resampler if needed based on input audio spec.
+    ///
+    /// # Arguments
+    /// * `spec` - Input audio signal specification
+    /// * `duration` - Audio duration in samples
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
         if self.resample_rate.is_none_or(|r| r != spec.rate)
             && self.output_rate != spec.rate as usize
@@ -83,6 +103,13 @@ impl Mp3Encoder {
         self
     }
 
+    /// Opens the encoder with the specified audio specification.
+    ///
+    /// This initializes the resampler and prepares the encoder for encoding.
+    ///
+    /// # Arguments
+    /// * `spec` - Audio signal specification
+    /// * `duration` - Audio duration in samples
     #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);
@@ -248,6 +275,13 @@ impl AudioWrite for Mp3Encoder {
     }
 }
 
+/// Encodes an audio file to MP3 format and returns a byte stream.
+///
+/// This function spawns a background task to encode the audio file
+/// and returns a stream that can be read as the encoding progresses.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
 #[must_use]
 pub fn encode_mp3_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
@@ -258,6 +292,11 @@ pub fn encode_mp3_stream(path: &str) -> ByteStream {
     stream
 }
 
+/// Spawns a background task to encode an audio file to MP3 format.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded MP3 data
 pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
@@ -271,6 +310,13 @@ pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     )
 }
 
+/// Encodes an audio file to MP3 format.
+///
+/// This function blocks until encoding is complete.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded MP3 data
 pub fn encode_mp3<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {

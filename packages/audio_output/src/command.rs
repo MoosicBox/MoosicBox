@@ -12,39 +12,54 @@ use thiserror::Error;
 /// Commands that can be sent to control audio output.
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
+    /// Set the volume level (0.0 to 1.0)
     SetVolume(f64),
+    /// Pause audio playback
     Pause,
+    /// Resume audio playback
     Resume,
+    /// Seek to the specified position in seconds
     Seek(f64),
+    /// Flush buffered audio data
     Flush,
+    /// Reset the audio output to its initial state
     Reset,
 }
 
 /// Response returned after executing an audio command.
 #[derive(Debug, Clone)]
 pub enum AudioResponse {
+    /// Command executed successfully
     Success,
+    /// Command execution failed with error message
     Error(String),
 }
 
 /// Message structure for sending commands through channels.
 #[derive(Debug)]
 pub struct CommandMessage {
+    /// The command to execute
     pub command: AudioCommand,
+    /// Optional channel for sending back the response
     pub response_sender: Option<flume::Sender<AudioResponse>>,
 }
 
 /// Errors that can occur during audio command operations.
 #[derive(Debug, Error)]
 pub enum AudioError {
+    /// Command execution failed with error message
     #[error("Command error: {0}")]
     Command(String),
+    /// Failed to send command through channel
     #[error("Channel send error")]
     ChannelSend,
+    /// Failed to receive response through channel
     #[error("Channel receive error")]
     ChannelReceive,
+    /// Received unexpected response type
     #[error("Unexpected response type")]
     UnexpectedResponse,
+    /// Audio handle is not available
     #[error("Handle not available")]
     HandleNotAvailable,
 }
@@ -92,6 +107,10 @@ impl Clone for AudioHandle {
 }
 
 impl AudioHandle {
+    /// Creates a new `AudioHandle` with the specified command sender.
+    ///
+    /// # Arguments
+    /// * `command_sender` - Channel for sending commands to the audio output
     #[must_use]
     pub const fn new(command_sender: flume::Sender<CommandMessage>) -> Self {
         Self { command_sender }
