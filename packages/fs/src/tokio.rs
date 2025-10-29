@@ -11,6 +11,8 @@ pub mod unsync {
 
     pub use tokio::fs::File;
 
+    /// Reads the entire contents of a file into a string asynchronously
+    ///
     /// # Errors
     ///
     /// * If underlying `tokio::fs::read_to_string` fails
@@ -30,6 +32,8 @@ pub mod unsync {
         ::tokio::fs::write(path, contents).await
     }
 
+    /// Creates a directory and all missing parent directories asynchronously
+    ///
     /// # Errors
     ///
     /// * If underlying `tokio::fs::create_dir_all` fails
@@ -37,6 +41,8 @@ pub mod unsync {
         tokio::fs::create_dir_all(path).await
     }
 
+    /// Removes a directory and all its contents recursively asynchronously
+    ///
     /// # Errors
     ///
     /// * If underlying `tokio::fs::remove_dir_all` fails
@@ -140,6 +146,8 @@ pub mod unsync {
 
     #[cfg(not(feature = "simulator"))]
     impl OpenOptions {
+        /// Opens a file asynchronously with the configured options
+        ///
         /// # Errors
         ///
         /// * If and IO error occurs
