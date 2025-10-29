@@ -3,8 +3,30 @@ use std::sync::Mutex;
 
 use crate::{Port, PortRange, is_free};
 
+/// A port reservation system that manages port allocation within a specified range
+///
+/// `PortReservation` allows you to reserve and release ports from a given range,
+/// ensuring that the same port is not allocated multiple times. This is useful
+/// for applications that need to manage multiple network services on different ports.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(feature = "reservation")]
+/// # {
+/// use openport::PortReservation;
+///
+/// let reservation = PortReservation::new(15000..16000);
+/// let port = reservation.reserve_port().expect("No ports available");
+/// assert!(reservation.is_reserved(port));
+/// reservation.release_port(port);
+/// assert!(!reservation.is_reserved(port));
+/// # }
+/// ```
 pub struct PortReservation<R: PortRange> {
+    /// The range of ports that can be reserved
     range: R,
+    /// Set of currently reserved ports, protected by a mutex for thread-safe access
     reserved_ports: Mutex<BTreeSet<Port>>,
 }
 
@@ -21,6 +43,26 @@ impl Default for PortReservation<std::ops::RangeInclusive<Port>> {
 }
 
 impl<R: PortRange> PortReservation<R> {
+    /// Creates a new port reservation system with the specified range
+    ///
+    /// # Parameters
+    ///
+    /// * `range` - The range of ports that can be reserved (can be exclusive `start..end` or inclusive `start..=end`)
+    ///
+    /// # Returns
+    ///
+    /// Returns a new `PortReservation` instance with no ports initially reserved
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
+    /// use openport::PortReservation;
+    ///
+    /// let reservation = PortReservation::new(15000..16000);
+    /// # }
+    /// ```
     #[must_use]
     pub const fn new(range: R) -> Self {
         Self {
