@@ -48,14 +48,39 @@
 //!
 //! The crate re-exports several sub-crates as modules:
 //!
+//! ## Core Modules
+//!
 //! * [`actions`] - Event handling and action system
 //! * [`app`] - Application builder and runtime
-//! * [`color`] - Color management
-//! * [`router`] - Routing functionality
-//! * [`state`] - State persistence system
-//! * [`template`] - Template macro system
-//! * [`transformer`] - Container and element types
+//! * [`color`] - Color management and theming
+//! * [`router`] - Routing functionality for navigation
+//! * [`state`] - State persistence system with optional SQLite backend
+//! * [`template`] - Template macro system for building UI components
+//! * [`transformer`] - Container and element types for UI transformations
 //! * [`transformer_models`] - Data models for transformers
+//!
+//! ## Content Modules
+//!
+//! * [`markdown`] - Markdown parsing and rendering support
+//!
+//! ## Renderer Modules
+//!
+//! * [`renderer`] - Base renderer traits and shared functionality
+//! * [`renderer_egui`] - Egui desktop renderer implementation
+//! * [`renderer_fltk`] - FLTK desktop renderer implementation
+//! * [`renderer_html`] - Base HTML rendering support
+//! * [`renderer_html_actix`] - Actix web server renderer
+//! * [`renderer_html_cdn`] - CDN-hosted HTML renderer
+//! * [`renderer_html_http`] - HTTP server renderer
+//! * [`renderer_html_lambda`] - AWS Lambda serverless renderer
+//! * [`renderer_html_web_server`] - Generic web server renderer
+//! * [`renderer_vanilla_js`] - Vanilla JavaScript client-side renderer
+//!
+//! ## Build and Development Modules
+//!
+//! * [`js_bundler`] - JavaScript bundling utilities for web targets
+//! * [`simulator`] - Testing and simulation utilities
+//! * [`test_utils`] - Shared testing utilities and helpers
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
