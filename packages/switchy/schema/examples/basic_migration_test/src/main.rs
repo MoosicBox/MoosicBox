@@ -23,6 +23,12 @@ impl Migration<'static> for CreateUsersTable {
         "001_create_users"
     }
 
+    /// Applies the migration forward, creating the users table with columns for id, name, email, and created_at.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if table creation fails
+    /// * Returns an error if unique index creation fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Create users table using schema query builder
         db.create_table("users")
@@ -65,6 +71,12 @@ impl Migration<'static> for CreateUsersTable {
         Ok(())
     }
 
+    /// Rolls back the migration, dropping the users table and its index.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if index drop fails
+    /// * Returns an error if table drop fails
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Drop index first, then table
         db.exec_raw("DROP INDEX IF EXISTS idx_users_email").await?;
@@ -86,6 +98,11 @@ impl Migration<'static> for AddUsersStatusColumn {
         "002_add_users_status"
     }
 
+    /// Applies the migration forward, adding a status column with default value 'active' to the users table.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the ALTER TABLE statement fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Add status column using raw SQL since ALTER TABLE ADD COLUMN
         // isn't supported by the schema builder yet
@@ -116,6 +133,11 @@ impl Migration<'static> for CreatePostsTable {
         "003_create_posts"
     }
 
+    /// Applies the migration forward, creating the posts table with a foreign key to users.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if table creation fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Create posts table using schema query builder
         db.create_table("posts")
@@ -161,6 +183,11 @@ impl Migration<'static> for CreatePostsTable {
         Ok(())
     }
 
+    /// Rolls back the migration, dropping the posts table.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if table drop fails
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("DROP TABLE posts").await?;
         Ok(())
@@ -171,6 +198,16 @@ impl Migration<'static> for CreatePostsTable {
     }
 }
 
+/// Demonstrates testing database migrations using `verify_migrations_full_cycle`.
+///
+/// This example creates three migrations (users table, status column, posts table)
+/// and uses `verify_migrations_full_cycle` to verify they work correctly in both
+/// forward (up) and backward (down) directions.
+///
+/// # Errors
+///
+/// * Returns an error if database creation fails
+/// * Returns an error if any migration fails during the full cycle test
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Basic Migration Test Example");
