@@ -109,14 +109,28 @@ use crate::{
 };
 
 #[cfg(feature = "api")]
+/// HTTP API endpoints for playback control.
+///
+/// This module provides RESTful API endpoints for controlling playback, including
+/// play, pause, stop, seek, and status operations. It uses Actix-web for HTTP handling
+/// and integrates with the core playback functionality.
 pub mod api;
 
 #[cfg(feature = "local")]
+/// Local audio player implementation.
+///
+/// This module provides a local player implementation that uses the Symphonia decoder
+/// for audio playback. It handles audio output, volume control, seeking, and playback
+/// state management for local audio files and streams.
 pub mod local;
 
+/// Audio signal processing chain for encoding and decoding.
 pub mod signal_chain;
+/// Asynchronous audio file playback using Symphonia.
 pub mod symphonia;
+/// Synchronous audio decoding using Symphonia.
 pub mod symphonia_unsync;
+/// Volume control and mixing utilities.
 pub mod volume_mixer;
 
 /// Default retry options for seek operations.
@@ -1283,33 +1297,85 @@ impl PlaybackHandler {
 /// Trait for implementing custom playback players.
 #[async_trait]
 pub trait Player: std::fmt::Debug + Send {
+    /// Hook called before starting a playback session.
+    ///
+    /// This allows implementations to perform setup or cleanup before playback begins.
+    ///
+    /// # Errors
+    ///
+    /// * If setup operations fail
     async fn before_play_playback(&self, _seek: Option<f64>) -> Result<(), PlayerError> {
         Ok(())
     }
 
+    /// Initiates playback at the current position with optional seek.
+    ///
+    /// # Errors
+    ///
+    /// * If playback cannot be started
+    /// * If the audio output fails
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError>;
 
+    /// Stops the current playback.
+    ///
+    /// # Errors
+    ///
+    /// * If stopping playback fails
     async fn trigger_stop(&self) -> Result<(), PlayerError>;
 
+    /// Seeks to a specific position in the current track.
+    ///
+    /// # Errors
+    ///
+    /// * If seeking fails
+    /// * If the seek position is invalid
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
 
+    /// Hook called before updating playback state.
+    ///
+    /// This allows implementations to prepare for state changes.
+    ///
+    /// # Errors
+    ///
+    /// * If preparation operations fail
     async fn before_update_playback(&self) -> Result<(), PlayerError> {
         Ok(())
     }
 
+    /// Hook called after updating playback state.
+    ///
+    /// This allows implementations to synchronize state after changes.
+    ///
+    /// # Errors
+    ///
+    /// * If synchronization operations fail
     async fn after_update_playback(&self) -> Result<(), PlayerError> {
         Ok(())
     }
 
+    /// Pauses the current playback.
+    ///
+    /// # Errors
+    ///
+    /// * If pausing fails
     async fn trigger_pause(&self) -> Result<(), PlayerError>;
 
+    /// Resumes playback from a paused state.
+    ///
+    /// # Errors
+    ///
+    /// * If resuming fails
     async fn trigger_resume(&self) -> Result<(), PlayerError>;
 
+    /// Retrieves the current playback status.
+    ///
     /// # Errors
     ///
     /// * If failed to access the player status
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
 
+    /// Returns the player's source configuration.
+    #[must_use]
     fn get_source(&self) -> &PlayerSource;
 }
 
