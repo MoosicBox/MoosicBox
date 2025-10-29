@@ -231,6 +231,11 @@ pub enum AppStateError {
 }
 
 impl AppStateError {
+    /// Creates an unknown error with a custom message.
+    ///
+    /// Used for errors that don't fit into other error categories or when
+    /// wrapping error messages from external sources.
+    #[must_use]
     pub fn unknown(message: impl Into<String>) -> Self {
         Self::Unknown(message.into())
     }
@@ -505,11 +510,20 @@ impl std::fmt::Debug for AppState {
 }
 
 impl AppState {
+    /// Creates a new application state with default values.
+    ///
+    /// All fields are initialized to empty/default values. Use builder methods
+    /// like `with_persistence` and `with_on_*_listener` to configure the state
+    /// before use.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Registers a listener to be called before handling playback updates.
+    ///
+    /// The listener receives the update session information and can perform
+    /// pre-processing or validation before the update is applied.
     #[must_use]
     pub fn with_on_before_handle_playback_update_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -525,6 +539,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called after handling playback updates.
+    ///
+    /// The listener receives the update session information and can perform
+    /// post-processing tasks after the update has been applied to players.
     #[must_use]
     pub fn with_on_after_handle_playback_update_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -540,6 +558,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called before updating the playlist.
+    ///
+    /// The listener can perform pre-processing tasks before the playlist
+    /// update is applied.
     #[must_use]
     pub fn with_on_before_update_playlist_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -554,6 +576,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called after updating the playlist.
+    ///
+    /// The listener receives the updated session and can perform post-processing
+    /// tasks such as UI updates or analytics tracking.
     #[must_use]
     pub fn with_on_after_update_playlist_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -569,6 +595,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called before handling `WebSocket` messages.
+    ///
+    /// The listener receives the incoming message payload and can perform
+    /// validation or logging before the message is processed.
     #[must_use]
     pub fn with_on_before_handle_ws_message_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -584,6 +614,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called after handling `WebSocket` messages.
+    ///
+    /// The listener receives the processed message payload and can perform
+    /// post-processing tasks such as UI updates or state synchronization.
     #[must_use]
     pub fn with_on_after_handle_ws_message_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -599,6 +633,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called before updating application state.
+    ///
+    /// The listener receives the state update parameters and can perform
+    /// validation or side effects before the state is modified.
     #[must_use]
     pub fn with_on_before_set_state_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -614,6 +652,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called after updating application state.
+    ///
+    /// The listener receives the state update parameters and can perform
+    /// post-processing tasks such as persistence or event propagation.
     #[must_use]
     pub fn with_on_after_set_state_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -629,6 +671,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called when the current sessions are updated.
+    ///
+    /// The listener receives the complete list of current sessions and can
+    /// update UI or perform other tasks in response to session changes.
     #[must_use]
     pub fn with_on_current_sessions_updated_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -644,6 +690,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called when audio zones with sessions are updated.
+    ///
+    /// The listener receives the complete list of audio zones with their
+    /// associated sessions, useful for updating zone-based UI components.
     #[must_use]
     pub fn with_on_audio_zone_with_sessions_updated_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -659,6 +709,10 @@ impl AppState {
         self
     }
 
+    /// Registers a listener to be called when connections are updated.
+    ///
+    /// The listener receives the complete list of connections and can update
+    /// UI or perform other tasks in response to connection changes.
     #[must_use]
     pub fn with_on_connections_updated_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -674,10 +728,20 @@ impl AppState {
         self
     }
 
+    /// Gets the currently active session if one is selected.
+    ///
+    /// Returns a cloned copy of the session data. Use `get_current_session_ref`
+    /// if you need a reference without cloning.
+    #[must_use]
     pub async fn get_current_session(&self) -> Option<ApiSession> {
         self.get_current_session_ref().await.map(|x| x.clone())
     }
 
+    /// Gets a read lock reference to the currently active session if one is selected.
+    ///
+    /// Returns a lock guard that provides efficient read access without cloning.
+    /// The guard will block other writers until dropped.
+    #[must_use]
     pub async fn get_current_session_ref(&self) -> Option<RwLockReadGuard<'_, ApiSession>> {
         let session_id = (*self.current_session_id.read().await)?;
         let binding = self.current_sessions.read().await;
@@ -713,6 +777,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Gets the default download location path.
+    ///
+    /// Returns the configured path for file downloads, or `None` if no default
+    /// location has been set.
+    ///
     /// # Panics
     ///
     /// * If the `default_download_location` `RwLock` is poisoned
@@ -1448,6 +1517,10 @@ impl AppState {
         }
     }
 
+    /// Adds new players to the current players list.
+    ///
+    /// Only players not already in the list (by player ID) will be added.
+    /// This prevents duplicate player entries.
     pub async fn add_players_to_current_players(&self, players: Vec<ApiPlayersMap>) {
         let mut existing_players = self.current_players.write().await;
 
@@ -1622,6 +1695,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Gets the session playback state for a specific player.
+    ///
+    /// If the player's session differs from the update's session, this method
+    /// will fetch the player's actual session data and merge it with the update.
+    ///
     /// # Panics
     ///
     /// * If the `Playback` `RwLock` is poisoned
