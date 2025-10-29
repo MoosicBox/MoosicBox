@@ -1,3 +1,7 @@
+//! Multi-producer, single-consumer channel implementation for simulator runtime.
+//!
+//! This module provides MPSC channels with deterministic execution for testing.
+
 use std::task::{Context, Poll};
 
 use tokio::sync::mpsc;
@@ -12,24 +16,32 @@ pub struct Sender<T> {
     inner: mpsc::UnboundedSender<T>,
 }
 
+/// Error returned when receiving from a channel fails.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RecvError {
+    /// All senders have been dropped.
     #[error("Disconnected")]
     Disconnected,
 }
 
+/// Error returned when trying to receive from a channel without blocking.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TryRecvError {
+    /// The channel is currently empty.
     #[error("Empty")]
     Empty,
+    /// All senders have been dropped.
     #[error("Disconnected")]
     Disconnected,
 }
 
+/// Error returned when receiving from a channel with a timeout.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RecvTimeoutError {
+    /// The timeout expired before a value was received.
     #[error("Timeout")]
     Timeout,
+    /// All senders have been dropped.
     #[error("Disconnected")]
     Disconnected,
 }
@@ -140,8 +152,10 @@ impl<T> Receiver<T> {
 //     }
 // }
 
+/// Error returned when sending to a channel fails.
 #[derive(Debug, thiserror::Error)]
 pub enum SendError<T> {
+    /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
 }
@@ -152,10 +166,13 @@ impl<T> From<mpsc::error::SendError<T>> for SendError<T> {
     }
 }
 
+/// Error returned when trying to send to a channel without blocking.
 #[derive(Debug, thiserror::Error)]
 pub enum TrySendError<T> {
+    /// The channel is full.
     #[error("Full")]
     Full(T),
+    /// The receiver has been dropped.
     #[error("Disconnected")]
     Disconnected(T),
 }
