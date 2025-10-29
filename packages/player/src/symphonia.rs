@@ -23,16 +23,22 @@ impl From<std::io::Error> for PlaybackError {
     }
 }
 
+/// Errors that can occur during asynchronous audio playback.
 #[derive(Debug, Error)]
 pub enum PlaybackError {
+    /// Error from audio decoding
     #[error(transparent)]
     Decode(#[from] DecodeError),
+    /// Error from the Symphonia decoder
     #[error(transparent)]
     Symphonia(#[from] symphonia::core::errors::Error),
+    /// Error joining async task
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// No audio output devices available
     #[error("No audio outputs")]
     NoAudioOutputs,
+    /// Invalid audio source
     #[error("Invalid source")]
     InvalidSource,
 }
@@ -102,6 +108,10 @@ fn play_file_path_str(
     )
 }
 
+/// Return type for functions that provide audio decode handlers.
+///
+/// This type alias represents a `Result` that either contains an `AudioDecodeHandler`
+/// for processing decoded audio or a `PlaybackError` if handler creation fails.
 pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, PlaybackError>;
 
 /// # Errors

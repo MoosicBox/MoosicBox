@@ -18,10 +18,13 @@ impl From<std::io::Error> for PlaybackError {
     }
 }
 
+/// Errors that can occur during synchronous audio playback.
 #[derive(Debug, Error)]
 pub enum PlaybackError {
+    /// Error from audio decoding
     #[error(transparent)]
     Decode(#[from] DecodeError),
+    /// Error from the Symphonia decoder
     #[error(transparent)]
     Symphonia(#[from] symphonia::core::errors::Error),
 }
