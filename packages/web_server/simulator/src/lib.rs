@@ -35,7 +35,12 @@ type HandlerFn = Arc<
 pub enum Error {
     /// No route was found matching the request method and path.
     #[error("Route not found: {method} {path}")]
-    RouteNotFound { method: HttpMethod, path: String },
+    RouteNotFound {
+        /// HTTP method of the request.
+        method: HttpMethod,
+        /// Request path that was not found.
+        path: String,
+    },
     /// Handler execution failed.
     #[error("Handler execution failed: {0}")]
     HandlerFailed(String),
