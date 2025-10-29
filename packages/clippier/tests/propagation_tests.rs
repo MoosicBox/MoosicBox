@@ -25,6 +25,8 @@ fn test_git_submodules_propagates_through_build_deps() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -69,6 +71,8 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -113,6 +117,8 @@ fn test_dependencies_propagate_and_merge() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -169,6 +175,8 @@ fn test_dependencies_propagate_to_root() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -225,6 +233,8 @@ fn test_ci_steps_propagate_and_preserve_order() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -285,6 +295,8 @@ fn test_env_vars_propagate_with_overlay() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -346,6 +358,8 @@ fn test_nightly_does_not_propagate() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -387,6 +401,8 @@ fn test_propagation_with_all_workspace_packages() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -431,6 +447,8 @@ fn test_external_deps_dont_break_propagation() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 

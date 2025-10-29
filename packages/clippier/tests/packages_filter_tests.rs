@@ -27,6 +27,8 @@ fn test_packages_filter_single_package() {
         None, // git_head
         false,                      // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -68,6 +70,8 @@ fn test_packages_filter_multiple_packages() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -116,6 +120,8 @@ fn test_packages_filter_empty_list() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -140,6 +146,8 @@ fn test_packages_filter_empty_list() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -186,6 +194,8 @@ fn test_packages_with_os_filter() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -225,6 +235,8 @@ fn test_packages_with_chunking() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -273,6 +285,8 @@ fn test_packages_with_features_filter() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -318,6 +332,8 @@ fn test_packages_nonexistent_package() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -358,6 +374,8 @@ fn test_packages_mixed_valid_invalid() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -402,6 +420,8 @@ fn test_packages_case_sensitivity() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -437,6 +457,8 @@ fn test_packages_raw_output_format() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Raw,
     );
 

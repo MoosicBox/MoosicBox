@@ -127,6 +127,16 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         ignore: Vec<String>,
 
+        /// Skip packages matching criteria (format: property<op>value, e.g., "publish=false")
+        /// Can be specified multiple times. ANY match causes package to be skipped.
+        #[arg(long, action = clap::ArgAction::Append)]
+        skip_if: Vec<String>,
+
+        /// Only include packages matching criteria (format: property<op>value, e.g., "categories@=audio")
+        /// Can be specified multiple times. ALL criteria must match (AND logic between properties).
+        #[arg(long, action = clap::ArgAction::Append)]
+        include_if: Vec<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -275,6 +285,16 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         ignore: Vec<String>,
 
+        /// Skip packages matching criteria (format: property<op>value, e.g., "publish=false")
+        /// Can be specified multiple times. ANY match causes package to be skipped.
+        #[arg(long, action = clap::ArgAction::Append)]
+        skip_if: Vec<String>,
+
+        /// Only include packages matching criteria (format: property<op>value, e.g., "categories@=audio")
+        /// Can be specified multiple times. ALL criteria must match (AND logic between properties).
+        #[arg(long, action = clap::ArgAction::Append)]
+        include_if: Vec<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
@@ -326,6 +346,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             include_reasoning,
             packages,
             ignore,
+            skip_if,
+            include_if,
             output,
         } => handle_features_command(
             &file,
@@ -352,6 +374,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 Some(&ignore)
             },
+            &skip_if,
+            &include_if,
             output,
         )?,
         Commands::WorkspaceDeps {
@@ -462,6 +486,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             include_reasoning,
             max_parallel,
             ignore,
+            skip_if,
+            include_if,
             output,
         } => handle_packages_command(
             &file,
@@ -474,11 +500,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_head.as_deref(),
             include_reasoning,
             max_parallel,
-            if ignore.is_empty() {
-                None
-            } else {
-                Some(&ignore)
-            },
+            Some(&ignore),
+            &skip_if,
+            &include_if,
             output,
         )?,
     };

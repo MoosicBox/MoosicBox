@@ -30,9 +30,11 @@ clap       = { workspace = true }
 globset    = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }
+regex      = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 tempfile   = { workspace = true }
+thiserror  = { workspace = true }
 toml       = { workspace = true }
 
 git2 = { workspace = true, optional = true }

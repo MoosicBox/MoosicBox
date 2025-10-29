@@ -2629,11 +2629,13 @@ dependencies = [
  "itertools 0.14.0",
  "log 0.4.28",
  "moosicbox_logging",
+ "regex",
  "serde",
  "serde_json",
  "switchy_random",
  "tempfile",
  "test-log",
+ "thiserror 2.0.17",
  "toml 0.9.8",
 ]
 

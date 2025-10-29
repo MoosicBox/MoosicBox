@@ -1,0 +1,10 @@
+# Package with large arrays for length testing
+[package]
+authors    = ["author1", "author2", "author3"]
+categories = ["cat1", "cat2"]
+edition    = "2021"
+keywords   = ["five", "four", "one", "three", "two"]
+name       = "array_testing_package"
+version    = "1.0.0"
+
+[dependencies]

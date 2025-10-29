@@ -1,0 +1,10 @@
+# Package for substring and pattern testing
+[package]
+categories  = ["web-programming::http-client"]
+description = "This is a test package for testing"
+edition     = "2021"
+keywords    = ["api-client", "music-api", "music-streaming"]
+name        = "test_moosicbox_core_test"
+version     = "0.3.14"
+
+[dependencies]

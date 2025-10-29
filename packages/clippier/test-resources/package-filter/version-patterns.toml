@@ -1,0 +1,7 @@
+# Package with specific version pattern
+[package]
+edition = "2021"
+name    = "versioned_package"
+version = "2.5.8"
+
+[dependencies]

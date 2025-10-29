@@ -47,6 +47,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+pub mod package_filter;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -3087,6 +3089,8 @@ pub fn handle_features_command(
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
     include_reasoning: bool,
     ignore_patterns: Option<&[String]>,
+    skip_if: &[String],
+    include_if: &[String],
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3136,9 +3140,22 @@ pub fn handle_features_command(
             }
         }
 
-        // Process only selected packages
+        // Apply package filters if any
+        let filtered_packages = if !skip_if.is_empty() || !include_if.is_empty() {
+            package_filter::apply_filters(
+                selected_packages,
+                &package_name_to_path,
+                &path,
+                skip_if,
+                include_if,
+            )?
+        } else {
+            selected_packages.to_vec()
+        };
+
+        // Process only filtered packages
         let mut all_filtered_packages = Vec::new();
-        for selected_pkg in selected_packages {
+        for selected_pkg in &filtered_packages {
             if let Some(package_path) = package_name_to_path.get(selected_pkg) {
                 let package_dir = path.join(package_path);
                 let packages = process_configs(
@@ -3891,6 +3908,8 @@ pub fn handle_packages_command(
     include_reasoning: bool,
     max_parallel: Option<u16>,
     ignore_patterns: Option<&[String]>,
+    skip_if: &[String],
+    include_if: &[String],
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3928,12 +3947,30 @@ pub fn handle_packages_command(
         }
     }
 
+    // Apply package filters if any
+    let filtered_packages = if !skip_if.is_empty() || !include_if.is_empty() {
+        package_filter::apply_filters(
+            &package_name_to_path.keys().cloned().collect::<Vec<_>>(),
+            &package_name_to_path,
+            &path,
+            skip_if,
+            include_if,
+        )?
+    } else {
+        package_name_to_path.keys().cloned().collect()
+    };
+
     let selected_packages: Vec<String> = if let Some(pkg_list) = packages
         && !pkg_list.is_empty()
     {
-        pkg_list.to_vec()
+        // Intersect user-specified packages with filtered packages
+        pkg_list
+            .iter()
+            .filter(|p| filtered_packages.contains(p))
+            .cloned()
+            .collect()
     } else {
-        package_name_to_path.keys().cloned().collect()
+        filtered_packages
     };
 
     // Determine if we should use filtering logic based on changed files or git diff

@@ -133,6 +133,8 @@ fn test_basic_chunking_respects_limit() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -172,6 +174,8 @@ fn test_basic_chunking_respects_limit() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -217,6 +221,8 @@ fn test_basic_spreading_distributes_features() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -265,6 +271,8 @@ fn test_chunking_and_spreading_combination() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -316,6 +324,8 @@ fn test_max_parallel_with_chunking() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -366,6 +376,8 @@ fn test_changed_files_respects_chunking_and_spreading() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -423,6 +435,8 @@ fn test_chunking_with_small_limit() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -468,6 +482,8 @@ fn test_empty_workspace_with_chunking_spreading() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -555,6 +571,8 @@ serde = "1.0"
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -605,6 +623,8 @@ fn test_complex_scenario_all_flags() {
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -653,6 +673,8 @@ fn test_chunking_without_spreading() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -705,6 +727,8 @@ fn test_spreading_without_chunking() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 

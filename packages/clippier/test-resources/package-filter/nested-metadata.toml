@@ -1,0 +1,24 @@
+# Package with deeply nested metadata
+[package]
+edition = "2021"
+name    = "metadata_rich_package"
+version = "1.2.3"
+
+[package.metadata]
+custom-bool   = true
+custom-int    = 42
+custom-string = "test-value"
+
+[package.metadata.ci]
+enabled  = true
+platform = "linux"
+
+[package.metadata.workspaces]
+independent = false
+shared      = true
+
+[package.metadata.build]
+optimized = true
+target    = "wasm32"
+
+[dependencies]

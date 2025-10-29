@@ -1,0 +1,10 @@
+# Package with empty arrays
+[package]
+authors    = []
+categories = []
+edition    = "2021"
+keywords   = []
+name       = "minimal_package"
+version    = "1.0.0"
+
+[dependencies]

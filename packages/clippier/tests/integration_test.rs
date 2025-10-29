@@ -215,6 +215,8 @@ fn test_git_submodules_with_chunking_and_spreading() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     )
     .unwrap();

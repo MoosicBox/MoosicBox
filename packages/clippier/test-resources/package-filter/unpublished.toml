@@ -1,0 +1,9 @@
+# Package with publish = false
+[package]
+edition = "2021"
+name    = "example_package"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = "1.0"

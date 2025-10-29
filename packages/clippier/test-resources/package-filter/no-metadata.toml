@@ -1,0 +1,7 @@
+# Minimal package with no metadata
+[package]
+edition = "2021"
+name    = "simple_package"
+version = "0.1.0"
+
+[dependencies]

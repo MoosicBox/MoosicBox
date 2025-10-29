@@ -106,14 +106,26 @@ This enables replaying the same randomized distribution by using the printed see
 
 #### Package Filtering
 
-Filter feature matrix generation to specific packages:
+Filter feature matrix generation to specific packages by name or by Cargo.toml properties:
 
 ```bash
-# Process only specific packages
+# Process only specific packages by name
 clippier features . \
   --packages moosicbox_server,moosicbox_audio_decoder \
   --chunked 15 \
   --max-parallel 256 \
+  --output json
+
+# Filter by package properties (exclude unpublished and examples)
+clippier features . \
+  --skip-if "publish=false" \
+  --skip-if "name$=_example" \
+  --output json
+
+# Include only packages with specific characteristics
+clippier features . \
+  --include-if "name^=moosicbox_" \
+  --include-if "categories@=audio" \
   --output json
 
 # Combine with other filters
@@ -128,8 +140,9 @@ clippier features . \
 This is particularly useful for:
 
 - **Focused testing**: Test only specific packages during development
-- **CI optimization**: Build matrix for selected components
+- **CI optimization**: Build matrix for selected components based on criteria
 - **Monorepo management**: Process subsets of large workspaces
+- **Quality gates**: Filter by documentation completeness, categories, etc.
 
 #### Enhanced Change Impact Analysis
 
@@ -467,6 +480,8 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--changed-files`     | Filter by changed files                      | -            |
 | `--git-base`          | Git base commit for external dep analysis    | -            |
 | `--git-head`          | Git head commit for external dep analysis    | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter     | -            |
+| `--include-if`        | Include only packages matching filter        | -            |
 
 ### Packages Command Options
 
@@ -479,6 +494,8 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--git-head`          | Git head commit for change detection        | -            |
 | `--include-reasoning` | Include reasoning for affected packages     | false        |
 | `--max-parallel`      | Maximum number of packages to return        | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter    | -            |
+| `--include-if`        | Include only packages matching filter       | -            |
 | `--output`            | Output format: `json`, `raw`                | `json`       |
 
 ### Workspace Dependencies Options
@@ -560,6 +577,229 @@ chunked = 4
 - **Environment variable management**: Configurable environment variables
 - **CI step customization**: Custom CI pipeline steps
 - **Toolchain specification**: Custom Rust toolchains per configuration
+
+## Advanced Package Filtering
+
+Clippier supports powerful property-based filtering to include or exclude packages based on their Cargo.toml properties using `--skip-if` and `--include-if` flags.
+
+### Filter Syntax
+
+**Format:** `property[.nested]<operator>value`
+
+Filters can access any property in a package's Cargo.toml, including nested metadata.
+
+### Available Operators
+
+#### Scalar Operators
+
+Match against string, boolean, or integer values:
+
+| Operator | Description        | Example                       |
+| -------- | ------------------ | ----------------------------- |
+| `=`      | Exact match        | `publish=false`               |
+| `!=`     | Not equal          | `version!=0.1.0`              |
+| `^=`     | Starts with        | `name^=moosicbox_`            |
+| `$=`     | Ends with          | `name$=_example`              |
+| `*=`     | Contains substring | `description*=audio`          |
+| `~=`     | Regex match        | `name~=^moosicbox_.*_server$` |
+
+#### Array Operators
+
+Match against array properties (keywords, categories, authors, etc.):
+
+| Operator | Description                           | Example                    |
+| -------- | ------------------------------------- | -------------------------- |
+| `@=`     | Array contains exact element          | `categories@=audio`        |
+| `@*=`    | Array contains element with substring | `keywords@*=music`         |
+| `@^=`    | Array contains element starting with  | `keywords@^=api-`          |
+| `@~=`    | Array contains element matching regex | `categories@~=^multimedia` |
+| `@!`     | Array is empty                        | `keywords@!`               |
+| `@#=`    | Array length equals                   | `keywords@#=3`             |
+| `@#>`    | Array length greater than             | `authors@#>1`              |
+| `@#<`    | Array length less than                | `categories@#<5`           |
+| `!@=`    | Array does NOT contain                | `keywords!@=deprecated`    |
+
+#### Existence Operators
+
+Check if properties exist:
+
+| Operator | Description             | Example      |
+| -------- | ----------------------- | ------------ |
+| `?`      | Property exists         | `readme?`    |
+| `!?`     | Property does NOT exist | `homepage!?` |
+
+### Usage Examples
+
+#### Skip Unpublished Packages
+
+```bash
+# Exclude packages with publish = false
+clippier features . --skip-if "publish=false" --output json
+```
+
+#### Include Only Specific Package Prefixes
+
+```bash
+# Only process moosicbox packages
+clippier features . --include-if "name^=moosicbox_" --output json
+
+# Exclude example packages
+clippier packages . --skip-if "name$=_example" --output json
+```
+
+#### Filter by Categories or Keywords
+
+```bash
+# Only packages with audio category
+clippier features . --include-if "categories@=audio" --output json
+
+# Packages containing "api" in keywords
+clippier features . --include-if "keywords@*=api" --output json
+
+# Skip packages with empty keywords
+clippier features . --skip-if "keywords@!" --output json
+```
+
+#### Array Length Filtering
+
+```bash
+# Only packages with 3+ keywords (well-documented)
+clippier features . --include-if "keywords@#>2" --output json
+
+# Packages with exactly 2 categories
+clippier features . --include-if "categories@#=2" --output json
+```
+
+#### Nested Metadata Access
+
+```bash
+# Only independent workspace packages
+clippier features . \
+  --include-if "metadata.workspaces.independent=true" \
+  --output json
+
+# Skip packages with custom CI configuration
+clippier packages . --skip-if "metadata.ci.skip-tests=true"
+```
+
+#### Combining Multiple Filters
+
+```bash
+# Include moosicbox packages, exclude examples and unpublished
+clippier features . \
+  --include-if "name^=moosicbox_" \
+  --skip-if "name$=_example" \
+  --skip-if "publish=false" \
+  --output json
+
+# Audio packages with sufficient documentation
+clippier features . \
+  --include-if "categories@=audio" \
+  --include-if "keywords@#>2" \
+  --include-if "readme?" \
+  --output json
+```
+
+### Filter Logic
+
+**Skip Filters (`--skip-if`):**
+
+- Multiple skip filters use **OR** logic
+- If **ANY** skip filter matches, the package is excluded
+- Processed after include filters
+
+**Include Filters (`--include-if`):**
+
+- Multiple filters for the **same property** use **OR** logic
+- Filters for **different properties** use **AND** logic
+- All property groups must have at least one match
+
+**Example:**
+
+```bash
+# Exclude if (name ends with _example) OR (publish is false)
+--skip-if "name$=_example" --skip-if "publish=false"
+
+# Include if (name starts with moosicbox_) AND (has audio category OR video category)
+--include-if "name^=moosicbox_" --include-if "categories@=audio" --include-if "categories@=video"
+```
+
+### Backward Compatibility
+
+Unprefixed property names automatically check the `[package]` section:
+
+```bash
+# These are equivalent:
+--include-if "name=my_package"
+--include-if "package.name=my_package"
+
+# Explicit package prefix for clarity:
+--include-if "package.categories@=audio"
+
+# Access nested metadata:
+--include-if "package.metadata.custom=value"
+```
+
+### Property Paths
+
+Access any Cargo.toml property using dot notation:
+
+- `name`, `version`, `edition` - Standard package properties
+- `publish`, `categories`, `keywords` - Package metadata
+- `metadata.custom.field` - Custom nested metadata
+- `dependencies.serde.version` - Dependency information (if needed)
+
+### Practical Use Cases
+
+#### CI/CD Optimization
+
+```bash
+# Test only published, non-example packages
+clippier features . \
+  --skip-if "publish=false" \
+  --skip-if "name$=_example" \
+  --max 20 \
+  --output json
+```
+
+#### Monorepo Component Isolation
+
+```bash
+# Test only frontend packages (by naming convention)
+clippier features . \
+  --include-if "name*=_ui" \
+  --include-if "name*=_web" \
+  --output json
+
+# Backend services only
+clippier features . \
+  --include-if "name*=_server" \
+  --include-if "name*=_service" \
+  --output json
+```
+
+#### Documentation Quality Checks
+
+```bash
+# Find packages missing documentation
+clippier packages . --skip-if "readme?" --output raw
+
+# Well-documented packages only
+clippier features . \
+  --include-if "readme?" \
+  --include-if "keywords@#>2" \
+  --include-if "categories@#>0" \
+  --output json
+```
+
+#### Dependency Auditing
+
+```bash
+# Packages with specific metadata flags
+clippier packages . \
+  --include-if "metadata.security.audited=true" \
+  --output json
+```
 
 ## Use Cases
 
@@ -1217,6 +1457,42 @@ echo "🎯 Feature validation completed successfully!"
 
 ## Quick Reference
 
+### Property-Based Filter Syntax
+
+```bash
+# Scalar operators
+--skip-if "publish=false"              # Exact match
+--include-if "name^=moosicbox_"        # Starts with
+--skip-if "name$=_example"             # Ends with
+--include-if "description*=audio"      # Contains
+--include-if "name~=^test_.*"          # Regex match
+
+# Array operators
+--include-if "categories@=audio"       # Array contains
+--include-if "keywords@*=api"          # Array element contains substring
+--include-if "keywords@^=music"        # Array element starts with
+--include-if "categories@~=^multi"     # Array element matches regex
+--skip-if "keywords@!"                 # Array is empty
+--include-if "keywords@#=3"            # Array length equals
+--include-if "authors@#>1"             # Array length greater than
+--include-if "categories@#<5"          # Array length less than
+--skip-if "keywords!@=deprecated"      # Array does NOT contain
+
+# Existence operators
+--include-if "readme?"                 # Property exists
+--skip-if "homepage!?"                 # Property does NOT exist
+
+# Nested properties
+--include-if "metadata.workspaces.independent=true"
+--skip-if "metadata.ci.skip-tests=true"
+
+# Combining filters
+clippier features . \
+  --include-if "name^=moosicbox_" \
+  --skip-if "name$=_example" \
+  --skip-if "publish=false"
+```
+
 ### Packages Command Patterns
 
 ```bash
@@ -1228,6 +1504,10 @@ clippier packages . --os ubuntu --output json
 
 # Filter to specific packages
 clippier packages . --packages server,auth
+
+# Property-based filtering
+clippier packages . --skip-if "publish=false" --output json
+clippier packages . --include-if "categories@=audio" --output json
 
 # Only packages affected by changes
 clippier packages . --changed-files "src/lib.rs,Cargo.toml"

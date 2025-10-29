@@ -252,6 +252,8 @@ fn test_ci_steps_with_command_and_toolchain() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -321,6 +323,8 @@ fn test_ci_steps_mixed_entries() {
         None, // git_head
         false,            // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -381,6 +385,8 @@ fn test_ci_steps_with_features() {
         None, // git_head
         false,         // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -432,6 +438,8 @@ fn test_ci_steps_json_output_structure() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -526,6 +534,8 @@ fn test_handle_features_command_basic() {
         None, // git_head
         false, // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Raw,
     );
 
@@ -710,6 +720,8 @@ fn test_handle_features_command_comprehensive() {
         None, // git_head
         false,                // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -841,6 +853,8 @@ serde = "1.0"
         None, // git_head
         false,    // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -886,6 +900,8 @@ serde = "1.0"
         None, // git_head
         false,   // include_reasoning
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1088,6 +1104,8 @@ fn test_handle_features_command_with_git_submodules() {
         None,
         false,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1227,6 +1245,8 @@ fn test_handle_packages_command_basic() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1264,6 +1284,8 @@ fn test_handle_packages_command_json_output() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1292,6 +1314,8 @@ fn test_handle_packages_command_raw_output() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Raw,
     );
 
@@ -1325,6 +1349,8 @@ fn test_handle_packages_command_with_specific_packages() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1362,6 +1388,8 @@ fn test_handle_packages_command_with_max_parallel() {
         false,
         Some(3),
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1391,6 +1419,8 @@ fn test_handle_packages_command_no_os_filter() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1426,6 +1456,8 @@ fn test_handle_packages_command_nonexistent_package() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1462,6 +1494,8 @@ members = []
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1499,6 +1533,8 @@ fn test_handle_packages_command_with_changed_files() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1540,6 +1576,8 @@ fn test_handle_packages_command_changed_files_with_dependencies() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1578,6 +1616,8 @@ fn test_handle_packages_command_with_include_reasoning() {
         true,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1611,6 +1651,8 @@ fn test_handle_packages_command_mixed_valid_invalid() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 
@@ -1649,6 +1691,8 @@ fn test_handle_packages_command_all_packages() {
         false,
         None,
         None,
+        &[],
+        &[],
         OutputType::Json,
     );
 

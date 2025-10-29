@@ -1,0 +1,37 @@
+# Comprehensive test fixture with all property types
+[package]
+authors       = ["Jane Smith <jane@example.com>", "John Doe <john@example.com>"]
+categories    = ["multimedia::audio", "multimedia::encoding"]
+description   = "Audio decoder package for MoosicBox"
+documentation = "https://docs.moosicbox.com"
+edition       = "2021"
+homepage      = "https://moosicbox.com"
+keywords      = ["audio", "decoder", "multimedia", "streaming"]
+license       = "MIT"
+name          = "moosicbox_audio_decoder"
+publish       = true
+readme        = "README.md"
+repository    = "https://github.com/MoosicBox/MoosicBox"
+rust-version  = "1.70"
+version       = "0.1.4"
+
+[package.metadata.workspaces]
+custom-field = "test-value"
+independent  = true
+
+[package.metadata.ci]
+skip-tests = false
+timeout    = 300
+
+[dependencies]
+serde = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+async   = []
+default = ["async"]
+full    = ["async", "sync"]
+sync    = []
