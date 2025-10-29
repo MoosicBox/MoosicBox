@@ -45,9 +45,13 @@ pub async fn health_endpoint() -> Result<Json<Value>> {
     })))
 }
 
+/// Request body for magic token authentication endpoints.
+///
+/// Magic tokens provide a temporary authentication mechanism for clients.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthMagicTokenRequest {
+    /// The magic token to authenticate with.
     magic_token: String,
 }
 
@@ -96,9 +100,13 @@ pub async fn auth_magic_token_endpoint(
     Ok(Json(json!({"success": true})))
 }
 
+/// Request parameters for registering a new client.
+///
+/// Used to create a new client access token for the specified client ID.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthRegisterClientRequest {
+    /// The unique identifier for the client to register.
     client_id: String,
 }
 
@@ -115,9 +123,13 @@ pub async fn auth_register_client_endpoint(
     Ok(Json(json!({"token": token})))
 }
 
+/// Request parameters for authentication operations.
+///
+/// Generic authentication request containing the client ID.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthRequest {
+    /// The unique identifier for the client.
     client_id: String,
 }
 
@@ -326,10 +338,13 @@ async fn handle_request(
     }
 }
 
+/// Errors that can occur when processing HTTP requests through the tunnel.
 #[derive(Error, Debug)]
 pub enum RequestError {
+    /// Failed to look up or parse a connection ID.
     #[error(transparent)]
     ConnectionId(#[from] ConnectionIdError),
+    /// Failed to send a command to the WebSocket server.
     #[error(transparent)]
     Commander(#[from] CommanderError),
 }

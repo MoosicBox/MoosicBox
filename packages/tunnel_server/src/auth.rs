@@ -15,6 +15,11 @@ use crate::db::{DatabaseError, valid_client_access_token, valid_signature_token}
 
 static TUNNEL_ACCESS_TOKEN: &str = std::env!("TUNNEL_ACCESS_TOKEN");
 
+/// Request guard that validates general authorization via the access token header.
+///
+/// This guard checks the `Authorization` header against the tunnel access token
+/// configured via the `TUNNEL_ACCESS_TOKEN` environment variable. It is used for
+/// administrative endpoints that require elevated permissions.
 pub struct GeneralHeaderAuthorized;
 
 impl FromRequest for GeneralHeaderAuthorized {
@@ -51,6 +56,11 @@ fn is_authorized(req: &HttpRequest) -> bool {
     false
 }
 
+/// Request guard that validates client authorization via client access tokens.
+///
+/// This guard verifies that the request includes a valid client ID in the query
+/// parameters and a matching client access token in the `Authorization` header.
+/// It queries the database to validate the token against the stored hash.
 pub struct ClientHeaderAuthorized;
 
 impl FromRequest for ClientHeaderAuthorized {
@@ -108,6 +118,11 @@ async fn client_is_authorized(
     Ok(false)
 }
 
+/// Request guard that validates signature token authorization.
+///
+/// This guard verifies that the request includes a valid client ID and signature
+/// token in the query parameters. Signature tokens are temporary tokens used for
+/// request signing and are validated against the database.
 pub struct SignatureAuthorized;
 
 impl FromRequest for SignatureAuthorized {
@@ -161,6 +176,15 @@ async fn is_signature_authorized(query_string: &str) -> Result<bool, DatabaseErr
 static HASH_CACHE: LazyLock<Mutex<BTreeMap<String, String>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
+/// Hash a token using SHA-256 and return the hexadecimal representation.
+///
+/// This function uses an in-memory cache to avoid re-hashing the same token
+/// multiple times. The cache persists for the lifetime of the application.
+///
+/// # Panics
+///
+/// Panics if the hash cache lock is poisoned (which is recovered from automatically).
+#[must_use]
 pub fn hash_token(token: &str) -> String {
     if let Some(existing) = HASH_CACHE
         .lock()

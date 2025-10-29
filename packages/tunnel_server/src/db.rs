@@ -22,16 +22,34 @@ impl From<DatabaseError> for actix_web::Error {
     }
 }
 
+/// Errors that can occur during database operations.
 #[derive(Debug, Error)]
 pub enum DatabaseError {
+    /// Failed to initialize the database connection.
     #[error(transparent)]
     InitDb(#[from] InitDbError),
+    /// Database query or operation failed.
     #[error(transparent)]
     Db(#[from] switchy_database::DatabaseError),
+    /// Failed to parse database row into a struct.
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
 }
 
+/// Initialize the database connection.
+///
+/// This function must be called once at application startup before any database
+/// operations are performed. It closes any existing connection and establishes
+/// a new one based on the configured database type.
+///
+/// # Errors
+///
+/// * [`DatabaseError::InitDb`] - Failed to initialize the database connection.
+///
+/// # Panics
+///
+/// * Panics if SQLite feature is enabled (not yet implemented).
+/// * Panics if database credentials cannot be retrieved (when postgres feature is enabled).
 #[allow(clippy::significant_drop_tightening)]
 pub async fn init() -> Result<(), DatabaseError> {
     #[allow(unused_mut)]
@@ -62,11 +80,18 @@ pub async fn init() -> Result<(), DatabaseError> {
     }
 }
 
+/// Database record representing an active tunnel connection.
+///
+/// This struct maps a client ID to its WebSocket connection ID in the database.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Connection {
+    /// The unique identifier for the client.
     pub client_id: String,
+    /// The WebSocket connection ID for this client.
     pub tunnel_ws_id: String,
+    /// Timestamp when the connection was first created.
     pub created: NaiveDateTime,
+    /// Timestamp when the connection was last updated.
     pub updated: NaiveDateTime,
 }
 
@@ -82,12 +107,21 @@ impl ToValueType<Connection> for &Row {
     }
 }
 
+/// Database record for a signature token.
+///
+/// Signature tokens are temporary tokens used for request signing. They expire
+/// after a configured duration (typically 14 days).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignatureToken {
+    /// SHA-256 hash of the signature token.
     pub token_hash: String,
+    /// The client ID this token is associated with.
     pub client_id: String,
+    /// Timestamp when the token expires.
     pub expires: NaiveDateTime,
+    /// Timestamp when the token was created.
     pub created: NaiveDateTime,
+    /// Timestamp when the token was last updated.
     pub updated: NaiveDateTime,
 }
 
@@ -104,12 +138,21 @@ impl ToValueType<SignatureToken> for &Row {
     }
 }
 
+/// Database record for a client access token.
+///
+/// Client access tokens are long-lived tokens used for client authentication.
+/// They may optionally expire, or remain valid indefinitely if expires is None.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ClientAccessToken {
+    /// SHA-256 hash of the access token.
     pub token_hash: String,
+    /// The client ID this token is associated with.
     pub client_id: String,
+    /// Optional expiration timestamp. If None, the token never expires.
     pub expires: Option<NaiveDateTime>,
+    /// Timestamp when the token was created.
     pub created: NaiveDateTime,
+    /// Timestamp when the token was last updated.
     pub updated: NaiveDateTime,
 }
 
@@ -126,12 +169,21 @@ impl ToValueType<ClientAccessToken> for &Row {
     }
 }
 
+/// Database record for a magic token.
+///
+/// Magic tokens provide a temporary authentication mechanism for one-time use
+/// or short-term access. They may optionally expire.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MagicToken {
+    /// SHA-256 hash of the magic token.
     pub magic_token_hash: String,
+    /// The client ID this token is associated with.
     pub client_id: String,
+    /// Optional expiration timestamp. If None, the token never expires.
     pub expires: Option<NaiveDateTime>,
+    /// Timestamp when the token was created.
     pub created: NaiveDateTime,
+    /// Timestamp when the token was last updated.
     pub updated: NaiveDateTime,
 }
 
@@ -148,6 +200,16 @@ impl ToValueType<MagicToken> for &Row {
     }
 }
 
+/// Global database connection handle.
+///
+/// This static provides thread-safe access to the database connection. It is
+/// initialized once at startup via the `init` function and reused throughout
+/// the application lifetime.
+///
+/// # Panics
+///
+/// Most database operations will panic with "DB not initialized" if accessed
+/// before calling `init`.
 pub static DB: LazyLock<Mutex<Option<Box<dyn Database>>>> = LazyLock::new(|| Mutex::new(None));
 
 async fn resilient_exec<T: Send, F>(
@@ -187,6 +249,19 @@ where
     }
 }
 
+/// Insert or update a connection record in the database.
+///
+/// Associates a client ID with a WebSocket connection ID. If a connection already
+/// exists for the client ID, it is updated with the new WebSocket ID.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<(), DatabaseError> {
     let client_id = client_id.to_owned();
     let tunnel_ws_id = tunnel_ws_id.to_owned();
@@ -208,6 +283,18 @@ pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<()
     .await
 }
 
+/// Retrieve a connection record from the database by client ID.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, DatabaseError> {
     let client_id = client_id.to_owned();
 
@@ -226,6 +313,16 @@ pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, Da
     .await
 }
 
+/// Delete a connection record from the database by WebSocket connection ID.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> {
     log::debug!("delete_connection: tunnel_ws_id={tunnel_ws_id}");
 
@@ -248,6 +345,18 @@ pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> 
     .await
 }
 
+/// Insert a new client access token into the database.
+///
+/// Creates a non-expiring client access token for the specified client ID.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 pub async fn insert_client_access_token(
     client_id: &str,
     token_hash: &str,
@@ -273,6 +382,20 @@ pub async fn insert_client_access_token(
     .await
 }
 
+/// Check if a client access token is valid for the given client ID.
+///
+/// Returns `true` if a matching non-expired token exists in the database.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn valid_client_access_token(
     client_id: &str,
     token_hash: &str,
@@ -282,6 +405,20 @@ pub async fn valid_client_access_token(
         .is_some())
 }
 
+/// Retrieve a client access token from the database.
+///
+/// Queries for a non-expired token matching the client ID and token hash.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn select_client_access_token(
     client_id: &str,
     token_hash: &str,
@@ -310,6 +447,18 @@ pub async fn select_client_access_token(
     .await
 }
 
+/// Insert a new magic token into the database.
+///
+/// Creates a non-expiring magic token for the specified client ID.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 pub async fn insert_magic_token(
     client_id: &str,
     magic_token_hash: &str,
@@ -335,6 +484,20 @@ pub async fn insert_magic_token(
     .await
 }
 
+/// Retrieve a magic token from the database by its hash.
+///
+/// Queries for a non-expired magic token matching the provided hash.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, DatabaseError> {
     let token_hash = token_hash.to_owned();
 
@@ -357,6 +520,18 @@ pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, 
     .await
 }
 
+/// Insert a new signature token into the database.
+///
+/// Creates a signature token for the specified client ID with a 14-day expiration.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 pub async fn insert_signature_token(
     client_id: &str,
     token_hash: &str,
@@ -382,6 +557,20 @@ pub async fn insert_signature_token(
     .await
 }
 
+/// Check if a signature token is valid for the given client ID.
+///
+/// Returns `true` if a matching non-expired token exists in the database.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn valid_signature_token(
     client_id: &str,
     token_hash: &str,
@@ -391,6 +580,20 @@ pub async fn valid_signature_token(
         .is_some())
 }
 
+/// Retrieve a signature token from the database.
+///
+/// Queries for a non-expired token matching the client ID and token hash.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database row.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
+#[must_use]
 pub async fn select_signature_token(
     client_id: &str,
     token_hash: &str,
@@ -416,7 +619,21 @@ pub async fn select_signature_token(
     .await
 }
 
+/// Retrieve all signature tokens for a given client ID.
+///
+/// Returns all signature tokens (both expired and non-expired) for the client.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database query failed.
+/// * [`DatabaseError::Parse`] - Failed to parse database rows.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 #[allow(dead_code)]
+#[must_use]
 pub async fn select_signature_tokens(
     client_id: &str,
 ) -> Result<Vec<SignatureToken>, DatabaseError> {
@@ -436,6 +653,16 @@ pub async fn select_signature_tokens(
     .await
 }
 
+/// Delete a signature token from the database by its hash.
+///
+/// # Errors
+///
+/// * [`DatabaseError::Db`] - Database operation failed.
+/// * [`DatabaseError::InitDb`] - Database reconnection failed after I/O error.
+///
+/// # Panics
+///
+/// Panics if the database has not been initialized.
 #[allow(dead_code)]
 pub async fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseError> {
     let token_hash = token_hash.to_owned();
