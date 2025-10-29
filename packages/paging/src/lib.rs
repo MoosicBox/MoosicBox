@@ -271,6 +271,8 @@ impl<T> Page<T> {
         }
     }
 
+    /// Returns whether there are more items available after this page.
+    ///
     /// # Panics
     ///
     /// * If the `items.len()` cannot be converted to a `u32`
@@ -327,7 +329,10 @@ impl<T> Page<T> {
         }
     }
 
-    /// Maps the items in this page using the provided function.
+    /// Transforms each item in this page using the provided function.
+    ///
+    /// This method consumes the page and returns a new page with transformed items,
+    /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
     pub fn map<U, F>(self, mut f: F) -> Page<U>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
@@ -360,6 +365,9 @@ impl<T> Page<T> {
     }
 
     /// Converts the items in this page into a different type using `Into`.
+    ///
+    /// This method consumes the page and returns a new page with items converted to type `TU`,
+    /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
     pub fn into<TU>(self) -> Page<TU>
     where
         T: Into<TU> + 'static,
@@ -390,6 +398,11 @@ impl<T> Page<T> {
         }
     }
 
+    /// Attempts to convert the items in this page into a different type using `TryInto`.
+    ///
+    /// This method consumes the page and returns a new page with items converted to type `TU`,
+    /// preserving the pagination metadata (offset, limit, `total`/`has_more`).
+    ///
     /// # Errors
     ///
     /// * If any of the items fail to `try_into`
@@ -778,6 +791,9 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
     }
 
     /// Converts both the item and error types using `Into`.
+    ///
+    /// This method transforms the current page and all future pages retrieved via the fetch function,
+    /// converting items from type `T` to `TU` and errors from type `E` to `EU`.
     #[must_use]
     pub fn inner_into<TU: Send + 'static, EU: Send + 'static>(self) -> PagingResponse<TU, EU>
     where
@@ -806,6 +822,12 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Attempts to convert both the item and error types using `TryInto` and `Into`.
+    ///
+    /// This method transforms the current page and all future pages retrieved via the fetch function,
+    /// attempting to convert items from type `T` to `TU` using `TryInto`, and converting errors from
+    /// type `E` to `EU` using `Into`. Conversion errors from `T::Error` are also converted to `EU`.
+    ///
     /// # Errors
     ///
     /// * If the `try_into` call fails
@@ -860,6 +882,13 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         })
     }
 
+    /// Attempts to convert both the item and error types, mapping conversion errors with a custom function.
+    ///
+    /// This method transforms the current page and all future pages retrieved via the fetch function,
+    /// attempting to convert items from type `T` to `TU` using `TryInto`, and converting errors from
+    /// type `E` to `EU` using `Into`. Conversion errors from `T::Error` are mapped to `EU` using the
+    /// provided `map_err` function.
+    ///
     /// # Errors
     ///
     /// * If the `try_into` call fails
@@ -941,6 +970,12 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// Attempts to convert the item type using `TryInto`, leaving the error type unchanged.
+    ///
+    /// This method transforms the current page and all future pages retrieved via the fetch function,
+    /// attempting to convert items from type `T` to `TU` using `TryInto`. The error type `E` remains unchanged.
+    /// Conversion errors from `T::Error` are converted to `E` using `Into`.
+    ///
     /// # Errors
     ///
     /// * If the `try_into` call fails
@@ -982,6 +1017,12 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         })
     }
 
+    /// Attempts to convert the item type, mapping conversion errors with a custom function.
+    ///
+    /// This method transforms the current page and all future pages retrieved via the fetch function,
+    /// attempting to convert items from type `T` to `TU` using `TryInto`. The error type `E` remains unchanged.
+    /// Conversion errors from `T::Error` are mapped to `E` using the provided `map_err` function.
+    ///
     /// # Errors
     ///
     /// * If the `try_into` call fails
