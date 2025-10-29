@@ -338,6 +338,12 @@ impl<F: HttpFetcher> Read for RemoteByteStream<F> {
     /// # Errors
     ///
     /// * [`std::io::ErrorKind::UnexpectedEof`] - If the HTTP stream ends before expected size is reached
+    ///
+    /// # Panics
+    ///
+    /// * If `read_position` or `fetcher.start` cannot be converted to `usize` (only on platforms where `u64 > usize::MAX`)
+    /// * If the internal channel receiver fails (indicating a fatal internal error)
+    /// * If the internal ready channel send fails (indicating a fatal internal error)
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Check if stream has been finished for a grace period
