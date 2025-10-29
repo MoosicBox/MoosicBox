@@ -19,13 +19,21 @@ use serde_json::Value;
 
 use crate::{API_SOURCE, YtAlbumType};
 
+/// `YouTube` Music artist entity.
+///
+/// Represents an artist from the `YouTube` Music API with cover image and popularity information.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtArtist {
+    /// `YouTube` Music artist ID
     pub id: String,
+    /// Artist profile picture URL
     pub picture: Option<String>,
+    /// Whether the artist has a cover image
     pub contains_cover: bool,
+    /// Artist popularity score
     pub popularity: u32,
+    /// Artist name
     pub name: String,
 }
 
@@ -65,12 +73,19 @@ impl From<YtArtist> for ApiArtist {
     }
 }
 
+/// Size options for `YouTube` Music artist profile images.
+///
+/// Different resolution options for retrieving artist thumbnails, ranging from 160px to 750px.
 #[derive(Clone, Copy, Debug)]
 pub enum YtArtistImageSize {
-    Max,    // 750
-    Large,  // 480
+    /// Maximum resolution (750x750 pixels)
+    Max, // 750
+    /// Large resolution (480x480 pixels)
+    Large, // 480
+    /// Medium resolution (320x320 pixels)
     Medium, // 320
-    Small,  // 160
+    /// Small resolution (160x160 pixels)
+    Small, // 160
 }
 
 impl From<YtArtistImageSize> for u16 {
@@ -121,13 +136,22 @@ impl AsModelResult<YtArtist, ParseError> for serde_json::Value {
     }
 }
 
+/// `YouTube` Music artist entity from search results.
+///
+/// Represents an artist returned from search operations, with slightly different fields
+/// than the standard `YtArtist` type.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchArtist {
+    /// `YouTube` Music artist ID
     pub id: u64,
+    /// Artist profile picture URL
     pub picture: Option<String>,
+    /// Whether the artist has a cover image
     pub contains_cover: bool,
+    /// Artist type classification
     pub r#type: String,
+    /// Artist name
     pub name: String,
 }
 
@@ -161,23 +185,42 @@ impl AsModelResult<YtSearchArtist, ParseError> for serde_json::Value {
     }
 }
 
+/// `YouTube` Music album entity.
+///
+/// Represents a complete album from the `YouTube` Music API with metadata including
+/// audio quality, duration, and track information.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAlbum {
+    /// `YouTube` Music album ID
     pub id: String,
+    /// Album artist name
     pub artist: String,
+    /// `YouTube` Music artist ID
     pub artist_id: String,
+    /// Album type classification (LP, EPs/singles, compilations)
     pub album_type: YtAlbumType,
+    /// Whether the album has cover artwork
     pub contains_cover: bool,
+    /// Audio quality level (e.g., "LOSSLESS", "HIGH")
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Album cover artwork URL
     pub cover: Option<String>,
+    /// Total album duration in seconds
     pub duration: u32,
+    /// Whether the album contains explicit content
     pub explicit: bool,
+    /// Number of tracks in the album
     pub number_of_tracks: u32,
+    /// Album popularity score
     pub popularity: u32,
+    /// Release date (ISO 8601 format)
     pub release_date: Option<String>,
+    /// Album title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -236,12 +279,20 @@ impl From<YtAlbum> for ApiGlobalSearchResult {
     }
 }
 
+/// Size options for `YouTube` Music album cover images.
+///
+/// Different resolution options for retrieving album artwork, ranging from 80px thumbnails to 1280px maximum resolution.
 #[derive(Clone, Copy, Debug)]
 pub enum YtAlbumImageSize {
-    Max,       // 1280
-    Large,     // 640
-    Medium,    // 320
-    Small,     // 160
+    /// Maximum resolution (1280x1280 pixels)
+    Max, // 1280
+    /// Large resolution (640x640 pixels)
+    Large, // 640
+    /// Medium resolution (320x320 pixels)
+    Medium, // 320
+    /// Small resolution (160x160 pixels)
+    Small, // 160
+    /// Thumbnail resolution (80x80 pixels)
     Thumbnail, // 80
 }
 
@@ -275,21 +326,37 @@ impl Display for YtAlbumImageSize {
     }
 }
 
+/// `YouTube` Music album entity from search results.
+///
+/// Represents an album returned from search operations, with multiple artist associations.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchAlbum {
+    /// `YouTube` Music album ID
     pub id: u64,
+    /// List of artists associated with this album
     pub artists: Vec<YtSearchArtist>,
+    /// Whether the album has cover artwork
     pub contains_cover: bool,
+    /// Audio quality level
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Album cover artwork URL
     pub cover: Option<String>,
+    /// Total album duration in seconds
     pub duration: u32,
+    /// Whether the album contains explicit content
     pub explicit: bool,
+    /// Number of tracks in the album
     pub number_of_tracks: u32,
+    /// Album popularity score
     pub popularity: u32,
+    /// Release date (ISO 8601 format)
     pub release_date: Option<String>,
+    /// Album title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -367,25 +434,46 @@ impl AsModelResult<YtAlbum, ParseError> for serde_json::Value {
     }
 }
 
+/// `YouTube` Music track entity.
+///
+/// Represents a music track from the `YouTube` Music API with complete metadata including
+/// album, artist, and audio quality information.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrack {
+    /// `YouTube` Music track ID
     pub id: String,
+    /// Track number within the album
     pub track_number: u32,
+    /// `YouTube` Music artist ID
     pub artist_id: String,
+    /// Artist name
     pub artist: String,
+    /// Artist profile image URL
     pub artist_cover: Option<String>,
+    /// `YouTube` Music album ID
     pub album_id: String,
+    /// Album title
     pub album: String,
+    /// Album type classification
     pub album_type: YtAlbumType,
+    /// Album cover artwork URL
     pub album_cover: Option<String>,
+    /// Audio quality level
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Track duration in seconds
     pub duration: u32,
+    /// Whether the track contains explicit content
     pub explicit: bool,
+    /// International Standard Recording Code
     pub isrc: String,
+    /// Track popularity score
     pub popularity: u32,
+    /// Track title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -473,19 +561,33 @@ impl AsModelResult<YtTrack, ParseError> for serde_json::Value {
     }
 }
 
+/// `YouTube` Music video entity.
+///
+/// Represents a music video (user-generated content) distinct from official track recordings.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtVideo {
+    /// `YouTube` video ID
     pub id: String,
+    /// `YouTube` Music artist ID
     pub artist_id: u64,
+    /// Artist name
     pub artist: String,
+    /// Artist profile image URL
     pub artist_cover: Option<String>,
+    /// `YouTube` Music album ID
     pub album_id: u64,
+    /// Album title
     pub album: String,
+    /// Album cover artwork URL
     pub album_cover: Option<String>,
+    /// Audio quality level
     pub audio_quality: String,
+    /// Video duration in seconds
     pub duration: u32,
+    /// Whether the video contains explicit content
     pub explicit: bool,
+    /// Video title
     pub title: String,
 }
 
@@ -513,23 +615,41 @@ impl AsModelResult<YtVideo, ParseError> for serde_json::Value {
     }
 }
 
+/// `YouTube` Music track entity from search results.
+///
+/// Represents a track returned from search operations, with multiple artist associations.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchTrack {
+    /// `YouTube` Music track ID
     pub id: u64,
+    /// Track number within the album
     pub track_number: u32,
+    /// List of artists associated with this track
     pub artists: Vec<YtSearchArtist>,
+    /// Artist profile image URL
     pub artist_cover: Option<String>,
+    /// `YouTube` Music album ID
     pub album_id: u64,
+    /// Album title
     pub album: String,
+    /// Album cover artwork URL
     pub album_cover: Option<String>,
+    /// Audio quality level
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Track duration in seconds
     pub duration: u32,
+    /// Whether the track contains explicit content
     pub explicit: bool,
+    /// International Standard Recording Code
     pub isrc: String,
+    /// Track popularity score
     pub popularity: u32,
+    /// Track title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -561,11 +681,18 @@ impl AsModelResult<YtSearchTrack, ParseError> for serde_json::Value {
     }
 }
 
+/// Generic paginated search result list from `YouTube` Music API.
+///
+/// Container for any type of search results with pagination information.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct YtSearchResultList<T> {
+    /// List of result items
     pub items: Vec<T>,
+    /// Pagination offset
     pub offset: usize,
+    /// Maximum number of results per page
     pub limit: usize,
+    /// Total number of available results
     pub total: usize,
 }
 
@@ -593,6 +720,9 @@ where
     }
 }
 
+/// `YouTube` Music search result item renderer (internal API structure).
+///
+/// Represents a single item in the search results list from the `YouTube` Music API response.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRenderer {
@@ -623,6 +753,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRenderer, ParseError> for Valu
     }
 }
 
+/// Flex columns container for search result item renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererFlexColumns {
@@ -647,6 +778,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererFlexColumns, ParseErro
     }
 }
 
+/// Flex column renderer for search result items (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererFlexColumnsRenderer {
@@ -675,6 +807,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererFlexColumnsRenderer, P
     }
 }
 
+/// Menu container for search result item (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenu {
@@ -695,6 +828,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenu, ParseError> for 
     }
 }
 
+/// Menu renderer for search result items (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRenderer {
@@ -717,6 +851,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenuRenderer, ParseErr
     }
 }
 
+/// Menu item in search result renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItem {
@@ -747,6 +882,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererMenuRendererItem, Pars
     }
 }
 
+/// Navigation menu item renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItemNavigationItemRenderer {
@@ -792,6 +928,7 @@ impl
     }
 }
 
+/// Service menu item renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererMenuRendererItemServiceItemRenderer {
@@ -837,6 +974,7 @@ impl
     }
 }
 
+/// Thumbnail container for search result items (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnail {
@@ -857,6 +995,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnail, ParseError>
     }
 }
 
+/// Thumbnail renderer for search result items (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRenderer {
@@ -887,6 +1026,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnailRenderer, Par
     }
 }
 
+/// Thumbnail data container (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRendererThumbnail {
@@ -916,6 +1056,7 @@ impl AsModelResult<YtSearchResultsContentsListItemRendererThumbnailRendererThumb
     }
 }
 
+/// Individual thumbnail image data with dimensions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsListItemRendererThumbnailRendererThumbnailData {
@@ -951,6 +1092,7 @@ impl
     }
 }
 
+/// Search suggestion renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchSuggestionRenderer {
@@ -971,6 +1113,7 @@ impl AsModelResult<YtSearchResultsContentsSearchSuggestionRenderer, ParseError> 
     }
 }
 
+/// Text runs container for search results (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRuns {
@@ -992,6 +1135,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRuns, ParseError> for Va
     }
 }
 
+/// Individual text run with optional formatting and navigation (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRun {
@@ -1018,6 +1162,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRun, ParseError> for Val
     }
 }
 
+/// Icon data for search renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererIcon {
@@ -1038,6 +1183,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererIcon, ParseError> for Va
     }
 }
 
+/// Navigation endpoint for search results (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpoint {
@@ -1075,6 +1221,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunNavigationEndpoint, P
     }
 }
 
+/// Service endpoint for search renderer actions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpoint {
@@ -1101,6 +1248,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpoint, Pars
     }
 }
 
+/// Queue add endpoint for service actions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddEndpoint {
@@ -1140,6 +1288,7 @@ impl
     }
 }
 
+/// Queue target configuration (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueTarget {
@@ -1173,6 +1322,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpointQueueT
     }
 }
 
+/// Queue command for service endpoint (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueCommand {
@@ -1206,6 +1356,7 @@ impl AsModelResult<YtSearchResultsContentsSearchRendererRunServiceEndpointQueueC
     }
 }
 
+/// Toast action for queue additions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddToToastAction {
@@ -1245,6 +1396,7 @@ impl
     }
 }
 
+/// Toast action item with notification renderer (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunServiceEndpointQueueAddToToastActionItem {
@@ -1284,6 +1436,7 @@ impl
     }
 }
 
+/// Notification text renderer for search actions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchNotificationTextRenderer {
@@ -1310,6 +1463,7 @@ impl AsModelResult<YtSearchResultsContentsSearchNotificationTextRenderer, ParseE
     }
 }
 
+/// Browse endpoint for navigating to artists/albums (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpoint {
@@ -1349,6 +1503,7 @@ impl
     }
 }
 
+/// Watch endpoint for playing videos/tracks (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpoint {
@@ -1396,6 +1551,7 @@ impl
     }
 }
 
+/// Watch playlist endpoint (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchPlaylistEndpoint {
@@ -1438,6 +1594,7 @@ impl
     }
 }
 
+/// Watch endpoint configuration (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpointConfigs {
@@ -1478,6 +1635,7 @@ impl
     }
 }
 
+/// Watch endpoint music configuration with video type (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointWatchEndpointConfig {
@@ -1517,6 +1675,7 @@ impl
     }
 }
 
+/// Browse endpoint configuration (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpointConfigs {
@@ -1558,6 +1717,7 @@ impl
     }
 }
 
+/// Browse endpoint page type configuration (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSearchRendererRunNavigationEndpointBrowseEndpointConfig {
@@ -1597,6 +1757,7 @@ impl
     }
 }
 
+/// Section renderer containing search results or suggestions (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSectionRenderer {
@@ -1622,6 +1783,7 @@ impl AsModelResult<YtSearchResultsContentsSectionRenderer, ParseError> for Value
     }
 }
 
+/// Section containing multiple search result renderers (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContentsSection {
@@ -1642,6 +1804,7 @@ impl AsModelResult<YtSearchResultsContentsSection, ParseError> for Value {
     }
 }
 
+/// Search results contents container (internal API structure).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsContents {
@@ -1663,6 +1826,9 @@ impl AsModelResult<YtSearchResultsContents, ParseError> for Value {
     }
 }
 
+/// Raw search results from the `YouTube` Music API.
+///
+/// Contains the unparsed search response structure with pagination information.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResults {
@@ -2092,15 +2258,25 @@ impl From<&YtSearchResults> for Vec<YtTrack> {
     }
 }
 
+/// Formatted search results organized by content type.
+///
+/// Parses raw `YouTube` Music API search results into separate lists for albums, artists, videos, and tracks.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResultsFormatted {
+    /// Albums matching the search query
     pub albums: Vec<YtAlbum>,
+    /// Artists matching the search query
     pub artists: Vec<YtArtist>,
+    /// Music videos matching the search query
     pub videos: Vec<YtVideo>,
+    /// Tracks matching the search query
     pub tracks: Vec<YtTrack>,
+    /// Pagination offset
     pub offset: usize,
+    /// Maximum results per page
     pub limit: usize,
+    /// Total number of results
     pub total: usize,
 }
 
