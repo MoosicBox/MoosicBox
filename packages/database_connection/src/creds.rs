@@ -30,10 +30,13 @@ use crate::{Credentials, CredentialsParseError};
 /// Errors that can occur when retrieving database credentials
 #[derive(Debug, Error)]
 pub enum GetDbCredsError {
+    /// Required connection options (host, name, or user) are missing or invalid
     #[error("Invalid Connection Options")]
     InvalidConnectionOptions,
+    /// Error parsing credentials from `DATABASE_URL` environment variable
     #[error(transparent)]
     CredentialsParseError(#[from] CredentialsParseError),
+    /// Failed to retrieve parameters from AWS SSM
     #[error("Failed to fetch SSM Parameters: {0:?}")]
     FailedSsmParameters(
         #[from]
@@ -43,10 +46,13 @@ pub enum GetDbCredsError {
             >,
         >,
     ),
+    /// SSM parameters exist but contain invalid data
     #[error("Invalid SSM Parameters")]
     InvalidSsmParameters,
+    /// Required SSM parameters are not available
     #[error("Missing SSM Parameters")]
     MissingSsmParameters,
+    /// A specific SSM parameter is missing
     #[error("Missing SSM Parameter: {0}")]
     MissingSsmParameter(&'static str),
 }

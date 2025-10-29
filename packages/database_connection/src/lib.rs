@@ -70,14 +70,19 @@ pub struct Credentials {
 /// Errors that can occur when parsing database credentials from a URL
 #[derive(Debug, Error)]
 pub enum CredentialsParseError {
+    /// URL does not contain `://` separator
     #[error("Invalid URL format")]
     InvalidUrl,
+    /// Host component is missing or empty in the URL
     #[error("Missing host")]
     MissingHost,
+    /// Database name component is missing or empty in the URL
     #[error("Missing database name")]
     MissingDatabase,
+    /// Username component is missing or empty in the URL
     #[error("Missing username")]
     MissingUsername,
+    /// URL scheme is not supported (must be postgres, postgresql, or mysql)
     #[error("Unsupported scheme: {0}")]
     UnsupportedScheme(String),
 }
@@ -181,15 +186,19 @@ impl Credentials {
 /// Errors that can occur when initializing a database connection
 #[derive(Debug, Error)]
 pub enum InitDbError {
+    /// Error initializing `SQLite` via rusqlite
     #[cfg(feature = "sqlite-rusqlite")]
     #[error(transparent)]
     InitSqlite(#[from] InitSqliteRusqliteError),
+    /// Error initializing `PostgreSQL` connection
     #[cfg(feature = "postgres")]
     #[error(transparent)]
     InitPostgres(#[from] InitPostgresError),
+    /// Error initializing generic database connection
     #[cfg(feature = "postgres")]
     #[error(transparent)]
     InitDatabase(#[from] InitDatabaseError),
+    /// Error initializing `SQLite` via sqlx
     #[cfg(any(
         feature = "sqlite-sqlx",
         all(
@@ -201,11 +210,14 @@ pub enum InitDbError {
     ))]
     #[error(transparent)]
     InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
+    /// Error initializing Turso database
     #[cfg(feature = "turso")]
     #[error(transparent)]
     InitTurso(#[from] InitTursoError),
+    /// Credentials were required but not provided
     #[error("Credentials are required")]
     CredentialsRequired,
+    /// Generic database error
     #[error(transparent)]
     Database(#[from] switchy_database::DatabaseError),
 }
@@ -356,10 +368,16 @@ pub async fn init_default_non_sqlite(
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
 pub enum InitSqliteRusqliteError {
+    /// Rusqlite database error
     #[error(transparent)]
     Sqlite(#[from] ::rusqlite::Error),
 }
 
+/// Initializes a `SQLite` database connection using rusqlite.
+///
+/// Creates a connection pool with 5 connections. If no path is provided,
+/// creates an in-memory database with a unique identifier.
+///
 /// # Errors
 ///
 /// * If fails to initialize the Sqlite connection via rusqlite
@@ -418,9 +436,11 @@ pub fn init_sqlite_rusqlite(
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitPostgresError {
+    /// Tokio-postgres connection error
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
+    /// Sqlx `PostgreSQL` error
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(#[from] sqlx::Error),
@@ -438,10 +458,16 @@ pub enum InitPostgresError {
 ))]
 #[derive(Debug, Error)]
 pub enum InitSqliteSqlxDatabaseError {
+    /// Sqlx `SQLite` error
     #[error(transparent)]
     SqliteSqlx(#[from] sqlx::Error),
 }
 
+/// Initializes a `SQLite` database connection using sqlx.
+///
+/// Creates a connection pool with 5 connections. If no path is provided,
+/// creates an in-memory database with a unique identifier.
+///
 /// # Errors
 ///
 /// * If fails to initialize the Sqlite connection via Sqlx
@@ -507,10 +533,15 @@ pub async fn init_sqlite_sqlx(
 #[cfg(feature = "turso")]
 #[derive(Debug, Error)]
 pub enum InitTursoError {
+    /// Turso database error
     #[error(transparent)]
     Turso(#[from] switchy_database::turso::TursoDatabaseError),
 }
 
+/// Initializes a local Turso database connection.
+///
+/// If no path is provided, creates an in-memory database using `:memory:`.
+///
 /// # Errors
 ///
 /// * If fails to initialize the Turso database connection
@@ -532,25 +563,35 @@ pub async fn init_turso_local(
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]
 pub enum InitDatabaseError {
+    /// `OpenSSL` error during TLS setup
     #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
     #[error(transparent)]
     OpenSsl(#[from] openssl::error::ErrorStack),
+    /// Native-tls error during TLS setup
     #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
     #[error(transparent)]
     NativeTls(#[from] native_tls::Error),
+    /// Tokio-postgres connection error
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
+    /// Sqlx `PostgreSQL` error
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(#[from] sqlx::Error),
+    /// Deadpool connection pool build error
     #[cfg(feature = "postgres-raw")]
     #[error(transparent)]
     DeadpoolBuildError(#[from] deadpool_postgres::BuildError),
+    /// Invalid connection options provided
     #[error("Invalid Connection Options")]
     InvalidConnectionOptions,
 }
 
+/// Initializes a `PostgreSQL` database connection using sqlx.
+///
+/// Creates a connection pool with 5 connections using the provided credentials.
+///
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection via Sqlx
@@ -584,6 +625,11 @@ pub async fn init_postgres_sqlx(
     ))))
 }
 
+/// Initializes a `PostgreSQL` database connection using tokio-postgres with native-tls.
+///
+/// Creates a connection pool with 5 connections. For localhost connections,
+/// accepts invalid hostnames to support self-signed certificates.
+///
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection over native TLS
@@ -628,6 +674,11 @@ pub async fn init_postgres_raw_native_tls(
     Ok(Box::new(PostgresDatabase::new(pool)))
 }
 
+/// Initializes a `PostgreSQL` database connection using tokio-postgres with `OpenSSL`.
+///
+/// Creates a connection pool with 5 connections. For localhost connections,
+/// disables certificate verification to support self-signed certificates.
+///
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection over OpenSSL
@@ -673,6 +724,10 @@ pub async fn init_postgres_raw_openssl(
     Ok(Box::new(PostgresDatabase::new(pool)))
 }
 
+/// Initializes a `PostgreSQL` database connection using tokio-postgres without TLS.
+///
+/// Creates a connection pool with 5 connections using the provided credentials.
+///
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection
