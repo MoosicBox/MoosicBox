@@ -1066,7 +1066,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(feature = "egui")]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_egui()
@@ -1076,7 +1076,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(feature = "fltk", not(feature = "egui")))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_fltk()
@@ -1086,7 +1086,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "actix",
         feature = "vanilla-js",
@@ -1100,7 +1100,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "lambda",
         feature = "vanilla-js",
@@ -1114,7 +1114,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "actix",
         feature = "html",
@@ -1133,7 +1133,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "lambda",
         feature = "html",
@@ -1152,7 +1152,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "html",
         feature = "vanilla-js",
@@ -1171,7 +1171,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(all(
         feature = "html",
         not(any(
@@ -1190,7 +1190,7 @@ impl AppBuilder {
     ///
     /// # Errors
     ///
-    /// * [`BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
+    /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(not(any(
         feature = "html",
         feature = "egui",

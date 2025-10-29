@@ -37,8 +37,10 @@ fn get_album_cover_path(
     path.join(filename)
 }
 
+/// Errors that can occur when retrieving album cover artwork.
 #[derive(Debug, Error)]
 pub enum AlbumCoverError {
+    /// Album cover not found for the specified album ID
     #[error("Album cover not found for album: {0}")]
     NotFound(Id),
     #[error(transparent)]
@@ -121,8 +123,10 @@ pub async fn get_local_album_cover_bytes(
     Err(AlbumCoverError::NotFound(album.id.clone()))
 }
 
+/// Errors that can occur when fetching local album cover files.
 #[derive(Debug, Error)]
 pub enum FetchLocalAlbumCoverError {
+    /// IO error reading cover file
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]

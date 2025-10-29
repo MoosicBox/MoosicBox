@@ -1,3 +1,10 @@
+//! Expression AST types for workflow conditions and expressions.
+//!
+//! This module provides the abstract syntax tree for GitHub Actions compatible expressions,
+//! including literals, variables, operators, function calls, and indexing. These expressions
+//! are used in workflow conditions (`if` statements) and can evaluate variables and perform
+//! operations at runtime.
+
 use serde::{Deserialize, Serialize};
 
 /// Expression AST for GitHub Actions compatible expressions.

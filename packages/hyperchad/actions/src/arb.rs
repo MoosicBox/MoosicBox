@@ -1,3 +1,32 @@
+//! Arbitrary value generation for property-based testing
+//!
+//! This module provides [`quickcheck::Arbitrary`] implementations for action types,
+//! enabling property-based testing of action serialization, deserialization, and processing.
+//!
+//! # Usage
+//!
+//! Enable the `arb` feature to use this module:
+//!
+//! ```toml
+//! [dependencies]
+//! hyperchad_actions = { version = "...", features = ["arb"] }
+//! ```
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use quickcheck::{quickcheck, TestResult};
+//! use hyperchad_actions::Action;
+//!
+//! fn prop_action_roundtrip(action: Action) -> TestResult {
+//!     let json = serde_json::to_string(&action).unwrap();
+//!     let deserialized: Action = serde_json::from_str(&json).unwrap();
+//!     TestResult::from_bool(action == deserialized)
+//! }
+//!
+//! quickcheck(prop_action_roundtrip as fn(Action) -> TestResult);
+//! ```
+
 use hyperchad_transformer_models::Visibility;
 use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};

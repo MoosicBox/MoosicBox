@@ -111,6 +111,11 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for &switchy_database::Row {
     }
 }
 
+/// Retrieves all available album version qualities for the given album IDs.
+///
+/// Queries the database for distinct quality combinations (format, bit depth, sample rate,
+/// channels) available for each album, sorted by quality (higher sample rate and bit depth first).
+///
 /// # Errors
 ///
 /// * If fails to get the data from the database

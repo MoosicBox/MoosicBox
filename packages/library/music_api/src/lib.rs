@@ -99,6 +99,8 @@ impl LibraryMusicApi {
         Self { db }
     }
 
+    /// Retrieves a library artist by ID.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library artist
@@ -111,6 +113,8 @@ impl LibraryMusicApi {
         })?))
     }
 
+    /// Retrieves the artist associated with a library album.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library album artist
@@ -128,6 +132,8 @@ impl LibraryMusicApi {
         .map_err(|e| moosicbox_music_api::Error::Other(e.into()))
     }
 
+    /// Retrieves a library album by ID and API source.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library album from source
@@ -141,6 +147,8 @@ impl LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Retrieves a library album by ID.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library album
@@ -153,6 +161,8 @@ impl LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Retrieves all versions of a library album.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library album versions
@@ -163,6 +173,8 @@ impl LibraryMusicApi {
         album_versions(&self.db, album_id).await
     }
 
+    /// Retrieves library albums based on the provided request parameters.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library albums
@@ -173,6 +185,8 @@ impl LibraryMusicApi {
         favorite_albums(&self.db, request).await
     }
 
+    /// Retrieves a library track by ID.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library track
@@ -185,6 +199,8 @@ impl LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(e.into()))
     }
 
+    /// Retrieves tracks from a library album with pagination support.
+    ///
     /// # Errors
     ///
     /// * If failed to get the library album tracks

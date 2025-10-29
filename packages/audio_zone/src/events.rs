@@ -36,6 +36,11 @@ pub async fn on_audio_zones_updated_event<
         .push(Box::new(move || Box::pin(listener())));
 }
 
+/// Triggers all registered audio zone update event listeners.
+///
+/// This function invokes all callbacks registered via [`on_audio_zones_updated_event`]
+/// when audio zones are created, updated, or deleted.
+///
 /// # Errors
 ///
 /// * If any of the event handlers fail with an error
@@ -44,6 +49,11 @@ pub async fn trigger_audio_zones_updated_event()
     send_audio_zones_updated_event().await
 }
 
+/// Sends audio zone update notifications to all registered listeners.
+///
+/// This is the internal implementation that iterates through all registered event listeners
+/// and invokes them. Use [`trigger_audio_zones_updated_event`] as the public entry point.
+///
 /// # Errors
 ///
 /// * If any of the event handlers fail with an error

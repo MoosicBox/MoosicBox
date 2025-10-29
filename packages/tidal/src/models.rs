@@ -27,10 +27,15 @@ use crate::{API_SOURCE, TidalAlbumType};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtist {
+    /// Tidal artist ID.
     pub id: u64,
+    /// Artist picture hash (convert with hyphens replaced by slashes for URL construction).
     pub picture: Option<String>,
+    /// Whether the artist has cover artwork available.
     pub contains_cover: bool,
+    /// Artist popularity score.
     pub popularity: u32,
+    /// Artist name.
     pub name: String,
 }
 
@@ -159,10 +164,15 @@ impl AsModelResult<TidalArtist, ParseError> for serde_json::Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchArtist {
+    /// Tidal artist ID.
     pub id: u64,
+    /// Artist picture hash (convert with hyphens replaced by slashes for URL construction).
     pub picture: Option<String>,
+    /// Whether the artist has cover artwork available.
     pub contains_cover: bool,
+    /// Artist type identifier.
     pub r#type: String,
+    /// Artist name.
     pub name: String,
 }
 
@@ -212,20 +222,35 @@ impl AsModelResult<TidalSearchArtist, ParseError> for serde_json::Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
+    /// Tidal album ID.
     pub id: u64,
+    /// Album artist name.
     pub artist: String,
+    /// Tidal artist ID.
     pub artist_id: u64,
+    /// Album type (LP, EPs/Singles, Compilations).
     pub album_type: TidalAlbumType,
+    /// Whether the album has cover artwork available.
     pub contains_cover: bool,
+    /// Audio quality level for this album.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Album cover hash (convert with hyphens replaced by slashes for URL construction).
     pub cover: Option<String>,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album contains explicit content.
     pub explicit: bool,
+    /// Total number of tracks on the album.
     pub number_of_tracks: u32,
+    /// Album popularity score.
     pub popularity: u32,
+    /// Release date in ISO 8601 format.
     pub release_date: Option<String>,
+    /// Album title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -349,18 +374,31 @@ impl Display for TidalAlbumImageSize {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchAlbum {
+    /// Tidal album ID.
     pub id: u64,
+    /// Artists associated with this album.
     pub artists: Vec<TidalSearchArtist>,
+    /// Whether the album has cover artwork available.
     pub contains_cover: bool,
+    /// Audio quality level for this album.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Album cover hash (convert with hyphens replaced by slashes for URL construction).
     pub cover: Option<String>,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album contains explicit content.
     pub explicit: bool,
+    /// Total number of tracks on the album.
     pub number_of_tracks: u32,
+    /// Album popularity score.
     pub popularity: u32,
+    /// Release date in ISO 8601 format.
     pub release_date: Option<String>,
+    /// Album title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -460,22 +498,39 @@ impl AsModelResult<TidalAlbum, ParseError> for serde_json::Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrack {
+    /// Tidal track ID.
     pub id: u64,
+    /// Track number on the album.
     pub track_number: u32,
+    /// Tidal artist ID.
     pub artist_id: u64,
+    /// Artist name.
     pub artist: String,
+    /// Artist cover hash (convert with hyphens replaced by slashes for URL construction).
     pub artist_cover: Option<String>,
+    /// Tidal album ID.
     pub album_id: u64,
+    /// Album type (LP, EPs/Singles, Compilations).
     pub album_type: TidalAlbumType,
+    /// Album title.
     pub album: String,
+    /// Album cover hash (convert with hyphens replaced by slashes for URL construction).
     pub album_cover: Option<String>,
+    /// Audio quality level for this track.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Track duration in seconds.
     pub duration: u32,
+    /// Whether the track contains explicit content.
     pub explicit: bool,
+    /// International Standard Recording Code.
     pub isrc: String,
+    /// Track popularity score.
     pub popularity: u32,
+    /// Track title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -545,20 +600,35 @@ impl AsModelResult<TidalTrack, ParseError> for serde_json::Value {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchTrack {
+    /// Tidal track ID.
     pub id: u64,
+    /// Track number on the album.
     pub track_number: u32,
+    /// Artists associated with this track.
     pub artists: Vec<TidalSearchArtist>,
+    /// Artist cover hash (convert with hyphens replaced by slashes for URL construction).
     pub artist_cover: Option<String>,
+    /// Tidal album ID.
     pub album_id: u64,
+    /// Album title.
     pub album: String,
+    /// Album cover hash (convert with hyphens replaced by slashes for URL construction).
     pub album_cover: Option<String>,
+    /// Audio quality level for this track.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Track duration in seconds.
     pub duration: u32,
+    /// Whether the track contains explicit content.
     pub explicit: bool,
+    /// International Standard Recording Code.
     pub isrc: String,
+    /// Track popularity score.
     pub popularity: u32,
+    /// Track title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
 }
 
@@ -617,9 +687,13 @@ impl AsModelResult<TidalSearchTrack, ParseError> for serde_json::Value {
 /// Paginated list of search results from Tidal.
 #[derive(Serialize, Deserialize)]
 pub struct TidalSearchResultList<T> {
+    /// List of result items.
     pub items: Vec<T>,
+    /// Offset of this page in the total result set.
     pub offset: usize,
+    /// Maximum number of items per page.
     pub limit: usize,
+    /// Total number of items available.
     pub total: usize,
 }
 
@@ -650,10 +724,15 @@ where
 /// Search results containing albums, artists, and tracks from Tidal.
 #[derive(Serialize, Deserialize)]
 pub struct TidalSearchResults {
+    /// Paginated list of album results.
     pub albums: TidalSearchResultList<TidalSearchAlbum>,
+    /// Paginated list of artist results.
     pub artists: TidalSearchResultList<TidalArtist>,
+    /// Paginated list of track results.
     pub tracks: TidalSearchResultList<TidalSearchTrack>,
+    /// Offset of this page in the total result set.
     pub offset: usize,
+    /// Maximum number of items per page.
     pub limit: usize,
 }
 

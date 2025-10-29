@@ -30,12 +30,23 @@ static SESSION_UPNP_PLAYERS: LazyLock<
     >,
 > = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
 
+/// Errors that can occur during `UPnP` player initialization.
 #[derive(Debug, Error)]
 pub enum InitError {
+    /// `UPnP` device discovery error.
     #[error(transparent)]
     UpnpDeviceScanner(#[from] UpnpDeviceScannerError),
 }
 
+/// Initializes UPnP/DLNA players by scanning the network for compatible devices.
+///
+/// This function discovers `UPnP` media renderers on the local network and registers a player
+/// for each device. Players are stored in the [`UPNP_PLAYERS`] static collection and are
+/// available for playback control.
+///
+/// # Errors
+///
+/// * [`InitError::UpnpDeviceScanner`] - If `UPnP` device discovery fails
 pub async fn init(
     handle: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<

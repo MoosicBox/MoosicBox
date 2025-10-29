@@ -1,67 +1,117 @@
+//! Conditional logic and dynamic value evaluation for actions
+//!
+//! This module provides types and functions for creating conditional actions that respond to
+//! runtime state, such as element visibility, display properties, mouse position, and more.
+//!
+//! # Core Types
+//!
+//! * [`crate::logic::Value`] - Dynamic values that can be calculated at runtime
+//! * [`crate::logic::CalcValue`] - Computed values from element state (visibility, dimensions, position, etc.)
+//! * [`crate::logic::Condition`] - Conditional expressions for if-then-else logic
+//! * [`crate::logic::If`] - Conditional action execution based on conditions
+//! * [`crate::logic::Arithmetic`] - Mathematical operations on dynamic values
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_actions::logic::{get_visibility_str_id, visible, If};
+//! use hyperchad_actions::ActionType;
+//!
+//! // Create a conditional action that shows an element if another is visible
+//! let condition = get_visibility_str_id("other-element").eq(visible());
+//! let if_action = condition.then(ActionType::show_str_id("my-element"));
+//! ```
+
 use hyperchad_transformer_models::{LayoutDirection, Visibility};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{Action, ActionEffect, ActionType, ElementTarget, Key, Target};
 
+/// Computed value from element or event state
+///
+/// Represents a value that is calculated at runtime based on element properties,
+/// mouse position, or event data. These values are used in conditional logic and
+/// parameterized actions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CalcValue {
+    /// Get visibility state of an element
     Visibility { target: ElementTarget },
+    /// Get display state of an element
     Display { target: ElementTarget },
+    /// Get string ID of an element
     Id { target: ElementTarget },
+    /// Get data attribute value from an element
     DataAttrValue { attr: String, target: ElementTarget },
+    /// Get current event value (e.g., input field value)
     EventValue,
+    /// Get width in pixels of an element
     WidthPx { target: ElementTarget },
+    /// Get height in pixels of an element
     HeightPx { target: ElementTarget },
+    /// Get X position of an element
     PositionX { target: ElementTarget },
+    /// Get Y position of an element
     PositionY { target: ElementTarget },
+    /// Get mouse X coordinate (optionally relative to element)
     MouseX { target: Option<ElementTarget> },
+    /// Get mouse Y coordinate (optionally relative to element)
     MouseY { target: Option<ElementTarget> },
+    /// Get keyboard key value
     Key { key: Key },
 }
 
 impl CalcValue {
+    /// Creates an equality condition comparing this value to another
     #[must_use]
     pub fn eq(self, other: impl Into<Value>) -> Condition {
         Condition::Eq(self.into(), other.into())
     }
 
+    /// Adds another value to this value
     #[must_use]
     pub fn plus(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Plus(self.into(), other.into())
     }
 
+    /// Subtracts another value from this value
     #[must_use]
     pub fn minus(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Minus(self.into(), other.into())
     }
 
+    /// Multiplies this value by another value
     #[must_use]
     pub fn multiply(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Multiply(self.into(), other.into())
     }
 
+    /// Divides this value by another value
     #[must_use]
     pub fn divide(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Divide(self.into(), other.into())
     }
 
+    /// Returns the minimum of this value and another
     #[must_use]
     pub fn min(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Min(self.into(), other.into())
     }
 
+    /// Returns the maximum of this value and another
     #[must_use]
     pub fn max(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Max(self.into(), other.into())
     }
 
+    /// Clamps this value between min and max bounds
     #[must_use]
     pub fn clamp(self, min: impl Into<Value>, max: impl Into<Value>) -> Arithmetic {
         Arithmetic::Min(max.into(), Arithmetic::Max(self.into(), min.into()).into())
     }
 
+    /// Creates a parameterized action that passes this value to the action
     #[must_use]
     pub fn then_pass_to(self, other: impl Into<ActionType>) -> ActionType {
         ActionType::Parameterized {
@@ -71,17 +121,29 @@ impl CalcValue {
     }
 }
 
+/// Dynamic value type that can be calculated or provided at runtime
+///
+/// Values can be computed from element state, arithmetic operations, or literal values.
+/// They are evaluated during action execution to enable conditional and data-driven behaviors.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Value {
     // IF YOU ADD A NEW VALUE TYPE, ADD IT TO THE DESERIALIZE IMPL BELOW
+    /// Computed value from element or event state
     Calc(CalcValue),
+    /// Arithmetic operation result
     Arithmetic(Box<Arithmetic>),
+    /// Numeric value
     Real(f32),
+    /// Visibility state value
     Visibility(Visibility),
+    /// Display state value
     Display(bool),
+    /// Layout direction value
     LayoutDirection(LayoutDirection),
+    /// String value
     String(String),
+    /// Keyboard key value
     Key(Key),
 }
 
@@ -147,11 +209,13 @@ impl<'de> Deserialize<'de> for Value {
 }
 
 impl Value {
+    /// Creates an equality condition comparing this value to another
     #[must_use]
     pub fn eq(self, other: impl Into<Self>) -> Condition {
         Condition::Eq(self, other.into())
     }
 
+    /// Converts this value to a string slice if possible
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn as_str(&self) -> Option<&str> {
@@ -167,6 +231,7 @@ impl Value {
         }
     }
 
+    /// Converts this value to an `f32` if possible, optionally evaluating calculated values
     #[must_use]
     pub fn as_f32(&self, calc_func: Option<&impl Fn(&CalcValue) -> Option<Self>>) -> Option<f32> {
         match self {
@@ -215,14 +280,20 @@ impl From<LayoutDirection> for Value {
     }
 }
 
+/// Conditional expression for if-then-else logic
+///
+/// Conditions are evaluated to determine which branch of actions to execute.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Condition {
+    /// Boolean literal condition
     Bool(bool),
+    /// Equality comparison between two values
     Eq(Value, Value),
 }
 
 impl Condition {
+    /// Creates an if-then action with this condition
     #[must_use]
     pub fn then(self, action: impl Into<ActionEffect>) -> If {
         If {
@@ -232,6 +303,7 @@ impl Condition {
         }
     }
 
+    /// Creates an if-else action with this condition
     #[must_use]
     pub fn or_else(self, action: impl Into<ActionEffect>) -> If {
         If {
@@ -242,13 +314,18 @@ impl Condition {
     }
 }
 
+/// Conditional expression for value selection
+///
+/// Similar to [`Condition`] but used for selecting between values rather than actions.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ConditionExpression {
+    /// Equality comparison between two values
     Eq(Value, Value),
 }
 
 impl ConditionExpression {
+    /// Sets the value to use when the condition is true
     #[must_use]
     pub fn then<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
         IfExpression {
@@ -258,6 +335,7 @@ impl ConditionExpression {
         }
     }
 
+    /// Sets the value to use when the condition is false
     #[must_use]
     pub fn or_else<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
         IfExpression {
@@ -268,21 +346,29 @@ impl ConditionExpression {
     }
 }
 
+/// Conditional value expression (if-then-else for values)
+///
+/// Selects a value based on a condition, similar to a ternary operator.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct IfExpression<T, C> {
+    /// The condition to evaluate
     pub condition: C,
+    /// Value to use when condition is true
     pub value: Option<T>,
+    /// Value to use when condition is false
     pub default: Option<T>,
 }
 
 impl<T, C> IfExpression<T, C> {
+    /// Sets the value to use when the condition is true
     #[must_use]
     pub fn then(mut self, value: impl Into<T>) -> Self {
         self.value.replace(value.into());
         self
     }
 
+    /// Sets the value to use when the condition is false
     #[must_use]
     pub fn or_else(mut self, value: impl Into<T>) -> Self {
         self.default.replace(value.into());
@@ -308,26 +394,44 @@ impl<'a, T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> TryFrom<&'a
     }
 }
 
+/// Action with a dynamic parameter value
+///
+/// Associates an action with a dynamically computed value that is passed to the action
+/// during execution.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ParameterizedAction {
+    /// The action to execute
     action: Action,
+    /// The dynamic value parameter
     value: Value,
 }
 
+/// Arithmetic operation on dynamic values
+///
+/// Supports basic mathematical operations and aggregations on values that can be
+/// computed at runtime.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Arithmetic {
+    /// Addition of two values
     Plus(Value, Value),
+    /// Subtraction of two values
     Minus(Value, Value),
+    /// Multiplication of two values
     Multiply(Value, Value),
+    /// Division of two values
     Divide(Value, Value),
+    /// Minimum of two values
     Min(Value, Value),
+    /// Maximum of two values
     Max(Value, Value),
+    /// Grouped arithmetic expression
     Grouping(Box<Self>),
 }
 
 impl Arithmetic {
+    /// Evaluates this arithmetic expression to an `f32` value
     #[must_use]
     pub fn as_f32(&self, calc_func: Option<&impl Fn(&CalcValue) -> Option<Value>>) -> Option<f32> {
         match self {
@@ -353,11 +457,13 @@ impl Arithmetic {
         }
     }
 
+    /// Creates an equality condition comparing this arithmetic result to another value
     #[must_use]
     pub fn eq(self, other: impl Into<Value>) -> Condition {
         Condition::Eq(self.into(), other.into())
     }
 
+    /// Creates a parameterized action that passes this arithmetic result to the action
     #[must_use]
     pub fn then_pass_to(self, other: impl Into<ActionType>) -> ActionType {
         ActionType::Parameterized {
@@ -366,41 +472,49 @@ impl Arithmetic {
         }
     }
 
+    /// Adds another value to this arithmetic expression
     #[must_use]
     pub fn plus(self, other: impl Into<Value>) -> Self {
         Self::Plus(self.into(), other.into())
     }
 
+    /// Subtracts another value from this arithmetic expression
     #[must_use]
     pub fn minus(self, other: impl Into<Value>) -> Self {
         Self::Minus(self.into(), other.into())
     }
 
+    /// Multiplies this arithmetic expression by another value
     #[must_use]
     pub fn multiply(self, other: impl Into<Value>) -> Self {
         Self::Multiply(self.into(), other.into())
     }
 
+    /// Divides this arithmetic expression by another value
     #[must_use]
     pub fn divide(self, other: impl Into<Value>) -> Self {
         Self::Divide(self.into(), other.into())
     }
 
+    /// Returns the minimum of this arithmetic expression and another value
     #[must_use]
     pub fn min(self, other: impl Into<Value>) -> Self {
         Self::Min(self.into(), other.into())
     }
 
+    /// Returns the maximum of this arithmetic expression and another value
     #[must_use]
     pub fn max(self, other: impl Into<Value>) -> Self {
         Self::Max(self.into(), other.into())
     }
 
+    /// Groups an arithmetic expression for explicit precedence
     #[must_use]
     pub fn group(value: impl Into<Self>) -> Self {
         Self::Grouping(Box::new(value.into()))
     }
 
+    /// Clamps this arithmetic expression between min and max bounds
     #[must_use]
     pub fn clamp(self, min: impl Into<Value>, max: impl Into<Value>) -> Self {
         Self::Min(max.into(), Self::Max(self.into(), min.into()).into())
@@ -413,21 +527,29 @@ impl From<Arithmetic> for Value {
     }
 }
 
+/// Conditional action execution (if-then-else for actions)
+///
+/// Executes different sets of actions based on a condition evaluated at runtime.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct If {
+    /// The condition to evaluate
     pub condition: Condition,
+    /// Actions to execute when condition is true
     pub actions: Vec<ActionEffect>,
+    /// Actions to execute when condition is false
     pub else_actions: Vec<ActionEffect>,
 }
 
 impl If {
+    /// Adds an action to execute when the condition is true
     #[must_use]
     pub fn then(mut self, action: impl Into<ActionEffect>) -> Self {
         self.actions.push(action.into());
         self
     }
 
+    /// Adds an action to execute when the condition is false
     #[must_use]
     pub fn or_else(mut self, action: impl Into<ActionEffect>) -> Self {
         self.else_actions.push(action.into());
@@ -451,6 +573,7 @@ impl<'a> TryFrom<&'a str> for If {
     }
 }
 
+/// Creates a conditional if statement with a single action
 #[must_use]
 pub fn if_stmt(condition: Condition, action: impl Into<ActionEffect>) -> If {
     If {
@@ -460,34 +583,41 @@ pub fn if_stmt(condition: Condition, action: impl Into<ActionEffect>) -> If {
     }
 }
 
+/// Converts a value into a [`Value`] type
 pub fn value(value: impl Into<Value>) -> Value {
     value.into()
 }
 
+/// Returns a hidden visibility value
 #[must_use]
 pub const fn hidden() -> Value {
     Value::Visibility(Visibility::Hidden)
 }
 
+/// Returns a visible visibility value
 #[must_use]
 pub const fn visible() -> Value {
     Value::Visibility(Visibility::Visible)
 }
 
+/// Returns a displayed value (display = true)
 #[must_use]
 pub const fn displayed() -> Value {
     Value::Display(true)
 }
 
+/// Returns a not displayed value (display = false)
 #[must_use]
 pub const fn not_displayed() -> Value {
     Value::Display(false)
 }
 
+/// Creates an equality condition between two values
 pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
     Condition::Eq(a.into(), b.into())
 }
 
+/// Gets the visibility value of an element by string ID
 #[must_use]
 pub fn get_visibility_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::Visibility {
@@ -495,6 +625,7 @@ pub fn get_visibility_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the visibility value of an element by numeric ID
 #[must_use]
 pub const fn get_visibility_id(id: usize) -> CalcValue {
     CalcValue::Visibility {
@@ -502,6 +633,7 @@ pub const fn get_visibility_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the visibility value of the element itself
 #[must_use]
 pub const fn get_visibility_self() -> CalcValue {
     CalcValue::Visibility {
@@ -509,6 +641,7 @@ pub const fn get_visibility_self() -> CalcValue {
     }
 }
 
+/// Gets the visibility value of an element by class name
 #[must_use]
 pub fn get_visibility_class(class_name: impl Into<Target>) -> CalcValue {
     CalcValue::Visibility {
@@ -516,6 +649,7 @@ pub fn get_visibility_class(class_name: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the display value of an element by string ID
 #[must_use]
 pub fn get_display_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::Display {
@@ -523,6 +657,7 @@ pub fn get_display_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the display value of an element by numeric ID
 #[must_use]
 pub const fn get_display_id(id: usize) -> CalcValue {
     CalcValue::Display {
@@ -530,6 +665,7 @@ pub const fn get_display_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the display value of the element itself
 #[must_use]
 pub const fn get_display_self() -> CalcValue {
     CalcValue::Display {
@@ -537,6 +673,7 @@ pub const fn get_display_self() -> CalcValue {
     }
 }
 
+/// Gets the display value of an element by class name
 #[must_use]
 pub fn get_display_class(class_name: impl Into<Target>) -> CalcValue {
     CalcValue::Display {
@@ -544,6 +681,7 @@ pub fn get_display_class(class_name: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the display value of a child element by class name
 #[must_use]
 pub fn get_display_child_class(class_name: impl Into<Target>) -> CalcValue {
     CalcValue::Display {
@@ -551,6 +689,7 @@ pub fn get_display_child_class(class_name: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the display value of the last child element
 #[must_use]
 pub const fn get_display_last_child() -> CalcValue {
     CalcValue::Display {
@@ -558,11 +697,13 @@ pub const fn get_display_last_child() -> CalcValue {
     }
 }
 
+/// Gets the current event value (e.g., input field value)
 #[must_use]
 pub const fn get_event_value() -> CalcValue {
     CalcValue::EventValue
 }
 
+/// Gets the string ID of the element itself
 #[must_use]
 pub const fn get_id_self() -> CalcValue {
     CalcValue::Id {
@@ -570,6 +711,7 @@ pub const fn get_id_self() -> CalcValue {
     }
 }
 
+/// Gets a data attribute value from the element itself
 #[must_use]
 pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
     CalcValue::DataAttrValue {
@@ -578,6 +720,7 @@ pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
     }
 }
 
+/// Gets the width in pixels of an element by string ID
 #[must_use]
 pub fn get_width_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::WidthPx {
@@ -585,6 +728,7 @@ pub fn get_width_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the width in pixels of an element by numeric ID
 #[must_use]
 pub const fn get_width_px_id(id: usize) -> CalcValue {
     CalcValue::WidthPx {
@@ -592,6 +736,7 @@ pub const fn get_width_px_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the width in pixels of the element itself
 #[must_use]
 pub const fn get_width_px_self() -> CalcValue {
     CalcValue::WidthPx {
@@ -599,6 +744,7 @@ pub const fn get_width_px_self() -> CalcValue {
     }
 }
 
+/// Gets the height in pixels of an element by string ID
 #[must_use]
 pub fn get_height_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::HeightPx {
@@ -606,6 +752,7 @@ pub fn get_height_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the height in pixels of an element by numeric ID
 #[must_use]
 pub const fn get_height_px_id(id: usize) -> CalcValue {
     CalcValue::HeightPx {
@@ -613,6 +760,7 @@ pub const fn get_height_px_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the height in pixels of the element itself
 #[must_use]
 pub const fn get_height_px_self() -> CalcValue {
     CalcValue::HeightPx {
@@ -620,6 +768,7 @@ pub const fn get_height_px_self() -> CalcValue {
     }
 }
 
+/// Gets the X position of an element by string ID
 #[must_use]
 pub fn get_position_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionX {
@@ -627,6 +776,7 @@ pub fn get_position_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the X position of an element by numeric ID
 #[must_use]
 pub const fn get_position_x_id(id: usize) -> CalcValue {
     CalcValue::PositionX {
@@ -634,6 +784,7 @@ pub const fn get_position_x_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the X position of the element itself
 #[must_use]
 pub const fn get_position_x_self() -> CalcValue {
     CalcValue::PositionX {
@@ -641,6 +792,7 @@ pub const fn get_position_x_self() -> CalcValue {
     }
 }
 
+/// Gets the Y position of an element by string ID
 #[must_use]
 pub fn get_position_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionY {
@@ -648,6 +800,7 @@ pub fn get_position_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the Y position of an element by numeric ID
 #[must_use]
 pub const fn get_position_y_id(id: usize) -> CalcValue {
     CalcValue::PositionY {
@@ -655,6 +808,7 @@ pub const fn get_position_y_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the Y position of the element itself
 #[must_use]
 pub const fn get_position_y_self() -> CalcValue {
     CalcValue::PositionY {
@@ -662,11 +816,13 @@ pub const fn get_position_y_self() -> CalcValue {
     }
 }
 
+/// Gets the global mouse X coordinate
 #[must_use]
 pub const fn get_mouse_x() -> CalcValue {
     CalcValue::MouseX { target: None }
 }
 
+/// Gets the mouse X coordinate relative to an element by string ID
 #[must_use]
 pub fn get_mouse_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseX {
@@ -674,6 +830,7 @@ pub fn get_mouse_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the mouse X coordinate relative to an element by numeric ID
 #[must_use]
 pub const fn get_mouse_x_id(id: usize) -> CalcValue {
     CalcValue::MouseX {
@@ -681,6 +838,7 @@ pub const fn get_mouse_x_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the mouse X coordinate relative to the element itself
 #[must_use]
 pub const fn get_mouse_x_self() -> CalcValue {
     CalcValue::MouseX {
@@ -688,11 +846,13 @@ pub const fn get_mouse_x_self() -> CalcValue {
     }
 }
 
+/// Gets the global mouse Y coordinate
 #[must_use]
 pub const fn get_mouse_y() -> CalcValue {
     CalcValue::MouseY { target: None }
 }
 
+/// Gets the mouse Y coordinate relative to an element by string ID
 #[must_use]
 pub fn get_mouse_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseY {
@@ -700,6 +860,7 @@ pub fn get_mouse_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     }
 }
 
+/// Gets the mouse Y coordinate relative to an element by numeric ID
 #[must_use]
 pub const fn get_mouse_y_id(id: usize) -> CalcValue {
     CalcValue::MouseY {
@@ -707,6 +868,7 @@ pub const fn get_mouse_y_id(id: usize) -> CalcValue {
     }
 }
 
+/// Gets the mouse Y coordinate relative to the element itself
 #[must_use]
 pub const fn get_mouse_y_self() -> CalcValue {
     CalcValue::MouseY {
@@ -714,14 +876,20 @@ pub const fn get_mouse_y_self() -> CalcValue {
     }
 }
 
+/// Responsive design condition for adaptive styling
+///
+/// Used to create conditional values based on responsive breakpoints or screen targets.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Responsive {
+    /// Single responsive target
     Target(String),
+    /// Multiple responsive targets (any match)
     Targets(Vec<String>),
 }
 
 impl Responsive {
+    /// Sets the value to use when the responsive condition matches
     #[must_use]
     pub fn then<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
         IfExpression {
@@ -731,6 +899,7 @@ impl Responsive {
         }
     }
 
+    /// Sets the fallback value when the responsive condition doesn't match
     #[must_use]
     pub fn or_else<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
         IfExpression {
@@ -741,12 +910,14 @@ impl Responsive {
     }
 }
 
+/// Creates a responsive condition for a single target
 #[must_use]
 pub fn if_responsive(target: impl Into<String>) -> Responsive {
     let target = target.into();
     Responsive::Target(target)
 }
 
+/// Creates a responsive condition that matches any of the provided targets
 #[must_use]
 pub fn if_responsive_any<T: Into<String>>(targets: impl Into<Vec<T>>) -> Responsive {
     Responsive::Targets(targets.into().into_iter().map(Into::into).collect())

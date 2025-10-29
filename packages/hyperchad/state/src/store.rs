@@ -26,9 +26,13 @@ impl<P: StatePersistence> StateStore<P> {
 
     /// Set a value in the store
     ///
+    /// The value is stored in both the in-memory cache and the persistence backend.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot be serialized
+    /// * [`Error::Serde`] - If the value cannot be serialized to JSON
+    /// * [`Error::Database`] - If the persistence backend database operation fails
+    /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
     pub async fn set<T: Serialize + Send + Sync>(
         &self,
         key: impl Into<String> + Send + Sync,
@@ -45,9 +49,14 @@ impl<P: StatePersistence> StateStore<P> {
 
     /// Get a value from the store
     ///
+    /// Checks the in-memory cache first, then falls back to the persistence backend
+    /// if not found in cache. Returns `None` if the key does not exist.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot be deserialized
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the persistence backend database operation fails
+    /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
     pub async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -76,9 +85,13 @@ impl<P: StatePersistence> StateStore<P> {
 
     /// Remove a value from the store
     ///
+    /// Removes the value from both the in-memory cache and the persistence backend.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot removed from the underlying `StatePersistence` implementation
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized during removal
+    /// * [`Error::Database`] - If the persistence backend database operation fails
+    /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
     pub async fn remove(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), Error> {
         let key = key.as_ref();
 
@@ -90,9 +103,14 @@ impl<P: StatePersistence> StateStore<P> {
 
     /// Remove a value from the store and return it
     ///
+    /// Removes the value from both the in-memory cache and the persistence backend,
+    /// returning the value if it exists. Returns `None` if the key does not exist.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot removed from the underlying `StatePersistence` implementation
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the persistence backend database operation fails
+    /// * [`Error::InvalidDbConfiguration`] - If the persistence backend database is misconfigured
     pub async fn take<T: DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -107,9 +125,11 @@ impl<P: StatePersistence> StateStore<P> {
 
     /// Clear all values from the store
     ///
+    /// Removes all values from both the in-memory cache and the persistence backend.
+    ///
     /// # Errors
     ///
-    /// * If the underlying `StatePersistence` implementation cannot be cleared
+    /// * [`Error::Database`] - If the persistence backend database operation fails
     pub async fn clear(&self) -> Result<(), Error> {
         if let Ok(mut cache) = self.cache.write() {
             cache.clear();

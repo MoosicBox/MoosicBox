@@ -5,17 +5,36 @@
 
 use crate::error::{Error, Result};
 
-/// Frame packing modes.
+/// Frame packing modes defined by RFC 6716 Section 3.2.
+///
+/// The frame packing code (bits 0-1 of the TOC byte) determines how frames
+/// are structured within an Opus packet.
 #[derive(Debug, Clone)]
 pub enum FramePacking {
-    /// Code 0: Single frame
+    /// Code 0: Packet contains a single frame.
+    ///
+    /// The entire packet payload is a single Opus frame, which may be empty (DTX).
     SingleFrame,
-    /// Code 1: Two equal frames
+
+    /// Code 1: Packet contains two frames of equal size.
+    ///
+    /// The payload is split evenly between two frames.
     TwoFramesEqual,
-    /// Code 2: Two variable frames
+
+    /// Code 2: Packet contains two frames with different sizes.
+    ///
+    /// The first frame's size is explicitly encoded, and the second frame
+    /// uses the remaining payload bytes.
     TwoFramesVariable,
-    /// Code 3: Multiple frames
-    ArbitraryFrames { count: u8 },
+
+    /// Code 3: Packet contains an arbitrary number of frames.
+    ///
+    /// Frame count and sizes are encoded in the packet header. Supports
+    /// both CBR (constant bitrate) and VBR (variable bitrate) modes.
+    ArbitraryFrames {
+        /// Number of frames in the packet (1-48)
+        count: u8,
+    },
 }
 
 /// Decode frame length from packet data.
@@ -45,11 +64,21 @@ pub fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
     }
 }
 
-/// Opus frame data.
+/// Opus frame data within a packet.
+///
+/// Represents a single encoded Opus frame, which is the fundamental unit
+/// of Opus compression. Frames may represent audio data or DTX (discontinuous
+/// transmission) silence frames.
 #[derive(Debug, Clone)]
 pub struct OpusFrame {
-    /// Frame data bytes
+    /// Encoded frame data bytes.
+    ///
+    /// Contains the compressed audio data for this frame. Empty for DTX frames.
     pub data: Vec<u8>,
-    /// Is DTX (silence) frame
+
+    /// Whether this is a DTX (discontinuous transmission) frame.
+    ///
+    /// DTX frames indicate silence and contain no audio data, allowing
+    /// bandwidth savings during silent periods.
     pub is_dtx: bool,
 }

@@ -99,6 +99,10 @@ pub struct GetMusicApis {
 ///
 /// * Returns a 404 error if the specified profile is not found
 /// * Returns a 500 error if querying music API state fails
+///
+/// # Panics
+///
+/// * Panics if the number of music APIs exceeds `u32::MAX` (practically impossible)
 pub async fn music_apis_endpoint(
     query: web::Query<GetMusicApis>,
     profile_name: ProfileName,

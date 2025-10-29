@@ -114,6 +114,7 @@ impl MusicApisProfiles {
     }
 }
 
+/// Actix-web integration for extracting `MusicApis` from HTTP requests.
 #[cfg(feature = "api")]
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};

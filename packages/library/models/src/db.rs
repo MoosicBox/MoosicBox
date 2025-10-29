@@ -398,6 +398,11 @@ impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
     }
 }
 
+/// Retrieves all available quality versions for an album from the database.
+///
+/// Queries the database for distinct track quality information (bit depth, sample rate,
+/// channels, format) associated with the album and returns them sorted by quality.
+///
 /// # Errors
 ///
 /// * If fails to get the data from the database

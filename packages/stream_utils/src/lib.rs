@@ -238,6 +238,11 @@ impl futures::Stream for ByteStream {
 
 #[allow(clippy::fallible_impl_from)]
 impl From<&ByteWriter> for ByteStream {
+    /// Creates a new stream from a byte writer reference.
+    ///
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     fn from(value: &ByteWriter) -> Self {
         let (sender, receiver) = unbounded();
         value.senders.write().unwrap().push(sender);
@@ -362,6 +367,11 @@ impl<T> futures::Stream for TypedStream<T> {
 
 #[allow(clippy::fallible_impl_from)]
 impl<T> From<&TypedWriter<T>> for TypedStream<T> {
+    /// Creates a new typed stream from a typed writer reference.
+    ///
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     fn from(value: &TypedWriter<T>) -> Self {
         let (sender, receiver) = unbounded();
         value.senders.write().unwrap().push(sender);

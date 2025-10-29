@@ -10,21 +10,38 @@ pub use free_log_client;
 /// Error type for logging initialization failures.
 #[derive(Debug, Error)]
 pub enum InitError {
+    /// Failed to initialize the logging system.
     #[error(transparent)]
     Logs(#[from] free_log_client::LogsInitError),
+    /// Failed to build the logs configuration.
     #[error(transparent)]
     BuildLogsConfig(#[from] free_log_client::BuildLogsConfigError),
+    /// Failed to build the file writer configuration.
     #[error(transparent)]
     BuildFileWriterConfig(#[from] free_log_client::BuildFileWriterConfigError),
 }
 
 /// Initializes the logging system with optional file output and custom layers.
 ///
+/// Configures environment-based log filtering using `MOOSICBOX_LOG` or `RUST_LOG`
+/// environment variables, with default log levels of `trace` in debug builds and
+/// `info` in release builds. When a filename is provided, logs are written to
+/// `{config_dir}/logs/{filename}`.
+///
+/// # Parameters
+///
+/// * `filename` - Optional log file name to write logs to in the config directory's logs subdirectory
+/// * `layers` - Optional vector of custom tracing layers to add to the logging system
+///
+/// # Returns
+///
+/// Returns a `FreeLogLayer` that can be used to manage the logging subscription.
+///
 /// # Errors
 ///
-/// * If the logs failed to initialize
-/// * If failed to build the logs config
-/// * If Failed to build the file writer config
+/// * `InitError::Logs` - Failed to initialize the logging system
+/// * `InitError::BuildLogsConfig` - Failed to build the logs configuration
+/// * `InitError::BuildFileWriterConfig` - Failed to build the file writer configuration
 pub fn init(
     filename: Option<&str>,
     layers: Option<Vec<DynLayer>>,

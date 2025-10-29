@@ -105,20 +105,35 @@ pub struct Api;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalAlbum {
+    /// Tidal album ID.
     pub id: u64,
+    /// Album artist name.
     pub artist: String,
+    /// Tidal artist ID.
     pub artist_id: u64,
+    /// Album type (LP, EPs/Singles, Compilations).
     pub album_type: TidalAlbumType,
+    /// Whether the album has cover artwork available.
     pub contains_cover: bool,
+    /// Audio quality level for this album.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Total duration in seconds.
     pub duration: u32,
+    /// Whether the album contains explicit content.
     pub explicit: bool,
+    /// Total number of tracks on the album.
     pub number_of_tracks: u32,
+    /// Album popularity score.
     pub popularity: u32,
+    /// Release date in ISO 8601 format.
     pub date_released: Option<String>,
+    /// Album title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
+    /// API source identifier.
     pub api_source: ApiSource,
 }
 
@@ -158,22 +173,39 @@ impl From<TidalTrack> for ApiTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalTrack {
+    /// Tidal track ID.
     pub id: u64,
+    /// Track number on the album.
     pub number: u32,
+    /// Album title.
     pub album: String,
+    /// Tidal album ID.
     pub album_id: u64,
+    /// Album type (LP, EPs/Singles, Compilations).
     pub album_type: TidalAlbumType,
+    /// Artist name.
     pub artist: String,
+    /// Tidal artist ID.
     pub artist_id: u64,
+    /// Whether the track has cover artwork available.
     pub contains_cover: bool,
+    /// Audio quality level for this track.
     pub audio_quality: String,
+    /// Copyright information.
     pub copyright: Option<String>,
+    /// Track duration in seconds.
     pub duration: u32,
+    /// Whether the track contains explicit content.
     pub explicit: bool,
+    /// International Standard Recording Code.
     pub isrc: String,
+    /// Track popularity score.
     pub popularity: u32,
+    /// Track title.
     pub title: String,
+    /// Media metadata tags (e.g., "`LOSSLESS`", "`HIRES_LOSSLESS`").
     pub media_metadata_tags: Vec<String>,
+    /// API source identifier.
     pub api_source: ApiSource,
 }
 
@@ -210,10 +242,15 @@ impl From<ApiTidalTrack> for moosicbox_music_models::api::ApiTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
+    /// Tidal artist ID.
     pub id: u64,
+    /// Whether the artist has cover artwork available.
     pub contains_cover: bool,
+    /// Artist popularity score.
     pub popularity: u32,
+    /// Artist name.
     pub title: String,
+    /// API source identifier.
     pub api_source: ApiSource,
 }
 

@@ -21,14 +21,27 @@ pub static SERVER_PLAYERS: LazyLock<
     >,
 > = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
 
+/// Errors that can occur during local player initialization.
 #[derive(Debug, Error)]
 pub enum InitError {
+    /// WebSocket communication error.
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
+    /// Audio output device scanning error.
     #[error(transparent)]
     AudioOutputScanner(#[from] AudioOutputScannerError),
 }
 
+/// Initializes local audio players for all available audio output devices.
+///
+/// This function scans for available audio output devices on the system and registers a player
+/// for each device. Players are stored in the [`SERVER_PLAYERS`] static map and are available
+/// for playback control.
+///
+/// # Errors
+///
+/// * [`InitError::AudioOutputScanner`] - If audio device scanning fails
+/// * [`InitError::WebsocketSend`] - If the WebSocket server handle is not available
 pub async fn init(
     config_db: &ConfigDatabase,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<

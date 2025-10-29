@@ -14,23 +14,41 @@ pub struct CalculatorDefaults {
     pub font_margin_top: f32,
     /// Default bottom margin for text.
     pub font_margin_bottom: f32,
+    /// Font size for H1 heading elements.
     pub h1_font_size: f32,
+    /// Top margin for H1 heading elements.
     pub h1_font_margin_top: f32,
+    /// Bottom margin for H1 heading elements.
     pub h1_font_margin_bottom: f32,
+    /// Font size for H2 heading elements.
     pub h2_font_size: f32,
+    /// Top margin for H2 heading elements.
     pub h2_font_margin_top: f32,
+    /// Bottom margin for H2 heading elements.
     pub h2_font_margin_bottom: f32,
+    /// Font size for H3 heading elements.
     pub h3_font_size: f32,
+    /// Top margin for H3 heading elements.
     pub h3_font_margin_top: f32,
+    /// Bottom margin for H3 heading elements.
     pub h3_font_margin_bottom: f32,
+    /// Font size for H4 heading elements.
     pub h4_font_size: f32,
+    /// Top margin for H4 heading elements.
     pub h4_font_margin_top: f32,
+    /// Bottom margin for H4 heading elements.
     pub h4_font_margin_bottom: f32,
+    /// Font size for H5 heading elements.
     pub h5_font_size: f32,
+    /// Top margin for H5 heading elements.
     pub h5_font_margin_top: f32,
+    /// Bottom margin for H5 heading elements.
     pub h5_font_margin_bottom: f32,
+    /// Font size for H6 heading elements.
     pub h6_font_size: f32,
+    /// Top margin for H6 heading elements.
     pub h6_font_margin_top: f32,
+    /// Bottom margin for H6 heading elements.
     pub h6_font_margin_bottom: f32,
 }
 

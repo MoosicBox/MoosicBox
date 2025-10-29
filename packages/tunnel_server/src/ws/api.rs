@@ -9,10 +9,16 @@ use actix_web::{
 use moosicbox_profiles::api::ProfileNameUnverified;
 use serde::Deserialize;
 
+/// WebSocket connection request parameters.
+///
+/// This struct contains the query parameters for establishing a WebSocket connection.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectRequest {
+    /// The unique identifier for the connecting client.
     client_id: String,
+    /// Whether this connection is acting as a sender (true) or receiver (false).
+    /// Defaults to false if not specified.
     sender: Option<bool>,
 }
 

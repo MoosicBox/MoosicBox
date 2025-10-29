@@ -148,10 +148,14 @@ pub struct CargoLockPackage {
     pub dependencies: Option<Vec<String>>,
 }
 
+/// A build or dependency step in CI configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct Step {
+    /// Command to execute
     command: Option<String>,
+    /// Rust toolchain to use (e.g., "stable", "nightly")
     toolchain: Option<String>,
+    /// Features required for this step
     features: Option<Vec<String>>,
 }
 

@@ -2046,7 +2046,7 @@ pub async fn track_file_url(
         &[
             ("audioquality", audio_quality.as_ref()),
             ("urlusagemode", "STREAM"),
-            ("assetpresentation", "FULL")
+            ("assetpresentation", "`FULL`")
         ]
     );
 
@@ -2068,18 +2068,31 @@ pub async fn track_file_url(
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TidalTrackPlaybackInfo {
+    /// Album peak amplitude for normalization.
     pub album_peak_amplitude: f64,
+    /// Album replay gain in dB.
     pub album_replay_gain: f64,
+    /// Asset presentation format (e.g., "`FULL`").
     pub asset_presentation: String,
+    /// Audio mode (e.g., "`STEREO`").
     pub audio_mode: String,
+    /// Audio quality level (e.g., "`HI_RES_LOSSLESS`").
     pub audio_quality: String,
+    /// Bit depth in bits (e.g., 16, 24).
     pub bit_depth: Option<u8>,
+    /// Playback manifest data.
     pub manifest: String,
+    /// Hash of the manifest for verification.
     pub manifest_hash: String,
+    /// MIME type of the manifest (e.g., "application/dash+xml").
     pub manifest_mime_type: String,
+    /// Sample rate in Hz (e.g., 44100, 96000).
     pub sample_rate: Option<u32>,
+    /// Tidal track ID.
     pub track_id: u64,
+    /// Track peak amplitude for normalization.
     pub track_peak_amplitude: f64,
+    /// Track replay gain in dB.
     pub track_replay_gain: f64,
 }
 
@@ -2105,7 +2118,7 @@ pub async fn track_playback_info(
         &[
             ("audioquality", audio_quality.as_ref()),
             ("playbackmode", "STREAM"),
-            ("assetpresentation", "FULL")
+            ("assetpresentation", "`FULL`")
         ]
     );
 

@@ -500,6 +500,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Updates the playlist for the current session.
+    ///
+    /// Fetches the current session and triggers all registered playlist update
+    /// listeners with the session data. If no current session is set or the
+    /// session doesn't exist, the method returns early.
     pub async fn update_playlist(&self) {
         log::trace!("update_playlist");
 

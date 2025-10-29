@@ -68,42 +68,66 @@ impl WebsocketSender for WsServer {
 /// A command received by the [`WsServer`].
 #[derive(Debug, AsRefStr)]
 pub enum Command {
+    /// Adds a player action to be broadcast to connected clients.
     #[cfg(feature = "player")]
     AddPlayerAction {
+        /// Player ID.
         id: u64,
+        /// The player action to broadcast.
         action: PlayerAction,
     },
 
+    /// Registers a new WebSocket connection.
     Connect {
+        /// Profile name for this connection.
         profile: String,
+        /// Channel sender for messages to this connection.
         conn_tx: mpsc::UnboundedSender<Msg>,
+        /// Channel to send back the assigned connection ID.
         res_tx: tokio::sync::oneshot::Sender<ConnId>,
     },
 
+    /// Removes a WebSocket connection.
     Disconnect {
+        /// Connection ID to disconnect.
         conn: ConnId,
     },
 
+    /// Sends a message to a specific connection.
     Send {
+        /// Message to send.
         msg: Msg,
+        /// Target connection ID.
         conn: ConnId,
+        /// Channel to signal completion.
         res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
+    /// Broadcasts a message to all connections.
     Broadcast {
+        /// Message to broadcast.
         msg: Msg,
+        /// Channel to signal completion.
         res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
+    /// Broadcasts a message to all connections except one.
     BroadcastExcept {
+        /// Message to broadcast.
         msg: Msg,
+        /// Connection ID to exclude from the broadcast.
         conn: ConnId,
+        /// Channel to signal completion.
         res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
+    /// Processes an incoming message from a connection.
     Message {
+        /// The received message.
         msg: Msg,
+        /// Connection ID that sent the message.
         conn: ConnId,
+        /// Channel to signal completion.
         res_tx: tokio::sync::oneshot::Sender<()>,
     },
 }

@@ -1,3 +1,8 @@
+//! Error types for the player plugin.
+//!
+//! This module defines error types that can occur during player plugin operations,
+//! including I/O errors and mobile plugin invocation failures.
+
 use serde::{Serialize, ser::Serializer};
 
 /// Result type for player plugin operations.

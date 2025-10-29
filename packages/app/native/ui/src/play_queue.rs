@@ -59,6 +59,10 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
     }
 }
 
+/// Renders the play queue panel.
+///
+/// Displays the current playback queue including played history, current track,
+/// and upcoming tracks with interactive controls.
 #[must_use]
 pub fn play_queue(state: &State) -> Containers {
     static EMPTY_QUEUE: Vec<ApiTrack> = vec![];

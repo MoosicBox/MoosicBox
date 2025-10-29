@@ -470,6 +470,8 @@ pub trait ToRenderRunner {
 /// Trait for async renderer implementations
 #[async_trait]
 pub trait Renderer: ToRenderRunner + Send + Sync {
+    /// Initialize the renderer with window dimensions and metadata.
+    ///
     /// # Errors
     ///
     /// Will error if `Renderer` implementation app fails to start
@@ -486,8 +488,11 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
+    /// Register a responsive trigger for media queries and breakpoint handling.
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
 
+    /// Emit a custom event to the renderer's event system.
+    ///
     /// # Errors
     ///
     /// Will error if `Renderer` implementation fails to emit the event.
@@ -497,11 +502,15 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         event_value: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
+    /// Render a view to the output display.
+    ///
     /// # Errors
     ///
     /// Will error if `Renderer` implementation fails to render the view.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
+    /// Render a canvas update with drawing operations.
+    ///
     /// # Errors
     ///
     /// Will error if `Renderer` implementation fails to render the canvas update.
@@ -520,6 +529,8 @@ pub trait HtmlTagRenderer {
     /// Add a responsive trigger for media queries
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
 
+    /// Render element attributes to HTML output.
+    ///
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the element attributes
@@ -530,6 +541,8 @@ pub trait HtmlTagRenderer {
         is_flex_child: bool,
     ) -> Result<(), std::io::Error>;
 
+    /// Render reactive media query conditions to CSS output.
+    ///
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the css media-queries
@@ -541,6 +554,7 @@ pub trait HtmlTagRenderer {
         Ok(())
     }
 
+    /// Generate partial HTML for a container without full page structure.
     fn partial_html(
         &self,
         headers: &std::collections::BTreeMap<String, String>,
@@ -550,6 +564,7 @@ pub trait HtmlTagRenderer {
         background: Option<Color>,
     ) -> String;
 
+    /// Generate complete HTML document with full page structure and metadata.
     #[allow(clippy::too_many_arguments)]
     fn root_html(
         &self,

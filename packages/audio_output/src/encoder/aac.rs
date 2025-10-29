@@ -1,3 +1,5 @@
+//! AAC audio encoder implementation.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::RwLock;
@@ -20,6 +22,10 @@ use moosicbox_resampler::Resampler;
 
 use super::AudioEncoder;
 
+/// AAC audio encoder that converts decoded audio to AAC format.
+///
+/// This encoder uses the FDK-AAC library to encode audio samples
+/// and supports automatic resampling to a target sample rate.
 pub struct AacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
@@ -31,6 +37,10 @@ pub struct AacEncoder {
 }
 
 impl AacEncoder {
+    /// Creates a new AAC encoder with default settings.
+    ///
+    /// Default output sample rate is 44100 Hz.
+    ///
     /// # Panics
     ///
     /// * If fails to get the aac encoder
@@ -47,6 +57,11 @@ impl AacEncoder {
         }
     }
 
+    /// Creates a new AAC encoder with a custom writer.
+    ///
+    /// # Arguments
+    /// * `writer` - Output writer for encoded AAC data
+    ///
     /// # Panics
     ///
     /// * If fails to get the aac encoder
@@ -62,6 +77,11 @@ impl AacEncoder {
         }
     }
 
+    /// Initializes the resampler if needed based on input audio spec.
+    ///
+    /// # Arguments
+    /// * `spec` - Input audio signal specification
+    /// * `duration` - Audio duration in samples
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
         self.input_rate.replace(spec.rate);
         self.duration.replace(duration);
@@ -84,6 +104,13 @@ impl AacEncoder {
         self
     }
 
+    /// Opens the encoder with the specified audio specification.
+    ///
+    /// This initializes the resampler and prepares the encoder for encoding.
+    ///
+    /// # Arguments
+    /// * `spec` - Audio signal specification
+    /// * `duration` - Audio duration in samples
     #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);
@@ -247,6 +274,13 @@ impl AudioWrite for AacEncoder {
     }
 }
 
+/// Encodes an audio file to AAC format and returns a byte stream.
+///
+/// This function spawns a background task to encode the audio file
+/// and returns a stream that can be read as the encoding progresses.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
 #[must_use]
 pub fn encode_aac_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
@@ -257,6 +291,11 @@ pub fn encode_aac_stream(path: &str) -> ByteStream {
     stream
 }
 
+/// Spawns a background task to encode an audio file to AAC format.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded AAC data
 pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
@@ -270,6 +309,13 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     )
 }
 
+/// Encodes an audio file to AAC format.
+///
+/// This function blocks until encoding is complete.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded AAC data
 pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {

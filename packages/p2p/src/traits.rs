@@ -16,7 +16,10 @@ use std::fmt::{Debug, Display};
 /// the simulator has no listener functionality yet.
 #[async_trait]
 pub trait P2PSystem: Send + Sync + 'static {
+    /// The type used to uniquely identify nodes in this P2P system
     type NodeId: P2PNodeId;
+
+    /// The type representing an active connection between peers
     type Connection: P2PConnection<NodeId = Self::NodeId>;
     // TODO: Add Listener associated type in Phase 5/6:
     // type Listener: P2PListener<Connection = Self::Connection>;
@@ -63,6 +66,7 @@ pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
 /// Connection trait for reliable message streams
 #[async_trait]
 pub trait P2PConnection: Send + Sync + 'static {
+    /// The type used to identify the remote peer in this connection
     type NodeId: P2PNodeId;
 
     /// Send data to remote peer

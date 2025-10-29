@@ -12,6 +12,8 @@ pub mod sync {
 
     pub use std::fs::File;
 
+    /// Reads the entire contents of a file into a string
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::read_to_string` fails
@@ -28,6 +30,8 @@ pub mod sync {
         ::std::fs::write(path, contents)
     }
 
+    /// Creates a directory and all missing parent directories
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails
@@ -35,6 +39,8 @@ pub mod sync {
         ::std::fs::create_dir_all(path)
     }
 
+    /// Removes a directory and all its contents recursively
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::remove_dir_all` fails
@@ -105,6 +111,8 @@ pub mod sync {
 
     #[cfg(not(feature = "simulator"))]
     impl OpenOptions {
+        /// Opens a file with the configured options
+        ///
         /// # Errors
         ///
         /// * If and IO error occurs

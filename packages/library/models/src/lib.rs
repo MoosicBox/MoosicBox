@@ -330,11 +330,15 @@ pub struct LibraryTrack {
 }
 
 impl LibraryTrack {
-    #[must_use]
+    /// Returns the directory path containing the track file.
+    ///
+    /// Extracts the parent directory from the track's file path.
+    ///
     /// # Panics
     ///
     /// * If the file path has no parent directory
     /// * If the parent path contains invalid UTF-8
+    #[must_use]
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()

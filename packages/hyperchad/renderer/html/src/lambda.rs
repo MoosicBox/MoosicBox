@@ -1,3 +1,17 @@
+//! AWS Lambda integration for HTML rendering.
+//!
+//! This module provides integration with AWS Lambda, enabling HTML rendering
+//! within serverless Lambda functions. It converts `HyperChad` routers to
+//! Lambda-compatible handlers that process Lambda HTTP events and generate
+//! HTML responses.
+//!
+//! # Features
+//!
+//! * Lambda HTTP request processing with user agent detection
+//! * HTML response generation for Lambda functions
+//! * Support for static assets and CSS
+//! * Optimized for serverless execution
+
 use std::{
     collections::BTreeMap,
     str::FromStr as _,

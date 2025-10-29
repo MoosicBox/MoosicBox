@@ -92,6 +92,7 @@ pub struct EmptyPayload {}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionPayload {
+    /// Session creation details.
     pub payload: CreateSession,
 }
 
@@ -99,6 +100,7 @@ pub struct CreateSessionPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPayload {
+    /// Session update details.
     pub payload: UpdateSession,
 }
 
@@ -106,6 +108,7 @@ pub struct UpdateSessionPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSessionPayload {
+    /// Session deletion details.
     pub payload: DeleteSession,
 }
 
@@ -113,6 +116,7 @@ pub struct DeleteSessionPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterConnectionPayload {
+    /// Connection registration details.
     pub payload: RegisterConnection,
 }
 
@@ -120,6 +124,7 @@ pub struct RegisterConnectionPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterPlayersPayload {
+    /// List of players to register.
     pub payload: Vec<RegisterPlayer>,
 }
 
@@ -127,6 +132,7 @@ pub struct RegisterPlayersPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAudioZonePayload {
+    /// Audio zone creation details.
     pub payload: CreateAudioZone,
 }
 
@@ -134,6 +140,7 @@ pub struct CreateAudioZonePayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaybackActionPayload {
+    /// Playback action data as a JSON value.
     pub payload: Value,
 }
 
@@ -141,6 +148,7 @@ pub struct PlaybackActionPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionIdPayload {
+    /// Unique identifier for the connection.
     pub connection_id: String,
 }
 
@@ -148,6 +156,7 @@ pub struct ConnectionIdPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionsPayload {
+    /// List of active sessions.
     pub payload: Vec<ApiSession>,
 }
 
@@ -155,6 +164,7 @@ pub struct SessionsPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioZoneWithSessionsPayload {
+    /// List of audio zones and their associated sessions.
     pub payload: Vec<ApiAudioZoneWithSession>,
 }
 
@@ -162,6 +172,7 @@ pub struct AudioZoneWithSessionsPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionUpdatedPayload {
+    /// Session update details.
     pub payload: ApiUpdateSession,
 }
 
@@ -169,6 +180,7 @@ pub struct SessionUpdatedPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadEventPayload {
+    /// Download event data as a JSON value.
     pub payload: Value,
 }
 
@@ -176,6 +188,7 @@ pub struct DownloadEventPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanEventPayload {
+    /// Scan event data as a JSON value.
     pub payload: Value,
 }
 
@@ -183,6 +196,7 @@ pub struct ScanEventPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionsPayload {
+    /// List of registered connections.
     pub payload: Vec<ApiConnection>,
 }
 
@@ -190,6 +204,7 @@ pub struct ConnectionsPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeekPayload {
+    /// Seek position details.
     pub payload: SetSeek,
 }
 

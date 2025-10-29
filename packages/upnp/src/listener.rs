@@ -82,6 +82,7 @@ pub struct UpnpContext {
 }
 
 impl UpnpContext {
+    /// Creates a new `UPnP` listener context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()

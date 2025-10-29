@@ -124,7 +124,7 @@ pub static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> 
 ///
 /// # Panics
 ///
-/// * If an invalid number is given to `WINDOW_WIDTH` or `WINDOW_HEIGHT`
+/// * If static asset route registration fails (when `assets` feature is enabled)
 #[must_use]
 pub fn init() -> AppBuilder {
     #[allow(unused_mut)]
@@ -154,7 +154,7 @@ pub fn init() -> AppBuilder {
 ///
 /// # Errors
 ///
-/// * If the `NativeApp` fails to start
+/// * If the application fails to build from the provided configuration
 pub fn build_app(builder: AppBuilder) -> Result<App<DefaultRenderer>, hyperchad::app::Error> {
     use hyperchad::renderer::Renderer as _;
 

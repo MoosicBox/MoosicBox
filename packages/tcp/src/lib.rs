@@ -157,15 +157,19 @@ macro_rules! impl_http {
             use crate::*;
 
             paste::paste! {
+                #[doc = concat!("Read half of a ", stringify!($module), " TCP stream.\n\nWraps the underlying read half to provide a generic interface.")]
                 pub type [< $module:camel TcpStreamReadHalf >] = $module::TcpStreamReadHalf;
                 type ModuleTcpStreamReadHalf = [< $module:camel TcpStreamReadHalf >];
 
+                #[doc = concat!("Write half of a ", stringify!($module), " TCP stream.\n\nWraps the underlying write half to provide a generic interface.")]
                 pub type [< $module:camel TcpStreamWriteHalf >] = $module::TcpStreamWriteHalf;
                 type ModuleTcpStreamWriteHalf = [< $module:camel TcpStreamWriteHalf >];
 
+                #[doc = concat!("TCP stream for ", stringify!($module), ".\n\nWraps the underlying stream to provide a generic interface that can be split into read and write halves.")]
                 pub type [< $module:camel TcpStream >] = TcpStreamWrapper<ModuleTcpStreamReadHalf, ModuleTcpStreamWriteHalf, $module::TcpStream>;
                 type ModuleTcpStream = [< $module:camel TcpStream >];
 
+                #[doc = concat!("TCP listener for ", stringify!($module), ".\n\nWraps the underlying listener to provide a generic interface for accepting connections.")]
                 pub type [< $module:camel TcpListener >] = TcpListenerWrapper<ModuleTcpStreamReadHalf, ModuleTcpStreamWriteHalf, ModuleTcpStream, $module::TcpListener>;
                 type ModuleTcpListener = [< $module:camel TcpListener >];
             }
@@ -273,9 +277,32 @@ impl_http!(tokio, impl_tokio);
 macro_rules! impl_gen_types {
     ($module:ident $(,)?) => {
         paste::paste! {
+            /// Default TCP listener type for the current feature configuration.
+            ///
+            /// This type alias points to the appropriate listener implementation based on
+            /// enabled features. With the `simulator` feature, it uses the in-memory simulator.
+            /// Otherwise, it uses the tokio-based implementation.
             pub type TcpListener = [< $module:camel TcpListener >];
+
+            /// Default TCP stream type for the current feature configuration.
+            ///
+            /// This type alias points to the appropriate stream implementation based on
+            /// enabled features. With the `simulator` feature, it uses the in-memory simulator.
+            /// Otherwise, it uses the tokio-based implementation.
             pub type TcpStream = [< $module:camel TcpStream >];
+
+            /// Default TCP stream read half type for the current feature configuration.
+            ///
+            /// This type alias points to the appropriate read half implementation based on
+            /// enabled features. With the `simulator` feature, it uses the in-memory simulator.
+            /// Otherwise, it uses the tokio-based implementation.
             pub type TcpStreamReadHalf = [< $module:camel TcpStreamReadHalf >];
+
+            /// Default TCP stream write half type for the current feature configuration.
+            ///
+            /// This type alias points to the appropriate write half implementation based on
+            /// enabled features. With the `simulator` feature, it uses the in-memory simulator.
+            /// Otherwise, it uses the tokio-based implementation.
             pub type TcpStreamWriteHalf = [< $module:camel TcpStreamWriteHalf >];
         }
     };

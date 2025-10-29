@@ -14,9 +14,11 @@ use std::{
 
 use crate::Error;
 
+/// Poll-based authentication implementation.
 #[cfg(feature = "auth-poll")]
 pub mod poll;
 
+/// Username and password authentication implementation.
 #[cfg(feature = "auth-username-password")]
 pub mod username_password;
 

@@ -426,6 +426,8 @@ pub mod sync {
     }
 
     impl File {
+        /// Retrieves metadata about the file
+        ///
         /// # Errors
         ///
         /// * If underlying `std::fs::metadata` fails
@@ -433,6 +435,7 @@ pub mod sync {
             std::fs::metadata(&self.path)
         }
 
+        /// Converts this synchronous file handle into an asynchronous file handle
         #[cfg(feature = "async")]
         #[must_use]
         pub fn into_async(self) -> crate::unsync::File {
@@ -448,6 +451,8 @@ pub mod sync {
     impl_file_sync!(File);
 
     impl OpenOptions {
+        /// Opens a file with the configured options
+        ///
         /// # Errors
         ///
         /// * If and IO error occurs
@@ -521,6 +526,8 @@ pub mod sync {
         }
     }
 
+    /// Reads the entire contents of a file into a string
+    ///
     /// # Errors
     ///
     /// * If the file doesn't exist
@@ -574,6 +581,8 @@ pub mod sync {
         Ok(())
     }
 
+    /// Creates a directory and all missing parent directories
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
@@ -612,6 +621,8 @@ pub mod sync {
         Ok(())
     }
 
+    /// Removes a directory and all its contents recursively
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)
@@ -968,6 +979,8 @@ pub mod unsync {
     }
 
     impl File {
+        /// Retrieves metadata about the file asynchronously
+        ///
         /// # Errors
         ///
         /// * If underlying `std::fs::metadata` fails
@@ -976,6 +989,7 @@ pub mod unsync {
             std::fs::metadata(&self.path)
         }
 
+        /// Converts this asynchronous file handle into a synchronous file handle
         #[cfg(feature = "sync")]
         #[must_use]
         pub fn into_sync(self) -> crate::sync::File {
@@ -1061,6 +1075,8 @@ pub mod unsync {
     }
 
     impl OpenOptions {
+        /// Opens a file asynchronously with the configured options
+        ///
         /// # Errors
         ///
         /// * If and IO error occurs
@@ -1091,6 +1107,8 @@ pub mod unsync {
         }
     }
 
+    /// Reads the entire contents of a file into a string asynchronously
+    ///
     /// # Errors
     ///
     /// * If the file doesn't exist
@@ -1142,6 +1160,8 @@ pub mod unsync {
         Ok(())
     }
 
+    /// Creates a directory and all missing parent directories asynchronously
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
@@ -1161,6 +1181,8 @@ pub mod unsync {
         super::sync::create_dir_all(path)
     }
 
+    /// Removes a directory and all its contents recursively asynchronously
+    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)

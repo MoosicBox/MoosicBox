@@ -182,25 +182,76 @@ fn build_test_tokens(
     tokens
 }
 
-/// Internal select! macro that accepts a crate path parameter
-/// This provides 100% `tokio::select`! compatibility while automatically
-/// fusing futures/streams for the simulator runtime
+/// Internal select! macro that accepts a crate path parameter.
+///
+/// This macro provides 100% `tokio::select!` compatibility while automatically
+/// fusing futures/streams for the simulator runtime. It is used internally by the
+/// `switchy_async` crate's `select!` macro implementation.
+///
+/// The macro accepts a special syntax with a crate path followed by the standard
+/// `select!` branches:
+///
+/// ```text
+/// select_internal! {
+///     @path = crate_path;
+///     pattern1 = future1 => handler1,
+///     pattern2 = future2 => handler2,
+/// }
+/// ```
+///
+/// Most users should use the public `select!` macro from `switchy_async` rather than
+/// calling this internal macro directly.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn select_internal(input: TokenStream) -> TokenStream {
     simulator::select_internal(input)
 }
 
-/// Internal join! macro that accepts a crate path parameter
-/// This provides 100% `tokio::join!` compatibility for the simulator runtime
+/// Internal join! macro that accepts a crate path parameter.
+///
+/// This macro provides 100% `tokio::join!` compatibility for the simulator runtime.
+/// It is used internally by the `switchy_async` crate's `join!` macro implementation.
+///
+/// The macro accepts a special syntax with a crate path followed by the futures to join:
+///
+/// ```text
+/// join_internal! {
+///     @path = crate_path;
+///     future1,
+///     future2,
+///     future3
+/// }
+/// ```
+///
+/// Most users should use the public `join!` macro from `switchy_async` rather than
+/// calling this internal macro directly.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn join_internal(input: TokenStream) -> TokenStream {
     simulator::join_internal(input)
 }
 
-/// Internal `try_join`! macro that accepts a crate path parameter
-/// This provides 100% `tokio::try_join!` compatibility for the simulator runtime
+/// Internal `try_join!` macro that accepts a crate path parameter.
+///
+/// This macro provides 100% `tokio::try_join!` compatibility for the simulator runtime.
+/// It is used internally by the `switchy_async` crate's `try_join!` macro implementation.
+///
+/// The macro accepts a special syntax with a crate path followed by the futures to join:
+///
+/// ```text
+/// try_join_internal! {
+///     @path = crate_path;
+///     future1,
+///     future2,
+///     future3
+/// }
+/// ```
+///
+/// Like `tokio::try_join!`, this macro requires all futures to return `Result` types and
+/// will short-circuit on the first error encountered.
+///
+/// Most users should use the public `try_join!` macro from `switchy_async` rather than
+/// calling this internal macro directly.
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn try_join_internal(input: TokenStream) -> TokenStream {
@@ -272,8 +323,28 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// Internal test attribute macro that accepts a crate path parameter
-/// This provides test runtime setup for the simulator runtime
+/// Internal test attribute macro that accepts a crate path parameter.
+///
+/// This macro provides test runtime setup for the simulator runtime. It is used internally
+/// by the public test macros (`test`, `unsync_test`, `internal_test`) to generate the
+/// appropriate test wrapper with the correct crate path.
+///
+/// The macro accepts a special syntax with configuration parameters:
+///
+/// ```text
+/// test_internal! {
+///     @path = crate_path;
+///     [real_time;]
+///     [real_fs;]
+///     [no_simulator;]
+///     async fn test_function() {
+///         // test body
+///     }
+/// }
+/// ```
+///
+/// Most users should use the public test attribute macros (`#[test]`, `#[unsync_test]`, etc.)
+/// rather than calling this internal macro directly.
 #[allow(clippy::too_many_lines)]
 #[cfg(feature = "simulator")]
 #[proc_macro]

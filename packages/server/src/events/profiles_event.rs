@@ -9,16 +9,21 @@ use moosicbox_profiles::events::{
 };
 use switchy_database::{Database, config::ConfigDatabase};
 
+/// Errors that can occur when adding a new profile.
 #[derive(Debug, thiserror::Error)]
 pub enum AddProfileError {
+    /// Database query error.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Tidal music service configuration error.
     #[cfg(feature = "tidal")]
     #[error(transparent)]
     TidalConfig(#[from] moosicbox_tidal::TidalConfigError),
+    /// Qobuz music service configuration error.
     #[cfg(feature = "qobuz")]
     #[error(transparent)]
     QobuzConfig(#[from] moosicbox_qobuz::QobuzConfigError),
+    /// `YouTube` Music service configuration error.
     #[cfg(feature = "yt")]
     #[error(transparent)]
     YtConfig(#[from] moosicbox_yt::YtConfigError),
@@ -137,6 +142,17 @@ async fn remove_profile(
     Ok(())
 }
 
+/// Initializes profile management and loads existing profiles.
+///
+/// This function sets up event handlers for profile additions and removals, then loads all
+/// existing profiles from the database. Each profile gets its own database connection and
+/// music API instances for enabled services (Tidal, Qobuz, `YouTube` Music, etc.).
+///
+/// # Errors
+///
+/// * If profile retrieval from the database fails
+/// * If profile database initialization fails
+/// * If music API initialization fails for any enabled service
 pub async fn init(
     #[allow(unused)] app_type: AppType,
     config_db: ConfigDatabase,

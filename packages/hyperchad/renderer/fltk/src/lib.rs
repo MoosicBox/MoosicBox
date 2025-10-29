@@ -160,7 +160,11 @@ pub enum AppEvent {
     UnloadImage { frame: Frame },
 }
 
-/// An image that has been registered for rendering.
+/// An image that has been registered for lazy loading and rendering.
+///
+/// This struct tracks an image that has been registered with the renderer but may not
+/// yet be loaded into memory. Images are loaded on demand based on viewport visibility
+/// to optimize memory usage and performance.
 #[derive(Debug, Clone)]
 pub struct RegisteredImage {
     source: ImageSource,
@@ -1213,6 +1217,11 @@ pub struct FltkRenderRunner {
 }
 
 impl RenderRunner for FltkRenderRunner {
+    /// Runs the FLTK event loop to process and dispatch GUI events.
+    ///
+    /// This method blocks the current thread and processes events until the application
+    /// is closed or an error occurs.
+    ///
     /// # Errors
     ///
     /// Will error if FLTK fails to run the event loop.
@@ -1227,9 +1236,11 @@ impl RenderRunner for FltkRenderRunner {
 }
 
 impl ToRenderRunner for FltkRenderer {
+    /// Converts the FLTK renderer into a runner that can execute the event loop.
+    ///
     /// # Errors
     ///
-    /// Will error if FLTK fails to run the event loop.
+    /// Will error if the renderer has not been initialized via `init()`.
     fn to_runner(
         self,
         _handle: Handle,
@@ -1244,9 +1255,15 @@ impl ToRenderRunner for FltkRenderer {
 
 #[async_trait]
 impl Renderer for FltkRenderer {
+    /// Registers a responsive trigger for dynamic layout adjustments.
+    ///
+    /// Currently a no-op implementation for the FLTK renderer.
     fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
 
     /// Initializes the FLTK application window and sets up the rendering environment.
+    ///
+    /// Creates and configures the application window with the specified dimensions, position,
+    /// background color, and title. Sets up event handlers and spawns the event listener thread.
     ///
     /// # Panics
     ///
@@ -1254,7 +1271,7 @@ impl Renderer for FltkRenderer {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK app fails to start
+    /// Will error if FLTK app fails to start.
     async fn init(
         &mut self,
         width: f32,
@@ -1378,9 +1395,12 @@ impl Renderer for FltkRenderer {
 
     /// Emits a custom event with an optional value.
     ///
+    /// Currently a no-op implementation for the FLTK renderer. Custom events are not
+    /// yet supported in the FLTK implementation.
+    ///
     /// # Errors
     ///
-    /// Will error if FLTK app fails to emit the event.
+    /// Will not error in the current implementation.
     async fn emit_event(
         &self,
         event_name: String,
@@ -1392,6 +1412,9 @@ impl Renderer for FltkRenderer {
     }
 
     /// Renders the given view elements to the FLTK window.
+    ///
+    /// Takes a `View` containing UI elements, calculates their layout, and renders them
+    /// as FLTK widgets. This replaces any previously rendered content.
     ///
     /// # Errors
     ///
@@ -1421,13 +1444,16 @@ impl Renderer for FltkRenderer {
 
     /// Renders canvas drawing updates to the FLTK window.
     ///
+    /// Currently a no-op implementation for the FLTK renderer. Canvas drawing operations
+    /// are not yet supported in the FLTK implementation.
+    ///
     /// # Errors
     ///
-    /// Will error if FLTK fails to render the canvas update.
+    /// Will not error in the current implementation.
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// Will not panic in the current implementation.
     async fn render_canvas(
         &self,
         _update: CanvasUpdate,

@@ -37,6 +37,8 @@ pub enum CacheItemType {
     Album(Arc<LibraryAlbum>),
 }
 
+/// Returns the current time in nanoseconds since the Unix epoch.
+///
 /// # Panics
 ///
 /// * If time went backwards
@@ -60,6 +62,8 @@ pub struct CacheRequest<'a> {
 static CACHE_MAP: LazyLock<RwLock<BTreeMap<String, CacheItem>>> =
     LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
+/// Clears all entries from the cache.
+///
 /// # Panics
 ///
 /// * If `RwLock` is poisoned
@@ -67,6 +71,8 @@ pub fn clear_cache() {
     CACHE_MAP.write().unwrap().clear();
 }
 
+/// Retrieves a value from cache or computes and caches it if not present or expired.
+///
 /// # Panics
 ///
 /// * If `RwLock` is poisoned

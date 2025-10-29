@@ -12,14 +12,28 @@ use crate::{
     toc::TocByte,
 };
 
-/// Parsed Opus packet.
+/// Parsed Opus packet conforming to RFC 6716.
+///
+/// Represents a complete Opus packet after parsing, containing the TOC byte,
+/// one or more encoded frames, and optional padding data.
 #[derive(Debug, Clone)]
 pub struct OpusPacket {
-    /// Table of contents byte
+    /// Table of contents byte containing configuration and frame packing info.
+    ///
+    /// The TOC byte encodes the Opus mode, bandwidth, channel count, and
+    /// frame packing mode according to RFC 6716 Section 3.1.
     pub toc: TocByte,
-    /// Decoded frames
+
+    /// Decoded frames contained in this packet.
+    ///
+    /// Contains 1-48 frames depending on the frame packing mode. Each frame
+    /// represents an independently decodable unit of compressed audio.
     pub frames: Vec<OpusFrame>,
-    /// Optional padding
+
+    /// Optional padding bytes.
+    ///
+    /// Padding may be present in code 3 packets to meet minimum size requirements
+    /// or obscure packet size patterns. Empty if no padding is present.
     pub padding: Bytes,
 }
 

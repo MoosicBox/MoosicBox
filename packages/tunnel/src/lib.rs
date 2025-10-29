@@ -159,6 +159,10 @@ impl TryFrom<Bytes> for TunnelResponse {
     ///
     /// * Returns [`TryFromBytesError::TryFromSlice`] if byte conversion fails
     /// * Returns [`TryFromBytesError::Serde`] if JSON deserialization fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte slice is shorter than 13 bytes (minimum required for header data).
     fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let mut data = bytes.slice(13..);
         let request_id = u64::from_be_bytes(bytes[..8].try_into()?);
@@ -208,6 +212,13 @@ impl TryFrom<&str> for TunnelResponse {
     ///
     /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
     /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    ///
+    /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
+    /// * JSON deserialization of headers fails
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
         use base64::{Engine, engine::general_purpose};
 
@@ -285,6 +296,13 @@ impl TryFrom<String> for TunnelResponse {
     ///
     /// * Returns [`Base64DecodeError::InvalidContent`] if the string format is invalid
     /// * Returns [`Base64DecodeError::Decode`] if base64 decoding fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    ///
+    /// * Parsing `request_id`, `packet_id`, last flag, or status code from the string fails
+    /// * JSON deserialization of headers fails
     fn try_from(base64: String) -> Result<Self, Self::Error> {
         base64.as_str().try_into()
     }

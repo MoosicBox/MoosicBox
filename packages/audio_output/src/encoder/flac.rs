@@ -1,3 +1,5 @@
+//! FLAC audio encoder implementation.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::RwLock;
@@ -20,6 +22,10 @@ use moosicbox_resampler::Resampler;
 
 use super::AudioEncoder;
 
+/// FLAC audio encoder that converts decoded audio to FLAC format.
+///
+/// This encoder uses the FLAC library to encode audio samples
+/// and supports automatic resampling to a target sample rate.
 pub struct FlacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
@@ -250,6 +256,13 @@ impl AudioWrite for FlacEncoder {
     }
 }
 
+/// Encodes an audio file to FLAC format and returns a byte stream.
+///
+/// This function spawns a background task to encode the audio file
+/// and returns a stream that can be read as the encoding progresses.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
 #[must_use]
 pub fn encode_flac_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
@@ -260,6 +273,11 @@ pub fn encode_flac_stream(path: &str) -> ByteStream {
     stream
 }
 
+/// Spawns a background task to encode an audio file to FLAC format.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded FLAC data
 pub fn encode_flac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
@@ -273,6 +291,13 @@ pub fn encode_flac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     )
 }
 
+/// Encodes an audio file to FLAC format.
+///
+/// This function blocks until encoding is complete.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded FLAC data
 pub fn encode_flac<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {

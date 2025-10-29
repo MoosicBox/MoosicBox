@@ -38,6 +38,11 @@ impl std::fmt::Display for PersistenceKey {
 }
 
 impl AppState {
+    /// Initializes persistence with a file-based `SQLite` database at the specified location.
+    ///
+    /// This method sets up the persistence layer and loads any previously saved state.
+    /// Use this when you need persistent storage across application restarts.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails to initialize
@@ -50,6 +55,11 @@ impl AppState {
         Ok(self)
     }
 
+    /// Builder method to initialize persistence with a file-based `SQLite` database.
+    ///
+    /// Consumes self and returns the configured instance. Equivalent to `set_persistence`
+    /// but designed for method chaining during initialization.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails to initialize
@@ -61,6 +71,11 @@ impl AppState {
         Ok(self)
     }
 
+    /// Initializes persistence with an in-memory `SQLite` database.
+    ///
+    /// State will be lost when the application terminates. Useful for testing
+    /// or when persistent storage is not needed.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails to initialize
@@ -70,6 +85,11 @@ impl AppState {
         Ok(self)
     }
 
+    /// Builder method to initialize persistence with an in-memory `SQLite` database.
+    ///
+    /// Consumes self and returns the configured instance. Equivalent to `set_persistence_in_memory`
+    /// but designed for method chaining during initialization.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails to initialize
@@ -78,9 +98,15 @@ impl AppState {
         Ok(self)
     }
 
+    /// Gets the persistence layer instance.
+    ///
+    /// Returns a reference to the `SQLite` persistence layer for direct access
+    /// to persistence operations.
+    ///
     /// # Panics
     ///
     /// * If the persistence is not set
+    #[must_use]
     pub async fn persistence(&self) -> Arc<SqlitePersistence> {
         self.persistence.read().await.clone().unwrap()
     }
@@ -92,6 +118,10 @@ impl AppState {
         Ok(())
     }
 
+    /// Retrieves all saved connections from persistent storage.
+    ///
+    /// Returns an empty list if no connections have been saved.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -103,6 +133,10 @@ impl AppState {
             .unwrap_or_default())
     }
 
+    /// Retrieves the currently active connection from persistent storage.
+    ///
+    /// Returns `None` if no connection is currently set as active.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -111,6 +145,11 @@ impl AppState {
         Ok(persistence.get(PersistenceKey::Connection).await?)
     }
 
+    /// Sets the currently active connection and saves it to persistent storage.
+    ///
+    /// This also updates the application state with the connection's API URL and
+    /// initializes the music API profiles for the connection.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -168,6 +207,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Removes the currently active connection from persistent storage.
+    ///
+    /// Returns the removed connection if one was set, or `None` if no connection
+    /// was active.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -176,6 +220,10 @@ impl AppState {
         Ok(persistence.take(PersistenceKey::Connection).await?)
     }
 
+    /// Retrieves the connection name from persistent storage.
+    ///
+    /// Returns `None` if no connection name has been set.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -184,6 +232,10 @@ impl AppState {
         Ok(persistence.get(PersistenceKey::ConnectionName).await?)
     }
 
+    /// Updates the connection name in persistent storage.
+    ///
+    /// Saves the provided name to the persistence layer for future retrieval.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -199,6 +251,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Gets the connection ID from persistent storage, or creates a new one if it doesn't exist.
+    ///
+    /// The connection ID is a unique identifier for this application instance. If one
+    /// doesn't exist in persistence, a new ID is generated and saved automatically.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -218,6 +275,12 @@ impl AppState {
         })
     }
 
+    /// Adds a new connection to the list of saved connections.
+    ///
+    /// If this is the first connection being added and no current connection is set,
+    /// it will automatically be set as the current connection. Returns the updated
+    /// list of all connections.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -244,6 +307,11 @@ impl AppState {
         Ok(connections)
     }
 
+    /// Deletes a connection from the list of saved connections by name.
+    ///
+    /// If the deleted connection was the current connection, it will be unset.
+    /// Returns the updated list of remaining connections.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -267,6 +335,13 @@ impl AppState {
         Ok(connections)
     }
 
+    /// Updates an existing connection in the list of saved connections.
+    ///
+    /// Finds the connection with the given name and replaces it with the new
+    /// connection data. If the updated connection is the current connection,
+    /// it will also update the current connection. Returns the updated list
+    /// of all connections.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails

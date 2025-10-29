@@ -98,6 +98,7 @@ pub fn bind_services<
         YtTrackOrderDirection,
     ))
 )]
+/// Marker struct for the `YouTube` Music API routes.
 pub struct Api;
 
 /// `YouTube` Music album representation for API responses.
@@ -255,6 +256,7 @@ impl From<Error> for actix_web::Error {
 
 static YT_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";
 
+/// Query parameters for device authorization endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtDeviceAuthorizationQuery {
@@ -291,6 +293,7 @@ pub async fn device_authorization_endpoint(
     ))
 }
 
+/// Query parameters for device authorization token endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtDeviceAuthorizationTokenQuery {
@@ -341,6 +344,7 @@ pub async fn device_authorization_token_endpoint(
     ))
 }
 
+/// Query parameters for track file URL endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackFileUrlQuery {
@@ -388,6 +392,7 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
+/// Query parameters for track playback info endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackPlaybackInfoQuery {
@@ -435,6 +440,7 @@ pub async fn track_playback_info_endpoint(
     ))
 }
 
+/// Query parameters for favorite artists endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtFavoriteArtistsQuery {
@@ -502,6 +508,7 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
+/// Query parameters for adding an artist to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAddFavoriteArtistsQuery {
@@ -560,6 +567,7 @@ pub async fn add_favorite_artist_endpoint(
     })))
 }
 
+/// Query parameters for removing an artist from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteArtistsQuery {
@@ -618,6 +626,7 @@ pub async fn remove_favorite_artist_endpoint(
     })))
 }
 
+/// Query parameters for favorite albums endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtFavoriteAlbumsQuery {
@@ -691,6 +700,7 @@ pub async fn favorite_albums_endpoint(
     ))
 }
 
+/// Query parameters for adding an album to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAddFavoriteAlbumsQuery {
@@ -749,6 +759,7 @@ pub async fn add_favorite_album_endpoint(
     })))
 }
 
+/// Query parameters for removing an album from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteAlbumsQuery {
@@ -807,6 +818,7 @@ pub async fn remove_favorite_album_endpoint(
     })))
 }
 
+/// Query parameters for adding a track to favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAddFavoriteTracksQuery {
@@ -865,6 +877,7 @@ pub async fn add_favorite_track_endpoint(
     })))
 }
 
+/// Query parameters for removing a track from favorites.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteTracksQuery {
@@ -923,6 +936,7 @@ pub async fn remove_favorite_track_endpoint(
     })))
 }
 
+/// Query parameters for favorite tracks endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtFavoriteTracksQuery {
@@ -989,6 +1003,7 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for artist albums endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtArtistAlbumsQuery {
@@ -1083,6 +1098,7 @@ pub async fn artist_albums_endpoint(
     ))
 }
 
+/// Query parameters for album tracks endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAlbumTracksQuery {
@@ -1143,6 +1159,7 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for album endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAlbumQuery {
@@ -1196,6 +1213,7 @@ pub async fn album_endpoint(
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
+/// Query parameters for artist endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtArtistQuery {
@@ -1249,6 +1267,7 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
+/// Query parameters for track endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackQuery {
@@ -1302,6 +1321,7 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
+/// Query parameters for search endpoint.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchQuery {

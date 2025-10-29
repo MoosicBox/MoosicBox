@@ -11,6 +11,15 @@ use utoipa::{OpenApi as _, openapi::OpenApi};
 #[openapi()]
 struct ApiDoc;
 
+/// Initializes and returns the combined `OpenAPI` specification for all enabled API modules.
+///
+/// This function aggregates `OpenAPI` documentation from all feature-enabled API modules
+/// (audio output, auth, config, player, etc.) into a single unified specification.
+///
+/// # Returns
+///
+/// A complete `OpenAPI` specification document that can be served via Swagger UI, Redoc,
+/// `RapiDoc`, or Scalar interfaces.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn init() -> OpenApi {
     #[allow(unused)]
@@ -79,6 +88,18 @@ pub fn init() -> OpenApi {
     api
 }
 
+/// Binds `OpenAPI` documentation services to an Actix-web scope.
+///
+/// This function registers multiple `OpenAPI` UI services (Swagger UI, Redoc, `RapiDoc`, Scalar)
+/// that all serve the same `OpenAPI` specification document.
+///
+/// # Returns
+///
+/// The modified scope with all documentation UI services registered:
+/// * `/swagger-ui/` - Interactive Swagger UI documentation
+/// * `/redoc` - Redoc documentation viewer
+/// * `/rapidoc` - `RapiDoc` documentation viewer
+/// * `/scalar` - Scalar documentation viewer
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

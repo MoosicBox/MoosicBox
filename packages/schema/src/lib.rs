@@ -159,10 +159,6 @@ pub async fn migrate_config_sqlite(
 /// if their respective features are enabled. `PostgreSQL` failures are logged but
 /// don't prevent `SQLite` migrations from running.
 ///
-/// # Panics
-///
-/// * If the db connection fails to establish
-///
 /// # Errors
 ///
 /// * If the migrations fail to run
@@ -311,10 +307,6 @@ pub async fn migrate_library_sqlite_until(
 /// if their respective features are enabled. `PostgreSQL` failures are logged but
 /// don't prevent `SQLite` migrations from running.
 ///
-/// # Panics
-///
-/// * If the db connection fails to establish
-///
 /// # Errors
 ///
 /// * If the migrations fail to run
@@ -329,10 +321,6 @@ pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), 
 /// for both database types if their respective features are enabled. If `migration_name`
 /// is `None`, all migrations are run. `PostgreSQL` failures are logged but don't prevent
 /// `SQLite` migrations from running.
-///
-/// # Panics
-///
-/// * If the db connection fails to establish
 ///
 /// # Errors
 ///
