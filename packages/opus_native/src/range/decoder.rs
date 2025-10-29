@@ -1,6 +1,28 @@
 use crate::error::{Error, Result};
 use crate::util::ilog;
 
+/// Range decoder for entropy decoding in Opus packets.
+///
+/// Implements the range decoder specified in RFC 6716 Section 4.1. The range decoder
+/// maintains an internal state consisting of a value and range, and provides methods
+/// for decoding symbols from compressed bitstreams using arithmetic coding.
+///
+/// The decoder reads from the beginning of the buffer for range-coded symbols and
+/// from the end of the buffer for raw bits, allowing efficient use of packet space.
+///
+/// # Examples
+///
+/// ```rust
+/// # use moosicbox_opus_native::range::RangeDecoder;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let packet = vec![0x80, 0x00, 0x00, 0x00];
+/// let mut decoder = RangeDecoder::new(&packet)?;
+///
+/// // Decode a bit with 50% probability
+/// let bit = decoder.ec_dec_bit_logp(1)?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct RangeDecoder {
     buffer: Vec<u8>,
@@ -355,27 +377,62 @@ impl RangeDecoder {
         Ok(t)
     }
 
+    /// Returns the number of whole bits decoded so far.
+    ///
+    /// This is an estimate based on the current range state and may be slightly
+    /// less than the actual number of bits consumed from the buffer.
     #[must_use]
     pub const fn ec_tell(&self) -> u32 {
         let lg = ilog(self.range);
         self.total_bits.saturating_sub(lg)
     }
 
+    /// Returns the current range value.
+    ///
+    /// This is the current size of the coding interval. The range is maintained
+    /// between 2^23 and 2^32-1 through normalization.
     #[must_use]
     pub const fn get_range(&self) -> u32 {
         self.range
     }
 
+    /// Returns the current value.
+    ///
+    /// This represents the current position within the coding interval.
+    /// Used internally for symbol decoding.
     #[must_use]
     pub const fn get_value(&self) -> u32 {
         self.value
     }
 
+    /// Returns the current read position in the buffer.
+    ///
+    /// This is the byte offset for forward reading (range-coded symbols).
+    /// Does not include bytes read from the end for raw bits.
     #[must_use]
     pub const fn get_position(&self) -> usize {
         self.position
     }
 
+    /// Returns the number of bits decoded with fractional precision.
+    ///
+    /// This provides a more accurate estimate than `ec_tell()` by using
+    /// fractional bits (8ths of a bit). The result is in units of 1/8 bit.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use moosicbox_opus_native::range::RangeDecoder;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let packet = vec![0x80, 0x00, 0x00, 0x00];
+    /// let decoder = RangeDecoder::new(&packet)?;
+    ///
+    /// let bits_frac = decoder.ec_tell_frac(); // In 1/8 bit units
+    /// let bits_whole = decoder.ec_tell();
+    /// assert!(bits_frac >= bits_whole * 8);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn ec_tell_frac(&self) -> u32 {
         let mut lg = ilog(self.range);
