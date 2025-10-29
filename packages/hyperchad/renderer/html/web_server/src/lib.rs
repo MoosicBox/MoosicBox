@@ -74,11 +74,28 @@ use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderR
 use moosicbox_env_utils::default_env_u16;
 use switchy_env::var_or;
 
+/// Re-export of the `moosicbox_web_server` crate.
+///
+/// Provides direct access to the underlying web server implementation
+/// for advanced configuration and customization.
 pub use moosicbox_web_server;
 
 use moosicbox_web_server::Scope;
-// Re-export types for compatibility
-pub use moosicbox_web_server::{Error as WebServerError, HttpRequest, HttpResponse};
+
+/// Web server error type.
+///
+/// Represents errors that can occur during web server operations.
+pub use moosicbox_web_server::Error as WebServerError;
+
+/// HTTP request type.
+///
+/// Represents an incoming HTTP request to the web server.
+pub use moosicbox_web_server::HttpRequest;
+
+/// HTTP response type.
+///
+/// Represents an HTTP response to be sent to the client.
+pub use moosicbox_web_server::HttpResponse;
 
 /// Trait for processing web server requests and responses.
 ///
@@ -192,7 +209,7 @@ impl<
     ///
     /// # Errors
     ///
-    /// Will error if web server fails to run the event loop.
+    /// This implementation never returns an error.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting web server backend");
 
