@@ -189,9 +189,15 @@ pub struct ActixAppRunner<
 impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static>
     RenderRunner for ActixAppRunner<T, R>
 {
+    /// Starts the Actix web server and begins processing renderer events.
+    ///
+    /// This method blocks the current thread and runs the Actix HTTP server, handling
+    /// incoming requests and streaming renderer events through SSE connections. The server
+    /// listens on the configured address and port (default: `0.0.0.0:8343`).
+    ///
     /// # Errors
     ///
-    /// Will error if html fails to run the event loop.
+    /// * Returns an error if the event loop fails to run
     #[allow(clippy::too_many_lines)]
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting");
