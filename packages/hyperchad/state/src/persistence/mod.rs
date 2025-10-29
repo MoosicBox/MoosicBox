@@ -1,3 +1,13 @@
+//! Persistence backend trait and implementations
+//!
+//! This module defines the [`StatePersistence`] trait that abstracts over different
+//! storage backends for state data. Implementations can use in-memory storage,
+//! databases, file systems, or any other persistent storage mechanism.
+//!
+//! # Available Implementations
+//!
+//! * [`sqlite::SqlitePersistence`] - SQLite-backed persistence (requires `persistence-sqlite` feature)
+
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -13,7 +23,9 @@ pub trait StatePersistence: Send + Sync {
     ///
     /// # Errors
     ///
-    /// * If the value cannot be serialized or stored
+    /// * [`Error::Serde`] - If the value cannot be serialized to JSON
+    /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
+    /// * [`Error::InvalidDbConfiguration`] - If the database is misconfigured (`SQLite` backend)
     async fn set<T: Serialize + Send + Sync>(
         &self,
         key: impl Into<String> + Send + Sync,
@@ -22,9 +34,13 @@ pub trait StatePersistence: Send + Sync {
 
     /// Retrieve a value by key
     ///
+    /// Returns `None` if the key does not exist in storage.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot be deserialized
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
+    /// * [`Error::InvalidDbConfiguration`] - If the database is misconfigured (`SQLite` backend)
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -34,7 +50,9 @@ pub trait StatePersistence: Send + Sync {
     ///
     /// # Errors
     ///
-    /// * If the value cannot removed from the underlying `StatePersistence` implementation
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized during removal
+    /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
+    /// * [`Error::InvalidDbConfiguration`] - If the database is misconfigured (`SQLite` backend)
     async fn remove(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), Error> {
         self.take::<serde_json::Value>(key).await?;
         Ok(())
@@ -42,9 +60,13 @@ pub trait StatePersistence: Send + Sync {
 
     /// Remove a value by key and return the value
     ///
+    /// Returns `None` if the key does not exist in storage.
+    ///
     /// # Errors
     ///
-    /// * If the value cannot be deserialized
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
+    /// * [`Error::InvalidDbConfiguration`] - If the database is misconfigured (`SQLite` backend)
     async fn take<T: DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -54,6 +76,6 @@ pub trait StatePersistence: Send + Sync {
     ///
     /// # Errors
     ///
-    /// * If the underlying storage cannot be cleared
+    /// * [`Error::Database`] - If the database operation fails (`SQLite` backend)
     async fn clear(&self) -> Result<(), Error>;
 }

@@ -27,7 +27,8 @@ impl SqlitePersistence {
     ///
     /// # Errors
     ///
-    /// * If the database connection cannot be established
+    /// * [`Error::InitDb`] - If the database connection cannot be established
+    /// * [`Error::Database`] - If the state table cannot be created
     pub async fn new_in_memory() -> Result<Self, Error> {
         let db = switchy::database_connection::init(None, None).await?;
 
@@ -62,7 +63,8 @@ impl SqlitePersistence {
     ///
     /// # Errors
     ///
-    /// * If the database connection cannot be established
+    /// * [`Error::InitDb`] - If the database connection cannot be established
+    /// * [`Error::Database`] - If the state table cannot be created
     pub async fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
         let db = switchy::database_connection::init(Some(db_path.as_ref()), None).await?;
 
