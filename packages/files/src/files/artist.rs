@@ -41,8 +41,10 @@ fn get_artist_directory(artist: &Artist) -> Option<String> {
         .and_then(|x| x.parent().and_then(|x| x.to_str()).map(ToString::to_string))
 }
 
+/// Errors that can occur when retrieving artist cover artwork.
 #[derive(Debug, Error)]
 pub enum ArtistCoverError {
+    /// Artist cover not found for the specified artist ID
     #[error("Artist cover not found for artist: {0} ({1})")]
     NotFound(Id, String),
     #[error(transparent)]
@@ -148,8 +150,10 @@ pub async fn get_local_artist_cover_bytes(
     ))
 }
 
+/// Errors that can occur when fetching local artist cover files.
 #[derive(Debug, Error)]
 pub enum FetchLocalArtistCoverError {
+    /// IO error reading cover file
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
