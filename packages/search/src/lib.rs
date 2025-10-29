@@ -294,13 +294,16 @@ pub enum PopulateIndexError {
 }
 
 /// Represents a data value that can be indexed in the search system.
+///
+/// This enum supports the three data types that can be stored in the Tantivy search index:
+/// text strings, boolean flags, and unsigned integers.
 #[derive(Debug, Clone)]
 pub enum DataValue {
-    /// A string value
+    /// A text string value for fields like titles, names, and descriptions
     String(String),
-    /// A boolean value
+    /// A boolean flag value for fields like blur settings or feature flags
     Bool(bool),
-    /// A numeric value (unsigned 64-bit integer)
+    /// An unsigned 64-bit integer value for fields like IDs, counts, and numeric metadata
     Number(u64),
 }
 
@@ -504,13 +507,21 @@ pub enum DeleteFromIndexError {
     Tantivy(#[from] tantivy::error::TantivyError),
 }
 
+/// Deletes documents from the global search index by matching field values.
+///
+/// This function removes documents from the search index that match the provided
+/// field-value pairs. Multiple documents may be deleted if they match the same term.
+/// The operation is performed synchronously and commits changes to disk.
+///
 /// # Panics
 ///
 /// * If any `RwLock`s are poisoned
 ///
 /// # Errors
 ///
-/// * If failed to delete from the global search index
+/// * `DeleteFromIndexError::GetGlobalSearchIndex` if failed to retrieve the global search index
+/// * `DeleteFromIndexError::GetGlobalSearchReader` if failed to retrieve the index reader
+/// * `DeleteFromIndexError::Tantivy` if Tantivy encounters a deletion error
 pub fn delete_from_global_search_index(
     data: &[(&str, DataValue)],
 ) -> Result<(), DeleteFromIndexError> {
