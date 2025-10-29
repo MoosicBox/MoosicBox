@@ -138,6 +138,14 @@ pub struct GetArtistsQuery {
     search: Option<String>,
 }
 
+/// HTTP endpoint for retrieving artists based on query criteria.
+///
+/// Returns a list of artists filtered and sorted according to the query parameters.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the query parameters are invalid
+/// * `ErrorInternalServerError` if the database query fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -232,6 +240,14 @@ pub struct GetAlbumsQuery {
     limit: Option<u32>,
 }
 
+/// HTTP endpoint for retrieving albums based on query criteria.
+///
+/// Returns a paginated list of albums filtered and sorted according to the query parameters.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the query parameters are invalid or the source is invalid
+/// * `ErrorInternalServerError` if fetching albums from the API fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -345,6 +361,14 @@ pub struct GetTracksQuery {
     track_ids: String,
 }
 
+/// HTTP endpoint for retrieving tracks by their IDs.
+///
+/// Returns a list of tracks in the order specified by the track IDs parameter.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the track IDs cannot be parsed
+/// * `ErrorInternalServerError` if the database query fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -407,6 +431,13 @@ pub struct GetAlbumTracksQuery {
     album_id: i32,
 }
 
+/// HTTP endpoint for retrieving all tracks in a specific album.
+///
+/// Returns the tracks belonging to the specified album ID.
+///
+/// # Errors
+///
+/// * `ErrorInternalServerError` if the database query fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -451,6 +482,14 @@ pub struct GetAlbumVersionsQuery {
     source: Option<ApiSource>,
 }
 
+/// HTTP endpoint for retrieving different versions of an album.
+///
+/// Returns a list of album versions (e.g., different quality formats) for the specified album.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the album ID is invalid
+/// * `ErrorInternalServerError` if fetching album versions fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -498,6 +537,13 @@ pub struct GetArtistAlbumsQuery {
     artist_id: i32,
 }
 
+/// HTTP endpoint for retrieving all albums by a specific artist.
+///
+/// Returns the albums associated with the specified artist ID.
+///
+/// # Errors
+///
+/// * `ErrorInternalServerError` if the database query fails or album conversion fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -556,6 +602,15 @@ pub struct GetArtistQuery {
     source: Option<ApiSource>,
 }
 
+/// HTTP endpoint for retrieving a specific artist.
+///
+/// Returns an artist by ID or by album association, depending on query parameters.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the source is invalid
+/// * `ErrorNotFound` if the artist is not found
+/// * Errors from the music API if artist retrieval fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -616,6 +671,15 @@ pub struct GetAlbumQuery {
     source: Option<ApiSource>,
 }
 
+/// HTTP endpoint for retrieving a specific album.
+///
+/// Returns an album by ID from the specified source.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the album ID is invalid
+/// * `ErrorNotFound` if the album is not found
+/// * `ErrorInternalServerError` if fetching the album fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -664,6 +728,14 @@ pub struct AddAlbumQuery {
     source: ApiSource,
 }
 
+/// HTTP endpoint for adding an album to the library.
+///
+/// Adds an album from an external source to the local library, including all tracks.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the album ID is invalid or the source is invalid
+/// * `ErrorInternalServerError` if adding the album fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -717,6 +789,14 @@ pub struct RemoveAlbumQuery {
     source: ApiSource,
 }
 
+/// HTTP endpoint for removing an album from the library.
+///
+/// Removes an album from the library, including its tracks and search index entries.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the album ID is invalid or the source is invalid
+/// * `ErrorInternalServerError` if removing the album fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
@@ -770,6 +850,14 @@ pub struct ReFavoriteAlbumQuery {
     source: ApiSource,
 }
 
+/// HTTP endpoint for re-favoriting an album.
+///
+/// Removes and re-adds an album from an external source to update it with the latest version.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the album ID is invalid or the source is invalid
+/// * `ErrorInternalServerError` if re-favoriting the album fails
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Menu"],
