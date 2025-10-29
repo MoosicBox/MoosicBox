@@ -29,7 +29,7 @@ pub enum ParseIntegersError {
 ///
 /// # Errors
 ///
-/// * If a number fails to parse to a u64
+/// * `ParseIntegersError::ParseId` - If any segment cannot be parsed as a valid `u64` integer
 pub fn parse_integer_sequences(
     integers: &str,
 ) -> std::result::Result<Vec<u64>, ParseIntegersError> {
@@ -46,14 +46,13 @@ pub fn parse_integer_sequences(
 ///
 /// # Errors
 ///
-/// * If a number fails to parse to a u64
-/// * If a range is unmatched (odd number of range separators)
-/// * If a range is too large (> 100,000)
+/// * `ParseIntegersError::ParseId` - If any segment cannot be parsed as a valid `u64` integer
+/// * `ParseIntegersError::UnmatchedRange` - If the range specification has an invalid format (more than 2 range separators and an odd count)
+/// * `ParseIntegersError::RangeTooLarge` - If any range span exceeds 100,000 items
 ///
 /// # Panics
 ///
-/// * If the input string contains empty comma-separated segments that result in empty vectors
-/// * If indexing operations on internal vectors fail (should not happen with valid input)
+/// Panics if range segments contain empty values between commas (e.g., `"1,,3-5"` or `"1-,3"`), which would result in indexing empty vectors
 pub fn parse_integer_ranges(
     integer_ranges: &str,
 ) -> std::result::Result<Vec<u64>, ParseIntegersError> {
