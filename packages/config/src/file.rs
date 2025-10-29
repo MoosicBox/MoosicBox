@@ -264,7 +264,9 @@ pub fn load_profile_config(app_type: AppType, profile: &str) -> Result<ProfileCo
 /// Merged configuration combining global and profile-specific settings
 #[derive(Debug, Clone)]
 pub struct MergedConfig {
+    /// Global configuration that applies to all profiles
     pub global: GlobalConfig,
+    /// Profile-specific configuration settings
     pub profile: ProfileConfig,
 }
 
