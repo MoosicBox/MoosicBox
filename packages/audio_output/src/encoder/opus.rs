@@ -1,3 +1,5 @@
+//! Opus audio encoder implementation.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::{Mutex, RwLock};
@@ -25,6 +27,10 @@ use super::AudioEncoder;
 
 const STEREO_20MS: usize = 48000 * 2 * 20 / 1000;
 
+/// Opus audio encoder that converts decoded audio to Opus format.
+///
+/// This encoder uses the Opus library to encode audio samples
+/// and supports automatic resampling to 48kHz (Opus standard).
 pub struct OpusEncoder<'a> {
     buf: [f32; STEREO_20MS],
     buf_len: usize,
@@ -368,6 +374,13 @@ impl AudioWrite for OpusEncoder<'_> {
     }
 }
 
+/// Encodes an audio file to Opus format and returns a byte stream.
+///
+/// This function spawns a background task to encode the audio file
+/// and returns a stream that can be read as the encoding progresses.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
 #[must_use]
 pub fn encode_opus_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
@@ -378,6 +391,11 @@ pub fn encode_opus_stream(path: &str) -> ByteStream {
     stream
 }
 
+/// Spawns a background task to encode an audio file to Opus format.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded Opus data
 pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
@@ -391,6 +409,13 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     )
 }
 
+/// Encodes an audio file to Opus format.
+///
+/// This function blocks until encoding is complete.
+///
+/// # Arguments
+/// * `path` - Path to the audio file to encode
+/// * `writer` - Output writer for encoded Opus data
 pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
