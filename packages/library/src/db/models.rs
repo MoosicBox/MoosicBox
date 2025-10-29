@@ -5,21 +5,35 @@ use moosicbox_json_utils::{
 use serde::{Deserialize, Serialize};
 use switchy_database::{AsId, DatabaseValue, Row};
 
+/// Library authentication configuration for external music APIs.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryConfig {
+    /// Configuration ID.
     pub id: u32,
+    /// Client ID for API authentication.
     pub client_id: String,
+    /// Access token for API requests.
     pub access_token: String,
+    /// Refresh token for obtaining new access tokens.
     pub refresh_token: String,
+    /// Client application name.
     pub client_name: String,
+    /// Token expiration duration in seconds.
     pub expires_in: u32,
+    /// Timestamp when the token was issued.
     pub issued_at: u64,
+    /// OAuth scope granted to the token.
     pub scope: String,
+    /// Type of token (e.g., "Bearer").
     pub token_type: String,
+    /// Username.
     pub user: String,
+    /// User ID.
     pub user_id: u64,
+    /// Timestamp when the configuration was created.
     pub created: String,
+    /// Timestamp when the configuration was last updated.
     pub updated: String,
 }
 
