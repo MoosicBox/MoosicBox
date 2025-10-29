@@ -23,7 +23,7 @@ pub enum AddProfileError {
     #[cfg(feature = "qobuz")]
     #[error(transparent)]
     QobuzConfig(#[from] moosicbox_qobuz::QobuzConfigError),
-    /// YouTube Music service configuration error.
+    /// `YouTube` Music service configuration error.
     #[cfg(feature = "yt")]
     #[error(transparent)]
     YtConfig(#[from] moosicbox_yt::YtConfigError),
@@ -146,7 +146,7 @@ async fn remove_profile(
 ///
 /// This function sets up event handlers for profile additions and removals, then loads all
 /// existing profiles from the database. Each profile gets its own database connection and
-/// music API instances for enabled services (Tidal, Qobuz, YouTube Music, etc.).
+/// music API instances for enabled services (Tidal, Qobuz, `YouTube` Music, etc.).
 ///
 /// # Errors
 ///

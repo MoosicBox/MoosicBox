@@ -54,7 +54,7 @@
 //! * [`app`] - Application builder and runtime
 //! * [`color`] - Color management and theming
 //! * [`router`] - Routing functionality for navigation
-//! * [`state`] - State persistence system with optional SQLite backend
+//! * [`state`] - State persistence system with optional `SQLite` backend
 //! * [`template`] - Template macro system for building UI components
 //! * [`transformer`] - Container and element types for UI transformations
 //! * [`transformer_models`] - Data models for transformers

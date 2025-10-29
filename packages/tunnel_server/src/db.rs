@@ -48,7 +48,7 @@ pub enum DatabaseError {
 ///
 /// # Panics
 ///
-/// * Panics if SQLite feature is enabled (not yet implemented).
+/// * Panics if `SQLite` feature is enabled (not yet implemented).
 /// * Panics if database credentials cannot be retrieved (when postgres feature is enabled).
 #[allow(clippy::significant_drop_tightening)]
 pub async fn init() -> Result<(), DatabaseError> {
@@ -294,7 +294,6 @@ pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<()
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, DatabaseError> {
     let client_id = client_id.to_owned();
 
@@ -395,7 +394,6 @@ pub async fn insert_client_access_token(
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn valid_client_access_token(
     client_id: &str,
     token_hash: &str,
@@ -418,7 +416,6 @@ pub async fn valid_client_access_token(
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn select_client_access_token(
     client_id: &str,
     token_hash: &str,
@@ -497,7 +494,6 @@ pub async fn insert_magic_token(
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, DatabaseError> {
     let token_hash = token_hash.to_owned();
 
@@ -570,7 +566,6 @@ pub async fn insert_signature_token(
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn valid_signature_token(
     client_id: &str,
     token_hash: &str,
@@ -593,7 +588,6 @@ pub async fn valid_signature_token(
 /// # Panics
 ///
 /// Panics if the database has not been initialized.
-#[must_use]
 pub async fn select_signature_token(
     client_id: &str,
     token_hash: &str,
@@ -633,7 +627,6 @@ pub async fn select_signature_token(
 ///
 /// Panics if the database has not been initialized.
 #[allow(dead_code)]
-#[must_use]
 pub async fn select_signature_tokens(
     client_id: &str,
 ) -> Result<Vec<SignatureToken>, DatabaseError> {
