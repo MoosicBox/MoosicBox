@@ -1,3 +1,8 @@
+//! Fault injection interaction plan generation and execution.
+//!
+//! This module provides the interaction plan system for fault injection testing,
+//! which generates random fault injection actions to test system resilience.
+
 use std::time::Duration;
 
 use simvar::{
@@ -35,6 +40,7 @@ pub struct FaultInjectionInteractionPlan {
     #[allow(unused)]
     context: InteractionPlanContext,
     step: u64,
+    /// The queue of generated interactions to execute.
     pub plan: Vec<Interaction>,
 }
 

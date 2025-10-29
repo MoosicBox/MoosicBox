@@ -1,3 +1,8 @@
+//! Health check interaction plan generation and execution.
+//!
+//! This module provides the interaction plan system for health checking,
+//! which generates periodic health check actions to verify server status.
+
 use std::time::Duration;
 
 use simvar::plan::InteractionPlan;
@@ -29,6 +34,7 @@ pub struct HealthCheckInteractionPlan {
     #[allow(unused)]
     context: InteractionPlanContext,
     step: u64,
+    /// The queue of generated interactions to execute.
     pub plan: Vec<Interaction>,
 }
 
