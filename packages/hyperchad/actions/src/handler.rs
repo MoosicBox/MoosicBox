@@ -1,3 +1,41 @@
+//! Action handler implementation for processing and executing actions
+//!
+//! This module provides traits and implementations for handling action execution in UI frameworks.
+//! It includes style management, element finding, action contexts, and a complete action handler
+//! that coordinates all action processing.
+//!
+//! # Core Traits
+//!
+//! * [`crate::handler::StyleManager`] - Manages style overrides with trigger-based precedence
+//! * [`crate::handler::ElementFinder`] - Finds elements in the UI tree by ID, class, or other selectors
+//! * [`crate::handler::ActionContainer`] - Trait for container types that integrate with the action system
+//! * [`crate::handler::ActionContext`] - Provides context-dependent operations (repaint, navigation, logging)
+//!
+//! # Main Types
+//!
+//! * [`crate::handler::ActionHandler`] - Main coordinator for action processing
+//! * [`crate::handler::BTreeMapStyleManager`] - Default style manager implementation
+//! * [`crate::handler::ActionTimingManager`] - Manages action throttling and delay-off timing
+//!
+//! # Integration Example
+//!
+//! ```rust,ignore
+//! use hyperchad_actions::handler::{ActionHandler, BTreeMapStyleManager, utils};
+//!
+//! // Create style managers for different properties
+//! let visibility_mgr = BTreeMapStyleManager::default();
+//! let background_mgr = BTreeMapStyleManager::default();
+//! let display_mgr = BTreeMapStyleManager::default();
+//!
+//! // Create action handler with a custom element finder
+//! let handler = ActionHandler::new(
+//!     my_element_finder,
+//!     visibility_mgr,
+//!     background_mgr,
+//!     display_mgr,
+//! );
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
