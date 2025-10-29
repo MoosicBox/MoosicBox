@@ -16,6 +16,10 @@ use strum::{AsRefStr, EnumString};
 
 use crate::{formatting::classify_name, page, state::State};
 
+/// Renders the settings page content.
+///
+/// Displays forms for managing connection name, server connections,
+/// download settings, scan settings, and music API authentication.
 #[must_use]
 pub fn settings_page_content(
     connection_name: &str,
@@ -88,6 +92,9 @@ pub fn settings_page_content(
     }
 }
 
+/// Renders the scan settings section content.
+///
+/// Displays the list of configured scan paths with delete controls.
 #[must_use]
 pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
     container! {
@@ -122,6 +129,9 @@ pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
     }
 }
 
+/// Renders the download settings section content.
+///
+/// Displays configured download locations with controls to delete or set as default.
 #[must_use]
 pub fn download_settings_content(download_settings: &DownloadSettings) -> Containers {
     container! {
@@ -173,6 +183,9 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
     }
 }
 
+/// Renders the music API settings section.
+///
+/// Displays all configured music API services with their authentication and scan settings.
 #[must_use]
 pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
     container! {
