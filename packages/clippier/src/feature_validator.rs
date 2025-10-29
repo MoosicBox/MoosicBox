@@ -60,41 +60,62 @@ type WorkspaceData = (WorkspacePackages, PackagePaths, PackageCargoValues);
 /// Validation results for feature propagation
 #[derive(Debug, Serialize)]
 pub struct ValidationResult {
+    /// Total number of packages validated
     pub total_packages: usize,
+    /// Number of packages that passed validation
     pub valid_packages: usize,
+    /// Validation errors found across packages
     pub errors: Vec<PackageValidationError>,
+    /// Non-critical warnings found during validation
     pub warnings: Vec<PackageValidationWarning>,
 }
 
+/// Validation errors for a single package
 #[derive(Debug, Serialize)]
 pub struct PackageValidationError {
+    /// Name of the package with validation errors
     pub package: String,
+    /// List of feature-specific validation errors
     pub errors: Vec<FeatureError>,
 }
 
+/// Feature validation error details
 #[derive(Debug, Serialize)]
 pub struct FeatureError {
+    /// Name of the feature with validation errors
     pub feature: String,
+    /// Missing feature propagations that should be added
     pub missing_propagations: Vec<MissingPropagation>,
+    /// Incorrect feature propagations that need correction
     pub incorrect_propagations: Vec<IncorrectPropagation>,
 }
 
+/// A feature propagation that is missing from the package definition
 #[derive(Debug, Serialize)]
 pub struct MissingPropagation {
+    /// Name of the dependency that should have the feature propagated
     pub dependency: String,
+    /// Expected feature propagation entry (e.g., "dep:feature-name")
     pub expected: String,
+    /// Explanation of why this propagation is required
     pub reason: String,
 }
 
+/// An incorrect feature propagation in the package definition
 #[derive(Debug, Serialize)]
 pub struct IncorrectPropagation {
+    /// The problematic feature propagation entry
     pub entry: String,
+    /// Explanation of why this propagation is incorrect
     pub reason: String,
 }
 
+/// A non-critical validation warning for a package
 #[derive(Debug, Serialize)]
 pub struct PackageValidationWarning {
+    /// Name of the package with the warning
     pub package: String,
+    /// Warning message
     pub message: String,
 }
 
