@@ -6,6 +6,10 @@ use std::sync::LazyLock;
 pub static MANIFEST_DIR_STR: &str = env!("CARGO_MANIFEST_DIR");
 
 /// The manifest directory as a `PathBuf`.
+///
+/// # Panics
+///
+/// Panics if the manifest directory path cannot be converted to a `PathBuf`.
 pub static MANIFEST_DIR: LazyLock<PathBuf> =
     LazyLock::new(|| PathBuf::from_str(MANIFEST_DIR_STR).unwrap());
 
