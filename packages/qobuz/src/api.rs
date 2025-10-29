@@ -284,21 +284,35 @@ impl From<QobuzTrack> for ApiTrack {
     }
 }
 
+/// API response type for Qobuz track with simplified metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiQobuzTrack {
+    /// Track identifier.
     pub id: u64,
+    /// Track number on the album.
     pub number: u32,
+    /// Artist name.
     pub artist: String,
+    /// Artist identifier.
     pub artist_id: u64,
+    /// Album release type.
     pub album_type: QobuzAlbumReleaseType,
+    /// Album title.
     pub album: String,
+    /// Album identifier.
     pub album_id: String,
+    /// Whether track artwork is available.
     pub contains_cover: bool,
+    /// Track duration in seconds.
     pub duration: u32,
+    /// Whether the track has explicit content.
     pub parental_warning: bool,
+    /// International Standard Recording Code.
     pub isrc: String,
+    /// Track title.
     pub title: String,
+    /// Source API identifier.
     pub api_source: ApiSource,
 }
 
@@ -331,13 +345,18 @@ impl From<ApiQobuzTrack> for moosicbox_music_models::api::ApiTrack {
     }
 }
 
+/// API response type for Qobuz artist with simplified metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzArtist {
+    /// Artist identifier.
     pub id: u64,
+    /// Whether artist photo is available.
     pub contains_cover: bool,
+    /// Artist name.
     pub title: String,
+    /// Source API identifier.
     pub api_source: ApiSource,
 }
 
@@ -345,9 +364,11 @@ static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
 static QOBUZ_APP_ID_HEADER: &str = "x-qobuz-app-id";
 static QOBUZ_APP_SECRET_HEADER: &str = "x-qobuz-app-secret";
 
+/// Query parameters for fetching a single artist by ID.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistQuery {
+    /// Qobuz artist identifier to fetch.
     artist_id: u64,
 }
 
@@ -392,10 +413,13 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
+/// Query parameters for fetching paginated favorite artists.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteArtistsQuery {
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
 }
 
@@ -444,9 +468,11 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
+/// Query parameters for fetching a single album by ID.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumQuery {
+    /// Qobuz album identifier to fetch.
     album_id: String,
 }
 
@@ -491,16 +517,23 @@ pub async fn album_endpoint(
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
+/// Album release type categories for API requests.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumReleaseType {
+    /// Standard studio album (LP).
     Lp,
+    /// Live recording.
     Live,
+    /// Compilation album.
     Compilations,
+    /// EPs and Singles.
     EpsAndSingles,
+    /// Other release type.
     Other,
+    /// Download-only release.
     Download,
 }
 
@@ -517,13 +550,17 @@ impl From<AlbumReleaseType> for QobuzAlbumReleaseType {
     }
 }
 
+/// Sort options for album listings in API requests.
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumSort {
+    /// Sort by release date.
     ReleaseDate,
+    /// Sort by relevance.
     Relevant,
+    /// Sort by release date with priority weighting.
     ReleaseDateByPriority,
 }
 
@@ -537,6 +574,7 @@ impl From<AlbumSort> for QobuzAlbumSort {
     }
 }
 
+/// Sort order direction for album listings in API requests.
 #[derive(
     Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
 )]
@@ -544,7 +582,9 @@ impl From<AlbumSort> for QobuzAlbumSort {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumOrder {
+    /// Ascending order.
     Asc,
+    /// Descending order (default).
     #[default]
     Desc,
 }
@@ -558,15 +598,23 @@ impl From<AlbumOrder> for QobuzAlbumOrder {
     }
 }
 
+/// Query parameters for fetching albums by a specific artist.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistAlbumsQuery {
+    /// Artist identifier whose albums to fetch.
     artist_id: u64,
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
+    /// Filter by release type (album, live, compilation, etc.).
     release_type: Option<AlbumReleaseType>,
+    /// Sort property to order results.
     sort: Option<AlbumSort>,
+    /// Sort direction (ascending or descending).
     order: Option<AlbumOrder>,
+    /// Number of tracks to return for each album.
     track_size: Option<u8>,
 }
 
@@ -624,11 +672,15 @@ pub async fn artist_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
+/// Query parameters for fetching paginated favorite albums.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteAlbumsQuery {
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
+    /// Filter by album release type.
     album_type: Option<QobuzAlbumReleaseType>,
 }
 
@@ -683,11 +735,15 @@ pub async fn favorite_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
+/// Query parameters for fetching tracks from a specific album.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumTracksQuery {
+    /// Album identifier whose tracks to fetch.
     album_id: String,
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
 }
 
@@ -737,9 +793,11 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for fetching a single track by ID.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackQuery {
+    /// Qobuz track identifier to fetch.
     track_id: u64,
 }
 
@@ -784,10 +842,13 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
+/// Query parameters for fetching paginated favorite tracks.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteTracksQuery {
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
 }
 
@@ -835,10 +896,13 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
+/// Query parameters for fetching a track's streaming URL.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackFileUrlQuery {
+    /// Desired audio quality for the stream.
     audio_quality: QobuzAudioQuality,
+    /// Track identifier to get streaming URL for.
     track_id: u64,
 }
 
@@ -888,11 +952,15 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
+/// Query parameters for searching the Qobuz catalog.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzSearchQuery {
+    /// Search query string to match against artists, albums, and tracks.
     query: String,
+    /// Starting offset for pagination.
     offset: Option<u32>,
+    /// Maximum number of results to return.
     limit: Option<u32>,
 }
 
