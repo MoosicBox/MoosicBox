@@ -364,7 +364,7 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
 actix-ws = "0.3.0"
 anyhow = "1.0.100"
 arrayvec = "0.7.6"
-assert_cmd = "2.0.17"
+assert_cmd = "2.1.0"
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
 atomic_float = "1.1.0"
@@ -384,7 +384,7 @@ chrono = { version = "0.4.42", default-features = false, features = [
 ] }
 clap = { version = "4.5.50", features = ["derive"] }
 cmake = "0.1.54"
-color-backtrace = { version = "0.7.1", default-features = false, features = [
+color-backtrace = { version = "0.7.2", default-features = false, features = [
     "use-btparse-crate",
 ] }
 color-hex = "0.2.0"
@@ -394,7 +394,7 @@ const-hex = "1.17.0"
 const_format = "0.2.35"
 convert_case = "0.8.0"
 cpal = "0.16.0"
-ctrlc = "3.5.0"
+ctrlc = "3.5.1"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
@@ -538,7 +538,7 @@ swc_ecma_ast = "17.0.0"
 swc_ecma_codegen = "19.0.0"
 swc_ecma_loader = { version = "16.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "35.0.0"
-swc_ecma_parser = "26.0.0"
+swc_ecma_parser = "26.0.1"
 swc_ecma_transforms_base = "29.0.0"
 swc_ecma_transforms_typescript = "32.0.0"
 swc_ecma_visit = "17.0.0"
