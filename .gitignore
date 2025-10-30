@@ -19,6 +19,8 @@ node_modules
 
 *.db
 *.bak
+*.db-shm
+*.db-wal
 
 */Cargo.lock
 .aider*
