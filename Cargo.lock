@@ -5807,6 +5807,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_js_bundler_basic_bundling_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_js_bundler",
+]
+
+[[package]]
 name = "hyperchad_markdown"
 version = "0.1.0"
 dependencies = [

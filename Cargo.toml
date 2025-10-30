@@ -58,6 +58,7 @@ members = [
     "packages/hyperchad/examples/http_events",
     "packages/hyperchad/examples/markdown",
     "packages/hyperchad/js_bundler",
+    "packages/hyperchad/js_bundler/examples/basic_bundling",
     "packages/hyperchad/markdown",
     "packages/hyperchad/renderer",
     "packages/hyperchad/renderer/egui",
