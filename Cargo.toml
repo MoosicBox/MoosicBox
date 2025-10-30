@@ -130,6 +130,7 @@ members = [
     "packages/library/music_api",
     "packages/library/music_api/examples/basic_usage",
     "packages/load_balancer",
+    "packages/load_balancer/examples/basic_usage",
     "packages/logging",
     "packages/logging/examples/basic_usage",
     "packages/marketing_site",
