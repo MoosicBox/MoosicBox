@@ -15531,6 +15531,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_p2p_basic_connection_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_p2p",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_random"
 version = "0.1.4"
 dependencies = [
