@@ -7989,6 +7989,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_admin_htmx_basic_admin_server_example"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "env_logger 0.11.8",
+ "moosicbox_admin_htmx",
+ "switchy_database",
+]
+
+[[package]]
 name = "moosicbox_app"
 version = "0.16.1"
 dependencies = [

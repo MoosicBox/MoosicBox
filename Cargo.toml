@@ -2,6 +2,7 @@
 members = [
     "packages/aconverter",
     "packages/admin_htmx",
+    "packages/admin_htmx/examples/basic_admin_server",
     "packages/app/models",
     "packages/app/native",
     "packages/app/native/bundled",
