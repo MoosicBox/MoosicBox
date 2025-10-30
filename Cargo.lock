@@ -6036,6 +6036,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_renderer_html_lambda_basic_lambda_app_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "chrono",
+ "env_logger 0.11.8",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html_lambda",
+ "lambda_http",
+ "log 0.4.28",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "hyperchad_renderer_html_web_server"
 version = "0.1.4"
 dependencies = [
