@@ -1,27 +1,23 @@
 [package]
-name = "moosicbox_downloader_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic download queue usage in moosicbox_downloader"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_downloader", "download", "queue"]
+edition     = { workspace = true }
+keywords    = ["download", "example", "moosicbox_downloader", "queue"]
+license     = { workspace = true }
+name        = "moosicbox_downloader_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_downloader = { workspace = true, default-features = false }
-moosicbox_music_api = { workspace = true }
+moosicbox_downloader   = { workspace = true, default-features = false }
 moosicbox_music_models = { workspace = true }
 
-switchy_database = { workspace = true }
-
-atomic_float = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_downloader/fail-on-warnings"]

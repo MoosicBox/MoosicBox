@@ -27,8 +27,8 @@ async fn main() -> std::io::Result<()> {
 
     // Step 1: Initialize OpenTelemetry tracing
     println!("1. Initializing OpenTelemetry tracing...");
-    let tracer_layer = switchy_telemetry::init_tracer("actix-metrics-example")
-        .map_err(std::io::Error::other)?;
+    let tracer_layer =
+        switchy_telemetry::init_tracer("actix-metrics-example").map_err(std::io::Error::other)?;
     println!("   ✓ Tracer initialized successfully\n");
 
     // Step 2: Set up tracing subscriber with both OpenTelemetry and console output

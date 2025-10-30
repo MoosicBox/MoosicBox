@@ -1,19 +1,19 @@
 [package]
-name = "switchy_http_json_request_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating JSON requests and responses in switchy_http"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "switchy_http", "json"]
+edition     = { workspace = true }
+keywords    = ["example", "json", "switchy_http"]
+license     = { workspace = true }
+name        = "switchy_http_json_request_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "json_request_example"
 path = "src/main.rs"
 
 [dependencies]
-switchy_http = { workspace = true, features = ["reqwest", "json"] }
+switchy_http = { workspace = true, features = ["json", "reqwest"] }
 
 log               = { workspace = true }
 pretty_env_logger = { workspace = true }
@@ -22,5 +22,5 @@ thiserror         = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["switchy_http/fail-on-warnings"]

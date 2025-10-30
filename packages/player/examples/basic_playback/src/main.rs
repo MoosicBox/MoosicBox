@@ -41,7 +41,8 @@ fn playback_event_handler(update: &UpdateSession, playback: &Playback) {
     log::debug!("Playback state: id={}", playback.id);
 }
 
-#[switchy_async::main]
+#[allow(clippy::too_many_lines)]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();

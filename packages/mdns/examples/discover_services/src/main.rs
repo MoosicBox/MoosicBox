@@ -8,8 +8,8 @@
 //! using the scanner feature of `switchy_mdns`.
 
 use switchy_mdns::scanner::{
-    service::{Commander, Service},
     Context,
+    service::{Commander, Service},
 };
 
 #[tokio::main]

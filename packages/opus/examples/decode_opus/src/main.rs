@@ -6,12 +6,7 @@
 //! with the Symphonia framework. It shows packet parsing, codec registration, and basic
 //! decoding workflow.
 
-use std::{
-    env,
-    fs::File,
-    io::Write,
-    path::Path,
-};
+use std::{env, fs::File, io::Write, path::Path};
 
 use symphonia::core::{
     audio::{AudioBufferRef, Signal},

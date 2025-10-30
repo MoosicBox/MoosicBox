@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_app_ws_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic WebSocket client usage in moosicbox_app_ws"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_app_ws", "websocket"]
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_app_ws", "websocket"]
+license     = { workspace = true }
+name        = "moosicbox_app_ws_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -14,11 +14,11 @@ path = "src/main.rs"
 
 [dependencies]
 moosicbox_app_ws = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio", "util"] }
+switchy_async    = { workspace = true, features = ["tokio", "util"] }
 
 env_logger = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_app_ws/fail-on-warnings"]

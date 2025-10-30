@@ -145,15 +145,18 @@ Actix-web's `app_data` and `FromRequest` traits enable automatic dependency inje
 Once the server is running, try these interactions:
 
 1. **View the Admin Interface**
+
     - Navigate to `http://127.0.0.1:8080/admin`
     - Verify you see the admin dashboard with sections for profiles, server info, and services
 
 2. **Create a New Profile**
+
     - Enter a profile name in the "New Profile" form
     - Click "Create"
     - The profile list should update dynamically to show the new profile
 
 3. **Switch Profiles**
+
     - Use the dropdown at the top to select different profiles
     - The page should update via HTMX to show the selected profile's data
 

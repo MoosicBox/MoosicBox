@@ -6,10 +6,11 @@ use flume::unbounded;
 use hyperchad_actions::logic::Value;
 use hyperchad_renderer::{Color, Renderer, ToRenderRunner, View};
 use hyperchad_renderer_fltk::FltkRenderer;
-use hyperchad_template::container;
+use hyperchad_template::{LayoutOverflow, container};
 use log::{error, info};
 
 /// Creates a simple welcome page with navigation
+#[allow(clippy::too_many_lines)]
 fn create_home_page() -> hyperchad_template::Container {
     container! {
         div
@@ -106,7 +107,7 @@ fn create_home_page() -> hyperchad_template::Container {
                     div
                         direction="row"
                         gap=15
-                        flex-wrap="wrap"
+                        overflow-x=(LayoutOverflow::Wrap { grid: true })
                     {
                         // Feature card 1
                         div
@@ -212,7 +213,7 @@ fn create_home_page() -> hyperchad_template::Container {
                             color="#ffffff"
                             padding=10
                             border-radius=4
-                            fx-click=fx { request_action("show_message", "Hello from FLTK!") }
+                            fx-click=fx { log("Hello from FLTK!") }
                         {
                             "Show Message"
                         }
@@ -224,13 +225,12 @@ fn create_home_page() -> hyperchad_template::Container {
                             color="#ffffff"
                             padding=10
                             border-radius=4
-                            fx-click=fx { request_action("increment_counter", "") }
                         {
                             "Count Click"
                         }
 
                         div
-                            str_id="counter"
+                            id="counter"
                             padding=10
                             font-size=16
                             color="#2c3e50"
@@ -263,6 +263,7 @@ fn create_home_page() -> hyperchad_template::Container {
 }
 
 /// Creates an about page
+#[allow(clippy::too_many_lines)]
 fn create_about_page() -> hyperchad_template::Container {
     container! {
         div
@@ -332,7 +333,6 @@ fn create_about_page() -> hyperchad_template::Container {
                     span
                         font-size=16
                         color="#34495e"
-                        line-height=1.6
                     {
                         "HyperChad FLTK is a lightweight desktop GUI renderer that provides native desktop application capabilities using the Fast Light Toolkit (FLTK)."
                     }
@@ -382,7 +382,7 @@ fn create_about_page() -> hyperchad_template::Container {
                     color="#ecf0f1"
                     font-size=14
                 {
-                    "Built with ❤️ using HyperChad FLTK"
+                    "Built with HyperChad FLTK"
                 }
             }
         }
@@ -391,6 +391,7 @@ fn create_about_page() -> hyperchad_template::Container {
 }
 
 /// Creates an image gallery page demonstrating async image loading
+#[allow(clippy::too_many_lines)]
 fn create_gallery_page() -> hyperchad_template::Container {
     container! {
         div
@@ -460,7 +461,7 @@ fn create_gallery_page() -> hyperchad_template::Container {
                 div
                     direction="row"
                     gap=15
-                    flex-wrap="wrap"
+                    overflow-x=(LayoutOverflow::Wrap { grid: true })
                     padding=20
                 {
                     // Note: In a real app, these would be actual image URLs
@@ -519,7 +520,6 @@ fn create_gallery_page() -> hyperchad_template::Container {
                 span
                     font-size=12
                     color="#95a5a6"
-                    font-style="italic"
                 {
                     "Note: Replace placeholder divs with img elements and actual URLs for real images"
                 }
@@ -573,12 +573,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some("Basic Desktop Application Demo"), // description
             None,                                   // viewport
         )
-        .await?;
+        .await
+        .map_err(|e| e as Box<dyn std::error::Error>)?;
 
     info!("Window initialized successfully");
 
     // Render the initial home page
-    renderer.render(View::from(create_home_page())).await?;
+    renderer
+        .render(View::from(create_home_page()))
+        .await
+        .map_err(|e| e as Box<dyn std::error::Error>)?;
 
     info!("Initial view rendered");
 
@@ -586,7 +590,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer_clone = renderer.clone();
     tokio::spawn(async move {
         while let Some(href) = renderer_clone.wait_for_navigation().await {
-            info!("Navigation event: {}", href);
+            info!("Navigation event: {href}");
 
             // Handle navigation based on href
             let new_view = match href.as_str() {
@@ -594,35 +598,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "/about" => create_about_page(),
                 "/gallery" => create_gallery_page(),
                 _ => {
-                    info!("Unknown route: {}, showing home page", href);
+                    info!("Unknown route: {href}, showing home page");
                     create_home_page()
                 }
             };
 
             // Render the new view
             if let Err(e) = renderer_clone.render(View::from(new_view)).await {
-                error!("Failed to render view for route {}: {:?}", href, e);
+                error!("Failed to render view for route {href}: {e:?}");
             }
         }
     });
 
     // Spawn a task to handle action events (button clicks, etc.)
-    let renderer_for_actions = renderer.clone();
     let mut click_count = 0;
     tokio::spawn(async move {
         while let Ok((action_name, value)) = action_rx.recv_async().await {
-            info!("Action received: {} = {:?}", action_name, value);
+            info!("Action received: {action_name} = {value:?}");
 
             match action_name.as_str() {
                 "show_message" => {
                     if let Some(Value::String(message)) = value {
-                        info!("Message: {}", message);
+                        info!("Message: {message}");
                         // In a real app, you might update the UI to show this message
                     }
                 }
                 "increment_counter" => {
                     click_count += 1;
-                    info!("Click count: {}", click_count);
+                    info!("Click count: {click_count}");
                     // In a real app, you would update the counter display
                     // For now, we'll just log it
                 }
@@ -631,7 +634,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(0);
                 }
                 _ => {
-                    info!("Unknown action: {}", action_name);
+                    info!("Unknown action: {action_name}");
                 }
             }
         }
@@ -640,8 +643,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Convert renderer to runner and start the FLTK event loop
     // This will block until the window is closed
     info!("Starting FLTK event loop");
-    let runner = renderer.to_runner(hyperchad_renderer::Handle::current())?;
-    runner.run()?;
+    let mut runner = renderer
+        .to_runner(hyperchad_renderer::Handle::current())
+        .map_err(|e| e as Box<dyn std::error::Error>)?;
+    runner.run().map_err(|e| e as Box<dyn std::error::Error>)?;
 
     info!("Application exited");
 

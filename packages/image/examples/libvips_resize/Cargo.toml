@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_image_libvips_resize_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating high-performance image resizing using libvips in moosicbox_image"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_image", "libvips", "resize"]
+edition     = { workspace = true }
+keywords    = ["example", "libvips", "moosicbox_image", "resize"]
+license     = { workspace = true }
+name        = "moosicbox_image_libvips_resize_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "libvips_resize_example"
@@ -19,5 +19,5 @@ moosicbox_image = { workspace = true }
 image = { workspace = true }
 
 [features]
-default = ["moosicbox_image/libvips"]
+default          = ["moosicbox_image/libvips"]
 fail-on-warnings = ["moosicbox_image/fail-on-warnings"]

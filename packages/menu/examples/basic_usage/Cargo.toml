@@ -1,24 +1,26 @@
 [package]
-name = "moosicbox_menu_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic artist and album querying in moosicbox_menu"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_menu", "artist", "album", "query"]
+edition     = { workspace = true }
+keywords    = ["album", "artist", "example", "moosicbox_menu", "query"]
+license     = { workspace = true }
+name        = "moosicbox_menu_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_menu = { workspace = true, default-features = false, features = ["local"] }
+env_logger = { workspace = true }
+moosicbox_menu = { workspace = true, default-features = false, features = [
+    "local",
+] }
 moosicbox_music_models = { workspace = true }
 switchy_database = { workspace = true, features = ["turso"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-env_logger = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_menu/fail-on-warnings"]

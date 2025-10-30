@@ -112,7 +112,10 @@ fn main() {
 
     let start = range.start;
     let end = range.end;
-    println!("   Found {} available ports in range {start}..{end}:", ports.len());
+    println!(
+        "   Found {} available ports in range {start}..{end}:",
+        ports.len()
+    );
     for (i, port) in ports.iter().enumerate() {
         let num = i + 1;
         println!("     {num}. Port {port}");

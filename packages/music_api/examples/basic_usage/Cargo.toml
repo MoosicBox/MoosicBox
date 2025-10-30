@@ -1,25 +1,25 @@
 [package]
-name = "moosicbox_music_api_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic usage of the MusicApi trait in moosicbox_music_api"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_music_api", "music", "api"]
+edition     = { workspace = true }
+keywords    = ["api", "example", "moosicbox_music_api", "music"]
+license     = { workspace = true }
+name        = "moosicbox_music_api_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_menu_models = { workspace = true }
-moosicbox_music_api = { workspace = true }
+moosicbox_menu_models  = { workspace = true }
+moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
-moosicbox_paging = { workspace = true }
+moosicbox_paging       = { workspace = true }
 
 async-trait = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []

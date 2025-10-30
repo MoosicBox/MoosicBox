@@ -1,12 +1,12 @@
 [package]
-name = "hyperchad_markdown_gfm_features_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating GitHub Flavored Markdown features in hyperchad_markdown"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "hyperchad_markdown", "gfm", "github"]
+edition     = { workspace = true }
+keywords    = ["example", "gfm", "github", "hyperchad_markdown"]
+license     = { workspace = true }
+name        = "hyperchad_markdown_gfm_features_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "gfm_features_example"
@@ -16,6 +16,6 @@ path = "src/main.rs"
 hyperchad_markdown = { workspace = true }
 
 [features]
-default = []
-emoji = ["hyperchad_markdown/emoji"]
+default          = []
+emoji            = ["hyperchad_markdown/emoji"]
 fail-on-warnings = ["hyperchad_markdown/fail-on-warnings"]

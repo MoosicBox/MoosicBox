@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_stream_utils_stalled_monitor_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating stalled read monitoring in moosicbox_stream_utils"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_stream_utils", "timeout", "monitoring"]
+edition     = { workspace = true }
+keywords    = ["example", "monitoring", "moosicbox_stream_utils", "timeout"]
+license     = { workspace = true }
+name        = "moosicbox_stream_utils_stalled_monitor_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "stalled_monitor_example"
@@ -15,10 +15,9 @@ path = "src/main.rs"
 [dependencies]
 moosicbox_stream_utils = { workspace = true, features = ["stalled-monitor"] }
 
-bytes = { workspace = true }
 futures = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio   = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_stream_utils/fail-on-warnings"]

@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_search_basic_search_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic search operations in moosicbox_search"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_search", "search", "tantivy"]
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_search", "search", "tantivy"]
+license     = { workspace = true }
+name        = "moosicbox_search_basic_search_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_search_example"
@@ -15,10 +15,9 @@ path = "src/main.rs"
 [dependencies]
 moosicbox_search = { workspace = true, features = ["simulator"] }
 
-env_logger    = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio"] }
-tokio         = { workspace = true, features = ["macros", "rt-multi-thread"] }
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_search/fail-on-warnings"]

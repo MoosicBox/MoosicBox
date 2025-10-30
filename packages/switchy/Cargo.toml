@@ -137,21 +137,69 @@ all-database = [
     "database-turso",
 ]
 
-database                 = ["dep:switchy_database"]
-database-api             = ["database", "switchy_database?/api"]
-database-mysql           = ["database", "switchy_database?/mysql"]
-database-mysql-sqlx      = ["database", "switchy_database?/mysql-sqlx"]
-database-postgres        = ["database", "switchy_database?/postgres"]
-database-postgres-raw    = ["database", "switchy_database?/postgres-raw"]
-database-postgres-sqlx   = ["database", "switchy_database?/postgres-sqlx"]
-database-schema          = ["database", "switchy_database?/schema"]
-database-simulator       = ["database", "switchy_database?/simulator"]
-database-sqlite          = ["database", "switchy_database?/sqlite"]
-database-sqlite-rusqlite = ["database", "switchy_database?/sqlite-rusqlite"]
-database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
-database-sqlx            = ["database", "switchy_database?/sqlx"]
-database-tls             = ["database", "switchy_database?/tls"]
-database-turso           = ["database", "switchy_database?/turso"]
+database = ["dep:switchy_database"]
+database-api = ["database", "switchy_database?/api"]
+database-mysql = [
+    "database",
+    "switchy_database?/mysql",
+    "switchy_database_connection?/mysql",
+]
+database-mysql-sqlx = [
+    "database",
+    "switchy_database?/mysql-sqlx",
+    "switchy_database_connection?/mysql-sqlx",
+]
+database-postgres = [
+    "database",
+    "switchy_database?/postgres",
+    "switchy_database_connection?/postgres",
+]
+database-postgres-raw = [
+    "database",
+    "switchy_database?/postgres-raw",
+    "switchy_database_connection?/postgres-raw",
+]
+database-postgres-sqlx = [
+    "database",
+    "switchy_database?/postgres-sqlx",
+    "switchy_database_connection?/postgres-sqlx",
+]
+database-schema = ["database", "switchy_database?/schema"]
+database-simulator = [
+    "database",
+    "switchy_database?/simulator",
+    "switchy_database_connection?/simulator",
+]
+database-sqlite = [
+    "database",
+    "switchy_database?/sqlite",
+    "switchy_database_connection?/sqlite",
+]
+database-sqlite-rusqlite = [
+    "database",
+    "switchy_database?/sqlite-rusqlite",
+    "switchy_database_connection?/sqlite-rusqlite",
+]
+database-sqlite-sqlx = [
+    "database",
+    "switchy_database?/sqlite-sqlx",
+    "switchy_database_connection?/sqlite-sqlx",
+]
+database-sqlx = [
+    "database",
+    "switchy_database?/sqlx",
+    "switchy_database_connection?/sqlx",
+]
+database-tls = [
+    "database",
+    "switchy_database?/tls",
+    "switchy_database_connection?/tls",
+]
+database-turso = [
+    "database",
+    "switchy_database?/turso",
+    "switchy_database_connection?/turso",
+]
 
 all-database-connection = [
     "database-connection",

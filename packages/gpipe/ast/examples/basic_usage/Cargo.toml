@@ -1,12 +1,12 @@
 [package]
-name = "gpipe_ast_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating core AST types and workflow building in gpipe_ast"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "gpipe_ast", "workflow", "ast"]
+edition     = { workspace = true }
+keywords    = ["ast", "example", "gpipe_ast", "workflow"]
+license     = { workspace = true }
+name        = "gpipe_ast_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -16,5 +16,5 @@ path = "src/main.rs"
 gpipe_ast = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["gpipe_ast/fail-on-warnings"]

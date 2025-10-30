@@ -329,6 +329,7 @@ async fn run_examples() -> Result<(), Box<dyn Error + Send>> {
     ];
 
     for event in events {
+        #[allow(clippy::match_wildcard_for_single_variants)]
         match event {
             RendererEvent::View(view) => {
                 info!("Processing View event");
@@ -338,6 +339,9 @@ async fn run_examples() -> Result<(), Box<dyn Error + Send>> {
                 info!("Processing custom event: {name} = {value:?}");
                 renderer.emit_event(name, value).await?;
             }
+            // Canvas events supported but not demonstrated here
+            #[allow(unreachable_patterns)]
+            _ => {}
         }
     }
 

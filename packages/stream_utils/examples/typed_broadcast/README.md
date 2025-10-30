@@ -161,9 +161,9 @@ The example demonstrates a publish-subscribe architecture:
 - **Publisher**: The `TypedWriter` publishes events
 - **Subscribers**: Multiple `TypedStream` instances subscribe to events
 - **Independent processing**: Each subscriber processes events differently
-  - Logger: Records all events
-  - Analytics: Counts event types
-  - Notifier: Sends notifications for specific events
+    - Logger: Records all events
+    - Analytics: Counts event types
+    - Notifier: Sends notifications for specific events
 
 ### Clone Behavior
 

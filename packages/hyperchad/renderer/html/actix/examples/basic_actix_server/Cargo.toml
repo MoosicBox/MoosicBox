@@ -1,12 +1,12 @@
 [package]
-name = "hyperchad_renderer_html_actix_basic_actix_server_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic Actix web server setup in hyperchad_renderer_html_actix"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "hyperchad", "actix", "web-server"]
+edition     = { workspace = true }
+keywords    = ["actix", "example", "hyperchad", "web-server"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_html_actix_basic_actix_server_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_actix_server_example"
@@ -14,14 +14,18 @@ path = "src/main.rs"
 
 [dependencies]
 hyperchad_renderer = { workspace = true }
-hyperchad_renderer_html_actix = { workspace = true, features = ["actions", "sse", "assets"] }
+hyperchad_renderer_html_actix = { workspace = true, features = [
+    "actions",
+    "assets",
+    "sse",
+] }
 
-actix-web = { workspace = true }
+actix-web   = { workspace = true }
 async-trait = { workspace = true }
-bytes = { workspace = true }
-env_logger = { workspace = true }
-flume = { workspace = true }
-log = { workspace = true }
+bytes       = { workspace = true }
+env_logger  = { workspace = true }
+flume       = { workspace = true }
+log         = { workspace = true }
 
 [features]
 default = []

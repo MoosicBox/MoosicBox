@@ -245,14 +245,17 @@ Egui uses immediate mode architecture:
 ## Testing the Example
 
 1. **Click "Show Message"**:
+
     - Yellow message box should appear with text
     - Console logs: `Received action: ...`
 
 2. **Click "Hide Message"**:
+
     - Message box should disappear
     - Console logs: `Received action: ...`
 
 3. **Resize Window**:
+
     - Drag window edges to resize
     - Console logs: `Window resized to: WxH`
     - UI elements should reflow based on flexbox layout

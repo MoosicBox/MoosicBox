@@ -1,23 +1,26 @@
 [package]
-name = "moosicbox_async_service_basic_service_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic async service usage in moosicbox_async_service"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_async_service", "async", "service"]
+edition     = { workspace = true }
+keywords    = ["async", "example", "moosicbox_async_service", "service"]
+license     = { workspace = true }
+name        = "moosicbox_async_service_basic_service_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_service_example"
 path = "src/main.rs"
 
+[package.metadata.cargo-machete]
+ignored = ["switchy_async", "thiserror"]
+
 [dependencies]
 moosicbox_async_service = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio", "rt-multi-thread"] }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+switchy_async           = { workspace = true, features = ["rt-multi-thread", "tokio"] }
+thiserror               = { workspace = true }
+tokio                   = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_async_service/fail-on-warnings"]

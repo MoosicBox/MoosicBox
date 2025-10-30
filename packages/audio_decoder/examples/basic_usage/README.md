@@ -178,6 +178,7 @@ The handler coordinates the decoding process:
     ```
 
 2. **Test with different channel configurations**:
+
     - Mono files (1 channel)
     - Stereo files (2 channels)
     - Multi-channel files (5.1 surround, etc.)

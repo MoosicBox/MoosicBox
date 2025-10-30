@@ -1,12 +1,12 @@
 [package]
-name = "hyperchad_renderer_vanilla_js_basic_interactive_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating interactive features in hyperchad_renderer_vanilla_js"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "hyperchad", "interactive", "renderer", "vanilla-js"]
+edition     = { workspace = true }
+keywords    = ["example", "hyperchad", "interactive", "renderer", "vanilla-js"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_vanilla_js_basic_interactive_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_interactive_example"
@@ -39,12 +39,12 @@ switchy = { workspace = true, features = [
 ] }
 
 env_logger = { workspace = true }
-log = { workspace = true }
+log        = { workspace = true }
 
 [features]
-default = ["actix", "dev", "vanilla-js"]
 actix = ["hyperchad/renderer-html-actix"]
 assets = ["hyperchad/renderer-assets"]
+default = ["actix", "dev", "vanilla-js"]
 dev = ["assets"]
 fail-on-warnings = ["hyperchad/fail-on-warnings", "switchy/fail-on-warnings"]
 vanilla-js = [

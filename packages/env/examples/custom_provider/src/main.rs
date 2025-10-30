@@ -152,6 +152,7 @@ impl<T1: EnvProvider, T2: EnvProvider> EnvProvider for MergedEnv<T1, T2> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     println!("=== switchy_env Custom Provider Example ===\n");
 
@@ -219,7 +220,10 @@ fn main() {
 
     let merged = MergedEnv::new(high_priority_env, low_priority_env);
 
-    println!("   PORT = {} (from high priority)", merged.var("PORT").unwrap());
+    println!(
+        "   PORT = {} (from high priority)",
+        merged.var("PORT").unwrap()
+    );
     println!(
         "   APP_NAME = {} (from low priority)",
         merged.var("APP_NAME").unwrap()
@@ -250,12 +254,18 @@ fn main() {
     // Then add prefix support
     let prefixed = PrefixedEnv::new("MYAPP", merged);
 
-    println!("   ENV = {} (from production)", prefixed.var("ENV").unwrap());
+    println!(
+        "   ENV = {} (from production)",
+        prefixed.var("ENV").unwrap()
+    );
     println!(
         "   PORT = {} (from production)",
         prefixed.var("PORT").unwrap()
     );
-    println!("   HOST = {} (from defaults)", prefixed.var("HOST").unwrap());
+    println!(
+        "   HOST = {} (from defaults)",
+        prefixed.var("HOST").unwrap()
+    );
     println!(
         "   WORKERS = {} (from defaults)",
         prefixed.var("WORKERS").unwrap()

@@ -114,6 +114,7 @@ fn execute_operation(request_id: u64) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 /// Demonstrates manual span creation for fine-grained control
+#[allow(clippy::cognitive_complexity)]
 fn manual_span_example() {
     // Create a parent span manually
     let parent_span = span!(Level::INFO, "manual_operation", operation_type = "demo");

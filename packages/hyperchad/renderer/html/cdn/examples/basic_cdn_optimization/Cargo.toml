@@ -1,13 +1,13 @@
 [package]
-categories = ["example", "template-engine", "web-programming"]
+categories  = ["example", "template-engine", "web-programming"]
 description = "Example demonstrating CDN optimization in hyperchad_renderer_html_cdn"
-edition = { workspace = true }
-keywords = ["cdn", "example", "html", "hyperchad", "optimization"]
-license = { workspace = true }
-name = "hyperchad_renderer_html_cdn_basic_cdn_optimization_example"
-publish = false
-repository = { workspace = true }
-version = "0.1.0"
+edition     = { workspace = true }
+keywords    = ["cdn", "example", "html", "hyperchad", "optimization"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_html_cdn_basic_cdn_optimization_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_cdn_optimization_example"
@@ -34,7 +34,7 @@ switchy_time = { workspace = true }
 
 # Logging and utilities
 env_logger = { workspace = true }
-log = { workspace = true }
+log        = { workspace = true }
 serde_json = { workspace = true }
 
 [features]

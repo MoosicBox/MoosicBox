@@ -1,12 +1,12 @@
 [package]
-name = "switchy_env_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic environment variable access in switchy_env"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "switchy_env", "environment", "config"]
+edition     = { workspace = true }
+keywords    = ["config", "environment", "example", "switchy_env"]
+license     = { workspace = true }
+name        = "switchy_env_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -16,5 +16,5 @@ path = "src/main.rs"
 switchy_env = { workspace = true, features = ["std"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["switchy_env/fail-on-warnings"]

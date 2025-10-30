@@ -22,7 +22,6 @@ hyperchad_app = { workspace = true, default-features = false, features = [
     "vanilla-js",
 ] }
 hyperchad_renderer = { workspace = true }
-hyperchad_renderer_html = { workspace = true }
 hyperchad_renderer_vanilla_js = { workspace = true }
 hyperchad_router = { workspace = true }
 hyperchad_template = { workspace = true }
@@ -37,11 +36,10 @@ env_logger = { workspace = true }
 log        = { workspace = true }
 
 [features]
-default          = []
+default = []
 fail-on-warnings = [
     "hyperchad_app/fail-on-warnings",
     "hyperchad_renderer/fail-on-warnings",
-    "hyperchad_renderer_html/fail-on-warnings",
     "hyperchad_renderer_vanilla_js/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
     "hyperchad_template/fail-on-warnings",

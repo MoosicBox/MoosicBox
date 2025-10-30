@@ -1,12 +1,12 @@
 [package]
-name = "hyperchad_js_bundler_basic_bundling_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating JavaScript bundling in hyperchad_js_bundler"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "hyperchad_js_bundler", "bundling"]
+edition     = { workspace = true }
+keywords    = ["bundling", "example", "hyperchad_js_bundler"]
+license     = { workspace = true }
+name        = "hyperchad_js_bundler_basic_bundling_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_bundling_example"
@@ -16,5 +16,5 @@ path = "src/main.rs"
 hyperchad_js_bundler = { workspace = true, default-features = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["hyperchad_js_bundler/fail-on-warnings"]

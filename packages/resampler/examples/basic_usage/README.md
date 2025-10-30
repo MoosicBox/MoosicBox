@@ -252,6 +252,7 @@ Common values:
     ```
 
 2. **Modify parameters** in `main.rs` to experiment:
+
     - Change sample rates (e.g., 48000 → 44100 for downsampling)
     - Adjust chunk size (e.g., 512, 1024, 4096)
     - Modify test duration

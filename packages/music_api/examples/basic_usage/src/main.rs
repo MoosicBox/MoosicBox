@@ -157,14 +157,8 @@ impl MusicApi for SimpleMusicApi {
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error> {
-        let offset = request
-            .page
-            .as_ref()
-            .map_or(0, |p| p.offset) as usize;
-        let limit = request
-            .page
-            .as_ref()
-            .map_or(10, |p| p.limit) as usize;
+        let offset = request.page.as_ref().map_or(0, |p| p.offset) as usize;
+        let limit = request.page.as_ref().map_or(10, |p| p.limit) as usize;
 
         let items = self
             .albums

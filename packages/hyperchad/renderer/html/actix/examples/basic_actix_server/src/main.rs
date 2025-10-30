@@ -68,6 +68,7 @@ impl ActixResponseProcessor<SimpleRequest> for SimpleProcessor {
         _data: SimpleRequest,
     ) -> Result<(Bytes, String), actix_web::Error> {
         // Handle different content types
+        #[allow(clippy::match_wildcard_for_single_variants)]
         let (bytes, content_type) = match content {
             Content::View(view) => {
                 // In a real application, you would render the view to HTML
@@ -76,6 +77,9 @@ impl ActixResponseProcessor<SimpleRequest> for SimpleProcessor {
                 (Bytes::from(html), "text/html; charset=utf-8".to_string())
             }
             Content::Raw { data, content_type } => (data, content_type),
+            // JSON content supported but not demonstrated here
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!(),
         };
         Ok((bytes, content_type))
     }

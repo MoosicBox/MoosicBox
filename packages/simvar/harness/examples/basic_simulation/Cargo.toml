@@ -1,12 +1,12 @@
 [package]
-name = "simvar_harness_basic_simulation_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic simulation usage in simvar_harness"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "simvar_harness", "simulation", "testing"]
+edition     = { workspace = true }
+keywords    = ["example", "simulation", "simvar_harness", "testing"]
+license     = { workspace = true }
+name        = "simvar_harness_basic_simulation_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_simulation_example"
@@ -18,5 +18,5 @@ simvar_harness = { workspace = true }
 log = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["simvar_harness/fail-on-warnings"]

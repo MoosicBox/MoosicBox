@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_stream_utils_typed_broadcast_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating typed value broadcasting in moosicbox_stream_utils"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_stream_utils", "typed", "broadcasting"]
+edition     = { workspace = true }
+keywords    = ["broadcasting", "example", "moosicbox_stream_utils", "typed"]
+license     = { workspace = true }
+name        = "moosicbox_stream_utils_typed_broadcast_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "typed_broadcast_example"
@@ -16,8 +16,8 @@ path = "src/main.rs"
 moosicbox_stream_utils = { workspace = true }
 
 futures = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio   = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_stream_utils/fail-on-warnings"]

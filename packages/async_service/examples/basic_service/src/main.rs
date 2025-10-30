@@ -11,7 +11,7 @@
 //! - Service lifecycle hooks (`on_start`, `on_shutdown`)
 //! - Proper shutdown and cleanup
 
-use moosicbox_async_service::{async_service_sequential, async_trait, log, sync, Arc, Duration};
+use moosicbox_async_service::{Arc, Duration, async_service_sequential, async_trait, log, sync};
 use tokio::time::sleep;
 
 // Step 1: Define command types

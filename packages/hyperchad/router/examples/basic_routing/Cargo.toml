@@ -1,29 +1,29 @@
 [package]
-name = "hyperchad_router_basic_routing_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic routing patterns in hyperchad_router"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "hyperchad_router", "routing"]
+edition     = { workspace = true }
+keywords    = ["example", "hyperchad_router", "routing"]
+license     = { workspace = true }
+name        = "hyperchad_router_basic_routing_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_routing_example"
 path = "src/main.rs"
 
 [dependencies]
-hyperchad_router = { workspace = true, default-features = true }
 hyperchad_renderer = { workspace = true }
+hyperchad_router   = { workspace = true, default-features = true }
 
-switchy = { workspace = true, features = ["http-models"] }
+switchy       = { workspace = true, features = ["http-models"] }
 switchy_async = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
-serde = { workspace = true, features = ["derive"] }
+serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 bytes = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["hyperchad_router/fail-on-warnings"]

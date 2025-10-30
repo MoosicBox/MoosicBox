@@ -1,27 +1,31 @@
 [package]
-name = "moosicbox_qobuz_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic Qobuz API usage in moosicbox_qobuz"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_qobuz", "qobuz", "music-api"]
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_qobuz", "music-api", "qobuz"]
+license     = { workspace = true }
+name        = "moosicbox_qobuz_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
-name = "basic_usage_example"
-path = "src/main.rs"
+name              = "basic_usage_example"
+path              = "src/main.rs"
+required-features = ["db"]
 
 [dependencies]
-moosicbox_qobuz = { workspace = true, features = ["db"] }
 moosicbox_music_api = { workspace = true }
-moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
-switchy = { workspace = true, features = ["database"] }
+moosicbox_qobuz = { workspace = true, features = ["db"] }
+switchy = { workspace = true, features = [
+    "database",
+    "database-connection",
+    "database-sqlite-sqlx",
+] }
 
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["db"]
-db = ["moosicbox_qobuz/db"]
+db               = ["moosicbox_qobuz/db"]
+default          = ["db"]
 fail-on-warnings = ["moosicbox_qobuz/fail-on-warnings"]

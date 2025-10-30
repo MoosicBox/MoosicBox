@@ -1,12 +1,12 @@
 [package]
-name = "switchy_fs_async_operations_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating async file operations in switchy_fs"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "switchy_fs", "async", "tokio"]
+edition     = { workspace = true }
+keywords    = ["async", "example", "switchy_fs", "tokio"]
+license     = { workspace = true }
+name        = "switchy_fs_async_operations_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "async_operations_example"
@@ -14,9 +14,12 @@ path = "src/main.rs"
 
 [dependencies]
 switchy_async = { workspace = true, features = ["io", "macros"] }
-switchy_fs = { workspace = true, features = ["async", "tokio", "std"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+switchy_fs    = { workspace = true, features = ["async", "std", "tokio"] }
+tokio         = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []
-fail-on-warnings = ["switchy_fs/fail-on-warnings", "switchy_async/fail-on-warnings"]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
+]

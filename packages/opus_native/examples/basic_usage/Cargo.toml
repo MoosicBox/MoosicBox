@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_opus_native_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic Opus decoder usage in moosicbox_opus_native"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_opus_native", "opus", "decoder", "audio"]
+edition     = { workspace = true }
+keywords    = ["audio", "decoder", "example", "moosicbox_opus_native", "opus"]
+license     = { workspace = true }
+name        = "moosicbox_opus_native_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -16,9 +16,9 @@ path = "src/main.rs"
 moosicbox_opus_native = { workspace = true }
 
 [features]
-default = ["celt", "silk"]
+celt             = ["moosicbox_opus_native/celt"]
+default          = ["celt", "silk"]
 fail-on-warnings = ["moosicbox_opus_native/fail-on-warnings"]
-celt = ["moosicbox_opus_native/celt"]
-silk = ["moosicbox_opus_native/silk"]
-hybrid = ["moosicbox_opus_native/hybrid"]
-resampling = ["moosicbox_opus_native/resampling"]
+hybrid           = ["moosicbox_opus_native/hybrid"]
+resampling       = ["moosicbox_opus_native/resampling"]
+silk             = ["moosicbox_opus_native/silk"]

@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_tunnel_sender_basic_connection_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic tunnel connection setup in moosicbox_tunnel_sender"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_tunnel_sender", "tunnel", "websocket"]
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_tunnel_sender", "tunnel", "websocket"]
+license     = { workspace = true }
+name        = "moosicbox_tunnel_sender_basic_connection_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_connection_example"
@@ -14,12 +14,12 @@ path = "src/main.rs"
 
 [dependencies]
 moosicbox_tunnel_sender = { workspace = true }
-switchy_database = { workspace = true, features = ["turso"] }
+switchy_database        = { workspace = true, features = ["turso"] }
 
 env_logger = { workspace = true }
-log = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+log        = { workspace = true }
+tokio      = { workspace = true, features = ["full"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_tunnel_sender/fail-on-warnings"]

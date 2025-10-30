@@ -77,6 +77,7 @@ When you run the example, you should see:
     ```
 
 2. **GUI Window:**
+
     - A 900x700 pixel window titled "HyperChad FLTK Example"
     - A dark header with navigation links (Home, About, Gallery)
     - A main content area with welcome text and feature cards

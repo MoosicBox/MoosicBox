@@ -14,9 +14,9 @@ name = "basic_http_app_example"
 path = "src/main.rs"
 
 [dependencies]
-hyperchad_renderer_html_http = { workspace = true, default-features = true }
-hyperchad_renderer_html      = { workspace = true }
 hyperchad_renderer           = { workspace = true }
+hyperchad_renderer_html      = { workspace = true }
+hyperchad_renderer_html_http = { workspace = true, default-features = true }
 hyperchad_router             = { workspace = true }
 hyperchad_template           = { workspace = true }
 
@@ -27,7 +27,6 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serde_json = { workspace = true }
 
 # HTTP types
-http    = { workspace = true }
 switchy = { workspace = true, features = ["http-models"] }
 
 # Logging
@@ -37,9 +36,9 @@ log        = { workspace = true }
 [features]
 default = []
 fail-on-warnings = [
-    "hyperchad_renderer_html_http/fail-on-warnings",
-    "hyperchad_renderer_html/fail-on-warnings",
     "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_html/fail-on-warnings",
+    "hyperchad_renderer_html_http/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
     "hyperchad_template/fail-on-warnings",
     "switchy/fail-on-warnings",

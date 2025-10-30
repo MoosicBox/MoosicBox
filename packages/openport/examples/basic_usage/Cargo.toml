@@ -1,12 +1,12 @@
 [package]
-name = "openport_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic port-finding functionality in openport"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "openport", "port", "network"]
+edition     = { workspace = true }
+keywords    = ["example", "network", "openport", "port"]
+license     = { workspace = true }
+name        = "openport_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -16,5 +16,5 @@ path = "src/main.rs"
 openport = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["openport/fail-on-warnings"]
