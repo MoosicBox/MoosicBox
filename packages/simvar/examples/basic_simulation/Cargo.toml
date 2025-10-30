@@ -1,0 +1,32 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Basic simulation example demonstrating core simvar concepts"
+edition     = { workspace = true }
+keywords    = ["example", "simulation", "simvar"]
+license     = { workspace = true }
+name        = "simvar_basic_simulation_example"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_simulation_example"
+path = "src/main.rs"
+
+[dependencies]
+simvar = { workspace = true, features = ["time"] }
+switchy_async = { workspace = true, features = ["simulator", "tokio"] }
+switchy_time = { workspace = true, features = ["simulator"] }
+
+log = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "simvar/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]

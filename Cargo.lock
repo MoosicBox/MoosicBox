@@ -14153,6 +14153,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_basic_simulation_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "simvar",
+ "switchy_async",
+ "switchy_time",
+]
+
+[[package]]
 name = "simvar_basic_web_server_example"
 version = "0.1.0"
 dependencies = [
