@@ -5753,16 +5753,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_basic_usage_example"
-version = "0.1.0"
-dependencies = [
- "env_logger 0.11.8",
- "hyperchad",
- "log 0.4.28",
- "switchy",
-]
-
-[[package]]
 name = "hyperchad_color"
 version = "0.1.4"
 dependencies = [
@@ -8398,6 +8388,13 @@ version = "0.1.4"
 dependencies = [
  "chrono",
  "log 0.4.28",
+]
+
+[[package]]
+name = "moosicbox_date_utils_basic_parsing_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_date_utils",
 ]
 
 [[package]]
