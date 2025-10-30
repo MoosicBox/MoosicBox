@@ -9309,6 +9309,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_scan_basic_scan_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_music_api",
+ "moosicbox_scan",
+ "moosicbox_schema",
+ "switchy_database",
+ "switchy_database_connection",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_scan_models"
 version = "0.1.4"
 dependencies = [

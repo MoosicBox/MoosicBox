@@ -159,6 +159,7 @@ members = [
     "packages/resampler",
     "packages/resampler/examples/basic_usage",
     "packages/scan",
+    "packages/scan/examples/basic_scan",
     "packages/scan/models",
     "packages/schema",
     "packages/schema/examples/basic_usage",
