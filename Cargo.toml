@@ -116,6 +116,7 @@ members = [
     "packages/library/examples/library_query",
     "packages/library/models",
     "packages/library/music_api",
+    "packages/library/music_api/examples/basic_usage",
     "packages/load_balancer",
     "packages/logging",
     "packages/logging/examples/basic_usage",

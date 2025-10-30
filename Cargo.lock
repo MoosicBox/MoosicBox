@@ -8736,6 +8736,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_library_music_api_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_library_music_api",
+ "moosicbox_music_api",
+ "moosicbox_music_models",
+ "moosicbox_paging",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_load_balancer"
 version = "0.1.4"
 dependencies = [
