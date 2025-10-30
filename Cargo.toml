@@ -43,6 +43,7 @@ members = [
     "packages/config",
     "packages/config/examples/basic_usage",
     "packages/database",
+    "packages/database/examples/query_builder",
     "packages/database/examples/turso_basic",
     "packages/database/examples/turso_transactions",
     "packages/database_connection",

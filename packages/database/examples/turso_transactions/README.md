@@ -1,6 +1,10 @@
 # Turso Database - Transaction Example
 
-This example demonstrates transaction management with the Turso Database backend, including commit, rollback, and nested transaction scenarios.
+This example demonstrates transaction management with the Turso Database backend, including commit, rollback, and multi-step transaction scenarios.
+
+## Summary
+
+Learn how to use database transactions to ensure data integrity and consistency across multiple operations, with proper error handling and rollback capabilities.
 
 ## What This Example Demonstrates
 
@@ -9,6 +13,12 @@ This example demonstrates transaction management with the Turso Database backend
 - **Rollback on Failure**: Detecting insufficient funds and rolling back changes
 - **Multi-Step Transactions**: Performing multiple operations within a single transaction
 - **ACID Properties**: Ensuring atomicity, consistency, isolation, and durability
+
+## Prerequisites
+
+- Understanding of database transactions and ACID properties
+- Familiarity with Rust async/await and error handling
+- Knowledge of basic SQL operations
 
 ## Running the Example
 
@@ -108,6 +118,70 @@ let balance = rows[0].get("balance").unwrap().as_i64().unwrap();
 - **Isolation**: Transactions don't see each other's uncommitted changes
 - **Durability**: Committed changes are persisted
 
+## Key Concepts
+
+### ACID Transactions
+
+Transactions provide four critical guarantees (ACID):
+
+1. **Atomicity**: All operations succeed or all fail - no partial commits
+2. **Consistency**: Database moves from one valid state to another
+3. **Isolation**: Concurrent transactions don't interfere with each other
+4. **Durability**: Once committed, changes survive crashes/power loss
+
+### Transaction Lifecycle
+
+```rust
+let tx = db.begin_transaction().await?;  // Start
+// ... perform operations ...
+tx.commit().await?;                       // End (success)
+// OR
+tx.rollback().await?;                     // End (failure)
+```
+
+### Error Handling Pattern
+
+Always handle transaction failures properly:
+
+```rust
+let tx = db.begin_transaction().await?;
+
+match risky_operation(&tx).await {
+    Ok(_) => {
+        tx.commit().await?;
+        println!("Success!");
+    }
+    Err(e) => {
+        tx.rollback().await?;
+        eprintln!("Failed: {}", e);
+    }
+}
+```
+
+## Testing the Example
+
+Run the example and verify:
+
+1. **Example 1**: Money transfer succeeds, balances update correctly
+2. **Example 2**: Insufficient funds triggers rollback, balance unchanged
+3. **Example 3**: Multi-step transaction inserts and updates atomically
+
+Check the output matches expected balances at each step.
+
+## Troubleshooting
+
+### Error: "Transaction already committed/rolled back"
+
+You tried to use a transaction after calling `commit()` or `rollback()`. Transactions can only be used once.
+
+### Error: "Already in transaction"
+
+You called `begin_transaction()` on a transaction object. Nested transactions are not supported (use savepoints instead for sub-transactions).
+
+### Deadlocks or lock timeouts
+
+For file-based databases, ensure proper transaction ordering and avoid long-running transactions that hold locks.
+
 ## Use Cases
 
 This pattern is essential for:
@@ -120,6 +194,7 @@ This pattern is essential for:
 ## Related Examples
 
 - **[turso_basic](../turso_basic/)**: Basic CRUD operations and schema introspection
+- **[query_builder](../query_builder/)**: Type-safe query builder API
 
 ## Notes
 
