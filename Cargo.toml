@@ -36,6 +36,7 @@ members = [
     "packages/auth/examples/basic_auth",
     "packages/bloaty",
     "packages/channel_utils",
+    "packages/channel_utils/examples/basic_priority",
     "packages/clippier",
     "packages/config",
     "packages/config/examples/basic_usage",
