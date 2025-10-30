@@ -8285,6 +8285,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_encoder_basic_encoding_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_audio_encoder",
+]
+
+[[package]]
 name = "moosicbox_audio_output"
 version = "0.1.4"
 dependencies = [

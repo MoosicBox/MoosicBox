@@ -26,6 +26,7 @@ members = [
     "packages/audio_decoder",
     "packages/audio_decoder/examples/basic_usage",
     "packages/audio_encoder",
+    "packages/audio_encoder/examples/basic_encoding",
     "packages/audio_output",
     "packages/audio_zone",
     "packages/audio_zone/models",
