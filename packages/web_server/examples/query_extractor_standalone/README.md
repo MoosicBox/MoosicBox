@@ -176,3 +176,46 @@ This example is perfect for:
 - Learning query parameter handling
 - Building flexible API endpoints
 - Understanding URL parameter parsing
+
+## Troubleshooting
+
+### Query Parameter Parsing Errors
+
+**Problem**: "Failed to parse query parameters" errors
+**Solution**: Ensure:
+
+- Parameter names match struct fields exactly (case-sensitive)
+- Required parameters are present in the URL
+- Parameter types can be parsed from strings (e.g., numbers are numeric)
+- URL encoding is correct (use `+` or `%20` for spaces)
+
+### Type Conversion Issues
+
+**Problem**: Cannot convert query parameter to expected type
+**Solution**: Query parameters come as strings - ensure your types implement `serde::Deserialize` and can be parsed from strings. Common types that work: `String`, `u32`, `i32`, `f64`, `bool`
+
+### Optional Parameters Not Working
+
+**Problem**: Handler returns error when optional parameter is missing
+**Solution**: Use `Option<T>` for optional fields in your query struct:
+
+```rust
+#[derive(Deserialize)]
+struct MyQuery {
+    required: String,
+    optional: Option<String>,
+}
+```
+
+### Backend-Specific Behavior
+
+**Problem**: Different behavior between Actix and Simulator
+**Solution**: This is expected - the Simulator backend is for testing. Use Actix backend for production HTTP servers.
+
+## Related Examples
+
+- **json_extractor_standalone**: Similar patterns for JSON body extraction
+- **combined_extractors_standalone**: Shows how to combine Query with other extractors
+- **basic_handler_standalone**: Foundation for understanding handler patterns
+- **simple_get**: Basic routing setup to build upon
+- **openapi**: Add API documentation to your query parameter endpoints
