@@ -6120,6 +6120,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_router_basic_routing_example"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "hyperchad_renderer",
+ "hyperchad_router",
+ "serde",
+ "serde_json",
+ "switchy",
+ "switchy_async",
+]
+
+[[package]]
 name = "hyperchad_simulator"
 version = "0.1.0"
 dependencies = [
