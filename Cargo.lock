@@ -8681,6 +8681,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_library_library_query_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_library",
+ "moosicbox_music_api_models",
+ "moosicbox_music_models",
+ "moosicbox_paging",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_library_models"
 version = "0.1.4"
 dependencies = [

@@ -113,6 +113,7 @@ members = [
     "packages/image/examples/libvips_resize",
     "packages/json_utils",
     "packages/library",
+    "packages/library/examples/library_query",
     "packages/library/models",
     "packages/library/music_api",
     "packages/load_balancer",
