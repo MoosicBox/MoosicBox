@@ -73,6 +73,7 @@ members = [
     "packages/hyperchad/renderer/html/examples/basic_rendering",
     "packages/hyperchad/renderer/html/actix",
     "packages/hyperchad/renderer/html/cdn",
+    "packages/hyperchad/renderer/html/cdn/examples/basic_cdn_optimization",
     "packages/hyperchad/renderer/html/http",
     "packages/hyperchad/renderer/html/lambda",
     "packages/hyperchad/renderer/html/lambda/examples/basic_lambda_app",

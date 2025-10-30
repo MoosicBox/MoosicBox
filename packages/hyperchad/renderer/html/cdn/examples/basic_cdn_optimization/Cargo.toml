@@ -1,0 +1,50 @@
+[package]
+categories = ["example", "template-engine", "web-programming"]
+description = "Example demonstrating CDN optimization in hyperchad_renderer_html_cdn"
+edition = { workspace = true }
+keywords = ["cdn", "example", "html", "hyperchad", "optimization"]
+license = { workspace = true }
+name = "hyperchad_renderer_html_cdn_basic_cdn_optimization_example"
+publish = false
+repository = { workspace = true }
+version = "0.1.0"
+
+[[bin]]
+name = "basic_cdn_optimization_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad = { workspace = true, features = [
+    "renderer",
+    "renderer-assets",
+    "renderer-html",
+    "renderer-html-web-server-actix",
+    "router",
+    "template",
+    "transformer",
+] }
+hyperchad_renderer_html_cdn = { workspace = true }
+
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-time",
+    "async-tokio",
+] }
+switchy_time = { workspace = true }
+
+# Logging and utilities
+env_logger = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["actix"]
+
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "hyperchad_renderer_html_cdn/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
+
+actix = []
