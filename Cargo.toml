@@ -135,6 +135,7 @@ members = [
     "packages/music_api/models",
     "packages/openport",
     "packages/opus",
+    "packages/opus/examples/decode_opus",
     "packages/opus_native",
     "packages/opus_native/examples/basic_usage",
     "packages/opus_native/libopus",
