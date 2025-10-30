@@ -8582,6 +8582,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_image_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "moosicbox_image",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_image_libvips_resize_example"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "moosicbox_image",
+]
+
+[[package]]
 name = "moosicbox_json_utils"
 version = "0.1.4"
 dependencies = [

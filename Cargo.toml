@@ -105,6 +105,8 @@ members = [
     "packages/hyperchad/transformer/examples/basic_usage",
     "packages/hyperchad/transformer/models",
     "packages/image",
+    "packages/image/examples/basic_usage",
+    "packages/image/examples/libvips_resize",
     "packages/json_utils",
     "packages/library",
     "packages/library/models",
