@@ -606,6 +606,9 @@ jobs:
             - name: Commit changes with resilient push
               if: steps.check_lib.outputs.exists == 'true'
               run: |
+                  # Remove output.txt so it doesn't get committed
+                  rm -f output.txt
+
                   # Check if any changes were made by Claude
                   if [ -n "$(git status --porcelain)" ]; then
 
