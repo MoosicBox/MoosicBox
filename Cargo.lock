@@ -5828,6 +5828,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_markdown_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_markdown",
+]
+
+[[package]]
+name = "hyperchad_markdown_custom_options_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_markdown",
+]
+
+[[package]]
 name = "hyperchad_markdown_example"
 version = "0.1.0"
 dependencies = [
@@ -5836,6 +5850,13 @@ dependencies = [
  "hyperchad_markdown",
  "log 0.4.28",
  "switchy",
+]
+
+[[package]]
+name = "hyperchad_markdown_gfm_features_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_markdown",
 ]
 
 [[package]]
