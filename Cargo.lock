@@ -9149,6 +9149,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_remote_library_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_music_api",
+ "moosicbox_music_models",
+ "moosicbox_remote_library",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_resampler"
 version = "0.1.4"
 dependencies = [

@@ -146,6 +146,7 @@ members = [
     "packages/qobuz",
     "packages/random",
     "packages/remote_library",
+    "packages/remote_library/examples/basic_usage",
     "packages/resampler",
     "packages/scan",
     "packages/scan/models",
