@@ -15406,6 +15406,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_env_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
+]
+
+[[package]]
+name = "switchy_env_custom_provider_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
+]
+
+[[package]]
+name = "switchy_env_simulator_testing_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
+]
+
+[[package]]
 name = "switchy_fs"
 version = "0.1.4"
 dependencies = [
