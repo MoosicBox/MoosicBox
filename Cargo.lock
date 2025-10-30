@@ -14141,6 +14141,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_utils_simulation_cancellation_example"
+version = "0.1.0"
+dependencies = [
+ "pretty_env_logger",
+ "simvar_utils",
+ "switchy_async",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

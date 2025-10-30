@@ -182,6 +182,7 @@ members = [
     "packages/simvar/harness",
     "packages/simvar/harness/examples/basic_simulation",
     "packages/simvar/utils",
+    "packages/simvar/utils/examples/simulation_cancellation",
     "packages/stream_utils",
     "packages/stream_utils/examples/basic_broadcast",
     "packages/stream_utils/examples/stalled_monitor",
