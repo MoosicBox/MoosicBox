@@ -124,6 +124,7 @@ members = [
     "packages/marketing_site/ui",
     "packages/mdns",
     "packages/menu",
+    "packages/menu/examples/basic_usage",
     "packages/menu/models",
     "packages/middleware",
     "packages/moosicbox",

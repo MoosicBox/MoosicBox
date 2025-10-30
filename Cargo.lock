@@ -8868,6 +8868,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_menu_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_menu",
+ "moosicbox_music_models",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_menu_models"
 version = "0.1.4"
 dependencies = [
