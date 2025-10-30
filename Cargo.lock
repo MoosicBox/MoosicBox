@@ -9161,6 +9161,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_profiles_api_integration_example"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "moosicbox_profiles",
+ "serde_json",
+]
+
+[[package]]
+name = "moosicbox_profiles_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_profiles",
+]
+
+[[package]]
+name = "moosicbox_profiles_events_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_profiles",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_qobuz"
 version = "0.1.4"
 dependencies = [
