@@ -8392,6 +8392,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_zone_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_audio_zone",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_audio_zone_models"
 version = "0.1.4"
 dependencies = [
