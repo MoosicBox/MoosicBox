@@ -5061,6 +5061,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpipe_ast_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "gpipe_ast",
+]
+
+[[package]]
 name = "gpu-alloc"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

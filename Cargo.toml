@@ -45,6 +45,7 @@ members = [
     "packages/fs/examples/temp_dir",
     "packages/gpipe",
     "packages/gpipe/ast",
+    "packages/gpipe/ast/examples/basic_usage",
     "packages/http",
     "packages/http/examples/simple_get",
     "packages/http/models",
