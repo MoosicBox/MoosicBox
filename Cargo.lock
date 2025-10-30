@@ -8998,6 +8998,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_opus_native_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_opus_native",
+]
+
+[[package]]
 name = "moosicbox_opus_native_libopus"
 version = "0.1.0"
 dependencies = [
