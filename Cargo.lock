@@ -8391,6 +8391,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_config_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_config",
+]
+
+[[package]]
 name = "moosicbox_date_utils"
 version = "0.1.4"
 dependencies = [
