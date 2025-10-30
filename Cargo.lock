@@ -9032,6 +9032,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_parsing_utils_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_parsing_utils",
+]
+
+[[package]]
 name = "moosicbox_player"
 version = "0.1.4"
 dependencies = [
