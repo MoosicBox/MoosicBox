@@ -8423,6 +8423,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_auth_basic_auth_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_auth",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_channel_utils"
 version = "0.1.4"
 dependencies = [
