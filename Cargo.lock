@@ -15591,6 +15591,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_schema_test_utils_migration_testing_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "switchy_schema_test_utils",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_tcp"
 version = "0.1.4"
 dependencies = [
