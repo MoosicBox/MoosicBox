@@ -8531,6 +8531,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_downloader_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "atomic_float",
+ "moosicbox_downloader",
+ "moosicbox_music_api",
+ "moosicbox_music_models",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_env_utils"
 version = "0.1.4"
 dependencies = [

@@ -47,6 +47,7 @@ members = [
     "packages/date_utils",
     "packages/date_utils/examples/basic_parsing",
     "packages/downloader",
+    "packages/downloader/examples/basic_usage",
     "packages/env",
     "packages/env_utils",
     "packages/files",
