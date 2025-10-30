@@ -6,6 +6,7 @@ edition     = { workspace = true }
 keywords    = ["api-testing", "rest", "simulation", "simvar"]
 license     = { workspace = true }
 name        = "simvar_api_testing_example"
+publish     = false
 readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"

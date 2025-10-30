@@ -6,6 +6,7 @@ edition     = { workspace = true }
 keywords    = ["handler", "macro", "server", "test", "web"]
 license     = { workspace = true }
 name        = "handler_macro_test"
+publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 

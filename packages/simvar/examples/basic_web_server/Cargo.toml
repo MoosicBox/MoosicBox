@@ -6,6 +6,7 @@ edition     = { workspace = true }
 keywords    = ["simulation", "simvar", "web-server"]
 license     = { workspace = true }
 name        = "simvar_basic_web_server_example"
+publish     = false
 readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"

@@ -6,6 +6,7 @@ edition     = { workspace = true }
 keywords    = ["extraction", "request", "server", "test", "web"]
 license     = { workspace = true }
 name        = "from_request_test"
+publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 

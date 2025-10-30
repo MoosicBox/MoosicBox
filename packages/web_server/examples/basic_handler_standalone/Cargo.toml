@@ -6,6 +6,7 @@ edition     = { workspace = true }
 keywords    = ["async", "example", "http", "network", "web"]
 license     = { workspace = true }
 name        = "basic_handler_standalone_example"
+publish     = false
 readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"

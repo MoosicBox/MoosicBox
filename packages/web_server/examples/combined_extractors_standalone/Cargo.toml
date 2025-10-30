@@ -15,6 +15,7 @@ keywords = [
 ]
 license = { workspace = true }
 name = "combined_extractors_standalone_example"
+publish = false
 readme = "README.md"
 repository = { workspace = true }
 version = "0.1.0"
