@@ -199,6 +199,7 @@ members = [
     "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
+    "packages/tidal/examples/basic_authentication",
     "packages/time",
     "packages/tunnel",
     "packages/tunnel/examples/basic_usage",
