@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating Opus audio decoding using moosicbox_opus with Symphonia"
+edition     = { workspace = true }
+keywords    = ["audio", "decode", "example", "moosicbox_opus", "opus"]
+license     = { workspace = true }
+name        = "moosicbox_opus_decode_opus_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "decode_opus_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_opus = { workspace = true }
+symphonia      = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_opus/fail-on-warnings"]

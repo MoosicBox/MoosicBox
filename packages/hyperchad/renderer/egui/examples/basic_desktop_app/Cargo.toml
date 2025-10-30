@@ -1,0 +1,38 @@
+[package]
+description = "Example demonstrating basic desktop application usage with hyperchad_renderer_egui"
+edition     = { workspace = true }
+keywords    = ["desktop", "egui", "example", "gui", "hyperchad"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_egui_basic_desktop_app_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_desktop_app_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_actions       = { workspace = true, features = ["logic"] }
+hyperchad_renderer      = { workspace = true, features = ["logic"] }
+hyperchad_renderer_egui = { workspace = true, features = ["wgpu"] }
+hyperchad_router        = { workspace = true }
+hyperchad_template      = { workspace = true }
+hyperchad_transformer   = { workspace = true, features = ["layout"] }
+switchy_async           = { workspace = true, features = ["tokio"] }
+
+env_logger = { workspace = true }
+flume      = { workspace = true }
+log        = { workspace = true }
+
+[features]
+default = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_egui/fail-on-warnings",
+    "hyperchad_router/fail-on-warnings",
+    "hyperchad_template/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]

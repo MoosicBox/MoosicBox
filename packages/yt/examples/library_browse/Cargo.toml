@@ -1,0 +1,25 @@
+[package]
+description = "Example demonstrating YouTube Music library browsing in moosicbox_yt"
+edition     = { workspace = true }
+keywords    = ["example", "library", "moosicbox_yt", "youtube-music"]
+license     = { workspace = true }
+name        = "moosicbox_yt_library_browse_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "library_browse_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_yt     = { workspace = true, features = ["db"] }
+switchy_database = { workspace = true, features = ["simulator"] }
+tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = [
+    "moosicbox_yt/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]

@@ -1,0 +1,25 @@
+[package]
+description = "Example demonstrating basic database migration usage in moosicbox_schema"
+edition     = { workspace = true }
+keywords    = ["database", "example", "migration", "moosicbox_schema"]
+license     = { workspace = true }
+name        = "moosicbox_schema_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_schema            = { workspace = true, features = ["sqlite"] }
+switchy_database            = { workspace = true }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_schema/fail-on-warnings"]

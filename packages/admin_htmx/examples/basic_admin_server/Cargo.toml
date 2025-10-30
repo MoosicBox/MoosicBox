@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating basic admin HTMX server setup in moosicbox_admin_htmx"
+edition     = { workspace = true }
+keywords    = ["admin", "example", "htmx", "moosicbox_admin_htmx", "web-server"]
+license     = { workspace = true }
+name        = "moosicbox_admin_htmx_basic_admin_server_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_admin_server_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_admin_htmx = { workspace = true, features = ["api"] }
+switchy_database     = { workspace = true, features = ["api", "turso"] }
+
+actix-web  = { workspace = true }
+env_logger = { workspace = true }
+
+[features]
+default = []
+fail-on-warnings = [
+    "moosicbox_admin_htmx/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]

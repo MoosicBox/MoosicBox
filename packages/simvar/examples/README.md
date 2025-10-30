@@ -1,22 +1,36 @@
-# Simvar Web Server Examples
+# Simvar Examples
 
-This directory contains comprehensive examples demonstrating how to use simvar with moosicbox_web_server for various simulation scenarios.
+This directory contains examples demonstrating how to use simvar for deterministic simulation testing of concurrent systems.
 
 ## Overview
 
-These examples showcase different aspects of web server simulation and testing:
+These examples showcase different aspects of simulation testing with simvar:
 
-- **Basic server operations** and client interactions
-- **Load testing** and performance analysis
-- **API endpoint validation** and contract testing
-- **Network resilience** and failure handling
-- **Performance monitoring** and alerting
+- **Core simulation concepts** - Host/client actors, simulation time, deterministic execution
+- **Web server testing** - Basic server operations and client interactions
+- **API validation** - REST API endpoint testing and contract validation
 
 ## Examples
 
-### 1. Basic Web Server (`basic_web_server/`)
+### 1. Basic Simulation (`basic_simulation/`)
 
-**Difficulty**: Beginner  
+**Difficulty**: Beginner
+**Focus**: Core simvar concepts without external dependencies
+
+A minimal simulation demonstrating fundamental concepts:
+
+- Creating persistent host actors and ephemeral client actors
+- Using simulation time for deterministic execution
+- Sharing state between actors using thread-safe primitives
+- Understanding the SimBootstrap lifecycle
+
+**Key Concepts**: SimBootstrap trait, Host/Client actors, Simulation time, Deterministic execution
+
+**Recommended Starting Point**: Start here if you're new to simvar!
+
+### 2. Basic Web Server (`basic_web_server/`)
+
+**Difficulty**: Beginner
 **Focus**: Fundamentals of simvar + web server integration
 
 A simple HTTP server simulation that demonstrates:
@@ -28,23 +42,9 @@ A simple HTTP server simulation that demonstrates:
 
 **Key Concepts**: SimBootstrap, Host/Client actors, HTTP routes, basic metrics
 
-### 2. Load Testing (`load_testing/`)
-
-**Difficulty**: Intermediate  
-**Focus**: Performance testing under various load patterns
-
-Advanced load testing simulation featuring:
-
-- Multiple load patterns (sustained, burst, ramp-up)
-- Weighted endpoint selection and realistic traffic
-- Performance metrics collection and analysis
-- Response time tracking and error analysis
-
-**Key Concepts**: Load patterns, performance metrics, concurrent clients, realistic traffic simulation
-
 ### 3. API Testing (`api_testing/`)
 
-**Difficulty**: Intermediate  
+**Difficulty**: Intermediate
 **Focus**: Comprehensive REST API validation
 
 Complete API testing framework with:
@@ -56,41 +56,13 @@ Complete API testing framework with:
 
 **Key Concepts**: REST API testing, test scenarios, validation patterns, comprehensive reporting
 
-### 4. Network Failure Simulation (`network_failure/`)
-
-**Difficulty**: Advanced  
-**Focus**: Resilience testing under network stress
-
-Network resilience testing environment with:
-
-- Various failure types (latency, packet loss, connection failures, partitions)
-- Client retry logic and recovery mechanisms
-- Server graceful degradation under stress
-- Resilience metrics and recovery time analysis
-
-**Key Concepts**: Network failure injection, resilience patterns, retry logic, recovery analysis
-
-### 5. Performance Monitoring (`performance_monitor/`)
-
-**Difficulty**: Advanced  
-**Focus**: Real-time performance monitoring and alerting
-
-Comprehensive performance monitoring system featuring:
-
-- Real-time metrics collection (RPS, response times, resource usage)
-- Automated alerting with configurable thresholds
-- Historical data tracking and trend analysis
-- Separate monitoring server with dedicated endpoints
-
-**Key Concepts**: Real-time monitoring, alerting systems, time-series data, performance analysis
-
 ## Getting Started
 
 ### Prerequisites
 
 - Rust toolchain (see `rust-toolchain.toml` in project root)
-- Basic understanding of HTTP and web servers
-- Familiarity with async Rust programming
+- Basic understanding of async Rust programming
+- Familiarity with HTTP concepts (for web server examples)
 
 ### Running Examples
 
@@ -99,20 +71,14 @@ Each example can be run independently:
 ```bash
 # From the MoosicBox root directory
 
+# Basic simulation example (recommended starting point)
+cargo run -p simvar_basic_simulation_example
+
 # Basic web server example
 cargo run -p simvar_basic_web_server_example
 
-# Load testing example
-cargo run -p simvar_load_testing_example
-
 # API testing example
 cargo run -p simvar_api_testing_example
-
-# Network failure simulation
-cargo run -p simvar_network_failure_example
-
-# Performance monitoring
-cargo run -p simvar_performance_monitor_example
 ```
 
 ### Logging
@@ -134,24 +100,17 @@ RUST_LOG=simvar=debug,moosicbox_web_server=info cargo run -p <example_name>
 
 ### Beginner Path
 
-1. **Start with `basic_web_server`** - Learn fundamental concepts
-2. **Explore the code structure** - Understand SimBootstrap, hosts, and clients
-3. **Modify configurations** - Change ports, client counts, and durations
-4. **Add simple endpoints** - Practice creating new routes
+1. **Start with `basic_simulation`** - Learn core concepts without complexity
+2. **Understand the fundamentals** - Host/client actors, simulation time, deterministic execution
+3. **Experiment with the code** - Modify client counts, durations, and behaviors
+4. **Try `basic_web_server`** - Apply concepts to HTTP server testing
 
 ### Intermediate Path
 
-1. **Try `load_testing`** - Learn performance testing concepts
-2. **Experiment with load patterns** - Compare sustained vs. burst vs. ramp-up
-3. **Explore `api_testing`** - Understand comprehensive API validation
-4. **Create custom test scenarios** - Add your own test cases
-
-### Advanced Path
-
-1. **Study `network_failure`** - Learn resilience testing patterns
-2. **Implement custom failure types** - Add new network conditions
-3. **Explore `performance_monitor`** - Understand real-time monitoring
-4. **Build custom monitoring** - Create your own metrics and alerts
+1. **Explore `api_testing`** - Understand comprehensive API validation
+2. **Create custom test scenarios** - Add your own test cases
+3. **Experiment with different features** - Try database, filesystem, or TCP simulations
+4. **Build your own simulations** - Apply concepts to your testing needs
 
 ## Key Concepts
 

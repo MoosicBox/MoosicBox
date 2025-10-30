@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic markdown to HyperChad Container conversion"
+edition     = { workspace = true }
+keywords    = ["basic", "example", "hyperchad_markdown", "markdown"]
+license     = { workspace = true }
+name        = "hyperchad_markdown_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_markdown = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["hyperchad_markdown/fail-on-warnings"]

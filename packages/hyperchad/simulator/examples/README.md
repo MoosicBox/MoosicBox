@@ -2,16 +2,22 @@
 
 This directory contains examples demonstrating how to use the HyperChad simulation framework.
 
-## Basic Simulation
+## Available Examples
 
-Run the basic simulation example:
+### [basic_simulation](basic_simulation/)
+
+Demonstrates how to use the HyperChad simulator to test applications across multiple renderer implementations with automated test plans. This example shows:
+
+- Creating a `HyperChadSimulator` instance with custom configuration
+- Configuring multiple renderer types (HTML and Vanilla JS)
+- Setting up application routes and mock data
+- Creating a test plan with navigation, form filling, and button clicks
+- Executing simulations and interpreting results
+
+Run with:
 
 ```bash
-# Without test utils (basic simulator setup)
-cargo run --example basic_simulation
-
-# With test utils (full test plan execution)
-cargo run --example basic_simulation --features test-utils
+cargo run --manifest-path packages/hyperchad/simulator/examples/basic_simulation/Cargo.toml --features test-utils
 ```
 
 ## Features
@@ -29,11 +35,17 @@ The simulator supports:
 ```rust
 let test_plan = TestPlan::new()
     .navigate_to("/login")
-    .fill_form(FormData::new()
-        .text("username", "testuser")
-        .text("password", "password123"))
+    .fill_form(
+        FormData::new()
+            .text("username", "testuser")
+            .text("password", "password123"),
+    )
     .click("#login-button")
-    .wait_for(WaitCondition::url_contains("/dashboard"))
-    .assert_dom("#welcome-message", DomMatcher::visible())
-    .assert_response(ResponseMatcher::status_ok());
+    .wait_for_url("/dashboard");
 ```
+
+## Additional Resources
+
+- [HyperChad Documentation](../../../README.md)
+- [Test Utils Package](../../test_utils/README.md)
+- [Web Server Simulator](../../../web_server/simulator/README.md)

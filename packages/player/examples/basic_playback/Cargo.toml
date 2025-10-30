@@ -1,0 +1,33 @@
+[package]
+description = "Example demonstrating basic audio playback in moosicbox_player"
+edition     = { workspace = true }
+keywords    = ["audio", "example", "moosicbox_player", "playback"]
+license     = { workspace = true }
+name        = "moosicbox_player_basic_playback_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_playback_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_audio_output = { workspace = true, default-features = false, features = [
+    "cpal",
+] }
+moosicbox_music_models = { workspace = true }
+moosicbox_player = { workspace = true, default-features = false, features = [
+    "decoder-flac",
+    "local",
+] }
+moosicbox_session = { workspace = true }
+
+env_logger    = { workspace = true }
+log           = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
+tokio         = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_player/fail-on-warnings"]

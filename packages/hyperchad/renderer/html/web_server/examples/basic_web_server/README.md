@@ -1,14 +1,23 @@
 # HyperChad Basic Web Server Example
 
-This example demonstrates a complete web application built with the HyperChad framework, showcasing server-side rendering with the web server backend.
+## Summary
 
-## Features
+This example demonstrates a complete web application built with the HyperChad framework, showcasing server-side rendering with the web server backend, multiple routes, and JSON API endpoints.
+
+## What This Example Demonstrates
 
 - **Server-side rendering** with type-safe HTML generation using the `container!` macro
 - **Component-based architecture** with reusable page functions
 - **Built-in routing** for multiple pages and API endpoints
 - **JSON API endpoints** for dynamic functionality
 - **Modern HTML structure** with semantic elements
+
+## Prerequisites
+
+- Basic knowledge of Rust and async programming
+- Understanding of web server concepts (routes, requests, responses)
+- Familiarity with HTML and JSON APIs
+- A Nix environment configured for HyperChad development (see MoosicBox root README)
 
 ## Project Structure
 
@@ -32,16 +41,37 @@ basic_web_server/
 From the MoosicBox root directory:
 
 ```bash
-# Build and run
-nix develop .#fltk-hyperchad --command bash -c "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo run"
+# Using the full manifest path (recommended)
+cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml
 
-# Or just build
-nix develop .#fltk-hyperchad --command bash -c "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo build"
+# Or with Nix development environment
+nix develop .#fltk-hyperchad --command bash -c "cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml"
+
+# Or navigate to the example directory
+cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server
+cargo run
 ```
 
 The server will start on `http://localhost:8343` by default.
 
-## Key Concepts Demonstrated
+## Expected Output
+
+When you run the example, you should see logging output similar to:
+
+```
+Starting HyperChad Web Server Example
+Starting web server
+Server listening on http://0.0.0.0:8343
+```
+
+You can then:
+
+- Open `http://localhost:8343/` in your browser to see the home page
+- Navigate to `http://localhost:8343/about` for the About page
+- Navigate to `http://localhost:8343/contact` for the Contact page
+- Visit `http://localhost:8343/api/status` to get a JSON response with server status
+
+## Code Walkthrough
 
 ### 1. Component Architecture
 
@@ -114,6 +144,107 @@ let app = router_to_web_server(DefaultHtmlTagRenderer::default(), router)
     .with_title(Some("HyperChad Web Server Example".to_string()))
     .with_description(Some("A modern web application built with HyperChad".to_string()));
 ```
+
+## Key Concepts
+
+### Type-Safe HTML Generation
+
+HyperChad provides compile-time safety for HTML generation through Rust's type system. The `container!` macro ensures that your HTML structure is valid at compile time, preventing common runtime errors like mismatched tags or invalid nesting.
+
+### Component-Based Architecture
+
+The example demonstrates how to build reusable page components as functions that return `Container` types. This pattern promotes code reuse and maintainability, similar to modern frontend frameworks.
+
+### Async Request Handling
+
+Routes use async handlers with the `RouteRequest` type, enabling efficient handling of concurrent requests without blocking. The `switchy` runtime provides cross-platform async execution.
+
+### Server-Side Rendering
+
+All HTML is generated on the server and sent to the client as complete HTML documents. This approach provides better SEO, faster initial page loads, and simpler client-side logic compared to client-side rendering.
+
+## Testing the Example
+
+Once the server is running, you can test it in several ways:
+
+### 1. Browser Testing
+
+Open a web browser and navigate to:
+
+- `http://localhost:8343/` - Should display the home page with features
+- `http://localhost:8343/about` - Should display the about page
+- `http://localhost:8343/contact` - Should display the contact form page
+
+### 2. API Endpoint Testing
+
+Test the JSON API endpoint using curl:
+
+```bash
+curl http://localhost:8343/api/status
+```
+
+Expected response:
+
+```json
+{
+    "status": "ok",
+    "message": "HyperChad Web Server is running!",
+    "timestamp": 1698765432
+}
+```
+
+### 3. Environment Variables
+
+You can customize the server binding:
+
+```bash
+# Change the port
+PORT=9000 cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml
+
+# Change the bind address
+BIND_ADDR=127.0.0.1 cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+If you see an error like "Address already in use":
+
+```
+Error: Os { code: 98, kind: AddrInUse, message: "Address already in use" }
+```
+
+**Solution**: Change the port using the `PORT` environment variable:
+
+```bash
+PORT=8344 cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml
+```
+
+### Nix Environment Issues
+
+If you encounter build errors related to missing dependencies:
+
+**Solution**: Ensure you're in the correct Nix development shell:
+
+```bash
+nix develop .#fltk-hyperchad
+```
+
+### Logging Not Showing
+
+If you don't see log output:
+
+**Solution**: Set the `RUST_LOG` environment variable:
+
+```bash
+RUST_LOG=info cargo run --manifest-path packages/hyperchad/renderer/html/web_server/examples/basic_web_server/Cargo.toml
+```
+
+## Related Examples
+
+- `packages/hyperchad/examples/details_summary/` - Demonstrates HyperChad web components with interactive elements
+- `packages/web_server/examples/simple_get/` - Basic web server example showing low-level server setup
 
 ## Technology Stack
 

@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating basic local music directory scanning in moosicbox_scan"
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_scan", "music", "scanning"]
+license     = { workspace = true }
+name        = "moosicbox_scan_basic_scan_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_scan_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_music_api         = { workspace = true }
+moosicbox_scan              = { workspace = true, features = ["local"] }
+moosicbox_schema            = { workspace = true, features = ["sqlite"] }
+switchy_database            = { workspace = true }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_scan/fail-on-warnings"]

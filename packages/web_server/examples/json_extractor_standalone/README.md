@@ -154,3 +154,42 @@ This example is perfect for:
 - Learning JSON handling in web services
 - Understanding serde integration
 - Building type-safe APIs
+
+## Troubleshooting
+
+### JSON Parsing Errors
+
+**Problem**: "Failed to deserialize JSON" errors
+**Solution**: Ensure your JSON matches the struct definition exactly. Check:
+
+- Field names match exactly (case-sensitive)
+- Required fields are present
+- Field types are correct (numbers vs strings)
+- JSON syntax is valid
+
+### Content-Type Issues
+
+**Problem**: Handler not receiving JSON data
+**Solution**: Ensure the `Content-Type: application/json` header is set in your request
+
+### Feature Flag Issues
+
+**Problem**: `Json` extractor not available
+**Solution**: Ensure the `serde` feature is enabled for `moosicbox_web_server`:
+
+```toml
+moosicbox_web_server = { workspace = true, features = ["serde"] }
+```
+
+### Backend-Specific Behavior
+
+**Problem**: Different behavior between Actix and Simulator
+**Solution**: This is expected - the Simulator backend is for testing. Use Actix backend for production HTTP servers.
+
+## Related Examples
+
+- **query_extractor_standalone**: Similar patterns for query parameter extraction
+- **combined_extractors_standalone**: Shows how to combine JSON with other extractors
+- **basic_handler_standalone**: Foundation for understanding handler patterns
+- **simple_get**: Basic routing setup to build upon
+- **openapi**: Add API documentation to your JSON endpoints

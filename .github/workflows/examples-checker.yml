@@ -395,6 +395,7 @@ jobs:
                       - DO NOT create examples for packages that don''t need them
                       - DO NOT fix compilation errors in pre-existing examples (that''s CI''s job)
                       - DO NOT modify existing example code to fix clippy warnings
+                      - DO NOT create or modify package.json or package-lock.json files (Astro files are legacy and not supported)
                       - DO ensure NEW or MODIFIED examples compile without errors or warnings
                       - DO add ALL new examples to the workspace Cargo.toml members list (CRITICAL - workflow will fail without this)
                       - DO improve READMEs and documentation of existing examples

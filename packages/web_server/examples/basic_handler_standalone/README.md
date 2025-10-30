@@ -88,3 +88,75 @@ This example is perfect for:
 - Learning the basics of the web server framework
 - Building lightweight APIs
 - Understanding request extraction fundamentals
+
+## Code Walkthrough
+
+### Handler Definition
+
+```rust
+async fn basic_info_handler(data: RequestData) -> Result<HttpResponse, Error> {
+    // Access request information
+    let method = data.method;
+    let path = data.path;
+    let query = data.query;
+
+    // Build response
+    Ok(HttpResponse::ok().with_body(format!(
+        "Method: {:?}, Path: {}, Query: {}",
+        method, path, query
+    )))
+}
+```
+
+### Route Registration
+
+```rust
+let route = Route::with_handler1(Method::Get, "/basic-info", basic_info_handler);
+```
+
+### Multiple Extractors
+
+```rust
+async fn double_handler(
+    data1: RequestData,
+    data2: RequestData,
+) -> Result<HttpResponse, Error> {
+    // Both parameters contain the same request data
+    // Useful for demonstrating extractor mechanics
+    Ok(HttpResponse::ok().with_body("..."))
+}
+```
+
+## Troubleshooting
+
+### Feature Flag Issues
+
+**Problem**: "trait bound not satisfied" errors
+**Solution**: Ensure correct backend feature is enabled:
+
+```bash
+--no-default-features --features actix        # for Actix backend
+# or use default features for Simulator
+```
+
+### Handler Registration Errors
+
+**Problem**: Cannot convert handler to Route
+**Solution**: Ensure you're using the correct method for the number of parameters:
+
+- `Route::with_handler()` for 0 parameters
+- `Route::with_handler1()` for 1 parameter (like RequestData)
+- `Route::with_handler2()` for 2 parameters
+
+### Backend-Specific Behavior
+
+**Problem**: Different behavior between Actix and Simulator
+**Solution**: This is expected - the Simulator backend is for testing. Use Actix backend for production HTTP servers.
+
+## Related Examples
+
+- **basic_handler**: Handler registration without running a server
+- **simple_get**: Basic routing with CORS and server startup
+- **query_extractor_standalone**: Add query parameter extraction
+- **json_extractor_standalone**: Add JSON body parsing
+- **combined_extractors_standalone**: Combine multiple extractors together

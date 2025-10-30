@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic synchronous file operations in switchy_fs"
+edition     = { workspace = true }
+keywords    = ["example", "file-operations", "switchy_fs"]
+license     = { workspace = true }
+name        = "switchy_fs_basic_file_ops_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_file_ops_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_fs = { workspace = true, features = ["std", "sync"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_fs/fail-on-warnings"]

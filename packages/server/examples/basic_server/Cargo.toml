@@ -1,0 +1,32 @@
+[package]
+description = "Example demonstrating basic MoosicBox server startup and configuration"
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_server", "server"]
+license     = { workspace = true }
+name        = "moosicbox_server_basic_server_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_server_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_config = { workspace = true }
+moosicbox_logging = { workspace = true }
+moosicbox_server = { workspace = true, features = [
+    "all-apis",
+    "all-formats",
+    "sqlite-sqlx",
+] }
+
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = [
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_server/fail-on-warnings",
+]

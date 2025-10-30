@@ -180,9 +180,25 @@ impl From<LibraryDatabase> for Arc<Box<dyn Database>> {
     }
 }
 
+impl From<Box<dyn Database>> for LibraryDatabase {
+    fn from(value: Box<dyn Database>) -> Self {
+        Self {
+            database: Arc::new(value),
+        }
+    }
+}
+
 impl From<Arc<Box<dyn Database>>> for LibraryDatabase {
     fn from(value: Arc<Box<dyn Database>>) -> Self {
         Self { database: value }
+    }
+}
+
+impl<T: Database + 'static> From<T> for LibraryDatabase {
+    fn from(value: T) -> Self {
+        Self {
+            database: Arc::new(Box::new(value)),
+        }
     }
 }
 

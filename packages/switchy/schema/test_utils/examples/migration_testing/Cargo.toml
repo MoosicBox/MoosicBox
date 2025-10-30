@@ -1,0 +1,24 @@
+[package]
+description = "Example demonstrating migration testing utilities in switchy_schema_test_utils"
+edition     = { workspace = true }
+keywords    = ["example", "migration", "switchy_schema_test_utils", "testing"]
+license     = { workspace = true }
+name        = "switchy_schema_test_utils_migration_testing_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "migration_testing_example"
+path = "src/main.rs"
+
+[dependencies]
+async-trait               = { workspace = true }
+switchy_database          = { workspace = true }
+switchy_schema            = { workspace = true }
+switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
+tokio                     = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_schema_test_utils/fail-on-warnings"]

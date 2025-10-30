@@ -1,15 +1,27 @@
 # API Testing Simulation Example
 
-This example demonstrates API testing using simvar and moosicbox_web_server to validate REST endpoint behavior.
+This example demonstrates comprehensive REST API endpoint testing using simvar and moosicbox_web_server in a deterministic simulation environment.
 
-## Overview
+## Summary
 
-The simulation creates an API testing environment with:
+This simulation creates a complete API testing framework that validates REST endpoint behavior through multiple test scenarios including happy path operations, error handling, edge cases, and concurrency testing. The example showcases how to use simvar for reproducible API contract testing with detailed result tracking and reporting.
 
-- **REST API Server**: Simplified CRUD endpoints for user management
-- **Test Scenarios**: Happy path, error handling, and edge case testing
-- **HTTP Validation**: Status code verification and response timing
-- **Detailed Reporting**: Test results with timing and error analysis
+## What This Example Demonstrates
+
+- Setting up a REST API server with CRUD endpoints using moosicbox_web_server
+- Creating test client actors that validate API contracts
+- Running multiple test scenarios (happy path, error handling, edge cases, concurrency)
+- Tracking detailed test results with pass/fail status and timing metrics
+- Using simulation time for deterministic, reproducible testing
+- Validating HTTP status codes and response formats
+- Organizing and reporting comprehensive test results
+
+## Prerequisites
+
+- Rust toolchain (see `rust-toolchain.toml` in project root)
+- Basic understanding of REST APIs and HTTP methods
+- Familiarity with async Rust and the tokio runtime
+- Understanding of CRUD operations (Create, Read, Update, Delete)
 
 ## Test Scenarios
 
@@ -81,8 +93,13 @@ The server implements these REST endpoints:
 
 ## Running the Example
 
+From the MoosicBox root directory:
+
 ```bash
-# From the MoosicBox root directory
+# Basic run
+cargo run --manifest-path packages/simvar/examples/api_testing/Cargo.toml
+
+# Or using the package name
 cargo run -p simvar_api_testing_example
 
 # With detailed logging
@@ -136,94 +153,202 @@ Test Details:
 
 **Note**: The test count reflects the actual implemented tests. Concurrency tests are currently simplified and do not perform actual API requests.
 
-## Key Features
+## Code Walkthrough
 
-### Test Coverage
+### 1. Main Simulation Entry Point
 
-- Multiple test scenarios: happy path, error handling, edge cases
-- Both positive and negative test cases
-- Boundary condition testing
-- **Planned**: Full concurrent operation validation
+The `main()` function initializes and runs the simulation:
 
-### Detailed Result Tracking
+```rust
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bootstrap = ApiTestingBootstrap::new();
+    let results = run_simulation(bootstrap)?;
 
-- Individual test pass/fail status
-- Response time measurement
-- Error message capture
-- Categorized test reporting
+    // Print test results summary
+    println!("\n=== API TESTING RESULTS ===");
+    for result in &results {
+        println!("{result}");
+    }
 
-### Simplified API Implementation
+    Ok(())
+}
+```
 
-- Basic CRUD endpoint structure
-- HTTP status code responses
-- JSON response handling
-- In-memory data persistence
-- **Limitation**: Simplified implementations for demonstration (hardcoded data, placeholder operations)
+### 2. Bootstrap Configuration
 
-### Deterministic Testing
+`ApiTestingBootstrap` configures the simulation parameters:
 
-- Controlled simulation environment
-- Reproducible test results
-- Configurable test duration (20 seconds by default)
-- Ordered test execution (random order disabled)
+```rust
+struct ApiTestingBootstrap {
+    server_port: u16,
+    test_scenarios: Vec<TestScenario>,
+    test_results: Arc<Mutex<TestResults>>,
+}
+```
 
-## Use Cases
+The `build_sim()` method sets simulation duration:
 
-This example demonstrates:
+```rust
+fn build_sim(&self, config: SimConfig) -> SimConfig {
+    config.with_duration(Duration::from_secs(20))
+}
+```
 
-- **Simulation Testing**: Using simvar to test HTTP APIs in a controlled environment
-- **Basic API Testing Patterns**: Structure for organizing and executing API tests
-- **Response Validation**: Checking HTTP status codes and response timing
-- **Test Result Tracking**: Collecting and reporting test outcomes
+### 3. Server Host Setup
 
-**Potential Extensions** (not currently implemented):
+The `on_start()` method creates the API server host:
 
-- Full API contract testing with request/response validation
-- Regression testing with complete CRUD implementations
-- Performance testing under load
-- Comprehensive concurrency testing
+```rust
+sim.host("api-server", || {
+    Box::pin(async move {
+        let builder = WebServerBuilder::default()
+            .with_port(self.server_port)
+            .with_scope(create_api_routes());
 
-## Potential Extensions
+        builder.serve().await?;
+        Ok(())
+    })
+});
+```
 
-This example could be extended to test:
+### 4. Test Client Actors
 
-- **Request Body Parsing**: Parse and validate JSON request bodies
-- **Path Parameter Extraction**: Extract and use URL path parameters
-- **Complete CRUD Operations**: Implement actual update and delete functionality
-- **Concurrency Testing**: Full implementation of concurrent API request scenarios
-- **Authentication and Authorization**: Add authentication testing
-- **Rate Limiting**: Test API rate limiting behavior
-- **Database Integration**: Replace in-memory storage with actual database operations
-- **Caching**: Test caching behavior
-- **API Versioning**: Test multiple API versions
+Test clients are spawned for each scenario:
 
-## Test Result Interpretation
+```rust
+sim.client("happy-path-tester", async move {
+    // Create user
+    let response = client.request(Method::Post, &create_url).send().await?;
 
-### Response Times
+    // Validate response
+    assert_eq!(response.status(), StatusCode::CREATED);
 
-- **Fast operations** (&lt;50ms): Simple CRUD operations
-- **Medium operations** (50-200ms): Complex queries or validations
-- **Slow operations** (&gt;200ms): May indicate performance issues
+    // Record test result
+    results.lock().unwrap().record_test(/* ... */);
 
-### Error Rates
+    Ok(())
+});
+```
 
-- **0% errors**: All tests passing (ideal)
-- **&lt;5% errors**: Acceptable for non-critical issues
-- **&gt;5% errors**: Indicates significant problems requiring investigation
+### 5. Test Result Tracking
 
-### Test Categories
+Results are collected using a thread-safe structure:
 
-- **Happy Path**: Tests basic successful operations (create, get, list)
-- **Error Handling**: Verifies expected error status codes (note: some may fail due to simplified implementation)
-- **Edge Cases**: Tests boundary conditions (accepts either success or validation errors)
-- **Concurrency**: Currently simplified and not performing full tests
+```rust
+struct TestResults {
+    tests: Vec<TestResult>,
+    total: u32,
+    passed: u32,
+    failed: u32,
+}
+```
 
-## Integration with CI/CD
+## Key Concepts
 
-This simulation can be used in continuous integration pipelines:
+### Deterministic Testing with Simvar
 
-- Run as part of automated testing (exit code reflects test results)
-- Parse output for test result summaries
-- Use as a template for building more comprehensive API test suites
+Simvar provides reproducible test execution:
 
-**Planned**: Generate test reports in standard formats (JUnit, TAP, etc.)
+- **Controlled time**: Tests run in simulation time, not real time
+- **Reproducible results**: Same test runs produce identical outcomes
+- **No external dependencies**: All components run within the simulation
+
+### Test Scenario Organization
+
+Tests are organized by category:
+
+- **Happy Path**: Validates successful operations under normal conditions
+- **Error Handling**: Ensures proper error responses for invalid requests
+- **Edge Cases**: Tests boundary conditions and unusual inputs
+- **Concurrency**: Validates behavior under concurrent access
+
+### API Contract Validation
+
+The example demonstrates:
+
+- **HTTP method validation**: Correct methods for each operation (GET, POST, PUT, DELETE)
+- **Status code validation**: Expected status codes for success and error cases
+- **Response format validation**: JSON structure and content verification
+- **Timing measurements**: Response time tracking for performance analysis
+
+## Testing the Example
+
+### Running the Simulation
+
+Execute the example and observe the test execution:
+
+```bash
+cargo run -p simvar_api_testing_example
+```
+
+### Interpreting Results
+
+The simulation outputs test results in the following format:
+
+```
+=== API TESTING RESULTS ===
+Tests: 7 (Passed: 5, Failed: 2)
+
+Test Details:
+  [PASS] HappyPath - create_user (45ms)
+  [PASS] HappyPath - get_user_by_id (23ms)
+  [PASS] HappyPath - list_users (18ms)
+  [PASS] ErrorHandling - get_non_existent_user (15ms)
+  [FAIL] ErrorHandling - create_user_invalid_data (12ms) - Error: Expected 400, got: 201
+  [PASS] EdgeCases - create_user_long_name (67ms)
+```
+
+### Success Criteria
+
+- **100% pass rate**: All tests should pass in a complete implementation
+- **Fast response times**: Most operations should complete in <100ms
+- **Correct status codes**: Each endpoint returns appropriate HTTP status codes
+- **No simulation errors**: The simulation completes without panics or timeouts
+
+## Troubleshooting
+
+### Simulation Doesn't Start
+
+**Problem**: Example fails to compile or run
+
+**Solutions**:
+
+- Verify Rust toolchain is up to date: `rustup update`
+- Check dependencies: `cargo check -p simvar_api_testing_example`
+- Enable debug logging: `RUST_LOG=debug cargo run -p simvar_api_testing_example`
+
+### Port Already in Use
+
+**Problem**: Error about port 8082 already being in use
+
+**Solutions**:
+
+- Change the port in `ApiTestingBootstrap::new()` to an available port
+- Check for other processes using the port: `lsof -i :8082` (Linux/macOS)
+- Kill the conflicting process or use a different port
+
+### Tests Failing
+
+**Problem**: Some tests show FAIL status
+
+**Solutions**:
+
+- Review the error message for each failed test
+- Check if the API implementation matches expected behavior
+- Verify HTTP status codes are correct for each endpoint
+- Note: Some failures are expected in the simplified demonstration implementation
+
+### Slow Performance
+
+**Problem**: Simulation takes too long to complete
+
+**Solutions**:
+
+- Reduce the simulation duration in `build_sim()`
+- Decrease the number of test scenarios
+- Check system resources and close other applications
+
+## Related Examples
+
+- **basic_web_server**: Simpler web server example demonstrating fundamental concepts
+- **Other simvar examples**: Check `packages/simvar/examples/` for more simulation patterns

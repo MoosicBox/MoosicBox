@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating basic audio zone management operations in moosicbox_audio_zone"
+edition     = { workspace = true }
+keywords    = ["audio_zone", "database", "example", "moosicbox_audio_zone"]
+license     = { workspace = true }
+name        = "moosicbox_audio_zone_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_audio_zone = { workspace = true }
+switchy_database     = { workspace = true, features = ["schema", "simulator"] }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = [
+    "moosicbox_audio_zone/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]

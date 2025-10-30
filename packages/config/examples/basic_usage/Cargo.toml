@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic usage of moosicbox_config path management"
+edition     = { workspace = true }
+keywords    = ["configuration", "example", "moosicbox_config", "paths"]
+license     = { workspace = true }
+name        = "moosicbox_config_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_config = { workspace = true, default-features = false }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_config/fail-on-warnings"]

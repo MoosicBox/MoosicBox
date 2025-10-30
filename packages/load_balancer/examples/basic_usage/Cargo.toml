@@ -1,0 +1,26 @@
+[package]
+description = "Example demonstrating basic load balancer setup and usage in moosicbox_load_balancer"
+edition     = { workspace = true }
+keywords    = ["example", "load-balancing", "moosicbox_load_balancer", "pingora"]
+license     = { workspace = true }
+name        = "moosicbox_load_balancer_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_load_balancer = { workspace = true }
+
+env_logger             = { workspace = true }
+pingora                = { workspace = true }
+pingora-core           = { workspace = true }
+pingora-load-balancing = { workspace = true }
+pingora-proxy          = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_load_balancer/fail-on-warnings"]

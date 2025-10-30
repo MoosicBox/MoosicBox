@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating basic byte broadcasting in moosicbox_stream_utils"
+edition     = { workspace = true }
+keywords    = ["broadcasting", "example", "moosicbox_stream_utils"]
+license     = { workspace = true }
+name        = "moosicbox_stream_utils_basic_broadcast_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_broadcast_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_stream_utils = { workspace = true }
+
+futures = { workspace = true }
+tokio   = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_stream_utils/fail-on-warnings"]

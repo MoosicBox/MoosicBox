@@ -1,0 +1,22 @@
+[package]
+description = "Example demonstrating basic container creation, HTML generation, and tree operations in hyperchad_transformer"
+edition     = { workspace = true }
+keywords    = ["container", "example", "html", "hyperchad_transformer", "layout"]
+license     = { workspace = true }
+name        = "hyperchad_transformer_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_color       = { workspace = true }
+hyperchad_transformer = { workspace = true, features = ["html", "layout"] }
+
+[features]
+default          = ["html"]
+fail-on-warnings = ["hyperchad_transformer/fail-on-warnings"]
+html             = ["hyperchad_transformer/html"]

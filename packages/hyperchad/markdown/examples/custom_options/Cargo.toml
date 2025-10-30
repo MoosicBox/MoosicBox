@@ -1,0 +1,22 @@
+[package]
+description = "Example demonstrating MarkdownOptions configuration in hyperchad_markdown"
+edition     = { workspace = true }
+keywords    = ["configuration", "example", "hyperchad_markdown", "options"]
+license     = { workspace = true }
+name        = "hyperchad_markdown_custom_options_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "custom_options_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_markdown = { workspace = true }
+
+[features]
+default          = []
+emoji            = ["hyperchad_markdown/emoji"]
+fail-on-warnings = ["hyperchad_markdown/fail-on-warnings"]
+xss-protection   = ["hyperchad_markdown/xss-protection"]

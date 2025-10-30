@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating basic audio decoding in moosicbox_audio_decoder"
+edition     = { workspace = true }
+keywords    = ["audio", "decoder", "example", "moosicbox_audio_decoder"]
+license     = { workspace = true }
+name        = "moosicbox_audio_decoder_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_audio_decoder = { workspace = true, features = ["all-formats"] }
+symphonia               = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_audio_decoder/fail-on-warnings"]

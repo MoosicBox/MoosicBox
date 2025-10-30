@@ -1,0 +1,33 @@
+[package]
+description = "Example demonstrating basic desktop application usage in hyperchad_renderer_fltk"
+edition     = { workspace = true }
+keywords    = ["desktop", "example", "fltk", "gui", "hyperchad_renderer_fltk"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_fltk_basic_desktop_app_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_desktop_app_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_actions       = { workspace = true, features = ["logic"] }
+hyperchad_renderer      = { workspace = true }
+hyperchad_renderer_fltk = { workspace = true }
+hyperchad_template      = { workspace = true }
+
+env_logger = { workspace = true }
+flume      = { workspace = true }
+log        = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_fltk/fail-on-warnings",
+    "hyperchad_template/fail-on-warnings",
+]

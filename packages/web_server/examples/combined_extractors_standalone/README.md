@@ -208,3 +208,44 @@ This example is perfect for:
 - Currently supports up to 2 extractors per handler
 - More complex combinations require additional handler support
 - Some extractor combinations may have ordering requirements
+
+## Troubleshooting
+
+### Multiple Extractor Errors
+
+**Problem**: "trait bound not satisfied" when using multiple extractors
+**Solution**: Ensure you're using the correct handler method:
+
+- `Route::with_handler()` for 0 parameters
+- `Route::with_handler1()` for 1 extractor
+- `Route::with_handler2()` for 2 extractors
+
+### Extractor Order Issues
+
+**Problem**: Extractors not working in certain orders
+**Solution**: Try different parameter orders. Some extractors may have dependencies on request body consumption.
+
+### JSON + Query Combination Issues
+
+**Problem**: Cannot combine JSON body with query parameters
+**Solution**: This should work! Ensure both extractors are properly typed:
+
+```rust
+async fn handler(
+    Query(params): Query<MyQuery>,
+    Json(body): Json<MyData>,
+) -> Result<HttpResponse, Error>
+```
+
+### Backend-Specific Behavior
+
+**Problem**: Different behavior between Actix and Simulator
+**Solution**: This is expected - the Simulator backend is for testing. Use Actix backend for production HTTP servers.
+
+## Related Examples
+
+- **query_extractor_standalone**: Learn individual Query extractor usage
+- **json_extractor_standalone**: Learn individual JSON extractor usage
+- **basic_handler_standalone**: Foundation for understanding handler patterns
+- **handler_macro_test**: Advanced handler testing with multiple extractors
+- **openapi**: Add API documentation to your combined extractor endpoints

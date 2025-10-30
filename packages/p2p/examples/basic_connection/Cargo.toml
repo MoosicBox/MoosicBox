@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating basic P2P connections and discovery in switchy_p2p"
+edition     = { workspace = true }
+keywords    = ["example", "networking", "p2p", "switchy_p2p"]
+license     = { workspace = true }
+name        = "switchy_p2p_basic_connection_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_connection_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_p2p = { workspace = true, features = ["simulator"] }
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_p2p/fail-on-warnings"]

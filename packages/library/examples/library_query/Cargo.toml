@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating music library query operations in moosicbox_library"
+edition     = { workspace = true }
+keywords    = ["example", "library", "moosicbox_library", "music", "query"]
+license     = { workspace = true }
+name        = "moosicbox_library_library_query_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "library_query_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_library          = { workspace = true }
+moosicbox_music_api_models = { workspace = true }
+moosicbox_music_models     = { workspace = true }
+moosicbox_paging           = { workspace = true }
+switchy_database           = { workspace = true, features = ["simulator"] }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_library/fail-on-warnings"]

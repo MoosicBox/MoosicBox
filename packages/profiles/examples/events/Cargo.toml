@@ -1,0 +1,22 @@
+[package]
+description = "Example demonstrating event system in moosicbox_profiles"
+edition     = { workspace = true }
+keywords    = ["async", "events", "example", "moosicbox_profiles"]
+license     = { workspace = true }
+name        = "moosicbox_profiles_events_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "events_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_profiles = { workspace = true, features = ["events"] }
+
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_profiles/fail-on-warnings"]

@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating test workflow building in hyperchad_test_utils"
+edition     = { workspace = true }
+keywords    = ["example", "hyperchad_test_utils", "testing", "workflow"]
+license     = { workspace = true }
+name        = "hyperchad_test_utils_workflow_builder_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "workflow_builder_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_test_utils = { workspace = true }
+serde_json           = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["hyperchad_test_utils/fail-on-warnings"]

@@ -1,0 +1,47 @@
+[package]
+description = "Example demonstrating basic application setup in hyperchad_app"
+edition     = { workspace = true }
+keywords    = ["app", "example", "hyperchad", "router", "web-server"]
+license     = { workspace = true }
+name        = "hyperchad_app_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_app = { workspace = true, default-features = false, features = [
+    "actix",
+    "assets",
+    "html",
+    "logic",
+    "static-routes",
+    "vanilla-js",
+] }
+hyperchad_renderer = { workspace = true }
+hyperchad_renderer_vanilla_js = { workspace = true }
+hyperchad_router = { workspace = true }
+hyperchad_template = { workspace = true }
+
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-time",
+    "async-tokio",
+] }
+
+env_logger = { workspace = true }
+log        = { workspace = true }
+
+[features]
+default = []
+fail-on-warnings = [
+    "hyperchad_app/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_vanilla_js/fail-on-warnings",
+    "hyperchad_router/fail-on-warnings",
+    "hyperchad_template/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]

@@ -1,0 +1,25 @@
+[package]
+description = "Example demonstrating basic action creation and usage in hyperchad_actions"
+edition     = { workspace = true }
+keywords    = ["actions", "example", "hyperchad_actions", "triggers"]
+license     = { workspace = true }
+name        = "hyperchad_actions_basic_actions_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_actions_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_actions            = { workspace = true, features = ["logic", "serde"] }
+hyperchad_transformer_models = { workspace = true }
+
+env_logger = { workspace = true }
+log        = { workspace = true }
+
+[features]
+default          = ["logic"]
+fail-on-warnings = ["hyperchad_actions/fail-on-warnings"]
+logic            = ["hyperchad_actions/logic"]

@@ -1,0 +1,26 @@
+[package]
+description = "Example demonstrating basic Renderer trait implementation in hyperchad_renderer"
+edition     = { workspace = true }
+keywords    = ["example", "hyperchad_renderer", "renderer", "view"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_basic_renderer_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_renderer_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_color    = { workspace = true }
+hyperchad_renderer = { workspace = true, features = ["html"] }
+switchy_async      = { workspace = true, features = ["rt-multi-thread", "tokio"] }
+
+async-trait = { workspace = true }
+env_logger  = { workspace = true }
+log         = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["hyperchad_renderer/fail-on-warnings"]
