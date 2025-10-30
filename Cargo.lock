@@ -5990,6 +5990,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_renderer_html_basic_rendering_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_router",
+ "hyperchad_template",
+ "hyperchad_transformer",
+]
+
+[[package]]
 name = "hyperchad_renderer_html_cdn"
 version = "0.1.4"
 dependencies = [

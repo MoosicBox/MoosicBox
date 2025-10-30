@@ -68,6 +68,7 @@ members = [
     "packages/hyperchad/renderer/fltk",
     "packages/hyperchad/renderer/fltk/examples/basic_desktop_app",
     "packages/hyperchad/renderer/html",
+    "packages/hyperchad/renderer/html/examples/basic_rendering",
     "packages/hyperchad/renderer/html/actix",
     "packages/hyperchad/renderer/html/cdn",
     "packages/hyperchad/renderer/html/http",
