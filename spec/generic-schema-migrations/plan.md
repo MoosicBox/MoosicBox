@@ -555,14 +555,18 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### 7.2 Database Helper Functions ✅ **COMPLETED**
 
 - [x] `packages/switchy/schema/test_utils/src/lib.rs` - Database creation helpers ✅ **CRITICAL**
+
     - [x] Feature-gated in-memory database helper:
+
         ```rust
         #[cfg(feature = "sqlite")]
         pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, switchy_database_connection::InitSqliteSqlxDatabaseError>
         ```
+
         - ✓ Uses `switchy_database_connection::init_sqlite_sqlx(None)` for in-memory SQLite
         - ✓ Proper error handling with specific error type
         - ✓ Comprehensive documentation with error section
+
     - [x] All test functions accept `&dyn Database` as parameter:
         - ✓ User provides the database instance they want to test against
         - ✓ Allows testing with any database type
@@ -609,6 +613,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         - [x] Add unit tests for this functionality
 
     - [x] **Pre-seeded state verification** - Test with existing data:
+
         ```rust
         pub async fn verify_migrations_with_state<'a, F, Fut>(
             db: &dyn Database,
@@ -619,6 +624,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
             F: FnOnce(&dyn Database) -> Fut,
             Fut: Future<Output = Result<(), DatabaseError>>
         ```
+
         - [x] Execute setup closure to populate initial state
         - [x] Create `VecMigrationSource` from provided migrations
         - [x] Create `MigrationRunner` internally from switchy_schema
@@ -646,7 +652,9 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - [x] Add unit tests for each implementation
 
 - [x] `packages/switchy/schema/test_utils/src/lib.rs` - Advanced mutation testing ✅ **IMPORTANT**
+
     - [x] **Interleaved state mutations** - Test with data changes between migrations:
+
         ```rust
         pub async fn verify_migrations_with_mutations<'a, M>(
             db: &dyn Database,
@@ -655,6 +663,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         ) -> Result<(), TestError>
         where M: MutationProvider
         ```
+
         - **Note**: Uses `Arc` for consistency with Phase 7.2.5 migration and `TestError` for consistency with Phase 7.3 test utilities
         - [x] Support mutations via:
             - [x] Raw SQL strings
@@ -836,11 +845,15 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### 7.2.5 Migration Type Update to Arc ✅ **COMPLETED**
 
 - [x] Update core migration types from `Box<dyn Migration>` to `Arc<dyn Migration>` ✅ **CRITICAL**
+
     - [x] Update `MigrationSource` trait return type:
+
         ```rust
         async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
         ```
+
         - ✓ Changed from `Box<dyn Migration>` to `Arc<dyn Migration>`
+
     - [x] Update all MigrationSource implementations:
         - ✓ `EmbeddedMigrationSource` - uses `Arc::new()` instead of `Box::new()`
         - ✓ `DirectoryMigrationSource` - uses `Arc::new()` instead of `Box::new()`
@@ -3287,6 +3300,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
 **Note:** Originally designed as a breaking change, but implemented with safer backward-compatible approach using `if_not_exists(true)` to preserve existing data.
 
 - [x] Update `VersionTracker` in `packages/switchy/schema/src/version.rs` ⚠️ **CRITICAL**
+
     - ✓ File modified: `packages/switchy/schema/src/version.rs`
     - ✓ Lines 65-71: `MigrationRecord` struct added
     - ✓ Lines 134-177: `ensure_table_exists()` method updated with new schema
@@ -3296,11 +3310,13 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - ✓ Lines 290-356: `get_migration_status()` method added
     - ✓ Lines 359-425: `get_dirty_migrations()` method added
     - [x] Modify `ensure_table_exists()` to:
+
         - ✓ Implementation at `packages/switchy/schema/src/version.rs:134-177`
         - [x] ~~Drop existing table if it exists: `DROP TABLE IF EXISTS {table_name}`~~ **IMPLEMENTATION CHANGE**: Uses `if_not_exists(true)` for safer backward compatibility
             - ✓ Uses `.if_not_exists(true)` at line 137 instead of DROP TABLE
         - [x] Create table with new schema:
             - ✓ New columns added: `finished_on` (lines 152-158), `status` (lines 159-165), `failure_reason` (lines 166-172)
+
         ```
         CONCEPTUAL SCHEMA (not literal SQL):
         {table_name} (
@@ -3311,6 +3327,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
             failure_reason TEXT NULL
         )
         ```
+
         - [x] Implementation notes:
             - [x] The existing run_on column definition remains unchanged
                 - ✓ `run_on` column at lines 145-151 with `default: Some(DatabaseValue::Now)`
@@ -3329,6 +3346,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
                     - ✓ Lines 166-172
         - [x] ~~No migration logic needed - clean slate approach~~ **IMPLEMENTATION**: Uses idempotent table creation, no data loss
             - ✓ `.execute(db)` at line 173 after `.if_not_exists(true)` at line 137
+
     - [x] Update `record_migration()` to:
         - ✓ Implementation at `packages/switchy/schema/src/version.rs:220-230`
         - [x] Insert with explicit values:
@@ -14373,9 +14391,11 @@ This ensures:
         ```
         Implemented in `rusqlite_table_exists()` helper function (lines 2864-2873) and trait methods for RusqliteDatabase (lines 456-459) and RusqliteTransaction (lines 700-702)
     - [x] `get_table_columns()`:
+
         ```sql
         PRAGMA table_info(table_name)
         ```
+
         - [x] Map SQLite types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
               Implemented in `sqlite_type_to_data_type()` helper (lines 2875-2886)
         - [x] Parse `notnull` flag for nullable
@@ -14388,6 +14408,7 @@ This ensures:
               All supported types implemented in `sqlite_type_to_data_type()` (lines 2878-2883)
         - [x] Unsupported types: BLOB, JSON, custom types (Phase 16.5 will add these)
               Returns `DatabaseError::UnsupportedDataType` for unmapped types (line 2884)
+
     - [x] `column_exists()`:
         - [x] Use PRAGMA table_info and search for column name
               Implemented in `rusqlite_column_exists()` helper (lines 2943-2950) and trait methods for both Database and Transaction

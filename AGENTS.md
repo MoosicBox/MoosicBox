@@ -7,6 +7,7 @@
 - **Rust lint**: `cargo clippy --all-targets`
 - **Rust lint enforce no warnings**: `cargo clippy --all-targets -- -D warnings`
 - **Format**: `cargo fmt` (Rust) for ALL packages in the workspace
+- **Format markdown/YAML**: `npx prettier --write "**/*.{md,yaml,yml}"` (Note: Astro files are NOT supported)
 
 ## Code Style Guidelines
 

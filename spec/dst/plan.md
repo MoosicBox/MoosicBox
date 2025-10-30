@@ -2943,7 +2943,6 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
     - **Best Practices**: Type-based header extraction, state management
 
 - [x] Create extractor combination examples
-
     - **File**: `packages/web_server/src/extractors/mod.rs:84-95`
     - **Example**: 5-parameter handler combining all extractor types
     - **Demonstration**: Real-world usage patterns
@@ -2970,7 +2969,6 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
         ````
 
 - [x] Add feature flag documentation
-
     - **File**: `packages/web_server/src/extractors/mod.rs:97-101`
     - **Documentation**: Clear explanation of `serde` feature requirements
     - **Guidance**: Which extractors require which features
@@ -2994,7 +2992,6 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
     - **Prelude**: Glob imports work correctly
 
 - [x] Verify documentation builds correctly
-
     - **Status**: All documentation compiles and renders properly
     - **Examples**: Code examples are syntactically correct
     - **Links**: Internal documentation links resolve correctly
@@ -3044,7 +3041,6 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
     - **Scope**: Error handling, type conversion, edge cases
 
 - [x] Module organization and re-exports complete ✅
-
     - **Structure**: Clean module hierarchy with consistent patterns
     - **Exports**: All extractors available through `extractors::` namespace
     - **Prelude**: Convenient glob imports for common usage
