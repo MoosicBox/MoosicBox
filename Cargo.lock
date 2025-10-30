@@ -8971,6 +8971,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_music_api_helpers_basic_scan_operations_example"
+version = "0.1.0"
+
+[[package]]
 name = "moosicbox_music_api_models"
 version = "0.1.4"
 dependencies = [

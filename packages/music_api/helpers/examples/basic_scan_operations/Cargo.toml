@@ -1,0 +1,21 @@
+[package]
+name = "moosicbox_music_api_helpers_basic_scan_operations_example"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Example demonstrating basic music API scanning operations in moosicbox_music_api_helpers"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["example", "moosicbox_music_api_helpers", "scan", "music-api"]
+
+[[bin]]
+name = "basic_scan_operations_example"
+path = "src/main.rs"
+
+[dependencies]
+# This example is conceptual and demonstrates API usage patterns.
+# It doesn't require runtime dependencies as it only prints example code.
+
+[features]
+default = []
+fail-on-warnings = []
