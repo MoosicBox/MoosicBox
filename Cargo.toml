@@ -84,6 +84,7 @@ members = [
     "packages/hyperchad/renderer/html/web_server",
     "packages/hyperchad/renderer/html/web_server/examples/basic_web_server",
     "packages/hyperchad/renderer/vanilla_js",
+    "packages/hyperchad/renderer/vanilla_js/examples/basic_interactive",
     "packages/hyperchad/renderer/vanilla_js/hash",
     "packages/hyperchad/router",
     "packages/hyperchad/router/examples/basic_routing",
