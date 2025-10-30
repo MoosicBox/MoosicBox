@@ -9618,6 +9618,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_tunnel_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "moosicbox_tunnel",
+ "serde_json",
+ "switchy_async",
+ "switchy_http",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_tunnel_sender"
 version = "0.1.4"
 dependencies = [

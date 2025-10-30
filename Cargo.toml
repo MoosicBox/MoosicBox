@@ -192,6 +192,7 @@ members = [
     "packages/tidal",
     "packages/time",
     "packages/tunnel",
+    "packages/tunnel/examples/basic_usage",
     "packages/tunnel_sender",
     "packages/tunnel_server",
     "packages/upnp",
