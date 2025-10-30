@@ -15257,6 +15257,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_async_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "pretty_env_logger",
+ "switchy_async",
+]
+
+[[package]]
 name = "switchy_async_cargo"
 version = "0.1.4"
 dependencies = [
