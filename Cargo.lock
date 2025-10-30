@@ -9567,6 +9567,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_stream_utils_basic_broadcast_example"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "moosicbox_stream_utils",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_stream_utils_stalled_monitor_example"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "moosicbox_stream_utils",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_stream_utils_typed_broadcast_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_stream_utils",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_tidal"
 version = "0.1.4"
 dependencies = [
