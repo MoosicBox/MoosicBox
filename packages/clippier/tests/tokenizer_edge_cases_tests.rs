@@ -483,14 +483,12 @@ fn test_many_filters_chained() {
 // ============================================================================
 
 #[test]
-#[ignore] // TODO: Unicode handling has char boundary issues - needs fix
 fn test_unicode_in_property_name() {
     let tokens = tokenize("名前=test").unwrap();
     assert_eq!(tokens, vec![Token::Filter("名前=test".to_string())]);
 }
 
 #[test]
-#[ignore] // TODO: Unicode handling has char boundary issues - needs fix
 fn test_unicode_in_value() {
     let tokens = tokenize("name=テスト").unwrap();
     assert_eq!(tokens, vec![Token::Filter("name=テスト".to_string())]);
@@ -506,7 +504,6 @@ fn test_unicode_in_quoted_value() {
 }
 
 #[test]
-#[ignore] // TODO: Emoji handling has char boundary issues - needs fix
 fn test_emoji_in_value() {
     let tokens = tokenize("icon=🎵").unwrap();
     assert_eq!(tokens, vec![Token::Filter("icon=🎵".to_string())]);
@@ -573,4 +570,109 @@ fn test_complex_expression_with_all_features() {
             Token::RightParen,
         ]
     );
+}
+
+// ============================================================================
+// Additional Unicode Tests
+// ============================================================================
+
+#[test]
+fn test_unicode_property_with_and() {
+    // Japanese property name followed by AND keyword
+    let tokens = tokenize("名前=test AND version=1.0").unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Filter("名前=test".to_string()),
+            Token::And,
+            Token::Filter("version=1.0".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_emoji_with_or() {
+    // Emoji in value followed by OR keyword
+    let tokens = tokenize(r#"icon="🎵" OR icon="🎸""#).unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Filter(r#"icon="🎵""#.to_string()),
+            Token::Or,
+            Token::Filter(r#"icon="🎸""#.to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_multibyte_before_not() {
+    // Multibyte chars before NOT keyword
+    let tokens = tokenize("名=日本 NOT x=1").unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Filter("名=日本".to_string()),
+            Token::Not,
+            Token::Filter("x=1".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_mixed_unicode_and_keywords() {
+    // Complex expression with Unicode and all keywords
+    let tokens = tokenize("(名前=テスト OR icon=🎵) AND NOT publish=false").unwrap();
+    assert_eq!(tokens.len(), 8); // LeftParen, Filter, Or, Filter, RightParen, And, Not, Filter
+    assert_eq!(tokens[0], Token::LeftParen);
+    assert_eq!(tokens[1], Token::Filter("名前=テスト".to_string()));
+    assert_eq!(tokens[2], Token::Or);
+    assert_eq!(tokens[3], Token::Filter("icon=🎵".to_string()));
+    assert_eq!(tokens[4], Token::RightParen);
+    assert_eq!(tokens[5], Token::And);
+    assert_eq!(tokens[6], Token::Not);
+    assert_eq!(tokens[7], Token::Filter("publish=false".to_string()));
+}
+
+#[test]
+fn test_unicode_that_looks_like_keyword() {
+    // Full-width characters that might be confused with keywords
+    // Should NOT be tokenized as keywords
+    let tokens = tokenize("ＡＮＤ=value").unwrap();
+    assert_eq!(tokens, vec![Token::Filter("ＡＮＤ=value".to_string())]);
+}
+
+#[test]
+fn test_korean_chars_with_parentheses() {
+    let tokens = tokenize("(이름=테스트)").unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Token::LeftParen,
+            Token::Filter("이름=테스트".to_string()),
+            Token::RightParen,
+        ]
+    );
+}
+
+#[test]
+fn test_arabic_with_operators() {
+    let tokens = tokenize("اسم=قيمة AND نسخة=١").unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Filter("اسم=قيمة".to_string()),
+            Token::And,
+            Token::Filter("نسخة=١".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_mixed_rtl_ltr() {
+    // Right-to-left and left-to-right mixed
+    let tokens = tokenize("name=مرحبا OR שלום=hello").unwrap();
+    assert_eq!(tokens.len(), 3);
+    assert_eq!(tokens[0], Token::Filter("name=مرحبا".to_string()));
+    assert_eq!(tokens[1], Token::Or);
+    assert_eq!(tokens[2], Token::Filter("שלום=hello".to_string()));
 }

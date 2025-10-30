@@ -6,11 +6,54 @@
 //! * Logical operators (AND, OR, NOT)
 //! * Grouping with parentheses
 //! * Filter conditions
+//! * Full Unicode support (multibyte characters, emoji, RTL text)
 
 use super::parser::parse_filter;
 use super::types::{FilterError, Token};
 use std::iter::Peekable;
 use std::str::CharIndices;
+
+/// Check if string starts with "AND" (case-insensitive), consuming exactly 3 chars.
+/// Returns true only if it's exactly 3 chars matching A-N-D.
+///
+/// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+fn starts_with_and(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(a), Some(n), Some(d))
+        if a.eq_ignore_ascii_case(&'A')
+           && n.eq_ignore_ascii_case(&'N')
+           && d.eq_ignore_ascii_case(&'D')
+    )
+}
+
+/// Check if string starts with "OR" (case-insensitive), consuming exactly 2 chars.
+///
+/// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+fn starts_with_or(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some(o), Some(r))
+        if o.eq_ignore_ascii_case(&'O')
+           && r.eq_ignore_ascii_case(&'R')
+    )
+}
+
+/// Check if string starts with "NOT" (case-insensitive), consuming exactly 3 chars.
+///
+/// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+fn starts_with_not(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(n), Some(o), Some(t))
+        if n.eq_ignore_ascii_case(&'N')
+           && o.eq_ignore_ascii_case(&'O')
+           && t.eq_ignore_ascii_case(&'T')
+    )
+}
 
 /// Tokenize a filter expression string.
 ///
@@ -71,18 +114,12 @@ fn try_parse_keyword(
     // Look ahead without consuming
     let remaining = &input[start_idx..];
 
-    // Try to match keywords
-    let (keyword, keyword_len) = if remaining.len() >= 3 {
-        if remaining[..3].eq_ignore_ascii_case("AND") {
-            (Some(Token::And), 3)
-        } else if remaining[..3].eq_ignore_ascii_case("NOT") {
-            (Some(Token::Not), 3)
-        } else if remaining.len() >= 2 && remaining[..2].eq_ignore_ascii_case("OR") {
-            (Some(Token::Or), 2)
-        } else {
-            return None;
-        }
-    } else if remaining.len() >= 2 && remaining[..2].eq_ignore_ascii_case("OR") {
+    // Try to match keywords using char-aware comparison
+    let (keyword, keyword_len) = if starts_with_and(remaining) {
+        (Some(Token::And), 3)
+    } else if starts_with_not(remaining) {
+        (Some(Token::Not), 3)
+    } else if starts_with_or(remaining) {
         (Some(Token::Or), 2)
     } else {
         return None;
@@ -220,13 +257,10 @@ fn looks_like_keyword_at(input: &str, pos: usize) -> bool {
         return false;
     }
 
-    // Check if it starts with a keyword
-    let (keyword, keyword_len) = if remaining.len() >= 3
-        && (remaining[..3].eq_ignore_ascii_case("AND")
-            || remaining[..3].eq_ignore_ascii_case("NOT"))
-    {
+    // Check if it starts with a keyword using char-aware comparison
+    let (keyword, keyword_len) = if starts_with_and(remaining) || starts_with_not(remaining) {
         (true, 3)
-    } else if remaining.len() >= 2 && remaining[..2].eq_ignore_ascii_case("OR") {
+    } else if starts_with_or(remaining) {
         (true, 2)
     } else {
         return false;
@@ -390,5 +424,56 @@ mod tests {
         // Parsing the expression should fail (UnexpectedToken, not ExpectedToken)
         let result = parse_expression("AND");
         assert!(matches!(result, Err(FilterError::UnexpectedToken(_))));
+    }
+
+    #[test]
+    fn test_starts_with_and() {
+        assert!(starts_with_and("AND"));
+        assert!(starts_with_and("AND "));
+        assert!(starts_with_and("and"));
+        assert!(starts_with_and("AnD"));
+        assert!(starts_with_and("AND rest of string"));
+
+        assert!(!starts_with_and("AN")); // Too short
+        assert!(starts_with_and("ANDROID")); // This DOES match AND prefix - boundaries checked by caller
+        assert!(!starts_with_and("OR"));
+        assert!(!starts_with_and(""));
+        assert!(!starts_with_and("名前")); // Unicode chars
+    }
+
+    #[test]
+    fn test_starts_with_or() {
+        assert!(starts_with_or("OR"));
+        assert!(starts_with_or("or"));
+        assert!(starts_with_or("Or"));
+        assert!(starts_with_or("OR more"));
+
+        assert!(!starts_with_or("O")); // Too short
+        assert!(!starts_with_or("AND"));
+        assert!(!starts_with_or(""));
+    }
+
+    #[test]
+    fn test_starts_with_not() {
+        assert!(starts_with_not("NOT"));
+        assert!(starts_with_not("not"));
+        assert!(starts_with_not("NoT"));
+        assert!(starts_with_not("NOT more"));
+
+        assert!(!starts_with_not("NO")); // Too short
+        assert!(!starts_with_not("AND"));
+        assert!(!starts_with_not(""));
+    }
+
+    #[test]
+    fn test_unicode_does_not_match_keywords() {
+        // Full-width characters that look like AND/OR/NOT
+        assert!(!starts_with_and("ＡＮＤ"));
+        assert!(!starts_with_or("ＯＲ"));
+        assert!(!starts_with_not("ＮＯＴ"));
+
+        // Unicode that starts with similar letters
+        assert!(!starts_with_and("名前"));
+        assert!(!starts_with_or("おはよう"));
     }
 }
