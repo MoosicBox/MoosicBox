@@ -437,12 +437,11 @@ jobs:
             - name: Commit changes with resilient push
               if: steps.check_readme.outputs.exists == 'true'
               run: |
-                  # Check if README.md specifically was modified (staged or unstaged)
-                  if git diff --name-only | grep -q "${{ matrix.package.path }}/README.md" || \
-                     git diff --cached --name-only | grep -q "${{ matrix.package.path }}/README.md"; then
+                  # Check if any changes were made by Claude
+                  if [ -n "$(git status --porcelain)" ]; then
 
-                    echo "📝 README changes detected, preparing commit..."
-                    git add ${{ matrix.package.path }}/README.md
+                    echo "📝 Changes detected, preparing commit..."
+                    git add -A
 
                     # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
@@ -488,7 +487,7 @@ jobs:
                       exit 1
                     fi
                   else
-                    echo "ℹ️ No changes to README.md, skipping commit"
+                    echo "ℹ️ No changes detected, skipping commit"
                     echo "📋 Git status shows:"
                     git status --short
                   fi
@@ -757,12 +756,11 @@ jobs:
 
             - name: Commit changes with resilient push
               run: |
-                  # Check if README.md specifically was modified (staged or unstaged)
-                  if git diff --name-only | grep -q "^README.md$" || \
-                     git diff --cached --name-only | grep -q "^README.md$"; then
+                  # Check if any changes were made by Claude
+                  if [ -n "$(git status --porcelain)" ]; then
 
-                    echo "📝 Root README changes detected, preparing commit..."
-                    git add README.md
+                    echo "📝 Changes detected, preparing commit..."
+                    git add -A
 
                     # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
@@ -808,7 +806,7 @@ jobs:
                       exit 1
                     fi
                   else
-                    echo "ℹ️ No changes to root README.md, skipping commit"
+                    echo "ℹ️ No changes detected, skipping commit"
                     echo "📋 Git status shows:"
                     git status --short
                   fi
