@@ -9233,6 +9233,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_resampler_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_resampler",
+ "symphonia",
+]
+
+[[package]]
 name = "moosicbox_scan"
 version = "0.1.4"
 dependencies = [
