@@ -23,6 +23,7 @@ members = [
     "packages/async/examples/simulated",
     "packages/async/macros",
     "packages/async_service",
+    "packages/async_service/examples/basic_service",
     "packages/audio_decoder",
     "packages/audio_decoder/examples/basic_usage",
     "packages/audio_encoder",

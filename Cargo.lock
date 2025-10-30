@@ -8242,6 +8242,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_async_service_basic_service_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_async_service",
+ "switchy_async",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_audio_decoder"
 version = "0.1.4"
 dependencies = [
