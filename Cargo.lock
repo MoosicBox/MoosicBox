@@ -6263,6 +6263,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_test_utils_workflow_builder_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_test_utils",
+ "serde_json",
+]
+
+[[package]]
 name = "hyperchad_transformer"
 version = "0.1.4"
 dependencies = [

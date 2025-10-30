@@ -88,6 +88,7 @@ members = [
     "packages/hyperchad/template/actions_dsl",
     "packages/hyperchad/template/macros",
     "packages/hyperchad/test_utils",
+    "packages/hyperchad/test_utils/examples/workflow_builder",
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
     "packages/image",
