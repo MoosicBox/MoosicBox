@@ -27,6 +27,33 @@ on:
                     - "create-missing"
                 default: "full"
 
+            model:
+                description: "Claude model to use (leave empty for latest default)"
+                required: false
+                type: choice
+                options:
+                    - ""
+                    - "claude-sonnet-4-5-20250929"
+                    - "claude-opus-4-1-20250805"
+                    - "claude-opus-4-20250514"
+                    - "claude-sonnet-4-20250514"
+                    - "claude-3-7-sonnet-20250219"
+                    - "claude-3-5-haiku-20241022"
+                    - "claude-3-haiku-20240307"
+                default: ""
+
+            max_tokens:
+                description: "Maximum tokens per request (leave empty for default)"
+                required: false
+                type: string
+                default: ""
+
+            max_turns:
+                description: "Maximum conversation turns (leave empty for default)"
+                required: false
+                type: string
+                default: ""
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -166,6 +193,12 @@ jobs:
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+
+                  claude_args: |
+                      --allowedTools Edit,Read,Write,Bash
+                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.RUSTDOC_CLAUDE_MODEL && format('--model {0}', vars.RUSTDOC_CLAUDE_MODEL) || '' }}
+                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.RUSTDOC_MAX_TOKENS && format('--max-tokens {0}', vars.RUSTDOC_MAX_TOKENS) || '' }}
+                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.RUSTDOC_MAX_TURNS && format('--max-turns {0}', vars.RUSTDOC_MAX_TURNS) || '' }}
 
                   prompt: |
                       ${{
