@@ -79,6 +79,7 @@ members = [
     "packages/hyperchad/renderer/vanilla_js/hash",
     "packages/hyperchad/router",
     "packages/hyperchad/simulator",
+    "packages/hyperchad/simulator/examples/basic_simulation",
     "packages/hyperchad/state",
     "packages/hyperchad/state/examples/basic_usage",
     "packages/hyperchad/template",

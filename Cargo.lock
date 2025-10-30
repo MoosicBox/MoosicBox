@@ -6136,6 +6136,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_simulator_basic_simulation_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "hyperchad_simulator",
+ "hyperchad_test_utils",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "hyperchad_state"
 version = "0.1.4"
 dependencies = [
