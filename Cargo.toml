@@ -161,6 +161,7 @@ members = [
     "packages/qobuz",
     "packages/qobuz/examples/basic_usage",
     "packages/random",
+    "packages/random/examples/basic_usage",
     "packages/remote_library",
     "packages/remote_library/examples/basic_usage",
     "packages/resampler",
