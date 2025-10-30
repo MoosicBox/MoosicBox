@@ -80,6 +80,7 @@ members = [
     "packages/hyperchad/router",
     "packages/hyperchad/simulator",
     "packages/hyperchad/state",
+    "packages/hyperchad/state/examples/basic_usage",
     "packages/hyperchad/template",
     "packages/hyperchad/template/actions_dsl",
     "packages/hyperchad/template/macros",

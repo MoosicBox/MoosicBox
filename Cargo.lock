@@ -6151,6 +6151,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_state_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_state",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "hyperchad_template"
 version = "0.1.4"
 dependencies = [

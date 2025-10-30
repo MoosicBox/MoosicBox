@@ -1,0 +1,22 @@
+[package]
+name = "hyperchad_state_basic_usage_example"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Example demonstrating basic usage of hyperchad_state with SQLite persistence"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["example", "hyperchad_state", "state-management", "sqlite"]
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad_state = { workspace = true, features = ["persistence-sqlite"] }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = ["hyperchad_state/fail-on-warnings"]
