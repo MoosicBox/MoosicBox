@@ -5,6 +5,8 @@
 //!
 //! # Examples
 //!
+//! ## Simple Filtering
+//!
 //! ```rust,ignore
 //! use clippier::package_filter::apply_filters;
 //! use std::collections::BTreeMap;
@@ -14,11 +16,74 @@
 //! let filtered = apply_filters(&packages, &paths, &root, &skip_filters, &[])?;
 //! ```
 //!
+//! ## Complex Expressions with Logical Operators
+//!
+//! ```rust,ignore
+//! // Skip unpublished packages OR examples
+//! let skip_filters = vec!["publish=false OR name$=_example".to_string()];
+//!
+//! // Include only published moosicbox packages that aren't examples
+//! let include_filters = vec!["name^=moosicbox_ AND publish=true AND NOT name$=_example".to_string()];
+//!
+//! let filtered = apply_filters(&packages, &paths, &root, &skip_filters, &include_filters)?;
+//! ```
+//!
 //! # Filter Syntax
 //!
 //! Filters use the format: `property[.nested]<operator>value`
 //!
+//! ## Logical Operators
+//!
+//! Combine filter conditions using logical operators:
+//!
+//! * `AND` - Both conditions must be true
+//! * `OR` - At least one condition must be true
+//! * `NOT` - Inverts the condition
+//! * `( )` - Groups conditions for precedence control
+//!
+//! **Operator Precedence** (highest to lowest):
+//! 1. `NOT`
+//! 2. `AND`
+//! 3. `OR`
+//!
+//! **Examples:**
+//! * `publish=false AND version^=0.1` - Both must match
+//! * `publish=false OR name$=_example` - Either must match
+//! * `NOT publish=false` - Inverts the condition (same as `publish=true`)
+//! * `(publish=false OR name$=_test) AND version^=0.1` - Grouped with precedence
+//! * `name^=moosicbox_ AND (categories@=audio OR categories@=video)` - Complex nesting
+//!
+//! **Case Insensitive:** Keywords can be `AND`, `and`, `And`, etc.
+//!
+//! ## Quoted Values
+//!
+//! Use double quotes for values containing spaces or special characters:
+//!
+//! * `name="my package"` - Value with spaces
+//! * `description="This AND that"` - Prevents "AND" from being treated as operator
+//!
+//! **Escape Sequences:**
+//! * `\"` - Double quote
+//! * `\\` - Backslash
+//! * `\n` - Newline
+//! * `\t` - Tab
+//! * `\r` - Carriage return
+//!
+//! Example: `title="Quote: \"test\""`
+//!
+//! ## Unicode Support
+//!
+//! Full Unicode support including multibyte characters, emoji, and RTL text:
+//!
+//! * Property names with Unicode: `名前=test`
+//! * Unicode values: `name=テスト`
+//! * Emoji in values: `icon=🎵`
+//! * Right-to-left text: `اسم=قيمة`
+//! * Works with all operators and logical expressions
+//!
 //! ## Scalar Operators
+//!
+//! Match against string, boolean, or integer values:
 //!
 //! * `=` - Exact match: `publish=false`
 //! * `!=` - Not equal: `version!=0.1.0`
@@ -28,6 +93,8 @@
 //! * `~=` - Regex: `name~=^moosicbox_.*`
 //!
 //! ## Array Operators
+//!
+//! Match against array properties (keywords, categories, authors, etc.):
 //!
 //! * `@=` - Contains element: `categories@=audio`
 //! * `@*=` - Contains element with substring: `keywords@*=music`
@@ -41,8 +108,18 @@
 //!
 //! ## Existence Operators
 //!
+//! Check if properties exist:
+//!
 //! * `?` - Property exists: `readme?`
-//! * `!?` - Property does NOT exist: `!homepage?`
+//! * `!?` - Property does NOT exist: `homepage!?`
+//!
+//! ## Nested Properties
+//!
+//! Access nested metadata using dot notation:
+//!
+//! * `metadata.workspaces.independent=true`
+//! * `metadata.ci.skip-tests=true`
+//! * `package.metadata.custom.field=value`
 
 mod expression_parser;
 mod matcher;
