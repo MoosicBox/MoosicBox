@@ -140,6 +140,7 @@ members = [
     "packages/opus_native/test_vectors",
     "packages/p2p",
     "packages/paging",
+    "packages/paging/examples/basic_pagination",
     "packages/parsing_utils",
     "packages/parsing_utils/examples/basic_usage",
     "packages/player",
