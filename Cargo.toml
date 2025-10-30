@@ -164,6 +164,7 @@ members = [
     "packages/schema/examples/basic_usage",
     "packages/search",
     "packages/server",
+    "packages/server/examples/basic_server",
     "packages/server/simulator",
     "packages/session",
     "packages/session/models",

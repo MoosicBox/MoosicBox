@@ -9452,6 +9452,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_server_basic_server_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_config",
+ "moosicbox_logging",
+ "moosicbox_server",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_server_simulator"
 version = "0.1.4"
 dependencies = [
