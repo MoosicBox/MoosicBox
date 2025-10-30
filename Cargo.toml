@@ -176,6 +176,7 @@ members = [
     "packages/simvar/examples/api_testing",
     "packages/simvar/examples/basic_web_server",
     "packages/simvar/harness",
+    "packages/simvar/harness/examples/basic_simulation",
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/stream_utils/examples/basic_broadcast",

@@ -14087,6 +14087,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_harness_basic_simulation_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "simvar_harness",
+]
+
+[[package]]
 name = "simvar_utils"
 version = "0.1.0"
 dependencies = [
