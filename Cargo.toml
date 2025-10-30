@@ -144,6 +144,7 @@ members = [
     "packages/parsing_utils",
     "packages/parsing_utils/examples/basic_usage",
     "packages/player",
+    "packages/player/examples/basic_playback",
     "packages/profiles",
     "packages/qobuz",
     "packages/random",

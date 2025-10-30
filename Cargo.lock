@@ -9108,6 +9108,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_player_basic_playback_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "moosicbox_audio_output",
+ "moosicbox_music_models",
+ "moosicbox_player",
+ "switchy_async",
+]
+
+[[package]]
 name = "moosicbox_profiles"
 version = "0.1.4"
 dependencies = [
