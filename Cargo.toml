@@ -131,6 +131,7 @@ members = [
     "packages/music/models",
     "packages/music_api",
     "packages/music_api/api",
+    "packages/music_api/examples/basic_usage",
     "packages/music_api/helpers",
     "packages/music_api/models",
     "packages/openport",
