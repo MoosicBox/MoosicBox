@@ -15379,6 +15379,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_database_connection_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "pretty_env_logger",
+ "switchy_database_connection",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_env"
 version = "0.1.0"
 dependencies = [
