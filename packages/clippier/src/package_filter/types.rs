@@ -165,7 +165,7 @@ impl FilterOperator {
 /// A token in a filter expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
-    /// A complete filter condition string (e.g., "publish=false", "name=\"my package\"")
+    /// A complete filter condition string (e.g., "package.publish=false", "package.name=\"my package\"")
     Filter(String),
     /// Logical AND operator
     And,

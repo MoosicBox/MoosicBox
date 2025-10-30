@@ -11,8 +11,8 @@
 //! use clippier::package_filter::apply_filters;
 //! use std::collections::BTreeMap;
 //!
-//! // Skip packages where publish = false
-//! let skip_filters = vec!["publish=false".to_string()];
+//! // Skip packages where package.publish = false
+//! let skip_filters = vec!["package.publish=false".to_string()];
 //! let filtered = apply_filters(&packages, &paths, &root, &skip_filters, &[])?;
 //! ```
 //!
@@ -20,10 +20,10 @@
 //!
 //! ```rust,ignore
 //! // Skip unpublished packages OR examples
-//! let skip_filters = vec!["publish=false OR name$=_example".to_string()];
+//! let skip_filters = vec!["package.publish=false OR package.name$=_example".to_string()];
 //!
 //! // Include only published moosicbox packages that aren't examples
-//! let include_filters = vec!["name^=moosicbox_ AND publish=true AND NOT name$=_example".to_string()];
+//! let include_filters = vec!["package.name^=moosicbox_ AND package.publish=true AND NOT package.name$=_example".to_string()];
 //!
 //! let filtered = apply_filters(&packages, &paths, &root, &skip_filters, &include_filters)?;
 //! ```
@@ -31,6 +31,27 @@
 //! # Filter Syntax
 //!
 //! Filters use the format: `property[.nested]<operator>value`
+//!
+//! ## Property Path Resolution
+//!
+//! Property paths are resolved from the root of Cargo.toml using dot notation.
+//! You must specify the full path to any property:
+//!
+//! * **Package section properties**: Use `package.` prefix
+//!   - `package.name`, `package.version`, `package.publish`
+//!   - `package.categories`, `package.keywords`, `package.authors`
+//!   - `package.metadata.workspaces.independent`
+//!   
+//! * **Other top-level sections**: Reference directly
+//!   - `dependencies.serde.version`
+//!   - `features.default`
+//!   - `workspace.members`
+//!
+//! **Examples:**
+//! * `package.name^=moosicbox_` - Match packages starting with "moosicbox_"
+//! * `dependencies.serde?` - Check if serde is a dependency
+//! * `package.metadata.ci.skip=true` - Match custom metadata
+//! * `features.default?` - Check if default feature exists
 //!
 //! ## Logical Operators
 //!
@@ -47,11 +68,11 @@
 //! 3. `OR`
 //!
 //! **Examples:**
-//! * `publish=false AND version^=0.1` - Both must match
-//! * `publish=false OR name$=_example` - Either must match
-//! * `NOT publish=false` - Inverts the condition (same as `publish=true`)
-//! * `(publish=false OR name$=_test) AND version^=0.1` - Grouped with precedence
-//! * `name^=moosicbox_ AND (categories@=audio OR categories@=video)` - Complex nesting
+//! * `package.publish=false AND package.version^=0.1` - Both must match
+//! * `package.publish=false OR package.name$=_example` - Either must match
+//! * `NOT package.publish=false` - Inverts the condition
+//! * `(package.publish=false OR package.name$=_test) AND package.version^=0.1` - Grouped with precedence
+//! * `package.name^=moosicbox_ AND (package.categories@=audio OR package.categories@=video)` - Complex nesting
 //!
 //! **Case Insensitive:** Keywords can be `AND`, `and`, `And`, etc.
 //!
@@ -59,8 +80,8 @@
 //!
 //! Use double quotes for values containing spaces or special characters:
 //!
-//! * `name="my package"` - Value with spaces
-//! * `description="This AND that"` - Prevents "AND" from being treated as operator
+//! * `package.name="my package"` - Value with spaces
+//! * `package.description="This AND that"` - Prevents "AND" from being treated as operator
 //!
 //! **Escape Sequences:**
 //! * `\"` - Double quote
@@ -69,56 +90,56 @@
 //! * `\t` - Tab
 //! * `\r` - Carriage return
 //!
-//! Example: `title="Quote: \"test\""`
+//! Example: `package.name="Quote: \"test\""`
 //!
 //! ## Unicode Support
 //!
 //! Full Unicode support including multibyte characters, emoji, and RTL text:
 //!
-//! * Property names with Unicode: `名前=test`
-//! * Unicode values: `name=テスト`
-//! * Emoji in values: `icon=🎵`
-//! * Right-to-left text: `اسم=قيمة`
+//! * Property names with Unicode: `package.名前=test`
+//! * Unicode values: `package.name=テスト`
+//! * Emoji in values: `package.icon=🎵`
+//! * Right-to-left text: `package.اسم=قيمة`
 //! * Works with all operators and logical expressions
 //!
 //! ## Scalar Operators
 //!
 //! Match against string, boolean, or integer values:
 //!
-//! * `=` - Exact match: `publish=false`
-//! * `!=` - Not equal: `version!=0.1.0`
-//! * `^=` - Starts with: `version^=0.1`
-//! * `$=` - Ends with: `name$=_example`
-//! * `*=` - Contains: `description*=server`
-//! * `~=` - Regex: `name~=^moosicbox_.*`
+//! * `=` - Exact match: `package.publish=false`
+//! * `!=` - Not equal: `package.version!=0.1.0`
+//! * `^=` - Starts with: `package.version^=0.1`
+//! * `$=` - Ends with: `package.name$=_example`
+//! * `*=` - Contains: `package.description*=server`
+//! * `~=` - Regex: `package.name~=^moosicbox_.*`
 //!
 //! ## Array Operators
 //!
 //! Match against array properties (keywords, categories, authors, etc.):
 //!
-//! * `@=` - Contains element: `categories@=audio`
-//! * `@*=` - Contains element with substring: `keywords@*=music`
-//! * `@^=` - Contains element starting with: `keywords@^=moosic`
-//! * `@~=` - Contains element matching regex: `categories@~=^dev.*`
-//! * `@!` - Array is empty: `keywords@!`
-//! * `@#=` - Length equals: `keywords@#=3`
-//! * `@#>` - Length greater: `keywords@#>2`
-//! * `@#<` - Length less: `keywords@#<5`
-//! * `!@=` - Does NOT contain: `categories!@=test`
+//! * `@=` - Contains element: `package.categories@=audio`
+//! * `@*=` - Contains element with substring: `package.keywords@*=music`
+//! * `@^=` - Contains element starting with: `package.keywords@^=moosic`
+//! * `@~=` - Contains element matching regex: `package.categories@~=^dev.*`
+//! * `@!` - Array is empty: `package.keywords@!`
+//! * `@#=` - Length equals: `package.keywords@#=3`
+//! * `@#>` - Length greater: `package.keywords@#>2`
+//! * `@#<` - Length less: `package.keywords@#<5`
+//! * `!@=` - Does NOT contain: `package.categories!@=test`
 //!
 //! ## Existence Operators
 //!
 //! Check if properties exist:
 //!
-//! * `?` - Property exists: `readme?`
-//! * `!?` - Property does NOT exist: `homepage!?`
+//! * `?` - Property exists: `package.readme?`
+//! * `!?` - Property does NOT exist: `package.homepage!?`
 //!
 //! ## Nested Properties
 //!
 //! Access nested metadata using dot notation:
 //!
-//! * `metadata.workspaces.independent=true`
-//! * `metadata.ci.skip-tests=true`
+//! * `package.metadata.workspaces.independent=true`
+//! * `package.metadata.ci.skip-tests=true`
 //! * `package.metadata.custom.field=value`
 
 mod expression_parser;
@@ -148,8 +169,8 @@ use toml::Value;
 /// * `include_filters` - Filter expressions that must match for inclusion (AND logic between filters)
 ///
 /// Each filter can be:
-/// * A simple condition: `"publish=false"`
-/// * A complex expression: `"(publish=false OR name$=_example) AND categories@=audio"`
+/// * A simple condition: `"package.publish=false"`
+/// * A complex expression: `"(package.publish=false OR package.name$=_example) AND package.categories@=audio"`
 ///
 /// # Returns
 ///
@@ -240,7 +261,7 @@ mod tests {
         package_paths.insert("test_package".to_string(), "test_package".to_string());
 
         let packages = vec!["test_package".to_string()];
-        let skip_filters = vec!["publish=false".to_string()];
+        let skip_filters = vec!["package.publish=false".to_string()];
 
         let result =
             apply_filters(&packages, &package_paths, temp_path, &skip_filters, &[]).unwrap();
@@ -271,7 +292,7 @@ mod tests {
         package_paths.insert("test_package".to_string(), "test_package".to_string());
 
         let packages = vec!["test_package".to_string()];
-        let include_filters = vec!["categories@=audio".to_string()];
+        let include_filters = vec!["package.categories@=audio".to_string()];
 
         let result =
             apply_filters(&packages, &package_paths, temp_path, &[], &include_filters).unwrap();

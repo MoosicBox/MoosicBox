@@ -98,11 +98,11 @@ fn split_on_operator(filter: &str, op: &str) -> Option<(String, String)> {
 ///
 /// # Examples
 ///
-/// * `"publish=false"` - Check if publish is false
-/// * `"version^=0.1"` - Check if version starts with "0.1"
-/// * `"categories@=audio"` - Check if categories array contains "audio"
-/// * `"metadata.workspaces.independent=true"` - Nested property check
-/// * `"readme?"` - Check if readme property exists
+/// * `"package.publish=false"` - Check if publish is false
+/// * `"package.version^=0.1"` - Check if version starts with "0.1"
+/// * `"package.categories@=audio"` - Check if categories array contains "audio"
+/// * `"package.metadata.workspaces.independent=true"` - Nested property check
+/// * `"package.readme?"` - Check if readme property exists
 ///
 /// # Errors
 ///
@@ -188,6 +188,14 @@ mod tests {
     fn test_parse_simple_equality() {
         let filter = parse_filter("publish=false").unwrap();
         assert_eq!(filter.property_path, vec!["publish"]);
+        assert_eq!(filter.operator, FilterOperator::Equals);
+        assert_eq!(filter.value, "false");
+    }
+
+    #[test]
+    fn test_parse_simple_equality_with_nested_path() {
+        let filter = parse_filter("package.publish=false").unwrap();
+        assert_eq!(filter.property_path, vec!["package", "publish"]);
         assert_eq!(filter.operator, FilterOperator::Equals);
         assert_eq!(filter.value, "false");
     }

@@ -16,10 +16,10 @@ use super::types::{FilterError, FilterExpression, Token};
 ///
 /// # Examples
 ///
-/// * `"publish=false"` → Single condition
-/// * `"publish=false AND version^=0.1"` → AND expression
-/// * `"(publish=false OR name$=_example) AND categories@=audio"` → Complex nested expression
-/// * `"NOT publish=false"` → NOT expression
+/// * `"package.publish=false"` → Single condition
+/// * `"package.publish=false AND package.version^=0.1"` → AND expression
+/// * `"(package.publish=false OR package.name$=_example) AND package.categories@=audio"` → Complex nested expression
+/// * `"NOT package.version^=0.1"` → NOT expression
 ///
 /// # Errors
 ///
@@ -167,8 +167,20 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_simple_filter_with_nested_path() {
+        let expr = parse_expression("package.publish=false").unwrap();
+        match expr {
+            FilterExpression::Condition(filter) => {
+                assert_eq!(filter.property_path, vec!["package", "publish"]);
+                assert_eq!(filter.value, "false");
+            }
+            _ => panic!("Expected Condition"),
+        }
+    }
+
+    #[test]
     fn test_parse_and_expression() {
-        let expr = parse_expression("publish=false AND version^=0.1").unwrap();
+        let expr = parse_expression("package.publish=false AND package.version^=0.1").unwrap();
         match expr {
             FilterExpression::And(children) => {
                 assert_eq!(children.len(), 2);
@@ -179,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_parse_or_expression() {
-        let expr = parse_expression("publish=false OR version^=0.1").unwrap();
+        let expr = parse_expression("package.publish=false OR package.version^=0.1").unwrap();
         match expr {
             FilterExpression::Or(children) => {
                 assert_eq!(children.len(), 2);
@@ -190,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_parse_not_expression() {
-        let expr = parse_expression("NOT publish=false").unwrap();
+        let expr = parse_expression("NOT package.publish=false").unwrap();
         match expr {
             FilterExpression::Not(inner) => match *inner {
                 FilterExpression::Condition(_) => {}
@@ -202,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_parse_parentheses() {
-        let expr = parse_expression("(publish=false OR version^=0.1)").unwrap();
+        let expr = parse_expression("(package.publish=false OR package.version^=0.1)").unwrap();
         match expr {
             FilterExpression::Or(children) => {
                 assert_eq!(children.len(), 2);
@@ -213,8 +225,10 @@ mod tests {
 
     #[test]
     fn test_parse_complex_expression() {
-        let expr =
-            parse_expression("(publish=false OR name$=_example) AND categories@=audio").unwrap();
+        let expr = parse_expression(
+            "(package.publish=false OR package.name$=_example) AND package.categories@=audio",
+        )
+        .unwrap();
         match expr {
             FilterExpression::And(children) => {
                 assert_eq!(children.len(), 2);
@@ -232,7 +246,10 @@ mod tests {
     #[test]
     fn test_parse_precedence() {
         // NOT > AND > OR
-        let expr = parse_expression("NOT publish=false AND version^=0.1 OR name=test").unwrap();
+        let expr = parse_expression(
+            "NOT package.publish=false AND package.version^=0.1 OR package.name=test",
+        )
+        .unwrap();
         match expr {
             FilterExpression::Or(children) => {
                 assert_eq!(children.len(), 2);
@@ -274,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_parse_unmatched_paren() {
-        let result = parse_expression("(publish=false");
+        let result = parse_expression("(package.publish=false");
         assert!(matches!(result, Err(FilterError::ExpectedToken(_))));
     }
 

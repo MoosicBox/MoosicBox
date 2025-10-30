@@ -25,42 +25,42 @@ fn load_fixture(name: &str) -> toml::Value {
 #[test]
 fn test_equals_string_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name=moosicbox_audio_decoder").unwrap();
+    let filter = parse_filter("package.name=moosicbox_audio_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_equals_string_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name=different_name").unwrap();
+    let filter = parse_filter("package.name=different_name").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_equals_boolean_true() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("publish=true").unwrap();
+    let filter = parse_filter("package.publish=true").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_equals_boolean_false() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("publish=false").unwrap();
+    let filter = parse_filter("package.publish=false").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_equals_version() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("version=0.1.4").unwrap();
+    let filter = parse_filter("package.version=0.1.4").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_equals_edition() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("edition=2021").unwrap();
+    let filter = parse_filter("package.edition=2021").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -71,21 +71,21 @@ fn test_equals_edition() {
 #[test]
 fn test_not_equals_string() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name!=wrong_name").unwrap();
+    let filter = parse_filter("package.name!=wrong_name").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_not_equals_boolean() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("publish!=false").unwrap();
+    let filter = parse_filter("package.publish!=false").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_not_equals_matching_value() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name!=moosicbox_audio_decoder").unwrap();
+    let filter = parse_filter("package.name!=moosicbox_audio_decoder").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -96,28 +96,28 @@ fn test_not_equals_matching_value() {
 #[test]
 fn test_starts_with_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name^=moosicbox_").unwrap();
+    let filter = parse_filter("package.name^=moosicbox_").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_starts_with_version() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("version^=0.1").unwrap();
+    let filter = parse_filter("package.version^=0.1").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_starts_with_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name^=different_").unwrap();
+    let filter = parse_filter("package.name^=different_").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_starts_with_full_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name^=moosicbox_audio_decoder").unwrap();
+    let filter = parse_filter("package.name^=moosicbox_audio_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -128,28 +128,28 @@ fn test_starts_with_full_match() {
 #[test]
 fn test_ends_with_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name$=_decoder").unwrap();
+    let filter = parse_filter("package.name$=_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_ends_with_example_suffix() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("name$=_example").unwrap();
+    let filter = parse_filter("package.name$=_example").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_ends_with_package_suffix() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("name$=_package").unwrap();
+    let filter = parse_filter("package.name$=_package").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_ends_with_full_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name$=moosicbox_audio_decoder").unwrap();
+    let filter = parse_filter("package.name$=moosicbox_audio_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -160,28 +160,28 @@ fn test_ends_with_full_match() {
 #[test]
 fn test_contains_substring_in_name() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name*=audio").unwrap();
+    let filter = parse_filter("package.name*=audio").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_contains_substring_in_description() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("description*=decoder").unwrap();
+    let filter = parse_filter("package.description*=decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_contains_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name*=xyz").unwrap();
+    let filter = parse_filter("package.name*=xyz").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_contains_multiple_test_words() {
     let toml = load_fixture("substring-test");
-    let filter = parse_filter("name*=test").unwrap();
+    let filter = parse_filter("package.name*=test").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -192,28 +192,28 @@ fn test_contains_multiple_test_words() {
 #[test]
 fn test_regex_simple_pattern() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"name~=^moosicbox_.*_decoder$").unwrap();
+    let filter = parse_filter(r"package.name~=^moosicbox_.*_decoder$").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_regex_version_pattern() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"version~=^\d+\.\d+\.\d+$").unwrap();
+    let filter = parse_filter(r"package.version~=^\d+\.\d+\.\d+$").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_regex_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"name~=^test_.*").unwrap();
+    let filter = parse_filter(r"package.name~=^test_.*").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_regex_alternative_pattern() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"name~=(audio|video)_decoder").unwrap();
+    let filter = parse_filter(r"package.name~=(audio|video)_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -224,28 +224,28 @@ fn test_regex_alternative_pattern() {
 #[test]
 fn test_array_contains_keyword() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@=audio").unwrap();
+    let filter = parse_filter("package.keywords@=audio").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_category() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("categories@=multimedia::audio").unwrap();
+    let filter = parse_filter("package.categories@=multimedia::audio").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_not_contains() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@=nonexistent").unwrap();
+    let filter = parse_filter("package.keywords@=nonexistent").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_in_authors() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("authors@=John Doe <john@example.com>").unwrap();
+    let filter = parse_filter("package.authors@=John Doe <john@example.com>").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -256,21 +256,21 @@ fn test_array_contains_in_authors() {
 #[test]
 fn test_array_contains_substring_in_keywords() {
     let toml = load_fixture("substring-test");
-    let filter = parse_filter("keywords@*=api").unwrap();
+    let filter = parse_filter("package.keywords@*=api").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_substring_partial_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@*=multi").unwrap();
+    let filter = parse_filter("package.keywords@*=multi").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_substring_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@*=xyz").unwrap();
+    let filter = parse_filter("package.keywords@*=xyz").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -281,21 +281,21 @@ fn test_array_contains_substring_no_match() {
 #[test]
 fn test_array_contains_starts_with_match() {
     let toml = load_fixture("substring-test");
-    let filter = parse_filter("keywords@^=music").unwrap();
+    let filter = parse_filter("package.keywords@^=music").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_starts_with_category() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("categories@^=multimedia").unwrap();
+    let filter = parse_filter("package.categories@^=multimedia").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_starts_with_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@^=xyz").unwrap();
+    let filter = parse_filter("package.keywords@^=xyz").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -306,21 +306,21 @@ fn test_array_contains_starts_with_no_match() {
 #[test]
 fn test_array_contains_regex_pattern() {
     let toml = load_fixture("substring-test");
-    let filter = parse_filter(r"keywords@~=^music-.*").unwrap();
+    let filter = parse_filter(r"package.keywords@~=^music-.*").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_regex_alternative() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"keywords@~=(audio|video|multimedia)").unwrap();
+    let filter = parse_filter(r"package.keywords@~=(audio|video|multimedia)").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_contains_regex_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"keywords@~=^test-.*").unwrap();
+    let filter = parse_filter(r"package.keywords@~=^test-.*").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -331,28 +331,28 @@ fn test_array_contains_regex_no_match() {
 #[test]
 fn test_array_empty_keywords() {
     let toml = load_fixture("empty-arrays");
-    let filter = parse_filter("keywords@!").unwrap();
+    let filter = parse_filter("package.keywords@!").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_empty_categories() {
     let toml = load_fixture("empty-arrays");
-    let filter = parse_filter("categories@!").unwrap();
+    let filter = parse_filter("package.categories@!").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_not_empty() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@!").unwrap();
+    let filter = parse_filter("package.keywords@!").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_empty_missing_property() {
     let toml = load_fixture("no-metadata");
-    let filter = parse_filter("keywords@!").unwrap();
+    let filter = parse_filter("package.keywords@!").unwrap();
     // Missing array property should be treated as empty
     assert!(matches(&filter, &toml).unwrap());
 }
@@ -364,28 +364,28 @@ fn test_array_empty_missing_property() {
 #[test]
 fn test_array_length_equals_zero() {
     let toml = load_fixture("empty-arrays");
-    let filter = parse_filter("keywords@#=0").unwrap();
+    let filter = parse_filter("package.keywords@#=0").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_equals_keywords() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#=5").unwrap();
+    let filter = parse_filter("package.keywords@#=5").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_equals_authors() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("authors@#=3").unwrap();
+    let filter = parse_filter("package.authors@#=3").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_equals_no_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@#=100").unwrap();
+    let filter = parse_filter("package.keywords@#=100").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -396,28 +396,28 @@ fn test_array_length_equals_no_match() {
 #[test]
 fn test_array_length_greater_than() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#>3").unwrap();
+    let filter = parse_filter("package.keywords@#>3").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_greater_than_zero() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@#>0").unwrap();
+    let filter = parse_filter("package.keywords@#>0").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_not_greater() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#>10").unwrap();
+    let filter = parse_filter("package.keywords@#>10").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_greater_equal_to_length() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#>5").unwrap();
+    let filter = parse_filter("package.keywords@#>5").unwrap();
     // Length is exactly 5, not greater
     assert!(!matches(&filter, &toml).unwrap());
 }
@@ -429,28 +429,28 @@ fn test_array_length_greater_equal_to_length() {
 #[test]
 fn test_array_length_less_than() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("categories@#<5").unwrap();
+    let filter = parse_filter("package.categories@#<5").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_less_than_large_number() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@#<100").unwrap();
+    let filter = parse_filter("package.keywords@#<100").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_not_less() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#<3").unwrap();
+    let filter = parse_filter("package.keywords@#<3").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_length_less_equal_to_length() {
     let toml = load_fixture("large-arrays");
-    let filter = parse_filter("keywords@#<5").unwrap();
+    let filter = parse_filter("package.keywords@#<5").unwrap();
     // Length is exactly 5, not less
     assert!(!matches(&filter, &toml).unwrap());
 }
@@ -462,21 +462,21 @@ fn test_array_length_less_equal_to_length() {
 #[test]
 fn test_array_not_contains_match() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords!@=nonexistent").unwrap();
+    let filter = parse_filter("package.keywords!@=nonexistent").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_not_contains_existing() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords!@=audio").unwrap();
+    let filter = parse_filter("package.keywords!@=audio").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_array_not_contains_category() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("categories!@=web-programming").unwrap();
+    let filter = parse_filter("package.categories!@=web-programming").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -487,28 +487,28 @@ fn test_array_not_contains_category() {
 #[test]
 fn test_property_exists_name() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name?").unwrap();
+    let filter = parse_filter("package.name?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_exists_readme() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("readme?").unwrap();
+    let filter = parse_filter("package.readme?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_exists_missing() {
     let toml = load_fixture("no-metadata");
-    let filter = parse_filter("homepage?").unwrap();
+    let filter = parse_filter("package.homepage?").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_exists_documentation() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("documentation?").unwrap();
+    let filter = parse_filter("package.documentation?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -519,28 +519,28 @@ fn test_property_exists_documentation() {
 #[test]
 fn test_property_not_exists_missing() {
     let toml = load_fixture("no-metadata");
-    let filter = parse_filter("homepage!?").unwrap();
+    let filter = parse_filter("package.homepage!?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_not_exists_readme_missing() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("readme!?").unwrap();
+    let filter = parse_filter("package.readme!?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_not_exists_present() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name!?").unwrap();
+    let filter = parse_filter("package.name!?").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_property_not_exists_documentation_missing() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("documentation!?").unwrap();
+    let filter = parse_filter("package.documentation!?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -551,42 +551,42 @@ fn test_property_not_exists_documentation_missing() {
 #[test]
 fn test_nested_metadata_workspaces_independent() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("metadata.workspaces.independent=true").unwrap();
+    let filter = parse_filter("package.metadata.workspaces.independent=true").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_nested_metadata_custom_field() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("metadata.workspaces.custom-field=test-value").unwrap();
+    let filter = parse_filter("package.metadata.workspaces.custom-field=test-value").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_nested_metadata_ci_skip_tests() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("metadata.ci.skip-tests=false").unwrap();
+    let filter = parse_filter("package.metadata.ci.skip-tests=false").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_nested_metadata_exists() {
     let toml = load_fixture("nested-metadata");
-    let filter = parse_filter("metadata.build.target?").unwrap();
+    let filter = parse_filter("package.metadata.build.target?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_nested_metadata_not_exists() {
     let toml = load_fixture("no-metadata");
-    let filter = parse_filter("metadata.workspaces.independent!?").unwrap();
+    let filter = parse_filter("package.metadata.workspaces.independent!?").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_deeply_nested_property() {
     let toml = load_fixture("nested-metadata");
-    let filter = parse_filter("metadata.build.target=wasm32").unwrap();
+    let filter = parse_filter("package.metadata.build.target=wasm32").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -611,28 +611,28 @@ fn test_explicit_package_metadata() {
 #[test]
 fn test_backward_compat_unprefixed_name() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name=moosicbox_audio_decoder").unwrap();
+    let filter = parse_filter("package.name=moosicbox_audio_decoder").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_backward_compat_unprefixed_version() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("version^=0.1").unwrap();
+    let filter = parse_filter("package.version^=0.1").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_backward_compat_unprefixed_publish() {
     let toml = load_fixture("unpublished");
-    let filter = parse_filter("publish=false").unwrap();
+    let filter = parse_filter("package.publish=false").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_backward_compat_unprefixed_keywords() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords@=audio").unwrap();
+    let filter = parse_filter("package.keywords@=audio").unwrap();
     assert!(matches(&filter, &toml).unwrap());
 }
 
@@ -643,14 +643,14 @@ fn test_backward_compat_unprefixed_keywords() {
 #[test]
 fn test_edge_case_empty_string_value() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name=").unwrap();
+    let filter = parse_filter("package.name=").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_edge_case_missing_property_equals() {
     let toml = load_fixture("no-metadata");
-    let filter = parse_filter("homepage=https://example.com").unwrap();
+    let filter = parse_filter("package.homepage=https://example.com").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
@@ -658,7 +658,7 @@ fn test_edge_case_missing_property_equals() {
 fn test_edge_case_invalid_array_length_format() {
     let toml = load_fixture("comprehensive");
     // Parser accepts any string, validation happens during matching
-    let filter = parse_filter("keywords@#=abc").unwrap();
+    let filter = parse_filter("package.keywords@#=abc").unwrap();
     let result = matches(&filter, &toml);
     // Should fail during matching because "abc" is not a valid number
     assert!(result.is_err());
@@ -667,7 +667,7 @@ fn test_edge_case_invalid_array_length_format() {
 #[test]
 fn test_edge_case_regex_invalid_pattern() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter(r"name~=[invalid").unwrap();
+    let filter = parse_filter(r"package.name~=[invalid").unwrap();
     let result = matches(&filter, &toml);
     assert!(result.is_err());
 }
@@ -675,14 +675,14 @@ fn test_edge_case_regex_invalid_pattern() {
 #[test]
 fn test_edge_case_type_mismatch_string_on_boolean() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("publish=yes").unwrap();
+    let filter = parse_filter("package.publish=yes").unwrap();
     assert!(!matches(&filter, &toml).unwrap());
 }
 
 #[test]
 fn test_edge_case_array_operation_on_scalar() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("name@=audio").unwrap();
+    let filter = parse_filter("package.name@=audio").unwrap();
     // Should not match because name is a string, not an array
     assert!(!matches(&filter, &toml).unwrap());
 }
@@ -690,7 +690,7 @@ fn test_edge_case_array_operation_on_scalar() {
 #[test]
 fn test_edge_case_scalar_operation_on_array() {
     let toml = load_fixture("comprehensive");
-    let filter = parse_filter("keywords=audio").unwrap();
+    let filter = parse_filter("package.keywords=audio").unwrap();
     // Should not match because keywords is an array, not a scalar
     assert!(!matches(&filter, &toml).unwrap());
 }
@@ -700,13 +700,13 @@ fn test_edge_case_empty_array_length_operations() {
     let toml = load_fixture("empty-arrays");
 
     // Empty array: length = 0
-    let filter_eq = parse_filter("keywords@#=0").unwrap();
+    let filter_eq = parse_filter("package.keywords@#=0").unwrap();
     assert!(matches(&filter_eq, &toml).unwrap());
 
-    let filter_gt = parse_filter("keywords@#>0").unwrap();
+    let filter_gt = parse_filter("package.keywords@#>0").unwrap();
     assert!(!matches(&filter_gt, &toml).unwrap());
 
-    let filter_lt = parse_filter("keywords@#<1").unwrap();
+    let filter_lt = parse_filter("package.keywords@#<1").unwrap();
     assert!(matches(&filter_lt, &toml).unwrap());
 }
 
@@ -720,11 +720,11 @@ fn test_combined_skip_and_include_both_match() {
     let toml = load_fixture("comprehensive");
 
     // Include if name starts with moosicbox_
-    let include = parse_filter("name^=moosicbox_").unwrap();
+    let include = parse_filter("package.name^=moosicbox_").unwrap();
     assert!(matches(&include, &toml).unwrap());
 
     // Skip if name ends with _example
-    let skip = parse_filter("name$=_example").unwrap();
+    let skip = parse_filter("package.name$=_example").unwrap();
     assert!(!matches(&skip, &toml).unwrap());
 
     // Logic: include=true AND skip=false -> should be included
@@ -735,11 +735,11 @@ fn test_combined_skip_and_include_skip_wins() {
     let toml = load_fixture("unpublished");
 
     // Include if name contains "package"
-    let include = parse_filter("name*=package").unwrap();
+    let include = parse_filter("package.name*=package").unwrap();
     assert!(matches(&include, &toml).unwrap());
 
     // Skip if publish = false
-    let skip = parse_filter("publish=false").unwrap();
+    let skip = parse_filter("package.publish=false").unwrap();
     assert!(matches(&skip, &toml).unwrap());
 
     // Logic: include=true AND skip=true -> should be skipped
@@ -750,9 +750,9 @@ fn test_combined_multiple_include_conditions() {
     let toml = load_fixture("comprehensive");
 
     // Multiple conditions that should all match
-    let filter1 = parse_filter("name^=moosicbox_").unwrap();
-    let filter2 = parse_filter("keywords@=audio").unwrap();
-    let filter3 = parse_filter("publish=true").unwrap();
+    let filter1 = parse_filter("package.name^=moosicbox_").unwrap();
+    let filter2 = parse_filter("package.keywords@=audio").unwrap();
+    let filter3 = parse_filter("package.publish=true").unwrap();
 
     assert!(matches(&filter1, &toml).unwrap());
     assert!(matches(&filter2, &toml).unwrap());
@@ -764,8 +764,8 @@ fn test_combined_multiple_skip_conditions() {
     let toml = load_fixture("unpublished");
 
     // Any skip condition matching should exclude
-    let filter1 = parse_filter("publish=false").unwrap();
-    let _filter2 = parse_filter("name$=_example").unwrap();
+    let filter1 = parse_filter("package.publish=false").unwrap();
+    let _filter2 = parse_filter("package.name$=_example").unwrap();
 
     // At least one matches
     assert!(matches(&filter1, &toml).unwrap());

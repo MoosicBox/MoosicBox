@@ -34,19 +34,19 @@ fn test_skip_unpublished_and_examples() {
         name = "test_example"
         publish = false"#,
     );
-    let expr = parse_expression("publish=false OR name$=_example").unwrap();
+    let expr = parse_expression("package.publish=false OR package.name$=_example").unwrap();
 
-    // Validate expression structure: OR(publish=false, name$=_example)
+    // Validate expression structure: OR(package.publish=false, package.name$=_example)
     let or_children = assert_or_with_n_children(&expr, 2);
     assert_condition(
         &or_children[0],
-        &["publish"],
+        &["package", "publish"],
         FilterOperator::Equals,
         "false",
     );
     assert_condition(
         &or_children[1],
-        &["name"],
+        &["package", "name"],
         FilterOperator::EndsWith,
         "_example",
     );
@@ -63,25 +63,32 @@ fn test_include_only_production_packages() {
         publish = true
         version = "0.1.4""#,
     );
-    let expr =
-        parse_expression("name^=moosicbox_ AND publish=true AND NOT name$=_example").unwrap();
+    let expr = parse_expression(
+        "package.name^=moosicbox_ AND package.publish=true AND NOT package.name$=_example",
+    )
+    .unwrap();
 
     // Validate expression structure: AND(name^=moosicbox_, publish=true, NOT(name$=_example))
     let and_children = assert_and_with_n_children(&expr, 3);
     assert_condition(
         &and_children[0],
-        &["name"],
+        &["package", "name"],
         FilterOperator::StartsWith,
         "moosicbox_",
     );
     assert_condition(
         &and_children[1],
-        &["publish"],
+        &["package", "publish"],
         FilterOperator::Equals,
         "true",
     );
     let not_child = assert_not(&and_children[2]);
-    assert_condition(not_child, &["name"], FilterOperator::EndsWith, "_example");
+    assert_condition(
+        not_child,
+        &["package", "name"],
+        FilterOperator::EndsWith,
+        "_example",
+    );
 
     // Validate it evaluates correctly
     assert!(evaluate_expression(&expr, &cargo).unwrap());
@@ -97,16 +104,21 @@ fn test_quality_gate_well_documented() {
         categories = ["multimedia"]"#,
     );
     let expr = parse_expression(
-        "readme? AND keywords@#>2 AND (categories@=audio OR categories@=multimedia)",
+        "package.readme? AND package.keywords@#>2 AND (package.categories@=audio OR package.categories@=multimedia)",
     )
     .unwrap();
 
     // Validate structure: AND(readme?, keywords@#>2, OR(categories@=audio, categories@=multimedia))
     let and_children = assert_and_with_n_children(&expr, 3);
-    assert_condition(&and_children[0], &["readme"], FilterOperator::Exists, "");
+    assert_condition(
+        &and_children[0],
+        &["package", "readme"],
+        FilterOperator::Exists,
+        "",
+    );
     assert_condition(
         &and_children[1],
-        &["keywords"],
+        &["package", "keywords"],
         FilterOperator::ArrayLengthGreater,
         "2",
     );
@@ -115,13 +127,13 @@ fn test_quality_gate_well_documented() {
     let or_children = assert_or_with_n_children(&and_children[2], 2);
     assert_condition(
         &or_children[0],
-        &["categories"],
+        &["package", "categories"],
         FilterOperator::ArrayContains,
         "audio",
     );
     assert_condition(
         &or_children[1],
-        &["categories"],
+        &["package", "categories"],
         FilterOperator::ArrayContains,
         "multimedia",
     );
@@ -135,12 +147,12 @@ fn test_component_isolation_by_prefix() {
         r#"[package]
         name = "moosicbox_player_core""#,
     );
-    let expr = parse_expression("name^=moosicbox_player").unwrap();
+    let expr = parse_expression("package.name^=moosicbox_player").unwrap();
 
-    // Validate expression structure: name^=moosicbox_player
+    // Validate expression structure: package.name^=moosicbox_player
     assert_condition(
         &expr,
-        &["name"],
+        &["package", "name"],
         FilterOperator::StartsWith,
         "moosicbox_player",
     );
@@ -162,21 +174,38 @@ fn test_release_ready_packages() {
         readme = "README.md"
         license = "MIT""#,
     );
-    let expr =
-        parse_expression("publish=true AND readme? AND license? AND NOT name$=_example").unwrap();
+    let expr = parse_expression(
+        "package.publish=true AND package.readme? AND package.license? AND NOT package.name$=_example",
+    )
+    .unwrap();
 
     // Validate structure: AND(publish=true, readme?, license?, NOT(name$=_example))
     let and_children = assert_and_with_n_children(&expr, 4);
     assert_condition(
         &and_children[0],
-        &["publish"],
+        &["package", "publish"],
         FilterOperator::Equals,
         "true",
     );
-    assert_condition(&and_children[1], &["readme"], FilterOperator::Exists, "");
-    assert_condition(&and_children[2], &["license"], FilterOperator::Exists, "");
+    assert_condition(
+        &and_children[1],
+        &["package", "readme"],
+        FilterOperator::Exists,
+        "",
+    );
+    assert_condition(
+        &and_children[2],
+        &["package", "license"],
+        FilterOperator::Exists,
+        "",
+    );
     let not_child = assert_not(&and_children[3]);
-    assert_condition(not_child, &["name"], FilterOperator::EndsWith, "_example");
+    assert_condition(
+        not_child,
+        &["package", "name"],
+        FilterOperator::EndsWith,
+        "_example",
+    );
 
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
@@ -187,10 +216,15 @@ fn test_version_range_filtering() {
         r#"[package]
         version = "0.1.4""#,
     );
-    let expr = parse_expression("version^=0.1").unwrap();
+    let expr = parse_expression("package.version^=0.1").unwrap();
 
-    // Validate expression structure: version^=0.1
-    assert_condition(&expr, &["version"], FilterOperator::StartsWith, "0.1");
+    // Validate expression structure: package.version^=0.1
+    assert_condition(
+        &expr,
+        &["package", "version"],
+        FilterOperator::StartsWith,
+        "0.1",
+    );
 
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
@@ -201,10 +235,15 @@ fn test_breaking_change_detection() {
         r#"[package]
         version = "1.0.0""#,
     );
-    let expr = parse_expression("version^=1.").unwrap();
+    let expr = parse_expression("package.version^=1.").unwrap();
 
-    // Validate expression structure: version^=1.
-    assert_condition(&expr, &["version"], FilterOperator::StartsWith, "1.");
+    // Validate expression structure: package.version^=1.
+    assert_condition(
+        &expr,
+        &["package", "version"],
+        FilterOperator::StartsWith,
+        "1.",
+    );
 
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
@@ -221,12 +260,12 @@ fn test_workspace_independent_packages() {
         [package]
         name = "test""#,
     );
-    let expr = parse_expression("metadata.workspaces.independent=true").unwrap();
+    let expr = parse_expression("package.metadata.workspaces.independent=true").unwrap();
 
     // Validate expression structure: metadata.workspaces.independent=true
     assert_condition(
         &expr,
-        &["metadata", "workspaces", "independent"],
+        &["package", "metadata", "workspaces", "independent"],
         FilterOperator::Equals,
         "true",
     );
@@ -242,12 +281,12 @@ fn test_ci_skip_metadata() {
         [package]
         name = "test""#,
     );
-    let expr = parse_expression("metadata.ci.skip-tests=true").unwrap();
+    let expr = parse_expression("package.metadata.ci.skip-tests=true").unwrap();
 
     // Validate expression structure: metadata.ci.skip-tests=true
     assert_condition(
         &expr,
-        &["metadata", "ci", "skip-tests"],
+        &["package", "metadata", "ci", "skip-tests"],
         FilterOperator::Equals,
         "true",
     );
@@ -264,19 +303,20 @@ fn test_complex_metadata_filtering() {
         [package]
         name = "test""#,
     );
-    let expr = parse_expression("metadata.internal=true AND metadata.stage=beta").unwrap();
+    let expr =
+        parse_expression("package.metadata.internal=true AND package.metadata.stage=beta").unwrap();
 
     // Validate structure: AND(metadata.internal=true, metadata.stage=beta)
     let and_children = assert_and_with_n_children(&expr, 2);
     assert_condition(
         &and_children[0],
-        &["metadata", "internal"],
+        &["package", "metadata", "internal"],
         FilterOperator::Equals,
         "true",
     );
     assert_condition(
         &and_children[1],
-        &["metadata", "stage"],
+        &["package", "metadata", "stage"],
         FilterOperator::Equals,
         "beta",
     );
@@ -294,19 +334,20 @@ fn test_multimedia_packages() {
         r#"[package]
         categories = ["multimedia", "audio"]"#,
     );
-    let expr = parse_expression("categories@=multimedia OR categories@=audio").unwrap();
+    let expr =
+        parse_expression("package.categories@=multimedia OR package.categories@=audio").unwrap();
 
     // Validate structure: OR(categories@=multimedia, categories@=audio)
     let or_children = assert_or_with_n_children(&expr, 2);
     assert_condition(
         &or_children[0],
-        &["categories"],
+        &["package", "categories"],
         FilterOperator::ArrayContains,
         "multimedia",
     );
     assert_condition(
         &or_children[1],
-        &["categories"],
+        &["package", "categories"],
         FilterOperator::ArrayContains,
         "audio",
     );
@@ -320,12 +361,12 @@ fn test_api_related_packages() {
         r#"[package]
         keywords = ["music-api", "rest-api"]"#,
     );
-    let expr = parse_expression("keywords@*=api").unwrap();
+    let expr = parse_expression("package.keywords@*=api").unwrap();
 
     // Validate expression structure: keywords@*=api
     assert_condition(
         &expr,
-        &["keywords"],
+        &["package", "keywords"],
         FilterOperator::ArrayContainsSubstring,
         "api",
     );
@@ -339,12 +380,12 @@ fn test_exclude_deprecated_packages() {
         r#"[package]
         keywords = ["music", "player"]"#,
     );
-    let expr = parse_expression("keywords!@=deprecated").unwrap();
+    let expr = parse_expression("package.keywords!@=deprecated").unwrap();
 
     // Validate expression structure: keywords!@=deprecated
     assert_condition(
         &expr,
-        &["keywords"],
+        &["package", "keywords"],
         FilterOperator::ArrayNotContains,
         "deprecated",
     );
@@ -395,7 +436,7 @@ fn test_apply_filters_with_complex_skip() {
         "pkg3".to_string(),
     ];
 
-    let skip_filters = vec!["publish=false OR name$=_example".to_string()];
+    let skip_filters = vec!["package.publish=false OR package.name$=_example".to_string()];
     let result = apply_filters(&packages, &paths, temp_path, &skip_filters, &[]).unwrap();
 
     assert_eq!(result, vec!["pkg3"]);
@@ -442,8 +483,9 @@ fn test_apply_filters_with_complex_include() {
         "other_pkg".to_string(),
     ];
 
-    let include_filters =
-        vec!["name^=moosicbox_ AND (categories@=multimedia OR categories@=video)".to_string()];
+    let include_filters = vec![
+        "package.name^=moosicbox_ AND (package.categories@=multimedia OR package.categories@=video)".to_string(),
+    ];
     let result = apply_filters(&packages, &paths, temp_path, &[], &include_filters).unwrap();
 
     assert_eq!(result, vec!["moosicbox_audio", "moosicbox_video"]);
@@ -481,8 +523,8 @@ fn test_apply_filters_skip_and_include_together() {
         "moosicbox_example".to_string(),
     ];
 
-    let skip_filters = vec!["publish=false OR name$=_example".to_string()];
-    let include_filters = vec!["name^=moosicbox_".to_string()];
+    let skip_filters = vec!["package.publish=false OR package.name$=_example".to_string()];
+    let include_filters = vec!["package.name^=moosicbox_".to_string()];
     let result = apply_filters(
         &packages,
         &paths,
@@ -516,7 +558,7 @@ fn test_invalid_array_length_value() {
         r#"[package]
         keywords = ["a", "b"]"#,
     );
-    let expr = parse_expression("keywords@#=notanumber").unwrap();
+    let expr = parse_expression("package.keywords@#=notanumber").unwrap();
     let result = evaluate_expression(&expr, &cargo);
     assert!(result.is_err());
 }
@@ -531,7 +573,7 @@ fn test_simple_filter_still_works() {
         r#"[package]
         publish = false"#,
     );
-    let expr = parse_expression("publish=false").unwrap();
+    let expr = parse_expression("package.publish=false").unwrap();
     assert!(evaluate_expression(&expr, &cargo).unwrap());
 }
 
@@ -547,20 +589,20 @@ fn test_all_existing_operators_work() {
 
     // Test each operator individually
     let operators = vec![
-        ("name=test", true),
-        ("name!=other", true),
-        ("name^=test", true),
-        ("name$=st", true),
-        ("version*=0.1", true),
-        ("keywords@=api", true),
-        ("keywords@*=aud", true),
-        ("keywords@^=api", true),
-        ("keywords@#=2", true),
-        ("keywords@#>1", true),
-        ("keywords@#<5", true),
-        ("keywords!@=video", true),
-        ("readme?", true),
-        ("homepage!?", true),
+        ("package.name=test", true),
+        ("package.name!=other", true),
+        ("package.name^=test", true),
+        ("package.name$=st", true),
+        ("package.version*=0.1", true),
+        ("package.keywords@=api", true),
+        ("package.keywords@*=aud", true),
+        ("package.keywords@^=api", true),
+        ("package.keywords@#=2", true),
+        ("package.keywords@#>1", true),
+        ("package.keywords@#<5", true),
+        ("package.keywords!@=video", true),
+        ("package.readme?", true),
+        ("package.homepage!?", true),
     ];
 
     for (filter_str, expected) in operators {
@@ -583,8 +625,8 @@ fn test_wide_or_expression_matches_first() {
         r#"[package]
         name = "test""#,
     );
-    let mut conditions: Vec<String> = vec!["name=test".to_string()];
-    conditions.extend((0..49).map(|i| format!("name=other{i}")));
+    let mut conditions: Vec<String> = vec!["package.name=test".to_string()];
+    conditions.extend((0..49).map(|i| format!("package.name=other{i}")));
     let expr_str = conditions.join(" OR ");
     let expr = parse_expression(&expr_str).unwrap();
     // Should short-circuit on first match
@@ -597,8 +639,8 @@ fn test_wide_and_expression_fails_fast() {
         r#"[package]
         name = "test""#,
     );
-    let mut conditions: Vec<String> = vec!["name=other".to_string()];
-    conditions.extend((0..49).map(|_| "name=test".to_string()));
+    let mut conditions: Vec<String> = vec!["package.name=other".to_string()];
+    conditions.extend((0..49).map(|_| "package.name=test".to_string()));
     let expr_str = conditions.join(" AND ");
     let expr = parse_expression(&expr_str).unwrap();
     // Should fail on first condition
@@ -612,7 +654,7 @@ fn test_deeply_nested_expression_evaluates() {
         name = "test""#,
     );
     let mut expr_str = "(".repeat(20);
-    expr_str.push_str("name=test");
+    expr_str.push_str("package.name=test");
     expr_str.push_str(&")".repeat(20));
     let expr = parse_expression(&expr_str).unwrap();
     assert!(evaluate_expression(&expr, &cargo).unwrap());

@@ -127,7 +127,7 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         ignore: Vec<String>,
 
-        /// Skip packages matching criteria (format: property<op>value, e.g., "publish=false")
+        /// Skip packages matching criteria (format: property<op>value, e.g., "package.publish=false")
         /// Can be specified multiple times. ANY match causes package to be skipped.
         #[arg(long, action = clap::ArgAction::Append)]
         skip_if: Vec<String>,
@@ -285,7 +285,7 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         ignore: Vec<String>,
 
-        /// Skip packages matching criteria (format: property<op>value, e.g., "publish=false")
+        /// Skip packages matching criteria (format: property<op>value, e.g., "package.publish=false")
         /// Can be specified multiple times. ANY match causes package to be skipped.
         #[arg(long, action = clap::ArgAction::Append)]
         skip_if: Vec<String>,

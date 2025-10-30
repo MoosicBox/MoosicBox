@@ -85,12 +85,10 @@ pub fn matches(filter: &PackageFilter, cargo_toml: &Value) -> Result<bool, Filte
 
 /// Navigate to a nested property in TOML structure.
 ///
-/// Supports backward compatibility: unprefixed properties automatically check [package] section.
-///
 /// # Arguments
 ///
 /// * `toml` - The root TOML value
-/// * `path` - Path segments to navigate (e.g., `["metadata", "workspaces", "independent"]`)
+/// * `path` - Path segments to navigate (e.g., `["package", "metadata", "workspaces", "independent"]`)
 ///
 /// # Returns
 ///
@@ -102,38 +100,7 @@ fn navigate_to_property<'a>(toml: &'a Value, path: &[String]) -> Option<&'a Valu
 
     let mut current = toml;
 
-    // Special case: if first segment is not a top-level key, try [package] first
-    let first_segment = &path[0];
-    let known_top_level = [
-        "package",
-        "dependencies",
-        "dev-dependencies",
-        "build-dependencies",
-        "features",
-        "workspace",
-        "bin",
-        "lib",
-        "test",
-        "bench",
-        "example",
-    ];
-
-    let actual_path = if !known_top_level.contains(&first_segment.as_str())
-        && current.get("package").is_some()
-        && current
-            .get("package")
-            .and_then(|p| p.get(first_segment))
-            .is_some()
-    {
-        // Prepend "package" to the path
-        let mut new_path = vec!["package".to_string()];
-        new_path.extend_from_slice(path);
-        new_path
-    } else {
-        path.to_vec()
-    };
-
-    for segment in &actual_path {
+    for segment in path {
         match current.get(segment) {
             Some(value) => current = value,
             None => return None,
@@ -300,7 +267,7 @@ mod tests {
             publish = false
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("publish=false").unwrap();
+        let filter = super::super::parser::parse_filter("package.publish=false").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -312,7 +279,7 @@ mod tests {
             version = "0.1.0"
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("version^=0.1").unwrap();
+        let filter = super::super::parser::parse_filter("package.version^=0.1").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -324,7 +291,7 @@ mod tests {
             categories = ["audio", "multimedia"]
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("categories@=audio").unwrap();
+        let filter = super::super::parser::parse_filter("package.categories@=audio").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -336,7 +303,7 @@ mod tests {
             keywords = []
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("keywords@!").unwrap();
+        let filter = super::super::parser::parse_filter("package.keywords@!").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -348,7 +315,7 @@ mod tests {
             readme = "README.md"
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("readme?").unwrap();
+        let filter = super::super::parser::parse_filter("package.readme?").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -359,7 +326,7 @@ mod tests {
             name = "test"
         "#;
         let value: Value = toml::from_str(toml).unwrap();
-        let filter = super::super::parser::parse_filter("homepage!?").unwrap();
+        let filter = super::super::parser::parse_filter("package.homepage!?").unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 
@@ -371,7 +338,8 @@ mod tests {
         ";
         let value: Value = toml::from_str(toml).unwrap();
         let filter =
-            super::super::parser::parse_filter("metadata.workspaces.independent=true").unwrap();
+            super::super::parser::parse_filter("package.metadata.workspaces.independent=true")
+                .unwrap();
         assert!(matches(&filter, &value).unwrap());
     }
 }

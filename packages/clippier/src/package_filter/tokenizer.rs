@@ -64,9 +64,9 @@ fn starts_with_not(s: &str) -> bool {
 ///
 /// # Examples
 ///
-/// * `"publish=false"` → `[Filter("publish=false")]`
-/// * `"publish=false AND version^=0.1"` → `[Filter("publish=false"), And, Filter("version^=0.1")]`
-/// * `"(name=\"test pkg\" OR version^=\"0.1\")"` → `[LeftParen, Filter(...), Or, Filter(...), RightParen]`
+/// * `"package.publish=false"` → `[Filter("publish=false")]`
+/// * `"package.publish=false AND package.version^=0.1"` → `[Filter("publish=false"), And, Filter("version^=0.1")]`
+/// * `"(package.name=\"test pkg\" OR package.version^=\"0.1\")"` → `[LeftParen, Filter(...), Or, Filter(...), RightParen]`
 ///
 /// # Errors
 ///
@@ -297,50 +297,62 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_simple_filter_with_nested_path() {
+        let tokens = tokenize("package.publish=false").unwrap();
+        assert_eq!(
+            tokens,
+            vec![Token::Filter("package.publish=false".to_string())]
+        );
+    }
+
+    #[test]
     fn test_tokenize_and_expression() {
-        let tokens = tokenize("publish=false AND version^=0.1").unwrap();
+        let tokens = tokenize("package.publish=false AND package.version^=0.1").unwrap();
         assert_eq!(
             tokens,
             vec![
-                Token::Filter("publish=false".to_string()),
+                Token::Filter("package.publish=false".to_string()),
                 Token::And,
-                Token::Filter("version^=0.1".to_string()),
+                Token::Filter("package.version^=0.1".to_string()),
             ]
         );
     }
 
     #[test]
     fn test_tokenize_or_expression() {
-        let tokens = tokenize("publish=false OR version^=0.1").unwrap();
+        let tokens = tokenize("package.publish=false OR package.version^=0.1").unwrap();
         assert_eq!(
             tokens,
             vec![
-                Token::Filter("publish=false".to_string()),
+                Token::Filter("package.publish=false".to_string()),
                 Token::Or,
-                Token::Filter("version^=0.1".to_string()),
+                Token::Filter("package.version^=0.1".to_string()),
             ]
         );
     }
 
     #[test]
     fn test_tokenize_not_expression() {
-        let tokens = tokenize("NOT publish=false").unwrap();
+        let tokens = tokenize("NOT package.publish=false").unwrap();
         assert_eq!(
             tokens,
-            vec![Token::Not, Token::Filter("publish=false".to_string()),]
+            vec![
+                Token::Not,
+                Token::Filter("package.publish=false".to_string()),
+            ]
         );
     }
 
     #[test]
     fn test_tokenize_parentheses() {
-        let tokens = tokenize("(publish=false OR version^=0.1)").unwrap();
+        let tokens = tokenize("(package.publish=false OR package.version^=0.1)").unwrap();
         assert_eq!(
             tokens,
             vec![
                 Token::LeftParen,
-                Token::Filter("publish=false".to_string()),
+                Token::Filter("package.publish=false".to_string()),
                 Token::Or,
-                Token::Filter("version^=0.1".to_string()),
+                Token::Filter("package.version^=0.1".to_string()),
                 Token::RightParen,
             ]
         );
@@ -348,17 +360,20 @@ mod tests {
 
     #[test]
     fn test_tokenize_complex_expression() {
-        let tokens = tokenize("(publish=false OR name$=_example) AND categories@=audio").unwrap();
+        let tokens = tokenize(
+            "(package.publish=false OR package.name$=_example) AND package.categories@=audio",
+        )
+        .unwrap();
         assert_eq!(
             tokens,
             vec![
                 Token::LeftParen,
-                Token::Filter("publish=false".to_string()),
+                Token::Filter("package.publish=false".to_string()),
                 Token::Or,
-                Token::Filter("name$=_example".to_string()),
+                Token::Filter("package.name$=_example".to_string()),
                 Token::RightParen,
                 Token::And,
-                Token::Filter("categories@=audio".to_string()),
+                Token::Filter("package.categories@=audio".to_string()),
             ]
         );
     }
@@ -392,15 +407,17 @@ mod tests {
 
     #[test]
     fn test_tokenize_case_insensitive_keywords() {
-        let tokens = tokenize("publish=false and version^=0.1 OR name=test").unwrap();
+        let tokens =
+            tokenize("package.publish=false and package.version^=0.1 OR package.name=test")
+                .unwrap();
         assert_eq!(
             tokens,
             vec![
-                Token::Filter("publish=false".to_string()),
+                Token::Filter("package.publish=false".to_string()),
                 Token::And,
-                Token::Filter("version^=0.1".to_string()),
+                Token::Filter("package.version^=0.1".to_string()),
                 Token::Or,
-                Token::Filter("name=test".to_string()),
+                Token::Filter("package.name=test".to_string()),
             ]
         );
     }

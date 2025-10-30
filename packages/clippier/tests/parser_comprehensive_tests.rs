@@ -383,7 +383,8 @@ fn test_all_17_operators_in_expressions() {
 
 #[test]
 fn test_nested_properties_in_expressions() {
-    let expr = parse_expression("metadata.workspaces.independent=true AND name=test").unwrap();
+    let expr =
+        parse_expression("package.metadata.workspaces.independent=true AND name=test").unwrap();
     match expr {
         FilterExpression::And(children) => {
             assert_eq!(children.len(), 2);
@@ -394,8 +395,10 @@ fn test_nested_properties_in_expressions() {
 
 #[test]
 fn test_quoted_values_in_complex_expressions() {
-    let expr =
-        parse_expression(r#"name="test pkg" AND (desc="A OR B" OR version^="0.1")"#).unwrap();
+    let expr = parse_expression(
+        r#"package.name="test pkg" AND (package.desc="A OR B" OR package.version^="0.1")"#,
+    )
+    .unwrap();
     // Just verify it parses correctly
     assert!(matches!(expr, FilterExpression::And(_)));
 }
@@ -406,13 +409,13 @@ fn test_quoted_values_in_complex_expressions() {
 
 #[test]
 fn test_simple_filter_parses_as_condition() {
-    let expr = parse_expression("publish=false").unwrap();
+    let expr = parse_expression("package.publish=false").unwrap();
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 
 #[test]
 fn test_filter_with_dots_in_path() {
-    let expr = parse_expression("metadata.ci.skip=true").unwrap();
+    let expr = parse_expression("package.metadata.ci.skip=true").unwrap();
     assert!(matches!(expr, FilterExpression::Condition(_)));
 }
 

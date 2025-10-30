@@ -11,92 +11,92 @@ use clippier::package_filter::{FilterError, Token, tokenize};
 
 #[test]
 fn test_multiple_spaces_between_tokens() {
-    let tokens = tokenize("publish=false     AND     version^=0.1").unwrap();
+    let tokens = tokenize("package.publish=false     AND     package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_tabs_instead_of_spaces() {
-    let tokens = tokenize("publish=false\tAND\tversion^=0.1").unwrap();
+    let tokens = tokenize("package.publish=false\tAND\tpackage.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_mixed_tabs_and_spaces() {
-    let tokens = tokenize("publish=false \t AND  \t version^=0.1").unwrap();
+    let tokens = tokenize("package.publish=false \t AND  \t package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_newlines_as_separators() {
-    let tokens = tokenize("publish=false\nAND\nversion^=0.1").unwrap();
+    let tokens = tokenize("package.publish=false\nAND\npackage.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_leading_whitespace() {
-    let tokens = tokenize("   publish=false AND version^=0.1").unwrap();
+    let tokens = tokenize("   package.publish=false AND package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_trailing_whitespace() {
-    let tokens = tokenize("publish=false AND version^=0.1   ").unwrap();
+    let tokens = tokenize("package.publish=false AND package.version^=0.1   ").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
 
 #[test]
 fn test_whitespace_inside_parentheses() {
-    let tokens = tokenize("(  publish=false  OR  version^=0.1  )").unwrap();
+    let tokens = tokenize("(  package.publish=false  OR  package.version^=0.1  )").unwrap();
     assert_eq!(
         tokens,
         vec![
             Token::LeftParen,
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::Or,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
             Token::RightParen,
         ]
     );
@@ -104,13 +104,13 @@ fn test_whitespace_inside_parentheses() {
 
 #[test]
 fn test_no_spaces_around_operators() {
-    let tokens = tokenize("publish=false AND version^=0.1").unwrap();
+    let tokens = tokenize("package.publish=false AND package.version^=0.1").unwrap();
     assert_eq!(
         tokens,
         vec![
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
         ]
     );
 }
@@ -307,7 +307,7 @@ fn test_mixed_case_keywords_in_expression() {
 
 #[test]
 fn test_deeply_nested_parentheses_5_levels() {
-    let tokens = tokenize("(((((name=test)))))").unwrap();
+    let tokens = tokenize("(((((package.name=test)))))").unwrap();
     assert_eq!(
         tokens,
         vec![
@@ -316,7 +316,7 @@ fn test_deeply_nested_parentheses_5_levels() {
             Token::LeftParen,
             Token::LeftParen,
             Token::LeftParen,
-            Token::Filter("name=test".to_string()),
+            Token::Filter("package.name=test".to_string()),
             Token::RightParen,
             Token::RightParen,
             Token::RightParen,
@@ -328,13 +328,13 @@ fn test_deeply_nested_parentheses_5_levels() {
 
 #[test]
 fn test_adjacent_parentheses() {
-    let tokens = tokenize("((name=test))").unwrap();
+    let tokens = tokenize("((package.name=test))").unwrap();
     assert_eq!(
         tokens,
         vec![
             Token::LeftParen,
             Token::LeftParen,
-            Token::Filter("name=test".to_string()),
+            Token::Filter("package.name=test".to_string()),
             Token::RightParen,
             Token::RightParen,
         ]
@@ -370,28 +370,37 @@ fn test_nested_with_operators() {
 
 #[test]
 fn test_dots_in_unquoted_filter() {
-    let tokens = tokenize("version=0.1.0").unwrap();
-    assert_eq!(tokens, vec![Token::Filter("version=0.1.0".to_string())]);
+    let tokens = tokenize("package.version=0.1.0").unwrap();
+    assert_eq!(
+        tokens,
+        vec![Token::Filter("package.version=0.1.0".to_string())]
+    );
 }
 
 #[test]
 fn test_hyphens_in_filter() {
-    let tokens = tokenize("name=test-package").unwrap();
-    assert_eq!(tokens, vec![Token::Filter("name=test-package".to_string())]);
+    let tokens = tokenize("package.name=test-package").unwrap();
+    assert_eq!(
+        tokens,
+        vec![Token::Filter("package.name=test-package".to_string())]
+    );
 }
 
 #[test]
 fn test_underscores_in_filter() {
-    let tokens = tokenize("name=test_package").unwrap();
-    assert_eq!(tokens, vec![Token::Filter("name=test_package".to_string())]);
+    let tokens = tokenize("package.name=test_package").unwrap();
+    assert_eq!(
+        tokens,
+        vec![Token::Filter("package.name=test_package".to_string())]
+    );
 }
 
 #[test]
 fn test_numbers_in_filter() {
-    let tokens = tokenize("version=123.456.789").unwrap();
+    let tokens = tokenize("package.version=123.456.789").unwrap();
     assert_eq!(
         tokens,
-        vec![Token::Filter("version=123.456.789".to_string())]
+        vec![Token::Filter("package.version=123.456.789".to_string())]
     );
 }
 
@@ -490,8 +499,11 @@ fn test_unicode_in_property_name() {
 
 #[test]
 fn test_unicode_in_value() {
-    let tokens = tokenize("name=テスト").unwrap();
-    assert_eq!(tokens, vec![Token::Filter("name=テスト".to_string())]);
+    let tokens = tokenize("package.name=テスト").unwrap();
+    assert_eq!(
+        tokens,
+        vec![Token::Filter("package.name=テスト".to_string())]
+    );
 }
 
 #[test]
@@ -516,22 +528,22 @@ fn test_emoji_in_value() {
 #[test]
 fn test_all_three_operators_with_nesting() {
     let tokens =
-        tokenize("NOT (publish=false AND version^=0.1) OR (name$=_example AND readme?)").unwrap();
+        tokenize("NOT (package.publish=false AND package.version^=0.1) OR (package.name$=_example AND package.readme?)").unwrap();
 
     assert_eq!(
         tokens,
         vec![
             Token::Not,
             Token::LeftParen,
-            Token::Filter("publish=false".to_string()),
+            Token::Filter("package.publish=false".to_string()),
             Token::And,
-            Token::Filter("version^=0.1".to_string()),
+            Token::Filter("package.version^=0.1".to_string()),
             Token::RightParen,
             Token::Or,
             Token::LeftParen,
-            Token::Filter("name$=_example".to_string()),
+            Token::Filter("package.name$=_example".to_string()),
             Token::And,
-            Token::Filter("readme?".to_string()),
+            Token::Filter("package.readme?".to_string()),
             Token::RightParen,
         ]
     );
@@ -539,9 +551,9 @@ fn test_all_three_operators_with_nesting() {
 
 #[test]
 fn test_complex_expression_with_all_features() {
-    let input = r#"(name^="moosicbox_" AND publish=true) AND 
-                   (NOT (categories@="test" OR keywords@!)) AND
-                   (version~="^\d+\.\d+\.\d+$" OR readme?)"#;
+    let input = r#"(package.name^="moosicbox_" AND package.publish=true) AND 
+                   (NOT (package.categories@="test" OR package.keywords@!)) AND
+                   (package.version~="^\d+\.\d+\.\d+$" OR package.readme?)"#;
     let tokens = tokenize(input).unwrap();
 
     // Validate exact token sequence
@@ -549,24 +561,24 @@ fn test_complex_expression_with_all_features() {
         tokens,
         vec![
             Token::LeftParen,
-            Token::Filter(r#"name^="moosicbox_""#.to_string()),
+            Token::Filter(r#"package.name^="moosicbox_""#.to_string()),
             Token::And,
-            Token::Filter("publish=true".to_string()),
+            Token::Filter("package.publish=true".to_string()),
             Token::RightParen,
             Token::And,
             Token::LeftParen,
             Token::Not,
             Token::LeftParen,
-            Token::Filter(r#"categories@="test""#.to_string()),
+            Token::Filter(r#"package.categories@="test""#.to_string()),
             Token::Or,
-            Token::Filter("keywords@!".to_string()),
+            Token::Filter("package.keywords@!".to_string()),
             Token::RightParen,
             Token::RightParen,
             Token::And,
             Token::LeftParen,
-            Token::Filter(r#"version~="^\d+\.\d+\.\d+$""#.to_string()),
+            Token::Filter(r#"package.version~="^\d+\.\d+\.\d+$""#.to_string()),
             Token::Or,
-            Token::Filter("readme?".to_string()),
+            Token::Filter("package.readme?".to_string()),
             Token::RightParen,
         ]
     );
@@ -579,13 +591,13 @@ fn test_complex_expression_with_all_features() {
 #[test]
 fn test_unicode_property_with_and() {
     // Japanese property name followed by AND keyword
-    let tokens = tokenize("名前=test AND version=1.0").unwrap();
+    let tokens = tokenize("名前=test AND package.version=1.0").unwrap();
     assert_eq!(
         tokens,
         vec![
             Token::Filter("名前=test".to_string()),
             Token::And,
-            Token::Filter("version=1.0".to_string()),
+            Token::Filter("package.version=1.0".to_string()),
         ]
     );
 }
@@ -621,7 +633,7 @@ fn test_multibyte_before_not() {
 #[test]
 fn test_mixed_unicode_and_keywords() {
     // Complex expression with Unicode and all keywords
-    let tokens = tokenize("(名前=テスト OR icon=🎵) AND NOT publish=false").unwrap();
+    let tokens = tokenize("(名前=テスト OR icon=🎵) AND NOT package.publish=false").unwrap();
     assert_eq!(tokens.len(), 8); // LeftParen, Filter, Or, Filter, RightParen, And, Not, Filter
     assert_eq!(tokens[0], Token::LeftParen);
     assert_eq!(tokens[1], Token::Filter("名前=テスト".to_string()));
@@ -630,7 +642,10 @@ fn test_mixed_unicode_and_keywords() {
     assert_eq!(tokens[4], Token::RightParen);
     assert_eq!(tokens[5], Token::And);
     assert_eq!(tokens[6], Token::Not);
-    assert_eq!(tokens[7], Token::Filter("publish=false".to_string()));
+    assert_eq!(
+        tokens[7],
+        Token::Filter("package.publish=false".to_string())
+    );
 }
 
 #[test]
@@ -670,9 +685,9 @@ fn test_arabic_with_operators() {
 #[test]
 fn test_mixed_rtl_ltr() {
     // Right-to-left and left-to-right mixed
-    let tokens = tokenize("name=مرحبا OR שלום=hello").unwrap();
+    let tokens = tokenize("package.name=مرحبا OR שלום=hello").unwrap();
     assert_eq!(tokens.len(), 3);
-    assert_eq!(tokens[0], Token::Filter("name=مرحبا".to_string()));
+    assert_eq!(tokens[0], Token::Filter("package.name=مرحبا".to_string()));
     assert_eq!(tokens[1], Token::Or);
     assert_eq!(tokens[2], Token::Filter("שלום=hello".to_string()));
 }
