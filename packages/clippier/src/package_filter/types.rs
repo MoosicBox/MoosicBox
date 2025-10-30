@@ -36,6 +36,18 @@ pub enum FilterError {
     /// TOML parsing error
     #[error("TOML parse error: {0}")]
     TomlError(String),
+
+    /// Unclosed quote in filter expression
+    #[error("Unclosed quote in filter expression: {0}")]
+    UnclosedQuote(String),
+
+    /// Unexpected token in expression
+    #[error("Unexpected token: {0}")]
+    UnexpectedToken(String),
+
+    /// Expected token not found
+    #[error("Expected {0}")]
+    ExpectedToken(String),
 }
 
 /// A parsed package filter with support for nested properties.
@@ -148,4 +160,34 @@ impl FilterOperator {
     pub const fn is_value_optional(self) -> bool {
         matches!(self, Self::ArrayEmpty | Self::Exists | Self::NotExists)
     }
+}
+
+/// A token in a filter expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Token {
+    /// A complete filter condition string (e.g., "publish=false", "name=\"my package\"")
+    Filter(String),
+    /// Logical AND operator
+    And,
+    /// Logical OR operator
+    Or,
+    /// Logical NOT operator
+    Not,
+    /// Left parenthesis
+    LeftParen,
+    /// Right parenthesis
+    RightParen,
+}
+
+/// A filter expression supporting logical operators and grouping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilterExpression {
+    /// A single filter condition
+    Condition(PackageFilter),
+    /// Logical AND - all children must be true
+    And(Vec<FilterExpression>),
+    /// Logical OR - at least one child must be true
+    Or(Vec<FilterExpression>),
+    /// Logical NOT - inverts child result
+    Not(Box<FilterExpression>),
 }

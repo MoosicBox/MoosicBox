@@ -153,6 +153,39 @@ Filter packages based on their Cargo.toml properties using `skip-if` and `includ
       include-if: 'metadata.workspaces.independent=true'
 ```
 
+**Logical Operators:**
+
+Combine conditions using `AND`, `OR`, `NOT`, and `()` for grouping:
+
+```yaml
+# Complex expression - exclude examples OR unpublished packages
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      skip-if: 'name$=_example OR publish=false'
+
+# Include published moosicbox packages that are NOT examples
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      include-if: 'name^=moosicbox_ AND publish=true AND NOT name$=_example'
+
+# Grouping with parentheses
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      include-if: '(categories@=audio OR categories@=video) AND keywords@#>2 AND readme?'
+
+# Quoted values for spaces or keywords in values
+- uses: ./.github/actions/clippier
+  with:
+      command: features
+      skip-if: 'description="Internal AND Testing"'
+```
+
+**Operator Precedence**: `NOT` > `AND` > `OR`  
+**Case Insensitive**: `AND`, `and`, `And` all work
+
 **Common Use Cases:**
 
 - Skip unpublished/internal packages in CI
@@ -160,6 +193,7 @@ Filter packages based on their Cargo.toml properties using `skip-if` and `includ
 - Require documentation quality (README, keywords)
 - Filter by custom metadata flags
 - Component isolation by naming conventions
+- Complex multi-condition filtering with boolean logic
 
 ## Enhanced Features
 

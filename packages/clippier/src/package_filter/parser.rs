@@ -2,6 +2,94 @@
 
 use super::types::{FilterError, FilterOperator, PackageFilter};
 
+/// Unquote a value string, handling escape sequences.
+///
+/// # Examples
+///
+/// * `"test"` → `"test"`
+/// * `"\"test\""` → `"test"` (with quotes)
+/// * `"test"` (quoted) → `"test"` (unquoted)
+///
+/// # Errors
+///
+/// * Returns error if escape sequence is invalid
+fn unquote_value(value: &str) -> Result<String, FilterError> {
+    let trimmed = value.trim();
+
+    // Check if value is quoted
+    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+        let inner = &trimmed[1..trimmed.len() - 1];
+
+        // Process escape sequences
+        let mut result = String::new();
+        let mut chars = inner.chars();
+
+        while let Some(ch) = chars.next() {
+            if ch == '\\' {
+                match chars.next() {
+                    Some('n') => result.push('\n'),
+                    Some('t') => result.push('\t'),
+                    Some('r') => result.push('\r'),
+                    Some('\\') => result.push('\\'),
+                    Some('"') => result.push('"'),
+                    Some(other) => {
+                        // Unknown escape - keep backslash and char
+                        result.push('\\');
+                        result.push(other);
+                    }
+                    None => {
+                        return Err(FilterError::InvalidSyntax(
+                            "Trailing backslash in quoted string".to_string(),
+                        ));
+                    }
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+
+        Ok(result)
+    } else {
+        // Not quoted - return as-is
+        Ok(trimmed.to_string())
+    }
+}
+
+/// Split filter string on operator, respecting quotes.
+///
+/// Returns None if operator is not found outside of quotes.
+fn split_on_operator(filter: &str, op: &str) -> Option<(String, String)> {
+    let mut in_quotes = false;
+    let mut escape_next = false;
+
+    for (i, ch) in filter.char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_quotes => {
+                escape_next = true;
+            }
+            '"' => {
+                in_quotes = !in_quotes;
+            }
+            _ if !in_quotes => {
+                // Check if operator starts here
+                if filter[i..].starts_with(op) {
+                    let property = filter[..i].to_string();
+                    let value = filter[i + op.len()..].to_string();
+                    return Some((property, value));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
 /// Parse a filter string into a structured filter.
 ///
 /// # Format
@@ -45,7 +133,7 @@ pub fn parse_filter(filter: &str) -> Result<PackageFilter, FilterError> {
     ];
 
     for (op_str, operator) in &operators {
-        if let Some((property, value)) = filter.split_once(op_str) {
+        if let Some((property, value)) = split_on_operator(filter, op_str) {
             let property = property.trim();
             let value = value.trim();
 
@@ -76,10 +164,13 @@ pub fn parse_filter(filter: &str) -> Result<PackageFilter, FilterError> {
                 )));
             }
 
+            // Unquote the value if it's quoted
+            let unquoted_value = unquote_value(value)?;
+
             return Ok(PackageFilter {
                 property_path,
                 operator: *operator,
-                value: value.to_string(),
+                value: unquoted_value,
             });
         }
     }

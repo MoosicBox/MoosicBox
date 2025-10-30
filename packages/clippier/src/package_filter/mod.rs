@@ -44,13 +44,17 @@
 //! * `?` - Property exists: `readme?`
 //! * `!?` - Property does NOT exist: `!homepage?`
 
+mod expression_parser;
 mod matcher;
 mod parser;
+mod tokenizer;
 mod types;
 
-pub use matcher::matches;
+pub use expression_parser::parse_expression;
+pub use matcher::{evaluate_expression, matches};
 pub use parser::parse_filter;
-pub use types::{FilterError, FilterOperator, PackageFilter};
+pub use tokenizer::tokenize;
+pub use types::{FilterError, FilterExpression, FilterOperator, PackageFilter, Token};
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -63,8 +67,12 @@ use toml::Value;
 /// * `packages` - List of package names to filter
 /// * `package_paths` - Map of package names to their workspace paths
 /// * `workspace_root` - Root directory of the workspace
-/// * `skip_filters` - Filters that cause packages to be excluded (OR logic)
-/// * `include_filters` - Filters that must match for inclusion (AND logic between properties, OR within)
+/// * `skip_filters` - Filter expressions that cause packages to be excluded (OR logic between filters)
+/// * `include_filters` - Filter expressions that must match for inclusion (AND logic between filters)
+///
+/// Each filter can be:
+/// * A simple condition: `"publish=false"`
+/// * A complex expression: `"(publish=false OR name$=_example) AND categories@=audio"`
 ///
 /// # Returns
 ///
@@ -96,10 +104,10 @@ pub fn apply_filters(
         let cargo_toml: Value =
             toml::from_str(&cargo_content).map_err(|e| FilterError::TomlError(e.to_string()))?;
 
-        // Check skip filters - if ANY match, skip package
-        let should_skip = skip_filters.iter().any(|filter| {
-            parser::parse_filter(filter)
-                .and_then(|parsed| matcher::matches(&parsed, &cargo_toml))
+        // Check skip filters - if ANY expression matches, skip package (OR logic)
+        let should_skip = skip_filters.iter().any(|filter_expr| {
+            expression_parser::parse_expression(filter_expr)
+                .and_then(|expr| matcher::evaluate_expression(&expr, &cargo_toml))
                 .unwrap_or(false)
         });
 
@@ -107,35 +115,14 @@ pub fn apply_filters(
             continue;
         }
 
-        // Check include filters - group by property path root
+        // Check include filters - ALL expressions must match (AND logic)
         let should_include = if include_filters.is_empty() {
             true
         } else {
-            // Parse all include filters
-            let parsed_filters: Vec<_> = include_filters
-                .iter()
-                .filter_map(|f| parser::parse_filter(f).ok())
-                .collect();
-
-            // Group by root property (first segment of path)
-            let mut filters_by_root: BTreeMap<String, Vec<&PackageFilter>> = BTreeMap::new();
-            for filter in &parsed_filters {
-                let root = filter
-                    .property_path
-                    .first()
-                    .map_or("package", String::as_str);
-                filters_by_root
-                    .entry(root.to_string())
-                    .or_default()
-                    .push(filter);
-            }
-
-            // For each root property, at least ONE filter must match (OR within root)
-            // ALL root properties must have a match (AND between roots)
-            filters_by_root.values().all(|root_filters| {
-                root_filters
-                    .iter()
-                    .any(|filter| matcher::matches(filter, &cargo_toml).unwrap_or(false))
+            include_filters.iter().all(|filter_expr| {
+                expression_parser::parse_expression(filter_expr)
+                    .and_then(|expr| matcher::evaluate_expression(&expr, &cargo_toml))
+                    .unwrap_or(false)
             })
         };
 

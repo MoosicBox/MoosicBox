@@ -3,9 +3,44 @@
 //! This module contains all the comparison operators and matching logic
 //! for filtering packages based on their Cargo.toml properties.
 
-use super::types::{FilterError, FilterOperator, PackageFilter};
+use super::types::{FilterError, FilterExpression, FilterOperator, PackageFilter};
 use regex::Regex;
 use toml::Value;
+
+/// Evaluate a filter expression against a package's TOML data.
+///
+/// # Errors
+///
+/// * Returns error if regex pattern is invalid
+/// * Returns error if value cannot be parsed for length comparisons
+pub fn evaluate_expression(
+    expr: &FilterExpression,
+    cargo_toml: &Value,
+) -> Result<bool, FilterError> {
+    match expr {
+        FilterExpression::Condition(filter) => matches(filter, cargo_toml),
+        FilterExpression::And(children) => {
+            for child in children {
+                if !evaluate_expression(child, cargo_toml)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        FilterExpression::Or(children) => {
+            for child in children {
+                if evaluate_expression(child, cargo_toml)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        FilterExpression::Not(child) => {
+            let result = evaluate_expression(child, cargo_toml)?;
+            Ok(!result)
+        }
+    }
+}
 
 /// Check if a filter matches a package's TOML data.
 ///

@@ -628,6 +628,37 @@ Check if properties exist:
 | `?`      | Property exists         | `readme?`    |
 | `!?`     | Property does NOT exist | `homepage!?` |
 
+### Logical Operators and Expressions
+
+You can combine multiple filter conditions using logical operators to create complex expressions:
+
+| Operator | Description                      | Example                                           |
+| -------- | -------------------------------- | ------------------------------------------------- |
+| `AND`    | Both conditions must be true     | `publish=false AND version^=0.1`                  |
+| `OR`     | At least one condition is true   | `publish=false OR name$=_example`                 |
+| `NOT`    | Inverts the condition            | `NOT publish=false`                               |
+| `( )`    | Groups conditions for precedence | `(publish=false OR name$=_test) AND version^=0.1` |
+
+**Operator Precedence** (highest to lowest):
+
+1. `NOT`
+2. `AND`
+3. `OR`
+
+**Case Insensitive**: Keywords can be written as `AND`, `and`, `And`, etc.
+
+**Quoted Values**: Use double quotes for values containing spaces or special characters:
+
+- `name="my package"` - Matches packages with spaces in name
+- `description="This AND that"` - Quotes prevent "AND" from being treated as operator
+
+**Escape Sequences** in quoted strings:
+
+- `\"` - Double quote
+- `\\` - Backslash
+- `\n` - Newline
+- `\t` - Tab
+
 ### Usage Examples
 
 #### Skip Unpublished Packages
@@ -684,6 +715,8 @@ clippier packages . --skip-if "metadata.ci.skip-tests=true"
 
 #### Combining Multiple Filters
 
+**Using separate filter arguments (OR logic for skip, AND logic for include):**
+
 ```bash
 # Include moosicbox packages, exclude examples and unpublished
 clippier features . \
@@ -700,28 +733,70 @@ clippier features . \
   --output json
 ```
 
+**Using logical expressions within a single filter:**
+
+```bash
+# Exclude examples OR unpublished packages
+clippier features . \
+  --skip-if "name$=_example OR publish=false" \
+  --output json
+
+# Include published moosicbox packages that are NOT examples
+clippier features . \
+  --include-if "name^=moosicbox_ AND publish=true AND NOT name$=_example" \
+  --output json
+
+# Complex: audio/video packages with good docs
+clippier features . \
+  --include-if "(categories@=audio OR categories@=video) AND keywords@#>2 AND readme?" \
+  --output json
+
+# Skip test packages or packages with specific metadata
+clippier features . \
+  --skip-if "name$=_test OR (metadata.ci? AND metadata.ci.skip=true)" \
+  --output json
+```
+
 ### Filter Logic
 
 **Skip Filters (`--skip-if`):**
 
-- Multiple skip filters use **OR** logic
+- Multiple skip filter arguments use **OR** logic
+- Each filter argument can be a complex expression with `AND`, `OR`, `NOT`
 - If **ANY** skip filter matches, the package is excluded
 - Processed after include filters
 
 **Include Filters (`--include-if`):**
 
-- Multiple filters for the **same property** use **OR** logic
-- Filters for **different properties** use **AND** logic
-- All property groups must have at least one match
+- Multiple include filter arguments use **AND** logic
+- Each filter argument can be a complex expression with `AND`, `OR`, `NOT`
+- **ALL** include filters must match for a package to be included
 
-**Example:**
+**Expression Evaluation:**
+
+Within each filter argument:
+
+- `AND` requires both sides to be true
+- `OR` requires at least one side to be true
+- `NOT` inverts the result
+- Parentheses `()` control precedence
+
+**Examples:**
 
 ```bash
-# Exclude if (name ends with _example) OR (publish is false)
---skip-if "name$=_example" --skip-if "publish=false"
+# Skip: Exclude if name ends with _example OR publish is false
+--skip-if "name$=_example OR publish=false"
+# Equivalent to separate args: --skip-if "name$=_example" --skip-if "publish=false"
 
-# Include if (name starts with moosicbox_) AND (has audio category OR video category)
---include-if "name^=moosicbox_" --include-if "categories@=audio" --include-if "categories@=video"
+# Include: Must match name prefix AND (one of the categories)
+--include-if "name^=moosicbox_ AND (categories@=audio OR categories@=video)"
+
+# Complex: Skip unpublished non-library packages
+--skip-if "publish=false AND NOT name$=_lib"
+
+# Multiple arguments with AND logic between them
+--include-if "name^=moosicbox_" --include-if "categories@=audio"
+# Both filters must match: name must start with moosicbox_ AND have audio category
 ```
 
 ### Backward Compatibility
