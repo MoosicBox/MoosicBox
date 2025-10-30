@@ -1,0 +1,24 @@
+[package]
+name = "switchy_upnp_basic_usage_example"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Example demonstrating basic UPnP device discovery and control in switchy_upnp"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["example", "switchy_upnp", "upnp", "dlna", "discovery"]
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_upnp = { workspace = true }
+
+env_logger = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = ["switchy_upnp/fail-on-warnings"]

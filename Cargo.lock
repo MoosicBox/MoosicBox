@@ -15784,6 +15784,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_upnp_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "log 0.4.28",
+ "switchy_upnp",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_uuid"
 version = "0.1.0"
 dependencies = [

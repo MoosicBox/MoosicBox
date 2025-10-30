@@ -225,6 +225,7 @@ members = [
     "packages/tunnel_sender/examples/basic_connection",
     "packages/tunnel_server",
     "packages/upnp",
+    "packages/upnp/examples/basic_usage",
     "packages/uuid",
     "packages/web_server",
     "packages/web_server/core",
