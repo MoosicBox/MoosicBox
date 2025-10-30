@@ -124,6 +124,9 @@ jobs:
                   force-full-matrix-condition: "true"
                   os-suffix: "-latest"
                   os: "ubuntu"
+                  skip-if: |
+                      package.publish=false
+                      package.name$=_models
 
     update-examples:
         name: Update ${{ matrix.package.name }}
