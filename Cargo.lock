@@ -15467,6 +15467,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_mdns_discover_services_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "kanal",
+ "log 0.4.28",
+ "switchy_mdns",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_mdns_register_service_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "log 0.4.28",
+ "switchy_mdns",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_p2p"
 version = "0.1.0"
 dependencies = [

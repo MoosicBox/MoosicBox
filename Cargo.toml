@@ -126,6 +126,8 @@ members = [
     "packages/marketing_site",
     "packages/marketing_site/ui",
     "packages/mdns",
+    "packages/mdns/examples/discover_services",
+    "packages/mdns/examples/register_service",
     "packages/menu",
     "packages/menu/examples/basic_usage",
     "packages/menu/models",
