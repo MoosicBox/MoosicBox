@@ -13,46 +13,51 @@ use super::types::{FilterError, Token};
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-/// Check if string starts with "AND" (case-insensitive), consuming exactly 3 chars.
-/// Returns true only if it's exactly 3 chars matching A-N-D.
+/// Generic helper to check if string starts with a keyword (case-insensitive, char-aware).
 ///
 /// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+/// The function checks that the string has at least as many characters as the keyword,
+/// and that each character matches (case-insensitively).
+///
+/// # Examples
+///
+/// ```
+/// # use clippier::package_filter::tokenizer::starts_with_keyword;
+/// assert!(starts_with_keyword("AND", "AND"));
+/// assert!(starts_with_keyword("and", "AND"));
+/// assert!(starts_with_keyword("ANDROID", "AND")); // true - word boundaries checked by caller
+/// assert!(!starts_with_keyword("AN", "AND")); // false - too short
+/// ```
+#[must_use]
+pub fn starts_with_keyword(s: &str, keyword: &str) -> bool {
+    s.chars()
+        .zip(keyword.chars())
+        .all(|(a, b)| a.eq_ignore_ascii_case(&b))
+        && s.chars().count() >= keyword.len()
+}
+
+/// Check if string starts with "AND" (case-insensitive).
+///
+/// This is a convenience wrapper around `starts_with_keyword` for the AND keyword.
+#[inline]
 fn starts_with_and(s: &str) -> bool {
-    let mut chars = s.chars();
-    matches!(
-        (chars.next(), chars.next(), chars.next()),
-        (Some(a), Some(n), Some(d))
-        if a.eq_ignore_ascii_case(&'A')
-           && n.eq_ignore_ascii_case(&'N')
-           && d.eq_ignore_ascii_case(&'D')
-    )
+    starts_with_keyword(s, "AND")
 }
 
-/// Check if string starts with "OR" (case-insensitive), consuming exactly 2 chars.
+/// Check if string starts with "OR" (case-insensitive).
 ///
-/// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+/// This is a convenience wrapper around `starts_with_keyword` for the OR keyword.
+#[inline]
 fn starts_with_or(s: &str) -> bool {
-    let mut chars = s.chars();
-    matches!(
-        (chars.next(), chars.next()),
-        (Some(o), Some(r))
-        if o.eq_ignore_ascii_case(&'O')
-           && r.eq_ignore_ascii_case(&'R')
-    )
+    starts_with_keyword(s, "OR")
 }
 
-/// Check if string starts with "NOT" (case-insensitive), consuming exactly 3 chars.
+/// Check if string starts with "NOT" (case-insensitive).
 ///
-/// This uses character-aware iteration to avoid byte boundary panics with multibyte UTF-8.
+/// This is a convenience wrapper around `starts_with_keyword` for the NOT keyword.
+#[inline]
 fn starts_with_not(s: &str) -> bool {
-    let mut chars = s.chars();
-    matches!(
-        (chars.next(), chars.next(), chars.next()),
-        (Some(n), Some(o), Some(t))
-        if n.eq_ignore_ascii_case(&'N')
-           && o.eq_ignore_ascii_case(&'O')
-           && t.eq_ignore_ascii_case(&'T')
-    )
+    starts_with_keyword(s, "NOT")
 }
 
 /// Tokenize a filter expression string.
@@ -424,6 +429,27 @@ mod tests {
         // Parsing the expression should fail (UnexpectedToken, not ExpectedToken)
         let result = parse_expression("AND");
         assert!(matches!(result, Err(FilterError::UnexpectedToken(_))));
+    }
+
+    #[test]
+    fn test_starts_with_keyword_generic() {
+        // Test the generic helper directly
+        assert!(starts_with_keyword("AND", "AND"));
+        assert!(starts_with_keyword("and", "AND"));
+        assert!(starts_with_keyword("AnD", "AND"));
+        assert!(starts_with_keyword("ANDROID", "AND")); // Matches prefix
+
+        assert!(!starts_with_keyword("AN", "AND")); // Too short
+        assert!(!starts_with_keyword("", "AND"));
+        assert!(!starts_with_keyword("OR", "AND"));
+
+        // Test with different keywords
+        assert!(starts_with_keyword("OR", "OR"));
+        assert!(starts_with_keyword("NOT", "NOT"));
+
+        // Unicode doesn't match ASCII keywords
+        assert!(!starts_with_keyword("ＡＮＤ", "AND"));
+        assert!(!starts_with_keyword("名前", "AND"));
     }
 
     #[test]

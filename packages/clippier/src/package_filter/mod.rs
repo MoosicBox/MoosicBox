@@ -47,7 +47,7 @@
 mod expression_parser;
 mod matcher;
 mod parser;
-mod tokenizer;
+pub mod tokenizer;
 mod types;
 
 pub use expression_parser::parse_expression;
