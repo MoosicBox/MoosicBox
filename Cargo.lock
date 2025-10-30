@@ -15362,6 +15362,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_http_json_request_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "pretty_env_logger",
+ "serde",
+ "switchy_http",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_http_models"
 version = "0.1.4"
 dependencies = [
