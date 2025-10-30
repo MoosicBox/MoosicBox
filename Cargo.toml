@@ -238,6 +238,7 @@ members = [
     "packages/web_server/examples/query_extractor_standalone",
     "packages/web_server/examples/simple_get",
     "packages/web_server/simulator",
+    "packages/web_server/simulator/examples/basic_usage",
     "packages/ws",
     "packages/yt",
     "packages/yt/examples/library_browse",
