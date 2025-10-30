@@ -406,6 +406,34 @@ jobs:
                       - DO make examples practical and realistic
                       - DO focus on the most common/important use case for new examples
 
+                      ## 📝 Commit Message Instructions
+
+                      If you make changes to examples, you MUST provide a commit message description.
+
+                      At the END of your response, include a section formatted EXACTLY as follows:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Brief description of changes (1-2 sentences per major item)
+                      - Focus on what was created, improved, or fixed
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Example:
+                      ```
+                      COMMIT_MESSAGE_START
+                      - Created new basic_usage example demonstrating primary API usage patterns
+                      - Improved README for decode_audio example to include all required sections
+                      - Added missing module-level documentation to examples
+                      COMMIT_MESSAGE_END
+                      ```
+
+                      Requirements:
+                      - Keep each bullet point concise (1-2 sentences max)
+                      - Focus on WHAT changed and WHY (new examples, documentation improvements, etc.)
+                      - Use bullet points with dashes (-)
+                      - Do not include code snippets or line numbers
+                      - If no changes needed, output "No changes required - examples coverage is adequate" or "No changes required - package does not need examples"
+
                       ## Verification Commands
 
                       After making changes to examples, you MUST run these commands:
@@ -438,15 +466,11 @@ jobs:
 
                       ## Output Format
 
+                      Your response should conclude with one of the following:
+
                       ### If you make changes:
 
-                      Provide a commit message at the end:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - [List what was done: created new example X, improved README for Y, added example Z, etc.]
-                      - [Describe specific changes: new examples added, documentation improvements, etc.]
-                      COMMIT_MESSAGE_END
-                      ```
+                      Provide your commit message as specified in the "📝 Commit Message Instructions" section above.
 
                       ### If no changes needed:
 
@@ -473,15 +497,11 @@ jobs:
 
             - name: Commit changes with resilient push
               run: |
-                  # Check if any files in the package's examples directory were modified
-                  EXAMPLES_DIR="${{ matrix.package.path }}/examples"
+                  # Check if any changes were made by Claude
+                  if [ -n "$(git status --porcelain)" ]; then
 
-                  if git diff --name-only | grep -q "^$EXAMPLES_DIR" || \
-                     git diff --cached --name-only | grep -q "^$EXAMPLES_DIR" || \
-                     [ -n "$(git ls-files --others --exclude-standard | grep "^$EXAMPLES_DIR")" ]; then
-
-                    echo "📝 Example changes detected in package, preparing commit..."
-                    git add "$EXAMPLES_DIR"
+                    echo "📝 Changes detected, preparing commit..."
+                    git add -A
 
                     # Extract commit message from Claude output (JSONL format)
                     if [ -f output.txt ]; then
