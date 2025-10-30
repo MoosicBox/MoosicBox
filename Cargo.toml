@@ -51,6 +51,7 @@ members = [
     "packages/http/models",
     "packages/hyperchad",
     "packages/hyperchad/actions",
+    "packages/hyperchad/actions/examples/basic_actions",
     "packages/hyperchad/app",
     "packages/hyperchad/color",
     "packages/hyperchad/examples/details_summary",
