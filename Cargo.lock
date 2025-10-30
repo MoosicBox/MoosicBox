@@ -5884,6 +5884,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_renderer_basic_renderer_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "env_logger 0.11.8",
+ "hyperchad_color",
+ "hyperchad_renderer",
+ "hyperchad_transformer",
+ "log 0.4.28",
+ "switchy_async",
+]
+
+[[package]]
 name = "hyperchad_renderer_egui"
 version = "0.1.4"
 dependencies = [

@@ -64,6 +64,7 @@ members = [
     "packages/hyperchad/markdown/examples/custom_options",
     "packages/hyperchad/markdown/examples/gfm_features",
     "packages/hyperchad/renderer",
+    "packages/hyperchad/renderer/examples/basic_renderer",
     "packages/hyperchad/renderer/egui",
     "packages/hyperchad/renderer/fltk",
     "packages/hyperchad/renderer/fltk/examples/basic_desktop_app",
