@@ -9316,6 +9316,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_schema_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_schema",
+ "switchy_database",
+ "switchy_database_connection",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_search"
 version = "0.1.4"
 dependencies = [
