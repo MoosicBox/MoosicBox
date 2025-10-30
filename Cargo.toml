@@ -200,6 +200,7 @@ members = [
     "packages/tunnel",
     "packages/tunnel/examples/basic_usage",
     "packages/tunnel_sender",
+    "packages/tunnel_sender/examples/basic_connection",
     "packages/tunnel_server",
     "packages/upnp",
     "packages/uuid",

@@ -9708,6 +9708,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_tunnel_sender_basic_connection_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "log 0.4.28",
+ "moosicbox_tunnel_sender",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_tunnel_server"
 version = "0.1.4"
 dependencies = [
