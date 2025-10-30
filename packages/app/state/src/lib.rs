@@ -818,7 +818,7 @@ impl AppState {
         if self.api_token.read().await.is_some() {
             headers.insert(
                 "Authorization".to_string(),
-                self.api_token.read().await.as_ref().unwrap().to_string(),
+                self.api_token.read().await.as_ref().unwrap().clone(),
             );
         }
 
@@ -828,16 +828,11 @@ impl AppState {
             let mut query = BTreeMap::new();
             query.insert(
                 "clientId".to_string(),
-                self.client_id.read().await.as_ref().unwrap().to_string(),
+                self.client_id.read().await.as_ref().unwrap().clone(),
             );
             query.insert(
                 "signature".to_string(),
-                self.signature_token
-                    .read()
-                    .await
-                    .as_ref()
-                    .unwrap()
-                    .to_string(),
+                self.signature_token.read().await.as_ref().unwrap().clone(),
             );
             Some(query)
         } else {

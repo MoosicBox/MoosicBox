@@ -946,7 +946,7 @@ impl TunnelSender {
     ) -> String {
         if !overflow_buf.is_empty() {
             overflow_buf.push_str(buf);
-            *buf = (*overflow_buf).to_string();
+            *buf = (*overflow_buf).clone();
             "".clone_into(overflow_buf);
         }
 
@@ -1187,7 +1187,7 @@ impl TunnelSender {
         let headers = response
             .headers()
             .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
 
         self.send_stream(

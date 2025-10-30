@@ -365,7 +365,7 @@ pub async fn get_track_url(
                     1,
                 )
             } else {
-                host.to_string()
+                host.clone()
             };
             (host, query, headers.to_owned())
         }

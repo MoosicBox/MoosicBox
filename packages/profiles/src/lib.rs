@@ -88,13 +88,11 @@ impl Profiles {
     /// Will panic if `RwLock` is poisoned
     #[must_use]
     pub fn get(&self, profile: &str) -> Option<String> {
-        self.profiles.read().unwrap().iter().find_map(|p| {
-            if p == profile {
-                Some(p.to_string())
-            } else {
-                None
-            }
-        })
+        self.profiles
+            .read()
+            .unwrap()
+            .iter()
+            .find_map(|p| if p == profile { Some(p.clone()) } else { None })
     }
 
     /// Returns all profile names in the registry.

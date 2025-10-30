@@ -403,7 +403,7 @@ fn request(
                 msg: serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
                     request_id,
                     method,
-                    path: path.to_string(),
+                    path: path.clone(),
                     query,
                     payload,
                     headers,

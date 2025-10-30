@@ -122,7 +122,7 @@ pub struct ChecksumConfig {
 }
 
 /// Controls which migration states should be marked as completed
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MarkCompletedScope {
     /// Only mark migrations that have not been tracked yet (safest, default)
     ///
@@ -130,6 +130,7 @@ pub enum MarkCompletedScope {
     /// * Already Completed → Unchanged
     /// * Failed → Unchanged
     /// * In-Progress → Unchanged
+    #[default]
     PendingOnly,
 
     /// Mark pending and failed migrations
@@ -155,12 +156,6 @@ pub enum MarkCompletedScope {
     /// * In-Progress → Completed
     /// * Already Completed → Unchanged
     All,
-}
-
-impl Default for MarkCompletedScope {
-    fn default() -> Self {
-        Self::PendingOnly
-    }
 }
 
 impl MarkCompletedScope {

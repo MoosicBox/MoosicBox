@@ -1262,10 +1262,7 @@ mod tests {
         for field in data {
             match &field.1 {
                 DataValue::String(value) => {
-                    map.insert(
-                        field.0.to_string(),
-                        vec![OwnedValue::Str(value.to_string())],
-                    );
+                    map.insert(field.0.to_string(), vec![OwnedValue::Str(value.clone())]);
                 }
                 DataValue::Bool(value) => {
                     map.insert(field.0.to_string(), vec![OwnedValue::Bool(*value)]);
@@ -1295,7 +1292,7 @@ mod tests {
                         .1
                         .iter()
                         .map(|value| match value {
-                            OwnedValue::Str(str) => str.to_string(),
+                            OwnedValue::Str(str) => str.clone(),
                             OwnedValue::Bool(bool) => bool.to_string(),
                             OwnedValue::U64(num) => num.to_string(),
                             _ => unimplemented!("Unimplemented cache data type"),

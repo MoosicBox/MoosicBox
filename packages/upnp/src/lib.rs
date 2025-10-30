@@ -607,15 +607,15 @@ pub async fn get_transport_info(
             .ok_or(ActionError::MissingProperty(
                 "CurrentTransportStatus".into(),
             ))?
-            .to_string(),
+            .clone(),
         current_transport_state: map
             .get("CurrentTransportState")
             .ok_or(ActionError::MissingProperty("CurrentTransportState".into()))?
-            .to_string(),
+            .clone(),
         current_speed: map
             .get("CurrentSpeed")
             .ok_or(ActionError::MissingProperty("TrackURI".into()))?
-            .to_string(),
+            .clone(),
     })
 }
 
@@ -692,7 +692,7 @@ pub async fn get_position_info(
         track_uri: map
             .get("TrackURI")
             .ok_or(ActionError::MissingProperty("TrackURI".into()))?
-            .to_string(),
+            .clone(),
         track_metadata: parse_track_metadata(
             map.get("TrackMetaData")
                 .ok_or(ActionError::MissingProperty("TrackMetaData".into()))?,
@@ -824,11 +824,11 @@ pub async fn get_media_info(
         record_medium: map
             .get("RecordMedium")
             .ok_or(ActionError::MissingProperty("MediaDuration".into()))?
-            .to_string(),
+            .clone(),
         write_status: map
             .get("WriteStatus")
             .ok_or(ActionError::MissingProperty("WriteStatus".into()))?
-            .to_string(),
+            .clone(),
         current_uri_metadata: parse_track_metadata(
             map.get("CurrentURIMetaData")
                 .ok_or(ActionError::MissingProperty("CurrentURIMetaData".into()))?,
@@ -841,11 +841,11 @@ pub async fn get_media_info(
         play_medium: map
             .get("PlayMedium")
             .ok_or(ActionError::MissingProperty("PlayMedium".into()))?
-            .to_string(),
+            .clone(),
         current_uri: map
             .get("CurrentURI")
             .ok_or(ActionError::MissingProperty("CurrentURI".into()))?
-            .to_string(),
+            .clone(),
     })
 }
 

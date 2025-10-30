@@ -304,7 +304,7 @@ impl TryFrom<&Id> for String {
 
     fn try_from(value: &Id) -> Result<Self, Self::Error> {
         Ok(if let Id::String(string) = value {
-            string.to_string()
+            string.clone()
         } else {
             return Err(TryFromIdError::InvalidType("String".to_string()));
         })

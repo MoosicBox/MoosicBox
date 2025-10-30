@@ -404,14 +404,14 @@ fn expression_to_js(expr: &Expression) -> String {
             Literal::Bool(b) => format!("{b}"),
             Literal::Unit => "null".to_string(),
         },
-        Expression::Variable(name) => name.to_string(),
+        Expression::Variable(name) => name.clone(),
         Expression::ElementRef(element_ref) => match &**element_ref {
             Expression::Literal(Literal::String(selector)) => {
-                let selector = selector.to_string();
+                let selector = selector.clone();
                 format!("document.querySelector('{selector}')")
             }
             Expression::Variable(selector) => {
-                let selector = selector.to_string();
+                let selector = selector.clone();
                 format!("document.querySelector({selector})")
             }
             _ => unimplemented!(),
@@ -500,7 +500,7 @@ fn expression_to_js(expr: &Expression) -> String {
         Expression::Grouping(x) => {
             format!("({})", expression_to_js(x))
         }
-        Expression::RawRust(code) => code.to_string(),
+        Expression::RawRust(code) => code.clone(),
     }
 }
 

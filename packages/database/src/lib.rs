@@ -486,7 +486,7 @@ impl From<&str> for DatabaseValue {
 
 impl From<&String> for DatabaseValue {
     fn from(val: &String) -> Self {
-        Self::String(val.to_string())
+        Self::String(val.clone())
     }
 }
 

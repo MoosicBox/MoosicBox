@@ -186,7 +186,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            ExpressionType::Literal(value) => value.value.to_string(),
+            ExpressionType::Literal(value) => value.value.clone(),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -2504,7 +2504,7 @@ fn from_row(column_names: &[String], row: &MySqlRow) -> Result<crate::Row, SqlxD
 
     for column in column_names {
         columns.push((
-            column.to_string(),
+            column.clone(),
             column_value(&row.try_get_raw(column.as_str())?)?,
         ));
     }

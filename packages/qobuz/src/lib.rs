@@ -410,7 +410,7 @@ async fn authenticated_request_inner(
                 db,
                 method,
                 url,
-                Some(app_id.to_string()),
+                Some(app_id.clone()),
                 Some(
                     refetch_access_token(
                         #[cfg(feature = "db")]
