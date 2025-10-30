@@ -229,6 +229,7 @@ members = [
     "packages/web_server/simulator",
     "packages/ws",
     "packages/yt",
+    "packages/yt/examples/library_browse",
 ]
 
 resolver = "2"

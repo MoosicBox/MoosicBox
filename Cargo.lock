@@ -9873,6 +9873,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_yt_library_browse_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_music_models",
+ "moosicbox_yt",
+ "switchy_database",
+ "tokio",
+]
+
+[[package]]
 name = "moxcms"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
