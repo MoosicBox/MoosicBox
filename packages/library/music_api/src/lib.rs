@@ -503,7 +503,7 @@ impl MusicApi for LibraryMusicApi {
             return Ok(None);
         };
         let mut path = if let Some(file) = &track.file {
-            file.to_string()
+            file.clone()
         } else {
             return Ok(None);
         };

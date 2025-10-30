@@ -236,7 +236,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            ExpressionType::Literal(value) => value.value.to_string(),
+            ExpressionType::Literal(value) => value.value.clone(),
             ExpressionType::Identifier(value) => format_identifier(&value.value),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -1528,7 +1528,7 @@ fn from_row(column_names: &[String], row: &Row) -> Result<crate::Row, PostgresDa
 
     for column in column_names {
         log::trace!("Mapping column {column:?}");
-        columns.push((column.to_string(), column_value(row, column)?));
+        columns.push((column.clone(), column_value(row, column)?));
     }
 
     Ok(crate::Row { columns })

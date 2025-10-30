@@ -161,7 +161,7 @@ impl Arbitrary for Action {
                 trigger: trigger.clone(),
                 effect: ActionEffect {
                     action: ActionType::Event {
-                        name: name.to_string(),
+                        name: name.clone(),
                         action: Box::new(ActionType::arbitrary(g)),
                     },
                     delay_off: Option::arbitrary(g),

@@ -47,7 +47,7 @@ where
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
-            Value::Text(x) => Ok(x.to_string()),
+            Value::Text(x) => Ok(x.clone()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }
@@ -309,7 +309,7 @@ where
 impl ToValueType<String> for Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
-            Self::Text(str) => Ok(str.to_string()),
+            Self::Text(str) => Ok(str.clone()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }

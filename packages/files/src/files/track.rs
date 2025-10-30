@@ -572,7 +572,7 @@ pub async fn get_audio_bytes(
                         TrackSource::RemoteUrl { url, .. } => {
                             let source_format = source.format();
                             let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-                                url.to_string(),
+                                url.clone(),
                                 size,
                                 true,
                                 size.is_some(), // HTTP range requests work for any format when size is known

@@ -413,7 +413,7 @@ async fn api_proxy_get(
             headers.map(|headers| {
                 let mut map = BTreeMap::new();
                 for (name, value) in headers.as_object().unwrap() {
-                    map.insert(name.to_string(), value.as_str().unwrap().to_string());
+                    map.insert(name.clone(), value.as_str().unwrap().to_string());
                 }
                 map
             }),
@@ -434,7 +434,7 @@ async fn api_proxy_post(
             headers.map(|headers| {
                 let mut map = BTreeMap::new();
                 for (name, value) in headers.as_object().unwrap() {
-                    map.insert(name.to_string(), value.as_str().unwrap().to_string());
+                    map.insert(name.clone(), value.as_str().unwrap().to_string());
                 }
                 map
             }),

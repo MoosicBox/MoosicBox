@@ -378,7 +378,7 @@ pub trait FromId {
 
 impl FromId for String {
     fn as_string(&self) -> String {
-        self.to_string()
+        self.clone()
     }
 
     fn into_id(str: &str) -> Self {

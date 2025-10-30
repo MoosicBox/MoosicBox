@@ -1255,7 +1255,7 @@ impl From<String> for RouteRequest {
 
 impl From<&String> for RouteRequest {
     fn from(value: &String) -> Self {
-        value.to_string().into()
+        value.clone().into()
     }
 }
 
@@ -1273,7 +1273,7 @@ impl From<(String, ClientInfo)> for RouteRequest {
 
 impl From<(&String, ClientInfo)> for RouteRequest {
     fn from(value: (&String, ClientInfo)) -> Self {
-        (value.0.to_string(), Arc::new(value.1)).into()
+        (value.0.clone(), Arc::new(value.1)).into()
     }
 }
 
@@ -1291,7 +1291,7 @@ impl From<(String, Arc<ClientInfo>)> for RouteRequest {
 
 impl From<(&String, Arc<ClientInfo>)> for RouteRequest {
     fn from(value: (&String, Arc<ClientInfo>)) -> Self {
-        (value.0.to_string(), value.1).into()
+        (value.0.clone(), value.1).into()
     }
 }
 
@@ -1323,7 +1323,7 @@ impl From<(String, RequestInfo)> for RouteRequest {
 
 impl From<(&String, RequestInfo)> for RouteRequest {
     fn from(value: (&String, RequestInfo)) -> Self {
-        (value.0.to_string(), value.1).into()
+        (value.0.clone(), value.1).into()
     }
 }
 
@@ -1365,7 +1365,7 @@ impl From<(String, ClientInfo)> for Navigation {
 
 impl From<(&String, ClientInfo)> for Navigation {
     fn from(value: (&String, ClientInfo)) -> Self {
-        Self(value.0.to_string(), Arc::new(value.1))
+        Self(value.0.clone(), Arc::new(value.1))
     }
 }
 
@@ -1383,7 +1383,7 @@ impl From<(String, Arc<ClientInfo>)> for Navigation {
 
 impl From<(&String, Arc<ClientInfo>)> for Navigation {
     fn from(value: (&String, Arc<ClientInfo>)) -> Self {
-        Self(value.0.to_string(), value.1)
+        Self(value.0.clone(), value.1)
     }
 }
 
@@ -1401,7 +1401,7 @@ impl From<(String, RequestInfo)> for Navigation {
 
 impl From<(&String, RequestInfo)> for Navigation {
     fn from(value: (&String, RequestInfo)) -> Self {
-        Self(value.0.to_string(), value.1.client)
+        Self(value.0.clone(), value.1.client)
     }
 }
 

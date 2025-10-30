@@ -2475,7 +2475,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             .insert(source.clone(), AppImage::Loading);
 
                         if let Err(e) = self.event.send(AppEvent::LoadImage {
-                            source: source.to_string(),
+                            source: source.clone(),
                         }) {
                             log::error!("Failed to send LoadImage event: {e:?}");
                         }
@@ -2746,7 +2746,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             if let ActionTrigger::Event(event_name) = &fx_action.trigger {
                 let action = fx_action.effect.clone();
                 let id = container.id;
-                self.add_event_handler(event_name.to_string(), move |render_context, value| {
+                self.add_event_handler(event_name.clone(), move |render_context, value| {
                     let effect = &action;
                     if let ActionType::Event { action, .. } = &action.action {
                         Self::handle_action(

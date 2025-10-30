@@ -22,7 +22,7 @@ scoped_thread_local! {
 #[must_use]
 pub fn current_client() -> Option<String> {
     if HANDLE.is_set() {
-        Some(HANDLE.with(|x| x.name.to_string()))
+        Some(HANDLE.with(|x| x.name.clone()))
     } else {
         None
     }

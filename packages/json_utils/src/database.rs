@@ -70,7 +70,7 @@ where
 impl ToValueType<String> for &DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
-            DatabaseValue::String(x) => Ok(x.to_string()),
+            DatabaseValue::String(x) => Ok(x.clone()),
             DatabaseValue::DateTime(datetime) => Ok(datetime.and_utc().to_rfc3339()),
             #[cfg(feature = "uuid")]
             DatabaseValue::Uuid(uuid) => Ok(uuid.to_string()),
@@ -419,7 +419,7 @@ where
 impl ToValueType<String> for DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
-            Self::String(x) => Ok(x.to_string()),
+            Self::String(x) => Ok(x.clone()),
             Self::DateTime(datetime) => Ok(datetime.and_utc().to_rfc3339()),
             _ => Err(ParseError::ConvertType("String".into())),
         }

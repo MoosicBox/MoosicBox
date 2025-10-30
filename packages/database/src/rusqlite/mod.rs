@@ -340,7 +340,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            ExpressionType::Literal(value) => value.value.to_string(),
+            ExpressionType::Literal(value) => value.value.clone(),
             ExpressionType::Identifier(value) => value.value.clone(),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -1463,10 +1463,7 @@ fn from_row(column_names: &[String], row: &Row<'_>) -> Result<crate::Row, Rusqli
     let mut columns = vec![];
 
     for column in column_names {
-        columns.push((
-            column.to_string(),
-            row.get::<_, Value>(column.as_str())?.into(),
-        ));
+        columns.push((column.clone(), row.get::<_, Value>(column.as_str())?.into()));
     }
 
     Ok(crate::Row { columns })
@@ -2011,7 +2008,7 @@ pub(crate) fn rusqlite_exec_alter_table(
                     crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
                         "BLOB".to_string()
                     }
-                    crate::schema::DataType::Custom(type_name) => type_name.to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 let nullable_str = if *nullable { "" } else { " NOT NULL" };

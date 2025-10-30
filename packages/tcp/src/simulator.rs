@@ -173,7 +173,7 @@ scoped_thread_local! {
 #[must_use]
 pub fn current_host() -> Option<String> {
     if HOST.is_set() {
-        Some(HOST.with(|x| x.addr.to_string()))
+        Some(HOST.with(|x| x.addr.clone()))
     } else {
         None
     }

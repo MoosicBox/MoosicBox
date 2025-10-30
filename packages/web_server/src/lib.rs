@@ -513,16 +513,11 @@ impl HttpRequest {
 ///
 /// * `Empty` - Minimal stub with no data
 /// * `Simulator` - Full simulator stub with request data
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Stub {
+    #[default]
     Empty,
     Simulator(simulator::SimulationStub),
-}
-
-impl Default for Stub {
-    fn default() -> Self {
-        Self::Empty
-    }
 }
 
 /// Borrowed reference to an HTTP request.
