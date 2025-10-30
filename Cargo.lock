@@ -6035,6 +6035,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_renderer_html_actix_basic_actix_server_example"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "bytes",
+ "env_logger 0.11.8",
+ "flume",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html_actix",
+ "log 0.4.28",
+]
+
+[[package]]
 name = "hyperchad_renderer_html_basic_rendering_example"
 version = "0.1.0"
 dependencies = [
