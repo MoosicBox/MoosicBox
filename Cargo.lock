@@ -8536,6 +8536,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_files_download_with_progress_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_files",
+ "switchy_http",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_image"
 version = "0.1.4"
 dependencies = [

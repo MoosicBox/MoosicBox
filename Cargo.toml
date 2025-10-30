@@ -47,6 +47,7 @@ members = [
     "packages/env",
     "packages/env_utils",
     "packages/files",
+    "packages/files/examples/download_with_progress",
     "packages/fs",
     "packages/fs/examples/temp_dir",
     "packages/gpipe",
