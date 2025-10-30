@@ -8252,6 +8252,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_decoder_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_audio_decoder",
+ "symphonia",
+]
+
+[[package]]
 name = "moosicbox_audio_encoder"
 version = "0.1.4"
 dependencies = [
