@@ -1,0 +1,23 @@
+[package]
+name = "switchy_telemetry_basic_tracing_example"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Example demonstrating basic OpenTelemetry tracing with switchy_telemetry"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["example", "switchy_telemetry", "tracing", "opentelemetry"]
+
+[[bin]]
+name = "basic_tracing_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_telemetry = { workspace = true, features = ["simulator"] }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[features]
+default = []
+fail-on-warnings = ["switchy_telemetry/fail-on-warnings"]

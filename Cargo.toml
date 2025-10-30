@@ -214,6 +214,8 @@ members = [
     "packages/tcp/examples/simulator_test",
     "packages/tcp/examples/split_stream",
     "packages/telemetry",
+    "packages/telemetry/examples/actix_metrics",
+    "packages/telemetry/examples/basic_tracing",
     "packages/tidal",
     "packages/tidal/examples/basic_authentication",
     "packages/time",

@@ -15717,6 +15717,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_telemetry_actix_metrics_example"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "serde_json",
+ "switchy_telemetry",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "switchy_telemetry_basic_tracing_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_telemetry",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "switchy_time"
 version = "0.1.4"
 dependencies = [
