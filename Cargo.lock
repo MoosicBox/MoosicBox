@@ -15419,6 +15419,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_fs_async_operations_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_async",
+ "switchy_fs",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_fs_basic_file_ops_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
+name = "switchy_fs_directory_ops_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
 name = "switchy_http"
 version = "0.1.4"
 dependencies = [
