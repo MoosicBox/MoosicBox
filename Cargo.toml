@@ -95,6 +95,7 @@ members = [
     "packages/hyperchad/test_utils",
     "packages/hyperchad/test_utils/examples/workflow_builder",
     "packages/hyperchad/transformer",
+    "packages/hyperchad/transformer/examples/basic_usage",
     "packages/hyperchad/transformer/models",
     "packages/image",
     "packages/json_utils",

@@ -6335,6 +6335,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_transformer_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_color",
+ "hyperchad_transformer",
+]
+
+[[package]]
 name = "hyperchad_transformer_models"
 version = "0.1.4"
 dependencies = [
