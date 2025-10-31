@@ -1,12 +1,18 @@
 [package]
-name = "moosicbox_parsing_utils_basic_usage_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating integer sequence and range parsing in moosicbox_parsing_utils"
+edition = { workspace = true }
+keywords = [
+    "example",
+    "integers",
+    "moosicbox_parsing_utils",
+    "parsing",
+    "ranges",
+]
 license = { workspace = true }
+name = "moosicbox_parsing_utils_basic_usage_example"
+publish = false
 repository = { workspace = true }
-keywords = ["example", "moosicbox_parsing_utils", "parsing", "integers", "ranges"]
+version = "0.1.0"
 
 [[bin]]
 name = "basic_usage_example"
@@ -16,5 +22,5 @@ path = "src/main.rs"
 moosicbox_parsing_utils = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_parsing_utils/fail-on-warnings"]

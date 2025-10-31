@@ -10,9 +10,9 @@
 //! - Ability to set/remove variables without affecting system environment
 //! - Reset functionality for test isolation
 
-use switchy_env::{var, var_exists, var_parse};
 #[cfg(feature = "simulator")]
 use switchy_env::simulator::{clear, remove_var, reset, set_var};
+use switchy_env::{var, var_exists, var_parse};
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -7,7 +7,7 @@
 //! This example demonstrates how to create a simple async service with sequential
 //! command processing, lifecycle hooks, and graceful shutdown.
 
-use moosicbox_async_service::{async_service_sequential, async_trait, log, sync, Arc};
+use moosicbox_async_service::{Arc, async_service_sequential, async_trait, log, sync};
 
 /// Commands that our service can process
 #[derive(Debug)]

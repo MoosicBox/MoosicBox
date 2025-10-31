@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_audio_decoder_basic_decode_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic audio decoding in moosicbox_audio_decoder"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_audio_decoder", "decode", "audio"]
+edition     = { workspace = true }
+keywords    = ["audio", "decode", "example", "moosicbox_audio_decoder"]
+license     = { workspace = true }
+name        = "moosicbox_audio_decoder_basic_decode_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_decode_example"
@@ -16,9 +16,9 @@ path = "src/main.rs"
 moosicbox_audio_decoder = { workspace = true }
 
 env_logger = { workspace = true }
-symphonia = { workspace = true }
-thiserror = { workspace = true }
+symphonia  = { workspace = true }
+thiserror  = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_audio_decoder/fail-on-warnings"]

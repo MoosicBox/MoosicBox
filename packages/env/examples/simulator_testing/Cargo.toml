@@ -1,12 +1,12 @@
 [package]
-name = "switchy_env_simulator_testing_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating simulator mode for testing with switchy_env"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "switchy_env", "simulator", "testing"]
+edition     = { workspace = true }
+keywords    = ["example", "simulator", "switchy_env", "testing"]
+license     = { workspace = true }
+name        = "switchy_env_simulator_testing_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "simulator_testing_example"
@@ -16,6 +16,6 @@ path = "src/main.rs"
 switchy_env = { workspace = true }
 
 [features]
-default = ["simulator"]
+default          = ["simulator"]
 fail-on-warnings = ["switchy_env/fail-on-warnings"]
-simulator = ["switchy_env/simulator"]
+simulator        = ["switchy_env/simulator"]

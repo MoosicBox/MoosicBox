@@ -12,7 +12,7 @@
 
 use std::error::Error;
 
-use switchy_tcp::{simulator, GenericTcpListener, TcpListener, TcpStream};
+use switchy_tcp::{GenericTcpListener, TcpListener, TcpStream, simulator};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]

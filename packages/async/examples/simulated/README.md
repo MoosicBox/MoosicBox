@@ -123,15 +123,18 @@ Coordinating between blocking operations and spawned tasks.
 Try experimenting with the code:
 
 1. **Run with different backends**:
+
     - Default (Tokio): Non-deterministic execution, real-time delays
     - With `--features simulator`: Deterministic execution with controlled time
 
 2. **Observe concurrency**:
+
     - Watch the order of "Start" messages (all appear together)
     - Note that "Ended" messages appear at different times based on random delays
     - See how nested tasks complete after their parent tasks
 
 3. **Modify task count**:
+
     - Change the loop from `0..5` to `0..10` to spawn more tasks
     - Observe how the runtime handles increased concurrency
 

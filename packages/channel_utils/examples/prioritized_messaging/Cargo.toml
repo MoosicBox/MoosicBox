@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_channel_utils_prioritized_messaging_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating prioritized message handling in moosicbox_channel_utils"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_channel_utils", "priority", "channel"]
+edition     = { workspace = true }
+keywords    = ["channel", "example", "moosicbox_channel_utils", "priority"]
+license     = { workspace = true }
+name        = "moosicbox_channel_utils_prioritized_messaging_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "prioritized_messaging_example"
@@ -22,5 +22,5 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 futures = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_channel_utils/fail-on-warnings"]

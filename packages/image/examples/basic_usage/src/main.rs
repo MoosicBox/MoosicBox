@@ -86,7 +86,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 /// Creates a simple test image for demonstration purposes.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 fn create_test_image(path: &str) -> Result<(), Box<dyn Error>> {
     use image::{ImageBuffer, Rgb};
 

@@ -8,9 +8,9 @@
 //! which provides database-agnostic operations across `SQLite`, `PostgreSQL`, and `MySQL`.
 
 use switchy_database::{
-    query::{FilterableQuery as _, SortDirection},
-    schema::{create_table, Column, DataType},
     DatabaseValue,
+    query::{FilterableQuery as _, SortDirection},
+    schema::{Column, DataType, create_table},
 };
 
 #[tokio::main]

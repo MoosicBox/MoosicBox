@@ -1,12 +1,12 @@
 [package]
-name = "openport_port_reservation_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating port reservation system in openport"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "openport", "reservation", "port"]
+edition     = { workspace = true }
+keywords    = ["example", "openport", "port", "reservation"]
+license     = { workspace = true }
+name        = "openport_port_reservation_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "port_reservation_example"
@@ -16,5 +16,5 @@ path = "src/main.rs"
 openport = { workspace = true, features = ["reservation"] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["openport/fail-on-warnings"]

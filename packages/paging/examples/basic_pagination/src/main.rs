@@ -18,8 +18,9 @@ fn simulate_database() -> Vec<String> {
     (1..=50).map(|i| format!("Item {i}")).collect()
 }
 
-type FetchFuture =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<PagingResponse<String, String>, String>> + Send>>;
+type FetchFuture = std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<PagingResponse<String, String>, String>> + Send>,
+>;
 
 /// Helper function to create a fetch closure for `PagingResponse`.
 ///

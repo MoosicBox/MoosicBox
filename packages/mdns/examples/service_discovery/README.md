@@ -187,15 +187,15 @@ The scanner listens for `ServiceEvent::ServiceResolved` events from the underlyi
 
 1. In one terminal, run the `service_registration` example:
 
-   ```bash
-   cargo run --manifest-path packages/mdns/examples/service_registration/Cargo.toml
-   ```
+    ```bash
+    cargo run --manifest-path packages/mdns/examples/service_registration/Cargo.toml
+    ```
 
 2. In another terminal, run this discovery example:
 
-   ```bash
-   cargo run --manifest-path packages/mdns/examples/service_discovery/Cargo.toml
-   ```
+    ```bash
+    cargo run --manifest-path packages/mdns/examples/service_discovery/Cargo.toml
+    ```
 
 3. You should see the registered service appear in the discovery output
 
@@ -215,9 +215,9 @@ If you have actual MoosicBox servers running on your network, this scanner will 
 - **Check network connectivity**: Ensure devices are on the same local network
 - **Firewall issues**: Ensure UDP port 5353 (mDNS) is not blocked
 - **Enable logging**: Set `RUST_LOG=debug` to see scanner activity:
-  ```bash
-  RUST_LOG=debug cargo run --manifest-path packages/mdns/examples/service_discovery/Cargo.toml
-  ```
+    ```bash
+    RUST_LOG=debug cargo run --manifest-path packages/mdns/examples/service_discovery/Cargo.toml
+    ```
 
 ### Scanner fails to start
 
