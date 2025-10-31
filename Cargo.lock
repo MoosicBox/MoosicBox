@@ -8081,6 +8081,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_decoder_basic_decode_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_audio_decoder",
+ "symphonia",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "moosicbox_audio_encoder"
 version = "0.1.4"
 dependencies = [
