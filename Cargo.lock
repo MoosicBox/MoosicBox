@@ -14933,6 +14933,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_database_query_builder_basic_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_database",
+ "switchy_database_connection",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_env"
 version = "0.1.0"
 dependencies = [
