@@ -122,6 +122,7 @@ members = [
     "packages/profiles",
     "packages/qobuz",
     "packages/random",
+    "packages/random/examples/basic_usage",
     "packages/remote_library",
     "packages/resampler",
     "packages/resampler/examples/basic_resampling",
