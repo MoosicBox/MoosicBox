@@ -15012,6 +15012,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_fs_basic_file_io_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
+name = "switchy_fs_simulator_mode_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
 name = "switchy_http"
 version = "0.1.4"
 dependencies = [

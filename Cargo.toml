@@ -54,6 +54,8 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/fs",
+    "packages/fs/examples/basic_file_io",
+    "packages/fs/examples/simulator_mode",
     "packages/fs/examples/temp_dir",
     "packages/gpipe",
     "packages/gpipe/ast",
