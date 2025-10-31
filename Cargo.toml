@@ -110,6 +110,7 @@ members = [
     "packages/p2p",
     "packages/paging",
     "packages/parsing_utils",
+    "packages/parsing_utils/examples/basic_usage",
     "packages/player",
     "packages/profiles",
     "packages/qobuz",
