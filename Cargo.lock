@@ -8984,6 +8984,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_search_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_music_api_models",
+ "moosicbox_search",
+ "switchy_async",
+]
+
+[[package]]
 name = "moosicbox_server"
 version = "0.1.4"
 dependencies = [
