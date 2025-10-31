@@ -163,6 +163,7 @@ members = [
     "packages/tunnel_sender",
     "packages/tunnel_server",
     "packages/upnp",
+    "packages/upnp/examples/device_discovery",
     "packages/uuid",
     "packages/web_server",
     "packages/web_server/core",
