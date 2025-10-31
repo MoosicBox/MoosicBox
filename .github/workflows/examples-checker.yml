@@ -232,6 +232,37 @@ jobs:
                       **Package path**: {1}
                       **Mode**: {2}
                       {3}
+                      ## ⚠️ CRITICAL: Feature Understanding Requirement
+
+                      **DO NOT CREATE EXAMPLES FOR FEATURES YOU DO NOT COMPLETELY UNDERSTAND.**
+
+                      Before creating any example:
+
+                      1. **Thoroughly read and understand the package''s source code**
+                         - Read ALL public API documentation
+                         - Understand the purpose and behavior of each function/type
+                         - Identify dependencies and how they interact
+
+                      2. **Only create examples for features you are ABSOLUTELY CERTAIN about**
+                         - If you''re unsure about how a feature works, DO NOT create an example
+                         - If the API is unclear or poorly documented, DO NOT guess
+                         - If you cannot find sufficient documentation, DO NOT proceed
+
+                      3. **Verify your understanding before writing code**
+                         - Check existing tests for usage patterns
+                         - Look for similar examples in the codebase
+                         - Ensure your understanding matches the actual implementation
+
+                      **INCOMPLETE, INCORRECT, OR SPECULATIVE EXAMPLES ARE WORSE THAN NO EXAMPLES.**
+
+                      Examples serve as authoritative documentation. Creating examples based on assumptions or incomplete understanding:
+                      - Misleads users about how to use the API correctly
+                      - Creates maintenance burden when examples need to be fixed
+                      - Damages trust in the project''s documentation quality
+                      - May demonstrate anti-patterns or incorrect usage
+
+                      **When in doubt, DO NOT CREATE THE EXAMPLE.** It is better to have no example than a wrong example.
+
                       ## Phase 1: Determine if Package Should Have Examples
 
                       First, analyze if this package should have examples at all:
@@ -407,10 +438,18 @@ jobs:
 
                       ## Constraints
 
+                      - **⚠️ CRITICAL: DO NOT CREATE EXAMPLES FOR FEATURES YOU DO NOT COMPLETELY UNDERSTAND**
+                        - Thoroughly read and understand the package''s source code before creating examples
+                        - Only create examples for features you are ABSOLUTELY CERTAIN about
+                        - If unsure about how a feature works, DO NOT create an example
+                        - Incomplete or incorrect examples are WORSE than no examples
+                        - Examples serve as authoritative documentation - wrong examples mislead users
+                        - **When in doubt, DO NOT CREATE THE EXAMPLE**
+                        - See "⚠️ CRITICAL: Feature Understanding Requirement" section above for full details
                       - DO NOT change existing examples'' core purpose or demonstrated features
                       - DO NOT add unnecessary features or complexity
                       - DO NOT make breaking changes to API usage
-                      - DO NOT create examples for packages that don''t need them
+                      - DO NOT create examples for packages that don''t need them OR features you don''t fully understand
                       - DO NOT fix compilation errors in pre-existing examples (that''s CI''s job)
                       - DO NOT modify existing example code to fix clippy warnings
                       - DO ensure NEW or MODIFIED examples compile without errors or warnings
