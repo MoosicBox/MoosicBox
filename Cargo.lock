@@ -14870,6 +14870,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_basic_async_example"
+version = "0.1.0"
+dependencies = [
+ "switchy",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_database"
 version = "0.1.4"
 dependencies = [
