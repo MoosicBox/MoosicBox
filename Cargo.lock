@@ -8226,6 +8226,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_channel_utils_prioritized_messaging_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_channel_utils",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_config"
 version = "0.1.4"
 dependencies = [
