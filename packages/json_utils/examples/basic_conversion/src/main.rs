@@ -12,7 +12,7 @@
 
 use moosicbox_json_utils::serde_json::{ToNestedValue, ToValue};
 use moosicbox_json_utils::{ParseError, ToValueType};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn main() -> Result<(), ParseError> {
     println!("=== MoosicBox JSON Utils: Basic Conversion Example ===\n");

@@ -3,8 +3,8 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::io::{Read, Seek, SeekFrom, Write};
-use switchy_fs::sync::{create_dir_all, read_dir_sorted, read_to_string, remove_dir_all, write};
 use switchy_fs::sync::OpenOptions;
+use switchy_fs::sync::{create_dir_all, read_dir_sorted, read_to_string, remove_dir_all, write};
 
 fn main() -> std::io::Result<()> {
     println!("switchy_fs Basic File I/O Example\n");

@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_json_utils_basic_conversion_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic JSON value conversion in moosicbox_json_utils"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_json_utils", "json", "conversion"]
+edition     = { workspace = true }
+keywords    = ["conversion", "example", "json", "moosicbox_json_utils"]
+license     = { workspace = true }
+name        = "moosicbox_json_utils_basic_conversion_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_conversion_example"
@@ -14,8 +14,8 @@ path = "src/main.rs"
 
 [dependencies]
 moosicbox_json_utils = { workspace = true, features = ["serde_json"] }
-serde_json = { workspace = true }
+serde_json           = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_json_utils/fail-on-warnings"]

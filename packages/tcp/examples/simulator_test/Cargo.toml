@@ -1,21 +1,27 @@
 [package]
-name = "switchy_tcp_simulator_test_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating in-memory TCP testing with switchy_tcp simulator"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "switchy_tcp", "simulator", "testing"]
+edition     = { workspace = true }
+keywords    = ["example", "simulator", "switchy_tcp", "testing"]
+license     = { workspace = true }
+name        = "switchy_tcp_simulator_test_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "simulator_test_example"
 path = "src/main.rs"
 
 [dependencies]
-switchy_tcp = { workspace = true, default-features = false, features = ["simulator"] }
-tokio = { workspace = true, features = ["io-util", "macros", "rt-multi-thread"] }
+switchy_tcp = { workspace = true, default-features = false, features = [
+    "simulator",
+] }
+tokio = { workspace = true, features = [
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+] }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["switchy_tcp/fail-on-warnings"]

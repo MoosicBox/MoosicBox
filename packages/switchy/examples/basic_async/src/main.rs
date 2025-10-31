@@ -9,12 +9,12 @@
 
 use std::time::Instant;
 
-use switchy::unsync::{
-    task::spawn,
-    time::{sleep, Duration},
-};
 #[cfg(feature = "async-macros")]
 use switchy::unsync::{join, select, try_join};
+use switchy::unsync::{
+    task::spawn,
+    time::{Duration, sleep},
+};
 
 /// Demonstrates basic async sleep operations
 async fn demonstrate_sleep() {

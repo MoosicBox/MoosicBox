@@ -1,12 +1,12 @@
 [package]
-name = "moosicbox_load_balancer_basic_routing_example"
-version = "0.1.0"
-edition = { workspace = true }
-publish = false
 description = "Example demonstrating basic hostname-based routing in moosicbox_load_balancer"
-license = { workspace = true }
-repository = { workspace = true }
-keywords = ["example", "moosicbox_load_balancer", "routing", "load-balancer"]
+edition     = { workspace = true }
+keywords    = ["example", "load-balancer", "moosicbox_load_balancer", "routing"]
+license     = { workspace = true }
+name        = "moosicbox_load_balancer_basic_routing_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
 
 [[bin]]
 name = "basic_routing_example"
@@ -15,9 +15,9 @@ path = "src/main.rs"
 [dependencies]
 moosicbox_load_balancer = { workspace = true }
 
-pingora-core = { workspace = true }
+pingora-core           = { workspace = true }
 pingora-load-balancing = { workspace = true }
 
 [features]
-default = []
+default          = []
 fail-on-warnings = ["moosicbox_load_balancer/fail-on-warnings"]

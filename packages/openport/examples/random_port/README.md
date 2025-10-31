@@ -110,11 +110,13 @@ Sequential selection is predictable but can lead to port conflicts when multiple
 `pick_random_unused_port()` uses a sophisticated fallback strategy:
 
 1. **Phase 1 - Random attempts (10 tries)**:
+
     - Generate random port in 15000-25000
     - Check if free on both TCP and UDP
     - Return immediately if found
 
 2. **Phase 2 - OS assistance (10 tries)**:
+
     - Ask OS for a free TCP port (by binding to port 0)
     - Verify the port is also free on UDP
     - Return if both conditions met
