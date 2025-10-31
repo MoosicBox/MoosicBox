@@ -253,6 +253,24 @@ pub struct ClippierConf {
     pub git_submodules: Option<bool>,
 }
 
+/// Workspace-level configuration (root clippier.toml)
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WorkspaceClippierConf {
+    /// Default environment variables
+    pub env: Option<BTreeMap<String, ClippierEnv>>,
+    /// Default CI steps
+    pub ci_steps: Option<VecOrItem<Step>>,
+    /// Default cargo commands
+    pub cargo: Option<VecOrItem<String>>,
+    /// Default nightly setting
+    pub nightly: Option<bool>,
+    /// Default git submodules setting
+    pub git_submodules: Option<bool>,
+    /// Default dependencies
+    pub dependencies: Option<Vec<Step>>,
+}
+
 /// List of features that may be chunked for parallel processing
 #[derive(Debug, Clone)]
 pub enum FeaturesList {
@@ -409,6 +427,8 @@ pub struct WorkspaceContext {
     member_cache: RefCell<BTreeMap<String, std::path::PathBuf>>,
     path_cache: RefCell<BTreeSet<std::path::PathBuf>>,
     fully_loaded: RefCell<bool>,
+    #[allow(clippy::option_option)]
+    workspace_config: RefCell<Option<Option<WorkspaceClippierConf>>>,
 }
 
 impl WorkspaceContext {
@@ -435,6 +455,7 @@ impl WorkspaceContext {
             member_cache: RefCell::new(BTreeMap::new()),
             path_cache: RefCell::new(BTreeSet::new()),
             fully_loaded: RefCell::new(false),
+            workspace_config: RefCell::new(None),
         })
     }
 
@@ -520,6 +541,40 @@ impl WorkspaceContext {
         let content = std::fs::read_to_string(cargo_toml_path).ok()?;
         let toml: Value = toml::from_str(&content).ok()?;
         toml.get("package")?.get("name")?.as_str().map(String::from)
+    }
+
+    /// Get workspace-level configuration, loading it if necessary
+    fn workspace_config(
+        &self,
+    ) -> Result<Option<WorkspaceClippierConf>, Box<dyn std::error::Error>> {
+        // Check if we've already tried to load the config
+        if let Some(cached) = self.workspace_config.borrow().as_ref() {
+            return Ok(cached.clone());
+        }
+
+        // Try to load workspace config
+        let workspace_conf_path = self.root.join("clippier.toml");
+
+        let result = if workspace_conf_path.exists() {
+            log::trace!(
+                "Loading workspace config from: {}",
+                workspace_conf_path.display()
+            );
+            let content = std::fs::read_to_string(&workspace_conf_path)?;
+            let conf: WorkspaceClippierConf = toml::from_str(&content)?;
+            Some(conf)
+        } else {
+            log::trace!(
+                "No workspace-level clippier.toml found at: {}",
+                workspace_conf_path.display()
+            );
+            None
+        };
+
+        // Cache the result (None means we tried and found nothing)
+        *self.workspace_config.borrow_mut() = Some(result.clone());
+
+        Ok(result)
     }
 }
 
@@ -1189,6 +1244,9 @@ pub fn create_map(
     )
     .unwrap_or_default();
 
+    // Get workspace config for defaults
+    let workspace_conf = context.workspace_config().ok().flatten();
+
     let mut map = serde_json::Map::new();
     map.insert("os".to_string(), serde_json::to_value(&config.os)?);
     map.insert("path".to_string(), serde_json::to_value(file)?);
@@ -1203,15 +1261,23 @@ pub fn create_map(
         config
             .nightly
             .or_else(|| conf.as_ref().and_then(|x| x.nightly))
+            .or_else(|| workspace_conf.as_ref().and_then(|x| x.nightly))
             .unwrap_or_default()
             .into(),
     );
 
-    let all_dependencies = if let Some(dependencies) = &config.dependencies {
-        merge_steps(propagated.dependencies.clone(), dependencies.clone())
-    } else {
-        propagated.dependencies.clone()
-    };
+    let mut all_dependencies = propagated.dependencies.clone();
+    // Merge workspace defaults
+    if let Some(workspace_deps) = workspace_conf
+        .as_ref()
+        .and_then(|x| x.dependencies.as_ref())
+    {
+        all_dependencies = merge_steps(all_dependencies, workspace_deps.clone());
+    }
+    // Then config-specific dependencies
+    if let Some(dependencies) = &config.dependencies {
+        all_dependencies = merge_steps(all_dependencies, dependencies.clone());
+    }
 
     if !all_dependencies.is_empty() {
         let dependencies = &all_dependencies;
@@ -1255,9 +1321,15 @@ pub fn create_map(
     }
 
     let mut env = propagated.env.clone();
+    // Merge workspace defaults first
+    if let Some(workspace_env) = workspace_conf.as_ref().and_then(|x| x.env.as_ref()) {
+        env.extend(workspace_env.clone());
+    }
+    // Then package-level config
     if let Some(conf_env) = conf.and_then(|x| x.env.as_ref()) {
         env.extend(conf_env.clone());
     }
+    // Finally config-specific overrides
     env.extend(config.env.clone().unwrap_or_default());
 
     let matches = env
@@ -1292,11 +1364,18 @@ pub fn create_map(
         );
     }
 
-    let mut cargo: Vec<_> = conf
+    let mut cargo: Vec<_> = workspace_conf
+        .as_ref()
         .and_then(|x| x.cargo.as_ref())
         .cloned()
         .unwrap_or_default()
         .into();
+    let conf_cargo: Vec<_> = conf
+        .and_then(|x| x.cargo.as_ref())
+        .cloned()
+        .unwrap_or_default()
+        .into();
+    cargo.extend(conf_cargo);
     let config_cargo: Vec<_> = config.cargo.clone().unwrap_or_default().into();
     cargo.extend(config_cargo);
 
@@ -1305,10 +1384,17 @@ pub fn create_map(
     }
 
     let mut ci_steps: Vec<_> = propagated.ci_steps.clone();
+    // Merge workspace defaults
+    if let Some(workspace_ci_steps) = workspace_conf.as_ref().and_then(|x| x.ci_steps.as_ref()) {
+        let workspace_ci_steps_vec: Vec<_> = workspace_ci_steps.clone().into();
+        ci_steps = merge_steps(ci_steps, workspace_ci_steps_vec);
+    }
+    // Then package-level config
     if let Some(conf_ci_steps) = conf.and_then(|x| x.ci_steps.as_ref()) {
         let conf_ci_steps_vec: Vec<_> = conf_ci_steps.clone().into();
         ci_steps = merge_steps(ci_steps, conf_ci_steps_vec);
     }
+    // Finally config-specific overrides
     let config_ci_steps: Vec<_> = config.ci_steps.clone().unwrap_or_default().into();
     ci_steps = merge_steps(ci_steps, config_ci_steps);
 
@@ -1354,6 +1440,7 @@ pub fn create_map(
         .git_submodules
         .or(config.git_submodules)
         .or_else(|| conf.and_then(|x| x.git_submodules))
+        .or_else(|| workspace_conf.as_ref().and_then(|x| x.git_submodules))
     {
         map.insert(
             "gitSubmodules".to_string(),

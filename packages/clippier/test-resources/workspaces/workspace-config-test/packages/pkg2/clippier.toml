@@ -1,0 +1,9 @@
+# Package-level overrides
+[env]
+PACKAGE_VAR = "from_package"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "apt-get install package-dep"

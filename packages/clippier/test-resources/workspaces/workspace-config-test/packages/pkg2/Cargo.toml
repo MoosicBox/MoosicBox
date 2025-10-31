@@ -1,0 +1,8 @@
+[package]
+edition = { workspace = true }
+name    = "pkg2"
+version = { workspace = true }
+
+[features]
+default  = []
+feature2 = []

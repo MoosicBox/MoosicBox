@@ -541,28 +541,61 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ## Configuration
 
-Clippier can be configured using a `clippier.toml` file in your workspace root or individual package directories:
+Clippier can be configured using `clippier.toml` files at two levels:
+
+### Workspace-Level Configuration
+
+Place a `clippier.toml` at the workspace root to define defaults for all packages:
 
 ```toml
-# Global configuration
-[config.linux]
+# {workspace_root}/clippier.toml
+# Workspace-level defaults apply to all packages unless overridden
+
+nightly = false
+
+[env]
+RUST_BACKTRACE = "1"
+CARGO_TERM_COLOR = "always"
+
+[[ci-steps]]
+command = "cargo fmt --check"
+
+[[dependencies]]
+command = "sudo apt-get update"
+
+[[dependencies]]
+command = "sudo apt-get install -y pkg-config libssl-dev"
+```
+
+### Package-Level Configuration
+
+Place a `clippier.toml` in individual package directories to override or extend workspace defaults:
+
+```toml
+# packages/{package}/clippier.toml
+# Package-level config merges with workspace defaults
+
+[env]
+PACKAGE_SPECIFIC_VAR = "custom_value"
+
+[[config]]
 os = "ubuntu-latest"
 nightly = false
 cargo = ["build", "test", "clippy"]
 
-[config.linux.env]
+[config.env]
 RUST_BACKTRACE = "1"
 CARGO_TERM_COLOR = "always"
 
 # System dependencies for Docker generation
-[[config.linux.dependencies]]
+[[config.dependencies]]
 command = "sudo apt-get update"
 
-[[config.linux.dependencies]]
+[[config.dependencies]]
 command = "sudo apt-get install -y pkg-config libssl-dev libasound2-dev"
 
 # Feature-specific dependencies
-[[config.linux.dependencies]]
+[[config.dependencies]]
 command = "sudo apt-get install -y libsqlite3-dev"
 features = ["database"]
 
@@ -570,11 +603,22 @@ features = ["database"]
 chunked = 4
 ```
 
+### Configuration Precedence
+
+Configuration values are resolved in the following order (highest to lowest priority):
+
+1. **Config-specific** - `[[config]]` section in package's `clippier.toml`
+2. **Package-level** - Top-level values in package's `clippier.toml`
+3. **Workspace defaults** - Values in workspace root `clippier.toml`
+4. **Built-in defaults** - Hardcoded fallback values
+
 ### Configuration Features
 
+- **Workspace-level defaults**: Set organization-wide configuration once
+- **Package-level overrides**: Customize specific packages as needed
 - **Feature-specific dependencies**: Dependencies can be conditionally included based on enabled features
 - **Multiple OS configurations**: Support for different operating systems
-- **Environment variable management**: Configurable environment variables
+- **Environment variable management**: Configurable environment variables at workspace and package levels
 - **CI step customization**: Custom CI pipeline steps
 - **Toolchain specification**: Custom Rust toolchains per configuration
 

@@ -1,0 +1,12 @@
+# Workspace-level defaults
+nightly = false
+
+[env]
+RUST_BACKTRACE = "1"
+WORKSPACE_VAR  = "from_workspace"
+
+[[ci-steps]]
+command = "echo workspace ci step"
+
+[[dependencies]]
+command = "apt-get install workspace-dep"
