@@ -8478,6 +8478,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_logging_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_logging",
+]
+
+[[package]]
 name = "moosicbox_marketing_site"
 version = "0.1.4"
 dependencies = [
