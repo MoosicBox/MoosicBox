@@ -80,6 +80,7 @@ members = [
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
     "packages/image",
+    "packages/image/examples/basic_usage",
     "packages/json_utils",
     "packages/library",
     "packages/library/models",
