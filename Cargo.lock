@@ -2640,6 +2640,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clippier_feature_validation_example"
+version = "0.1.0"
+dependencies = [
+ "clippier",
+ "moosicbox_logging",
+ "serde_json",
+]
+
+[[package]]
 name = "clippier_test_utilities"
 version = "0.1.4"
 dependencies = [

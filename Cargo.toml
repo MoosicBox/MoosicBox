@@ -33,6 +33,7 @@ members = [
     "packages/bloaty",
     "packages/channel_utils",
     "packages/clippier",
+    "packages/clippier/examples/feature_validation",
     "packages/config",
     "packages/database",
     "packages/database/examples/turso_basic",
