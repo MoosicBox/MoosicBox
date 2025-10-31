@@ -34,6 +34,7 @@ members = [
     "packages/auth",
     "packages/bloaty",
     "packages/channel_utils",
+    "packages/channel_utils/examples/prioritized_messaging",
     "packages/clippier",
     "packages/clippier/examples/feature_validation",
     "packages/config",
