@@ -92,6 +92,7 @@ members = [
     "packages/library/models",
     "packages/library/music_api",
     "packages/load_balancer",
+    "packages/load_balancer/examples/basic_routing",
     "packages/logging",
     "packages/logging/examples/basic_usage",
     "packages/marketing_site",
