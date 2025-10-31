@@ -38,10 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  ID: {}", factory.id);
         println!("  Sample Rate: {} Hz", factory.spec.rate);
         println!("  Channels: {}", factory.spec.channels.count());
-        println!(
-            "  Channel Layout: {:?}",
-            factory.spec.channels.map_to_layout().unwrap_or_default()
-        );
+        println!("  Channel Layout: {:?}", factory.spec.channels);
         println!();
     }
 
@@ -52,14 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  ID: {}", default_factory.id);
         println!("  Sample Rate: {} Hz", default_factory.spec.rate);
         println!("  Channels: {}", default_factory.spec.channels.count());
-        println!(
-            "  Channel Layout: {:?}",
-            default_factory
-                .spec
-                .channels
-                .map_to_layout()
-                .unwrap_or_default()
-        );
+        println!("  Channel Layout: {:?}", default_factory.spec.channels);
     } else {
         println!("No default audio output device found.");
     }
