@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.1.4"
 
 [package.metadata]
-examples = false
+examples = true
 
 [package.metadata.workspaces]
 group = "switchy"
