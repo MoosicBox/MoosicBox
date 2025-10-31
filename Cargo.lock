@@ -8884,18 +8884,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_qobuz_basic_usage_example"
-version = "0.1.0"
-dependencies = [
- "env_logger 0.11.8",
- "moosicbox_music_api",
- "moosicbox_paging",
- "moosicbox_qobuz",
- "switchy",
- "tokio",
-]
-
-[[package]]
 name = "moosicbox_remote_library"
 version = "0.1.4"
 dependencies = [
@@ -15186,6 +15174,15 @@ dependencies = [
  "tokio",
  "utoipa",
  "xml",
+]
+
+[[package]]
+name = "switchy_upnp_device_discovery_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "switchy_upnp",
+ "tokio",
 ]
 
 [[package]]
