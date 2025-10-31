@@ -15030,6 +15030,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_random_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_random",
+]
+
+[[package]]
 name = "switchy_schema"
 version = "0.1.0"
 dependencies = [
