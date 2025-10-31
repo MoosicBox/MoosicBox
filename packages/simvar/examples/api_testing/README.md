@@ -183,6 +183,17 @@ This example demonstrates:
 - Performance testing under load
 - Comprehensive concurrency testing
 
+## Testing the Example
+
+The simulation runs automatically and produces test results. To verify the example:
+
+1. **Check the output** for the test summary showing passed/failed tests
+2. **Verify status codes** match expected values in the test scenarios
+3. **Review response times** to ensure they are reasonable
+4. **Examine error messages** for any failed tests to understand issues
+
+You can modify test scenarios in the code to experiment with different testing patterns.
+
 ## Potential Extensions
 
 This example could be extended to test:
@@ -217,6 +228,30 @@ This example could be extended to test:
 - **Error Handling**: Verifies expected error status codes (note: some may fail due to simplified implementation)
 - **Edge Cases**: Tests boundary conditions (accepts either success or validation errors)
 - **Concurrency**: Currently simplified and not performing full tests
+
+## Troubleshooting
+
+### Tests Failing with Connection Errors
+
+- Ensure the server port (8082 by default) is available
+- Check that no other services are using the same port
+- Verify network simulation is properly initialized
+
+### Unexpected Status Codes
+
+- Review the simplified implementation notes in this README
+- Some error handling tests may fail due to placeholder implementations
+- Check that test expectations match the current implementation
+
+### Performance Issues
+
+- Simulation may run slower in debug mode
+- Use release builds for more realistic performance: `cargo run --release -p simvar_api_testing_example`
+- Adjust test duration if needed by modifying the configuration
+
+## Related Examples
+
+- **basic_web_server**: Demonstrates basic web server setup with simvar (see `packages/simvar/examples/basic_web_server/`)
 
 ## Integration with CI/CD
 
