@@ -122,6 +122,7 @@ members = [
     "packages/random",
     "packages/remote_library",
     "packages/resampler",
+    "packages/resampler/examples/basic_resampling",
     "packages/scan",
     "packages/scan/models",
     "packages/schema",
