@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating mDNS service discovery in switchy_mdns"
+edition     = { workspace = true }
+keywords    = ["discovery", "example", "mdns", "switchy_mdns"]
+license     = { workspace = true }
+name        = "switchy_mdns_service_discovery_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "service_discovery_example"
+path = "src/main.rs"
+
+[dependencies]
+env_logger   = { workspace = true }
+kanal        = { workspace = true }
+switchy_mdns = { workspace = true, features = ["scanner"] }
+tokio        = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_mdns/fail-on-warnings"]

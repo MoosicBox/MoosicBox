@@ -1,0 +1,24 @@
+[package]
+description = "Example demonstrating WebSocket message handling and connection lifecycle in moosicbox_ws"
+edition     = { workspace = true }
+keywords    = ["example", "message-handler", "moosicbox_ws", "websocket"]
+license     = { workspace = true }
+name        = "moosicbox_ws_basic_message_handler_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_message_handler_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_ws = { workspace = true, features = ["ws"] }
+
+async-trait = { workspace = true }
+serde_json  = { workspace = true }
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_ws/fail-on-warnings"]

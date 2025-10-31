@@ -2640,6 +2640,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clippier_feature_validation_example"
+version = "0.1.0"
+dependencies = [
+ "clippier",
+ "moosicbox_logging",
+ "serde_json",
+]
+
+[[package]]
 name = "clippier_test_utilities"
 version = "0.1.4"
 dependencies = [
@@ -8042,6 +8051,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_async_service_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_async_service",
+ "switchy_async",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_audio_decoder"
 version = "0.1.4"
 dependencies = [
@@ -8062,6 +8081,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_audio_decoder_basic_decode_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_audio_decoder",
+ "symphonia",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "moosicbox_audio_encoder"
 version = "0.1.4"
 dependencies = [
@@ -8074,6 +8103,13 @@ dependencies = [
  "opus",
  "switchy_fs",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "moosicbox_audio_encoder_basic_encoding_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_audio_encoder",
 ]
 
 [[package]]
@@ -8105,6 +8141,15 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "utoipa",
+]
+
+[[package]]
+name = "moosicbox_audio_output_list_devices_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_audio_output",
+ "tokio",
 ]
 
 [[package]]
@@ -8181,6 +8226,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_channel_utils_prioritized_messaging_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_channel_utils",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_config"
 version = "0.1.4"
 dependencies = [
@@ -8206,6 +8260,13 @@ version = "0.1.4"
 dependencies = [
  "chrono",
  "log 0.4.28",
+]
+
+[[package]]
+name = "moosicbox_date_utils_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_date_utils",
 ]
 
 [[package]]
@@ -8316,6 +8377,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_image_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "moosicbox_image",
+]
+
+[[package]]
 name = "moosicbox_json_utils"
 version = "0.1.4"
 dependencies = [
@@ -8327,6 +8396,14 @@ dependencies = [
  "switchy_database",
  "tantivy",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "moosicbox_json_utils_basic_conversion_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_json_utils",
+ "serde_json",
 ]
 
 [[package]]
@@ -8416,6 +8493,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_load_balancer_basic_routing_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_load_balancer",
+ "pingora-load-balancing",
+]
+
+[[package]]
 name = "moosicbox_lofty"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8451,6 +8536,13 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_env_utils",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "moosicbox_logging_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_logging",
 ]
 
 [[package]]
@@ -8682,10 +8774,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_paging_basic_pagination_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_paging",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_parsing_utils"
 version = "0.1.4"
 dependencies = [
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "moosicbox_parsing_utils_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_parsing_utils",
 ]
 
 [[package]]
@@ -8803,6 +8910,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_resampler_basic_resampling_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_resampler",
+ "symphonia",
+]
+
+[[package]]
 name = "moosicbox_scan"
 version = "0.1.4"
 dependencies = [
@@ -8899,6 +9014,16 @@ dependencies = [
  "test-log",
  "thiserror 2.0.17",
  "tokio",
+]
+
+[[package]]
+name = "moosicbox_search_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "moosicbox_music_api_models",
+ "moosicbox_search",
+ "switchy_async",
 ]
 
 [[package]]
@@ -9051,6 +9176,33 @@ dependencies = [
  "switchy_http",
  "test-log",
  "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_stream_utils_basic_broadcast_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_stream_utils",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_stream_utils_stalled_monitoring_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_stream_utils",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_stream_utils_typed_stream_example"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "moosicbox_stream_utils",
  "tokio",
 ]
 
@@ -9248,6 +9400,16 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_database",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "moosicbox_ws_basic_message_handler_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "moosicbox_ws",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -10300,6 +10462,27 @@ version = "0.1.2"
 dependencies = [
  "clap 4.5.51",
  "switchy_random",
+]
+
+[[package]]
+name = "openport_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
+]
+
+[[package]]
+name = "openport_port_reservation_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
+]
+
+[[package]]
+name = "openport_random_port_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
 ]
 
 [[package]]
@@ -14674,6 +14857,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_async_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_async",
+]
+
+[[package]]
 name = "switchy_async_cargo"
 version = "0.1.4"
 dependencies = [
@@ -14692,6 +14882,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.108",
+]
+
+[[package]]
+name = "switchy_basic_async_example"
+version = "0.1.0"
+dependencies = [
+ "switchy",
+ "tokio",
 ]
 
 [[package]]
@@ -14751,11 +14949,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_database_query_builder_basic_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_database",
+ "switchy_database_connection",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_env"
 version = "0.1.0"
 dependencies = [
  "log 0.4.28",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "switchy_env_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
+]
+
+[[package]]
+name = "switchy_env_custom_provider_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
+]
+
+[[package]]
+name = "switchy_env_simulator_testing_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_env",
 ]
 
 [[package]]
@@ -14769,6 +14997,20 @@ dependencies = [
  "switchy_async",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "switchy_fs_basic_file_io_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
+name = "switchy_fs_simulator_mode_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
 ]
 
 [[package]]
@@ -14787,6 +15029,32 @@ dependencies = [
  "strum 0.27.2",
  "switchy_http_models",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "switchy_http_headers_params_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "pretty_env_logger",
+ "serde",
+ "serde_json",
+ "switchy_http",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_http_json_post_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.28",
+ "pretty_env_logger",
+ "serde",
+ "serde_json",
+ "switchy_http",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -14818,6 +15086,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_mdns_service_discovery_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "kanal",
+ "switchy_mdns",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_mdns_service_registration_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "switchy_mdns",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_p2p"
 version = "0.1.0"
 dependencies = [
@@ -14833,6 +15120,13 @@ version = "0.1.4"
 dependencies = [
  "log 0.4.28",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "switchy_random_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_random",
 ]
 
 [[package]]
@@ -14922,6 +15216,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_tcp_echo_server_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_tcp",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_tcp_simulator_test_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_tcp",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_telemetry"
 version = "0.1.4"
 dependencies = [
@@ -14985,6 +15295,15 @@ dependencies = [
  "tokio",
  "utoipa",
  "xml",
+]
+
+[[package]]
+name = "switchy_upnp_device_discovery_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "switchy_upnp",
+ "tokio",
 ]
 
 [[package]]

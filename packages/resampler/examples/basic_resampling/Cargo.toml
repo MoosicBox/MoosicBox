@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating basic audio resampling in moosicbox_resampler"
+edition     = { workspace = true }
+keywords    = ["audio", "example", "moosicbox_resampler", "resampling"]
+license     = { workspace = true }
+name        = "moosicbox_resampler_basic_resampling_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_resampling_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_resampler = { workspace = true }
+symphonia           = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_resampler/fail-on-warnings"]

@@ -1,0 +1,27 @@
+[package]
+description = "Example demonstrating custom headers and query parameters in switchy_http"
+edition     = { workspace = true }
+keywords    = ["example", "headers", "query", "switchy_http"]
+license     = { workspace = true }
+name        = "switchy_http_headers_params_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "headers_params_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_http = { workspace = true, features = ["json", "reqwest"] }
+
+log               = { workspace = true }
+pretty_env_logger = { workspace = true }
+serde             = { workspace = true, features = ["derive"] }
+serde_json        = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_http/fail-on-warnings"]

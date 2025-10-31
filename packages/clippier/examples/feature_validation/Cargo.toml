@@ -1,0 +1,25 @@
+[package]
+description = "Example demonstrating feature validation in clippier"
+edition     = { workspace = true }
+keywords    = ["clippier", "example", "feature-validation"]
+license     = { workspace = true }
+name        = "clippier_feature_validation_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "feature_validation_example"
+path = "src/main.rs"
+
+[dependencies]
+clippier          = { workspace = true }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+serde_json        = { workspace = true }
+
+[features]
+default = []
+fail-on-warnings = [
+    "clippier/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+]

@@ -1,0 +1,29 @@
+[package]
+description = "Example demonstrating basic search operations in moosicbox_search"
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_search", "search", "tantivy"]
+license     = { workspace = true }
+name        = "moosicbox_search_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
+moosicbox_search           = { workspace = true }
+
+switchy_async = { workspace = true, features = ["tokio"] }
+
+env_logger = { workspace = true }
+
+[features]
+default = []
+fail-on-warnings = [
+    "moosicbox_music_api_models/fail-on-warnings",
+    "moosicbox_search/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]

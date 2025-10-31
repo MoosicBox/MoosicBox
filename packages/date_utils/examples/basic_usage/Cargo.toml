@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic date/time parsing in moosicbox_date_utils"
+edition     = { workspace = true }
+keywords    = ["date", "example", "moosicbox_date_utils", "parsing", "time"]
+license     = { workspace = true }
+name        = "moosicbox_date_utils_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_date_utils = { workspace = true, features = ["chrono"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_date_utils/fail-on-warnings"]

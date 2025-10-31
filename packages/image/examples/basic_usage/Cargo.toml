@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating basic image resizing and format conversion in moosicbox_image"
+edition     = { workspace = true }
+keywords    = ["example", "image-processing", "moosicbox_image", "resize"]
+license     = { workspace = true }
+name        = "moosicbox_image_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+image           = { workspace = true }
+moosicbox_image = { workspace = true, features = ["image"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_image/fail-on-warnings"]

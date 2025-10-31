@@ -1,0 +1,28 @@
+[package]
+description = "Example demonstrating basic async runtime usage in switchy"
+edition     = { workspace = true }
+keywords    = ["async", "example", "runtime", "switchy"]
+license     = { workspace = true }
+name        = "switchy_basic_async_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name              = "basic_async_example"
+path              = "src/main.rs"
+required-features = ["async-tokio"]
+
+[dependencies]
+switchy = { workspace = true, features = ["async", "async-time"] }
+tokio = { workspace = true, optional = true, features = [
+    "macros",
+    "rt-multi-thread",
+] }
+
+[features]
+async-macros     = ["switchy/async-macros"]
+async-tokio      = ["dep:tokio", "switchy/async-tokio"]
+default          = []
+fail-on-warnings = ["switchy/fail-on-warnings"]
+simulator        = ["switchy/simulator"]

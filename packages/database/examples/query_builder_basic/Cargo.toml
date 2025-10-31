@@ -1,0 +1,22 @@
+[package]
+description = "Example demonstrating query builder API in switchy_database"
+edition     = { workspace = true }
+keywords    = ["example", "query-builder", "switchy_database"]
+license     = { workspace = true }
+name        = "switchy_database_query_builder_basic_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "query_builder_basic_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_database            = { workspace = true, features = ["schema", "sqlite-sqlx"] }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+tokio                       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["switchy_database/fail-on-warnings"]

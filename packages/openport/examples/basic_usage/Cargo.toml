@@ -1,0 +1,20 @@
+[package]
+description = "Example demonstrating basic usage of openport for finding available network ports"
+edition     = { workspace = true }
+keywords    = ["example", "network", "openport", "port"]
+license     = { workspace = true }
+name        = "openport_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+openport = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["openport/fail-on-warnings"]

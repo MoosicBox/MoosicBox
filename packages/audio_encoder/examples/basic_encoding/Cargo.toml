@@ -1,0 +1,25 @@
+[package]
+description = "Example demonstrating basic audio encoding with AAC, FLAC, MP3, and Opus formats"
+edition     = { workspace = true }
+keywords    = ["audio", "encoding", "example", "moosicbox_audio_encoder"]
+license     = { workspace = true }
+name        = "moosicbox_audio_encoder_basic_encoding_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_encoding_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_audio_encoder = { workspace = true }
+
+[features]
+default          = ["aac", "flac", "mp3", "opus"]
+fail-on-warnings = ["moosicbox_audio_encoder/fail-on-warnings"]
+
+aac  = ["moosicbox_audio_encoder/aac"]
+flac = ["moosicbox_audio_encoder/flac"]
+mp3  = ["moosicbox_audio_encoder/mp3"]
+opus = ["moosicbox_audio_encoder/opus"]
