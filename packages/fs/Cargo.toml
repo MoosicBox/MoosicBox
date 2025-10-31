@@ -43,6 +43,7 @@ simulator = ["dep:bytes", "sync"]
 simulator-real-fs = [
     "dep:scoped-tls",
     "dep:switchy_async",
+    "dep:tempfile",
     "switchy_async/rt-multi-thread",
 ]
 std = ["dep:tempfile", "sync"]
