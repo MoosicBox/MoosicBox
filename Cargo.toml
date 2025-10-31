@@ -99,6 +99,8 @@ members = [
     "packages/marketing_site",
     "packages/marketing_site/ui",
     "packages/mdns",
+    "packages/mdns/examples/service_discovery",
+    "packages/mdns/examples/service_registration",
     "packages/menu",
     "packages/menu/models",
     "packages/middleware",
