@@ -144,6 +144,7 @@ members = [
     "packages/stream_utils/examples/stalled_monitoring",
     "packages/stream_utils/examples/typed_stream",
     "packages/switchy",
+    "packages/switchy/examples/basic_async",
     "packages/switchy/schema",
     "packages/switchy/schema/cli",
     "packages/switchy/schema/examples/basic_migration_test",
