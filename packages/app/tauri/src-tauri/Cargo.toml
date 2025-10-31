@@ -11,6 +11,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.16.1"
 
+[package.metadata]
+examples = false
+
 [package.metadata.workspaces]
 independent = true
 

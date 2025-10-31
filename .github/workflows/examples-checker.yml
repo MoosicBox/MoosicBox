@@ -154,6 +154,7 @@ jobs:
                   skip-if: |
                       package.publish=false
                       package.name$=_models
+                      package.metadata.examples=false
 
     update-examples:
         name: Update ${{ matrix.package.name }}

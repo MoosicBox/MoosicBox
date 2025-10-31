@@ -7,6 +7,9 @@ publish     = false
 readme      = "README.md"
 version     = "0.1.0"
 
+[package.metadata]
+examples = false
+
 [package.metadata.cargo-machete]
 ignored = ["cmake"]
 
