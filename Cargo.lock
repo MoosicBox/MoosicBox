@@ -10477,6 +10477,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "openport_basic_usage_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
+]
+
+[[package]]
+name = "openport_port_reservation_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
+]
+
+[[package]]
+name = "openport_random_port_example"
+version = "0.1.0"
+dependencies = [
+ "openport",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
