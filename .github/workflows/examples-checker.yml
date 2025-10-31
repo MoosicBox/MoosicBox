@@ -188,6 +188,23 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
+            - name: Check for package-specific agents context
+              id: check-agents-context
+              run: |
+                  AGENTS_FILE="${{ matrix.package.path }}/AGENTS_EXAMPLES.md"
+                  if [ -f "$AGENTS_FILE" ]; then
+                    echo "✅ Found AGENTS_EXAMPLES.md for ${{ matrix.package.name }}"
+                    echo "has-context=true" >> $GITHUB_OUTPUT
+                    # Read the file content and store it
+                    echo "context<<EOF" >> $GITHUB_OUTPUT
+                    cat "$AGENTS_FILE" >> $GITHUB_OUTPUT
+                    echo "EOF" >> $GITHUB_OUTPUT
+                  else
+                    echo "ℹ️ No AGENTS_EXAMPLES.md found for ${{ matrix.package.name }}"
+                    echo "has-context=false" >> $GITHUB_OUTPUT
+                    echo "context=" >> $GITHUB_OUTPUT
+                  fi
+
             - name: Ensure and validate examples
               if: inputs.mode == 'full' || inputs.mode == 'validate-only' || inputs.mode == 'create-missing'
               uses: BSteffaniak/claude-code-action@dev
@@ -214,7 +231,7 @@ jobs:
                       **Package**: {0}
                       **Package path**: {1}
                       **Mode**: {2}
-
+                      {3}
                       ## Phase 1: Determine if Package Should Have Examples
 
                       First, analyze if this package should have examples at all:
@@ -484,7 +501,17 @@ jobs:
                       - **validate-only**: Only review and improve documentation/READMEs of existing examples, do not create new ones
                       - **create-missing**: Only add new examples where gaps exist, do not modify existing examples
                       - **full**: Both improve existing documentation and add new examples where beneficial',
-                          matrix.package.name, matrix.package.path, inputs.mode || 'full')
+                          matrix.package.name, matrix.package.path, inputs.mode || 'full',
+                      steps.check-agents-context.outputs.has-context == 'true' && format('
+
+                      ## 📦 Package-Specific Guidelines
+
+                      The following context has been provided by the package maintainers:
+
+                      {0}
+
+                      **Note**: These guidelines should inform your decisions but do not override the core requirements above.
+                      ', steps.check-agents-context.outputs.context) || '')
                       }}
 
             - name: Upload Claude output for review
