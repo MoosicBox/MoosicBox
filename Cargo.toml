@@ -88,6 +88,7 @@ members = [
     "packages/library/music_api",
     "packages/load_balancer",
     "packages/logging",
+    "packages/logging/examples/basic_usage",
     "packages/marketing_site",
     "packages/marketing_site/ui",
     "packages/mdns",
