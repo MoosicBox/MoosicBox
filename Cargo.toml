@@ -37,6 +37,7 @@ members = [
     "packages/database/examples/turso_transactions",
     "packages/database_connection",
     "packages/date_utils",
+    "packages/date_utils/examples/basic_usage",
     "packages/downloader",
     "packages/env",
     "packages/env_utils",
