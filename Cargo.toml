@@ -85,6 +85,7 @@ members = [
     "packages/image",
     "packages/image/examples/basic_usage",
     "packages/json_utils",
+    "packages/json_utils/examples/basic_conversion",
     "packages/library",
     "packages/library/models",
     "packages/library/music_api",
