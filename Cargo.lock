@@ -8775,6 +8775,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_paging_basic_pagination_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_paging",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_parsing_utils"
 version = "0.1.4"
 dependencies = [
