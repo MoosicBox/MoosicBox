@@ -164,6 +164,8 @@ members = [
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
     "packages/tcp",
+    "packages/tcp/examples/echo_server",
+    "packages/tcp/examples/simulator_test",
     "packages/telemetry",
     "packages/tidal",
     "packages/time",
