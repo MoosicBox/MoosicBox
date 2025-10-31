@@ -15,7 +15,6 @@ path = "src/main.rs"
 [dependencies]
 moosicbox_load_balancer = { workspace = true }
 
-pingora-core           = { workspace = true }
 pingora-load-balancing = { workspace = true }
 
 [features]

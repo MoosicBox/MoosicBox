@@ -9,8 +9,9 @@ repository  = { workspace = true }
 version     = "0.1.0"
 
 [[bin]]
-name = "basic_async_example"
-path = "src/main.rs"
+name              = "basic_async_example"
+path              = "src/main.rs"
+required-features = ["async-tokio"]
 
 [dependencies]
 switchy = { workspace = true, features = ["async", "async-time"] }

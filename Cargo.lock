@@ -8497,7 +8497,6 @@ name = "moosicbox_load_balancer_basic_routing_example"
 version = "0.1.0"
 dependencies = [
  "moosicbox_load_balancer",
- "pingora-core",
  "pingora-load-balancing",
 ]
 
@@ -9409,7 +9408,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "moosicbox_ws",
- "serde",
  "serde_json",
  "tokio",
 ]
@@ -15093,7 +15091,6 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "kanal",
- "moosicbox_async_service",
  "switchy_mdns",
  "tokio",
 ]
