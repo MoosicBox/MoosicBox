@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-//! Example demonstrating audio device enumeration using moosicbox_audio_output.
+//! Example demonstrating audio device enumeration using `moosicbox_audio_output`.
 //!
 //! This example scans for available audio output devices and displays their
 //! specifications including sample rate and channel configuration.

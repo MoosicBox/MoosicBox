@@ -13,15 +13,11 @@ name = "service_discovery_example"
 path = "src/main.rs"
 
 [dependencies]
-env_logger              = { workspace = true }
-kanal                   = { workspace = true }
-moosicbox_async_service = { workspace = true }
-switchy_mdns            = { workspace = true, features = ["scanner"] }
-tokio                   = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+env_logger   = { workspace = true }
+kanal        = { workspace = true }
+switchy_mdns = { workspace = true, features = ["scanner"] }
+tokio        = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 
 [features]
-default = []
-fail-on-warnings = [
-    "moosicbox_async_service/fail-on-warnings",
-    "switchy_mdns/fail-on-warnings",
-]
+default          = []
+fail-on-warnings = ["switchy_mdns/fail-on-warnings"]

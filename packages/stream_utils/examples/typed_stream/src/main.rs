@@ -2,10 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-//! Typed stream example demonstrating TypedWriter and TypedStream.
+//! Typed stream example demonstrating `TypedWriter` and `TypedStream`.
 //!
-//! This example shows how to use TypedWriter to broadcast strongly-typed
-//! values to multiple TypedStream readers.
+//! This example shows how to use `TypedWriter` to broadcast strongly-typed
+//! values to multiple `TypedStream` readers.
 
 use futures::StreamExt;
 use moosicbox_stream_utils::TypedWriter;
@@ -26,6 +26,7 @@ enum AlertLevel {
     Error,
 }
 
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Typed Stream Example ===\n");
@@ -106,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     writer.write(Event::UserLogin {
         username: "alice".to_string(),
-        timestamp: 1234567890,
+        timestamp: 1_234_567_890,
     });
 
     writer.write(Event::SystemAlert {
@@ -121,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     writer.write(Event::UserLogin {
         username: "bob".to_string(),
-        timestamp: 1234567900,
+        timestamp: 1_234_567_900,
     });
 
     writer.write(Event::SystemAlert {
@@ -136,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     writer.write(Event::UserLogin {
         username: "charlie".to_string(),
-        timestamp: 1234567910,
+        timestamp: 1_234_567_910,
     });
 
     writer.write(Event::SystemAlert {

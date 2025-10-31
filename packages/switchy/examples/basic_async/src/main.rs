@@ -136,7 +136,6 @@ async fn demonstrate_try_join() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(feature = "async-tokio")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Switchy Basic Async Example (Using Tokio Runtime)\n");
@@ -156,12 +155,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("To use the simulator backend, compile with --features simulator");
 
     Ok(())
-}
-
-#[cfg(not(feature = "async-tokio"))]
-fn main() {
-    println!("This example requires the async-tokio feature.");
-    println!(
-        "Run with: cargo run --manifest-path packages/switchy/examples/basic_async/Cargo.toml --features async-tokio"
-    );
 }
