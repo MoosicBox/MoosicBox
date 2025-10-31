@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.4"
 
+[package.metadata]
+examples = true
+
 [dependencies]
 # database dependencies
 switchy_database = { workspace = true, optional = true }

@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.4"
 
+[package.metadata]
+examples = true
+
 [dependencies]
 moosicbox_menu_models  = { workspace = true, features = ["api"] }
 moosicbox_music_api    = { workspace = true }
