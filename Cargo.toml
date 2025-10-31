@@ -178,6 +178,7 @@ members = [
     "packages/web_server/examples/simple_get",
     "packages/web_server/simulator",
     "packages/ws",
+    "packages/ws/examples/basic_message_handler",
     "packages/yt",
 ]
 
