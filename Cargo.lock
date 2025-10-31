@@ -15187,6 +15187,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_tcp_echo_server_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_tcp",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_tcp_simulator_test_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_tcp",
+ "tokio",
+]
+
+[[package]]
 name = "switchy_telemetry"
 version = "0.1.4"
 dependencies = [
