@@ -53,6 +53,8 @@ members = [
     "packages/gpipe",
     "packages/gpipe/ast",
     "packages/http",
+    "packages/http/examples/headers_params",
+    "packages/http/examples/json_post",
     "packages/http/examples/simple_get",
     "packages/http/models",
     "packages/hyperchad",
