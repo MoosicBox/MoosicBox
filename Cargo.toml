@@ -24,6 +24,7 @@ members = [
     "packages/async_service",
     "packages/audio_decoder",
     "packages/audio_encoder",
+    "packages/audio_encoder/examples/basic_encoding",
     "packages/audio_output",
     "packages/audio_output/examples/list_devices",
     "packages/audio_zone",
