@@ -1,0 +1,23 @@
+[package]
+name = "moosicbox_async_service_basic_usage_example"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Example demonstrating basic async service usage with sequential command processing"
+license = { workspace = true }
+repository = { workspace = true }
+keywords = ["example", "moosicbox_async_service", "async", "service"]
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_async_service = { workspace = true }
+switchy_async = { workspace = true, features = ["time"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+fail-on-warnings = ["moosicbox_async_service/fail-on-warnings"]
