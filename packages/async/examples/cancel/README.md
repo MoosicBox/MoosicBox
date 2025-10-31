@@ -1,12 +1,38 @@
-# Async Cancel Example
+# Cancellation Token Example
 
-Demonstrates cancellation token usage with the Switchy async runtime.
+Demonstrates graceful shutdown using `CancellationToken` with signal handling.
 
-## What it does
+## What This Example Demonstrates
 
-This example shows how to use `CancellationToken` to gracefully shutdown async operations. It sets up a Ctrl+C handler that cancels a long-running sleep operation.
+- Using `CancellationToken` for graceful shutdown
+- Integrating signal handlers (Ctrl+C) with async cancellation
+- Running futures with automatic cancellation via `run_until_cancelled()`
+- Proper cleanup and runtime shutdown after cancellation
 
-## The code
+## Prerequisites
+
+- Basic understanding of async/await and runtime lifecycle
+- Familiarity with signal handling concepts
+- No additional setup required - example runs standalone
+
+## Running the Example
+
+```bash
+cargo run --manifest-path packages/async/examples/cancel/Cargo.toml
+```
+
+Press Ctrl+C to trigger cancellation and observe the graceful shutdown.
+
+## Expected Output
+
+```
+Blocking Function. Press ctrl+c to exit
+^Cctrl+c received. shutting runtime down...
+After block_on
+Runtime shut down cleanly
+```
+
+## Code Walkthrough
 
 The example:
 
@@ -15,15 +41,17 @@ The example:
 3. Runs `time::sleep(Duration::MAX)` inside `TOKEN.run_until_cancelled()`
 4. When Ctrl+C is pressed, the sleep is cancelled and the program exits cleanly
 
-## Key parts
+## Key Concepts
 
-### Global cancellation token
+### Global Cancellation Token
 
 ```rust
 static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 ```
 
-### Signal handler
+The `CancellationToken` is created once globally and shared across signal handlers and async tasks.
+
+### Signal Handler Integration
 
 ```rust
 fn ctrl_c() {
@@ -32,7 +60,9 @@ fn ctrl_c() {
 }
 ```
 
-### Cancellable operation
+The `ctrlc` crate provides cross-platform signal handling. When Ctrl+C is pressed, the handler calls `TOKEN.cancel()` to trigger shutdown.
+
+### Cancellable Operation
 
 ```rust
 runtime.block_on(TOKEN.run_until_cancelled(async move {
@@ -42,30 +72,50 @@ runtime.block_on(TOKEN.run_until_cancelled(async move {
 }));
 ```
 
-## Running it
+The `run_until_cancelled()` method wraps a future and automatically cancels it when the token is triggered. The future completes immediately upon cancellation, even if it was sleeping or waiting.
 
-```bash
-cargo run --package async_cancel
-```
+### Graceful Shutdown Pattern
 
-Press Ctrl+C to trigger cancellation.
+1. Long-running operation starts within `run_until_cancelled()`
+2. User presses Ctrl+C
+3. Signal handler calls `TOKEN.cancel()`
+4. The future exits immediately without completing
+5. Runtime continues and calls `wait()` for cleanup
+6. Program exits cleanly
 
-## Expected output
+## Testing the Example
 
-```
-Blocking Function. Press ctrl+c to exit
-^Cctrl+c received. shutting runtime down...
-After block_on
-Runtime shut down cleanly
-```
+1. **Run the example** - It will display "Blocking Function. Press ctrl+c to exit"
+2. **Press Ctrl+C** - Observe the cancellation message and clean shutdown
+3. **Verify output** - Confirm "Runtime shut down cleanly" appears
 
-## Dependencies
+Try modifying the example:
 
-- `switchy_async` - Async runtime with cancellation support
-- `ctrlc` - Ctrl+C signal handling
-- `pretty_env_logger` - Logging setup
+- Change `Duration::MAX` to a shorter duration and see cancellation vs. natural completion
+- Add multiple tasks wrapped in `run_until_cancelled()` to see concurrent cancellation
+- Create child tokens with `TOKEN.child_token()` for hierarchical cancellation
 
-## Related
+## Troubleshooting
 
-- [`switchy_async`](../../README.md) - Main async runtime package
-- [Simulated Example](../simulated/README.md) - Task spawning example
+### Ctrl+C doesn't work or panics
+
+- Ensure you're running in a terminal that supports signal handling
+- Check that the `ctrlc` crate is compatible with your platform
+- Verify the signal handler was registered successfully
+
+### "Blocking Function Polled To Completion" appears
+
+- This message only appears if the sleep completes naturally before cancellation
+- With `Duration::MAX`, you should never see this unless cancellation fails
+- If you see it, check that the signal handler is actually calling `TOKEN.cancel()`
+
+### Runtime doesn't shut down cleanly
+
+- Always call `runtime.wait()` before program exit
+- Ensure all tasks respond to cancellation (don't ignore it)
+- Check for deadlocks or tasks that never yield
+
+## Related Examples
+
+- [Basic Usage Example](../basic_usage/README.md) - Runtime fundamentals and task spawning
+- [Simulated Example](../simulated/README.md) - Concurrent task execution patterns
