@@ -33,7 +33,7 @@ os    = "windows"
 # ============================================================================
 
 [runner-pools.mac-mini-runners]
-label          = "self-hosted-macos"
+label          = "mac-mini-runners"
 max_concurrent = 20
 min_jobs       = 5
 os             = "macos"
@@ -44,7 +44,7 @@ min_available = 1
 type          = "github_api"
 
 [runner-pools.ubuntu-runners]
-label          = "self-hosted-ubuntu"
+label          = "ubuntu-runners"
 max_concurrent = 10
 min_jobs       = 10
 os             = "ubuntu"
@@ -55,7 +55,7 @@ min_available = 1
 type          = "github_api"
 
 [runner-pools.windows-runners]
-label          = "self-hosted-windows"
+label          = "windows-runners"
 max_concurrent = 20
 min_jobs       = 20
 os             = "windows"
