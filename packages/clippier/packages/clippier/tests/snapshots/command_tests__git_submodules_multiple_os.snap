@@ -1,6 +1,5 @@
 ---
 source: packages/clippier/tests/command_tests.rs
-assertion_line: 300
 expression: result
 ---
 - features:

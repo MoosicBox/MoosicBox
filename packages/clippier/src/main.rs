@@ -137,6 +137,14 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         include_if: Vec<String>,
 
+        /// Enable runner pool allocation
+        #[arg(long)]
+        enable_runner_allocation: bool,
+
+        /// GitHub token for runner health checks (queries GitHub API to check if self-hosted runners are online)
+        #[arg(long)]
+        github_token: Option<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -301,7 +309,8 @@ enum Commands {
 }
 
 #[allow(clippy::too_many_lines)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None).expect("Failed to initialize logging");
 
     let args = Args::parse();
@@ -348,36 +357,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ignore,
             skip_if,
             include_if,
+            enable_runner_allocation,
+            github_token,
             output,
-        } => handle_features_command(
-            &file,
-            os.as_deref(),
-            offset,
-            max,
-            max_parallel,
-            chunked,
-            spread,
-            randomize,
-            seed,
-            features.as_deref(),
-            skip_features.as_deref(),
-            required_features.as_deref(),
-            packages.as_deref(),
-            changed_files.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_base.as_deref(),
-            #[cfg(feature = "git-diff")]
-            git_head.as_deref(),
-            include_reasoning,
-            if ignore.is_empty() {
-                None
-            } else {
-                Some(&ignore)
-            },
-            &skip_if,
-            &include_if,
-            output,
-        )?,
+        } => {
+            handle_features_command(
+                &file,
+                os.as_deref(),
+                offset,
+                max,
+                max_parallel,
+                chunked,
+                spread,
+                randomize,
+                seed,
+                features.as_deref(),
+                skip_features.as_deref(),
+                required_features.as_deref(),
+                packages.as_deref(),
+                changed_files.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_base.as_deref(),
+                #[cfg(feature = "git-diff")]
+                git_head.as_deref(),
+                include_reasoning,
+                if ignore.is_empty() {
+                    None
+                } else {
+                    Some(&ignore)
+                },
+                &skip_if,
+                &include_if,
+                enable_runner_allocation,
+                github_token.as_deref(),
+                output,
+            )
+            .await?
+        }
         Commands::WorkspaceDeps {
             workspace_root,
             package,

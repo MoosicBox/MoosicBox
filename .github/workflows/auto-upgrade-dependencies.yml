@@ -237,11 +237,10 @@ jobs:
                   transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   git-strategy: branch-comparison
                   git-compare-branch: master
-                  os-suffix: -latest
 
     test-compatible:
         name: Test compatible upgrades
-        runs-on: ${{ matrix.package.os }}
+        runs-on: ${{ matrix.package.runner }}
         needs: [upgrade-dependencies, validate-compatible, build-cargo-machete]
         if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
         strategy:
@@ -313,35 +312,35 @@ jobs:
                   (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'macos-latest' }}
+              if: ${{ matrix.package.runner == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              if: ${{ matrix.package.runner == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'windows-latest' }}
+              if: ${{ matrix.package.runner == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
                   path: ~/.cargo/bin
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'macos-latest' }}
+              if: ${{ matrix.package.runner == 'macos-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              if: ${{ matrix.package.runner == 'ubuntu-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'windows-latest' }}
+              if: ${{ matrix.package.runner == 'windows-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete.exe
 
@@ -416,11 +415,10 @@ jobs:
                   transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
                   git-strategy: branch-comparison
                   git-compare-branch: master
-                  os-suffix: -latest
 
     test-incompatible:
         name: Test incompatible upgrades
-        runs-on: ${{ matrix.package.os }}
+        runs-on: ${{ matrix.package.runner }}
         needs:
             [upgrade-dependencies, validate-incompatible, build-cargo-machete]
         if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' && needs.validate-incompatible.outputs.matrix != '[]' }}
@@ -487,35 +485,35 @@ jobs:
                   (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'macos-latest' }}
+              if: ${{ matrix.package.runner == 'macos-latest' }}
               with:
                   name: cargo-machete-macos
                   path: ~/.cargo/bin
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              if: ${{ matrix.package.runner == 'ubuntu-latest' }}
               with:
                   name: cargo-machete-ubuntu
                   path: ~/.cargo/bin
 
             - uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'windows-latest' }}
+              if: ${{ matrix.package.runner == 'windows-latest' }}
               with:
                   name: cargo-machete.exe
                   path: ~/.cargo/bin
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'macos-latest' }}
+              if: ${{ matrix.package.runner == 'macos-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              if: ${{ matrix.package.runner == 'ubuntu-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'windows-latest' }}
+              if: ${{ matrix.package.runner == 'windows-latest' }}
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-machete.exe
 

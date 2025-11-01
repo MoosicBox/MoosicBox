@@ -48,9 +48,9 @@
 #![allow(clippy::multiple_crate_versions)]
 
 pub mod package_filter;
+pub mod runner_allocation;
 
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
 };
@@ -223,6 +223,8 @@ pub struct ClippierConfiguration {
     pub nightly: Option<bool>,
     /// Whether git submodules are needed
     pub git_submodules: Option<bool>,
+    /// Runner override for this specific configuration
+    pub runner: Option<String>,
 }
 
 /// Configuration for parallelization settings
@@ -269,6 +271,10 @@ pub struct WorkspaceClippierConf {
     pub git_submodules: Option<bool>,
     /// Default dependencies
     pub dependencies: Option<Vec<Step>>,
+    /// Runner pools configuration
+    pub runner_pools: Option<runner_allocation::RunnerPoolsConfig>,
+    /// Allocation strategy configuration
+    pub allocation_strategy: Option<runner_allocation::AllocationStrategyConfig>,
 }
 
 /// List of features that may be chunked for parallel processing
@@ -424,15 +430,22 @@ struct DependencyInfo<'a> {
 pub struct WorkspaceContext {
     root: std::path::PathBuf,
     member_patterns: Vec<String>,
-    member_cache: RefCell<BTreeMap<String, std::path::PathBuf>>,
-    path_cache: RefCell<BTreeSet<std::path::PathBuf>>,
-    fully_loaded: RefCell<bool>,
+    member_cache: std::sync::Mutex<BTreeMap<String, std::path::PathBuf>>,
+    path_cache: std::sync::Mutex<BTreeSet<std::path::PathBuf>>,
+    fully_loaded: std::sync::Mutex<bool>,
     #[allow(clippy::option_option)]
-    workspace_config: RefCell<Option<Option<WorkspaceClippierConf>>>,
+    workspace_config: std::sync::Mutex<Option<Option<WorkspaceClippierConf>>>,
 }
 
 impl WorkspaceContext {
-    fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    /// Creates a new `WorkspaceContext` for the given workspace root.
+    ///
+    /// # Errors
+    ///
+    /// * Failed to read workspace `Cargo.toml`
+    /// * Failed to parse workspace `Cargo.toml` as valid TOML
+    /// * Invalid glob pattern in workspace members
+    pub fn new(workspace_root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let workspace_cargo = workspace_root.join("Cargo.toml");
         let content = std::fs::read_to_string(&workspace_cargo)?;
         let root_toml: Value = toml::from_str(&content)?;
@@ -452,10 +465,10 @@ impl WorkspaceContext {
         Ok(Self {
             root: workspace_root.to_path_buf(),
             member_patterns,
-            member_cache: RefCell::new(BTreeMap::new()),
-            path_cache: RefCell::new(BTreeSet::new()),
-            fully_loaded: RefCell::new(false),
-            workspace_config: RefCell::new(None),
+            member_cache: std::sync::Mutex::new(BTreeMap::new()),
+            path_cache: std::sync::Mutex::new(BTreeSet::new()),
+            fully_loaded: std::sync::Mutex::new(false),
+            workspace_config: std::sync::Mutex::new(None),
         })
     }
 
@@ -464,7 +477,7 @@ impl WorkspaceContext {
             return false;
         };
 
-        if self.path_cache.borrow().contains(&canonical) {
+        if self.path_cache.lock().unwrap().contains(&canonical) {
             return true;
         }
 
@@ -473,10 +486,10 @@ impl WorkspaceContext {
             if let Ok(member_canonical) = member_path.canonicalize()
                 && member_canonical == canonical
             {
-                self.path_cache.borrow_mut().insert(canonical.clone());
+                self.path_cache.lock().unwrap().insert(canonical.clone());
 
                 if let Some(name) = Self::read_package_name(&canonical) {
-                    self.member_cache.borrow_mut().insert(name, canonical);
+                    self.member_cache.lock().unwrap().insert(name, canonical);
                 }
 
                 return true;
@@ -487,7 +500,7 @@ impl WorkspaceContext {
     }
 
     fn ensure_fully_loaded(&self) {
-        if *self.fully_loaded.borrow() {
+        if *self.fully_loaded.lock().unwrap() {
             return;
         }
 
@@ -501,36 +514,37 @@ impl WorkspaceContext {
             let member_path = self.root.join(pattern);
             if member_path.exists()
                 && let Ok(canonical) = member_path.canonicalize()
-                && !self.path_cache.borrow().contains(&canonical)
+                && !self.path_cache.lock().unwrap().contains(&canonical)
                 && let Some(actual_name) = Self::read_package_name(&canonical)
             {
                 self.member_cache
-                    .borrow_mut()
+                    .lock()
+                    .unwrap()
                     .insert(actual_name, canonical.clone());
-                self.path_cache.borrow_mut().insert(canonical);
+                self.path_cache.lock().unwrap().insert(canonical);
             }
         }
 
-        *self.fully_loaded.borrow_mut() = true;
+        *self.fully_loaded.lock().unwrap() = true;
         log::trace!(
             "✅ Loaded {} members in {:?}",
-            self.member_cache.borrow().len(),
+            self.member_cache.lock().unwrap().len(),
             start.elapsed()
         );
     }
 
     fn is_member_by_name(&self, name: &str) -> bool {
         self.ensure_fully_loaded();
-        self.member_cache.borrow().contains_key(name)
+        self.member_cache.lock().unwrap().contains_key(name)
     }
 
     fn find_member(&self, name: &str) -> Option<std::path::PathBuf> {
-        if let Some(path) = self.member_cache.borrow().get(name) {
+        if let Some(path) = self.member_cache.lock().unwrap().get(name) {
             return Some(path.clone());
         }
 
         if self.is_member_by_name(name) {
-            self.member_cache.borrow().get(name).cloned()
+            self.member_cache.lock().unwrap().get(name).cloned()
         } else {
             None
         }
@@ -548,7 +562,7 @@ impl WorkspaceContext {
         &self,
     ) -> Result<Option<WorkspaceClippierConf>, Box<dyn std::error::Error>> {
         // Check if we've already tried to load the config
-        if let Some(cached) = self.workspace_config.borrow().as_ref() {
+        if let Some(cached) = self.workspace_config.lock().unwrap().as_ref() {
             return Ok(cached.clone());
         }
 
@@ -572,7 +586,7 @@ impl WorkspaceContext {
         };
 
         // Cache the result (None means we tried and found nothing)
-        *self.workspace_config.borrow_mut() = Some(result.clone());
+        *self.workspace_config.lock().unwrap() = Some(result.clone());
 
         Ok(result)
     }
@@ -808,27 +822,6 @@ fn collect_propagated_config(
     Ok(merged)
 }
 
-fn find_workspace_root_from_package(
-    package_path: &Path,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let mut current = package_path.to_path_buf();
-
-    while let Some(parent) = current.parent() {
-        let cargo_toml = parent.join("Cargo.toml");
-        if cargo_toml.exists() {
-            let content = std::fs::read_to_string(&cargo_toml)?;
-            let toml_value: Value = toml::from_str(&content)?;
-
-            if toml_value.get("workspace").is_some() {
-                return Ok(parent.to_path_buf());
-            }
-        }
-        current = parent.to_path_buf();
-    }
-
-    Err("Workspace root not found".into())
-}
-
 /// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
@@ -990,6 +983,7 @@ pub fn get_binary_name(
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn process_configs(
     path: &Path,
+    workspace_context: &WorkspaceContext,
     offset: Option<u16>,
     max: Option<u16>,
     chunked: Option<u16>,
@@ -1029,16 +1023,13 @@ pub fn process_configs(
                 required_features: None,
                 nightly: None,
                 git_submodules: None,
+                runner: None,
             }]
         },
         |x| x.config.clone(),
     );
 
     let mut packages = vec![];
-
-    let workspace_root =
-        find_workspace_root_from_package(path).unwrap_or_else(|_| path.to_path_buf());
-    let workspace_context = WorkspaceContext::new(&workspace_root)?;
 
     if let Some(name) = value
         .get("package")
@@ -1086,7 +1077,7 @@ pub fn process_configs(
                 FeaturesList::Chunked(x) => {
                     for features in x {
                         packages.push(create_map(
-                            &workspace_context,
+                            workspace_context,
                             &name,
                             conf.as_ref(),
                             &config,
@@ -1099,7 +1090,7 @@ pub fn process_configs(
                 }
                 FeaturesList::NotChunked(x) => {
                     packages.push(create_map(
-                        &workspace_context,
+                        workspace_context,
                         &name,
                         conf.as_ref(),
                         &config,
@@ -1448,6 +1439,14 @@ pub fn create_map(
         );
     }
 
+    // Add runner field (defaults to {os}-latest for now)
+    // TODO: Runner allocation will be implemented at a higher level
+    let runner = config
+        .runner
+        .clone()
+        .unwrap_or_else(|| format!("{}-latest", config.os));
+    map.insert("runner".to_string(), serde_json::to_value(runner)?);
+
     Ok(map)
 }
 
@@ -1469,7 +1468,7 @@ pub fn create_map(
 /// * Should be infallible
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn find_workspace_dependencies(
-    workspace_root: &Path,
+    workspace_context: &WorkspaceContext,
     target_package: &str,
     enabled_features: Option<&[String]>,
     all_potential_deps: bool,
@@ -1481,9 +1480,8 @@ pub fn find_workspace_dependencies(
         log::trace!("📋 Using default features");
     }
 
-    let workspace_context = WorkspaceContext::new(workspace_root)?;
-
     // First, load the workspace and get all members
+    let workspace_root = &workspace_context.root;
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
     log::trace!(
         "📂 Loading workspace from: {}",
@@ -1531,7 +1529,7 @@ pub fn find_workspace_dependencies(
 
             // Extract dependencies that are workspace members - we'll resolve them later
             let deps =
-                extract_workspace_dependencies(&value, &workspace_context, all_potential_deps);
+                extract_workspace_dependencies(&value, workspace_context, all_potential_deps);
             log::trace!("📊 Direct dependencies for {package_name}: {deps:?}");
             package_dependencies.insert(package_name.to_string(), deps);
         }
@@ -1794,8 +1792,9 @@ pub fn generate_dockerfile(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Get all potential dependencies for the target package (needed for Docker build compatibility)
     // Docker builds require all possible dependencies to ensure proper layer caching
+    let workspace_context = WorkspaceContext::new(workspace_root)?;
     let mut dependencies =
-        find_workspace_dependencies(workspace_root, target_package, enabled_features, true)?;
+        find_workspace_dependencies(&workspace_context, target_package, enabled_features, true)?;
 
     // Add the target package itself to the dependencies list if not already present
     let default_target_path = format!(
@@ -2842,8 +2841,10 @@ pub fn collect_environment_variables(
         )
     };
 
+    let workspace_context = WorkspaceContext::new(workspace_root)?;
     let packages = process_configs(
         &path,
+        &workspace_context,
         None,
         None,
         None,
@@ -2890,6 +2891,8 @@ pub fn collect_system_dependencies(
     // Convert features to comma-separated string for the dependencies command
     let features_str = enabled_features.map(|f| f.join(",")).unwrap_or_default();
 
+    let workspace_context = WorkspaceContext::new(workspace_root)?;
+
     for (_, package_path) in dependencies {
         let path = workspace_root.join(package_path);
 
@@ -2913,6 +2916,7 @@ pub fn collect_system_dependencies(
 
         let packages = process_configs(
             &path,
+            &workspace_context,
             None,
             None,
             None,
@@ -3011,8 +3015,10 @@ pub fn handle_dependencies_command(
     let path = std::path::PathBuf::from_str(file)?;
     let specific_features = features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
 
+    let workspace_context = WorkspaceContext::new(&path)?;
     let packages = process_workspace_configs(
         &path,
+        &workspace_context,
         None,
         None,
         None,
@@ -3063,8 +3069,10 @@ pub fn handle_environment_command(
     let path = std::path::PathBuf::from_str(file)?;
     let specific_features = features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
 
+    let workspace_context = WorkspaceContext::new(&path)?;
     let packages = process_workspace_configs(
         &path,
+        &workspace_context,
         None,
         None,
         None,
@@ -3115,8 +3123,10 @@ pub fn handle_ci_steps_command(
     let path = std::path::PathBuf::from_str(file)?;
     let specific_features = features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
 
+    let workspace_context = WorkspaceContext::new(&path)?;
     let packages = process_workspace_configs(
         &path,
+        &workspace_context,
         None,
         None,
         None,
@@ -3151,6 +3161,89 @@ pub fn handle_ci_steps_command(
     }
 }
 
+/// Allocates runners to packages based on runner pool configuration
+///
+/// # Errors
+///
+/// * Returns error if runner allocation fails
+/// * Returns error if workspace config cannot be loaded
+async fn allocate_runners_to_packages(
+    mut packages: Vec<serde_json::Map<String, serde_json::Value>>,
+    workspace_context: &WorkspaceContext,
+    github_token: Option<&str>,
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+    log::info!(
+        "allocate_runners_to_packages called with {} packages",
+        packages.len()
+    );
+
+    // Get runner pools configuration from workspace context
+    let workspace_config = workspace_context.workspace_config()?;
+
+    let Some(config) = workspace_config else {
+        log::debug!("No workspace clippier.toml found, skipping runner allocation");
+        return Ok(packages);
+    };
+
+    log::debug!(
+        "Loaded workspace config: runner_pools={:?}, allocation_strategy={:?}",
+        config.runner_pools.is_some(),
+        config.allocation_strategy.is_some()
+    );
+
+    let Some(runner_pools_config) = &config.runner_pools else {
+        log::debug!("No runner_pools configuration found, skipping runner allocation");
+        return Ok(packages);
+    };
+
+    let Some(allocation_strategy) = &config.allocation_strategy else {
+        log::debug!("No allocation_strategy configuration found, skipping runner allocation");
+        return Ok(packages);
+    };
+
+    // Organize jobs by OS with job IDs
+    let mut jobs_by_os: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (idx, package) in packages.iter().enumerate() {
+        if let Some(os) = package.get("os").and_then(|v| v.as_str()) {
+            let job_id = format!("job_{idx}");
+            jobs_by_os.entry(os.to_string()).or_default().push(job_id);
+        }
+    }
+
+    log::info!(
+        "Runner allocation: jobs by OS: {:?}",
+        jobs_by_os
+            .iter()
+            .map(|(os, jobs)| (os, jobs.len()))
+            .collect::<BTreeMap<_, _>>()
+    );
+
+    // Create allocation engine
+    let mut allocation_engine = runner_allocation::AllocationEngine::new(
+        runner_pools_config,
+        allocation_strategy,
+        github_token.map(String::from),
+    )?;
+
+    // Batch allocate with cross-OS coordination
+    let allocations = allocation_engine
+        .allocate_runners_batch(&jobs_by_os)
+        .await?;
+
+    // Apply allocations to packages
+    for (idx, package) in packages.iter_mut().enumerate() {
+        let job_id = format!("job_{idx}");
+        if let Some(runner_label) = allocations.get(&job_id) {
+            package.insert(
+                "runner".to_string(),
+                serde_json::Value::String(runner_label.clone()),
+            );
+        }
+    }
+
+    Ok(packages)
+}
+
 /// Handles the features command
 ///
 /// # Errors
@@ -3159,9 +3252,10 @@ pub fn handle_ci_steps_command(
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
-    clippy::cognitive_complexity
+    clippy::cognitive_complexity,
+    clippy::fn_params_excessive_bools
 )]
-pub fn handle_features_command(
+pub async fn handle_features_command(
     file: &str,
     os: Option<&str>,
     offset: Option<u16>,
@@ -3182,6 +3276,8 @@ pub fn handle_features_command(
     ignore_patterns: Option<&[String]>,
     skip_if: &[String],
     include_if: &[String],
+    enable_runner_allocation: bool,
+    github_token: Option<&str>,
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3192,6 +3288,9 @@ pub fn handle_features_command(
         skip_features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
     let required_features_list =
         required_features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
+
+    // Create workspace context once for the entire operation
+    let workspace_context = WorkspaceContext::new(&path)?;
 
     // If specific packages are requested, filter to only those packages
     if let Some(selected_packages) = packages
@@ -3251,6 +3350,7 @@ pub fn handle_features_command(
                 let package_dir = path.join(package_path);
                 let packages = process_configs(
                     &package_dir,
+                    &workspace_context,
                     offset,
                     max,
                     chunked,
@@ -3285,6 +3385,16 @@ pub fn handle_features_command(
                 max_parallel_limit as usize,
                 chunked,
             )?;
+        }
+
+        // Perform runner allocation if enabled
+        if enable_runner_allocation {
+            all_filtered_packages = allocate_runners_to_packages(
+                all_filtered_packages,
+                &workspace_context,
+                github_token,
+            )
+            .await?;
         }
 
         let result = match output {
@@ -3497,6 +3607,7 @@ pub fn handle_features_command(
                 let package_dir = path.join(package_path);
                 let mut packages = process_configs(
                     &package_dir,
+                    &workspace_context,
                     offset,
                     max,
                     chunked,   // Respect chunking when filtering by changed files
@@ -3543,6 +3654,21 @@ pub fn handle_features_command(
             )?;
         }
 
+        // Perform runner allocation if enabled
+        if enable_runner_allocation {
+            log::info!(
+                "Runner allocation enabled, allocating runners for {} packages",
+                all_filtered_packages.len()
+            );
+            all_filtered_packages = allocate_runners_to_packages(
+                all_filtered_packages,
+                &workspace_context,
+                github_token,
+            )
+            .await?;
+            log::info!("Runner allocation completed");
+        }
+
         let result = match output {
             OutputType::Json => serde_json::to_string(&all_filtered_packages)?,
             OutputType::Raw => {
@@ -3563,6 +3689,7 @@ pub fn handle_features_command(
 
     let mut packages = process_workspace_configs(
         &path,
+        &workspace_context,
         offset,
         max,
         effective_chunked,
@@ -3587,6 +3714,16 @@ pub fn handle_features_command(
     // Apply max_parallel re-chunking if specified (redistribute instead of truncate)
     if let Some(max_parallel_limit) = max_parallel {
         packages = apply_max_parallel_rechunking(packages, max_parallel_limit as usize, chunked)?;
+    }
+
+    // Perform runner allocation if enabled
+    if enable_runner_allocation {
+        log::info!(
+            "Runner allocation enabled, allocating runners for {} packages",
+            packages.len()
+        );
+        packages = allocate_runners_to_packages(packages, &workspace_context, github_token).await?;
+        log::info!("Runner allocation completed");
     }
 
     let result = match output {
@@ -3617,7 +3754,9 @@ pub fn handle_workspace_deps_command(
     format: &str,
     all_potential_deps: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let deps = find_workspace_dependencies(workspace_root, package, features, all_potential_deps)?;
+    let workspace_context = WorkspaceContext::new(workspace_root)?;
+    let deps =
+        find_workspace_dependencies(&workspace_context, package, features, all_potential_deps)?;
 
     let result = if format == "json" {
         let result = WorkspaceDepsResult {
@@ -3871,6 +4010,7 @@ pub fn handle_affected_packages_command(
 #[allow(clippy::too_many_arguments)]
 pub fn process_workspace_configs(
     workspace_path: &Path,
+    workspace_context: &WorkspaceContext,
     offset: Option<u16>,
     max: Option<u16>,
     chunked: Option<u16>,
@@ -3901,6 +4041,7 @@ pub fn process_workspace_configs(
         || {
             process_configs(
                 workspace_path,
+                workspace_context,
                 offset,
                 max,
                 chunked,
@@ -3931,6 +4072,7 @@ pub fn process_workspace_configs(
                 // Process this member's configs (with default config if no clippier.toml)
                 match process_configs(
                     &full_path,
+                    workspace_context,
                     offset,
                     max,
                     chunked,
@@ -4250,8 +4392,10 @@ skip-features = ["simd"]
         std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
 
         // Test the combination: command line skip_features + config skip_features
+        let workspace_context = WorkspaceContext::new(temp_path).unwrap();
         let result = process_configs(
             temp_path,
+            &workspace_context,
             None,
             None,
             None,

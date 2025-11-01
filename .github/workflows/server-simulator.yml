@@ -54,7 +54,7 @@ jobs:
     simulator:
         name: Simulator
 
-        runs-on: ${{ matrix.package.os }}
+        runs-on: ${{ matrix.package.runner }}
 
         needs: build-matrix
 

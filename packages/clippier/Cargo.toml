@@ -17,6 +17,7 @@ examples = true
 independent = true
 
 [package.metadata.cargo-machete]
+ignored      = ["switchy_time"]
 ignored-dirs = ["test-resources"]
 
 [[bin]]
@@ -26,18 +27,23 @@ required-features = []
 
 [dependencies]
 moosicbox_logging = { workspace = true, features = ["free_log"] }
+switchy_async     = { workspace = true, features = ["time", "tokio"] }
 switchy_random    = { workspace = true, features = ["rand"] }
+switchy_time      = { workspace = true }
 
 anyhow     = { workspace = true }
 clap       = { workspace = true }
+futures    = { workspace = true }
 globset    = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }
 regex      = { workspace = true }
+reqwest    = { workspace = true, features = ["json"] }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 tempfile   = { workspace = true }
 thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 toml       = { workspace = true }
 
 git2 = { workspace = true, optional = true }
@@ -45,6 +51,7 @@ git2 = { workspace = true, optional = true }
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
 insta                   = { workspace = true, features = ["redactions", "yaml"] }
+switchy_async           = { workspace = true, features = ["macros", "tokio"] }
 test-log                = { workspace = true }
 
 [features]
@@ -52,6 +59,7 @@ default = ["git-diff"]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
 

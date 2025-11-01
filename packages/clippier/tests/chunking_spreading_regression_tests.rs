@@ -107,8 +107,8 @@ dependencies = [
 }
 
 /// Test basic chunking functionality - ensure no chunk exceeds the limit
-#[test]
-fn test_basic_chunking_respects_limit() {
+#[switchy_async::test]
+async fn test_basic_chunking_respects_limit() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking with limit of 5 features per package
@@ -135,11 +135,13 @@ fn test_basic_chunking_respects_limit() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Verify no package has more than 5 features
     for config in &configs {
@@ -176,11 +178,13 @@ fn test_basic_chunking_respects_limit() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Verify no package has more than 10 features
     for config in &configs {
@@ -192,11 +196,12 @@ fn test_basic_chunking_respects_limit() {
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test basic spreading functionality - ensure features are distributed across chunks
-#[test]
-fn test_basic_spreading_distributes_features() {
+#[switchy_async::test]
+async fn test_basic_spreading_distributes_features() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test spreading without chunking - should create many packages with different features
@@ -223,11 +228,13 @@ fn test_basic_spreading_distributes_features() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // With spreading alone (no chunking), we should have the same number of packages
     // because spreading only redistributes features when there are overflow features
@@ -242,11 +249,12 @@ fn test_basic_spreading_distributes_features() {
         let features = config.get("features").unwrap().as_array().unwrap();
         assert!(!features.is_empty(), "Each package should have features");
     }
+    Ok(())
 }
 
 /// Test chunking + spreading combination - the main regression test
-#[test]
-fn test_chunking_and_spreading_combination() {
+#[switchy_async::test]
+async fn test_chunking_and_spreading_combination() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking with spreading - should distribute features while respecting chunk limits
@@ -273,11 +281,13 @@ fn test_chunking_and_spreading_combination() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Verify every package respects the chunk limit
     for config in &configs {
@@ -295,11 +305,12 @@ fn test_chunking_and_spreading_combination() {
         configs.len() > 20,
         "Spreading + chunking should create many small packages"
     );
+    Ok(())
 }
 
 /// Test max-parallel interaction with chunking - should respect both limits
-#[test]
-fn test_max_parallel_with_chunking() {
+#[switchy_async::test]
+async fn test_max_parallel_with_chunking() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test max-parallel with chunking - should limit total results while respecting chunk size
@@ -326,11 +337,13 @@ fn test_max_parallel_with_chunking() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should be limited to exactly 8 packages by max_parallel
     assert_eq!(configs.len(), 8, "max_parallel should limit results to 8");
@@ -345,11 +358,13 @@ fn test_max_parallel_with_chunking() {
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test the main regression case - simulate changed-files scenario with chunking and spreading
-#[test]
-fn test_changed_files_respects_chunking_and_spreading() {
+#[switchy_async::test]
+async fn test_changed_files_respects_chunking_and_spreading()
+-> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test the core regression case: chunking and spreading together
@@ -378,11 +393,13 @@ fn test_changed_files_respects_chunking_and_spreading() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should have results
     assert!(
@@ -406,11 +423,12 @@ fn test_changed_files_respects_chunking_and_spreading() {
         configs.len() > 10,
         "Chunking + spreading should create multiple packages"
     );
+    Ok(())
 }
 
 /// Test edge case - chunking with very small limit
-#[test]
-fn test_chunking_with_small_limit() {
+#[switchy_async::test]
+async fn test_chunking_with_small_limit() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test with chunk size of 1 - should create many small packages
@@ -437,11 +455,13 @@ fn test_chunking_with_small_limit() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Every package should have exactly 1 feature
     for config in &configs {
@@ -454,11 +474,12 @@ fn test_chunking_with_small_limit() {
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test edge case - empty workspace with chunking/spreading
-#[test]
-fn test_empty_workspace_with_chunking_spreading() {
+#[switchy_async::test]
+async fn test_empty_workspace_with_chunking_spreading() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = create_simple_workspace(&[], &[], &[]);
 
     let result = handle_features_command(
@@ -484,22 +505,25 @@ fn test_empty_workspace_with_chunking_spreading() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should be empty for empty workspace
     assert!(
         configs.is_empty(),
         "Empty workspace should produce empty results"
     );
+    Ok(())
 }
 
 /// Test edge case - single package with chunking/spreading
-#[test]
-fn test_single_package_with_chunking_spreading() {
+#[switchy_async::test]
+async fn test_single_package_with_chunking_spreading() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new().unwrap();
 
     // Create a single package with many features
@@ -573,11 +597,13 @@ serde = "1.0"
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should have multiple packages due to spreading
     assert!(
@@ -594,11 +620,12 @@ serde = "1.0"
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test complex scenario - max-parallel + chunking + spreading
-#[test]
-fn test_complex_scenario_all_flags() {
+#[switchy_async::test]
+async fn test_complex_scenario_all_flags() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test with all flags combined (without changed files since that's not working)
@@ -625,11 +652,13 @@ fn test_complex_scenario_all_flags() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should be limited to 5 packages by max_parallel
     assert_eq!(configs.len(), 5, "max_parallel should limit results to 5");
@@ -644,11 +673,12 @@ fn test_complex_scenario_all_flags() {
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test that chunking without spreading still works correctly
-#[test]
-fn test_chunking_without_spreading() {
+#[switchy_async::test]
+async fn test_chunking_without_spreading() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test chunking without spreading - should limit features but not spread
@@ -675,11 +705,13 @@ fn test_chunking_without_spreading() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should have more packages than original because chunking splits packages with too many features
     // With 10 packages having ~21 features each, and chunking to 15, we expect more than 10 packages
@@ -698,11 +730,12 @@ fn test_chunking_without_spreading() {
             features.len()
         );
     }
+    Ok(())
 }
 
 /// Test that spreading without chunking still works correctly
-#[test]
-fn test_spreading_without_chunking() {
+#[switchy_async::test]
+async fn test_spreading_without_chunking() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = create_feature_rich_workspace();
 
     // Test spreading without chunking - should distribute all features
@@ -729,11 +762,13 @@ fn test_spreading_without_chunking() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should have the same number of packages as original because spreading alone doesn't split packages
     // Spreading only redistributes features when there are overflow features from chunking
@@ -754,4 +789,5 @@ fn test_spreading_without_chunking() {
         total_features > 100,
         "Total features should be preserved during spreading: got {total_features}"
     );
+    Ok(())
 }
