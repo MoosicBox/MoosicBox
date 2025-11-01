@@ -235,7 +235,7 @@ jobs:
             matrix:
                 package: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
 
-        runs-on: ${{ matrix.package.runner }}
+        runs-on: mac-mini-runners
 
         steps:
             - name: Print matrix
