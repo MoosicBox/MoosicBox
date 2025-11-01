@@ -381,8 +381,17 @@ build_clippier_command() {
 
 run_clippier() {
     local cmd=$(build_clippier_command)
+    export RUST_LOG=off
     echo "Running: $cmd" >&2
-    eval "$cmd" | jq -c .
+
+    # Capture all output
+    local output=$(eval "$cmd")
+
+    # Print all but the last line to stderr (logs)
+    echo "$output" | head -n -1 >&2
+
+    # Parse only the last line as JSON
+    echo "$output" | tail -1 | jq -c .
 }
 
 inject_custom_reasoning() {
