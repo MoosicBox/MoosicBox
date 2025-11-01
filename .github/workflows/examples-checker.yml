@@ -149,7 +149,6 @@ jobs:
                   packages: ${{ github.event.inputs.packages }}
                   skip-on-no-changes: "false"
                   force-full-matrix-condition: "true"
-                  os-suffix: "-latest"
                   os: "ubuntu"
                   skip-if: |
                       package.publish=false

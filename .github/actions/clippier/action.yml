@@ -174,11 +174,6 @@ inputs:
         required: false
         default: "name,path,features,requiredFeatures,os,runner,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
 
-    os-suffix:
-        description: 'Suffix to add to OS field (e.g., "-latest")'
-        required: false
-        default: "-latest"
-
     generate-summary:
         description: "Generate GitHub workflow summary"
         required: false
@@ -428,7 +423,6 @@ runs:
               INPUT_TRANSFORM_NAME_REGEX: ${{ inputs.transform-name-regex }}
               INPUT_TRANSFORM_NAME_REPLACEMENT: ${{ inputs.transform-name-replacement }}
               INPUT_MATRIX_PROPERTIES: ${{ inputs.matrix-properties }}
-              INPUT_OS_SUFFIX: ${{ inputs.os-suffix }}
               INPUT_GENERATE_SUMMARY: ${{ inputs.generate-summary }}
               INPUT_SUMMARY_TITLE: ${{ inputs.summary-title }}
               INPUT_SUMMARY_INCLUDE_SEED: ${{ inputs.summary-include-seed }}
