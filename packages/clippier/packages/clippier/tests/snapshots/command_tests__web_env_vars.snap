@@ -1,6 +1,5 @@
 ---
 source: packages/clippier/tests/command_tests.rs
-assertion_line: 97
 expression: test_data
 ---
 env_vars:

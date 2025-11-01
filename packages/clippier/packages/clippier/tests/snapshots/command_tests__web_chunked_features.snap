@@ -1,6 +1,5 @@
 ---
 source: packages/clippier/tests/command_tests.rs
-assertion_line: 47
 expression: test_data
 ---
 chunked: 2

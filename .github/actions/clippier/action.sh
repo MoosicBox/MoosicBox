@@ -300,6 +300,10 @@ build_clippier_command() {
             done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
         fi
 
+        # Runner allocation flags
+        [[ "$INPUT_ENABLE_RUNNER_ALLOCATION" == "true" ]] && cmd="$cmd --enable-runner-allocation"
+        [[ -n "$INPUT_GITHUB_TOKEN_FOR_RUNNERS" ]] && cmd="$cmd --github-token \"$INPUT_GITHUB_TOKEN_FOR_RUNNERS\""
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "affected-packages" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"

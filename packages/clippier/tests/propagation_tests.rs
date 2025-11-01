@@ -1,8 +1,9 @@
 use clippier::{OutputType, handle_features_command};
 use clippier_test_utilities::test_resources::load_test_workspace;
 
-#[test]
-fn test_git_submodules_propagates_through_build_deps() {
+#[switchy_async::test]
+async fn test_git_submodules_propagates_through_build_deps()
+-> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -27,11 +28,13 @@ fn test_git_submodules_propagates_through_build_deps() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -45,10 +48,12 @@ fn test_git_submodules_propagates_through_build_deps() {
         middle["gitSubmodules"], true,
         "git-submodules should propagate from leaf to middle via build-dependencies"
     );
+    Ok(())
 }
 
-#[test]
-fn test_git_submodules_propagates_through_dev_and_regular_deps() {
+#[switchy_async::test]
+async fn test_git_submodules_propagates_through_dev_and_regular_deps()
+-> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -73,11 +78,13 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -91,10 +98,11 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         root["gitSubmodules"], true,
         "git-submodules should propagate from leaf to root via dependencies"
     );
+    Ok(())
 }
 
-#[test]
-fn test_dependencies_propagate_and_merge() {
+#[switchy_async::test]
+async fn test_dependencies_propagate_and_merge() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -119,11 +127,13 @@ fn test_dependencies_propagate_and_merge() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -149,10 +159,11 @@ fn test_dependencies_propagate_and_merge() {
         deps.contains("libmiddle-dev"),
         "Should have its own libmiddle"
     );
+    Ok(())
 }
 
-#[test]
-fn test_dependencies_propagate_to_root() {
+#[switchy_async::test]
+async fn test_dependencies_propagate_to_root() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -177,11 +188,13 @@ fn test_dependencies_propagate_to_root() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -207,10 +220,11 @@ fn test_dependencies_propagate_to_root() {
         deps.contains("libmiddle-dev"),
         "Should inherit libmiddle from middle"
     );
+    Ok(())
 }
 
-#[test]
-fn test_ci_steps_propagate_and_preserve_order() {
+#[switchy_async::test]
+async fn test_ci_steps_propagate_and_preserve_order() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -235,11 +249,13 @@ fn test_ci_steps_propagate_and_preserve_order() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -269,10 +285,11 @@ fn test_ci_steps_propagate_and_preserve_order() {
         ci_steps.contains("cargo test"),
         "Should have its own ci-steps"
     );
+    Ok(())
 }
 
-#[test]
-fn test_env_vars_propagate_with_overlay() {
+#[switchy_async::test]
+async fn test_env_vars_propagate_with_overlay() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -297,11 +314,13 @@ fn test_env_vars_propagate_with_overlay() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -332,10 +351,11 @@ fn test_env_vars_propagate_with_overlay() {
         env.contains("ROOT_VAR=\"root_value\""),
         "Should have ROOT_VAR from root config"
     );
+    Ok(())
 }
 
-#[test]
-fn test_nightly_does_not_propagate() {
+#[switchy_async::test]
+async fn test_nightly_does_not_propagate() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -360,11 +380,13 @@ fn test_nightly_does_not_propagate() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -375,10 +397,11 @@ fn test_nightly_does_not_propagate() {
         .expect("leaf package not found");
 
     assert_eq!(leaf["nightly"], false, "leaf should not be nightly");
+    Ok(())
 }
 
-#[test]
-fn test_propagation_with_all_workspace_packages() {
+#[switchy_async::test]
+async fn test_propagation_with_all_workspace_packages() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -403,11 +426,13 @@ fn test_propagation_with_all_workspace_packages() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok(), "Command failed: {:?}", result.err());
-    let output = result.unwrap();
+    let output = result;
 
     let packages: Vec<serde_json::Value> =
         serde_json::from_str(&output).expect("Failed to parse JSON");
@@ -421,12 +446,13 @@ fn test_propagation_with_all_workspace_packages() {
             pkg["name"]
         );
     }
+    Ok(())
 }
 
-#[test]
-fn test_external_deps_dont_break_propagation() {
+#[switchy_async::test]
+async fn test_external_deps_dont_break_propagation() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, _) = load_test_workspace("propagation");
-    let result = handle_features_command(
+    let _result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
         None,
         None,
@@ -449,11 +475,12 @@ fn test_external_deps_dont_break_propagation() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(
-        result.is_ok(),
-        "Command should succeed even with external deps like serde"
-    );
+    // Command succeeded if we got here (await? would have returned early on error)
+    Ok(())
 }

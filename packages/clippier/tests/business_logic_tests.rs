@@ -226,8 +226,8 @@ fn test_handle_ci_steps_command_json_output() {
 /// Regression test for ci-steps with both command and toolchain
 /// This reproduces the bug where ci-steps with both command and toolchain
 /// would not properly export ciToolchains in the matrix output
-#[test]
-fn test_ci_steps_with_command_and_toolchain() {
+#[switchy_async::test]
+async fn test_ci_steps_with_command_and_toolchain() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with features command to get the full matrix output
@@ -254,8 +254,11 @@ fn test_ci_steps_with_command_and_toolchain() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -297,8 +300,8 @@ fn test_ci_steps_with_command_and_toolchain() {
 }
 
 /// Test ci-steps with mixed entry types (command-only, toolchain-only, both)
-#[test]
-fn test_ci_steps_mixed_entries() {
+#[switchy_async::test]
+async fn test_ci_steps_mixed_entries() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with features that match different ci-steps entries
@@ -325,8 +328,11 @@ fn test_ci_steps_mixed_entries() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -359,8 +365,8 @@ fn test_ci_steps_mixed_entries() {
 }
 
 /// Test ci-steps with feature filtering
-#[test]
-fn test_ci_steps_with_features() {
+#[switchy_async::test]
+async fn test_ci_steps_with_features() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     // Test with tauri features - should match entries with frontend and tauri features
@@ -387,8 +393,11 @@ fn test_ci_steps_with_features() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -413,8 +422,8 @@ fn test_ci_steps_with_features() {
 }
 
 /// Test JSON output structure for ci-steps
-#[test]
-fn test_ci_steps_json_output_structure() {
+#[switchy_async::test]
+async fn test_ci_steps_json_output_structure() {
     let (temp_dir, _) = load_test_workspace("ci-steps-regression");
 
     let result = handle_features_command(
@@ -440,8 +449,11 @@ fn test_ci_steps_json_output_structure() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -509,8 +521,8 @@ fn test_ci_steps_json_output_structure() {
 }
 
 /// Test the handle_features_command function
-#[test]
-fn test_handle_features_command_basic() {
+#[switchy_async::test]
+async fn test_handle_features_command_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_features_command(
@@ -536,8 +548,11 @@ fn test_handle_features_command_basic() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Raw,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features = result.unwrap();
@@ -563,8 +578,10 @@ fn test_handle_workspace_deps_command_basic() {
 fn test_process_workspace_configs_workspace_root() {
     let (temp_dir, _) = load_test_workspace("complex");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = process_workspace_configs(
         temp_dir.path(),
+        &workspace_context,
         None,
         None,
         None,
@@ -695,8 +712,8 @@ dependencies = [
 }
 
 /// Test comprehensive scenario with multiple features and chunking
-#[test]
-fn test_handle_features_command_comprehensive() {
+#[switchy_async::test]
+async fn test_handle_features_command_comprehensive() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     let result = handle_features_command(
@@ -722,8 +739,11 @@ fn test_handle_features_command_comprehensive() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let features_json = result.unwrap();
@@ -771,8 +791,8 @@ fn test_handle_features_command_comprehensive() {
     );
 }
 
-#[test]
-fn test_handle_features_command_max_parallel_limits_results() {
+#[switchy_async::test]
+async fn test_handle_features_command_max_parallel_limits_results() {
     let temp_dir = tempfile::tempdir().unwrap();
 
     // Create workspace with multiple packages to generate many results
@@ -855,8 +875,11 @@ serde = "1.0"
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -902,8 +925,11 @@ serde = "1.0"
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1079,8 +1105,8 @@ dependencies = [
     temp_dir
 }
 
-#[test]
-fn test_handle_features_command_with_git_submodules() {
+#[switchy_async::test]
+async fn test_handle_features_command_with_git_submodules() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
 
     let result = handle_features_command(
@@ -1106,8 +1132,11 @@ fn test_handle_features_command_with_git_submodules() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await;
 
     assert!(result.is_ok());
     let json_output = result.unwrap();
@@ -1146,8 +1175,10 @@ fn test_git_submodules_inheritance() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let inherited_pkg = temp_dir.path().join("packages/inherited-submodules");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
         &inherited_pkg,
+        &workspace_context,
         None,
         None,
         None,
@@ -1175,6 +1206,13 @@ fn test_git_submodules_override() {
     let pkg_dir = temp_dir.path().join("packages/override-test");
     std::fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
+    // Create workspace Cargo.toml
+    let workspace_toml = r#"
+[workspace]
+members = ["packages/*"]
+    "#;
+    std::fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
     let cargo_toml = r#"
 [package]
 name = "override-test"
@@ -1199,8 +1237,19 @@ os = "macos"
     "#;
     std::fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
-        &pkg_dir, None, None, None, false, false, None, None, None, None,
+        &pkg_dir,
+        &workspace_context,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     )
     .unwrap();
 

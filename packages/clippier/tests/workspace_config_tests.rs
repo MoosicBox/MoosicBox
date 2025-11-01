@@ -5,9 +5,12 @@ fn test_workspace_config_defaults() {
     // Test pkg1 which has no package-level config - should use workspace defaults
     let workspace_path =
         PathBuf::from("test-resources/workspaces/workspace-config-test/packages/pkg1");
+    let workspace_root = PathBuf::from("test-resources/workspaces/workspace-config-test");
 
+    let workspace_context = clippier::WorkspaceContext::new(&workspace_root).unwrap();
     let result = clippier::process_configs(
         &workspace_path,
+        &workspace_context,
         None,
         None,
         None,
@@ -49,9 +52,12 @@ fn test_workspace_config_with_package_overrides() {
     // Test pkg2 which has package-level config - should merge with workspace defaults
     let workspace_path =
         PathBuf::from("test-resources/workspaces/workspace-config-test/packages/pkg2");
+    let workspace_root = PathBuf::from("test-resources/workspaces/workspace-config-test");
 
+    let workspace_context = clippier::WorkspaceContext::new(&workspace_root).unwrap();
     let result = clippier::process_configs(
         &workspace_path,
+        &workspace_context,
         None,
         None,
         None,
@@ -94,9 +100,12 @@ fn test_workspace_config_with_package_overrides() {
 fn test_backward_compatibility_no_workspace_config() {
     // Test that workspaces without workspace-level config still work
     let workspace_path = PathBuf::from("test-resources/workspaces/propagation/root");
+    let workspace_root = PathBuf::from("test-resources/workspaces/propagation");
 
+    let workspace_context = clippier::WorkspaceContext::new(&workspace_root).unwrap();
     let result = clippier::process_configs(
         &workspace_path,
+        &workspace_context,
         None,
         None,
         None,

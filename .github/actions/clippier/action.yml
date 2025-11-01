@@ -172,7 +172,7 @@ inputs:
     matrix-properties:
         description: "Comma-separated list of properties to include in matrix"
         required: false
-        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
+        default: "name,path,features,requiredFeatures,os,runner,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
 
     os-suffix:
         description: 'Suffix to add to OS field (e.g., "-latest")'
@@ -269,6 +269,16 @@ inputs:
         description: "Rust components to install (for setup command)"
         required: false
         default: "rustfmt, clippy"
+
+    enable-runner-allocation:
+        description: "Enable runner pool allocation"
+        required: false
+        default: "false"
+
+    github-token-for-runners:
+        description: "GitHub token for runner health checks"
+        required: false
+        default: ${{ github.token }}
 
 outputs:
     matrix:
@@ -434,6 +444,8 @@ runs:
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
+              INPUT_ENABLE_RUNNER_ALLOCATION: ${{ inputs.enable-runner-allocation }}
+              INPUT_GITHUB_TOKEN_FOR_RUNNERS: ${{ inputs.github-token-for-runners }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

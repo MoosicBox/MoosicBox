@@ -150,8 +150,9 @@ fn test_dockerfile_dependency_resolution() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test workspace dependency resolution in Docker context
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::find_workspace_dependencies(
-        temp_dir.path(),
+        &workspace_context,
         "web",
         None,
         true, // all_potential_deps for Docker compatibility

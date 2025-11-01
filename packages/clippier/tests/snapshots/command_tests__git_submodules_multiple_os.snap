@@ -12,6 +12,7 @@ expression: result
   os: ubuntu
   path: "[TEMP_PATH]"
   requiredFeatures: ~
+  runner: ubuntu-latest
 - features:
     - default
     - feature-a
@@ -22,6 +23,7 @@ expression: result
   os: macos
   path: "[TEMP_PATH]"
   requiredFeatures: ~
+  runner: macos-latest
 - features:
     - default
     - feature-a
@@ -32,3 +34,4 @@ expression: result
   os: windows
   path: "[TEMP_PATH]"
   requiredFeatures: ~
+  runner: windows-latest

@@ -4,8 +4,10 @@ use itertools::Itertools;
 #[test]
 fn test_process_configs_basic() {
     let (temp_dir, _) = load_test_workspace("complex");
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
         &temp_dir.path().join("packages/cli"),
+        &workspace_context,
         None,
         None,
         None,
@@ -235,8 +237,10 @@ fn test_git_submodules_enabled() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let submodules_pkg = temp_dir.path().join("packages/with-submodules");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
         &submodules_pkg,
+        &workspace_context,
         None,
         None,
         None,
@@ -259,8 +263,19 @@ fn test_git_submodules_disabled_by_default() {
     let (temp_dir, _) = load_test_workspace("complex");
     let api_path = temp_dir.path().join("packages/api");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
-        &api_path, None, None, None, false, false, None, None, None, None,
+        &api_path,
+        &workspace_context,
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     )
     .unwrap();
 
@@ -273,8 +288,10 @@ fn test_git_submodules_multiple_os() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let submodules_pkg = temp_dir.path().join("packages/with-submodules");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
         &submodules_pkg,
+        &workspace_context,
         None,
         None,
         None,
@@ -306,8 +323,10 @@ fn test_git_submodules_not_present_without_config() {
     let (temp_dir, _) = load_test_workspace("git-submodules");
     let without_submodules_pkg = temp_dir.path().join("packages/without-submodules");
 
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::process_configs(
         &without_submodules_pkg,
+        &workspace_context,
         None,
         None,
         None,

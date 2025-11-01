@@ -12,3 +12,4 @@ expression: normalize_paths(parsed)
   os: ubuntu
   path: packages/test-app
   requiredFeatures: ~
+  runner: ubuntu-latest
