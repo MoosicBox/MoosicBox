@@ -354,7 +354,7 @@ runs:
               node-version: latest
 
         - name: Setup cmake
-          if: inputs.command == 'setup'
+          if: inputs.command == 'setup' && (runner.name == 'ubuntu-latest' || runner.name == 'macos-latest' || runner.name == 'windows-latest')
           uses: jwlawson/actions-setup-cmake@v2
           with:
               cmake-version: "3.x"

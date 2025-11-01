@@ -268,6 +268,7 @@ jobs:
 
             - name: Setup CI environment
               uses: ./.github/actions/clippier
+              if: runner.name == 'ubuntu-latest' || runner.name == 'macos-latest' || runner.name == 'windows-latest'
               with:
                   command: setup
                   package-json: ${{ toJson(matrix.package) }}
