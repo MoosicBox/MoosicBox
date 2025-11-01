@@ -290,10 +290,7 @@ impl AllocationEngine {
             return false;
         };
 
-        let Some(ref labels) = check.labels else {
-            log::warn!("GitHub API health check requires labels configuration");
-            return false;
-        };
+        let labels = check.labels.clone().unwrap_or_default();
 
         let min_available = check.min_available.unwrap_or(1);
 
@@ -308,30 +305,30 @@ impl AllocationEngine {
             return false;
         }
 
-        match self
-            .fetch_github_runners(token, &repo, labels, min_available)
+        let Ok(available) = self
+            .fetch_github_runners(token, &repo, &labels, min_available)
             .await
-        {
-            Ok(available) => {
-                if available {
-                    log::debug!("GitHub API health check passed for pool {:?}", pool.label);
-                } else {
-                    log::debug!(
-                        "GitHub API health check failed for pool {:?}: not enough runners available",
-                        pool.label
-                    );
-                }
-                available
-            }
-            Err(e) => {
+            .inspect_err(|e| {
                 log::warn!(
                     "GitHub API health check failed for pool {:?}: {}",
                     pool.label,
                     e
                 );
-                false
-            }
+            })
+        else {
+            return false;
+        };
+
+        if available {
+            log::debug!("GitHub API health check passed for pool {:?}", pool.label);
+        } else {
+            log::debug!(
+                "GitHub API health check failed for pool {:?}: not enough runners available",
+                pool.label
+            );
         }
+
+        available
     }
 
     /// Fetch runner status from GitHub API
@@ -383,6 +380,8 @@ impl AllocationEngine {
                             .collect::<Vec<_>>()
                     })
                     .unwrap_or_default();
+
+                log::debug!("GitHub API status='{status}' busy={busy} runner labels={runner_labels:?} required labels={required_labels:?}");
 
                 // Runner must be online, not busy, and have all required labels
                 status == "online"
