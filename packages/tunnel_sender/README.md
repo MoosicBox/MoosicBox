@@ -59,9 +59,41 @@ match send_result {
 }
 ```
 
-### Sender Operations
+### Tunnel Sender
 
-The library provides `TunnelSender` for establishing and managing tunnel connections, handling message routing, and processing tunnel requests.
+The `TunnelSender` is the main component for establishing and managing tunnel connections. It returns a handle for controlling the connection.
+
+```rust
+use moosicbox_tunnel_sender::sender::TunnelSender;
+use switchy_database::config::ConfigDatabase;
+
+let config_db = ConfigDatabase::new();
+
+// Create a tunnel sender and get a handle for control
+let (sender, handle) = TunnelSender::new(
+    "https://example.com".to_string(),
+    "wss://example.com/tunnel".to_string(),
+    "client-id".to_string(),
+    "access-token".to_string(),
+    config_db,
+);
+
+// Start receiving messages from the tunnel
+let mut receiver = sender.start();
+
+// Process incoming messages
+while let Some(message) = receiver.recv().await {
+    // Handle tunnel messages
+}
+
+// Close the tunnel when done
+handle.close();
+```
+
+The library also provides:
+
+- `TunnelSenderHandle`: Handle for controlling active tunnel connections
+- `TunnelWebsocketSender`: Routes WebSocket messages through tunnel connections
 
 ## Error Types
 
