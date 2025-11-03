@@ -1,0 +1,26 @@
+[package]
+description = "Example demonstrating basic async service usage with sequential command processing"
+edition     = { workspace = true }
+keywords    = ["async", "example", "moosicbox_async_service", "service"]
+license     = { workspace = true }
+name        = "moosicbox_async_service_basic_usage_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage_example"
+path = "src/main.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["thiserror"]
+
+[dependencies]
+moosicbox_async_service = { workspace = true }
+switchy_async           = { workspace = true, features = ["time"] }
+thiserror               = { workspace = true }
+tokio                   = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_async_service/fail-on-warnings"]

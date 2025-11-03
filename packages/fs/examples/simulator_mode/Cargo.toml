@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating simulator mode for testing in switchy_fs"
+edition     = { workspace = true }
+keywords    = ["example", "simulator", "switchy_fs", "testing"]
+license     = { workspace = true }
+name        = "switchy_fs_simulator_mode_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "simulator_mode_example"
+path = "src/main.rs"
+
+[dependencies]
+switchy_fs = { workspace = true, features = ["simulator", "sync"] }
+
+[features]
+default          = ["simulator"]
+fail-on-warnings = ["switchy_fs/fail-on-warnings"]
+
+simulator         = ["switchy_fs/simulator"]
+simulator-real-fs = ["switchy_fs/simulator-real-fs"]

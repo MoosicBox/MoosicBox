@@ -1,0 +1,26 @@
+[package]
+description = "Example demonstrating prioritized message handling in moosicbox_channel_utils"
+edition     = { workspace = true }
+keywords    = ["channel", "example", "moosicbox_channel_utils", "priority"]
+license     = { workspace = true }
+name        = "moosicbox_channel_utils_prioritized_messaging_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "prioritized_messaging_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_channel_utils = { workspace = true, default-features = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# Futures utilities
+futures = { workspace = true }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_channel_utils/fail-on-warnings"]

@@ -1,0 +1,21 @@
+[package]
+description = "Example demonstrating basic pagination features in moosicbox_paging"
+edition     = { workspace = true }
+keywords    = ["example", "moosicbox_paging", "pagination"]
+license     = { workspace = true }
+name        = "moosicbox_paging_basic_pagination_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_pagination_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_paging = { workspace = true }
+tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_paging/fail-on-warnings"]

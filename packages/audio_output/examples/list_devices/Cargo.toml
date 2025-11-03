@@ -1,0 +1,23 @@
+[package]
+description = "Example demonstrating audio device enumeration in moosicbox_audio_output"
+edition     = { workspace = true }
+keywords    = ["devices", "enumeration", "example", "moosicbox_audio_output"]
+license     = { workspace = true }
+name        = "moosicbox_audio_output_list_devices_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "list_devices_example"
+path = "src/main.rs"
+
+[dependencies]
+moosicbox_audio_output = { workspace = true, features = ["cpal"] }
+
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default          = []
+fail-on-warnings = ["moosicbox_audio_output/fail-on-warnings"]
