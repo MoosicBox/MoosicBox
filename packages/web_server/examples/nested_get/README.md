@@ -20,14 +20,14 @@ This example demonstrates how to organize routes using nested scopes in the Moos
 
 ```bash
 # From repository root
-cargo run --example nested_get
+cargo run -p web_server_nested_get
 
 # From example directory
 cd packages/web_server/examples/nested_get
 cargo run
 
 # With NixOS
-nix develop .#server --command cargo run --example nested_get
+nix develop .#server --command cargo run -p web_server_nested_get
 ```
 
 Note: This example uses the actix backend, which is enabled via the features in the moosicbox_web_server dependency.
