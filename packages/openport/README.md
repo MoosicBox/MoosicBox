@@ -8,6 +8,7 @@ OpenPort provides a minimal set of functions to:
 
 - Find available ports within a specified range
 - Check if specific ports are free on TCP and/or UDP
+- Reserve and manage port allocation to prevent conflicts (with `reservation` feature, enabled by default)
 - Optionally find random available ports (with `rand` feature)
 
 ## Installation
@@ -93,6 +94,35 @@ fn main() {
 }
 ```
 
+### Port Reservation (requires `reservation` feature, enabled by default)
+
+```rust
+use openport::PortReservation;
+
+fn main() {
+    // Create a reservation system for a port range
+    let reservation = PortReservation::new(15000..16000);
+
+    // Reserve a single port
+    if let Some(port) = reservation.reserve_port() {
+        println!("Reserved port: {}", port);
+
+        // Check if port is reserved
+        assert!(reservation.is_reserved(port));
+
+        // Release the port when done
+        reservation.release_port(port);
+    }
+
+    // Reserve multiple ports
+    let ports = reservation.reserve_ports(5);
+    println!("Reserved {} ports", ports.len());
+
+    // Release all ports at once
+    reservation.release_ports(ports.iter().copied());
+}
+```
+
 ### Integration with Web Servers
 
 ```rust
@@ -161,14 +191,44 @@ pub fn is_free_udp(port: u16) -> bool;
 /// Port number type alias
 pub type Port = u16;
 
+/// Port reservation system for managing port allocation
+/// Requires the `reservation` feature (enabled by default)
+#[cfg(feature = "reservation")]
+pub type PortReservation = reservation::PortReservation<Range<Port>>;
+
 /// Trait for port range types (Range<u16> and RangeInclusive<u16>)
 pub trait PortRange {
     fn into_iter(self) -> impl Iterator<Item = u16>;
 }
 ```
 
+### PortReservation Methods (requires `reservation` feature)
+
+```rust
+impl<R: PortRange> PortReservation<R> {
+    /// Creates a new port reservation system with the specified range
+    pub const fn new(range: R) -> Self;
+
+    /// Reserve a single port from the range
+    pub fn reserve_port(&self) -> Option<Port>;
+
+    /// Reserve multiple ports from the range
+    pub fn reserve_ports(&self, num_ports: usize) -> Vec<Port>;
+
+    /// Release a reserved port
+    pub fn release_port(&self, port: Port);
+
+    /// Release multiple reserved ports
+    pub fn release_ports(&self, ports: impl Iterator<Item = Port>);
+
+    /// Check if a port is currently reserved
+    pub fn is_reserved(&self, port: Port) -> bool;
+}
+```
+
 ## Features
 
+- **`reservation`** (default): Enables the `PortReservation` type for managing port allocation and preventing duplicate port usage
 - **`cli`**: Enables the command-line binary for finding available ports
 - **`rand`**: Enables `pick_random_unused_port()` function for finding random ports in the 15000-25000 range
 - **`fail-on-warnings`**: Treats compiler warnings as errors (for development)
@@ -184,9 +244,8 @@ pub trait PortRange {
 
 - Sequential port checking (no concurrent checks)
 - No timeout configuration
-- No port reservation mechanism
 - Binding to low ports (<1024) requires root/administrator privileges on most systems
-- Race condition: A port that tests as "free" may be taken before you can bind to it
+- Race condition: A port that tests as "free" may be taken before you can bind to it (mitigated by using `PortReservation`)
 
 ## Examples
 
