@@ -50,14 +50,14 @@ moosicbox_app_tauri_bundled = { path = "../app/tauri/bundled" }
 
 ```rust,no_run
 use moosicbox_app_tauri_bundled::{service::Service, Context};
-use moosicbox_async_service::{runtime::Handle, Arc, sync::RwLock};
+use moosicbox_async_service::runtime::Handle;
 
 // Create the service context
 let handle = Handle::current();
 let context = Context::new(&handle);
 
 // Create and start the service
-let service = Service::new(Arc::new(RwLock::new(context)));
+let service = Service::new(context);
 let service_handle = service.handle();
 let _join_handle = service.start();
 
