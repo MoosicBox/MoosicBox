@@ -137,6 +137,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Remote Byte Stream (Optional)
+
+```rust
+#[cfg(feature = "remote-bytestream")]
+use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
+use std::io::{Read, Seek, SeekFrom};
+use switchy_async::util::CancellationToken;
+
+#[cfg(feature = "remote-bytestream")]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let abort = CancellationToken::new();
+
+    // Create a remote byte stream that fetches data from an HTTP URL on demand
+    let mut stream = RemoteByteStream::new(
+        "https://example.com/file.mp3".to_string(),
+        Some(1000000), // Optional: total file size in bytes (required for seeking from end)
+        true,          // Auto-start fetching
+        true,          // Seekable
+        abort,
+    );
+
+    // Read data like a normal stream
+    let mut buffer = [0u8; 1024];
+    let bytes_read = stream.read(&mut buffer)?;
+    println!("Read {} bytes", bytes_read);
+
+    // Seek to a different position (triggers new HTTP range request if needed)
+    stream.seek(SeekFrom::Start(50000))?;
+    let bytes_read = stream.read(&mut buffer)?;
+    println!("Read {} bytes from position 50000", bytes_read);
+
+    Ok(())
+}
+```
+
 ## Configuration
 
 The stream utilities support some basic configuration:

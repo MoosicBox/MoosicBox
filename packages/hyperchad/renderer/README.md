@@ -172,6 +172,9 @@ impl HtmlTagRenderer for MyHtmlRenderer {
         background: Option<Color>,
         title: Option<&str>,
         description: Option<&str>,
+        css_urls: &[String],
+        css_paths: &[String],
+        inline_css: &[String],
     ) -> String {
         format!(r#"
 <!DOCTYPE html>

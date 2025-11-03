@@ -1321,7 +1321,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// Parameter syntax varies by backend implementation, not just database type:
     /// * rusqlite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
-    /// * sqlx-sqlite: Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * sqlx-sqlite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
     /// * `PostgreSQL` (both native and sqlx): Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
     /// * `MySQL` (sqlx): Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
     ///
