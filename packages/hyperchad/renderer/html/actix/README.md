@@ -47,6 +47,11 @@ Add this to your `Cargo.toml`:
 [dependencies]
 hyperchad_renderer_html_actix = { path = "../hyperchad/renderer/html/actix" }
 
+# For the examples below, you'll also need:
+hyperchad_renderer_html = { path = "../hyperchad/renderer/html" }
+hyperchad_router = { path = "../hyperchad/router" }
+hyperchad_template = { path = "../hyperchad/template" }
+
 # With additional features
 hyperchad_renderer_html_actix = {
     path = "../hyperchad/renderer/html/actix",
