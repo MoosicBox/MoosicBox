@@ -3695,7 +3695,7 @@ impl Database for SqliteSqlxTransaction {
     ) -> Result<u64, DatabaseError> {
         let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
 
-        // Add parameters in order - sqlx uses $1, $2 placeholders
+        // Add parameters in order - SQLite uses ? placeholders
         for param in params {
             query_builder = match param {
                 crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
@@ -3790,7 +3790,7 @@ impl Database for SqliteSqlxTransaction {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
 
-        // Add parameters in order - sqlx uses $1, $2 placeholders
+        // Add parameters in order - SQLite uses ? placeholders
         for param in params {
             query_builder = match param {
                 crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
