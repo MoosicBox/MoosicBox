@@ -119,13 +119,13 @@ clippier features . \
 # Filter by package properties (exclude unpublished and examples)
 clippier features . \
   --skip-if "package.publish=false" \
-  --skip-if package.name$=_example" \
+  --skip-if "package.name$=_example" \
   --output json
 
 # Include only packages with specific characteristics
 clippier features . \
-  --include-if package.name^=moosicbox_" \
-  --include-if package.categories@=audio" \
+  --include-if "package.name^=moosicbox_" \
+  --include-if "package.categories@=audio" \
   --output json
 
 # Combine with other filters
@@ -716,23 +716,23 @@ clippier features . --skip-if "package.publish=false" --output json
 
 ```bash
 # Only process moosicbox packages
-clippier features . --include-if package.name^=moosicbox_" --output json
+clippier features . --include-if "package.name^=moosicbox_" --output json
 
 # Exclude example packages
-clippier packages . --skip-if package.name$=_example" --output json
+clippier packages . --skip-if "package.name$=_example" --output json
 ```
 
 #### Filter by Categories or Keywords
 
 ```bash
 # Only packages with audio category
-clippier features . --include-if package.categories@=audio" --output json
+clippier features . --include-if "package.categories@=audio" --output json
 
 # Packages containing "api" in keywords
-clippier features . --include-if package.keywords@*=api" --output json
+clippier features . --include-if "package.keywords@*=api" --output json
 
 # Skip packages with empty keywords
-clippier features . --skip-if package.keywords@!" --output json
+clippier features . --skip-if "package.keywords@!" --output json
 ```
 
 #### Array Length Filtering
@@ -742,7 +742,7 @@ clippier features . --skip-if package.keywords@!" --output json
 clippier features . --include-if "package.keywords@#>2" --output json
 
 # Packages with exactly 2 categories
-clippier features . --include-if package.categories@#=2" --output json
+clippier features . --include-if "package.categories@#=2" --output json
 ```
 
 #### Nested Metadata Access
@@ -764,16 +764,16 @@ clippier packages . --skip-if "package.metadata.ci.skip-tests=true"
 ```bash
 # Include moosicbox packages, exclude examples and unpublished
 clippier features . \
-  --include-if package.name^=moosicbox_" \
-  --skip-if package.name$=_example" \
+  --include-if "package.name^=moosicbox_" \
+  --skip-if "package.name$=_example" \
   --skip-if "package.publish=false" \
   --output json
 
 # Audio packages with sufficient documentation
 clippier features . \
-  --include-if package.categories@=audio" \
+  --include-if "package.categories@=audio" \
   --include-if "package.keywords@#>2" \
-  --include-if package.readme?" \
+  --include-if "package.readme?" \
   --output json
 ```
 
@@ -782,12 +782,12 @@ clippier features . \
 ```bash
 # Exclude examples OR unpublished packages
 clippier features . \
-  --skip-if package.name$=_example OR publish=false" \
+  --skip-if "package.name$=_example OR publish=false" \
   --output json
 
 # Include published moosicbox packages that are NOT examples
 clippier features . \
-  --include-if package.name^=moosicbox_ AND publish=true AND NOT name$=_example" \
+  --include-if "package.name^=moosicbox_ AND publish=true AND NOT name$=_example" \
   --output json
 
 # Complex: audio/video packages with good docs
@@ -797,7 +797,7 @@ clippier features . \
 
 # Skip test packages or packages with specific metadata
 clippier features . \
-  --skip-if package.name$=_test OR (metadata.ci? AND metadata.ci.skip=true)" \
+  --skip-if "package.name$=_test OR (metadata.ci? AND metadata.ci.skip=true)" \
   --output json
 ```
 
@@ -829,17 +829,17 @@ Within each filter argument:
 
 ```bash
 # Skip: Exclude if name ends with _example OR publish is false
---skip-if package.name$=_example OR publish=false"
-# Equivalent to separate args: --skip-if package.name$=_example" --skip-if "package.publish=false"
+--skip-if "package.name$=_example OR publish=false"
+# Equivalent to separate args: --skip-if "package.name$=_example" --skip-if "package.publish=false"
 
 # Include: Must match name prefix AND (one of the categories)
---include-if package.name^=moosicbox_ AND (categories@=audio OR categories@=video)"
+--include-if "package.name^=moosicbox_ AND (categories@=audio OR categories@=video)"
 
 # Complex: Skip unpublished non-library packages
 --skip-if "package.publish=false AND NOT package.name$=_lib"
 
 # Multiple arguments with AND logic between them
---include-if package.name^=moosicbox_" --include-if package.categories@=audio"
+--include-if "package.name^=moosicbox_" --include-if "package.categories@=audio"
 # Both filters must match: name must start with moosicbox_ AND have audio category
 ```
 
@@ -862,7 +862,7 @@ Access any Cargo.toml property using dot notation with the full path:
 # Test only published, non-example packages
 clippier features . \
   --skip-if "package.publish=false" \
-  --skip-if package.name$=_example" \
+  --skip-if "package.name$=_example" \
   --max 20 \
   --output json
 ```
@@ -872,14 +872,14 @@ clippier features . \
 ```bash
 # Test only frontend packages (by naming convention)
 clippier features . \
-  --include-if package.name*=_ui" \
-  --include-if package.name*=_web" \
+  --include-if "package.name*=_ui" \
+  --include-if "package.name*=_web" \
   --output json
 
 # Backend services only
 clippier features . \
-  --include-if package.name*=_server" \
-  --include-if package.name*=_service" \
+  --include-if "package.name*=_server" \
+  --include-if "package.name*=_service" \
   --output json
 ```
 
@@ -887,11 +887,11 @@ clippier features . \
 
 ```bash
 # Find packages missing documentation
-clippier packages . --skip-if package.readme?" --output raw
+clippier packages . --skip-if "package.readme?" --output raw
 
 # Well-documented packages only
 clippier features . \
-  --include-if package.readme?" \
+  --include-if "package.readme?" \
   --include-if "package.keywords@#>2" \
   --include-if "package.categories@#>0" \
   --output json
@@ -1567,25 +1567,25 @@ echo "🎯 Feature validation completed successfully!"
 ```bash
 # Scalar operators
 --skip-if "package.publish=false"              # Exact match
---include-if package.name^=moosicbox_"        # Starts with
---skip-if package.name$=_example"             # Ends with
---include-if package.description*=audio"      # Contains
---include-if package.name~=^test_.*"          # Regex match
+--include-if "package.name^=moosicbox_"        # Starts with
+--skip-if "package.name$=_example"             # Ends with
+--include-if "package.description*=audio"      # Contains
+--include-if "package.name~=^test_.*"          # Regex match
 
 # Array operators
---include-if package.categories@=audio"       # Array contains
---include-if package.keywords@*=api"          # Array element contains substring
---include-if package.keywords@^=music"        # Array element starts with
---include-if package.categories@~=^multi"     # Array element matches regex
---skip-if package.keywords@!"                 # Array is empty
---include-if package.keywords@#=3"            # Array length equals
+--include-if "package.categories@=audio"       # Array contains
+--include-if "package.keywords@*=api"          # Array element contains substring
+--include-if "package.keywords@^=music"        # Array element starts with
+--include-if "package.categories@~=^multi"     # Array element matches regex
+--skip-if "package.keywords@!"                 # Array is empty
+--include-if "package.keywords@#=3"            # Array length equals
 --include-if "package.authors@#>1"             # Array length greater than
 --include-if "package.categories@#<5"          # Array length less than
---skip-if package.keywords!@=deprecated"      # Array does NOT contain
+--skip-if "package.keywords!@=deprecated"      # Array does NOT contain
 
 # Existence operators
---include-if package.readme?"                 # Property exists
---skip-if package.homepage!?"                 # Property does NOT exist
+--include-if "package.readme?"                 # Property exists
+--skip-if "package.homepage!?"                 # Property does NOT exist
 
 # Nested properties
 --include-if "package.metadata.workspaces.independent=true"
@@ -1593,8 +1593,8 @@ echo "🎯 Feature validation completed successfully!"
 
 # Combining filters
 clippier features . \
-  --include-if package.name^=moosicbox_" \
-  --skip-if package.name$=_example" \
+  --include-if "package.name^=moosicbox_" \
+  --skip-if "package.name$=_example" \
   --skip-if "package.publish=false"
 ```
 
@@ -1612,7 +1612,7 @@ clippier packages . --packages server,auth
 
 # Property-based filtering
 clippier packages . --skip-if "package.publish=false" --output json
-clippier packages . --include-if package.categories@=audio" --output json
+clippier packages . --include-if "package.categories@=audio" --output json
 
 # Only packages affected by changes
 clippier packages . --changed-files "src/lib.rs,Cargo.toml"
