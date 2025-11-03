@@ -7,7 +7,6 @@ This example demonstrates the `switchy_fs` temp directory functionality across d
 - **`std`** - Standard filesystem operations
 - **`simulator`** - Simulated filesystem for testing
 - **`simulator-real-fs`** - Simulator with real filesystem backing
-- **`async`** - Async filesystem operations
 
 ## Usage
 
@@ -22,9 +21,6 @@ cargo run --no-default-features --features simulator
 
 # Simulator with real filesystem
 cargo run --no-default-features --features simulator-real-fs
-
-# Async mode
-cargo run --no-default-features --features async
 ```
 
 ## Examples
