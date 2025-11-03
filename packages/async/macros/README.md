@@ -32,7 +32,7 @@ The MoosicBox Async Macros package provides:
 
 #### Test Macros
 
-- **`#[test]`**: External test macro for `switchy_async` tests (simulator feature only)
+- **`#[test]`**: External test macro for `switchy_async` tests with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
 - **`#[unsync_test]`**: Test macro for `switchy::unsync` with optional `real_time`, `real_fs`, `no_simulator` parameters (simulator feature only)
 - **`#[tokio_test_wrapper]`**: Tokio-compatible test wrapper (always available)
 
