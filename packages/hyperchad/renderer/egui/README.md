@@ -364,7 +364,7 @@ Handle::current().spawn(async move {
 rendering stubbed but not yet implemented.
 
 ```rust
-use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction};
+use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction, Pos};
 use hyperchad_renderer::Color;
 
 let canvas_update = CanvasUpdate {
@@ -373,8 +373,8 @@ let canvas_update = CanvasUpdate {
         CanvasAction::Clear,
         CanvasAction::StrokeColor(Color { r: 255, g: 0, b: 0, a: Some(255) }),
         CanvasAction::StrokeSize(2.0),
-        CanvasAction::Line((10.0, 10.0), (110.0, 10.0)),
-        CanvasAction::FillRect((10.0, 20.0), (110.0, 70.0)),
+        CanvasAction::Line(Pos(10.0, 10.0), Pos(110.0, 10.0)),
+        CanvasAction::FillRect(Pos(10.0, 20.0), Pos(110.0, 70.0)),
     ],
 };
 
