@@ -123,6 +123,9 @@ fn generate_html(container: &Container) -> Result<String, std::io::Error> {
         Some("My Page"),
         Some("Page description"),
         &tag_renderer,
+        &[],  // css_urls
+        &[],  // css_paths
+        &[],  // inline_css
     )
 }
 ```
