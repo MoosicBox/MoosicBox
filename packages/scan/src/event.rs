@@ -204,7 +204,15 @@ pub enum ScanTaskState {
     Error,
 }
 
+/// Future returned by a progress listener callback.
+///
+/// This type represents the asynchronous result of invoking a progress listener.
 pub type ProgressListenerRefFut = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Callback function type for progress event listeners.
+///
+/// Progress listeners are functions that receive a [`ProgressEvent`] and return a future.
+/// They are invoked asynchronously when scan progress events occur.
 pub type ProgressListenerRef =
     Box<dyn (Fn(&ProgressEvent) -> ProgressListenerRefFut) + Send + Sync>;
 
