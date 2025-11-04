@@ -105,19 +105,33 @@ pub struct Api;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtAlbum {
+    /// `YouTube` Music album ID
     pub id: String,
+    /// Album artist name
     pub artist: String,
+    /// `YouTube` Music artist ID
     pub artist_id: String,
+    /// Whether the album has cover artwork
     pub contains_cover: bool,
+    /// Audio quality level (e.g., "HIGH", "LOSSLESS")
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Total album duration in seconds
     pub duration: u32,
+    /// Whether the album contains explicit content
     pub explicit: bool,
+    /// Number of tracks in the album
     pub number_of_tracks: u32,
+    /// Album popularity score
     pub popularity: u32,
+    /// Release date (ISO 8601 format)
     pub date_released: Option<String>,
+    /// Album title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
+    /// API source identifier
     pub api_source: ApiSource,
 }
 
@@ -165,22 +179,39 @@ impl From<ApiTrack> for moosicbox_music_models::api::ApiTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtTrack {
+    /// `YouTube` Music track ID
     pub id: String,
+    /// Track number within the album
     pub number: u32,
+    /// Album title
     pub album: String,
+    /// `YouTube` Music album ID
     pub album_id: String,
+    /// Album type classification
     pub album_type: YtAlbumType,
+    /// Artist name
     pub artist: String,
+    /// `YouTube` Music artist ID
     pub artist_id: String,
+    /// Whether the track has cover artwork
     pub contains_cover: bool,
+    /// Audio quality level (e.g., "HIGH", "LOSSLESS")
     pub audio_quality: String,
+    /// Copyright information
     pub copyright: Option<String>,
+    /// Track duration in seconds
     pub duration: u32,
+    /// Whether the track contains explicit content
     pub explicit: bool,
+    /// International Standard Recording Code
     pub isrc: String,
+    /// Track popularity score
     pub popularity: u32,
+    /// Track title
     pub title: String,
+    /// Media metadata tags
     pub media_metadata_tags: Vec<String>,
+    /// API source identifier
     pub api_source: ApiSource,
 }
 
@@ -217,10 +248,15 @@ impl From<ApiYtTrack> for moosicbox_music_models::api::ApiTrack {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtArtist {
+    /// `YouTube` Music artist ID
     pub id: String,
+    /// Whether the artist has a cover image
     pub contains_cover: bool,
+    /// Artist popularity score
     pub popularity: u32,
+    /// Artist name
     pub title: String,
+    /// API source identifier
     pub api_source: ApiSource,
 }
 
