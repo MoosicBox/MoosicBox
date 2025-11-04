@@ -477,7 +477,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 border_top_right_radius: Some(Number::from(6)),
                 border_bottom_left_radius: Some(Number::from(6)),
                 border_bottom_right_radius: Some(Number::from(6)),
-                white_space: Some(WhiteSpace::Preserve),
+                white_space: Some(WhiteSpace::PreserveWrap),
                 ..Default::default()
             });
             Ok(())
