@@ -176,7 +176,7 @@ impl RangeDecoder {
     ///
     /// ICDF tables MUST be terminated with a value of 0, as specified in RFC 6716
     /// Section 4.1.3.3 (line 1534): "the table is terminated by a value of 0
-    /// (where fh[k] == ft)." This terminating zero represents the point where the
+    /// (where fh\[k\] == ft)." This terminating zero represents the point where the
     /// cumulative distribution reaches ft.
     ///
     /// The RFC documents provide probability distribution functions (PDFs). To use
