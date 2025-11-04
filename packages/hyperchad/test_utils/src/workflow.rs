@@ -75,103 +75,178 @@ impl InteractionStep {
 /// Keyboard keys for interaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Key {
-    // Letters
+    /// Letter A key.
     A,
+    /// Letter B key.
     B,
+    /// Letter C key.
     C,
+    /// Letter D key.
     D,
+    /// Letter E key.
     E,
+    /// Letter F key.
     F,
+    /// Letter G key.
     G,
+    /// Letter H key.
     H,
+    /// Letter I key.
     I,
+    /// Letter J key.
     J,
+    /// Letter K key.
     K,
+    /// Letter L key.
     L,
+    /// Letter M key.
     M,
+    /// Letter N key.
     N,
+    /// Letter O key.
     O,
+    /// Letter P key.
     P,
+    /// Letter Q key.
     Q,
+    /// Letter R key.
     R,
+    /// Letter S key.
     S,
+    /// Letter T key.
     T,
+    /// Letter U key.
     U,
+    /// Letter V key.
     V,
+    /// Letter W key.
     W,
+    /// Letter X key.
     X,
+    /// Letter Y key.
     Y,
+    /// Letter Z key.
     Z,
 
-    // Numbers
+    /// Digit 0 key.
     Digit0,
+    /// Digit 1 key.
     Digit1,
+    /// Digit 2 key.
     Digit2,
+    /// Digit 3 key.
     Digit3,
+    /// Digit 4 key.
     Digit4,
+    /// Digit 5 key.
     Digit5,
+    /// Digit 6 key.
     Digit6,
+    /// Digit 7 key.
     Digit7,
+    /// Digit 8 key.
     Digit8,
+    /// Digit 9 key.
     Digit9,
 
-    // Function keys
+    /// F1 function key.
     F1,
+    /// F2 function key.
     F2,
+    /// F3 function key.
     F3,
+    /// F4 function key.
     F4,
+    /// F5 function key.
     F5,
+    /// F6 function key.
     F6,
+    /// F7 function key.
     F7,
+    /// F8 function key.
     F8,
+    /// F9 function key.
     F9,
+    /// F10 function key.
     F10,
+    /// F11 function key.
     F11,
+    /// F12 function key.
     F12,
 
-    // Special keys
+    /// Enter key.
     Enter,
+    /// Escape key.
     Escape,
+    /// Space bar.
     Space,
+    /// Tab key.
     Tab,
+    /// Backspace key.
     Backspace,
+    /// Delete key.
     Delete,
+    /// Insert key.
     Insert,
+    /// Home key.
     Home,
+    /// End key.
     End,
+    /// Page Up key.
     PageUp,
+    /// Page Down key.
     PageDown,
 
-    // Arrow keys
+    /// Up arrow key.
     ArrowUp,
+    /// Down arrow key.
     ArrowDown,
+    /// Left arrow key.
     ArrowLeft,
+    /// Right arrow key.
     ArrowRight,
 
-    // Modifier keys
+    /// Shift modifier key.
     Shift,
+    /// Control modifier key.
     Control,
+    /// Alt modifier key.
     Alt,
+    /// Meta (Windows/Command) modifier key.
     Meta,
 
-    // Other keys
+    /// Caps Lock key.
     CapsLock,
+    /// Num Lock key.
     NumLock,
+    /// Scroll Lock key.
     ScrollLock,
+    /// Print Screen key.
     PrintScreen,
+    /// Pause key.
     Pause,
 
-    // Punctuation
+    /// Semicolon (;) key.
     Semicolon,
+    /// Equal (=) key.
     Equal,
+    /// Comma (,) key.
     Comma,
+    /// Minus (-) key.
     Minus,
+    /// Period (.) key.
     Period,
+    /// Slash (/) key.
     Slash,
+    /// Backquote (\`) key.
     Backquote,
+    /// Left bracket ([) key.
     BracketLeft,
+    /// Backslash (\) key.
     Backslash,
+    /// Right bracket (]) key.
     BracketRight,
+    /// Quote (') key.
     Quote,
 }
 
