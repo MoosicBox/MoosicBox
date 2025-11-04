@@ -1,3 +1,9 @@
+//! Layout calculation implementation for containers.
+//!
+//! This module provides the [`Calculator`] type for performing layout calculations
+//! on container trees, including width/height calculation, flexbox layout, margin/padding,
+//! and element positioning.
+
 use bumpalo::Bump;
 use paste::paste;
 
@@ -1009,6 +1015,9 @@ mod pass_widths {
     }
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Calculates widths for all containers in the tree.
+        ///
+        /// Performs font size calculation and fixed property calculation for width-related properties.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
             let each_parent = |container: &mut Container,
@@ -1055,6 +1064,10 @@ mod pass_margin_and_padding {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Calculates margin and padding for all containers in the tree.
+        ///
+        /// Processes margin and padding values based on container dimensions and view size.
+        ///
         /// # Panics
         ///
         /// * If any of the required container properties are missing
@@ -1122,6 +1135,9 @@ mod pass_flex_width {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Applies flexbox layout calculations for width on the horizontal axis.
+        ///
+        /// Distributes available width among flex children based on their flex properties.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
             flex_on_axis!(
@@ -1147,6 +1163,10 @@ mod pass_wrap_horizontal {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Wraps text content horizontally based on available width.
+        ///
+        /// Measures and adjusts text dimensions when wrapping is needed.
+        ///
         /// # Panics
         ///
         /// * If any of the required container properties are missing
@@ -1199,6 +1219,9 @@ mod pass_heights {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Calculates heights for all containers in the tree.
+        ///
+        /// Performs height calculations for all containers based on their content and layout properties.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
             calc_size_on_axis!(
@@ -1228,6 +1251,9 @@ mod pass_flex_height {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Applies flexbox layout calculations for height on the vertical axis.
+        ///
+        /// Distributes available height among flex children based on their flex properties.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
             flex_on_axis!(
@@ -1259,6 +1285,13 @@ mod pass_positioning {
     };
 
     impl<F: FontMetrics> Calculator<F> {
+        /// Positions all elements in the container tree based on layout rules.
+        ///
+        /// Calculates final x and y positions for all containers considering alignment,
+        /// justification, text alignment, and positioning properties.
+        ///
+        /// Returns `true` if any positions changed, `false` otherwise.
+        ///
         /// # Panics
         ///
         /// * If any of the required container properties are missing
@@ -1714,6 +1747,7 @@ macro_rules! axis_sum_func {
     ($prop:ident, $unit:ident, $x:ident, $y:ident $(,)?) => {
         paste! {
             impl Container {
+                #[doc = concat!("Returns the sum of calculated `", stringify!($prop), "` values on the ", stringify!($unit), " axis.\n\nReturns `None` if neither value is set.")]
                 #[must_use]
                 pub fn [<$prop _ $unit>](&self) -> Option<f32> {
                     let mut value = if let Some(x) = self.[<calculated_ $prop _ $x>] {
@@ -1737,6 +1771,9 @@ axis_sum_func!(padding, x, left, right);
 axis_sum_func!(padding, y, top, bottom);
 
 impl Container {
+    /// Returns the sum of left and right border widths.
+    ///
+    /// Returns `None` if neither border is set.
     #[must_use]
     pub fn border_x(&self) -> Option<f32> {
         let mut borders = if let Some((_, border_left)) = self.calculated_border_left {
@@ -1750,6 +1787,9 @@ impl Container {
         borders
     }
 
+    /// Returns the sum of top and bottom border widths.
+    ///
+    /// Returns `None` if neither border is set.
     #[must_use]
     pub fn border_y(&self) -> Option<f32> {
         let mut borders = if let Some((_, border_top)) = self.calculated_border_top {
@@ -1763,6 +1803,9 @@ impl Container {
         borders
     }
 
+    /// Returns the total bounding width including content, padding, scrollbar, and margin.
+    ///
+    /// Returns `None` if calculated width is not set.
     #[must_use]
     pub fn bounding_calculated_width(&self) -> Option<f32> {
         self.calculated_width.map(|width| {
@@ -1773,6 +1816,9 @@ impl Container {
         })
     }
 
+    /// Returns the total bounding height including content, padding, scrollbar, and margin.
+    ///
+    /// Returns `None` if calculated height is not set.
     #[must_use]
     pub fn bounding_calculated_height(&self) -> Option<f32> {
         self.calculated_height.map(|height| {
