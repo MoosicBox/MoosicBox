@@ -500,7 +500,6 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 element: Element::ListItem,
                 classes: vec!["markdown-list-item".to_string()],
                 margin_bottom: Some(Number::from(4)),
-                direction: LayoutDirection::Row,
                 ..Default::default()
             });
             Ok(())
