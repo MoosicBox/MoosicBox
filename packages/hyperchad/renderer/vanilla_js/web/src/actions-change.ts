@@ -1,5 +1,5 @@
-import { evaluate, createEventDelegator } from './actions';
-import { handleError, decodeHtml } from './core';
+import { evaluate } from './actions';
+import { handleError, decodeHtml, createEventDelegator } from './core';
 
 createEventDelegator('input', 'v-onchange', (element, attr, event) => {
     const value = (event.target as HTMLInputElement).value;

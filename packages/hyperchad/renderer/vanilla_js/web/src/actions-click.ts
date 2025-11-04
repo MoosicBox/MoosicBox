@@ -1,5 +1,5 @@
-import { evaluate, createEventDelegator } from './actions';
-import { handleError } from './core';
+import { evaluate } from './actions';
+import { createEventDelegator, handleError } from './core';
 
 createEventDelegator('click', 'v-onclick', (element, attr, event) => {
     event.stopPropagation();

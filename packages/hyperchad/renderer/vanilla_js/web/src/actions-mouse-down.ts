@@ -1,5 +1,5 @@
-import { evaluate, createEventDelegator } from './actions';
-import { handleError, decodeHtml } from './core';
+import { evaluate } from './actions';
+import { handleError, decodeHtml, createEventDelegator } from './core';
 
 let mousePos: { x: number; y: number } | undefined;
 const intervals: Set<ReturnType<typeof setInterval>> = new Set();

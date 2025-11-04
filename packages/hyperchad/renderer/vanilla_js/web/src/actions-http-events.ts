@@ -1,5 +1,5 @@
 import { evaluate } from './actions';
-import { handleError, onElement } from './core';
+import { handleError } from './core';
 
 const HTTP_TRIGGER_ATTRS = [
     'v-http-before-request',

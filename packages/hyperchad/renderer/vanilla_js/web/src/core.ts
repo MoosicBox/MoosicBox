@@ -239,6 +239,44 @@ export function handleError<T>(type: string, func: () => T): T | undefined {
     }
 }
 
+type EventHandler = (element: HTMLElement, attr: string, event: Event) => void;
+const globalListeners: { [key: string]: EventHandler[] } = {};
+
+export function createEventDelegator(
+    eventType: string,
+    attrName: string,
+    handler: EventHandler,
+) {
+    let listeners = globalListeners[eventType];
+    if (!listeners) {
+        listeners = [];
+    }
+    listeners.push(handler);
+
+    document.addEventListener(
+        eventType,
+
+        (event: Event) => {
+            const target = event.target as HTMLElement;
+            if (!target) return;
+
+            // Find the element with the attribute by walking up the DOM tree
+            let currentElement = target;
+            while (currentElement && currentElement !== document.body) {
+                const attr = currentElement.getAttribute(attrName);
+                if (attr) {
+                    listeners.forEach((handler) =>
+                        handler(currentElement, attr, event),
+                    );
+                    return;
+                }
+                currentElement = currentElement.parentElement as HTMLElement;
+            }
+        },
+        true,
+    );
+}
+
 on('domLoad', ({ elements }) =>
     elements.forEach((element) => processElement(element)),
 );

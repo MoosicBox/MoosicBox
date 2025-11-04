@@ -1,5 +1,5 @@
-import { evaluate, createEventDelegator } from './actions';
-import { handleError, decodeHtml } from './core';
+import { evaluate } from './actions';
+import { handleError, decodeHtml, createEventDelegator } from './core';
 
 createEventDelegator('keydown', 'v-onkeydown', (element, attr, event) => {
     const keyEvent = event as KeyboardEvent;
