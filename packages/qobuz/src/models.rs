@@ -104,11 +104,18 @@ impl Display for QobuzImageSize {
 }
 
 impl QobuzImage {
+    /// Returns the highest quality available cover URL (Mega size preferred).
+    ///
+    /// Falls back to the next best available size if Mega is unavailable.
     #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.cover_url_for_size(QobuzImageSize::Mega)
     }
 
+    /// Returns a cover URL for the specified size, falling back to available alternatives.
+    ///
+    /// The fallback order prioritizes sizes closest to the requested size, preferring
+    /// higher quality over lower quality when the exact size is unavailable.
     #[must_use]
     pub fn cover_url_for_size(&self, size: QobuzImageSize) -> Option<String> {
         match size {
@@ -351,6 +358,9 @@ impl TryFrom<Album> for QobuzAlbum {
 }
 
 impl QobuzAlbum {
+    /// Returns the highest quality available album artwork URL.
+    ///
+    /// Returns `None` if no artwork is available for this album.
     #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(QobuzImage::cover_url)
@@ -459,6 +469,9 @@ pub struct QobuzRelease {
 }
 
 impl QobuzRelease {
+    /// Returns the highest quality available release artwork URL.
+    ///
+    /// Returns `None` if no artwork is available for this release.
     #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(QobuzImage::cover_url)
@@ -590,6 +603,9 @@ impl From<QobuzTrack> for ApiGlobalSearchResult {
 }
 
 impl QobuzTrack {
+    /// Returns the highest quality available track artwork URL.
+    ///
+    /// Returns `None` if no artwork is available for this track.
     #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(QobuzImage::cover_url)
@@ -713,6 +729,9 @@ impl From<QobuzArtist> for ApiGlobalSearchResult {
 }
 
 impl QobuzArtist {
+    /// Returns the highest quality available artist photo URL.
+    ///
+    /// Returns `None` if no photo is available for this artist.
     #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.image.as_ref().and_then(QobuzImage::cover_url)
