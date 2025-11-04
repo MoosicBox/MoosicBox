@@ -11,13 +11,31 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 
+/// Payload for action requests from client-side JavaScript.
+///
+/// This structure represents the parsed request body for action endpoints.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ActionPayload {
+    /// The action identifier (string or JSON value).
     action: serde_json::Value,
+    /// Optional value parameter for the action.
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<Value>,
 }
 
+/// Handles an action request from a client by parsing the payload and sending it to the action channel.
+///
+/// Parses the request body as an [`ActionPayload`], extracts the action name and value,
+/// and sends them through the provided channel for processing by the application.
+///
+/// # Errors
+///
+/// * `Error::Http` - If HTTP response construction fails
+///
+/// # Panics
+///
+/// * If the channel sender fails to send the action (channel receiver has been dropped)
+/// * If JSON serialization of the action name fails (for non-string action values)
 #[allow(clippy::future_not_send)]
 pub fn handle_action(
     tx: &flume::Sender<(String, Option<Value>)>,

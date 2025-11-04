@@ -293,6 +293,7 @@ impl GenericRuntime for Runtime {
 }
 
 impl Runtime {
+    /// Creates a new simulator runtime with default settings.
     #[must_use]
     pub fn new() -> Self {
         let queue = Arc::new(Mutex::new(vec![]));
@@ -362,10 +363,17 @@ impl Runtime {
         true
     }
 
+    /// Processes the next task in the runtime's queue.
+    ///
+    /// This advances the simulator by one task execution. Useful for manual stepping
+    /// through task execution during testing.
     pub fn tick(&self) {
         self.process_next_task();
     }
 
+    /// Spawns a future onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn<T: Send + 'static>(
         &self,
         future: impl Future<Output = T> + Send + 'static,
@@ -383,6 +391,9 @@ impl Runtime {
         self.handle().spawn_with_name(name, future)
     }
 
+    /// Spawns a blocking task onto the runtime.
+    ///
+    /// Returns a `JoinHandle` that can be awaited to get the task's result.
     pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -401,6 +412,10 @@ impl Runtime {
         self.handle().spawn_blocking_with_name(name, func)
     }
 
+    /// Spawns a non-Send future onto the runtime.
+    ///
+    /// This allows spawning futures that are not `Send`, which must run on the current thread.
+    /// Returns a `JoinHandle` that can be awaited to get the future's result.
     pub fn spawn_local<T: 'static>(
         &self,
         future: impl Future<Output = T> + 'static,
@@ -417,6 +432,9 @@ impl Runtime {
         self.tasks.load(Ordering::SeqCst)
     }
 
+    /// Returns a reference to the currently running runtime.
+    ///
+    /// Returns `None` if no runtime is currently active on this thread.
     #[must_use]
     pub fn current() -> Option<Self> {
         if RUNTIME.is_set() {
@@ -463,6 +481,10 @@ impl<T: Send + Unpin> JoinHandle<T> {
         }
     }
 
+    /// Aborts the task associated with the handle.
+    ///
+    /// This is a no-op in the simulator runtime to maintain API compatibility with tokio.
+    /// The simulator cannot abort running tasks.
     pub fn abort(&self) {
         // FIXME: We should implement this in the simulator
         // Note: In the simulator, we can't actually abort running tasks
@@ -754,6 +776,11 @@ impl Wake for Task {
     }
 }
 
+/// Builds a new simulator runtime from the given builder.
+///
+/// # Errors
+///
+/// * This function always succeeds for the simulator runtime
 #[allow(clippy::unnecessary_wraps)]
 pub(crate) fn build_runtime(_builder: &Builder) -> Result<Runtime, Error> {
     Ok(Runtime::new())

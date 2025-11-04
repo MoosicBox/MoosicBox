@@ -247,6 +247,11 @@ impl GenericRuntime for Runtime {
     }
 }
 
+/// Builds a new tokio runtime from the given builder.
+///
+/// # Errors
+///
+/// * If the underlying tokio runtime fails to build
 #[allow(unused)]
 pub(crate) fn build_runtime(#[allow(unused)] builder: &Builder) -> Result<Runtime, Error> {
     #[cfg(feature = "rt-multi-thread")]

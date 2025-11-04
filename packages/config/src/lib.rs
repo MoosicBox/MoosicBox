@@ -101,7 +101,7 @@ static ROOT_DIR: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(
 ///
 /// # Panics
 ///
-/// * If the `ROOT_DIR` `Mutex` is poisoned
+/// * If the `ROOT_DIR` mutex is poisoned (which can only occur if another thread panicked while holding the lock)
 pub fn set_root_dir(path: PathBuf) {
     *ROOT_DIR.lock().unwrap() = Some(path);
 }

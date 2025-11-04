@@ -46,14 +46,19 @@ pub mod renderer;
 /// Errors that can occur in the hyperchad app.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// I/O error occurred during app operations.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// App builder configuration error.
     #[error(transparent)]
     Builder(#[from] BuilderError),
+    /// Generic error from another component.
     #[error(transparent)]
     OtherSend(#[from] Box<dyn std::error::Error + Send>),
+    /// Async runtime error.
     #[error(transparent)]
     Async(#[from] switchy::unsync::Error),
+    /// Task join error when waiting for async task completion.
     #[error(transparent)]
     Join(#[from] switchy::unsync::task::JoinError),
 }
@@ -61,8 +66,10 @@ pub enum Error {
 /// Errors that can occur when building an [`App`].
 #[derive(Debug, thiserror::Error)]
 pub enum BuilderError {
+    /// Router was not provided to the builder.
     #[error("Missing Router")]
     MissingRouter,
+    /// Runtime handle was not provided to the builder.
     #[error("Missing Runtime")]
     MissingRuntime,
 }

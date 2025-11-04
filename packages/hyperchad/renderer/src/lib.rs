@@ -152,6 +152,7 @@ pub struct View {
 }
 
 impl View {
+    /// Create a `ViewBuilder` for constructing a `View` with primary content, fragments, and delete selectors
     #[must_use]
     pub fn builder() -> ViewBuilder {
         ViewBuilder::default()
@@ -260,6 +261,10 @@ impl ViewBuilder {
 }
 
 /// Builder for constructing `Content` instances
+///
+/// Provides a fluent interface for building `Content::View` responses with
+/// primary content, fragments, and delete selectors. Automatically wraps
+/// the resulting `View` in a `Content` variant when built.
 #[derive(Debug, Default)]
 pub struct ContentBuilder {
     builder: ViewBuilder,

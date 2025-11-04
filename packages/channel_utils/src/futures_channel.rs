@@ -74,6 +74,10 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
     /// is buffered and will be sent in priority order when the receiver polls for items.
     /// Otherwise, the message is sent immediately.
     ///
+    /// # Errors
+    ///
+    /// * If the channel is disconnected and cannot accept messages
+    ///
     /// # Panics
     ///
     /// * If the internal priority buffer lock is poisoned (when another thread panicked while

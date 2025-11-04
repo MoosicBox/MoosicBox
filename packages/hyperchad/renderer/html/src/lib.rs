@@ -112,6 +112,11 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         self.responsive_triggers.insert(name, trigger);
     }
 
+    /// Writes HTML element attributes for a container to the output.
+    ///
+    /// Generates HTML attributes including ID, styling, classes, and data attributes
+    /// for the given container element.
+    ///
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the element attributes
@@ -141,6 +146,11 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         Ok(())
     }
 
+    /// Writes CSS media queries for responsive conditions to the output.
+    ///
+    /// Generates CSS `@media` rules based on responsive triggers configured in the
+    /// renderer, applying responsive overrides to container styles.
+    ///
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the css media-queries
@@ -342,6 +352,10 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         Ok(())
     }
 
+    /// Returns partial HTML content without the document structure.
+    ///
+    /// Used for rendering fragments or partial updates that will be inserted
+    /// into an existing page.
     fn partial_html(
         &self,
         _headers: &BTreeMap<String, String>,
@@ -353,6 +367,10 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         content
     }
 
+    /// Returns complete HTML document with doctype, head, and body elements.
+    ///
+    /// Generates a full HTML page including meta tags, CSS links, inline styles,
+    /// and the rendered content wrapped in proper HTML structure.
     fn root_html(
         &self,
         _headers: &BTreeMap<String, String>,
@@ -764,9 +782,11 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
 }
 
 impl<T: HtmlApp + ToRenderRunner + Send + Sync> ToRenderRunner for HtmlRenderer<T> {
+    /// Converts the renderer into a render runner that can execute the event loop.
+    ///
     /// # Errors
     ///
-    /// Will error if html fails to run the event loop.
+    /// * If the HTML app fails to initialize the render runner
     fn to_runner(
         self,
         handle: Handle,
@@ -781,9 +801,14 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         self.app.add_responsive_trigger(name, trigger);
     }
 
+    /// Initializes the renderer with dimensions and page metadata.
+    ///
+    /// Sets up the renderer's initial state including viewport dimensions,
+    /// positioning, background color, and page metadata like title and description.
+    ///
     /// # Errors
     ///
-    /// Will error if html app fails to start
+    /// * If the HTML app fails to initialize
     async fn init(
         &mut self,
         width: f32,
@@ -808,9 +833,14 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         Ok(())
     }
 
+    /// Emits a custom event to the renderer extension.
+    ///
+    /// Publishes events that can be handled by custom renderer extensions
+    /// for server-sent events, WebSocket updates, or other custom behavior.
+    ///
     /// # Errors
     ///
-    /// Will error if html app fails to emit the event.
+    /// * If the renderer extension fails to handle the event
     async fn emit_event(
         &self,
         event_name: String,
@@ -828,9 +858,14 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         Ok(())
     }
 
+    /// Renders a view containing the primary container and optional fragments.
+    ///
+    /// Processes the view through any configured renderer extensions to generate
+    /// HTML output or trigger updates via server-sent events or `WebSockets`.
+    ///
     /// # Errors
     ///
-    /// Will error if html fails to render the elements.
+    /// * If the renderer extension fails to process the view
     async fn render(
         &self,
         elements: View,
@@ -850,13 +885,18 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         Ok(())
     }
 
+    /// Renders canvas drawing updates to the HTML renderer.
+    ///
+    /// Processes canvas drawing operations through any configured renderer extensions
+    /// to update canvas elements in the rendered output.
+    ///
     /// # Errors
     ///
-    /// Will error if html fails to render the canvas update.
+    /// * If the renderer extension fails to process the canvas update
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * If the elements `Mutex` is poisoned
     #[allow(unused_variables)]
     async fn render_canvas(
         &self,

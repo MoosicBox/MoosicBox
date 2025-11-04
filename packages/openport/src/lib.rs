@@ -34,6 +34,22 @@ mod reservation;
 /// A network port number
 pub type Port = u16;
 
+/// A port reservation system with an exclusive range (e.g., `15000..16000`)
+///
+/// This is a type alias for a port reservation system with a [`Range<Port>`] (exclusive range).
+/// For inclusive ranges (e.g., `15000..=16000`), construct a `PortReservation<RangeInclusive<Port>>` directly.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(feature = "reservation")]
+/// # {
+/// use openport::PortReservation;
+///
+/// let reservation = PortReservation::new(15000..16000);
+/// let port = reservation.reserve_port().expect("No ports available");
+/// # }
+/// ```
 #[cfg(feature = "reservation")]
 pub type PortReservation = reservation::PortReservation<Range<Port>>;
 

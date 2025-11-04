@@ -42,11 +42,15 @@ pub struct SignalChain {
 }
 
 impl SignalChain {
+    /// Creates a new empty signal chain.
     #[must_use]
     pub const fn new() -> Self {
         Self { steps: vec![] }
     }
 
+    /// Sets the format hint for the most recently added step.
+    ///
+    /// The hint helps the decoder identify the audio format.
     #[must_use]
     pub fn with_hint(mut self, hint: Hint) -> Self {
         if let Some(step) = self.steps.pop() {
@@ -55,6 +59,9 @@ impl SignalChain {
         self
     }
 
+    /// Sets the audio decode handler for the most recently added step.
+    ///
+    /// The handler processes decoded audio samples.
     #[must_use]
     pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
@@ -67,6 +74,9 @@ impl SignalChain {
         self
     }
 
+    /// Sets the audio encoder for the most recently added step.
+    ///
+    /// The encoder transforms decoded audio into a different format.
     #[must_use]
     pub fn with_encoder<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
@@ -78,6 +88,7 @@ impl SignalChain {
         self
     }
 
+    /// Sets whether to verify decoded audio for the most recently added step.
     #[must_use]
     pub fn with_verify(mut self, verify: bool) -> Self {
         if let Some(step) = self.steps.pop() {
@@ -86,6 +97,9 @@ impl SignalChain {
         self
     }
 
+    /// Sets the seek position for the most recently added step.
+    ///
+    /// The seek position is specified in seconds.
     #[must_use]
     pub fn with_seek(mut self, seek: Option<f64>) -> Self {
         if let Some(step) = self.steps.pop() {
@@ -94,18 +108,21 @@ impl SignalChain {
         self
     }
 
+    /// Adds a new empty step to the signal chain.
     #[must_use]
     pub fn next_step(mut self) -> Self {
         self.steps.push(SignalChainStep::new());
         self
     }
 
+    /// Adds a configured step to the signal chain.
     #[must_use]
     pub fn add_step(mut self, step: SignalChainStep) -> Self {
         self.steps.push(step);
         self
     }
 
+    /// Adds a new step with the specified encoder to the signal chain.
     #[must_use]
     pub fn add_encoder_step<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
@@ -116,6 +133,7 @@ impl SignalChain {
         self
     }
 
+    /// Adds a new step with the specified resampler to the signal chain.
     #[must_use]
     pub fn add_resampler_step(mut self, resampler: Resampler<f32>) -> Self {
         self.steps
@@ -123,6 +141,8 @@ impl SignalChain {
         self
     }
 
+    /// Processes audio through all steps in the signal chain.
+    ///
     /// # Errors
     ///
     /// * If fails to process the audio somewhere in the `SignalChain`
@@ -166,6 +186,7 @@ pub struct SignalChainStep {
 }
 
 impl SignalChainStep {
+    /// Creates a new signal chain step with default settings.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -179,12 +200,18 @@ impl SignalChainStep {
         }
     }
 
+    /// Sets the format hint for this step.
+    ///
+    /// The hint helps the decoder identify the audio format.
     #[must_use]
     pub fn with_hint(mut self, hint: Hint) -> Self {
         self.hint.replace(hint);
         self
     }
 
+    /// Sets the audio decode handler for this step.
+    ///
+    /// The handler processes decoded audio samples.
     #[must_use]
     pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
@@ -194,6 +221,9 @@ impl SignalChainStep {
         self
     }
 
+    /// Sets the audio encoder for this step.
+    ///
+    /// The encoder transforms decoded audio into a different format.
     #[must_use]
     pub fn with_encoder<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
@@ -203,24 +233,33 @@ impl SignalChainStep {
         self
     }
 
+    /// Sets the resampler for this step.
+    ///
+    /// The resampler converts audio to a different sample rate.
     #[must_use]
     pub fn with_resampler(mut self, resampler: Resampler<f32>) -> Self {
         self.resampler.replace(resampler);
         self
     }
 
+    /// Sets whether to verify decoded audio for this step.
     #[must_use]
     pub const fn with_verify(mut self, verify: bool) -> Self {
         self.verify = verify;
         self
     }
 
+    /// Sets the seek position for this step.
+    ///
+    /// The seek position is specified in seconds.
     #[must_use]
     pub const fn with_seek(mut self, seek: Option<f64>) -> Self {
         self.seek = seek;
         self
     }
 
+    /// Processes audio through this signal chain step.
+    ///
     /// # Errors
     ///
     /// * If fails to process the audio somewhere in the `SignalChain`

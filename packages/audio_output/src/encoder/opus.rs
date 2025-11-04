@@ -50,6 +50,10 @@ pub struct OpusEncoder<'a> {
 }
 
 impl OpusEncoder<'_> {
+    /// Creates a new Opus encoder with default settings.
+    ///
+    /// Default output sample rate is 48000 Hz (Opus standard).
+    ///
     /// # Panics
     ///
     /// * If fails to get the opus encoder
@@ -76,6 +80,14 @@ impl OpusEncoder<'_> {
         }
     }
 
+    /// Creates a new Opus encoder with a custom writer.
+    ///
+    /// # Arguments
+    /// * `writer` - Output writer for encoded Opus data
+    ///
+    /// # Panics
+    ///
+    /// * If fails to get the opus encoder
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         let mut x = Self::new();
         x.writer.replace(Box::new(writer));

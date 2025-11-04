@@ -53,21 +53,8 @@ use std::{
 
 use simvar::{Sim, switchy::tcp::TcpStream};
 
-/// Client simulators for testing the `MoosicBox` server.
-///
-/// This module provides client-side simulation components including:
-/// * `fault_injector` - Injects random faults to test resilience
-/// * `health_checker` - Monitors server health status
 pub mod client;
-/// Host simulation for the `MoosicBox` server.
-///
-/// This module provides the simulation infrastructure for running the `MoosicBox` server
-/// in a deterministic simulated environment.
 pub mod host;
-/// HTTP utilities for simulated network requests.
-///
-/// This module provides functions for making HTTP requests over simulated TCP streams
-/// and parsing HTTP responses.
 pub mod http;
 
 static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =

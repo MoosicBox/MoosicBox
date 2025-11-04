@@ -475,7 +475,10 @@ impl ToValueType<SessionPlaylist> for &switchy_database::Row {
 
 /// Wrapper for session playlist tracks.
 #[derive(Debug)]
-pub struct SessionPlaylistTracks(pub Vec<ApiTrack>);
+pub struct SessionPlaylistTracks(
+    /// The list of tracks in the session playlist.
+    pub Vec<ApiTrack>,
+);
 
 impl AsId for SessionPlaylist {
     fn as_id(&self) -> DatabaseValue {

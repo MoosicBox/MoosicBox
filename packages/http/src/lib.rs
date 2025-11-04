@@ -281,36 +281,43 @@ macro_rules! impl_http {
             }
 
             impl ModuleRequestBuilder {
+                /// Add a header to the request.
                 #[must_use]
                 pub fn header(mut self, name: &str, value: &str) -> Self {
                     self.0.header(name, value);
                     self
                 }
 
+                /// Add a query parameter to the request.
                 #[must_use]
                 pub fn query_param(mut self, name: &str, value: &str) -> Self {
                     self.0.query_param(name, value);
                     self
                 }
 
+                /// Add an optional query parameter to the request.
                 #[must_use]
                 pub fn query_param_opt(mut self, name: &str, value: Option<&str>) -> Self {
                     self.0.query_param_opt(name, value);
                     self
                 }
 
+                /// Add multiple query parameters to the request.
                 #[must_use]
                 pub fn query_params(mut self, params: &[(&str, &str)]) -> Self {
                     self.0.query_params(params);
                     self
                 }
 
+                /// Set the request body.
                 #[must_use]
                 pub fn body(mut self, body: Bytes) -> Self {
                     self.0.body(body);
                     self
                 }
 
+                /// Send the HTTP request.
+                ///
                 /// # Errors
                 ///
                 /// * If there was an error while sending request, redirect loop was
@@ -354,6 +361,8 @@ macro_rules! impl_http {
 
             #[cfg(feature = "json")]
             impl ModuleRequestBuilder {
+                /// Set the request body as JSON.
+                ///
                 /// # Panics
                 ///
                 /// * If the `serde_json` serialization to bytes fails
@@ -365,6 +374,8 @@ macro_rules! impl_http {
                     self
                 }
 
+                /// Set the request body as form data.
+                ///
                 /// # Panics
                 ///
                 /// * If the `serde_json` serialization to bytes fails
@@ -404,16 +415,20 @@ macro_rules! impl_http {
             }
 
             impl ModuleResponse {
+                /// Get the HTTP status code of the response.
                 #[must_use]
                 pub fn status(&self) -> StatusCode {
                     <Self as GenericResponse>::status(self)
                 }
 
+                /// Get the response headers.
                 #[must_use]
                 pub fn headers(&mut self) -> &BTreeMap<String, String> {
                     <Self as GenericResponse>::headers(self)
                 }
 
+                /// Get the response body as text.
+                ///
                 /// # Errors
                 ///
                 /// * If the text response fails
@@ -421,6 +436,8 @@ macro_rules! impl_http {
                     <Self as GenericResponse>::text(&mut self).await
                 }
 
+                /// Get the response body as bytes.
+                ///
                 /// # Errors
                 ///
                 /// * If the bytes response fails
@@ -436,6 +453,8 @@ macro_rules! impl_http {
             }
 
             impl ModuleClientBuilder {
+                /// Build the configured HTTP client.
+                ///
                 /// # Errors
                 ///
                 /// * If the `Client` fails to build
@@ -445,6 +464,8 @@ macro_rules! impl_http {
             }
 
             impl ModuleResponse {
+                /// Get the response body as a stream of bytes.
+                ///
                 /// # Errors
                 ///
                 /// * If the `bytes_stream` response fails
@@ -457,6 +478,8 @@ macro_rules! impl_http {
             }
 
             impl ModuleResponse {
+                /// Deserialize the response body as JSON.
+                ///
                 /// # Errors
                 ///
                 /// * If the json response fails
@@ -474,6 +497,8 @@ macro_rules! impl_http {
             }
 
             impl ModuleClient {
+                /// Create a new HTTP client with default configuration.
+                ///
                 /// # Panics
                 ///
                 /// * If the empty `ClientBuilder` somehow fails to build
@@ -482,46 +507,55 @@ macro_rules! impl_http {
                     Self::builder().0.build().unwrap()
                 }
 
+                /// Create a new client builder for configuring the HTTP client.
                 #[must_use]
                 pub const fn builder() -> ModuleClientBuilder {
                     ModuleClientBuilder::new()
                 }
 
+                /// Create a GET request builder for the specified URL.
                 #[must_use]
                 pub fn get(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::get(self, url)
                 }
 
+                /// Create a POST request builder for the specified URL.
                 #[must_use]
                 pub fn post(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::post(self, url)
                 }
 
+                /// Create a PUT request builder for the specified URL.
                 #[must_use]
                 pub fn put(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::put(self, url)
                 }
 
+                /// Create a PATCH request builder for the specified URL.
                 #[must_use]
                 pub fn patch(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::patch(self, url)
                 }
 
+                /// Create a DELETE request builder for the specified URL.
                 #[must_use]
                 pub fn delete(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::delete(self, url)
                 }
 
+                /// Create a HEAD request builder for the specified URL.
                 #[must_use]
                 pub fn head(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::head(self, url)
                 }
 
+                /// Create an OPTIONS request builder for the specified URL.
                 #[must_use]
                 pub fn options(&self, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::options(self, url)
                 }
 
+                /// Create a request builder with the specified HTTP method and URL.
                 #[must_use]
                 pub fn request(&self, method: Method, url: &str) -> ModuleRequestBuilder {
                     <Self as GenericClient<ModuleRequestBuilder>>::request(self, method, url)

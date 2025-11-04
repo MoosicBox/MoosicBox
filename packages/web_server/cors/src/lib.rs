@@ -59,16 +59,19 @@ impl<T> Default for AllOrSome<T> {
 
 impl<T> AllOrSome<T> {
     /// Returns whether this is an `All` variant.
+    #[must_use]
     pub const fn is_all(&self) -> bool {
         matches!(self, Self::All)
     }
 
     /// Returns whether this is a `Some` variant.
+    #[must_use]
     pub const fn is_some(&self) -> bool {
         !self.is_all()
     }
 
     /// Provides a shared reference to `T` if variant is `Some`.
+    #[must_use]
     pub const fn as_ref(&self) -> Option<&T> {
         match *self {
             Self::All => None,
@@ -77,6 +80,7 @@ impl<T> AllOrSome<T> {
     }
 
     /// Provides a mutable reference to `T` if variant is `Some`.
+    #[must_use]
     pub const fn as_mut(&mut self) -> Option<&mut T> {
         match *self {
             Self::All => None,

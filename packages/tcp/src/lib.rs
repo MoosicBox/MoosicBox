@@ -196,6 +196,8 @@ macro_rules! impl_http {
             }
 
             impl ModuleTcpStream {
+                /// Connects to a remote TCP server at the specified address.
+                ///
                 /// # Errors
                 ///
                 /// * If the underlying `TcpStream` fails to connect
@@ -203,6 +205,8 @@ macro_rules! impl_http {
                     Ok(Self($module::TcpStream::connect(addr).await?, PhantomData, PhantomData))
                 }
 
+                /// Returns the local socket address of this stream.
+                ///
                 /// # Errors
                 ///
                 /// * If the underlying `TcpStream` fails to get the `local_addr`
@@ -210,6 +214,8 @@ macro_rules! impl_http {
                     self.0.local_addr()
                 }
 
+                /// Returns the remote peer socket address of this stream.
+                ///
                 /// # Errors
                 ///
                 /// * If the underlying `TcpStream` fails to get the `peer_addr`

@@ -19,13 +19,21 @@ static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
     Arc::new(runtime)
 });
 
+/// Runs the marketing site application in AWS Lambda environment.
+///
+/// Initializes tracing, builds the application with a runtime handle, and starts
+/// serving HTTP requests through the Lambda runtime.
+///
 /// # Errors
 ///
-/// * If the lambda fails
+/// * If application building fails
+/// * If Lambda handler setup fails
 ///
 /// # Panics
 ///
-/// * If the runner fails to run
+/// * If static asset route registration fails (via [`init`])
+///
+/// [`init`]: crate::init
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 

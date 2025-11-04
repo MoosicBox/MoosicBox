@@ -124,7 +124,12 @@ pub enum ProxyRequestError {
     Http(#[from] switchy_http::Error),
     /// Non-success HTTP response from the server
     #[error("Failure response ({status}): {text}")]
-    FailureResponse { status: u16, text: String },
+    FailureResponse {
+        /// HTTP status code
+        status: u16,
+        /// Response body text
+        text: String,
+    },
 }
 
 /// Errors that can occur when fetching audio zones from the server.

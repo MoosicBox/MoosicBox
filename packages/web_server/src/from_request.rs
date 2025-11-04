@@ -528,9 +528,13 @@ impl FromRequest for Headers {
 /// ```
 #[derive(Debug, Clone)]
 pub struct RequestInfo {
+    /// HTTP method (GET, POST, etc.)
     pub method: Method,
+    /// Request path (e.g., `/api/users`)
     pub path: String,
+    /// Query string (e.g., `page=1&limit=20`)
     pub query: String,
+    /// Optional remote address of the client
     pub remote_addr: Option<String>,
 }
 

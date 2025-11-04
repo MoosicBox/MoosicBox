@@ -33,6 +33,8 @@ pub struct TcpStreamReadHalf(tokio::net::tcp::OwnedReadHalf);
 pub struct TcpStreamWriteHalf(tokio::net::tcp::OwnedWriteHalf);
 
 impl TcpListener {
+    /// Binds a TCP listener to the specified address.
+    ///
     /// # Errors
     ///
     /// * If the `tokio::new::TcpListener` fails to bind the address
@@ -42,6 +44,8 @@ impl TcpListener {
 }
 
 impl crate::TokioTcpListener {
+    /// Binds a wrapped TCP listener to the specified address.
+    ///
     /// # Errors
     ///
     /// * If the `tokio::net::TcpListener` fails to bind the address
@@ -83,6 +87,8 @@ impl GenericTcpStream<TcpStreamReadHalf, TcpStreamWriteHalf> for TcpStream {
 }
 
 impl TcpStream {
+    /// Connects to a remote TCP server at the specified address.
+    ///
     /// # Errors
     ///
     /// * If the underlying `tokio::net::TcpStream` fails to connect

@@ -12,6 +12,10 @@ use futures::future::FusedFuture;
 use pin_project_lite::pin_project;
 
 pin_project! {
+    /// A future that completes after a specified duration.
+    ///
+    /// This is the simulator's implementation of a sleep future. Time advancement
+    /// is controlled by the simulator runtime.
     #[derive(Debug, Copy, Clone)]
     pub struct Sleep {
         #[pin]
@@ -26,6 +30,7 @@ pin_project! {
 }
 
 impl Sleep {
+    /// Creates a new `Sleep` future that completes after the specified duration.
     #[must_use]
     pub fn new(duration: Duration) -> Self {
         Self {
@@ -82,6 +87,9 @@ impl FusedFuture for Sleep {
 }
 
 pin_project! {
+    /// A future that completes at a specific instant in time.
+    ///
+    /// This future resolves when the simulator time reaches or exceeds the target instant.
     #[derive(Debug, Copy, Clone)]
     pub struct Instant {
         #[pin]
@@ -94,6 +102,7 @@ pin_project! {
 }
 
 impl Instant {
+    /// Creates a new `Instant` future that completes at the specified instant.
     #[must_use]
     pub const fn new(instant: std::time::Instant) -> Self {
         Self {
@@ -161,6 +170,10 @@ impl FusedFuture for Instant {
 }
 
 pin_project! {
+    /// An interval that yields values at a fixed rate.
+    ///
+    /// This is the simulator's implementation of an interval timer. It yields values
+    /// at regular intervals controlled by the simulator's time advancement.
     #[derive(Debug, Copy, Clone)]
     pub struct Interval {
         #[pin]
@@ -175,6 +188,7 @@ pin_project! {
 }
 
 impl Interval {
+    /// Creates a new `Interval` that yields values at the specified interval.
     #[must_use]
     pub fn new(interval: Duration) -> Self {
         Self {
@@ -185,6 +199,8 @@ impl Interval {
         }
     }
 
+    /// Returns a future that completes at the next tick.
+    ///
     /// # Panics
     ///
     /// * If the `Instant` fails to create
@@ -192,12 +208,17 @@ impl Interval {
         Instant::new(system_time_to_instant(switchy_time::now() + self.interval).unwrap())
     }
 
+    /// Resets the interval to the current time.
+    ///
+    /// This resets the internal state so the next tick will occur one interval from now.
     pub fn reset(&mut self) {
         self.now = switchy_time::now();
         self.polled = false;
         self.completed = false;
     }
 
+    /// Polls for the next tick of the interval.
+    ///
     /// # Panics
     ///
     /// * If time goes backwards
@@ -240,6 +261,10 @@ impl fmt::Display for Elapsed {
 impl std::error::Error for Elapsed {}
 
 pin_project! {
+    /// A future that wraps another future with a timeout.
+    ///
+    /// If the inner future doesn't complete within the specified duration,
+    /// the timeout future returns an `Elapsed` error.
     #[derive(Debug)]
     pub struct Timeout<F> {
         #[pin]
@@ -250,6 +275,9 @@ pin_project! {
 }
 
 impl<F> Timeout<F> {
+    /// Creates a new `Timeout` that wraps the given future.
+    ///
+    /// The timeout will expire after the specified duration.
     #[must_use]
     pub fn new(duration: Duration, future: F) -> Self {
         Self {
@@ -258,6 +286,7 @@ impl<F> Timeout<F> {
         }
     }
 
+    /// Consumes the `Timeout` and returns the inner future.
     pub fn into_inner(self) -> F {
         self.future
     }

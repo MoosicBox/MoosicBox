@@ -1106,6 +1106,13 @@ impl UpnpDeviceScanner {
         Self::default()
     }
 
+    /// Scans the network for `UPnP` devices and populates the device list.
+    ///
+    /// This method discovers devices on the local network, caches them, and stores
+    /// their information in the scanner's device list. If devices have already been
+    /// scanned or a scan is in progress, this method returns immediately without
+    /// performing another scan.
+    ///
     /// # Errors
     ///
     /// * If failed to scan for `UPnP` devices

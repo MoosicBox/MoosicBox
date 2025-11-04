@@ -105,6 +105,9 @@ fn wrap_to_500<E: std::error::Error + Send + 'static>(e: E) -> TunnelRequestErro
 
 #[async_trait]
 impl WebsocketSender for TunnelSenderHandle {
+    /// # Panics
+    ///
+    /// * If the `sender` `RwLock` is poisoned
     async fn send(
         &self,
         conn_id: &str,
@@ -122,6 +125,9 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `sender` `RwLock` is poisoned
     async fn send_all(&self, data: &str) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender
@@ -135,6 +141,9 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `sender` `RwLock` is poisoned
     async fn send_all_except(
         &self,
         conn_id: &str,
@@ -152,6 +161,9 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `sender` `RwLock` is poisoned
     async fn ping(&self) -> Result<(), moosicbox_ws::WebsocketSendError> {
         if let Some(sender) = self.sender.read().unwrap().as_ref() {
             sender

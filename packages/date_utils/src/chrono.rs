@@ -29,7 +29,10 @@ pub use chrono::*;
 ///
 /// # Errors
 ///
-/// * If the datetime fails to parse
+/// Returns `chrono::ParseError` if:
+/// * The input string doesn't match any of the supported formats
+/// * The year string cannot be parsed as a valid 16-bit unsigned integer (for year-only input)
+/// * The date or time components are invalid (e.g., month > 12, day > 31, hour > 23)
 pub fn parse_date_time(value: &str) -> Result<NaiveDateTime, chrono::ParseError> {
     if value.len() <= 4
         && let Ok(year) = value.parse::<u16>()

@@ -524,20 +524,35 @@ static MUSIC_FILE_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r".+\.(flac|m4a|mp3|opus)").unwrap());
 static MULTI_ARTIST_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\S,\S").unwrap());
 
+/// Represents an item discovered during filesystem scanning.
+///
+/// During directory traversal, files are classified into scan items for processing.
 pub enum ScanItem {
+    /// A music track file with metadata.
     Track {
+        /// Path to the track file.
         path: PathBuf,
+        /// File metadata (size, permissions, etc.).
         metadata: Metadata,
+        /// Track information if already known.
         track: Option<Track>,
     },
+    /// An album cover image file.
     AlbumCover {
+        /// Path to the cover image file.
         path: PathBuf,
+        /// File metadata (size, permissions, etc.).
         metadata: Metadata,
+        /// Album information if already known.
         album: Option<Album>,
     },
+    /// An artist cover image file.
     ArtistCover {
+        /// Path to the cover image file.
         path: PathBuf,
+        /// File metadata (size, permissions, etc.).
         metadata: Metadata,
+        /// Artist information if already known.
         artist: Option<Artist>,
     },
 }

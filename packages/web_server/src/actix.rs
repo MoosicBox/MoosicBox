@@ -207,6 +207,14 @@ where
 use crate::{HttpRequest, HttpRequestRef, WebServerBuilder};
 
 impl WebServerBuilder {
+    /// Build the web server using Actix backend
+    ///
+    /// This method constructs an Actix-based web server with all configured scopes,
+    /// middleware, and settings. The server is ready to be started with `start()`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a boxed `WebServer` trait object that can be used to start and stop the server.
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn build_actix(self) -> Box<dyn WebServer> {

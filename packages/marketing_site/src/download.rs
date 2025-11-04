@@ -20,6 +20,11 @@ static CLIENT: LazyLock<switchy_http::Client> =
 /// * If fetching GitHub releases fails after retries
 /// * If parsing the GitHub API response fails
 /// * If parsing release published dates fails
+///
+/// # Panics
+///
+/// * If the HTTP client fails to build (during static initialization)
+/// * If any regex pattern compilation fails (during static initialization)
 #[allow(clippy::too_many_lines)]
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
     #[derive(Deserialize)]

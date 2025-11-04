@@ -242,14 +242,23 @@ pub async fn get_track_or_ids_from_track_id_ranges(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayAlbumQuery {
+    /// Session ID to play the album on
     pub session_id: u64,
+    /// Album ID to play
     pub album_id: String,
+    /// Starting track position in the album
     pub position: Option<u16>,
+    /// Seek position in seconds within the track
     pub seek: Option<f64>,
+    /// Playback volume (0.0 to 1.0)
     pub volume: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
+    /// Audio format for playback
     pub format: Option<AudioFormat>,
+    /// API source for the album
     pub source: Option<ApiSource>,
+    /// Audio zone ID for multi-room audio
     pub audio_zone_id: Option<u64>,
 }
 
@@ -319,13 +328,21 @@ pub async fn play_album_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTrackQuery {
+    /// Session ID to play the track on
     pub session_id: u64,
+    /// Track ID to play
     pub track_id: i32,
+    /// Seek position in seconds within the track
     pub seek: Option<f64>,
+    /// Playback volume (0.0 to 1.0)
     pub volume: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
+    /// Audio format for playback
     pub format: Option<AudioFormat>,
+    /// API source for the track
     pub source: Option<ApiSource>,
+    /// Audio zone ID for multi-room audio
     pub audio_zone_id: Option<u64>,
 }
 
@@ -397,14 +414,23 @@ pub async fn play_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayTracksQuery {
+    /// Session ID to play the tracks on
     pub session_id: u64,
+    /// Comma-separated list of track IDs to play
     pub track_ids: String,
+    /// Starting track position in the playlist
     pub position: Option<u16>,
+    /// Seek position in seconds within the starting track
     pub seek: Option<f64>,
+    /// Playback volume (0.0 to 1.0)
     pub volume: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
+    /// Audio format for playback
     pub format: Option<AudioFormat>,
+    /// API source for the tracks
     pub source: Option<ApiSource>,
+    /// Audio zone ID for multi-room audio
     pub audio_zone_id: Option<u64>,
 }
 
@@ -475,6 +501,7 @@ pub async fn play_tracks_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StopTrackQuery {
+    /// Remote host to stop playback on
     pub host: Option<String>,
 }
 
@@ -513,7 +540,9 @@ pub async fn stop_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekTrackQuery {
+    /// Seek position in seconds
     pub seek: f64,
+    /// Remote host to seek playback on
     pub host: Option<String>,
 }
 
@@ -552,17 +581,29 @@ pub async fn seek_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePlaybackQuery {
+    /// Start playback
     pub play: Option<bool>,
+    /// Stop playback
     pub stop: Option<bool>,
+    /// Set playing state
     pub playing: Option<bool>,
+    /// Track position in playlist
     pub position: Option<u16>,
+    /// Seek position in seconds
     pub seek: Option<f64>,
+    /// Playback volume (0.0 to 1.0)
     pub volume: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
+    /// Comma-separated list of track IDs
     pub track_ids: Option<String>,
+    /// Audio format for playback
     pub format: Option<AudioFormat>,
+    /// Session ID for playback
     pub session_id: Option<u64>,
+    /// Audio zone ID for multi-room audio
     pub audio_zone_id: Option<u64>,
+    /// API source for tracks
     pub source: Option<ApiSource>,
 }
 
@@ -645,7 +686,9 @@ pub async fn update_playback_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NextTrackQuery {
+    /// Seek position in seconds for the next track
     pub seek: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
 }
 
@@ -685,6 +728,7 @@ pub async fn next_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PauseQuery {
+    /// Remote host to pause playback on
     pub host: Option<String>,
 }
 
@@ -723,6 +767,7 @@ pub async fn pause_playback_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ResumeQuery {
+    /// Remote host to resume playback on
     pub host: Option<String>,
 }
 
@@ -761,7 +806,9 @@ pub async fn resume_playback_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviousTrackQuery {
+    /// Seek position in seconds for the previous track
     pub seek: Option<f64>,
+    /// Remote host for playback
     pub host: Option<String>,
 }
 
@@ -801,6 +848,7 @@ pub async fn previous_track_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerStatusQuery {
+    /// Remote host to get status from
     pub host: Option<String>,
 }
 

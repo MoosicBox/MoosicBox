@@ -46,6 +46,9 @@ pub struct State {
 }
 
 impl std::fmt::Display for State {
+    /// # Panics
+    ///
+    /// * Panics if the state cannot be serialized to JSON
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }

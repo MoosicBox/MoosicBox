@@ -1,3 +1,8 @@
+//! Font metrics traits and types for text measurement.
+//!
+//! This module provides the [`FontMetrics`] trait for measuring text dimensions
+//! and related types for representing text bounds and row measurements.
+
 use super::order_float;
 
 /// Metrics for a single row of text.

@@ -296,7 +296,7 @@ pub fn mult_norm_gain_q15(norm: CeltNorm, gain: i32) -> i32 {
 
 /// Inner product of two i16 vectors (dot product)
 ///
-/// Computes Σ(x[i] * y[i]) in Q0 format (accumulated in i32).
+/// Computes Σ(x\[i\] * y\[i\]) in Q0 format (accumulated in i32).
 ///
 /// # Reference
 ///
@@ -323,11 +323,11 @@ pub fn celt_inner_prod(x: &[i16], y: &[i16]) -> i32 {
 ///
 /// # Algorithm
 ///
-/// 1. Compute E = EPSILON + Σ(pulses[i]²)
+/// 1. Compute E = EPSILON + Σ(pulses\[i\]²)
 /// 2. k = floor(log2(E)) / 2
 /// 3. t = E >> (2*(k-7))
 /// 4. g = `rsqrt_norm(t)` * gain  (where gain = `Q31_ONE` for unit norm)
-/// 5. output[i] = (g * pulses[i]) >> (k+1)
+/// 5. output\[i\] = (g * pulses\[i\]) >> (k+1)
 ///
 /// # Reference
 ///

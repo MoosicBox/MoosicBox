@@ -225,6 +225,10 @@ pub trait MusicApi: Send + Sync {
     fn source(&self) -> &ApiSource;
 
     /// Retrieves a paginated list of artists.
+    ///
+    /// # Errors
+    ///
+    /// * If the artists could not be retrieved
     async fn artists(
         &self,
         offset: Option<u32>,
@@ -234,6 +238,10 @@ pub trait MusicApi: Send + Sync {
     ) -> PagingResult<Artist, Error>;
 
     /// Retrieves an artist by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If the artist could not be retrieved
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error>;
 
     /// Adds an artist to the library.
@@ -284,12 +292,24 @@ pub trait MusicApi: Send + Sync {
     }
 
     /// Retrieves a paginated list of albums.
+    ///
+    /// # Errors
+    ///
+    /// * If the albums could not be retrieved
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
 
     /// Retrieves an album by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If the album could not be retrieved
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error>;
 
     /// Retrieves different versions of an album.
+    ///
+    /// # Errors
+    ///
+    /// * If the album versions could not be retrieved
     async fn album_versions(
         &self,
         album_id: &Id,
@@ -298,6 +318,10 @@ pub trait MusicApi: Send + Sync {
     ) -> PagingResult<AlbumVersion, Error>;
 
     /// Retrieves a paginated list of albums for a specific artist.
+    ///
+    /// # Errors
+    ///
+    /// * If the artist albums could not be retrieved
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
         &self,
@@ -340,6 +364,10 @@ pub trait MusicApi: Send + Sync {
     }
 
     /// Retrieves a paginated list of tracks.
+    ///
+    /// # Errors
+    ///
+    /// * If the tracks could not be retrieved
     async fn tracks(
         &self,
         track_ids: Option<&[Id]>,
@@ -350,9 +378,17 @@ pub trait MusicApi: Send + Sync {
     ) -> PagingResult<Track, Error>;
 
     /// Retrieves a track by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If the track could not be retrieved
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error>;
 
     /// Retrieves a paginated list of tracks for a specific album.
+    ///
+    /// # Errors
+    ///
+    /// * If the album tracks could not be retrieved
     async fn album_tracks(
         &self,
         album_id: &Id,

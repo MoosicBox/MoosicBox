@@ -1,3 +1,9 @@
+//! Core bundling functionality with automatic bundler selection.
+//!
+//! This module provides the main bundling interface that automatically delegates
+//! to either the SWC or esbuild bundler based on enabled features. SWC is preferred
+//! when both features are enabled.
+
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::LazyLock;
