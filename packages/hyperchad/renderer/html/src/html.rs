@@ -19,6 +19,10 @@ use hyperchad_transformer::{
     },
 };
 
+/// Writes multiple container elements to HTML output.
+///
+/// Iterates through the containers and converts each one to its HTML representation.
+///
 /// # Errors
 ///
 /// * If any of the elements fail to be written as HTML
@@ -35,6 +39,10 @@ pub fn elements_to_html(
     Ok(())
 }
 
+/// Writes an HTML attribute with name and value to the output.
+///
+/// Formats as ` name="value"` with proper escaping.
+///
 /// # Errors
 ///
 /// * If there was an IO error writing the attribute
@@ -47,6 +55,10 @@ pub fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), st
     Ok(())
 }
 
+/// Writes a CSS property declaration to the output.
+///
+/// Formats as `property:value;` for use within a style attribute.
+///
 /// # Errors
 ///
 /// * If there was an IO error writing the css attribute
@@ -58,6 +70,11 @@ pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<()
     Ok(())
 }
 
+/// Writes a CSS property declaration with `!important` flag to the output.
+///
+/// Formats as `property:value !important;` for use within style attributes
+/// or media queries where higher specificity is needed.
+///
 /// # Errors
 ///
 /// * If there was an IO error writing the css attribute
@@ -169,6 +186,11 @@ const fn is_grid_container(container: &Container) -> bool {
     matches!(container.overflow_x, LayoutOverflow::Wrap { grid: true })
 }
 
+/// Writes the style attribute for a container element to the output.
+///
+/// Converts container properties like dimensions, positioning, flexbox settings,
+/// colors, borders, and text styling into inline CSS within a style attribute.
+///
 /// # Errors
 ///
 /// * If there were any IO errors writing the element style attribute
@@ -774,9 +796,14 @@ pub fn element_style_to_html(
     Ok(())
 }
 
+/// Writes the class attribute for a container element to the output.
+///
+/// Generates HTML class attribute including default classes for specific elements
+/// (like removing button/table default styles) and custom classes from the container.
+///
 /// # Errors
 ///
-/// * If there were any IO errors writing the element style attribute
+/// * If there were any IO errors writing the element class attribute
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::cognitive_complexity)]
 pub fn element_classes_to_html(
@@ -824,6 +851,12 @@ pub fn element_classes_to_html(
     Ok(())
 }
 
+/// Writes a complete HTML element for a container to the output.
+///
+/// Converts a container into its corresponding HTML element with all attributes,
+/// styles, and child elements. Handles various element types including images,
+/// forms, buttons, tables, and semantic HTML elements.
+///
 /// # Errors
 ///
 /// * If there were any IO errors writing the element as HTML
@@ -1219,6 +1252,11 @@ pub fn element_to_html(
     Ok(())
 }
 
+/// Converts a container's child elements to an HTML string.
+///
+/// Renders all children of the container and returns the HTML as a string,
+/// without wrapping document structure. Useful for generating HTML fragments.
+///
 /// # Errors
 ///
 /// * If there were any IO errors writing the `Container` as HTML
@@ -1240,6 +1278,12 @@ pub fn container_element_to_html(
         .to_string())
 }
 
+/// Converts a container to a complete HTML document response.
+///
+/// Generates a full HTML page with doctype, head section (including CSS and metadata),
+/// and body containing the rendered container. This is used for serving complete
+/// HTML pages in web applications.
+///
 /// # Errors
 ///
 /// * If there were any IO errors writing the `Container` as an HTML response
