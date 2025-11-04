@@ -191,7 +191,7 @@ fn build_test_tokens(
 /// The macro accepts a special syntax with a crate path followed by the standard
 /// `select!` branches:
 ///
-/// ```text
+/// ```ignore
 /// select_internal! {
 ///     @path = crate_path;
 ///     pattern1 = future1 => handler1,
@@ -214,7 +214,7 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
 ///
 /// The macro accepts a special syntax with a crate path followed by the futures to join:
 ///
-/// ```text
+/// ```ignore
 /// join_internal! {
 ///     @path = crate_path;
 ///     future1,
@@ -238,7 +238,7 @@ pub fn join_internal(input: TokenStream) -> TokenStream {
 ///
 /// The macro accepts a special syntax with a crate path followed by the futures to join:
 ///
-/// ```text
+/// ```ignore
 /// try_join_internal! {
 ///     @path = crate_path;
 ///     future1,
@@ -331,7 +331,7 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The macro accepts a special syntax with configuration parameters:
 ///
-/// ```text
+/// ```ignore
 /// test_internal! {
 ///     @path = crate_path;
 ///     [real_time;]
