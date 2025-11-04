@@ -134,6 +134,15 @@ impl Default for SimulatorEnv {
 }
 
 impl EnvProvider for SimulatorEnv {
+    /// Get an environment variable as a string
+    ///
+    /// # Errors
+    ///
+    /// * If the environment variable is not found
+    ///
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     fn var(&self, name: &str) -> Result<String> {
         let vars = self.vars.read().unwrap();
         vars.get(name)
@@ -141,6 +150,11 @@ impl EnvProvider for SimulatorEnv {
             .ok_or_else(|| EnvError::NotFound(name.to_string()))
     }
 
+    /// Get all environment variables
+    ///
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     fn vars(&self) -> BTreeMap<String, String> {
         let vars = self.vars.read().unwrap();
         vars.clone()
