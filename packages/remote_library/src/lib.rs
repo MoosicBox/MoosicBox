@@ -103,6 +103,9 @@ impl MusicApi for RemoteLibraryMusicApi {
         &self.api_source
     }
 
+    /// # Panics
+    ///
+    /// Panics if the number of artists returned exceeds `u32::MAX`.
     async fn artists(
         &self,
         offset: Option<u32>,
@@ -433,6 +436,9 @@ impl MusicApi for RemoteLibraryMusicApi {
         })?))
     }
 
+    /// # Panics
+    ///
+    /// Panics if the number of album versions returned exceeds `u32::MAX`.
     async fn album_versions(
         &self,
         album_id: &Id,
@@ -583,6 +589,9 @@ impl MusicApi for RemoteLibraryMusicApi {
         }))
     }
 
+    /// # Panics
+    ///
+    /// Panics if the number of tracks returned exceeds `u32::MAX`.
     async fn tracks(
         &self,
         track_ids: Option<&[Id]>,
@@ -665,6 +674,9 @@ impl MusicApi for RemoteLibraryMusicApi {
         })
     }
 
+    /// # Panics
+    ///
+    /// Panics if the number of tracks returned exceeds `u32::MAX`.
     async fn album_tracks(
         &self,
         album_id: &Id,
