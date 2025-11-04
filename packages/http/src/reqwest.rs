@@ -29,6 +29,7 @@ use crate::{
 pub struct Client(reqwest::Client);
 
 impl Client {
+    /// Create a new reqwest HTTP client wrapper.
     #[must_use]
     pub const fn new(client: reqwest::Client) -> Self {
         Self(client)
@@ -51,6 +52,7 @@ impl GenericClient<crate::ReqwestRequestBuilder> for Client {
 pub struct ClientBuilder;
 
 impl crate::ReqwestClientBuilder {
+    /// Create a new client builder for configuring the reqwest HTTP client.
     #[must_use]
     pub const fn new() -> Self {
         Self(ClientBuilder, PhantomData, PhantomData)

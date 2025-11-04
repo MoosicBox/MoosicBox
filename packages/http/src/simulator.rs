@@ -36,6 +36,7 @@ use crate::{
 pub struct Client;
 
 impl Client {
+    /// Create a new simulator HTTP client.
     #[must_use]
     pub const fn new() -> Self {
         Self
@@ -55,6 +56,7 @@ impl GenericClient<crate::SimulatorRequestBuilder> for Client {
 pub struct ClientBuilder;
 
 impl crate::SimulatorClientBuilder {
+    /// Create a new client builder for the simulator HTTP client.
     #[must_use]
     pub const fn new() -> Self {
         Self(ClientBuilder, PhantomData, PhantomData)
