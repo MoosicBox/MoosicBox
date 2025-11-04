@@ -487,14 +487,18 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
     }
 }
 
+/// Retrieves track bytes from cache or fetches them if not cached.
+///
+/// This is the main entry point for the track pooling system. It checks if the track is already
+/// being processed or cached, and reuses existing streams when possible. Falls back to calling
+/// the provided fetch function for cache misses.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
-/// * If the `AudioFormat` is invalid
+/// * `GetTrackBytesError::NotFound` - If the track was not found
+/// * `GetTrackBytesError::IO` - If an IO error occurs
+/// * `GetTrackBytesError::Commander` - If track pool service error occurs
+/// * `GetTrackBytesError::Recv` - If channel receive fails
 pub async fn get_or_fetch_track(
     source: &TrackSource,
     output_format: AudioFormat,

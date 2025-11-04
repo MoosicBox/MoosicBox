@@ -59,13 +59,18 @@ pub enum AlbumCoverError {
     InvalidSource,
 }
 
+/// Retrieves the local file path to an album cover image.
+///
+/// First checks for a local file, then falls back to fetching from remote sources if available.
+/// Updates the database with the located cover path.
+///
 /// # Errors
 ///
-/// * If the album cover was not found
-/// * If failed to get the album info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `AlbumCoverError::NotFound` - If the album cover was not found
+/// * `AlbumCoverError::MusicApi` - If failed to get the album info
+/// * `AlbumCoverError::IO` - If an IO error occurs
+/// * `AlbumCoverError::Database` - If a database error occurs
+/// * `AlbumCoverError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_local_album_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -91,13 +96,18 @@ pub async fn get_local_album_cover(
     Err(AlbumCoverError::NotFound(album.id.clone()))
 }
 
+/// Retrieves an album cover image as a stream of bytes.
+///
+/// First checks for a local file, then falls back to fetching from remote sources if available.
+/// Returns a byte stream suitable for streaming to clients.
+///
 /// # Errors
 ///
-/// * If the album cover was not found
-/// * If failed to get the album info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `AlbumCoverError::NotFound` - If the album cover was not found
+/// * `AlbumCoverError::MusicApi` - If failed to get the album info
+/// * `AlbumCoverError::IO` - If an IO error occurs
+/// * `AlbumCoverError::Database` - If a database error occurs
+/// * `AlbumCoverError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_local_album_cover_bytes(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -264,13 +274,18 @@ async fn copy_streaming_cover_to_local(
     Ok(cover)
 }
 
+/// Retrieves the file path to an album cover image at the specified size.
+///
+/// This is the main public API for getting album covers. It delegates to `get_local_album_cover`
+/// to handle local and remote sources.
+///
 /// # Errors
 ///
-/// * If the album cover was not found
-/// * If failed to get the album info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `AlbumCoverError::NotFound` - If the album cover was not found
+/// * `AlbumCoverError::MusicApi` - If failed to get the album info
+/// * `AlbumCoverError::IO` - If an IO error occurs
+/// * `AlbumCoverError::Database` - If a database error occurs
+/// * `AlbumCoverError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_album_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -280,13 +295,18 @@ pub async fn get_album_cover(
     get_local_album_cover(api, db, album, size).await
 }
 
+/// Retrieves an album cover image as a stream of bytes at the specified size.
+///
+/// This is the main public API for getting album cover byte streams. It delegates to
+/// `get_local_album_cover_bytes` to handle local and remote sources.
+///
 /// # Errors
 ///
-/// * If the album cover was not found
-/// * If failed to get the album info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `AlbumCoverError::NotFound` - If the album cover was not found
+/// * `AlbumCoverError::MusicApi` - If failed to get the album info
+/// * `AlbumCoverError::IO` - If an IO error occurs
+/// * `AlbumCoverError::Database` - If a database error occurs
+/// * `AlbumCoverError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_album_cover_bytes(
     api: &dyn MusicApi,
     db: &LibraryDatabase,

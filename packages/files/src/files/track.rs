@@ -86,13 +86,16 @@ pub enum TrackSourceError {
     MusicApi(#[from] moosicbox_music_api::Error),
 }
 
+/// Retrieves the track source information for a given track ID.
+///
+/// Resolves the track through the music API and returns the appropriate source (local file or
+/// remote URL) for streaming the track at the requested quality.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackSourceError::NotFound` - If the track was not found
+/// * `TrackSourceError::MusicApi` - If failed to get the track info
+/// * `TrackSourceError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_track_id_source(
     apis: MusicApis,
     track_id: &Id,
@@ -140,13 +143,16 @@ pub async fn get_track_id_source(
     get_track_source(&**api, &track, quality).await
 }
 
+/// Retrieves the track source from a track object.
+///
+/// Gets the appropriate source (local file or remote URL) for streaming the track at the
+/// requested quality. This is a lower-level function used by `get_track_id_source`.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackSourceError::NotFound` - If the track source was not found
+/// * `TrackSourceError::MusicApi` - If failed to get the track source
+/// * `TrackSourceError::InvalidSource` - If the `ApiSource` is invalid
 pub async fn get_track_source(
     api: &dyn MusicApi,
     track: &Track,
@@ -249,14 +255,19 @@ impl std::fmt::Debug for TrackBytes {
     }
 }
 
+/// Retrieves the audio bytes for a track as a stream.
+///
+/// Fetches track audio data from the specified source (local file or remote URL) and returns
+/// it as a byte stream. Optionally converts the format if different from the source format.
+/// Supports partial content via byte range parameters.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
-/// * If the `AudioFormat` is invalid
+/// * `GetTrackBytesError::NotFound` - If the track was not found
+/// * `GetTrackBytesError::TrackInfo` - If failed to get the track info
+/// * `GetTrackBytesError::IO` - If an IO error occurs
+/// * `GetTrackBytesError::MusicApi` - If a music API error occurs
+/// * `GetTrackBytesError::UnsupportedFormat` - If the `AudioFormat` is invalid
 pub async fn get_track_bytes(
     api: &dyn MusicApi,
     track_id: &Id,
@@ -325,10 +336,15 @@ pub enum GetSilenceBytesError {
     AudioOutput(#[from] AudioOutputError),
 }
 
+/// Generates silent audio bytes for a specified duration.
+///
+/// Creates a stream of silent audio in the requested format and duration. Useful for filling
+/// gaps in playback or testing audio pipelines.
+///
 /// # Errors
 ///
-/// * If failed to encode the audio bytes
-/// * If the `ApiSource` is invalid
+/// * `GetSilenceBytesError::AudioOutput` - If failed to encode the audio bytes
+/// * `GetSilenceBytesError::InvalidSource` - If the `AudioFormat` is `Source` (invalid for generated audio)
 ///
 /// # Panics
 ///
@@ -435,13 +451,19 @@ pub fn get_silence_bytes(
     })
 }
 
+/// Retrieves audio bytes from a track source with optional format conversion.
+///
+/// Low-level function that fetches audio data from local files or remote URLs and optionally
+/// transcodes to a different format. Uses the track pool for caching when appropriate.
+/// Supports byte range requests for partial content streaming.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `GetTrackBytesError::NotFound` - If the track was not found
+/// * `GetTrackBytesError::IO` - If an IO error occurs
+/// * `GetTrackBytesError::Http` - If an HTTP request fails
+/// * `GetTrackBytesError::Commander` - If track pool service error occurs
+/// * `GetTrackBytesError::UnsupportedFormat` - If the `AudioFormat` is invalid
 ///
 /// # Panics
 ///
@@ -918,13 +940,15 @@ impl From<Track> for TrackInfo {
     }
 }
 
+/// Retrieves metadata information for multiple tracks.
+///
+/// Fetches track metadata (title, artist, album, duration, etc.) for a list of track IDs
+/// from the specified music API source.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackInfoError::NotFound` - If any track was not found
+/// * `TrackInfoError::MusicApi` - If failed to get the track info
 pub async fn get_tracks_info(
     api: &dyn MusicApi,
     track_ids: &[Id],
@@ -942,13 +966,15 @@ pub async fn get_tracks_info(
     Ok(tracks.into_iter().map(Into::into).collect())
 }
 
+/// Retrieves metadata information for a single track.
+///
+/// Fetches track metadata (title, artist, album, duration, etc.) for a track ID from the
+/// specified music API source.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackInfoError::NotFound` - If the track was not found
+/// * `TrackInfoError::MusicApi` - If failed to get the track info
 pub async fn get_track_info(
     api: &dyn MusicApi,
     track_id: &Id,
@@ -1000,17 +1026,21 @@ where
     values
 }
 
-/// # Panics
+/// Generates or retrieves visualization data for a track.
 ///
-/// * If the `RwLock` is poisoned
+/// Decodes the track audio and generates amplitude data for visualization purposes (waveform).
+/// The data is downsampled to the specified maximum number of points.
 ///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackInfoError::GetTrackBytes` - If failed to get track bytes
+/// * `TrackInfoError::Decode` - If audio decoding fails
+/// * `TrackInfoError::UnsupportedFormat` - If the audio format is not supported
+/// * `TrackInfoError::UnsupportedSource` - If the track source is not supported
+///
+/// # Panics
+///
+/// * If the `RwLock` is poisoned
 pub async fn get_or_init_track_visualization(
     source: &TrackSource,
     max: u16,
@@ -1137,13 +1167,15 @@ pub async fn get_or_init_track_visualization(
     Ok(ret_viz)
 }
 
+/// Retrieves the file size of a track at the specified quality.
+///
+/// Gets the total size in bytes of the track audio data. This is useful for setting
+/// Content-Length headers and calculating download progress.
+///
 /// # Errors
 ///
-/// * If the track cover was not found
-/// * If failed to get the track info
-/// * If an IO error occurs
-/// * If a database error occurs
-/// * If the `ApiSource` is invalid
+/// * `TrackInfoError::NotFound` - If the track was not found
+/// * `TrackInfoError::MusicApi` - If failed to get the track size
 pub async fn get_or_init_track_size(
     api: &dyn MusicApi,
     track_id: &Id,
