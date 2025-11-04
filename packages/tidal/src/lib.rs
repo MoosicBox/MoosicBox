@@ -89,30 +89,42 @@ use url::form_urlencoded;
 /// Errors that can occur when interacting with the Tidal API.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// No user ID is available for the authenticated session.
     #[error("No user ID available")]
     NoUserIdAvailable,
+    /// Failed to parse JSON data from the API response.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// HTTP request error from the underlying HTTP client.
     #[error(transparent)]
     Http(#[from] switchy::http::Error),
+    /// Database operation failed.
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to retrieve Tidal configuration from the database.
     #[cfg(feature = "db")]
     #[error(transparent)]
     TidalConfig(#[from] db::GetTidalConfigError),
+    /// No access token is available for authentication.
     #[error("No access token available")]
     NoAccessTokenAvailable,
+    /// Request was rejected due to invalid or missing authentication.
     #[error("Unauthorized")]
     Unauthorized,
+    /// API request failed with an error message.
     #[error("Request failed (error {0})")]
     RequestFailed(String),
+    /// HTTP request failed with a specific status code and message.
     #[error("Request failed (error {0}): {1}")]
     HttpRequestFailed(u16, String),
+    /// Maximum number of retry attempts has been exceeded.
     #[error("MaxFailedAttempts")]
     MaxFailedAttempts,
+    /// API response did not include an expected body.
     #[error("No response body")]
     NoResponseBody,
+    /// Failed to serialize or deserialize JSON data.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
@@ -123,6 +135,7 @@ pub enum Error {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalDeviceType {
+    /// Browser-based device type for web applications.
     Browser,
 }
 
@@ -653,6 +666,7 @@ async fn refetch_access_token(
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalArtistOrder {
+    /// Order artists by date added to favorites.
     Date,
 }
 
@@ -662,7 +676,9 @@ pub enum TidalArtistOrder {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalArtistOrderDirection {
+    /// Ascending order (oldest to newest).
     Asc,
+    /// Descending order (newest to oldest).
     Desc,
 }
 
@@ -912,6 +928,7 @@ pub async fn remove_favorite_artist(
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalAlbumOrder {
+    /// Order albums by date added to favorites.
     Date,
 }
 
@@ -921,7 +938,9 @@ pub enum TidalAlbumOrder {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalAlbumOrderDirection {
+    /// Ascending order (oldest to newest).
     Asc,
+    /// Descending order (newest to oldest).
     Desc,
 }
 
@@ -1239,6 +1258,7 @@ pub async fn remove_favorite_album(
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalTrackOrder {
+    /// Order tracks by date added to favorites.
     Date,
 }
 
@@ -1248,7 +1268,9 @@ pub enum TidalTrackOrder {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalTrackOrderDirection {
+    /// Ascending order (oldest to newest).
     Asc,
+    /// Descending order (newest to oldest).
     Desc,
 }
 
@@ -1497,9 +1519,12 @@ pub async fn remove_favorite_track(
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum TidalAlbumType {
+    /// Full-length studio album (LP).
     #[default]
     Lp,
+    /// Extended plays (EPs) and single releases.
     EpsAndSingles,
+    /// Compilation albums and collections.
     Compilations,
 }
 
@@ -1881,11 +1906,17 @@ pub async fn track(
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SearchType {
+    /// Search for artists.
     Artists,
+    /// Search for albums.
     Albums,
+    /// Search for tracks.
     Tracks,
+    /// Search for videos.
     Videos,
+    /// Search for playlists.
     Playlists,
+    /// Search for user profiles.
     UserProfiles,
 }
 
@@ -1907,11 +1938,17 @@ impl From<SearchType> for TidalSearchType {
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum TidalSearchType {
+    /// Search for artists.
     Artists,
+    /// Search for albums.
     Albums,
+    /// Search for tracks.
     Tracks,
+    /// Search for videos.
     Videos,
+    /// Search for playlists.
     Playlists,
+    /// Search for user profiles.
     UserProfiles,
 }
 
@@ -2010,8 +2047,11 @@ pub async fn search(
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TidalAudioQuality {
+    /// High quality audio (AAC 320kbps).
     High,
+    /// Lossless audio quality (FLAC 16-bit/44.1kHz).
     Lossless,
+    /// Hi-Res lossless audio (FLAC up to 24-bit/192kHz or MQA).
     HiResLossless,
 }
 
@@ -2225,9 +2265,11 @@ impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
 /// Errors that can occur when configuring the Tidal API client.
 #[derive(Debug, thiserror::Error)]
 pub enum TidalConfigError {
+    /// Database connection is required but was not provided.
     #[cfg(feature = "db")]
     #[error("Missing Db")]
     MissingDb,
+    /// Failed to retrieve Tidal configuration from the database.
     #[cfg(feature = "db")]
     #[error(transparent)]
     GetTidalConfig(#[from] db::GetTidalConfigError),
