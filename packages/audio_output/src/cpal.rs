@@ -1,3 +1,9 @@
+//! CPAL (Cross-Platform Audio Library) audio output implementation.
+//!
+//! This module provides audio output functionality using the CPAL library, which supports
+//! multiple audio backends across different operating systems. It handles device enumeration,
+//! stream management, and audio playback through hardware devices.
+
 #![allow(clippy::module_name_repetitions)]
 
 use cpal::traits::{DeviceTrait, HostTrait};
