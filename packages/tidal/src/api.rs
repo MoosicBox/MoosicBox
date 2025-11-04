@@ -1061,8 +1061,11 @@ pub struct TidalArtistAlbumsQuery {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumType {
+    /// Full-length studio album (LP).
     Lp,
+    /// Extended plays (EPs) and single releases.
     EpsAndSingles,
+    /// Compilation albums and collections.
     Compilations,
 }
 
