@@ -1,3 +1,26 @@
+//! Deterministic simulation backend for reproducible random sequences.
+//!
+//! This module provides a deterministic random number generator suitable for simulations
+//! that require reproducible random sequences. The initial seed can be configured via
+//! the `SIMULATOR_SEED` environment variable.
+//!
+//! # Thread-Local State
+//!
+//! The simulator maintains thread-local RNG state to ensure deterministic behavior in
+//! multi-threaded simulations. Each thread has its own seed that can be reset independently.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "simulator")]
+//! # {
+//! use switchy_random::simulator::rng;
+//!
+//! let random_gen = rng();
+//! let value = random_gen.next_u32();
+//! # }
+//! ```
+
 use std::{
     cell::RefCell,
     sync::{Arc, LazyLock, Mutex, RwLock},
@@ -107,22 +130,37 @@ impl SimulatorRng {
 }
 
 impl GenericRng for SimulatorRng {
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_u32(&self) -> u32 {
         self.0.lock().unwrap().next_u32()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_i32(&self) -> i32 {
         self.0.lock().unwrap().gen_range(i32::MIN..=i32::MAX)
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_u64(&self) -> u64 {
         self.0.lock().unwrap().next_u64()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn fill_bytes(&self, dest: &mut [u8]) {
         self.0.lock().unwrap().fill_bytes(dest);
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
