@@ -118,7 +118,15 @@ static RT: LazyLock<switchy::unsync::runtime::Runtime> = LazyLock::new(|| {
         .unwrap()
 });
 
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
+/// Tauri command to show the main application window.
+///
+/// This command makes the main webview window visible. Only available on
+/// desktop platforms (not Android).
+///
+/// # Panics
+///
+/// * If the main webview window cannot be found
+/// * If the window fails to show
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
 async fn show_main_window(window: tauri::Window) {
@@ -127,6 +135,14 @@ async fn show_main_window(window: tauri::Window) {
     window.get_webview_window("main").unwrap().show().unwrap();
 }
 
+/// Tauri command invoked when the application starts up.
+///
+/// This command handles application startup logic, including reconnecting
+/// to existing WebSocket connections if present.
+///
+/// # Errors
+///
+/// * If emitting the `ws-connect` event fails
 #[tauri::command]
 async fn on_startup() -> Result<(), tauri::Error> {
     log::debug!("on_startup");
@@ -189,6 +205,15 @@ impl From<TauriUpdateAppState> for UpdateAppState {
     }
 }
 
+/// Tauri command to update the application state.
+///
+/// This command allows the frontend to update various aspects of the
+/// application state, such as connection details, API credentials, and
+/// playback configuration.
+///
+/// # Errors
+///
+/// * If the state update fails in the underlying `AppState`
 #[tauri::command]
 async fn set_state(state: TauriUpdateAppState) -> Result<(), TauriPlayerError> {
     Ok(STATE.set_state(state.into()).await?)
@@ -347,6 +372,14 @@ impl From<TrackId> for Id {
     }
 }
 
+/// Tauri command to set the playback quality for all active players.
+///
+/// This command updates the playback quality setting and propagates it to
+/// all active players in the current session.
+///
+/// # Errors
+///
+/// * If updating playback quality on any active player fails
 #[tauri::command]
 async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlayerError> {
     log::debug!("Setting playback quality: {quality:?}");
@@ -383,6 +416,15 @@ async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlaye
     Ok(())
 }
 
+/// Tauri command to propagate a WebSocket message from the frontend.
+///
+/// This command receives WebSocket messages from the frontend and queues them
+/// for transmission to the connected `MoosicBox` server.
+///
+/// # Errors
+///
+/// * Currently this function always succeeds, but returns a `Result` for
+///   consistency with other Tauri commands. Errors in the spawned task are logged.
 #[tauri::command]
 async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayerError> {
     moosicbox_logging::debug_or_trace!(
@@ -402,6 +444,19 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
     Ok(())
 }
 
+/// Tauri command to proxy a GET request to the `MoosicBox` server.
+///
+/// This command forwards HTTP GET requests from the frontend to the configured
+/// `MoosicBox` server, handling authentication and connection details automatically.
+///
+/// # Errors
+///
+/// * If the API proxy GET request fails
+///
+/// # Panics
+///
+/// * If the headers JSON value is not an object
+/// * If any header value is not a string
 #[tauri::command]
 async fn api_proxy_get(
     url: String,
@@ -421,6 +476,19 @@ async fn api_proxy_get(
         .await?)
 }
 
+/// Tauri command to proxy a POST request to the `MoosicBox` server.
+///
+/// This command forwards HTTP POST requests from the frontend to the configured
+/// `MoosicBox` server, handling authentication and connection details automatically.
+///
+/// # Errors
+///
+/// * If the API proxy POST request fails
+///
+/// # Panics
+///
+/// * If the headers JSON value is not an object
+/// * If any header value is not a string
 #[tauri::command]
 async fn api_proxy_post(
     url: String,
