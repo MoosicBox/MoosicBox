@@ -82,9 +82,16 @@ pub enum GetAlbumsError {
     MusicApi(#[from] moosicbox_music_api::Error),
 }
 
+/// Retrieves a paginated list of albums from a music API source.
+///
+/// Fetches albums from the specified API, applying filters and pagination from the
+/// request. For external sources, propagates any existing library album associations
+/// to maintain cross-reference information between the library and external APIs.
+///
 /// # Errors
 ///
-/// * If the `MusicApi` fails to get the albums from the `ApiSource`
+/// * `GetAlbumsError::GetAlbums` if fetching the album list from the database fails
+/// * `GetAlbumsError::MusicApi` if the music API fails to retrieve albums
 pub async fn get_albums_from_source(
     db: &LibraryDatabase,
     api: &dyn MusicApi,
@@ -134,9 +141,17 @@ pub enum GetAlbumVersionsError {
     },
 }
 
+/// Retrieves all available versions of an album from a source.
+///
+/// Fetches different versions of an album (e.g., different quality formats, bit depths)
+/// from the specified source. For library albums, returns all locally available versions.
+/// For external API sources, constructs a version list from the album's available tracks.
+///
 /// # Errors
 ///
-/// * If the `MusicApi` fails to get the album versions from the `ApiSource`
+/// * `GetAlbumVersionsError::MusicApi` if the music API fails to retrieve album versions
+/// * `GetAlbumVersionsError::LibraryAlbumTracks` if fetching library album tracks fails
+/// * `GetAlbumVersionsError::UnknownSource` if the specified API source is not recognized
 pub async fn get_album_versions_from_source(
     #[allow(unused)] db: &LibraryDatabase,
     library_api: &LibraryMusicApi,
@@ -205,9 +220,21 @@ pub enum AddAlbumError {
     InvalidAlbumIdType,
 }
 
+/// Adds an album from an external source to the local library.
+///
+/// Fetches an album and all its tracks from the specified external music API and
+/// imports them into the local library database. This includes scanning the album
+/// metadata, updating the database, clearing caches, and populating the search index
+/// with the new artists, albums, and tracks.
+///
 /// # Errors
 ///
-/// * If the `LibraryMusicApi` fails to add the album to the library
+/// * `AddAlbumError::MusicApi` if the music API fails to retrieve the album or tracks
+/// * `AddAlbumError::NoAlbum` if the album is not found at the source
+/// * `AddAlbumError::Scan` if scanning the album metadata fails
+/// * `AddAlbumError::UpdateDatabase` if updating the database with the album fails
+/// * `AddAlbumError::PopulateIndex` if populating the search index fails
+/// * `AddAlbumError::GetAlbum` if retrieving the added album from the library fails
 pub async fn add_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
@@ -346,9 +373,20 @@ pub enum RemoveAlbumError {
     TryFromId(#[from] TryFromIdError),
 }
 
+/// Removes an album from the local library.
+///
+/// Deletes an album and its associated tracks from the library database, including
+/// removing tracks from session playlists, track size records, API source mappings,
+/// and search index entries. If the album has local tracks or other API source
+/// associations, the album record is retained but the specified source is removed.
+///
 /// # Errors
 ///
-/// * If the `LibraryMusicApi` fails to remove the album from the library
+/// * `RemoveAlbumError::MusicApi` if the music API fails during album removal
+/// * `RemoveAlbumError::NoAlbum` if the album is not found in the library
+/// * `RemoveAlbumError::Database` if database operations fail
+/// * `RemoveAlbumError::DeleteFromIndex` if removing from the search index fails
+/// * `RemoveAlbumError::TryFromId` if ID type conversion fails
 #[allow(clippy::too_many_lines)]
 pub async fn remove_album(
     api: &dyn MusicApi,
@@ -500,9 +538,22 @@ pub enum ReFavoriteAlbumError {
     InvalidAlbumIdType,
 }
 
+/// Re-favorites an album by removing and re-adding it with updated metadata.
+///
+/// Removes the current version of an album from the library and adds the latest
+/// version from the external source. This is useful when an album has been updated
+/// at the source (e.g., remastered version, changed track list) and needs to be
+/// refreshed in the library. The function matches albums by artist and title to
+/// find the updated version.
+///
 /// # Errors
 ///
-/// * If the `LibraryMusicApi` fails to refavorite the album in the library
+/// * `ReFavoriteAlbumError::MusicApi` if the music API fails to retrieve album information
+/// * `ReFavoriteAlbumError::MissingAlbum` if the album is not found in the source's favorites
+/// * `ReFavoriteAlbumError::MissingArtist` if the artist information is not available
+/// * `ReFavoriteAlbumError::NoAlbum` if the updated album cannot be found at the source
+/// * `ReFavoriteAlbumError::RemoveAlbum` if removing the old album fails
+/// * `ReFavoriteAlbumError::AddAlbum` if adding the new album fails
 pub async fn refavorite_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,

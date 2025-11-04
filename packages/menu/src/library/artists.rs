@@ -89,9 +89,15 @@ pub enum GetArtistsError {
     DatabaseFetch(#[from] DatabaseFetchError),
 }
 
+/// Retrieves all artists from the library with filtering and sorting.
+///
+/// Fetches all artists from the database, applies the specified filters (name, search),
+/// and sorts them according to the requested sort order. This is the main entry point
+/// for querying artists from the library.
+///
 /// # Errors
 ///
-/// * If failed to get the artists from the database
+/// * `GetArtistsError::DatabaseFetch` if fetching artists from the database fails
 pub async fn get_all_artists(
     db: &LibraryDatabase,
     request: &ArtistsRequest,

@@ -35,9 +35,16 @@ pub enum GetArtistError {
     InvalidRequest,
 }
 
+/// Retrieves an artist by ID or by album association.
+///
+/// Fetches an artist either directly by artist ID or indirectly by finding the
+/// artist associated with a given album ID. Exactly one of `artist_id` or `album_id`
+/// must be provided.
+///
 /// # Errors
 ///
-/// * If the `MusicApi` fails to get the artist
+/// * `GetArtistError::MusicApi` if the music API fails to retrieve the artist
+/// * `GetArtistError::InvalidRequest` if neither or both IDs are provided
 #[allow(clippy::too_many_arguments)]
 pub async fn get_artist(
     api: &dyn MusicApi,
@@ -94,9 +101,18 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     }
 }
 
+/// Retrieves an album from a specific API source.
+///
+/// Fetches an album by ID from the specified source (either the local library or
+/// an external API). If the album is from an external source, propagates any existing
+/// library album source associations to maintain cross-reference information.
+///
 /// # Errors
 ///
-/// * If the `LibraryMusicApi` fails to get the album from the `ApiSource`
+/// * `GetAlbumError::GetAlbums` if fetching the album list from the database fails
+/// * `GetAlbumError::UnknownSource` if the specified API source is not recognized
+/// * `GetAlbumError::MusicApi` if the music API fails to retrieve the album
+/// * `GetAlbumError::DatabaseFetch` if converting the library album fails
 pub async fn get_album_from_source(
     db: &LibraryDatabase,
     profile: &str,
@@ -134,9 +150,15 @@ pub async fn get_album_from_source(
     Ok(album)
 }
 
+/// Retrieves a library album by ID and source.
+///
+/// Fetches a library album from the database, looking it up either by library ID
+/// (if source is library) or by finding an album with a matching source ID in its
+/// `album_sources` list (if source is external).
+///
 /// # Errors
 ///
-/// * If the `LibraryMusicApi` fails to get the `LibraryAlbum` from the `ApiSource`
+/// * `GetAlbumError::GetAlbums` if fetching the album list from the database fails
 pub async fn get_library_album(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -179,13 +201,19 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
     }
 }
 
+/// Retrieves all albums from the library with caching.
+///
+/// Fetches all library albums from the database, using a 5-minute cache to improve
+/// performance. The cache key is scoped to the local database instance.
+///
 /// # Panics
 ///
-/// * If fails to fetch the `LibraryAlbum`s from the cache
+/// * If the cached value cannot be converted back to the expected `Albums` type
 ///
 /// # Errors
 ///
-/// * If fails to get the `LibraryAlbum`s from the cache or database
+/// * `GetAlbumsError::DatabaseFetch` if fetching albums from the database fails
+/// * `GetAlbumsError::Poison` if a lock is poisoned
 pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums",
@@ -227,13 +255,20 @@ impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
     }
 }
 
+/// Retrieves all albums for a specific artist with caching.
+///
+/// Fetches all albums associated with the given artist from the database, using a
+/// 5-minute cache to improve performance. The cache key is scoped to the specific
+/// artist ID and database instance.
+///
 /// # Panics
 ///
-/// * If fails to fetch the artist's `LibraryAlbum`s from the cache
+/// * If the cached value cannot be converted back to the expected `ArtistAlbums` type
 ///
 /// # Errors
 ///
-/// * If fails to get the artist's `LibraryAlbum`s from the cache or database
+/// * `GetArtistAlbumsError::DatabaseFetch` if fetching albums from the database fails
+/// * `GetArtistAlbumsError::Poison` if a lock is poisoned
 pub async fn get_artist_albums(
     artist_id: &Id,
     db: &LibraryDatabase,
