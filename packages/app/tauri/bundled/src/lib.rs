@@ -62,6 +62,11 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
+    /// Processes commands for the Tauri bundled app service.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the server handle fails to join during shutdown
     async fn process_command(
         ctx: Arc<RwLock<Context>>,
         command: Command,
