@@ -1,3 +1,9 @@
+//! Free log integration for initializing and configuring structured logging.
+//!
+//! This module provides functionality to initialize the `free_log_client` logging
+//! system with environment-based configuration, optional file output, and custom
+//! tracing layers.
+
 #![allow(clippy::module_name_repetitions)]
 
 use free_log_client::{DynLayer, FreeLogLayer};
