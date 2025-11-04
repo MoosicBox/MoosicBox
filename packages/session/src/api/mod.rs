@@ -49,6 +49,7 @@ use crate::{
     models::{ApiSession, ApiSessionPlaylist, RegisterPlayer},
 };
 
+/// API data models for session endpoints.
 pub mod models;
 
 /// Binds session-related API endpoints to an Actix-Web scope.
@@ -103,6 +104,11 @@ pub struct GetSessionPlaylistTracks {
     limit: Option<u32>,
 }
 
+/// Retrieves paginated tracks from a session playlist.
+///
+/// # Panics
+///
+/// * If the number of tracks exceeds `u32::MAX`
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -157,6 +163,7 @@ pub struct GetSessionPlaylist {
     session_playlist_id: u64,
 }
 
+/// Retrieves a session playlist by its ID.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -197,6 +204,7 @@ pub struct GetSessionActivePlayers {
     session_id: u64,
 }
 
+/// Retrieves the audio zone configuration for a session.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -237,6 +245,7 @@ pub struct GetSessionPlaying {
     session_id: u64,
 }
 
+/// Checks if a session is currently playing.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -276,6 +285,7 @@ pub struct GetSession {
     session_id: u64,
 }
 
+/// Retrieves a session by its ID.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -318,6 +328,11 @@ pub struct GetSessions {
     limit: Option<u32>,
 }
 
+/// Retrieves all sessions with pagination support.
+///
+/// # Panics
+///
+/// * If the number of sessions exceeds `u32::MAX`
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -381,6 +396,7 @@ impl From<CreatePlayersError> for actix_web::Error {
     }
 }
 
+/// Registers multiple players to a connection.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -417,6 +433,7 @@ pub async fn register_players_endpoint(
     Ok(Json(registered))
 }
 
+/// Registers a new connection with its associated players.
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
