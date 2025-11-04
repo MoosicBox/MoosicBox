@@ -38,6 +38,7 @@ pub struct AudioZone {
     pub players: Vec<Player>,
 }
 
+/// Converts an API audio zone into an internal audio zone.
 impl From<ApiAudioZone> for AudioZone {
     fn from(value: ApiAudioZone) -> Self {
         Self {
@@ -68,6 +69,7 @@ pub struct ApiAudioZone {
     pub players: Vec<ApiPlayer>,
 }
 
+/// Converts an internal audio zone into an API audio zone.
 impl From<AudioZone> for ApiAudioZone {
     fn from(value: AudioZone) -> Self {
         Self {
@@ -97,6 +99,7 @@ pub struct AudioZoneWithSession {
     pub players: Vec<Player>,
 }
 
+/// Converts an API audio zone with session into an internal audio zone with session.
 impl From<ApiAudioZoneWithSession> for AudioZoneWithSession {
     fn from(value: ApiAudioZoneWithSession) -> Self {
         Self {
@@ -130,6 +133,7 @@ pub struct ApiAudioZoneWithSession {
     pub players: Vec<ApiPlayer>,
 }
 
+/// Converts an internal audio zone with session into an API audio zone with session.
 impl From<AudioZoneWithSession> for ApiAudioZoneWithSession {
     fn from(value: AudioZoneWithSession) -> Self {
         Self {
@@ -165,6 +169,10 @@ pub struct Player {
     pub updated: String,
 }
 
+/// Converts an API player into an internal player.
+///
+/// The `created` and `updated` timestamps are initialized as empty strings since
+/// the API representation does not include timestamp information.
 impl From<ApiPlayer> for Player {
     fn from(value: ApiPlayer) -> Self {
         Self {
@@ -178,7 +186,15 @@ impl From<ApiPlayer> for Player {
     }
 }
 
+/// Enables handling of missing values when converting database rows to `Player`.
 impl MissingValue<Player> for &switchy_database::Row {}
+
+/// Converts a database row into a `Player`.
+///
+/// # Errors
+///
+/// * Returns an error if any required column is missing from the row
+/// * Returns an error if any column value cannot be converted to the expected type
 impl ToValueType<Player> for &switchy_database::Row {
     fn to_value_type(self) -> Result<Player, ParseError> {
         Ok(Player {
@@ -192,6 +208,7 @@ impl ToValueType<Player> for &switchy_database::Row {
     }
 }
 
+/// Converts a `Player` into a database ID value.
 impl AsId for Player {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
@@ -217,6 +234,7 @@ pub struct ApiPlayer {
     pub playing: bool,
 }
 
+/// Converts an internal player into an API player.
 impl From<Player> for ApiPlayer {
     fn from(value: Player) -> Self {
         Self {
