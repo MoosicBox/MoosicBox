@@ -1415,6 +1415,10 @@ pub fn set_service_port(service_port: u16) {
     SERVICE_PORT.write().unwrap().replace(service_port);
 }
 
+/// Callback function type for playback state change events.
+///
+/// Functions of this type receive notifications when playback state changes,
+/// including play, pause, seek, volume, and track position updates.
 type PlaybackEventCallback = fn(&UpdateSession, &Playback);
 
 static PLAYBACK_EVENT_LISTENERS: LazyLock<Arc<RwLock<Vec<PlaybackEventCallback>>>> =

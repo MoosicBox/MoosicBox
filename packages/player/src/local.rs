@@ -385,12 +385,17 @@ impl LocalPlayer {
         self
     }
 
+    /// Takes ownership of the current audio handle.
+    ///
+    /// Returns the audio handle if one exists, leaving `None` in its place.
     #[must_use]
     fn take_current_audio_handle(&self) -> Option<AudioHandle> {
         self.audio_handle.write().unwrap().take()
     }
 
-    /// Cleanup old session coordinator and forwarder before creating new ones
+    /// Cleans up the old session coordinator and forwarder before creating new ones.
+    ///
+    /// This aborts the existing coordinator task and clears the command forwarder.
     async fn cleanup_session_coordinator(&self) {
         // Take the handle outside the lock to avoid holding it across await
         let handle = self.session_coordinator_handle.write().unwrap().take();
