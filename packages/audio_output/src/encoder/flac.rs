@@ -37,6 +37,10 @@ pub struct FlacEncoder {
 }
 
 impl FlacEncoder {
+    /// Creates a new FLAC encoder with default settings.
+    ///
+    /// Default output sample rate is 44100 Hz.
+    ///
     /// # Panics
     ///
     /// * If fails to get the flac encoder
@@ -53,6 +57,11 @@ impl FlacEncoder {
         }
     }
 
+    /// Creates a new FLAC encoder with a custom writer.
+    ///
+    /// # Arguments
+    /// * `writer` - Output writer for encoded FLAC data
+    ///
     /// # Panics
     ///
     /// * If fails to get the flac encoder

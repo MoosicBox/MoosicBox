@@ -20,6 +20,10 @@ pub mod mp3;
 #[cfg(feature = "opus")]
 pub mod opus;
 
+/// Trait for encoding decoded audio into compressed formats.
+///
+/// Implementors of this trait handle encoding audio samples into various
+/// compressed formats like AAC, FLAC, MP3, or Opus.
 pub trait AudioEncoder: Send + Sync {
     /// Encodes decoded audio samples into a compressed format.
     ///
