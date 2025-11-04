@@ -1,9 +1,9 @@
 import {
     SwapStrategy,
+    createEventDelegator,
     elementFetch,
     methods,
     onAttr,
-    onElement,
     splitHtml,
     triggerHandlers,
 } from './core';
@@ -183,31 +183,27 @@ const supportedTags: Record<string, boolean> = {
     A: true,
 } as const;
 
-onElement(({ element }) => {
-    if (!supportedTags[element.tagName]) return;
+for (const method of methods) {
+    createEventDelegator('click', `hx-${method}`, (element, route, e) => {
+        if (!route) return;
+        if (!supportedTags[element.tagName]) return;
 
-    for (const method of methods) {
-        const route = element.getAttribute(`hx-${method}`);
-        if (!route) continue;
+        e.preventDefault();
 
-        element.addEventListener('click', (e) => {
-            e.preventDefault();
-
-            handleHtmlResponse(
-                element,
-                elementFetch(
-                    route,
-                    {
-                        method,
-                        headers: {
-                            'hx-request': 'true',
-                        },
+        handleHtmlResponse(
+            element,
+            elementFetch(
+                route,
+                {
+                    method,
+                    headers: {
+                        'hx-request': 'true',
                     },
-                    element,
-                ),
-            );
+                },
+                element,
+            ),
+        );
 
-            return false;
-        });
-    }
-});
+        return false;
+    });
+}
