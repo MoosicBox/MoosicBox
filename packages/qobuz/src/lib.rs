@@ -13,10 +13,11 @@
 //! # Basic Usage
 //!
 //! ```rust,no_run
-//! # use moosicbox_qobuz::QobuzMusicApi;
 //! # #[cfg(feature = "db")]
 //! # {
-//! # use switchy::database::profiles::LibraryDatabase;
+//! use moosicbox_qobuz::QobuzMusicApi;
+//! use switchy::database::profiles::LibraryDatabase;
+//!
 //! # async fn example(db: LibraryDatabase) -> Result<(), Box<dyn std::error::Error>> {
 //! // Build a Qobuz client with database support
 //! let client = QobuzMusicApi::builder()
