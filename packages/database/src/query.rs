@@ -73,15 +73,21 @@ use std::fmt::Debug;
 
 use crate::{Database, DatabaseError, DatabaseValue, Row};
 
+/// Sort direction for ORDER BY clauses
 #[derive(Debug, Clone, Copy)]
 pub enum SortDirection {
+    /// Ascending order (smallest to largest, A to Z)
     Asc,
+    /// Descending order (largest to smallest, Z to A)
     Desc,
 }
 
+/// Sort expression combining a column/expression with a sort direction
 #[derive(Debug)]
 pub struct Sort {
+    /// The column or expression to sort by
     pub expression: Box<dyn Expression>,
+    /// The sort direction (ascending or descending)
     pub direction: SortDirection,
 }
 
@@ -91,10 +97,14 @@ impl Expression for Sort {
     }
 }
 
+/// JOIN clause specification for combining tables
 #[derive(Debug, Clone)]
 pub struct Join<'a> {
+    /// Name of the table to join with
     pub table_name: &'a str,
+    /// JOIN condition (e.g., "users.id = `orders.user_id`")
     pub on: &'a str,
+    /// Whether this is a LEFT JOIN (true) or INNER JOIN (false)
     pub left: bool,
 }
 
@@ -104,28 +114,56 @@ impl Expression for Join<'_> {
     }
 }
 
+/// Tagged union representing different types of SQL expressions
+///
+/// This enum is used internally by the query builder to distinguish between
+/// different expression types when generating SQL. Each variant holds a reference
+/// to the actual expression object.
 pub enum ExpressionType<'a> {
+    /// Equality comparison expression
     Eq(&'a Eq),
+    /// Greater than comparison expression
     Gt(&'a Gt),
+    /// IN clause expression
     In(&'a In<'a>),
+    /// Less than comparison expression
     Lt(&'a Lt),
+    /// Logical OR expression
     Or(&'a Or),
+    /// Logical AND expression
     And(&'a And),
+    /// Greater than or equal comparison expression
     Gte(&'a Gte),
+    /// Less than or equal comparison expression
     Lte(&'a Lte),
+    /// JOIN clause expression
     Join(&'a Join<'a>),
+    /// Sort expression
     Sort(&'a Sort),
+    /// NOT IN clause expression
     NotIn(&'a NotIn<'a>),
+    /// Not equal comparison expression
     NotEq(&'a NotEq),
+    /// IN list expression (with explicit list of values)
     InList(&'a InList),
+    /// Raw SQL literal expression
     Literal(&'a Literal),
+    /// COALESCE function expression
     Coalesce(&'a Coalesce),
+    /// Column/table identifier expression
     Identifier(&'a Identifier),
+    /// Subquery expression
     SelectQuery(&'a SelectQuery<'a>),
+    /// Database value expression
     DatabaseValue(&'a DatabaseValue),
 }
 
+/// Base trait for all SQL expression types
+///
+/// This trait provides the common interface for all expression types in the query builder.
+/// Expressions can be column references, comparisons, logical operations, literals, or subqueries.
 pub trait Expression: Send + Sync + Debug {
+    /// Returns the type tag for this expression
     fn expression_type(&self) -> ExpressionType<'_>;
 
     fn params(&self) -> Option<Vec<&DatabaseValue>> {
@@ -148,8 +186,17 @@ pub trait Expression: Send + Sync + Debug {
     }
 }
 
+/// Raw SQL literal expression
+///
+/// Represents a raw SQL expression that will be inserted into the generated SQL
+/// without escaping or parameterization. Use with caution to avoid SQL injection.
+///
+/// # Safety
+///
+/// The value is inserted directly into SQL. Never use with untrusted user input.
 #[derive(Debug)]
 pub struct Literal {
+    /// The raw SQL expression text
     pub value: String,
 }
 
@@ -185,6 +232,11 @@ impl Expression for Literal {
     }
 }
 
+/// Creates a raw SQL literal expression
+///
+/// # Safety
+///
+/// The value is inserted directly into SQL without escaping. Never use with untrusted user input.
 #[must_use]
 pub fn literal(value: &str) -> Literal {
     Literal {
@@ -192,8 +244,13 @@ pub fn literal(value: &str) -> Literal {
     }
 }
 
+/// SQL identifier (column or table name)
+///
+/// Represents a database identifier that will be properly quoted/escaped
+/// for the target database backend.
 #[derive(Debug)]
 pub struct Identifier {
+    /// The identifier name (column or table)
     pub value: String,
 }
 
@@ -223,6 +280,7 @@ impl Expression for Identifier {
     }
 }
 
+/// Creates an SQL identifier expression for a column or table name
 #[must_use]
 pub fn identifier(value: &str) -> Identifier {
     Identifier {
@@ -305,8 +363,12 @@ impl<T: Into<DatabaseValue>> From<T> for Box<dyn Expression> {
     }
 }
 
+/// Marker trait for expressions that evaluate to boolean values
+///
+/// Used to ensure WHERE clause expressions are boolean-valued.
 pub trait BooleanExpression: Expression {}
 
+/// Logical AND expression combining multiple boolean conditions
 #[derive(Debug)]
 pub struct And {
     pub(crate) conditions: Vec<Box<dyn BooleanExpression>>,
@@ -334,8 +396,10 @@ impl Expression for And {
     }
 }
 
+/// Logical OR expression combining multiple boolean conditions
 #[derive(Debug)]
 pub struct Or {
+    /// The boolean conditions to combine with OR
     pub conditions: Vec<Box<dyn BooleanExpression>>,
 }
 
@@ -361,9 +425,12 @@ impl Expression for Or {
     }
 }
 
+/// Not equal comparison expression (!=)
 #[derive(Debug)]
 pub struct NotEq {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -378,9 +445,12 @@ impl Expression for NotEq {
     }
 }
 
+/// Equal comparison expression (=)
 #[derive(Debug)]
 pub struct Eq {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -395,9 +465,12 @@ impl Expression for Eq {
     }
 }
 
+/// Greater than comparison expression (>)
 #[derive(Debug)]
 pub struct Gt {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -412,9 +485,12 @@ impl Expression for Gt {
     }
 }
 
+/// Greater than or equal comparison expression (>=)
 #[derive(Debug)]
 pub struct Gte {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -429,9 +505,12 @@ impl Expression for Gte {
     }
 }
 
+/// Less than comparison expression (<)
 #[derive(Debug)]
 pub struct Lt {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -446,9 +525,12 @@ impl Expression for Lt {
     }
 }
 
+/// Less than or equal comparison expression (<=)
 #[derive(Debug)]
 pub struct Lte {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// Right-hand side (value or expression)
     pub right: Box<dyn Expression>,
 }
 
@@ -463,9 +545,12 @@ impl Expression for Lte {
     }
 }
 
+/// IN clause expression checking if column value is in a list
 #[derive(Debug)]
 pub struct In<'a> {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// List of values or subquery to check against
     pub values: Box<dyn List + 'a>,
 }
 
@@ -490,9 +575,12 @@ impl Expression for In<'_> {
     }
 }
 
+/// NOT IN clause expression checking if column value is not in a list
 #[derive(Debug)]
 pub struct NotIn<'a> {
+    /// Left-hand side (column identifier)
     pub left: Identifier,
+    /// List of values or subquery to check against
     pub values: Box<dyn List + 'a>,
 }
 
@@ -621,8 +709,10 @@ pub const fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     }
 }
 
+/// COALESCE SQL function expression returning first non-NULL value
 #[derive(Debug)]
 pub struct Coalesce {
+    /// List of expressions to evaluate in order
     pub values: Vec<Box<dyn Expression>>,
 }
 
@@ -652,8 +742,10 @@ pub fn coalesce(values: Vec<Box<dyn Expression>>) -> Coalesce {
     Coalesce { values }
 }
 
+/// List of expressions for IN clause
 #[derive(Debug)]
 pub struct InList {
+    /// The expressions in the list
     pub values: Vec<Box<dyn Expression>>,
 }
 
@@ -678,6 +770,9 @@ impl Expression for InList {
     }
 }
 
+/// Marker trait for expressions that represent lists of values
+///
+/// Used for IN and NOT IN clauses to ensure type safety.
 pub trait List: Expression {}
 
 impl<T> From<Vec<T>> for Box<dyn List>
@@ -723,6 +818,9 @@ macro_rules! boxed {
     );
 }
 
+/// Trait for query types that support WHERE clause filtering
+///
+/// Provides a fluent API for adding filter conditions to SELECT, UPDATE, and DELETE statements.
 #[allow(clippy::module_name_repetitions)]
 pub trait FilterableQuery
 where
@@ -838,15 +936,23 @@ impl<'a> From<SelectQuery<'a>> for Box<dyn List + 'a> {
     }
 }
 
+/// SELECT query builder for retrieving data from tables
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SelectQuery<'a> {
+    /// Table to select from
     pub table_name: &'a str,
+    /// Whether to return only distinct rows
     pub distinct: bool,
+    /// Columns to retrieve (empty means *)
     pub columns: &'a [&'a str],
+    /// WHERE clause filters
     pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    /// JOIN clauses
     pub joins: Option<Vec<Join<'a>>>,
+    /// ORDER BY clauses
     pub sorts: Option<Vec<Sort>>,
+    /// Maximum number of rows to return
     pub limit: Option<usize>,
 }
 
@@ -1028,9 +1134,13 @@ impl<'a> SelectQuery<'a> {
     }
 }
 
+/// UPSERT statement for inserting multiple rows or updating on conflict
 pub struct UpsertMultiStatement<'a> {
+    /// Table to upsert into
     pub table_name: &'a str,
+    /// Multiple rows of column-value pairs to insert/update
     pub values: Vec<Vec<(&'a str, Box<dyn Expression>)>>,
+    /// Columns that form the unique constraint to detect conflicts
     pub unique: Option<Vec<Box<dyn Expression>>>,
 }
 
@@ -1070,8 +1180,11 @@ impl<'a> UpsertMultiStatement<'a> {
     }
 }
 
+/// INSERT statement for adding new rows to a table
 pub struct InsertStatement<'a> {
+    /// Table to insert into
     pub table_name: &'a str,
+    /// Column-value pairs to insert
     pub values: Vec<(&'a str, Box<dyn Expression>)>,
 }
 
@@ -1106,11 +1219,17 @@ impl<'a> InsertStatement<'a> {
     }
 }
 
+/// UPDATE statement for modifying existing rows in a table
 pub struct UpdateStatement<'a> {
+    /// Table to update
     pub table_name: &'a str,
+    /// Column-value pairs to set
     pub values: Vec<(&'a str, Box<dyn Expression>)>,
+    /// WHERE clause filters
     pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    /// Unique columns for conflict resolution
     pub unique: Option<&'a [&'a str]>,
+    /// Maximum number of rows to update
     pub limit: Option<usize>,
 }
 
@@ -1178,11 +1297,17 @@ impl<'a> UpdateStatement<'a> {
     }
 }
 
+/// UPSERT statement for inserting or updating a row on conflict
 pub struct UpsertStatement<'a> {
+    /// Table to upsert into
     pub table_name: &'a str,
+    /// Column-value pairs to insert/update
     pub values: Vec<(&'a str, Box<dyn Expression>)>,
+    /// WHERE clause filters for conditional upsert
     pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    /// Columns that form the unique constraint to detect conflicts
     pub unique: Option<&'a [&'a str]>,
+    /// Maximum number of rows to upsert
     pub limit: Option<usize>,
 }
 
@@ -1285,9 +1410,13 @@ impl<'a> From<UpsertStatement<'a>> for SelectQuery<'a> {
     }
 }
 
+/// DELETE statement for removing rows from a table
 pub struct DeleteStatement<'a> {
+    /// Table to delete from
     pub table_name: &'a str,
+    /// WHERE clause filters
     pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    /// Maximum number of rows to delete
     pub limit: Option<usize>,
 }
 
