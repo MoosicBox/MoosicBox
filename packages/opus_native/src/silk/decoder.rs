@@ -2745,8 +2745,8 @@ impl SilkDecoder {
     ///
     /// # Notes
     ///
-    /// * When `e_raw`[i] is zero, `sign`() returns 0, so factor of 20 is not subtracted (RFC lines 5475-5476)
-    /// * Final `e_Q23`[i] requires ≤23 bits including sign (RFC lines 5477-5478)
+    /// * When `e_raw`\[i\] is zero, `sign`() returns 0, so factor of 20 is not subtracted (RFC lines 5475-5476)
+    /// * Final `e_Q23`\[i\] requires ≤23 bits including sign (RFC lines 5477-5478)
     /// * LCG seed is stored in decoder state and persists across calls
     pub fn reconstruct_excitation(
         &mut self,
