@@ -37,7 +37,8 @@ use swc_ecma_visit::VisitMutWith as _;
 /// # Panics
 ///
 /// * Panics if the bundler fails to bundle the modules.
-/// * Panics if file I/O operations fail.
+/// * Panics if emitting the bundled module to code fails.
+/// * Panics if file I/O operations fail (creating directories or writing output).
 pub fn bundle(target: &Path, out: &Path, minify: bool) {
     let globals = Box::leak(Box::default());
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
@@ -187,6 +188,20 @@ pub struct Loader {
 }
 
 impl Load for Loader {
+    /// Loads a JavaScript or TypeScript module from a file.
+    ///
+    /// This method reads the file, determines the appropriate syntax based on the
+    /// file extension, parses the module, and applies TypeScript stripping if needed.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the file cannot be loaded from the source map.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the filename is not a real file path.
+    /// * Panics if the file extension is not one of: ts, js, mjs, cjs.
+    /// * Panics if parsing the module fails.
     fn load(&self, f: &FileName) -> Result<ModuleData, Error> {
         let FileName::Real(path) = f else {
             unreachable!()
