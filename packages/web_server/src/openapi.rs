@@ -29,6 +29,10 @@ use utoipa::openapi::OpenApi;
 
 use crate::Scope;
 
+/// Global `OpenAPI` specification storage
+///
+/// This static variable holds the `OpenAPI` specification for the application.
+/// It is initialized lazily and can be accessed by documentation UI handlers.
 pub static OPENAPI: LazyLock<Arc<RwLock<Option<OpenApi>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(None)));
 
@@ -203,6 +207,21 @@ pub fn bind_services(#[allow(unused_mut)] mut scope: Scope) -> Scope {
     scope
 }
 
+/// Macro for defining `OpenAPI` API specifications
+///
+/// Creates a static `LazyLock` containing an `OpenApi` specification.
+/// The generated static will be named `{NAME}_API` in uppercase.
+///
+/// # Example
+///
+/// ```ignore
+/// api!(users, {
+///     OpenApi::new(
+///         Info::new("Users API", "1.0"),
+///         Paths::new(),
+///     )
+/// });
+/// ```
 #[macro_export]
 macro_rules! api {
     ($name:ident, $impl:expr $(,)?) => {
@@ -216,6 +235,22 @@ macro_rules! api {
     };
 }
 
+/// Macro for defining `OpenAPI` path specifications
+///
+/// Creates a static `LazyLock` containing a `PathItem` specification for a specific
+/// HTTP method and endpoint. The generated static will be named `{METHOD}_{NAME}_PATH`
+/// in uppercase.
+///
+/// # Example
+///
+/// ```ignore
+/// path!(get, users, {
+///     PathItem::new(
+///         PathItemType::Get,
+///         Operation::new(),
+///     )
+/// });
+/// ```
 #[macro_export]
 macro_rules! path {
     ($method:ident, $name:ident, $impl:expr $(,)?) => {

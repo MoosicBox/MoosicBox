@@ -6,11 +6,11 @@ use serde::de::DeserializeOwned;
 /// Unified test response wrapper for both Actix and Simulator backends
 #[derive(Debug, Clone)]
 pub struct TestResponse {
-    /// HTTP status code
+    /// HTTP status code (e.g., 200, 404, 500)
     pub status: u16,
-    /// Response headers
+    /// Response headers as key-value pairs
     pub headers: BTreeMap<String, String>,
-    /// Response body as bytes
+    /// Response body as raw bytes
     pub body: Vec<u8>,
 }
 

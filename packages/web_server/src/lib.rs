@@ -295,11 +295,15 @@ impl WebServerHandle {
 /// * `Stub` - Test/simulator request stub
 #[derive(Debug, Clone)]
 pub enum HttpRequest {
+    /// Actix web request wrapper (requires `actix` feature)
     #[cfg(feature = "actix")]
     Actix {
+        /// The underlying Actix `HttpRequest`
         inner: actix_web::HttpRequest,
+        /// Request context holding path parameters and other request-scoped data
         context: std::sync::Arc<RequestContext>,
     },
+    /// Test or simulator request stub
     Stub(Stub),
 }
 
@@ -515,8 +519,10 @@ impl HttpRequest {
 /// * `Simulator` - Full simulator stub with request data
 #[derive(Debug, Clone, Default)]
 pub enum Stub {
+    /// Minimal stub with no data
     #[default]
     Empty,
+    /// Full simulator stub with request data
     Simulator(simulator::SimulationStub),
 }
 
@@ -532,8 +538,10 @@ pub enum Stub {
 /// * `Stub` - Reference to a test/simulator request stub
 #[derive(Debug, Clone, Copy)]
 pub enum HttpRequestRef<'a> {
+    /// Reference to an Actix web request (requires `actix` feature)
     #[cfg(feature = "actix")]
     Actix(&'a actix_web::HttpRequest),
+    /// Reference to a test/simulator request stub
     Stub(&'a Stub),
 }
 
@@ -694,6 +702,7 @@ impl<'a> HttpRequestRef<'a> {
 /// * `Bytes` - Raw byte sequence response body
 #[derive(Debug)]
 pub enum HttpResponseBody {
+    /// Raw byte sequence response body
     Bytes(Bytes),
 }
 
@@ -784,9 +793,13 @@ impl From<String> for HttpResponseBody {
 /// ```
 #[derive(Debug)]
 pub struct HttpResponse {
+    /// HTTP status code (200, 404, etc.)
     pub status_code: StatusCode,
+    /// Optional location header for redirects (backwards compatibility)
     pub location: Option<String>,
+    /// Response headers as key-value pairs
     pub headers: BTreeMap<String, String>,
+    /// Optional response body
     pub body: Option<HttpResponseBody>,
 }
 
@@ -937,8 +950,11 @@ impl HttpResponse {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Scope {
+    /// Path prefix for all routes in this scope (e.g., `/api`)
     pub path: String,
+    /// Routes directly under this scope
     pub routes: Vec<Route>,
+    /// Nested sub-scopes
     pub scopes: Vec<Scope>,
 }
 
@@ -1079,9 +1095,12 @@ impl Scope {
 /// * `Http` - HTTP error with associated status code and source error
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// HTTP error with associated status code and source error
     #[error("HTTP Error {status_code}: {source:?}")]
     Http {
+        /// HTTP status code for the error response
         status_code: StatusCode,
+        /// The underlying source error
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 }
@@ -1189,8 +1208,11 @@ pub type RouteHandler = Box<
 /// ```
 #[derive(Clone)]
 pub struct Route {
+    /// URL path pattern (e.g., `/users/{id}`)
     pub path: String,
+    /// HTTP method (GET, POST, etc.)
     pub method: Method,
+    /// Function that processes requests to this route
     pub handler: std::sync::Arc<RouteHandler>,
 }
 
