@@ -124,26 +124,41 @@ impl<R: GenericRng> RngCore for RngWrapper<R> {
 }
 
 impl<R: GenericRng> GenericRng for RngWrapper<R> {
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     #[inline]
     fn next_u32(&self) -> u32 {
         self.0.lock().unwrap().next_u32()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     #[inline]
     fn next_i32(&self) -> i32 {
         self.0.lock().unwrap().next_i32()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     #[inline]
     fn next_u64(&self) -> u64 {
         self.0.lock().unwrap().next_u64()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     #[inline]
     fn fill_bytes(&self, dest: &mut [u8]) {
         self.0.lock().unwrap().fill_bytes(dest);
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     #[inline]
     fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
@@ -208,6 +223,10 @@ macro_rules! impl_rng {
             /// Generates a random value of type `T`.
             ///
             /// The type must implement the `Standard` distribution.
+            ///
+            /// # Panics
+            ///
+            /// * If the internal mutex is poisoned
             #[must_use]
             pub fn random<T>(&self) -> T
             where
@@ -221,6 +240,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If the range is empty
+            /// * If the internal mutex is poisoned
             pub fn gen_range<T, R>(&self, range: R) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -237,6 +257,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If the range is empty
+            /// * If the internal mutex is poisoned
             pub fn gen_range_dist<T, R>(&self, range: R, dist: f64) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -256,6 +277,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If the range is empty
+            /// * If the internal mutex is poisoned
             pub fn gen_range_disti<T, R>(&self, range: R, dist: i32) -> T
             where
                 T: ::rand::distributions::uniform::SampleUniform,
@@ -269,6 +291,10 @@ macro_rules! impl_rng {
             }
 
             /// Samples a value from the given distribution.
+            ///
+            /// # Panics
+            ///
+            /// * If the internal mutex is poisoned
             pub fn sample<T, D: ::rand::prelude::Distribution<T>>(&self, distr: D) -> T {
                 distr.sample(&mut *self.0.lock().unwrap())
             }
@@ -300,6 +326,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If `p` is not in the range `[0.0, 1.0]`
+            /// * If the internal mutex is poisoned
             #[must_use]
             pub fn gen_bool(&self, p: f64) -> bool {
                 let d = ::rand::distributions::Bernoulli::new(p).unwrap();
@@ -311,6 +338,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If `numerator > denominator` or `denominator == 0`
+            /// * If the internal mutex is poisoned
             #[must_use]
             pub fn gen_ratio(&self, numerator: u32, denominator: u32) -> bool {
                 let d =

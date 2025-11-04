@@ -1,3 +1,20 @@
+//! Standard random number generation backend using `rand::rngs::SmallRng`.
+//!
+//! This module provides the standard random number generator implementation for the crate,
+//! using the `rand` crate's `SmallRng` for good performance with general-purpose randomness.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "rand")]
+//! # {
+//! use switchy_random::rand::rng;
+//!
+//! let random_gen = rng();
+//! let value = random_gen.next_u32();
+//! # }
+//! ```
+
 use std::sync::{Arc, Mutex};
 
 use rand::{Rng as _, RngCore, SeedableRng, rngs::SmallRng};
@@ -34,22 +51,37 @@ impl RandRng {
 }
 
 impl GenericRng for RandRng {
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_u32(&self) -> u32 {
         self.0.lock().unwrap().next_u32()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_i32(&self) -> i32 {
         self.0.lock().unwrap().gen_range(i32::MIN..=i32::MAX)
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn next_u64(&self) -> u64 {
         self.0.lock().unwrap().next_u64()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn fill_bytes(&self, dest: &mut [u8]) {
         self.0.lock().unwrap().fill_bytes(dest);
     }
 
+    /// # Panics
+    ///
+    /// * If the internal mutex is poisoned
     fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
