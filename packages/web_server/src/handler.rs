@@ -80,10 +80,23 @@ where
     }
 }
 
-// Feature-gated Send bounds for different runtimes
+/// Marker trait for handler Send bounds
+///
+/// This trait is automatically implemented for all types and provides
+/// feature-gated Send bounds for different runtimes:
+///
+/// * With `actix` feature: Requires `Send` for thread-safe operation
+/// * Without `actix` feature: No Send requirement for single-threaded operation
 #[cfg(feature = "actix")]
 pub trait HandlerSend: Send {}
 
+/// Marker trait for handler Send bounds
+///
+/// This trait is automatically implemented for all types and provides
+/// feature-gated Send bounds for different runtimes:
+///
+/// * With `actix` feature: Requires `Send` for thread-safe operation
+/// * Without `actix` feature: No Send requirement for single-threaded operation
 #[cfg(not(feature = "actix"))]
 pub trait HandlerSend {}
 

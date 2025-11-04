@@ -53,10 +53,13 @@ pub use wrappers::{
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
 pub mod actix_impl;
 
+/// Simulator-based test client implementation
 pub mod simulator_impl;
 
 // Common modules
+/// Request builder utilities for constructing test requests
 pub mod request_builder;
+/// Response handling and assertion utilities for test responses
 pub mod response;
 
 pub use request_builder::TestRequestBuilder;
@@ -96,12 +99,19 @@ pub trait TestClient {
 /// HTTP method enumeration for test requests
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HttpMethod {
+    /// HTTP GET method
     Get,
+    /// HTTP POST method
     Post,
+    /// HTTP PUT method
     Put,
+    /// HTTP DELETE method
     Delete,
+    /// HTTP PATCH method
     Patch,
+    /// HTTP HEAD method
     Head,
+    /// HTTP OPTIONS method
     Options,
 }
 

@@ -62,12 +62,16 @@ use crate::{PathParams, RouteHandler, WebServerBuilder};
 /// Simulation-specific implementation of HTTP response data
 #[derive(Debug, Clone)]
 pub struct SimulationResponse {
+    /// HTTP status code (e.g., 200, 404, 500)
     pub status: u16,
+    /// Response headers as key-value pairs
     pub headers: BTreeMap<String, String>,
+    /// Optional response body as a string
     pub body: Option<String>,
 }
 
 impl SimulationResponse {
+    /// Create a new response with the specified status code
     #[must_use]
     pub const fn new(status: u16) -> Self {
         Self {
@@ -77,27 +81,32 @@ impl SimulationResponse {
         }
     }
 
+    /// Create a new 200 OK response
     #[must_use]
     pub const fn ok() -> Self {
         Self::new(200)
     }
 
+    /// Create a new 404 Not Found response
     #[must_use]
     pub const fn not_found() -> Self {
         Self::new(404)
     }
 
+    /// Create a new 500 Internal Server Error response
     #[must_use]
     pub const fn internal_server_error() -> Self {
         Self::new(500)
     }
 
+    /// Add a header to the response
     #[must_use]
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
+    /// Set the response body
     #[must_use]
     pub fn with_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
@@ -121,11 +130,13 @@ pub struct PathPattern {
 }
 
 impl PathPattern {
+    /// Create a new path pattern from the given segments
     #[must_use]
     pub const fn new(segments: Vec<PathSegment>) -> Self {
         Self { segments }
     }
 
+    /// Get the segments of this path pattern
     #[must_use]
     pub fn segments(&self) -> &[PathSegment] {
         &self.segments
@@ -319,17 +330,26 @@ const fn status_code_to_u16(status_code: switchy_http_models::StatusCode) -> u16
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
 pub struct SimulationRequest {
+    /// HTTP method (GET, POST, etc.)
     pub method: Method,
+    /// Request path (e.g., `/api/users`)
     pub path: String,
+    /// Query string (e.g., `?page=1&limit=20`)
     pub query_string: String,
+    /// Request headers as key-value pairs
     pub headers: BTreeMap<String, String>,
+    /// Optional request body
     pub body: Option<Bytes>,
+    /// Cookies as key-value pairs
     pub cookies: BTreeMap<String, String>,
+    /// Optional remote address of the client
     pub remote_addr: Option<String>,
+    /// Path parameters extracted from the route pattern
     pub path_params: PathParams,
 }
 
 impl SimulationRequest {
+    /// Create a new simulation request with the given method and path
     #[must_use]
     pub fn new(method: Method, path: impl Into<String>) -> Self {
         Self {
@@ -344,42 +364,49 @@ impl SimulationRequest {
         }
     }
 
+    /// Set the query string for this request
     #[must_use]
     pub fn with_query_string(mut self, query: impl Into<String>) -> Self {
         self.query_string = query.into();
         self
     }
 
+    /// Add a header to this request
     #[must_use]
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
     }
 
+    /// Set the body for this request
     #[must_use]
     pub fn with_body(mut self, body: impl Into<Bytes>) -> Self {
         self.body = Some(body.into());
         self
     }
 
+    /// Add multiple cookies to this request
     #[must_use]
     pub fn with_cookies(mut self, cookies: impl IntoIterator<Item = (String, String)>) -> Self {
         self.cookies.extend(cookies);
         self
     }
 
+    /// Add a single cookie to this request
     #[must_use]
     pub fn with_cookie(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.cookies.insert(name.into(), value.into());
         self
     }
 
+    /// Set the remote address for this request
     #[must_use]
     pub fn with_remote_addr(mut self, addr: impl Into<String>) -> Self {
         self.remote_addr = Some(addr.into());
         self
     }
 
+    /// Set the path parameters for this request
     #[must_use]
     pub fn with_path_params(mut self, params: PathParams) -> Self {
         self.path_params = params;
@@ -390,12 +417,14 @@ impl SimulationRequest {
 /// Enhanced Stub that can hold simulation data
 #[derive(Debug, Clone)]
 pub struct SimulationStub {
+    /// The simulation request being processed
     pub request: SimulationRequest,
     /// State container for the simulation
     pub state_container: Option<Arc<RwLock<crate::extractors::state::StateContainer>>>,
 }
 
 impl SimulationStub {
+    /// Create a new simulation stub from the given request
     #[must_use]
     pub const fn new(request: SimulationRequest) -> Self {
         Self {
@@ -404,6 +433,7 @@ impl SimulationStub {
         }
     }
 
+    /// Attach a state container to this stub
     #[must_use]
     pub fn with_state_container(
         mut self,
@@ -413,41 +443,49 @@ impl SimulationStub {
         self
     }
 
+    /// Get a header value by name
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
         self.request.headers.get(name).map(String::as_str)
     }
 
+    /// Get the request path
     #[must_use]
     pub fn path(&self) -> &str {
         &self.request.path
     }
 
+    /// Get the query string
     #[must_use]
     pub fn query_string(&self) -> &str {
         &self.request.query_string
     }
 
+    /// Get the HTTP method
     #[must_use]
     pub const fn method(&self) -> &Method {
         &self.request.method
     }
 
+    /// Get the request body
     #[must_use]
     pub const fn body(&self) -> Option<&Bytes> {
         self.request.body.as_ref()
     }
 
+    /// Get a cookie value by name
     #[must_use]
     pub fn cookie(&self, name: &str) -> Option<&str> {
         self.request.cookies.get(name).map(String::as_str)
     }
 
+    /// Get all cookies
     #[must_use]
     pub const fn cookies(&self) -> &BTreeMap<String, String> {
         &self.request.cookies
     }
 
+    /// Get the remote address of the client
     #[must_use]
     pub fn remote_addr(&self) -> Option<&str> {
         self.request.remote_addr.as_deref()

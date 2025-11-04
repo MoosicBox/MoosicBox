@@ -100,18 +100,23 @@
 //! extractor is available without additional features, as it doesn't require
 //! serialization/deserialization capabilities.
 
+/// Query parameter extraction module
 #[cfg(feature = "serde")]
 pub mod query;
 
+/// JSON body extraction module
 #[cfg(feature = "serde")]
 pub mod json;
 
+/// Path parameter extraction module
 #[cfg(feature = "serde")]
 pub mod path;
 
+/// HTTP header extraction module
 #[cfg(feature = "serde")]
 pub mod header;
 
+/// Application state extraction module
 pub mod state;
 
 // Re-export extractors for convenient access
