@@ -18,7 +18,8 @@ use crate::{
 ///
 /// # Panics
 ///
-/// Panics if the npm install or esbuild command fails to execute.
+/// * Panics if the npm install or esbuild command fails to execute.
+/// * Panics if the target or output path contains invalid UTF-8 characters.
 pub fn bundle(target: &Path, out: &Path) {
     run_npm_command(&["install"], &MANIFEST_DIR);
     run_command(
