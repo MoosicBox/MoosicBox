@@ -146,6 +146,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     /// # Panics
     ///
     /// * If action channel send fails (with `actions` feature)
+    /// * If path string conversion fails during asset serving (with `assets` feature)
     #[allow(clippy::too_many_lines)]
     pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
         static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
