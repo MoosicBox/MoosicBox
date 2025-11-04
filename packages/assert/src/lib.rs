@@ -21,17 +21,17 @@
 //!
 //! Basic assertion that exits when enabled, does nothing when disabled:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use moosicbox_assert::assert;
 //!
-//! std::env::set_var("ENABLE_ASSERT", "1");
+//! unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 //! let value = 42;
 //! assert!(value > 0, "Value must be positive");
 //! ```
 //!
 //! Assertion that returns an error when disabled:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use moosicbox_assert::assert_or_err;
 //!
 //! #[derive(Debug)]
@@ -90,10 +90,10 @@ pub use moosicbox_env_utils;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::assert;
 ///
-/// std::env::set_var("ENABLE_ASSERT", "1");
+/// unsafe { std::env::set_var("ENABLE_ASSERT", "1"); }
 /// let value = 42;
 /// assert!(value > 0);
 /// assert!(value == 42, "Expected 42, got {}", value);
@@ -155,7 +155,7 @@ macro_rules! assert {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::assert_or_err;
 ///
 /// #[derive(Debug)]
@@ -211,7 +211,7 @@ macro_rules! assert_or_err {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::assert_or_error;
 ///
 /// fn process_data(data: &[u8]) {
@@ -248,7 +248,7 @@ macro_rules! assert_or_error {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::assert_or_unimplemented;
 ///
 /// fn experimental_feature(enabled: bool) {
@@ -317,7 +317,7 @@ macro_rules! assert_or_unimplemented {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::assert_or_panic;
 ///
 /// fn critical_operation(value: i32) {
@@ -385,7 +385,7 @@ macro_rules! assert_or_panic {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die;
 ///
 /// fn check_value(value: i32) {
@@ -443,7 +443,7 @@ macro_rules! die {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_warn;
 ///
 /// fn deprecated_function() {
@@ -499,7 +499,7 @@ macro_rules! die_or_warn {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_err;
 ///
 /// #[derive(Debug)]
@@ -544,7 +544,7 @@ macro_rules! die_or_err {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_error;
 ///
 /// fn check_invariant(valid: bool) {
@@ -602,13 +602,12 @@ macro_rules! die_or_error {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_propagate;
-/// use std::fs::File;
 ///
-/// fn read_config() -> std::io::Result<String> {
-///     let _file = die_or_propagate!(File::open("config.txt"), "Failed to open config");
-///     Ok(String::new())
+/// fn process_result() -> Result<(), String> {
+///     die_or_propagate!(Ok::<(), String>(()), "Failed to process");
+///     Ok(())
 /// }
 /// ```
 ///
@@ -656,7 +655,7 @@ macro_rules! die_or_propagate {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_panic;
 ///
 /// fn critical_failure() {
@@ -713,7 +712,7 @@ macro_rules! die_or_panic {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use moosicbox_assert::die_or_unimplemented;
 ///
 /// fn not_ready_yet() {
