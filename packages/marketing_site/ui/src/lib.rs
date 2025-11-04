@@ -10,6 +10,11 @@
 
 /// Download page functionality for the marketing site.
 pub mod download;
+
+/// Re-exported `HyperChad` template module for convenient access to template types and macros.
+///
+/// This module provides the `Containers` type and `container!` macro used throughout
+/// the marketing site UI components.
 pub use hyperchad::template as hyperchad_template;
 
 use hyperchad::{
