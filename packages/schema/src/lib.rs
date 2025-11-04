@@ -75,7 +75,8 @@ fn should_drop_migrations_table() -> bool {
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "postgres")]
 pub async fn migrate_config_postgres(
     db: &dyn switchy_database::Database,
@@ -116,7 +117,8 @@ pub async fn migrate_config_postgres(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "sqlite")]
 pub async fn migrate_config_sqlite(
     db: &dyn switchy_database::Database,
@@ -161,7 +163,8 @@ pub async fn migrate_config_sqlite(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_config(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
@@ -183,7 +186,8 @@ pub async fn migrate_config(db: &dyn switchy_database::Database) -> Result<(), M
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "postgres")]
 pub async fn migrate_library_postgres(
     db: &dyn switchy_database::Database,
@@ -195,7 +199,8 @@ pub async fn migrate_library_postgres(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "postgres")]
 pub async fn migrate_library_postgres_until(
     db: &dyn switchy_database::Database,
@@ -244,7 +249,8 @@ pub async fn migrate_library_postgres_until(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "sqlite")]
 pub async fn migrate_library_sqlite(
     db: &dyn switchy_database::Database,
@@ -256,7 +262,8 @@ pub async fn migrate_library_sqlite(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(feature = "sqlite")]
 pub async fn migrate_library_sqlite_until(
     db: &dyn switchy_database::Database,
@@ -309,7 +316,8 @@ pub async fn migrate_library_sqlite_until(
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     migrate_library_until(db, None).await
@@ -324,7 +332,8 @@ pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), 
 ///
 /// # Errors
 ///
-/// * If the migrations fail to run
+/// * `MigrateError::Database` - If database connection or query fails
+/// * `MigrateError::Schema` - If migration execution fails
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library_until(
     db: &dyn switchy_database::Database,
@@ -435,7 +444,7 @@ fn postgres_library_migrations() -> CodeMigrationSource<'static> {
 ///
 /// # Errors
 ///
-/// * If the migration source fails to provide migrations
+/// * `MigrateError::Schema` - If the migration source fails to provide migrations
 ///
 /// # Examples
 ///
@@ -473,7 +482,7 @@ pub async fn get_sqlite_library_migrations() -> Result<
 ///
 /// # Errors
 ///
-/// * If the migration source fails to provide migrations
+/// * `MigrateError::Schema` - If the migration source fails to provide migrations
 #[cfg(feature = "sqlite")]
 pub async fn get_sqlite_config_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
@@ -491,7 +500,7 @@ pub async fn get_sqlite_config_migrations() -> Result<
 ///
 /// # Errors
 ///
-/// * If the migration source fails to provide migrations
+/// * `MigrateError::Schema` - If the migration source fails to provide migrations
 #[cfg(feature = "postgres")]
 pub async fn get_postgres_library_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
@@ -509,7 +518,7 @@ pub async fn get_postgres_library_migrations() -> Result<
 ///
 /// # Errors
 ///
-/// * If the migration source fails to provide migrations
+/// * `MigrateError::Schema` - If the migration source fails to provide migrations
 #[cfg(feature = "postgres")]
 pub async fn get_postgres_config_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
