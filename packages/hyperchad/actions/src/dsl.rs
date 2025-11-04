@@ -44,6 +44,7 @@ pub enum Statement {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Block {
+    /// Statements in this block
     pub statements: Vec<Statement>,
 }
 
@@ -51,7 +52,9 @@ pub struct Block {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MatchArm {
+    /// Pattern to match against
     pub pattern: Pattern,
+    /// Expression to evaluate when pattern matches
     pub body: Expression,
 }
 
@@ -278,28 +281,40 @@ impl std::fmt::Display for Expression {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BinaryOp {
-    // Arithmetic
+    /// Addition operator (+)
     Add,
+    /// Subtraction operator (-)
     Subtract,
+    /// Multiplication operator (*)
     Multiply,
+    /// Division operator (/)
     Divide,
+    /// Modulo operator (%)
     Modulo,
 
-    // Comparison
+    /// Equality operator (==)
     Equal,
+    /// Inequality operator (!=)
     NotEqual,
+    /// Less than operator (<)
     Less,
+    /// Less than or equal operator (<=)
     LessEqual,
+    /// Greater than operator (>)
     Greater,
+    /// Greater than or equal operator (>=)
     GreaterEqual,
 
-    // Logical
+    /// Logical AND operator (&&)
     And,
+    /// Logical OR operator (||)
     Or,
 
-    // Bitwise
+    /// Bitwise AND operator (&)
     BitAnd,
+    /// Bitwise OR operator (|)
     BitOr,
+    /// Bitwise XOR operator (^)
     BitXor,
 }
 
@@ -307,9 +322,13 @@ pub enum BinaryOp {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum UnaryOp {
+    /// Logical NOT operator (!)
     Not,
+    /// Unary minus operator (-)
     Minus,
+    /// Unary plus operator (+)
     Plus,
+    /// Reference operator (&)
     Ref,
 }
 
@@ -371,6 +390,7 @@ impl std::fmt::Display for Literal {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Dsl {
+    /// Top-level statements in the DSL program
     pub statements: Vec<Statement>,
 }
 

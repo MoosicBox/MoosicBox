@@ -217,24 +217,33 @@ pub trait ActionEventHandler {
 /// Style trigger types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleTrigger {
+    /// Trigger from UI event (click, hover, etc.)
     UiEvent,
+    /// Trigger from custom event
     CustomEvent,
 }
 
 /// Style override with trigger information
 #[derive(Debug, Clone)]
 pub struct StyleOverride<T> {
+    /// Trigger type that caused this override
     pub trigger: StyleTrigger,
+    /// Override value
     pub value: T,
 }
 
 /// Log level enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
+    /// Error log level
     Error,
+    /// Warning log level
     Warn,
+    /// Info log level
     Info,
+    /// Debug log level
     Debug,
+    /// Trace log level
     Trace,
 }
 
