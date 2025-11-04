@@ -105,9 +105,14 @@ pub use moosicbox_web_server::HttpResponse;
 pub trait WebServerResponseProcessor<T: Send + Sync + Clone> {
     /// Prepares an HTTP request by extracting and transforming it into application data.
     ///
+    /// This method is called by the web server for each incoming request to transform
+    /// the raw HTTP request and body into application-specific data.
+    ///
     /// # Errors
     ///
-    /// * If the request fails to prepare
+    /// * Returns `WebServerError` if the request data cannot be parsed or validated
+    /// * Returns `WebServerError` if required headers or parameters are missing
+    /// * Returns `WebServerError` if the request body is malformed or cannot be deserialized
     fn prepare_request(
         &self,
         req: HttpRequest,
@@ -116,16 +121,26 @@ pub trait WebServerResponseProcessor<T: Send + Sync + Clone> {
 
     /// Converts application data into an HTTP response.
     ///
+    /// This method is responsible for transforming the prepared application data
+    /// into a complete HTTP response with status code, headers, and body.
+    ///
     /// # Errors
     ///
-    /// * If the response fails to be created
+    /// * Returns `WebServerError` if the response cannot be serialized
+    /// * Returns `WebServerError` if required response headers cannot be set
+    /// * Returns `WebServerError` if the application data is in an invalid state
     async fn to_response(&self, data: T) -> Result<HttpResponse, WebServerError>;
 
     /// Converts rendered content and application data into response body bytes and content type.
     ///
+    /// This method transforms the rendered hyperchad content into raw bytes suitable
+    /// for sending over HTTP, along with the appropriate content type header value.
+    ///
     /// # Errors
     ///
-    /// * If the body fails to be created
+    /// * Returns `WebServerError` if the content cannot be serialized to bytes
+    /// * Returns `WebServerError` if the content type cannot be determined
+    /// * Returns `WebServerError` if the content encoding fails
     async fn to_body(&self, content: Content, data: T) -> Result<(Bytes, String), WebServerError>;
 }
 
@@ -171,9 +186,12 @@ impl<
 {
     /// Converts the web server application into a render runner.
     ///
+    /// This method wraps the web server application in a runner that can be
+    /// executed by the hyperchad renderer runtime.
+    ///
     /// # Errors
     ///
-    /// This implementation never returns an error.
+    /// This method is infallible and always returns `Ok`.
     fn to_runner(
         self,
         handle: Handle,
@@ -204,12 +222,14 @@ impl<
     /// Starts the web server and runs the event loop.
     ///
     /// Binds to the address and port specified by the `BIND_ADDR` and `PORT`
-    /// environment variables, configures CORS, and starts the web server to handle
+    /// environment variables (defaults to `0.0.0.0:8343`), configures CORS
+    /// to allow any origin/method/header, and starts the web server to handle
     /// incoming HTTP requests.
     ///
     /// # Errors
     ///
-    /// This implementation never returns an error.
+    /// This method is infallible and always returns `Ok`. Server startup errors
+    /// are logged but do not cause this method to return an error.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting web server backend");
 
