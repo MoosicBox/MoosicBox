@@ -183,12 +183,16 @@ impl AsDeleteTerm for Track {
 /// Error type for failures when reindexing from a database.
 #[derive(Debug, Error)]
 pub enum ReindexFromDbError {
+    /// Failed to fetch data from the database
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to recreate the search index
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
+    /// Failed to populate the index with data
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    /// The asynchronous task failed to complete
     #[error(transparent)]
     Join(#[from] JoinError),
 }

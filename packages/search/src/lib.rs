@@ -61,8 +61,10 @@ static GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS: LazyLock<RwLock<Option<usize>>> =
 /// Error type for failures when retrieving the global search index.
 #[derive(Debug, Error, Clone)]
 pub enum GetGlobalSearchIndexError {
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    /// Failed to retrieve or initialize the global search index
     #[error("{0}")]
     FailedToGetIndex(String),
 }
@@ -81,8 +83,10 @@ static GLOBAL_SEARCH_INDEX: LazyLock<RwLock<Result<Index, GetGlobalSearchIndexEr
 /// Error type for failures when retrieving the global search index reader.
 #[derive(Debug, Error, Clone)]
 pub enum GetGlobalSearchReaderError {
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    /// Failed to retrieve or initialize the index reader
     #[error("{0}")]
     FailedToGetReader(String),
 }
@@ -112,12 +116,16 @@ static GLOBAL_SEARCH_READER: LazyLock<RwLock<Result<IndexReader, GetGlobalSearch
 /// Error type for failures when creating a search index.
 #[derive(Debug, Error)]
 pub enum CreateIndexError {
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    /// Failed to open the index directory
     #[error(transparent)]
     OpenDirectory(#[from] tantivy::directory::error::OpenDirectoryError),
+    /// Failed to open a file for reading in the index directory
     #[error(transparent)]
     OpenRead(#[from] tantivy::directory::error::OpenReadError),
+    /// An I/O error occurred while creating the index
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
@@ -244,10 +252,13 @@ fn create_global_search_index(
 /// Error type for failures when recreating a search index.
 #[derive(Debug, Error)]
 pub enum RecreateIndexError {
+    /// Failed to create the new search index
     #[error(transparent)]
     CreateIndex(#[from] CreateIndexError),
+    /// Failed to retrieve the index reader for the new index
     #[error(transparent)]
     GetIndexReader(#[from] GetIndexReaderError),
+    /// The asynchronous task failed to complete
     #[error(transparent)]
     Join(#[from] JoinError),
 }
@@ -267,8 +278,10 @@ fn recreate_global_search_index_sync(path: &Path) -> Result<(), RecreateIndexErr
 /// Error type for failures when retrieving an index reader.
 #[derive(Debug, Error)]
 pub enum GetIndexReaderError {
+    /// Failed to create the search index
     #[error(transparent)]
     CreateIndex(#[from] CreateIndexError),
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
 }
@@ -283,12 +296,16 @@ fn get_index_reader(index: &Index) -> Result<IndexReader, GetIndexReaderError> {
 /// Error type for failures when populating a search index.
 #[derive(Debug, Error)]
 pub enum PopulateIndexError {
+    /// Failed to retrieve the global search index
     #[error(transparent)]
     GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    /// Failed to retrieve the global search index reader
     #[error(transparent)]
     GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    /// The asynchronous task failed to complete
     #[error(transparent)]
     Join(#[from] JoinError),
 }
@@ -499,10 +516,13 @@ pub fn populate_global_search_index_sync(
 /// Error type for failures when deleting from a search index.
 #[derive(Debug, Error)]
 pub enum DeleteFromIndexError {
+    /// Failed to retrieve the global search index
     #[error(transparent)]
     GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    /// Failed to retrieve the global search index reader
     #[error(transparent)]
     GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
 }
@@ -599,10 +619,13 @@ pub fn delete_from_global_search_index(
 /// Error type for failures when reindexing a search index.
 #[derive(Debug, Error)]
 pub enum ReindexError {
+    /// Failed to recreate the search index
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
+    /// Failed to populate the index with data
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    /// The asynchronous task failed to complete
     #[error(transparent)]
     Join(#[from] JoinError),
 }
@@ -667,12 +690,16 @@ fn reindex_global_search_index_sync(data: &[Vec<(&str, DataValue)>]) -> Result<(
 /// Error type for failures when searching a search index.
 #[derive(Debug, Error)]
 pub enum SearchIndexError {
+    /// Failed to retrieve the global search index
     #[error(transparent)]
     GetGlobalSearchIndex(#[from] GetGlobalSearchIndexError),
+    /// Failed to retrieve the global search index reader
     #[error(transparent)]
     GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
+    /// An error occurred in the underlying Tantivy search library
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    /// Failed to parse the search query string
     #[error(transparent)]
     QueryParser(#[from] tantivy::query::QueryParserError),
 }
