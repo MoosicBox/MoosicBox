@@ -256,6 +256,8 @@ pub struct TcpListener {
 }
 
 impl TcpListener {
+    /// Binds a TCP listener to the specified address in the simulator.
+    ///
     /// # Errors
     ///
     /// * If the `TcpListener` fails to bind the address
@@ -285,6 +287,8 @@ impl TcpListener {
         .await
     }
 
+    /// Shuts down the TCP listener and removes it from the simulator registry.
+    ///
     /// # Panics
     ///
     /// * If the `CancellationToken` is already cancelled
@@ -322,6 +326,8 @@ impl Drop for TcpListener {
 }
 
 impl crate::SimulatorTcpListener {
+    /// Binds a wrapped TCP listener to the specified address in the simulator.
+    ///
     /// # Errors
     ///
     /// * If the `TcpListener` fails to bind the address
@@ -373,6 +379,8 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
+    /// Connects to a remote TCP server at the specified address in the simulator.
+    ///
     /// # Errors
     ///
     /// * If the underlying `TcpStream` fails to connect
