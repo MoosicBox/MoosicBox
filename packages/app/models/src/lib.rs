@@ -17,6 +17,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Re-exported authentication method type from the music API module.
+///
+/// Used by [`MusicApiSettings`] to specify the authentication mechanism
+/// for external music API integrations.
 #[cfg(feature = "music-api-api")]
 pub use moosicbox_music_api_api::models::AuthMethod;
 
@@ -76,6 +80,10 @@ pub mod music_api_api {
 
     use crate::MusicApiSettings;
 
+    /// Converts from API-level music API model to application-level settings.
+    ///
+    /// This conversion automatically generates the `run_scan_endpoint` URL
+    /// based on the API name if scanning is supported.
     impl From<ApiMusicApi> for MusicApiSettings {
         fn from(value: ApiMusicApi) -> Self {
             Self {
