@@ -204,6 +204,11 @@ struct OpusPacket {
 ///
 /// Implements [`std::io::Write`] to provide a streaming interface for writing Opus-encoded
 /// audio data to an Ogg container file.
+///
+/// # Panics
+///
+/// The [`Write::write`](std::io::Write::write) and [`Write::flush`](std::io::Write::flush)
+/// implementations will panic if writing packets to the underlying Ogg stream fails.
 pub struct OpusWrite<'a> {
     packet_writer: PacketWriter<'a, File>,
     serial: u32,
