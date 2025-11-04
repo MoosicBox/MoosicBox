@@ -161,6 +161,8 @@ pub type Containers = Vec<Container>;
 /// This trait is automatically implemented and in scope, so you can call
 /// these methods on any `Vec<Container>` without importing anything.
 pub trait ContainerVecMethods {
+    /// Convert the containers to a string representation with optional debug attributes.
+    ///
     /// # Errors
     ///
     /// * If the container could not be converted to a string.
@@ -170,6 +172,8 @@ pub trait ContainerVecMethods {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
+    /// Convert the containers to a pretty-printed string with optional debug attributes.
+    ///
     /// # Errors
     ///
     /// * If the container could not be converted to a string.
@@ -259,6 +263,8 @@ pub fn into_html(containers: &[Container]) -> String {
 
 /// Extension trait to add missing methods to `Vec<Container>`
 pub trait ContainerVecExt {
+    /// Convert the containers to a string representation with optional debug attributes.
+    ///
     /// # Errors
     ///
     /// * If the container could not be converted to a string.
@@ -268,6 +274,8 @@ pub trait ContainerVecExt {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
+    /// Convert the containers to a pretty-printed string with optional debug attributes.
+    ///
     /// # Errors
     ///
     /// * If the container could not be converted to a string.
@@ -277,7 +285,9 @@ pub trait ContainerVecExt {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
+    /// Convert the containers to an HTML string, consuming self
     fn into_string(self) -> String;
+    /// Convert the containers to an HTML string
     fn to_string(&self) -> String;
 }
 
@@ -353,11 +363,15 @@ impl ContainerVecExt for Vec<Container> {
 pub trait RenderContainer {
     type Error;
 
+    /// Render this value into the provided container vector.
+    ///
     /// # Errors
     ///
     /// * If the value could not be rendered.
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error>;
 
+    /// Render this value to an HTML string.
+    ///
     /// # Errors
     ///
     /// * If the value could not be converted to a string.
@@ -370,6 +384,8 @@ pub trait RenderContainer {
             .collect::<String>())
     }
 
+    /// Render this value to a vector of containers.
+    ///
     /// # Errors
     ///
     /// * If the value could not be converted to a `Vec<Container>`.
