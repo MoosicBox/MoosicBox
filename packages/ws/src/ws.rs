@@ -58,12 +58,16 @@ pub struct WebsocketContext {
 /// Errors that can occur when sending websocket messages.
 #[derive(Debug, Error)]
 pub enum WebsocketSendError {
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Unknown error with details
     #[error("Unknown: {0}")]
     Unknown(String),
+    /// Failed to parse integer value
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
@@ -124,6 +128,7 @@ static CONNECTION_DATA: LazyLock<Arc<RwLock<BTreeMap<String, Connection>>>> =
 /// Errors that can occur when connecting to a websocket.
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {
+    /// Unknown connection error
     #[error("Unknown")]
     Unknown,
 }
@@ -141,10 +146,13 @@ pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Re
 /// Errors that can occur when disconnecting from a websocket.
 #[derive(Debug, Error)]
 pub enum WebsocketDisconnectError {
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Websocket send error
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
@@ -210,24 +218,37 @@ pub async fn process_message(
 /// Errors that can occur when processing a websocket message.
 #[derive(Debug, Error)]
 pub enum WebsocketMessageError {
+    /// Message is missing the required type field
     #[error("Missing message type")]
     MissingMessageType,
+    /// Message type is not recognized or invalid
     #[error("Invalid message type")]
     InvalidMessageType,
+    /// Message payload is invalid or malformed
     #[error("Invalid payload: '{0}' ({1})")]
     InvalidPayload(String, String),
+    /// Message is missing the required payload
     #[error("Missing payload")]
     MissingPayload,
+    /// Connection is missing the required profile
     #[error("Missing profile")]
     MissingProfile,
+    /// Websocket send error
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
+    /// Session update error
     #[error(transparent)]
     UpdateSession(#[from] UpdateSessionError),
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Unknown error with details
     #[error("Unknown {message:?}")]
-    Unknown { message: String },
+    Unknown {
+        /// Error message details
+        message: String,
+    },
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
@@ -571,12 +592,16 @@ pub async fn send_scan_event<ProgressEvent: Serialize + Send>(
 /// Errors that can occur when updating a session.
 #[derive(Debug, Error)]
 pub enum UpdateSessionError {
+    /// The requested session does not exist
     #[error("No session found")]
     NoSessionFound,
+    /// Websocket send error
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
+    /// Database fetch error
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// JSON serialization/deserialization error
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
