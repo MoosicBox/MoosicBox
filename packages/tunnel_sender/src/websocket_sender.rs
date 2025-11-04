@@ -36,6 +36,11 @@ impl<T> TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
+    /// Sends a message through the tunnel with connection filtering options.
+    ///
+    /// # Panics
+    ///
+    /// * If `data` is not valid JSON
     fn send_tunnel(
         &self,
         data: &str,
@@ -65,6 +70,9 @@ impl<T> WebsocketSender for TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
+    /// # Panics
+    ///
+    /// * If `connection_id` cannot be parsed as a `u64`
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
         let id = connection_id.parse::<u64>().unwrap();
 
@@ -92,6 +100,9 @@ where
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If `connection_id` cannot be parsed as a `u64`
     async fn send_all_except(
         &self,
         connection_id: &str,
