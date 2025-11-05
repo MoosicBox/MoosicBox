@@ -1,3 +1,9 @@
+//! Version 1 implementation of the egui renderer.
+//!
+//! This module provides the first generation egui-based renderer for `HyperChad`,
+//! including comprehensive UI element rendering, action handling, and viewport
+//! management capabilities.
+
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, LazyLock, Mutex, RwLock},

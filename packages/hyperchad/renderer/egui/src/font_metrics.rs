@@ -18,6 +18,10 @@ impl EguiFontMetrics {
 }
 
 impl FontMetrics for EguiFontMetrics {
+    /// Measures text dimensions using egui's font system.
+    ///
+    /// Returns the bounds containing width and height information for each row
+    /// of text after layout with the specified font size and wrap width.
     fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
         log::trace!("measure_text: measuring text={text} size={size} wrap_width={wrap_width}");
         from_galley(&self.ctx.fonts_mut(|x| {

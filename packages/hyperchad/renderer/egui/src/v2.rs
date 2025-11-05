@@ -1,3 +1,9 @@
+//! Version 2 implementation of the egui renderer.
+//!
+//! This module provides the second generation egui-based renderer for `HyperChad`,
+//! featuring improved rendering architecture and simplified action handling compared
+//! to version 1.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
