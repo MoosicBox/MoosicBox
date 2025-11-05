@@ -393,6 +393,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
     /// # Errors
     ///
     /// Will error if egui fails to run the event loop.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the `RwLock` for view transmission or render buffer is poisoned,
+    /// or if width or height were not set during initialization.
     fn to_runner(
         self,
         _handle: Handle,
