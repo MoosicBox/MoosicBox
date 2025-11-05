@@ -147,6 +147,13 @@ impl StreamableFileAsync {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Read for StreamableFileAsync {
+    /// Reads bytes from the remote file into the provided buffer.
+    ///
+    /// This method automatically fetches chunks from the remote source as needed.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the system time is before the Unix epoch (January 1, 1970)
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // If we are reading after the buffer,
         // then return early with 0 written bytes.

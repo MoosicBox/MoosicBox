@@ -163,6 +163,12 @@ impl ByteStreamSource {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Read for ByteStreamSource {
+    /// Reads bytes from the stream into the provided buffer.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the internal channel receiver is disconnected while waiting for data
+    /// * Panics if the internal ready signal sender fails to send
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.finished {
             return Ok(0);
@@ -228,6 +234,11 @@ impl Read for ByteStreamSource {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Seek for ByteStreamSource {
+    /// Seeks to a position in the stream.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if seeking from end when the stream size is unknown
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
             #[allow(clippy::cast_possible_truncation)]
