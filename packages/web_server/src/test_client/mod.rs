@@ -116,6 +116,7 @@ pub enum HttpMethod {
 }
 
 impl HttpMethod {
+    /// Convert HTTP method to its string representation
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {

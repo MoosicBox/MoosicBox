@@ -15,7 +15,10 @@ use super::{HttpMethod, TestRequestBuilder, TestResponse};
 /// This wrapper provides thread-safe access to any `GenericTestClient` implementation
 /// and implements the original `TestClient` trait. It follows the same pattern as
 /// `RngWrapper` in `switchy_random`.
-pub struct TestClientWrapper<C: GenericTestClient>(Arc<Mutex<C>>);
+pub struct TestClientWrapper<C: GenericTestClient>(
+    /// Thread-safe reference to the underlying client implementation
+    Arc<Mutex<C>>,
+);
 
 impl<C: GenericTestClient> Clone for TestClientWrapper<C> {
     fn clone(&self) -> Self {
@@ -100,7 +103,10 @@ impl<C: GenericTestClient> super::TestClient for TestClientWrapper<C> {
 ///
 /// This wrapper provides thread-safe access to any `GenericTestServer` implementation.
 /// It follows the same pattern as `TestClientWrapper`.
-pub struct TestServerWrapper<S: GenericTestServer>(Arc<Mutex<S>>);
+pub struct TestServerWrapper<S: GenericTestServer>(
+    /// Thread-safe reference to the underlying server implementation
+    Arc<Mutex<S>>,
+);
 
 impl<S: GenericTestServer> Clone for TestServerWrapper<S> {
     fn clone(&self) -> Self {
