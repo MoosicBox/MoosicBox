@@ -556,6 +556,11 @@ impl PlaybackHandler {
 }
 
 impl PlaybackHandler {
+    /// Initializes the playback handler from an API session.
+    ///
+    /// This updates the playback state to match the provided API session configuration,
+    /// including tracks, position, volume, and playback target settings.
+    ///
     /// # Errors
     ///
     /// * If failed to update the playback from the session
@@ -600,6 +605,11 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Initializes the playback handler from a database session.
+    ///
+    /// This updates the playback state to match the provided session from the database,
+    /// applying any initialization updates specified in the `UpdateSession` parameter.
+    ///
     /// # Errors
     ///
     /// * If failed to update the playback from the session
@@ -655,6 +665,11 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Plays all tracks from an album.
+    ///
+    /// Fetches all tracks from the specified album via the music API and begins playback,
+    /// optionally starting at a specific track position with seek and volume settings.
+    ///
     /// # Errors
     ///
     /// * If failed to fetch the album tracks
@@ -702,6 +717,10 @@ impl PlaybackHandler {
         .await
     }
 
+    /// Plays a single track.
+    ///
+    /// Begins playback of the specified track with optional seek position and volume settings.
+    ///
     /// # Errors
     ///
     /// * If failed to play the track
@@ -903,6 +922,11 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Triggers playback of the current track.
+    ///
+    /// Starts or resumes playback at the current position with optional seek offset.
+    /// This is the internal method that handles actual playback triggering with retry logic.
+    ///
     /// # Errors
     ///
     /// * If failed to play the existing playback
@@ -926,6 +950,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Stops the current playback.
+    ///
+    /// Halts playback completely and releases playback resources.
+    ///
     /// # Errors
     ///
     /// * If failed to stop the existing playback
@@ -948,6 +976,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Seeks to a specific position in the current track.
+    ///
+    /// Changes the playback position to the specified time offset in seconds.
+    ///
     /// # Errors
     ///
     /// * If failed to seek the current playback
@@ -1059,6 +1091,10 @@ impl PlaybackHandler {
         .await
     }
 
+    /// Performs pre-update operations before playback state changes.
+    ///
+    /// This hook allows the player implementation to prepare for upcoming playback state updates.
+    ///
     /// # Errors
     ///
     /// * If failed to handle logic in the `before_update_playback`
@@ -1069,6 +1105,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Performs post-update operations after playback state changes.
+    ///
+    /// This hook allows the player implementation to synchronize state after playback updates.
+    ///
     /// # Errors
     ///
     /// * If failed to handle logic in the `after_update_playback`
@@ -1249,6 +1289,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Pauses the current playback.
+    ///
+    /// Temporarily halts playback while maintaining the current position.
+    ///
     /// # Errors
     ///
     /// * If failed to pause the current `Playback`
@@ -1271,6 +1315,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Resumes playback from a paused state.
+    ///
+    /// Continues playback from the position where it was paused.
+    ///
     /// # Errors
     ///
     /// * If failed to resume the current `Playback`

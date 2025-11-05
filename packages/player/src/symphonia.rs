@@ -43,6 +43,11 @@ pub enum PlaybackError {
     InvalidSource,
 }
 
+/// Plays an audio file asynchronously from a file path string.
+///
+/// Loads and plays the audio file at the specified path using the Symphonia decoder
+/// in a blocking task, with optional gapless playback and verification.
+///
 /// # Errors
 ///
 /// * If failed to play the file path
@@ -114,6 +119,11 @@ fn play_file_path_str(
 /// for processing decoded audio or a `PlaybackError` if handler creation fails.
 pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, PlaybackError>;
 
+/// Plays audio from a media source stream asynchronously.
+///
+/// Decodes and plays audio from the provided `MediaSourceStream` in a blocking task,
+/// using the Symphonia decoder with optional gapless playback and verification.
+///
 /// # Errors
 ///
 /// * If failed to play the `MediaSourceStream`
@@ -144,6 +154,11 @@ pub async fn play_media_source_async(
         .await?
 }
 
+/// Plays audio from a media source stream synchronously.
+///
+/// Decodes and plays audio from the provided `MediaSourceStream` using the Symphonia decoder,
+/// probing the stream format and processing audio through the provided handler.
+///
 /// # Errors
 ///
 /// * If failed to play the `MediaSourceStream`
