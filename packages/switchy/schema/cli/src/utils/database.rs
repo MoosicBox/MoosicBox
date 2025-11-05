@@ -1,7 +1,24 @@
+//! Database connection utilities.
+//!
+//! This module provides database connection functionality for the CLI, supporting
+//! both `PostgreSQL` and `SQLite` databases based on URL scheme detection.
+
 use crate::CliError;
 use switchy_database::Database;
 
-/// Connect to database based on URL scheme
+/// Connect to database based on URL scheme.
+///
+/// Parses the database URL and establishes a connection to either `PostgreSQL` or `SQLite`
+/// based on the URL scheme. Supported schemes are `sqlite`, `postgresql`, and `postgres`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The database URL format is invalid (missing scheme)
+/// * The database scheme is unsupported (not `sqlite`/`postgresql`/`postgres`)
+/// * `SQLite` connection fails (invalid path, permissions, etc.)
+/// * `PostgreSQL` URL parsing fails (malformed URL)
+/// * `PostgreSQL` connection fails (network, authentication, etc.)
 pub async fn connect(database_url: &str) -> Result<Box<dyn Database>, CliError> {
     let scheme = database_url
         .split(':')
