@@ -28,6 +28,8 @@ use crate::{
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
 
+/// Creates or updates a library authentication configuration.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -61,6 +63,8 @@ pub async fn create_library_config(
     Ok(())
 }
 
+/// Deletes a library authentication configuration by refresh token.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -90,6 +94,8 @@ pub enum LibraryConfigError {
     NoConfigsAvailable,
 }
 
+/// Retrieves the library authentication configuration.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -112,6 +118,8 @@ pub async fn get_library_config(
     Ok(configs.first().cloned())
 }
 
+/// Retrieves the library access token and refresh token pair.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -123,6 +131,8 @@ pub async fn get_library_access_tokens(
         .map(|c| (c.access_token.clone(), c.refresh_token)))
 }
 
+/// Retrieves the library access token.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -132,6 +142,8 @@ pub async fn get_library_access_token(
     Ok(get_library_access_tokens(db).await?.map(|c| c.0))
 }
 
+/// Retrieves all artists from the library database.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -139,6 +151,8 @@ pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, Dat
     Ok(db.select("artists").execute(&**db).await?.to_value_type()?)
 }
 
+/// Retrieves all albums from the library database with audio format information.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -169,6 +183,8 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
         .as_model_mapped()
 }
 
+/// Retrieves a specific artist by ID from a given API source.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -199,6 +215,8 @@ pub async fn get_artist(
     })
 }
 
+/// Retrieves the artist associated with a specific album ID.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -216,6 +234,8 @@ pub async fn get_artist_by_album_id(
         .to_value_type()?)
 }
 
+/// Retrieves all artists associated with the given album IDs.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -233,6 +253,8 @@ pub async fn get_artists_by_album_ids(
         .to_value_type()?)
 }
 
+/// Retrieves the artist for a specific album.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -250,6 +272,8 @@ pub async fn get_album_artist(
         .transpose()?)
 }
 
+/// Retrieves a specific album by ID from a given API source.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -292,6 +316,8 @@ pub async fn get_album(
     })
 }
 
+/// Retrieves all tracks for a specific album.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -333,6 +359,8 @@ pub async fn get_album_tracks(
         .to_value_type()?)
 }
 
+/// Retrieves all albums for a specific artist.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -384,6 +412,8 @@ pub struct SetTrackSize {
     pub channels: Option<Option<u8>>,
 }
 
+/// Sets the audio size information for a single track.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -394,6 +424,8 @@ pub async fn set_track_size(
     Ok(set_track_sizes(db, &[value]).await?.first().cloned())
 }
 
+/// Sets the audio size information for multiple tracks.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -472,6 +504,8 @@ pub async fn set_track_sizes(
         .to_value_type()?)
 }
 
+/// Retrieves the file size in bytes for a track at a specific quality level.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -494,6 +528,8 @@ pub async fn get_track_size(
         .flatten())
 }
 
+/// Retrieves a specific track by ID.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -507,6 +543,8 @@ pub async fn get_track(
         .next())
 }
 
+/// Retrieves tracks by their IDs, or all tracks if no IDs are provided.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -551,6 +589,8 @@ pub async fn get_tracks(
         .to_value_type()?)
 }
 
+/// Deletes a single track from the database by its ID.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -561,6 +601,8 @@ pub async fn delete_track(
     Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
+/// Deletes multiple tracks from the database by their IDs.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -580,6 +622,8 @@ pub async fn delete_tracks(
         .to_value_type()?)
 }
 
+/// Deletes track size information for a single track.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -593,6 +637,8 @@ pub async fn delete_track_size_by_track_id(
         .next())
 }
 
+/// Deletes track size information for multiple tracks.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -612,6 +658,8 @@ pub async fn delete_track_sizes_by_track_id(
         .to_value_type()?)
 }
 
+/// Adds a single artist to the database and returns the created/existing artist.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -622,6 +670,8 @@ pub async fn add_artist_and_get_artist(
     Ok(add_artists_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
+/// Adds a single artist from a field map to the database and returns the created/existing artist.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -632,6 +682,8 @@ pub async fn add_artist_map_and_get_artist(
     Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
+/// Adds multiple artists to the database and returns the created/existing artists.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -654,6 +706,8 @@ pub async fn add_artists_and_get_artists(
     .await
 }
 
+/// Adds multiple artists from field maps to the database and returns the created/existing artists.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -684,6 +738,8 @@ pub async fn add_artist_maps_and_get_artists(
     Ok(results)
 }
 
+/// Adds multiple albums to the database without returning them.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -713,6 +769,8 @@ pub async fn add_albums(
     Ok(data)
 }
 
+/// Adds a single album to the database and returns the created/existing album.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -723,6 +781,8 @@ pub async fn add_album_and_get_album(
     Ok(add_albums_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
+/// Adds a single album from a field map to the database and returns the created/existing album.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -733,6 +793,8 @@ pub async fn add_album_map_and_get_album(
     Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
+/// Adds multiple albums to the database and returns the created/existing albums.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -765,6 +827,8 @@ pub async fn add_albums_and_get_albums(
     .await
 }
 
+/// Adds multiple albums from field maps to the database and returns the created/existing albums.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -806,6 +870,8 @@ pub struct InsertTrack {
     pub file: Option<String>,
 }
 
+/// Adds multiple tracks to the database and returns the created/existing tracks.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -901,6 +967,8 @@ impl ToValueType<ApiSourceMapping> for &switchy_database::Row {
     }
 }
 
+/// Adds multiple API source mappings to the database.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -947,6 +1015,8 @@ pub struct UpdateApiSource {
     pub source_id: String,
 }
 
+/// Updates API source mappings for a table by regenerating the JSON array.
+///
 /// # Errors
 ///
 /// * If there was a database error
