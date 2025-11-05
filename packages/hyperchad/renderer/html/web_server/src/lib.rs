@@ -167,6 +167,11 @@ impl<T: Send + Sync + Clone, R: WebServerResponseProcessor<T> + Send + Sync + Cl
     WebServerApp<T, R>
 {
     /// Creates a new web server application.
+    ///
+    /// # Parameters
+    ///
+    /// * `processor` - The response processor that handles HTTP request/response transformations
+    /// * `renderer_event_rx` - Channel receiver for receiving renderer lifecycle events
     #[must_use]
     pub const fn new(processor: R, renderer_event_rx: Receiver<RendererEvent>) -> Self {
         Self {
