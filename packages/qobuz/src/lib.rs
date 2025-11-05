@@ -707,6 +707,11 @@ async fn validate_credentials(#[cfg(feature = "db")] db: &LibraryDatabase) -> Re
     }
 }
 
+/// Authenticates a user with Qobuz using username and password credentials.
+///
+/// Returns an access token and user information that can be persisted to the database
+/// for subsequent authenticated API requests.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -819,6 +824,8 @@ pub async fn user_login(
     }))
 }
 
+/// Retrieves detailed information about a specific artist from Qobuz by ID.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -932,6 +939,8 @@ pub async fn favorite_artists(
     })
 }
 
+/// Adds an artist to the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -969,6 +978,8 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
+/// Removes an artist from the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1098,6 +1109,8 @@ pub async fn artist_albums(
     })
 }
 
+/// Retrieves detailed information about a specific album from Qobuz by ID.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1174,6 +1187,8 @@ async fn request_favorite_albums(
     }
 }
 
+/// Retrieves a paginated list of the user's favorite albums from Qobuz.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1247,6 +1262,8 @@ pub async fn favorite_albums(
     })
 }
 
+/// Retrieves all of the user's favorite albums from Qobuz without pagination.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1292,6 +1309,8 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
+/// Adds an album to the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1325,6 +1344,8 @@ pub async fn add_favorite_album(
     Ok(())
 }
 
+/// Removes an album from the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1464,6 +1485,8 @@ pub async fn album_tracks(
     })
 }
 
+/// Retrieves detailed information about a specific track from Qobuz by ID.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1587,6 +1610,8 @@ pub async fn favorite_tracks(
     })
 }
 
+/// Adds a track to the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1620,6 +1645,8 @@ pub async fn add_favorite_track(
     Ok(())
 }
 
+/// Removes a track from the user's Qobuz favorites.
+///
 /// # Errors
 ///
 /// * If the API request failed
@@ -1776,6 +1803,8 @@ pub async fn track_file_url(
     Ok(url)
 }
 
+/// Searches the Qobuz catalog for artists, albums, and tracks matching a query.
+///
 /// # Errors
 ///
 /// * If the API request failed
