@@ -94,6 +94,11 @@ impl OpusEncoder<'_> {
         x
     }
 
+    /// Initializes the resampler if needed based on input audio spec.
+    ///
+    /// # Arguments
+    /// * `spec` - Input audio signal specification
+    /// * `duration` - Audio duration in samples
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
         if self.resample_rate.is_none_or(|r| r != spec.rate)
             && self.output_rate != spec.rate as usize
@@ -115,6 +120,13 @@ impl OpusEncoder<'_> {
         self
     }
 
+    /// Opens the encoder with the specified audio specification.
+    ///
+    /// This initializes the resampler and prepares the encoder for encoding.
+    ///
+    /// # Arguments
+    /// * `spec` - Audio signal specification
+    /// * `duration` - Audio duration in samples
     #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);

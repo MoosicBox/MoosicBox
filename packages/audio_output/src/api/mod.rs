@@ -16,6 +16,7 @@ use serde::Deserialize;
 
 use crate::api::models::ApiAudioOutput;
 
+/// Data models for audio output API responses.
 pub mod models;
 
 /// Binds audio output API endpoints to an Actix-web scope.
