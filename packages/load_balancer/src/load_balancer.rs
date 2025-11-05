@@ -63,8 +63,18 @@ impl Router {
 impl ProxyHttp for Router {
     type CTX = ();
 
+    /// Creates a new context for the proxy session.
+    ///
+    /// Returns an empty unit type as no session-specific context is needed.
     fn new_ctx(&self) -> Self::CTX {}
 
+    /// Filters incoming requests before routing.
+    ///
+    /// Currently performs no filtering, only logs the request path for debugging.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
 
