@@ -25,6 +25,9 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Property-based testing support via `quickcheck::Arbitrary` implementations.
+///
+/// This module is only available when the `arb` feature is enabled.
 #[cfg(feature = "arb")]
 pub mod arb;
 
