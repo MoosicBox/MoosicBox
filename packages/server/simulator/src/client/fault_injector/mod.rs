@@ -1,3 +1,9 @@
+//! Fault injection client simulator for testing system resilience.
+//!
+//! This module provides a fault injector that generates random fault injection
+//! interactions (such as server restarts/bounces) to test the resilience and
+//! recovery capabilities of the `MoosicBox` server under adverse conditions.
+
 use plan::{FaultInjectionInteractionPlan, Interaction};
 use simvar::{Sim, plan::InteractionPlan as _, switchy::random::rng};
 

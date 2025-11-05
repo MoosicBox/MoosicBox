@@ -1,3 +1,9 @@
+//! HTTP utilities for making requests and parsing responses in simulations.
+//!
+//! This module provides utilities for working with HTTP in the simulated environment,
+//! including making HTTP requests over simulated TCP streams and parsing HTTP responses
+//! into structured components.
+
 use std::{collections::BTreeMap, io};
 
 use simvar::switchy::tcp::TcpStream;

@@ -1,3 +1,9 @@
+//! Health check client simulator for monitoring server status.
+//!
+//! This module provides a health checker that periodically verifies the server's
+//! health status by making HTTP requests to the health endpoint and validating
+//! the responses.
+
 use std::sync::LazyLock;
 
 use plan::{HealthCheckInteractionPlan, Interaction};
