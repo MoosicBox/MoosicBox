@@ -1,3 +1,34 @@
+//! Audio format converter command-line tool.
+//!
+//! This binary provides a CLI interface for converting audio files between different formats
+//! (AAC, FLAC, MP3, Opus) with configurable quality settings. It preserves metadata tags
+//! during conversion.
+//!
+//! # Features
+//!
+//! * Convert between multiple audio formats
+//! * Preserve audio metadata (title, artist, album, etc.)
+//! * Configurable quality settings
+//! * Support for various input and output formats
+//!
+//! # Usage
+//!
+//! ```text
+//! aconverter <FILE> --output <OUTPUT> [--encoding <ENCODING>] [--quality <QUALITY>]
+//! ```
+//!
+//! # Examples
+//!
+//! Convert FLAC to MP3:
+//! ```text
+//! aconverter input.flac --output output.mp3 --quality 90
+//! ```
+//!
+//! Convert with explicit encoding:
+//! ```text
+//! aconverter input.wav --output output.opus --encoding OPUS
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
