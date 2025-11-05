@@ -3,6 +3,19 @@
 //! This crate computes a hash string from the set of enabled plugin features to ensure
 //! that different feature builds produce distinct output directories and don't overwrite
 //! each other. The hash is computed at compile time using the enabled feature flags.
+//!
+//! # Example
+//!
+//! ```rust
+//! use hyperchad_renderer_vanilla_js_hash::PLUGIN_HASH_HEX;
+//!
+//! // Use the hash to construct a unique output path
+//! let output_dir = format!("dist/vanilla-js-{}", PLUGIN_HASH_HEX);
+//! println!("Output directory: {}", output_dir);
+//! ```
+//!
+//! The hash value changes based on which plugin features are enabled at compile time,
+//! ensuring that builds with different feature sets don't conflict.
 
 use const_hex::{Buffer, const_encode};
 use sha2_const_stable::Sha256;
@@ -172,4 +185,16 @@ pub const HEX_BUF: Buffer<{ Sha256::DIGEST_SIZE }> = const_encode(&RAW_HASH);
 /// containing the hexadecimal encoding of the SHA-256 hash of all enabled plugin
 /// features. Use this value to construct unique paths or identifiers for different
 /// feature builds to prevent conflicts.
+///
+/// # Example
+///
+/// ```rust
+/// use hyperchad_renderer_vanilla_js_hash::PLUGIN_HASH_HEX;
+///
+/// // Create a unique output directory name based on enabled features
+/// let build_dir = format!("target/renderer-{}", PLUGIN_HASH_HEX);
+///
+/// // Or use it as a cache key
+/// let cache_key = format!("hyperchad-js-cache-{}", PLUGIN_HASH_HEX);
+/// ```
 pub const PLUGIN_HASH_HEX: &str = HEX_BUF.as_str();
