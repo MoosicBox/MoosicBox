@@ -91,13 +91,17 @@ impl PlaybackTarget {
     }
 }
 
+/// Default implementation for `PlaybackTarget`.
 impl Default for PlaybackTarget {
+    /// Returns the default playback target (`AudioZone` with ID 0).
     fn default() -> Self {
         Self::AudioZone { audio_zone_id: 0 }
     }
 }
 
+/// Converts an `ApiPlaybackTarget` to a `PlaybackTarget`.
 impl From<ApiPlaybackTarget> for PlaybackTarget {
+    /// Converts an `ApiPlaybackTarget` into its internal representation.
     fn from(value: ApiPlaybackTarget) -> Self {
         match value {
             ApiPlaybackTarget::AudioZone { audio_zone_id } => Self::AudioZone { audio_zone_id },
@@ -173,7 +177,9 @@ impl UpdateSession {
     }
 }
 
+/// Converts an `ApiUpdateSession` to an `UpdateSession`.
 impl From<ApiUpdateSession> for UpdateSession {
+    /// Converts an `ApiUpdateSession` into its internal representation.
     fn from(value: ApiUpdateSession) -> Self {
         Self {
             session_id: value.session_id,
@@ -193,7 +199,9 @@ impl From<ApiUpdateSession> for UpdateSession {
     }
 }
 
+/// Converts an `UpdateSession` to an `ApiUpdateSession`.
 impl From<UpdateSession> for ApiUpdateSession {
+    /// Converts an `UpdateSession` into its API representation.
     fn from(value: UpdateSession) -> Self {
         Self {
             session_id: value.session_id,
@@ -223,7 +231,9 @@ pub struct UpdateSessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
+/// Converts an `UpdateSessionPlaylist` to an `ApiUpdateSessionPlaylist`.
 impl From<UpdateSessionPlaylist> for ApiUpdateSessionPlaylist {
+    /// Converts an `UpdateSessionPlaylist` into its API representation.
     fn from(value: UpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
@@ -232,7 +242,9 @@ impl From<UpdateSessionPlaylist> for ApiUpdateSessionPlaylist {
     }
 }
 
+/// Converts an `ApiUpdateSessionPlaylist` to an `UpdateSessionPlaylist`.
 impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
+    /// Converts an `ApiUpdateSessionPlaylist` into its internal representation.
     fn from(value: ApiUpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
@@ -263,13 +275,17 @@ pub enum ApiPlaybackTarget {
     },
 }
 
+/// Default implementation for `ApiPlaybackTarget`.
 impl Default for ApiPlaybackTarget {
+    /// Returns the default API playback target (`AudioZone` with ID 0).
     fn default() -> Self {
         Self::AudioZone { audio_zone_id: 0 }
     }
 }
 
+/// Converts a `PlaybackTarget` to an `ApiPlaybackTarget`.
 impl From<PlaybackTarget> for ApiPlaybackTarget {
+    /// Converts a `PlaybackTarget` into its API representation.
     fn from(value: PlaybackTarget) -> Self {
         match value {
             PlaybackTarget::AudioZone { audio_zone_id } => Self::AudioZone { audio_zone_id },
@@ -368,7 +384,10 @@ pub struct Session {
     pub playlist: SessionPlaylist,
 }
 
+/// Converts a database row into a `Session`.
 impl ToValueType<Session> for &switchy_database::Row {
+    /// Converts this database row into a `Session`.
+    ///
     /// # Errors
     ///
     /// * Returns an error if required database columns are missing or have invalid types
@@ -403,7 +422,9 @@ impl ToValueType<Session> for &switchy_database::Row {
     }
 }
 
+/// Converts a `Session` ID to a database value.
 impl AsId for Session {
+    /// Returns the session ID as a database value.
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Int64(self.id as i64)
@@ -435,7 +456,9 @@ pub struct ApiSession {
     pub playlist: ApiSessionPlaylist,
 }
 
+/// Converts a `Session` to an `ApiSession`.
 impl From<Session> for ApiSession {
+    /// Converts a `Session` into its API representation.
     fn from(value: Session) -> Self {
         Self {
             session_id: value.id,
@@ -461,7 +484,10 @@ pub struct SessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
+/// Converts a database row into a `SessionPlaylist`.
 impl ToValueType<SessionPlaylist> for &switchy_database::Row {
+    /// Converts this database row into a `SessionPlaylist`.
+    ///
     /// # Errors
     ///
     /// * Returns an error if required database columns are missing or have invalid types
@@ -480,7 +506,9 @@ pub struct SessionPlaylistTracks(
     pub Vec<ApiTrack>,
 );
 
+/// Converts a `SessionPlaylist` ID to a database value.
 impl AsId for SessionPlaylist {
+    /// Returns the session playlist ID as a database value.
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Int64(self.id as i64)
@@ -498,7 +526,9 @@ pub struct ApiSessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
+/// Converts a `SessionPlaylist` to an `ApiSessionPlaylist`.
 impl From<SessionPlaylist> for ApiSessionPlaylist {
+    /// Converts a `SessionPlaylist` into its API representation.
     fn from(value: SessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.id,
@@ -535,7 +565,10 @@ pub struct Connection {
     pub players: Vec<Player>,
 }
 
+/// Converts a database row into a `Connection`.
 impl ToValueType<Connection> for &switchy_database::Row {
+    /// Converts this database row into a `Connection`.
+    ///
     /// # Errors
     ///
     /// * Returns an error if required database columns are missing or have invalid types
@@ -550,7 +583,9 @@ impl ToValueType<Connection> for &switchy_database::Row {
     }
 }
 
+/// Converts a `Connection` ID to a database value.
 impl AsId for Connection {
+    /// Returns the connection ID as a database value.
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::String(self.id.clone())
     }
@@ -571,7 +606,9 @@ pub struct ApiConnection {
     pub players: Vec<ApiPlayer>,
 }
 
+/// Converts a `Connection` to an `ApiConnection`.
 impl From<Connection> for ApiConnection {
+    /// Converts a `Connection` into its API representation.
     fn from(value: Connection) -> Self {
         Self {
             connection_id: value.id,
