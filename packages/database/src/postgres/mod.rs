@@ -1,3 +1,8 @@
+//! PostgreSQL database backend implementation
+//!
+//! This module provides native PostgreSQL database support using the `postgres` crate.
+//! It includes connection management, query execution, and schema introspection for PostgreSQL.
+
 #[allow(clippy::module_inception)]
 #[cfg(feature = "postgres-raw")]
 pub mod postgres;
