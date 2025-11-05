@@ -13,12 +13,12 @@
 //! # Example
 //!
 //! Run with the simulator backend:
-//! ```text
+//! ```sh
 //! cargo run --package basic_handler_example
 //! ```
 //!
 //! Run with the Actix backend:
-//! ```text
+//! ```sh
 //! cargo run --package basic_handler_example --features actix
 //! ```
 
