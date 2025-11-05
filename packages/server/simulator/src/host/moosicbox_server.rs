@@ -1,3 +1,9 @@
+//! `MoosicBox` server host simulation.
+//!
+//! This module provides the simulation infrastructure for running the `MoosicBox` server
+//! in a deterministic simulated environment. It handles server startup, TCP listener setup,
+//! connection proxying, and graceful shutdown.
+
 use std::{
     io::{Read as _, Write as _},
     sync::{Arc, LazyLock, Mutex},
