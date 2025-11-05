@@ -1,3 +1,38 @@
+//! Combined extractors example demonstrating multiple extractors working together.
+//!
+//! This example shows how to use multiple extractors in handler functions,
+//! combining different data sources like query parameters, JSON payloads,
+//! and request metadata. The example demonstrates patterns for building
+//! real-world API endpoints with the `moosicbox_web_server` framework.
+//!
+//! # Features
+//!
+//! * `actix` - Run with Actix Web backend
+//! * `simulator` - Run with Simulator backend (default)
+//! * `serde` - Enable JSON serialization/deserialization support
+//!
+//! # Demonstrated Patterns
+//!
+//! This example demonstrates:
+//!
+//! * Combining `Query` and `RequestData` extractors for search endpoints
+//! * Combining `Json` and `RequestData` extractors for API updates
+//! * Using multiple `RequestData` extractors in a single handler
+//! * Building JSON API responses with proper error handling
+//! * Backend-agnostic handler creation (works with Actix and Simulator)
+//!
+//! # Examples
+//!
+//! Run with the simulator backend:
+//! ```text
+//! cargo run --package combined_extractors_standalone_example
+//! ```
+//!
+//! Run with the Actix backend:
+//! ```text
+//! cargo run --package combined_extractors_standalone_example --features actix
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
