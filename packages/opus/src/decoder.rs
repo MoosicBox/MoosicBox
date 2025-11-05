@@ -88,6 +88,9 @@ impl Decoder for OpusDecoder {
         })
     }
 
+    /// Get the list of codecs supported by this decoder.
+    ///
+    /// Returns a static slice containing the Opus codec descriptor.
     fn supported_codecs() -> &'static [CodecDescriptor] {
         &[support_codec!(
             CODEC_TYPE_OPUS,
@@ -96,6 +99,10 @@ impl Decoder for OpusDecoder {
         )]
     }
 
+    /// Get the codec parameters for this decoder instance.
+    ///
+    /// Returns the parameters used to initialize this decoder, including
+    /// sample rate and channel configuration.
     fn codec_params(&self) -> &CodecParameters {
         &self.params
     }
@@ -162,10 +169,16 @@ impl Decoder for OpusDecoder {
         Ok(self.output_buf.as_audio_buffer_ref())
     }
 
+    /// Finalize the decoder and flush any remaining audio.
+    ///
+    /// For Opus, this is a no-op as frames are independently decodable.
     fn finalize(&mut self) -> FinalizeResult {
         FinalizeResult::default()
     }
 
+    /// Get the last decoded audio buffer.
+    ///
+    /// Returns a reference to the most recently decoded audio data.
     fn last_decoded(&self) -> AudioBufferRef<'_> {
         self.output_buf.as_audio_buffer_ref()
     }
