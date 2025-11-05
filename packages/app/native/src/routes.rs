@@ -33,6 +33,7 @@ use crate::{PROFILE, RENDERER, STATE, convert_state};
 static CLIENT: LazyLock<switchy::http::Client> =
     LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
 
+/// Errors that can occur during route handling.
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error("Missing query param: '{0}'")]
@@ -70,6 +71,16 @@ fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
         .map_err(|e| RouteError::RouteFailed(e.into()))
 }
 
+/// Handles the initial load of the albums list with pagination.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingQueryParam`] if required query parameters are missing
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseInt`] if numeric query parameters are invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -152,6 +163,16 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
     .into())
 }
 
+/// Handles loading additional pages of the albums list.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingQueryParam`] if required query parameters are missing
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseInt`] if numeric query parameters are invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -226,6 +247,16 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     Ok(moosicbox_app_native_ui::albums::albums_list(host, &albums, size).into())
 }
 
+/// Handles loading an artist's albums list filtered by album type.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingQueryParam`] if required query parameters are missing
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseInt`] if numeric query parameters are invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -282,6 +313,14 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
     )
 }
 
+/// Handles loading the audio zones list with their associated sessions.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -307,6 +346,14 @@ pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
     Ok(moosicbox_app_native_ui::audio_zones::audio_zones(&zones, &[]).into())
 }
 
+/// Handles loading the list of active playback sessions.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -332,6 +379,18 @@ pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteErr
     Ok(moosicbox_app_native_ui::playback_sessions::playback_sessions(host, &sessions).into())
 }
 
+/// Handles displaying either a specific album or the albums list.
+///
+/// If an `albumId` query parameter is provided, displays the album details page.
+/// Otherwise, displays the paginated albums list.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::MusicApi`] if the music API source is invalid or unavailable
+/// * [`RouteError::ParseInt`] if numeric query parameters are invalid
+/// * [`RouteError::RouteFailed`] if the server returns an error response or album not found
 pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -445,6 +504,17 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
     })
 }
 
+/// Handles displaying either a specific artist or the artists list.
+///
+/// If an `artistId` query parameter is provided, displays the artist details page.
+/// Otherwise, displays the full artists list.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -508,6 +578,15 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
     })
 }
 
+/// Handles displaying the downloads page with current or historical download tasks.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseInt`] if numeric query parameters are invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -575,6 +654,12 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
     Ok(moosicbox_app_native_ui::downloads::downloads(&state, &tasks, active_tab).into())
 }
 
+/// Handles displaying the settings page with connections and configurations.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::AppState`] if fails to retrieve connections from the app state
 pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -615,6 +700,13 @@ struct ConnectionName {
     name: String,
 }
 
+/// Handles updating the connection name.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::RouteFailed`] if fails to parse the form data
+/// * [`RouteError::AppState`] if fails to update the connection name in the app state
 pub async fn settings_connection_name_route(req: RouteRequest) -> Result<(), RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -638,6 +730,14 @@ struct ConnectionUpdate {
     api_url: String,
 }
 
+/// Handles managing server connections (delete or update).
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not DELETE or PATCH
+/// * [`RouteError::MissingQueryParam`] if the `name` query parameter is missing
+/// * [`RouteError::RouteFailed`] if fails to parse the form data (for PATCH)
+/// * [`RouteError::AppState`] if fails to update connections in the app state
 pub async fn settings_connections_route(req: RouteRequest) -> Result<View, RouteError> {
     match req.method {
         Method::Delete => {
@@ -694,6 +794,12 @@ pub async fn settings_connections_route(req: RouteRequest) -> Result<View, Route
     }
 }
 
+/// Handles creating a new server connection with a default name.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::AppState`] if fails to add the connection to the app state
 pub async fn settings_new_connection_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -724,6 +830,14 @@ pub async fn settings_new_connection_route(req: RouteRequest) -> Result<View, Ro
     .into())
 }
 
+/// Handles selecting a server connection as the current active connection.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingQueryParam`] if the `name` query parameter is missing
+/// * [`RouteError::MissingConnection`] if no connection with the specified name exists
+/// * [`RouteError::AppState`] if fails to set the current connection in the app state
 pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View, RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -749,6 +863,12 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
     )
 }
 
+/// Handles loading the music API settings section.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
 pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -791,6 +911,15 @@ async fn settings_music_api_settings_markup(state: &State) -> Result<Container, 
     Ok(moosicbox_app_native_ui::settings::music_api_settings_section(&music_api_settings).into())
 }
 
+/// Handles triggering a music API scan operation.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingQueryParam`] if the `apiSource` query parameter is missing
+/// * [`RouteError::RouteFailed`] if the API source is invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::AppState`] if fails to get the current connection
 pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -842,6 +971,15 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
         .build())
 }
 
+/// Handles enabling scan origins for a music API.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingQueryParam`] if the `apiSource` query parameter is missing
+/// * [`RouteError::RouteFailed`] if the API source is invalid
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::AppState`] if fails to get the current connection
 pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -890,6 +1028,16 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
         .build())
 }
 
+/// Handles music API authentication with credentials or device flow polling.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingQueryParam`] if the `apiSource` query parameter is missing
+/// * [`RouteError::RouteFailed`] if the API source is invalid
+/// * [`RouteError::ParseBody`] if fails to parse the authentication form data
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::AppState`] if fails to get the current connection
 pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -949,12 +1097,30 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
         .build())
 }
 
+/// Request body for search operations.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct SearchRequest {
-    query: String,
+    /// The search query string.
+    pub query: String,
 }
 
+/// Handles music search across all registered API sources.
+///
+/// Spawns concurrent search tasks for each music API source and updates the UI
+/// as results arrive.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseBody`] if fails to parse the search form data
+///
+/// # Panics
+///
+/// * If the HTTP request to the server fails in a spawned task
+/// * If fails to parse the server response in a spawned task
+/// * If fails to render the search results in a spawned task
 pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -1016,6 +1182,15 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
     Ok(())
 }
 
+/// Handles initiating an album download.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::MissingQueryParam`] if required query parameters are missing
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::RouteFailed`] if the API source is invalid or download fails
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
 pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
     if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
@@ -1057,6 +1232,16 @@ pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
     Ok(())
 }
 
+/// Handles adding or removing an album from the library.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST or DELETE
+/// * [`RouteError::MissingQueryParam`] if required query parameters are missing
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::RouteFailed`] if the API source is invalid or operation fails
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::Parse`] if fails to create the success response view
 pub async fn library_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Post | Method::Delete) {
         return Err(RouteError::UnsupportedMethod);
@@ -1098,6 +1283,14 @@ pub async fn library_route(req: RouteRequest) -> Result<Content, RouteError> {
     Ok(Content::try_view("Success!")?)
 }
 
+/// Handles loading the download settings section.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -1139,12 +1332,24 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
     Ok(Content::builder().with_fragment(markup).build())
 }
 
+/// Request body for download location operations.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DownloadsDownloadLocationRequest {
-    location: String,
+    /// The download location path.
+    pub location: String,
 }
 
+/// Handles deleting a download location.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not DELETE
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseBody`] if fails to parse the form data
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
+/// * [`RouteError::Parse`] if fails to create the success response view
 pub async fn settings_downloads_download_location_route(
     req: RouteRequest,
 ) -> Result<Content, RouteError> {
@@ -1177,12 +1382,22 @@ pub async fn settings_downloads_download_location_route(
     Ok(Content::try_view("Success!")?)
 }
 
+/// Request body for setting the default download location.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DownloadsDefaultDownloadLocationRequest {
-    location: String,
+    /// The default download location path.
+    pub location: String,
 }
 
+/// Handles setting the default download location.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not POST
+/// * [`RouteError::ParseBody`] if fails to parse the form data
+/// * [`RouteError::AppState`] if fails to update the default download location
+/// * [`RouteError::Parse`] if fails to create the success response view
 pub async fn settings_downloads_default_download_location_route(
     req: RouteRequest,
 ) -> Result<Content, RouteError> {
@@ -1198,6 +1413,14 @@ pub async fn settings_downloads_default_download_location_route(
     Ok(Content::try_view("Success!")?)
 }
 
+/// Handles loading the scan settings section.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not GET
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
 pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
@@ -1231,12 +1454,24 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
     Ok(Content::builder().with_fragment(markup).build())
 }
 
+/// Request body for scan path operations.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ScanScanPathRequest {
-    path: String,
+    /// The scan path to delete.
+    pub path: String,
 }
 
+/// Handles deleting a scan path.
+///
+/// # Errors
+///
+/// * [`RouteError::UnsupportedMethod`] if the request method is not DELETE
+/// * [`RouteError::MissingConnection`] if no server connection is configured
+/// * [`RouteError::ParseBody`] if fails to parse the form data
+/// * [`RouteError::Reqwest`] if the HTTP request to the server fails
+/// * [`RouteError::RouteFailed`] if the server returns an error response
+/// * [`RouteError::Parse`] if fails to create the success response view
 pub async fn settings_scan_scan_path_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Delete) {
         return Err(RouteError::UnsupportedMethod);
