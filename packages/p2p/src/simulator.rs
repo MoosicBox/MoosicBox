@@ -143,7 +143,15 @@ impl NetworkGraph {
         self.links.insert((b, a), link); // Bidirectional
     }
 
-    /// Find path using simple BFS (for Phase 2, more sophisticated in Phase 6)
+    /// Find a path between two nodes using breadth-first search
+    ///
+    /// Searches the network graph for an active route from the source node to the destination node.
+    /// Returns the shortest path if one exists, considering only active links.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Vec<SimulatorNodeId>)` - The path from source to destination, including both endpoints
+    /// * `None` - No active path exists between the nodes (network partition)
     #[must_use]
     pub fn find_path(
         &self,
