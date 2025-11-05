@@ -73,11 +73,15 @@ pub use hyperchad_transformer_models as models;
 use strum::{EnumDiscriminants, EnumIter};
 
 #[cfg(test)]
+/// Arbitrary value generation for property-based testing with quickcheck.
 pub mod arb;
 #[cfg(any(test, feature = "html"))]
+/// HTML parsing and generation utilities (requires `html` feature).
 pub mod html;
 #[cfg(feature = "layout")]
+/// Layout calculation engine for UI containers (requires `layout` feature).
 pub mod layout;
+/// Parsing utilities for numeric values and CSS calculation expressions.
 pub mod parse;
 
 /// Represents a calculation expression that can be evaluated with context.
@@ -2321,11 +2325,20 @@ fn fixed_positioned_elements_mut(
 }
 
 impl Container {
+    /// Checks if this container has fixed or sticky positioning.
+    ///
+    /// Returns `true` if the container's position is set to [`Position::Fixed`] or [`Position::Sticky`],
+    /// which removes it from the normal document flow and positions it relative to the viewport or
+    /// scroll container.
     #[must_use]
     pub const fn is_fixed(&self) -> bool {
         matches!(self.position, Some(Position::Fixed | Position::Sticky))
     }
 
+    /// Checks if this container contains raw HTML content.
+    ///
+    /// Returns `true` if the element is [`Element::Raw`], which means it contains unescaped HTML
+    /// that will be rendered directly without further processing.
     #[must_use]
     pub const fn is_raw(&self) -> bool {
         matches!(self.element, Element::Raw { .. })
@@ -4032,6 +4045,24 @@ fn display_elements(
 }
 
 impl Element {
+    /// Checks if this element type can contain child containers.
+    ///
+    /// Returns `true` for container elements (div, section, button, etc.) and `false` for
+    /// self-closing or content elements (input, img, textarea, raw HTML).
+    ///
+    /// Container elements that allow children:
+    /// * Structural: `Div`, `Aside`, `Main`, `Header`, `Footer`, `Section`
+    /// * Interactive: `Form`, `Button`, `Anchor`, `Details`, `Summary`
+    /// * Text: `Span`, `Heading`
+    /// * Lists: `UnorderedList`, `OrderedList`, `ListItem`
+    /// * Tables: `Table`, `THead`, `TH`, `TBody`, `TR`, `TD`
+    ///
+    /// Elements that do not allow children:
+    /// * Input elements
+    /// * Images
+    /// * Textarea elements
+    /// * Raw HTML content
+    /// * Canvas elements (when feature enabled)
     #[must_use]
     pub const fn allows_children(&self) -> bool {
         match self {
@@ -4065,6 +4096,10 @@ impl Element {
         }
     }
 
+    /// Returns the display name of this element type as a static string.
+    ///
+    /// This is primarily used for debugging and error messages. The returned string matches
+    /// the variant name (e.g., "Div", "Button", "Heading").
     #[must_use]
     pub const fn tag_display_str(&self) -> &'static str {
         match self {

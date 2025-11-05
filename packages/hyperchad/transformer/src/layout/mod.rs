@@ -8,7 +8,9 @@ use std::sync::atomic::AtomicU16;
 
 use crate::Container;
 
+/// Layout calculation implementation with the `Calculator` type and layout algorithms.
 pub mod calc;
+/// Font metrics traits and types for text measurement during layout.
 pub mod font;
 
 pub static EPSILON: f32 = 0.001;
