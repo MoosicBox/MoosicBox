@@ -2298,6 +2298,8 @@ impl TidalMusicApiBuilder {
         self
     }
 
+    /// Constructs a [`TidalMusicApi`] instance from the builder configuration.
+    ///
     /// # Errors
     ///
     /// * If the `db` is missing
