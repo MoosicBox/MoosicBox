@@ -766,6 +766,11 @@ impl AppState {
         Some(binding)
     }
 
+    /// Sets the default download location path and persists it to storage.
+    ///
+    /// The path will be saved to the persistence layer and loaded on future
+    /// application starts.
+    ///
     /// # Errors
     ///
     /// * If the persistence fails
@@ -795,6 +800,12 @@ impl AppState {
         self.default_download_location.read().unwrap().clone()
     }
 
+    /// Creates a new audio player for the specified session and playback target.
+    ///
+    /// Initializes either a local or `UPnP` player depending on the player type, configures
+    /// it with the appropriate authentication headers and endpoints, and initializes it
+    /// with the current session's playback state.
+    ///
     /// # Errors
     ///
     /// * If there is a `PlayerError`
@@ -959,6 +970,12 @@ impl AppState {
         Ok(player)
     }
 
+    /// Gets all active players for a specific session and optional playback target.
+    ///
+    /// Returns players whose session matches `session_id`, optionally filtered by
+    /// `playback_target` if provided. Used to get the players that should receive
+    /// playback updates.
+    ///
     /// # Panics
     ///
     /// * If any of the required state properties are missing
@@ -1013,6 +1030,12 @@ impl AppState {
         playback_handlers
     }
 
+    /// Reinitializes all active players with fresh instances.
+    ///
+    /// Creates new player instances for each active player while preserving their
+    /// current playback state. This is useful when connection parameters or
+    /// authentication credentials have changed.
+    ///
     /// # Errors
     ///
     /// * If there is a `PlayerError`
@@ -1080,6 +1103,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Sets the active players for a specific audio zone.
+    ///
+    /// Creates or updates player instances for the given audio zone, associating them
+    /// with the specified session. Existing players for the zone are reused if they
+    /// match the session and output configuration.
+    ///
     /// # Errors
     ///
     /// * If a new player fails to be created
@@ -1173,6 +1202,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Updates all audio zones with their current players.
+    ///
+    /// Iterates through all known audio zones and creates/updates players for each zone
+    /// based on the zone's configured players. This syncs the active players list with
+    /// the current audio zone configuration.
+    ///
     /// # Errors
     ///
     /// * If `set_audio_zone_active_players` fails
@@ -1220,6 +1255,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Initializes `UPnP`/DLNA players by scanning for network devices.
+    ///
+    /// Scans the network for `UPnP` devices with AV Transport services, registers
+    /// them as players with the server, and adds them to the current players list.
+    ///
     /// # Errors
     ///
     /// * If the `UpnpDeviceScanner` fails
@@ -1329,6 +1369,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Registers audio players with the `MoosicBox` server.
+    ///
+    /// Sends player information to the server to register them under the current
+    /// connection. If the connection doesn't exist on the server, it will be
+    /// created automatically.
+    ///
     /// # Errors
     ///
     /// * If the request is missing a `MoosicBox` profile
@@ -1389,6 +1435,11 @@ impl AppState {
         Ok(response)
     }
 
+    /// Makes a GET request to the `MoosicBox` API.
+    ///
+    /// Proxies a GET request to the configured API server, automatically adding
+    /// authentication headers and profile information.
+    ///
     /// # Errors
     ///
     /// * If the `api_url` is not set in the state
@@ -1405,6 +1456,11 @@ impl AppState {
         self.api_proxy("get", url, None, headers).await
     }
 
+    /// Makes a POST request to the `MoosicBox` API.
+    ///
+    /// Proxies a POST request to the configured API server, automatically adding
+    /// authentication headers and profile information.
+    ///
     /// # Errors
     ///
     /// * If the `api_url` is not set in the state
@@ -1422,6 +1478,11 @@ impl AppState {
         self.api_proxy("post", url, body, headers).await
     }
 
+    /// Makes an HTTP request to the `MoosicBox` API with the specified method.
+    ///
+    /// Core method for making authenticated API requests. Adds required headers
+    /// (profile, authorization, content-type) and client parameters automatically.
+    ///
     /// # Errors
     ///
     /// * If the `api_url` is not set in the state
@@ -1492,6 +1553,11 @@ impl AppState {
         Ok(self.send_request_builder(builder).await?)
     }
 
+    /// Sends an HTTP request and parses the JSON response.
+    ///
+    /// Executes the request configured in the builder, validates the response status,
+    /// and deserializes the response body as JSON.
+    ///
     /// # Errors
     ///
     /// * If failed to parse the JSON response
@@ -1541,6 +1607,12 @@ impl AppState {
         existing_players.extend(new_players);
     }
 
+    /// Creates players for all connection outputs across specified sessions.
+    ///
+    /// Iterates through all available audio outputs (both local and `UPnP`) and creates
+    /// players for each output/session combination. This allows individual outputs on
+    /// this connection to be controlled independently.
+    ///
     /// # Errors
     ///
     /// * If any `UpnpAvTransportService`s fail to convert to `AudioOutputFactory`s
@@ -1627,6 +1699,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Scans for available audio outputs and registers them with the server.
+    ///
+    /// Discovers local audio outputs on the system, registers them as players with
+    /// the `MoosicBox` server, and creates player instances for all sessions. This
+    /// should be called when the connection is established or when outputs change.
+    ///
     /// # Errors
     ///
     /// * If failed to scan outputs
@@ -1753,6 +1831,12 @@ impl AppState {
         update
     }
 
+    /// Updates application state with the provided parameters.
+    ///
+    /// Applies the state update to the application, persisting changes and triggering
+    /// reconnection if connection details changed. Notifies all registered before/after
+    /// state change listeners.
+    ///
     /// # Errors
     ///
     /// * If fails to `updated_connection_details`
@@ -1956,6 +2040,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Re-establishes the connection to the `MoosicBox` server.
+    ///
+    /// Closes existing `WebSocket` connections, scans for outputs, initializes `UPnP`
+    /// players if enabled, reinitializes all players, and establishes a new `WebSocket`
+    /// connection. Called after connection details (URL, auth tokens) change.
+    ///
     /// # Errors
     ///
     /// * If any of the connection state fails to update
@@ -2078,6 +2168,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Fetches audio zones from the server and updates local state.
+    ///
+    /// Retrieves all audio zones with their current sessions from the server,
+    /// updates the local audio zones list, and triggers a player update for each zone.
+    ///
     /// # Errors
     ///
     /// * If the http proxy request fails
