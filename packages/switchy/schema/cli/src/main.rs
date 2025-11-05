@@ -1,3 +1,42 @@
+//! Command-line interface for managing database schema migrations.
+//!
+//! This crate provides the `switchy-migrate` binary, a CLI tool for managing database schema
+//! migrations with support for `PostgreSQL` and `SQLite` databases. It handles migration creation,
+//! execution, rollback, validation, and status tracking.
+//!
+//! # Features
+//!
+//! * Create new migration files with timestamped directories
+//! * Run pending migrations with various execution strategies (all, up-to, steps)
+//! * Rollback migrations individually or in batches
+//! * Validate migration checksums to detect file modifications
+//! * Track migration status including failed and in-progress migrations
+//! * Retry failed migrations
+//! * Mark migrations as completed (for manual intervention scenarios)
+//!
+//! # Usage
+//!
+//! The binary is invoked as `switchy-migrate` with various subcommands:
+//!
+//! ```text
+//! switchy-migrate create <name>              # Create a new migration
+//! switchy-migrate status -d <db-url>          # Show migration status
+//! switchy-migrate migrate -d <db-url>         # Run pending migrations
+//! switchy-migrate rollback -d <db-url>        # Rollback migrations
+//! switchy-migrate validate -d <db-url>        # Validate checksums
+//! ```
+//!
+//! # Supported Databases
+//!
+//! * `SQLite`: `sqlite://path/to/db.sqlite` or `sqlite://:memory:`
+//! * `PostgreSQL`: `postgresql://user:pass@host:port/database`
+//!
+//! # Environment Variables
+//!
+//! * `SWITCHY_DATABASE_URL`: Database connection URL
+//! * `SWITCHY_MIGRATIONS_DIR`: Directory containing migration files (default: `./migrations`)
+//! * `SWITCHY_MIGRATION_TABLE`: Name of migration tracking table (default: `__switchy_migrations`)
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
@@ -7,19 +46,35 @@ use thiserror::Error;
 
 mod utils;
 
-/// Error types for the CLI
+/// Error types for the CLI.
+///
+/// Represents all possible errors that can occur during CLI operations, including
+/// migration execution errors, database connection failures, I/O errors, and
+/// configuration problems.
 #[derive(Debug, Error)]
 pub enum CliError {
-    /// Migration error
+    /// Migration execution error.
+    ///
+    /// Wrapper for errors from the migration engine, including failed migrations,
+    /// checksum validation failures, and migration state issues.
     #[error(transparent)]
     Migration(#[from] switchy_schema::MigrationError),
-    /// Database connection error
+    /// Database connection or query error.
+    ///
+    /// Wrapper for database-level errors including connection failures, query
+    /// execution errors, and transaction issues.
     #[error(transparent)]
     Database(#[from] switchy_database::DatabaseError),
-    /// IO error
+    /// File system I/O error.
+    ///
+    /// Wrapper for standard I/O errors such as missing files, permission errors,
+    /// or disk space issues when creating or reading migration files.
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    /// Configuration error
+    /// Configuration or validation error.
+    ///
+    /// Represents errors in command-line arguments, environment variables, or
+    /// invalid database URLs. The string contains a human-readable error message.
     #[error("Configuration error: {0}")]
     Config(String),
 }
