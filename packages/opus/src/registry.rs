@@ -26,6 +26,17 @@ pub fn register_opus_codec(registry: &mut CodecRegistry) {
 }
 
 /// Create a codec registry with Opus support.
+///
+/// Creates a new [`CodecRegistry`] with default Symphonia codecs and Opus decoder registered.
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_opus::create_opus_registry;
+///
+/// let registry = create_opus_registry();
+/// // Use the registry with Symphonia to decode Opus streams
+/// ```
 #[must_use]
 pub fn create_opus_registry() -> CodecRegistry {
     let mut registry = CodecRegistry::new();
