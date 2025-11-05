@@ -36,6 +36,9 @@ use crate::db::{
 use crate::ws::server::service::{Commander, CommanderError};
 use crate::ws::server::{ConnectionIdError, RequestHeaders, get_connection_id};
 
+/// Health check endpoint for monitoring server status.
+///
+/// Returns a JSON response with the server's health status and current git hash.
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
@@ -55,6 +58,16 @@ pub struct AuthMagicTokenRequest {
     magic_token: String,
 }
 
+/// Authenticate and proxy a request using a magic token.
+///
+/// This endpoint validates the magic token and proxies the request through the
+/// tunnel connection associated with the token's client ID. This is typically
+/// used for one-time authentication links.
+///
+/// # Errors
+///
+/// * Returns [`ErrorUnauthorized`] if the magic token is invalid or expired.
+/// * Returns [`DatabaseError`] if database operations fail.
 #[route("/auth/magic-token", method = "GET")]
 pub async fn auth_get_magic_token_endpoint(
     query: web::Query<AuthMagicTokenRequest>,
@@ -80,6 +93,15 @@ pub async fn auth_get_magic_token_endpoint(
     }
 }
 
+/// Register a new magic token for a client.
+///
+/// Creates a new magic token in the database for the authenticated client.
+/// The client must be authenticated via client access token.
+///
+/// # Errors
+///
+/// * Returns [`ErrorBadRequest`] if clientId is missing from query parameters.
+/// * Returns [`DatabaseError`] if database operations fail.
 #[route("/auth/magic-token", method = "POST")]
 pub async fn auth_magic_token_endpoint(
     query: web::Query<AuthMagicTokenRequest>,
@@ -110,6 +132,14 @@ pub struct AuthRegisterClientRequest {
     client_id: String,
 }
 
+/// Register a new client and generate an access token.
+///
+/// Creates a new client access token for the specified client ID. Requires
+/// general authorization via the tunnel access token.
+///
+/// # Errors
+///
+/// * Returns [`DatabaseError`] if database operations fail.
 #[route("/auth/register-client", method = "POST", method = "HEAD")]
 pub async fn auth_register_client_endpoint(
     query: web::Query<AuthRegisterClientRequest>,
@@ -133,6 +163,14 @@ pub struct AuthRequest {
     client_id: String,
 }
 
+/// Generate a new signature token for a client.
+///
+/// Creates a temporary signature token (valid for 14 days) for the authenticated
+/// client. Signature tokens are used for request signing and short-term access.
+///
+/// # Errors
+///
+/// * Returns [`DatabaseError`] if database operations fail.
 #[route("/auth/signature-token", method = "POST", method = "HEAD")]
 pub async fn auth_signature_token_endpoint(
     query: web::Query<AuthRequest>,
@@ -146,11 +184,25 @@ pub async fn auth_signature_token_endpoint(
     Ok(Json(json!({"token": token})))
 }
 
+/// Validate a signature token.
+///
+/// Checks if the provided signature token is valid. Returns a success response
+/// if the token is valid, or an unauthorized error if invalid.
 #[route("/auth/validate-signature-token", method = "POST", method = "HEAD")]
 pub async fn auth_validate_signature_token_endpoint(_: SignatureAuthorized) -> Result<Json<Value>> {
     Ok(Json(json!({"valid": true})))
 }
 
+/// Proxy a request for a music track file through the tunnel.
+///
+/// This endpoint validates the signature token and proxies the request to the
+/// client's tunnel connection to retrieve the track file.
+///
+/// # Errors
+///
+/// * Returns [`ErrorBadRequest`] if the request parameters are invalid.
+/// * Returns [`ErrorFailedDependency`] if the client is not connected.
+/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
 #[route("/files/track", method = "GET", method = "HEAD", method = "OPTIONS")]
 pub async fn track_endpoint(
     body: Option<Bytes>,
@@ -161,6 +213,16 @@ pub async fn track_endpoint(
     proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
+/// Proxy a request for an artist cover image through the tunnel.
+///
+/// This endpoint validates the signature token and proxies the request to the
+/// client's tunnel connection to retrieve the artist cover image.
+///
+/// # Errors
+///
+/// * Returns [`ErrorBadRequest`] if the request parameters are invalid.
+/// * Returns [`ErrorFailedDependency`] if the client is not connected.
+/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
 #[route("/files/artists/{artist_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn artist_cover_endpoint(
     body: Option<Bytes>,
@@ -171,6 +233,16 @@ pub async fn artist_cover_endpoint(
     proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
+/// Proxy a request for an album cover image through the tunnel.
+///
+/// This endpoint validates the signature token and proxies the request to the
+/// client's tunnel connection to retrieve the album cover image.
+///
+/// # Errors
+///
+/// * Returns [`ErrorBadRequest`] if the request parameters are invalid.
+/// * Returns [`ErrorFailedDependency`] if the client is not connected.
+/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
 #[route("/files/albums/{album_id}/{size}", method = "GET", method = "HEAD")]
 pub async fn album_cover_endpoint(
     body: Option<Bytes>,
@@ -181,6 +253,17 @@ pub async fn album_cover_endpoint(
     proxy_request(body, req, profile.map(|x| x.0)).await
 }
 
+/// Proxy any HTTP request through the tunnel connection.
+///
+/// This is the main tunnel endpoint that accepts any HTTP method and path.
+/// It validates the client access token and proxies the request to the
+/// client's tunnel connection.
+///
+/// # Errors
+///
+/// * Returns [`ErrorBadRequest`] if the request parameters are invalid or clientId is missing.
+/// * Returns [`ErrorFailedDependency`] if the client is not connected.
+/// * Returns [`ErrorUnauthorized`] if the client access token is invalid.
 #[route(
     "/{path:.*}",
     method = "GET",
