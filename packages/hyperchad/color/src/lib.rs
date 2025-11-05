@@ -78,19 +78,16 @@ pub enum ParseHexError {
 }
 
 /// Represents an RGB or RGBA color with 8-bit channels.
-///
-/// # Fields
-///
-/// * `r` - Red channel (0-255)
-/// * `g` - Green channel (0-255)
-/// * `b` - Blue channel (0-255)
-/// * `a` - Optional alpha channel (0-255). `None` represents fully opaque.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Color {
+    /// Red channel (0-255).
     pub r: u8,
+    /// Green channel (0-255).
     pub g: u8,
+    /// Blue channel (0-255).
     pub b: u8,
+    /// Optional alpha channel (0-255). `None` represents fully opaque.
     pub a: Option<u8>,
 }
 
