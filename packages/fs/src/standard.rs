@@ -4,6 +4,10 @@
 //! with the simulator API. It allows you to use the same API whether you're working
 //! with the real filesystem or the simulator.
 
+/// Synchronous filesystem operations using standard library
+///
+/// This module provides blocking filesystem operations that use `std::fs` for actual
+/// disk operations. Operations are simple wrappers around standard library functions.
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::path::Path;
