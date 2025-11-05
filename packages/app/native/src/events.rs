@@ -10,6 +10,15 @@ use moosicbox_session_models::{
 
 use crate::{RENDERER, STATE, convert_state};
 
+/// Handles updates to the current playback sessions.
+///
+/// This function is called when the list of active playback sessions changes. It updates
+/// the current session ID if a matching session exists, or selects the first available
+/// session if no current session is set.
+///
+/// # Panics
+///
+/// * If fails to navigate to the home page on native platforms (egui, fltk)
 pub async fn current_sessions_updated(sessions: Vec<ApiSession>) {
     log::trace!("current_sessions_updated: {sessions:?}");
 
@@ -48,12 +57,20 @@ pub async fn current_sessions_updated(sessions: Vec<ApiSession>) {
     }
 }
 
+/// Handles updates to the connection list.
+///
+/// This function refreshes the audio zone and sessions display when the list of
+/// server connections changes.
 pub async fn connections_updated(_connections: Vec<ApiConnection>) {
     log::trace!("connections_updated");
 
     refresh_audio_zone_with_sessions().await;
 }
 
+/// Handles updates to audio zones and their associated sessions.
+///
+/// This function refreshes the audio zone and sessions display when audio zone
+/// configuration or session assignments change.
 pub async fn audio_zone_with_sessions_updated(_zones: Vec<ApiAudioZoneWithSession>) {
     log::trace!("audio_zone_with_sessions_updated");
 
@@ -78,6 +95,11 @@ async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[Ap
     }
 }
 
+/// Handles playback session updates and refreshes the UI.
+///
+/// This function is called when a playback session is updated (e.g., play/pause, track change,
+/// volume adjustment). It spawns a task to render the updated UI partials and updates the
+/// visualization if the canvas feature is enabled.
 pub async fn handle_playback_update(update: ApiUpdateSession) {
     moosicbox_logging::debug_or_trace!(
         ("handle_playback_update"),
@@ -101,6 +123,11 @@ pub async fn handle_playback_update(update: ApiUpdateSession) {
     crate::visualization::check_visualization_update().await;
 }
 
+/// Playback event listener that handles session update events.
+///
+/// This function is registered as a callback with the playback system and is invoked
+/// when playback events occur (e.g., play, pause, seek, track change). It spawns
+/// an async task to handle the update asynchronously.
 pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     log::debug!("on_playback_event: received update, spawning task to handle update={update:?}");
 
