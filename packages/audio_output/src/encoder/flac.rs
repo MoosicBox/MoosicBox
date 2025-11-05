@@ -77,6 +77,11 @@ impl FlacEncoder {
         }
     }
 
+    /// Initializes the resampler if needed based on input audio spec.
+    ///
+    /// # Arguments
+    /// * `spec` - Input audio signal specification
+    /// * `duration` - Audio duration in samples
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
         self.input_rate.replace(spec.rate);
         self.duration.replace(duration);
@@ -99,6 +104,13 @@ impl FlacEncoder {
         self
     }
 
+    /// Opens the encoder with the specified audio specification.
+    ///
+    /// This initializes the resampler and prepares the encoder for encoding.
+    ///
+    /// # Arguments
+    /// * `spec` - Audio signal specification
+    /// * `duration` - Audio duration in samples
     #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);

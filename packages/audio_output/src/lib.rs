@@ -35,9 +35,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Resource daemon pattern for managing !Send resources in dedicated threads.
 pub mod resource_daemon;
 
 #[cfg(feature = "cpal")]
+/// CPAL stream daemon for managing !Send CPAL streams in dedicated threads.
 pub mod cpal_daemon;
 
 use std::sync::{Arc, LazyLock};
@@ -62,15 +64,20 @@ pub use progress_tracker::ProgressTracker;
 // Export command types for use by AudioOutput implementations
 pub use command::{AudioCommand, AudioError, AudioHandle, AudioResponse, CommandMessage};
 
+/// Command-based control interface for audio outputs.
 pub mod command;
+/// Audio encoders for compressing decoded audio into various formats.
 pub mod encoder;
 
 #[cfg(feature = "api")]
+/// HTTP API endpoints for managing audio outputs.
 pub mod api;
 
 #[cfg(feature = "cpal")]
+/// CPAL (Cross-Platform Audio Library) audio output implementation.
 pub mod cpal;
 
+/// Progress tracking for audio playback.
 pub mod progress_tracker;
 
 /// An audio output that writes decoded audio samples to an underlying audio device or stream.
