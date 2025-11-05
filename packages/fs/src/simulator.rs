@@ -87,6 +87,9 @@ mod real_fs_support {
 // When the feature is not enabled, provide no-op implementations
 #[cfg(not(feature = "simulator-real-fs"))]
 mod real_fs_support {
+    /// Executes a function without switching filesystem modes (no-op when `simulator-real-fs` feature is disabled)
+    ///
+    /// This function simply executes the provided closure without changing filesystem behavior.
     pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
         f()
     }
@@ -402,6 +405,10 @@ impl FileType {
     }
 }
 
+/// Synchronous filesystem operations for the simulator
+///
+/// This module provides blocking filesystem operations that work with the in-memory
+/// simulated filesystem. All operations are immediate and do not touch the actual disk.
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::{
@@ -956,6 +963,11 @@ pub mod sync {
     }
 }
 
+/// Asynchronous filesystem operations for the simulator
+///
+/// This module provides async filesystem operations that work with the in-memory
+/// simulated filesystem. Operations are non-blocking but execute immediately since
+/// no actual I/O is performed.
 #[cfg(feature = "async")]
 pub mod unsync {
     use std::{

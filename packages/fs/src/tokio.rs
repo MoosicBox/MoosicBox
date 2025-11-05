@@ -3,6 +3,10 @@
 //! This module provides asynchronous filesystem operations using the tokio runtime.
 //! All operations are non-blocking and can be used in async contexts.
 
+/// Asynchronous filesystem operations using tokio
+///
+/// This module provides async filesystem operations using `tokio::fs` for non-blocking
+/// disk I/O. All operations return futures that can be awaited in async contexts.
 #[cfg(feature = "async")]
 pub mod unsync {
     use std::path::Path;
