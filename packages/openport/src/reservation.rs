@@ -52,12 +52,37 @@ pub struct PortReservation<R: PortRange> {
     reserved_ports: Mutex<BTreeSet<Port>>,
 }
 
+/// Default implementation for [`PortReservation`] with exclusive range
+///
+/// Creates a port reservation system with the default range of `15000..65535`.
+/// This provides a large pool of ports in the dynamic/private port range.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(feature = "reservation")]
+/// # {
+/// use openport::PortReservation;
+///
+/// let reservation: PortReservation = PortReservation::default();
+/// let port = reservation.reserve_port().expect("No ports available");
+/// assert!((15000..65535).contains(&port));
+/// # }
+/// ```
 impl Default for PortReservation<std::ops::Range<Port>> {
     fn default() -> Self {
         Self::new(15000..65535)
     }
 }
 
+/// Default implementation for [`PortReservation`] with inclusive range
+///
+/// Creates a port reservation system with the default range of `15000..=65535`.
+/// This provides a large pool of ports in the dynamic/private port range.
+///
+/// Note: Since the `reservation` module is private, this implementation is primarily
+/// used internally. Users should use the exported `PortReservation` type alias for
+/// exclusive ranges, or construct instances with `new()` for inclusive ranges.
 impl Default for PortReservation<std::ops::RangeInclusive<Port>> {
     fn default() -> Self {
         Self::new(15000..=65535)
