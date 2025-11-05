@@ -1,3 +1,13 @@
+//! SILK Line Spectral Frequency (LSF) constants and probability distributions
+//!
+//! Contains constants for SILK LSF quantization per RFC 6716 Section 4.2.7.3-4.2.7.5:
+//! * Stage-1 LSF indices (coarse quantization)
+//! * Stage-2 LSF residuals (fine quantization)
+//! * Separate PDFs for NB/MB/WB and Inactive/Voiced frame types
+//!
+//! All PDF constants are stored in ICDF (Inverse Cumulative Distribution Function) format
+//! for use with the range decoder's `ec_dec_icdf()` function.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
@@ -28,6 +38,7 @@
 // RFC 6716 Table 14: PDFs for Normalized LSF Stage-1 Index Decoding (lines 2639-2660)
 // RFC shows PDF NB/MB INACTIVE: {44, 34, 30, 19, 21, 12, 11, 3, 3, 2, 16, 2, 2, 1, 5, 2, 1, 3, 3, 1, 1, 2, 2, 2, 3, 1, 9, 9, 2, 7, 2, 1}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf stage1 pdf nb mb inactive (RFC 6716 Section 4.2.7)
 pub const LSF_STAGE1_PDF_NB_MB_INACTIVE: &[u8] = &[
     212, 178, 148, 129, 108, 96, 85, 82, 79, 77, 61, 59, 57, 56, 51, 49, 48, 45, 42, 41, 40, 38,
     36, 34, 31, 30, 21, 12, 10, 3, 1, 0,
@@ -35,6 +46,7 @@ pub const LSF_STAGE1_PDF_NB_MB_INACTIVE: &[u8] = &[
 
 // RFC shows PDF NB/MB VOICED: {1, 10, 1, 8, 3, 8, 8, 14, 13, 14, 1, 14, 12, 13, 11, 11, 12, 11, 10, 10, 11, 8, 9, 8, 7, 8, 1, 1, 6, 1, 6, 5}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf stage1 pdf nb mb voiced (RFC 6716 Section 4.2.7)
 pub const LSF_STAGE1_PDF_NB_MB_VOICED: &[u8] = &[
     255, 245, 244, 236, 233, 225, 217, 203, 190, 176, 175, 161, 149, 136, 125, 114, 102, 91, 81,
     71, 60, 52, 43, 35, 28, 20, 19, 18, 12, 11, 5, 0,
@@ -42,6 +54,7 @@ pub const LSF_STAGE1_PDF_NB_MB_VOICED: &[u8] = &[
 
 // RFC shows PDF WB INACTIVE: {31, 21, 3, 17, 1, 8, 17, 4, 1, 18, 16, 4, 2, 3, 1, 10, 1, 3, 16, 11, 16, 2, 2, 3, 2, 11, 1, 4, 9, 8, 7, 3}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf stage1 pdf wb inactive (RFC 6716 Section 4.2.7)
 pub const LSF_STAGE1_PDF_WB_INACTIVE: &[u8] = &[
     225, 204, 201, 184, 183, 175, 158, 154, 153, 135, 119, 115, 113, 110, 109, 99, 98, 95, 79, 68,
     52, 50, 48, 45, 43, 32, 31, 27, 18, 10, 3, 0,
@@ -49,6 +62,7 @@ pub const LSF_STAGE1_PDF_WB_INACTIVE: &[u8] = &[
 
 // RFC shows PDF WB VOICED: {1, 4, 16, 5, 18, 11, 5, 14, 15, 1, 3, 12, 13, 14, 14, 6, 14, 12, 2, 6, 1, 12, 12, 11, 10, 3, 10, 5, 1, 1, 1, 3}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf stage1 pdf wb voiced (RFC 6716 Section 4.2.7)
 pub const LSF_STAGE1_PDF_WB_VOICED: &[u8] = &[
     255, 251, 235, 230, 212, 201, 196, 182, 167, 166, 163, 151, 138, 124, 110, 104, 90, 78, 76, 70,
     69, 57, 45, 34, 24, 21, 11, 6, 5, 4, 3, 0,
@@ -57,41 +71,44 @@ pub const LSF_STAGE1_PDF_WB_VOICED: &[u8] = &[
 // RFC 6716 Table 15: PDFs for NB/MB Normalized LSF Stage-2 Index Decoding (lines 2695-2715)
 // RFC shows PDF A: {1, 1, 1, 15, 224, 11, 1, 1, 1}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf stage2 pdf nb a (RFC 6716 Section 4.2.7)
 pub const LSF_STAGE2_PDF_NB_A: &[u8] = &[255, 254, 253, 238, 14, 3, 2, 1, 0];
-// RFC shows PDF B: {1, 1, 2, 34, 183, 32, 1, 1, 1}/256
+/// LSF Stage-2 PDF NB variant B (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_B: &[u8] = &[255, 254, 252, 218, 35, 3, 2, 1, 0];
-// RFC shows PDF C: {1, 1, 4, 42, 149, 55, 2, 1, 1}/256
+/// LSF Stage-2 PDF NB variant C (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_C: &[u8] = &[255, 254, 250, 208, 59, 4, 2, 1, 0];
-// RFC shows PDF D: {1, 1, 8, 52, 123, 61, 8, 1, 1}/256
+/// LSF Stage-2 PDF NB variant D (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_D: &[u8] = &[255, 254, 246, 194, 71, 10, 2, 1, 0];
-// RFC shows PDF E: {1, 3, 16, 53, 101, 74, 6, 1, 1}/256
+/// LSF Stage-2 PDF NB variant E (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_E: &[u8] = &[255, 252, 236, 183, 82, 8, 2, 1, 0];
-// RFC shows PDF F: {1, 3, 17, 55, 90, 73, 15, 1, 1}/256
+/// LSF Stage-2 PDF NB variant F (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_F: &[u8] = &[255, 252, 235, 180, 90, 17, 2, 1, 0];
-// RFC shows PDF G: {1, 7, 24, 53, 74, 67, 26, 3, 1}/256
+/// LSF Stage-2 PDF NB variant G (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_G: &[u8] = &[255, 248, 224, 171, 97, 30, 4, 1, 0];
-// RFC shows PDF H: {1, 1, 18, 63, 78, 58, 30, 6, 1}/256
+/// LSF Stage-2 PDF NB variant H (RFC 6716 Table 15)
 pub const LSF_STAGE2_PDF_NB_H: &[u8] = &[255, 254, 236, 173, 95, 37, 7, 1, 0];
 
 // RFC 6716 Table 16: PDFs for WB Normalized LSF Stage-2 Index Decoding (lines 2750-2768)
-// RFC shows PDF I: {1, 1, 1, 9, 232, 9, 1, 1, 1}/256
+/// LSF Stage-2 PDF WB variant I (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_I: &[u8] = &[255, 254, 253, 244, 12, 3, 2, 1, 0];
-// RFC shows PDF J: {1, 1, 2, 28, 186, 35, 1, 1, 1}/256
+/// LSF Stage-2 PDF WB variant J (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_J: &[u8] = &[255, 254, 252, 224, 38, 3, 2, 1, 0];
-// RFC shows PDF K: {1, 1, 3, 42, 152, 53, 2, 1, 1}/256
+/// LSF Stage-2 PDF WB variant K (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_K: &[u8] = &[255, 254, 251, 209, 57, 4, 2, 1, 0];
-// RFC shows PDF L: {1, 1, 10, 49, 126, 65, 2, 1, 1}/256
+/// LSF Stage-2 PDF WB variant L (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_L: &[u8] = &[255, 254, 244, 195, 69, 4, 2, 1, 0];
-// RFC shows PDF M: {1, 4, 19, 48, 100, 77, 5, 1, 1}/256
+/// LSF Stage-2 PDF WB variant M (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_M: &[u8] = &[255, 251, 232, 184, 84, 7, 2, 1, 0];
-// RFC shows PDF N: {1, 1, 14, 54, 100, 72, 12, 1, 1}/256
+/// LSF Stage-2 PDF WB variant N (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_N: &[u8] = &[255, 254, 240, 186, 86, 14, 2, 1, 0];
-// RFC shows PDF O: {1, 1, 15, 61, 87, 61, 25, 4, 1}/256
+/// LSF Stage-2 PDF WB variant O (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_O: &[u8] = &[255, 254, 239, 178, 91, 30, 5, 1, 0];
-// RFC shows PDF P: {1, 7, 21, 50, 77, 81, 17, 1, 1}/256
+/// LSF Stage-2 PDF WB variant P (RFC 6716 Table 16)
 pub const LSF_STAGE2_PDF_WB_P: &[u8] = &[255, 248, 227, 177, 100, 19, 2, 1, 0];
 
-// RFC 6716 Table 17: Codebook Selection for NB/MB Normalized LSF Stage-2 Index Decoding (lines 2751-2849)
+/// Codebook selection table for NB/MB LSF Stage-2 decoding (RFC 6716 Table 17)
+///
+/// Maps Stage-1 index (I1) and coefficient index to codebook letter (a-h).
 pub const LSF_CB_SELECT_NB: &[[u8; 10]; 32] = &[
     [b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a'], // I1=0
     [b'b', b'd', b'b', b'c', b'c', b'b', b'c', b'b', b'b', b'b'], // I1=1
@@ -127,7 +144,9 @@ pub const LSF_CB_SELECT_NB: &[[u8; 10]; 32] = &[
     [b'e', b'e', b'f', b'e', b'f', b'g', b'f', b'g', b'f', b'e'], // I1=31
 ];
 
-// RFC 6716 Table 18: Codebook Selection for WB Normalized LSF Stage-2 Index Decoding (lines 2851-2909)
+/// Codebook selection table for WB LSF Stage-2 decoding (RFC 6716 Table 18)
+///
+/// Maps Stage-1 index (I1) and coefficient index to codebook letter (i-p).
 pub const LSF_CB_SELECT_WB: &[[u8; 16]; 32] = &[
     [
         b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i', b'i',
@@ -262,17 +281,22 @@ pub const LSF_CB_SELECT_WB: &[[u8; 16]; 32] = &[
 // RFC 6716 Table 19: PDF for Normalized LSF Index Extension Decoding (lines 2928-2934)
 // RFC shows PDF: {156, 60, 24, 9, 4, 2, 1}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf extension pdf (RFC 6716 Section 4.2.7)
 pub const LSF_EXTENSION_PDF: &[u8] = &[100, 40, 16, 7, 3, 1, 0];
 
 // RFC 6716 Table 20: Prediction Weights for Normalized LSF Decoding (lines 2975-3009)
 // These are Q8 values used for backward prediction in residual dequantization
 // Lists A and B are for NB/MB (9 coefficients, k=0..8)
 // Lists C and D are for WB (15 coefficients, k=0..14)
+/// Lsf pred weights nb a (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHTS_NB_A: &[u8] = &[179, 138, 140, 148, 151, 149, 153, 151, 163];
+/// Lsf pred weights nb b (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHTS_NB_B: &[u8] = &[116, 67, 82, 59, 92, 72, 100, 89, 92];
+/// Lsf pred weights wb c (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHTS_WB_C: &[u8] = &[
     175, 148, 160, 176, 178, 173, 174, 164, 177, 174, 196, 182, 198, 192, 182,
 ];
+/// Lsf pred weights wb d (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHTS_WB_D: &[u8] = &[
     68, 62, 66, 60, 72, 117, 85, 90, 118, 136, 151, 142, 160, 142, 155,
 ];
@@ -280,6 +304,7 @@ pub const LSF_PRED_WEIGHTS_WB_D: &[u8] = &[
 // RFC 6716 Table 21: Prediction Weight Selection for NB/MB Normalized LSF Decoding (lines 3035-3114)
 // 32 rows (I1 index) × 9 columns (coefficient index)
 // Values: b'A' (use LSF_PRED_WEIGHTS_NB_A) or b'B' (use LSF_PRED_WEIGHTS_NB_B)
+/// Lsf pred weight sel nb (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHT_SEL_NB: &[[u8; 9]; 32] = &[
     [b'A', b'B', b'A', b'A', b'A', b'A', b'A', b'A', b'A'], // I1=0
     [b'B', b'A', b'A', b'A', b'A', b'A', b'A', b'A', b'A'], // I1=1
@@ -318,6 +343,7 @@ pub const LSF_PRED_WEIGHT_SEL_NB: &[[u8; 9]; 32] = &[
 // RFC 6716 Table 22: Prediction Weight Selection for WB Normalized LSF Decoding (lines 3116-3205)
 // 32 rows (I1 index) × 15 columns (coefficient index)
 // Values: b'C' (use LSF_PRED_WEIGHTS_WB_C) or b'D' (use LSF_PRED_WEIGHTS_WB_D)
+/// Lsf pred weight sel wb (RFC 6716 Section 4.2.7)
 pub const LSF_PRED_WEIGHT_SEL_WB: &[[u8; 15]; 32] = &[
     [
         b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'C', b'D',
@@ -419,6 +445,7 @@ pub const LSF_PRED_WEIGHT_SEL_WB: &[[u8; 15]; 32] = &[
 
 // RFC 6716 Table 23: NB/MB Normalized LSF Stage-1 Codebook Vectors (lines 3255-3333)
 // 32 vectors (I1 index) × 10 coefficients (Q8 format)
+/// Lsf codebook nb (RFC 6716 Section 4.2.7)
 pub const LSF_CODEBOOK_NB: &[[u8; 10]; 32] = &[
     [12, 35, 60, 83, 108, 132, 157, 180, 206, 228], // I1=0
     [15, 32, 55, 77, 101, 125, 151, 175, 201, 225], // I1=1
@@ -456,6 +483,7 @@ pub const LSF_CODEBOOK_NB: &[[u8; 10]; 32] = &[
 
 // RFC 6716 Table 24: WB Normalized LSF Stage-1 Codebook Vectors (lines 3335-3413)
 // 32 vectors (I1 index) × 16 coefficients (Q8 format)
+/// Lsf codebook wb (RFC 6716 Section 4.2.7)
 pub const LSF_CODEBOOK_WB: &[[u8; 16]; 32] = &[
     [
         7, 23, 38, 54, 69, 85, 100, 116, 131, 147, 162, 178, 193, 208, 223, 239,
@@ -559,24 +587,31 @@ pub const LSF_CODEBOOK_WB: &[[u8; 16]; 32] = &[
 // These are Q15 values representing minimum allowed spacing between consecutive LSF coefficients
 // For NB/MB: 11 values (coefficients 0-9, plus final spacing after coefficient 9)
 // For WB: 17 values (coefficients 0-15, plus final spacing after coefficient 15)
+/// Lsf min spacing nb (RFC 6716 Section 4.2.7)
 pub const LSF_MIN_SPACING_NB: &[u16] = &[250, 3, 6, 3, 3, 3, 4, 3, 3, 3, 461];
+/// Lsf min spacing wb (RFC 6716 Section 4.2.7)
 pub const LSF_MIN_SPACING_WB: &[u16] =
     &[100, 3, 40, 3, 3, 3, 5, 14, 14, 10, 11, 3, 8, 9, 7, 3, 347];
 
 // RFC 6716 Section 4.2.7.5.3: Quantization step sizes for residual dequantization (line 3031)
 // Q16 format: 11796 ≈ 0.18, 9830 ≈ 0.15
+/// Lsf qstep nb (RFC 6716 Section 4.2.7)
 pub const LSF_QSTEP_NB: u16 = 11796;
+/// Lsf qstep wb (RFC 6716 Section 4.2.7)
 pub const LSF_QSTEP_WB: u16 = 9830;
 
 // RFC 6716 Table 26: PDF for Normalized LSF Interpolation Index (lines 3609-3615)
 // RFC shows PDF: {13, 22, 29, 11, 181}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Lsf interp pdf (RFC 6716 Section 4.2.7)
 pub const LSF_INTERP_PDF: &[u8] = &[243, 221, 192, 181, 0];
 
 // RFC 6716 Table 27: LSF Ordering for Polynomial Evaluation (lines 3703-3739)
 // Reordering improves numerical accuracy during polynomial construction
 // NB/MB: 10 coefficients, WB: 16 coefficients
+/// Lsf ordering nb (RFC 6716 Section 4.2.7)
 pub const LSF_ORDERING_NB: &[usize; 10] = &[0, 9, 6, 3, 4, 5, 8, 1, 2, 7];
+/// Lsf ordering wb (RFC 6716 Section 4.2.7)
 pub const LSF_ORDERING_WB: &[usize; 16] = &[0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10, 5, 6, 9, 14, 1];
 
 // RFC 6716 Table 28: Q12 Cosine Table for LSF Conversion (lines 3763-3841)
@@ -585,6 +620,7 @@ pub const LSF_ORDERING_WB: &[usize; 16] = &[0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10
 // Monotonically decreasing from cos(0)=4096 to cos(π)=-4096
 // Cosine table from libopus silk/table_LSF_cos.c
 // Q12 format representing cos(pi * i / 128) for i = 0..128
+/// Lsf cos table q12 (RFC 6716 Section 4.2.7)
 pub const LSF_COS_TABLE_Q12: &[i16; 129] = &[
     8192, 8190, 8182, 8170, 8152, 8130, 8104, 8072, 8034, 7994, 7946, 7896, 7840, 7778, 7714, 7644,
     7568, 7490, 7406, 7318, 7226, 7128, 7026, 6922, 6812, 6698, 6580, 6458, 6332, 6204, 6070, 5934,

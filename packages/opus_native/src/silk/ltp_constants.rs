@@ -1,9 +1,21 @@
+//! SILK Long-Term Prediction (LTP) constants and probability distributions
+//!
+//! Contains constants for SILK pitch analysis and LTP coding per RFC 6716 Section 4.2.7.6:
+//! * Pitch lag PDFs (high and low parts)
+//! * Pitch lag delta PDFs for inter-subframe prediction
+//! * Pitch contour PDFs and codebooks
+//! * LTP filter coefficient PDFs and filter banks
+//!
+//! All PDF constants are stored in ICDF (Inverse Cumulative Distribution Function) format
+//! for use with the range decoder's `ec_dec_icdf()` function.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
 // RFC 6716 Table 29: PDF for High Part of Primary Pitch Lag (lines 4169-4175)
 // RFC shows PDF: {3, 3, 6, 11, 21, 30, 32, 19, 11, 10, 12, 13, 13, 12, 11, 9, 8, 7, 6, 4, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp lag high pdf (RFC 6716 Section 4.2.7)
 pub const LTP_LAG_HIGH_PDF: &[u8] = &[
     253, 250, 244, 233, 212, 182, 150, 131, 120, 110, 98, 85, 72, 60, 49, 40, 32, 25, 19, 15, 13,
     11, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
@@ -14,13 +26,17 @@ pub const LTP_LAG_HIGH_PDF: &[u8] = &[
 // RFC shows PDF MB: {43, 42, 43, 43, 42, 43}/256
 // RFC shows PDF WB: {32, 32, 32, 32, 32, 32, 32, 32}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp lag low pdf nb (RFC 6716 Section 4.2.7)
 pub const LTP_LAG_LOW_PDF_NB: &[u8] = &[192, 128, 64, 0];
+/// Ltp lag low pdf mb (RFC 6716 Section 4.2.7)
 pub const LTP_LAG_LOW_PDF_MB: &[u8] = &[213, 171, 128, 85, 43, 0];
+/// Ltp lag low pdf wb (RFC 6716 Section 4.2.7)
 pub const LTP_LAG_LOW_PDF_WB: &[u8] = &[224, 192, 160, 128, 96, 64, 32, 0];
 
 // RFC 6716 Table 31: PDF for Primary Pitch Lag Change (lines 4217-4224)
 // RFC shows PDF: {46, 2, 2, 3, 4, 6, 10, 15, 26, 38, 30, 22, 15, 10, 7, 6, 4, 4, 2, 2, 2}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp lag delta pdf (RFC 6716 Section 4.2.7)
 pub const LTP_LAG_DELTA_PDF: &[u8] = &[
     210, 208, 206, 203, 199, 193, 183, 168, 142, 104, 74, 52, 37, 27, 20, 14, 10, 6, 4, 2, 0,
 ];
@@ -31,9 +47,13 @@ pub const LTP_LAG_DELTA_PDF: &[u8] = &[
 // RFC shows PDF MB/WB 10ms: {91, 46, 39, 19, 14, 12, 8, 7, 6, 5, 5, 4}/256
 // RFC shows PDF MB/WB 20ms: {33, 22, 18, 16, 15, 14, 14, 13, 13, 10, 9, 9, 8, 6, 6, 6, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Pitch contour pdf nb 10ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_PDF_NB_10MS: &[u8] = &[113, 63, 0];
+/// Pitch contour pdf nb 20ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_PDF_NB_20MS: &[u8] = &[188, 176, 155, 138, 119, 97, 67, 43, 26, 10, 0];
+/// Pitch contour pdf mbwb 10ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_PDF_MBWB_10MS: &[u8] = &[165, 119, 80, 61, 47, 35, 27, 20, 14, 9, 4, 0];
+/// Pitch contour pdf mbwb 20ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_PDF_MBWB_20MS: &[u8] = &[
     223, 201, 183, 167, 152, 138, 124, 111, 98, 88, 79, 70, 62, 56, 50, 44, 39, 35, 31, 27, 24, 21,
     18, 16, 14, 12, 10, 8, 6, 4, 3, 2, 1, 0,
@@ -41,9 +61,11 @@ pub const PITCH_CONTOUR_PDF_MBWB_20MS: &[u8] = &[
 
 // RFC 6716 Tables 33-36: Codebooks for Subframe Pitch Contour
 // Table 33: NB 10ms (lines 4263-4271) - 2 subframes
+/// Pitch contour cb nb 10ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_CB_NB_10MS: &[[i8; 2]; 3] = &[[0, 0], [1, 0], [0, 1]];
 
 // Table 34: NB 20ms (lines 4276-4303) - 4 subframes
+/// Pitch contour cb nb 20ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_CB_NB_20MS: &[[i8; 4]; 11] = &[
     [0, 0, 0, 0],
     [2, 1, 0, -1],
@@ -59,6 +81,7 @@ pub const PITCH_CONTOUR_CB_NB_20MS: &[[i8; 4]; 11] = &[
 ];
 
 // Table 35: MB/WB 10ms (lines 4319-4345) - 2 subframes
+/// Pitch contour cb mbwb 10ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_CB_MBWB_10MS: &[[i8; 2]; 12] = &[
     [0, 0],
     [0, 1],
@@ -75,6 +98,7 @@ pub const PITCH_CONTOUR_CB_MBWB_10MS: &[[i8; 2]; 12] = &[
 ];
 
 // Table 36: MB/WB 20ms (lines 4350-4439) - 4 subframes
+/// Pitch contour cb mbwb 20ms (RFC 6716 Section 4.2.7)
 pub const PITCH_CONTOUR_CB_MBWB_20MS: &[[i8; 4]; 34] = &[
     [0, 0, 0, 0],
     [0, 0, 1, 1],
@@ -115,6 +139,7 @@ pub const PITCH_CONTOUR_CB_MBWB_20MS: &[[i8; 4]; 34] = &[
 // RFC 6716 Table 37: Periodicity Index PDF (lines 4487-4493)
 // RFC shows PDF: {77, 80, 99}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp periodicity pdf (RFC 6716 Section 4.2.7)
 pub const LTP_PERIODICITY_PDF: &[u8] = &[179, 99, 0];
 
 // RFC 6716 Table 38: LTP Filter PDFs (lines 4500-4514)
@@ -122,10 +147,13 @@ pub const LTP_PERIODICITY_PDF: &[u8] = &[179, 99, 0];
 // RFC shows PDF for periodicity=1: {57, 34, 21, 20, 15, 13, 12, 13, 10, 10, 9, 10, 9, 8, 7, 8}/256
 // RFC shows PDF for periodicity=2: {15, 16, 14, 12, 12, 12, 11, 11, 11, 10, 9, 9, 9, 9, 8, 8, 8, 8, 7, 7, 6, 6, 5, 4, 5, 4, 4, 4, 3, 4, 3, 2}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp filter pdf 0 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_PDF_0: &[u8] = &[71, 56, 43, 30, 21, 12, 6, 0];
+/// Ltp filter pdf 1 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_PDF_1: &[u8] = &[
     199, 165, 144, 124, 109, 96, 84, 71, 61, 51, 42, 32, 23, 15, 8, 0,
 ];
+/// Ltp filter pdf 2 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_PDF_2: &[u8] = &[
     241, 225, 211, 199, 187, 175, 164, 153, 142, 132, 123, 114, 105, 96, 88, 80, 72, 64, 57, 50,
     44, 38, 33, 29, 24, 20, 16, 12, 9, 5, 2, 0,
@@ -133,6 +161,7 @@ pub const LTP_FILTER_PDF_2: &[u8] = &[
 
 // RFC 6716 Tables 39-41: LTP Filter Codebooks (5-tap filters, signed Q7 format)
 // Table 39: Periodicity Index 0 (lines 4543-4563) - 8 filters
+/// Ltp filter cb 0 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_CB_0: &[[i8; 5]; 8] = &[
     [4, 6, 24, 7, 5],
     [0, 0, 2, 0, 0],
@@ -145,6 +174,7 @@ pub const LTP_FILTER_CB_0: &[[i8; 5]; 8] = &[
 ];
 
 // Table 40: Periodicity Index 1 (lines 4599-4635) - 16 filters
+/// Ltp filter cb 1 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_CB_1: &[[i8; 5]; 16] = &[
     [13, 22, 39, 23, 12],
     [-1, 36, 64, 27, -6],
@@ -165,6 +195,7 @@ pub const LTP_FILTER_CB_1: &[[i8; 5]; 16] = &[
 ];
 
 // Table 41: Periodicity Index 2 (lines 4637-4720) - 32 filters
+/// Ltp filter cb 2 (RFC 6716 Section 4.2.7)
 pub const LTP_FILTER_CB_2: &[[i8; 5]; 32] = &[
     [-6, 27, 61, 39, 5],
     [-11, 42, 88, 4, 1],
@@ -203,6 +234,7 @@ pub const LTP_FILTER_CB_2: &[[i8; 5]; 32] = &[
 // RFC 6716 Table 42: PDF for LTP Scaling Parameter (lines 4767-4773)
 // RFC shows PDF: {128, 64, 64}/256
 // Converted to ICDF for ec_dec_icdf()
+/// Ltp scaling pdf (RFC 6716 Section 4.2.7)
 pub const LTP_SCALING_PDF: &[u8] = &[128, 64, 0];
 
 // RFC 6716 Section 4.2.7.6.3: LTP Scaling Factors in Q14 format (lines 4751-4753)

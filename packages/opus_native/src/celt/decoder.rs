@@ -206,6 +206,39 @@ impl CeltState {
     }
 }
 
+/// CELT decoder for full-spectrum audio
+///
+/// Decodes CELT frames according to RFC 6716 Section 4.3. Operates internally at 48 kHz
+/// and supports all Opus bandwidths through configurable band ranges and optional decimation.
+///
+/// # Features
+///
+/// * Adaptive MDCT with transient detection
+/// * Pyramid Vector Quantization (PVQ) for spectral coefficients
+/// * Energy envelope coding with prediction
+/// * Intensity stereo and dual stereo support
+/// * Configurable bandwidth via start/end band parameters
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "celt")]
+/// # {
+/// use moosicbox_opus_native::celt::CeltDecoder;
+/// use moosicbox_opus_native::{SampleRate, Channels};
+///
+/// let mut decoder = CeltDecoder::new(
+///     SampleRate::Hz48000,
+///     Channels::Stereo,
+///     480,  // 10ms at 48kHz
+/// )?;
+///
+/// // Set band range for fullband
+/// decoder.set_start_band(0);
+/// decoder.set_end_band(21);
+/// # Ok::<(), moosicbox_opus_native::Error>(())
+/// # }
+/// ```
 pub struct CeltDecoder {
     sample_rate: SampleRate,
     #[allow(dead_code)]

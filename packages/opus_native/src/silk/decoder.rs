@@ -121,22 +121,38 @@ const FRAME_TYPE_PDF_INACTIVE: &[u8] = &[230, 0];
 // Converted to ICDF for ec_dec_icdf()
 const FRAME_TYPE_PDF_ACTIVE: &[u8] = &[232, 158, 10, 0];
 
+/// SILK header bits decoded from frame header
+///
+/// Contains VAD and LBRR flags for mid and side channels per RFC 6716 Section 4.2.4.
 #[derive(Debug, Clone)]
 pub struct HeaderBits {
+    /// VAD flags for mid channel (one per SILK frame)
     pub mid_vad_flags: Vec<bool>,
+    /// LBRR (Low Bit Rate Redundancy) flag for mid channel
     pub mid_lbrr_flag: bool,
+    /// VAD flags for side channel in stereo (None for mono)
     pub side_vad_flags: Option<Vec<bool>>,
+    /// LBRR flag for side channel in stereo (None for mono)
     pub side_lbrr_flag: Option<bool>,
 }
 
+/// SILK subframe decoding parameters
+///
+/// Contains all parameters needed for LTP synthesis and excitation generation
+/// for a single SILK subframe (5ms at internal rate).
 // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SubframeParams {
+    /// LPC (Linear Predictive Coding) coefficients in Q12 format
     pub lpc_coeffs_q12: Vec<i16>,
+    /// Subframe gain in Q16 format
     pub gain_q16: i32,
+    /// Pitch lag for Long-Term Prediction
     pub pitch_lag: i16,
+    /// LTP filter coefficients in Q7 format (5 taps)
     pub ltp_filter_q7: [i8; 5],
+    /// LTP scaling factor in Q14 format
     pub ltp_scale_q14: i16,
 }
 
@@ -197,6 +213,35 @@ impl LtpState {
     }
 }
 
+/// SILK decoder for voice-optimized audio
+///
+/// Decodes SILK frames according to RFC 6716 Section 4.2. Operates at internal sample rates
+/// of 8/12/16 kHz for Narrowband, Mediumband, and Wideband respectively.
+///
+/// # Features
+///
+/// * LPC (Linear Predictive Coding) synthesis
+/// * Long-Term Prediction (LTP) for voiced speech
+/// * Adaptive quantization with prediction
+/// * Stereo coding with mid/side representation
+/// * Low Bit Rate Redundancy (LBRR) support
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "silk")]
+/// # {
+/// use moosicbox_opus_native::silk::SilkDecoder;
+/// use moosicbox_opus_native::{SampleRate, Channels};
+///
+/// let mut decoder = SilkDecoder::new(
+///     SampleRate::Hz16000,  // Wideband
+///     Channels::Stereo,
+///     20,  // 20ms frame
+/// )?;
+/// # Ok::<(), moosicbox_opus_native::Error>(())
+/// # }
+/// ```
 pub struct SilkDecoder {
     #[allow(dead_code)]
     sample_rate: SampleRate,
