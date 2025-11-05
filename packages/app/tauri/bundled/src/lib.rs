@@ -207,7 +207,7 @@ impl Context {
     ///
     /// # Errors
     ///
-    /// * This function currently never returns an error
+    /// * Currently always succeeds, but returns `Result` to allow for future error conditions
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
         if let Some(handle) = &self.server_handle {
             handle.abort();
