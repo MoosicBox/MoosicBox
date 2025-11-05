@@ -1,3 +1,49 @@
+//! JSON extractor example demonstrating `Json<T>` usage with serde deserialization.
+//!
+//! This example shows how to use the `Json<T>` extractor from `moosicbox_web_server`
+//! to automatically deserialize JSON request bodies into strongly-typed Rust structs
+//! using serde. It demonstrates common patterns for building JSON APIs including
+//! simple payloads, optional fields, combined extractors, and JSON responses.
+//!
+//! # Features
+//!
+//! * `actix` - Run with Actix Web backend
+//! * `simulator` - Run with Simulator backend (default)
+//! * `serde` - Enable JSON serialization/deserialization support (default)
+//!
+//! # Demonstrated Patterns
+//!
+//! This example demonstrates:
+//!
+//! * Basic JSON extraction with `Json<T>` for simple structured payloads
+//! * Handling optional fields with `Option<T>` for partial updates
+//! * Combining `Json<T>` with `RequestData` extractors for metadata access
+//! * Generating JSON responses with `serde_json::to_string`
+//! * Content-Type validation and error handling best practices
+//! * Backend-agnostic JSON API creation (works with Actix and Simulator)
+//!
+//! # Usage
+//!
+//! Run with the simulator backend:
+//! ```text
+//! cargo run --package json_extractor_standalone_example
+//! ```
+//!
+//! Run with the Actix backend:
+//! ```text
+//! cargo run --package json_extractor_standalone_example --features actix
+//! ```
+//!
+//! # Handler Examples
+//!
+//! The example includes several handler functions demonstrating different patterns:
+//!
+//! * `simple_json_handler` - Basic JSON extraction with required fields
+//! * `optional_json_handler` - Handling partial updates with optional fields
+//! * `combined_json_handler` - Combining JSON with other extractors
+//! * `json_response_handler` - Generating JSON responses
+//! * `error_demo_handler` - Content-Type validation and error handling
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
