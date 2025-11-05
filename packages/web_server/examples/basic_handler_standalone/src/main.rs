@@ -1,3 +1,36 @@
+//! Basic HTTP handler example demonstrating minimal request handling.
+//!
+//! This example shows how to create simple HTTP request handlers using only
+//! the `RequestData` extractor from `moosicbox_web_server`, without requiring
+//! any JSON parsing or serde dependencies.
+//!
+//! # Features
+//!
+//! * Basic request information extraction (method, path, query, headers)
+//! * Multiple extractor support (demonstrates using `RequestData` multiple times)
+//! * Backend flexibility (works with both Actix and Simulator backends)
+//! * Zero JSON/serde dependencies for minimal complexity
+//!
+//! # Usage
+//!
+//! Run with Actix backend:
+//! ```sh
+//! cargo run --features actix
+//! ```
+//!
+//! Run with Simulator backend:
+//! ```sh
+//! cargo run --features simulator
+//! ```
+//!
+//! # Example Handlers
+//!
+//! The example includes three handler functions:
+//!
+//! * `basic_info_handler` - Extracts and displays basic request information
+//! * `double_data_handler` - Demonstrates using multiple `RequestData` extractors
+//! * `error_demo_handler` - Shows basic error handling without complex parsing
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
