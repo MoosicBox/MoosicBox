@@ -50,37 +50,37 @@
 //!
 //! ## Core Modules
 //!
-//! * [`actions`] - Event handling and action system
-//! * [`app`] - Application builder and runtime
-//! * [`color`] - Color management and theming
-//! * [`router`] - Routing functionality for navigation
-//! * [`state`] - State persistence system with optional `SQLite` backend
-//! * [`template`] - Template macro system for building UI components
-//! * [`transformer`] - Container and element types for UI transformations
-//! * [`transformer_models`] - Data models for transformers
+//! * `actions` - Event handling and action system (requires `actions` feature)
+//! * `app` - Application builder and runtime (requires `app` feature)
+//! * `color` - Color management and theming (requires `color` feature)
+//! * `router` - Routing functionality for navigation (requires `router` feature)
+//! * `state` - State persistence system with optional `SQLite` backend (requires `state` feature)
+//! * `template` - Template macro system for building UI components (requires `template` feature)
+//! * `transformer` - Container and element types for UI transformations (requires `transformer` feature)
+//! * `transformer_models` - Data models for transformers (requires `transformer-models` feature)
 //!
 //! ## Content Modules
 //!
-//! * [`markdown`] - Markdown parsing and rendering support
+//! * `markdown` - Markdown parsing and rendering support (requires `markdown` feature)
 //!
 //! ## Renderer Modules
 //!
-//! * [`renderer`] - Base renderer traits and shared functionality
-//! * [`renderer_egui`] - Egui desktop renderer implementation
-//! * [`renderer_fltk`] - FLTK desktop renderer implementation
-//! * [`renderer_html`] - Base HTML rendering support
-//! * [`renderer_html_actix`] - Actix web server renderer
-//! * [`renderer_html_cdn`] - CDN-hosted HTML renderer
-//! * [`renderer_html_http`] - HTTP server renderer
-//! * [`renderer_html_lambda`] - AWS Lambda serverless renderer
-//! * [`renderer_html_web_server`] - Generic web server renderer
-//! * [`renderer_vanilla_js`] - Vanilla JavaScript client-side renderer
+//! * `renderer` - Base renderer traits and shared functionality (requires `renderer` feature)
+//! * `renderer_egui` - Egui desktop renderer implementation (requires `renderer-egui` feature)
+//! * `renderer_fltk` - FLTK desktop renderer implementation (requires `renderer-fltk` feature)
+//! * `renderer_html` - Base HTML rendering support (requires `renderer-html` feature)
+//! * `renderer_html_actix` - Actix web server renderer (requires `renderer-html-actix` feature)
+//! * `renderer_html_cdn` - CDN-hosted HTML renderer (requires `renderer-html-cdn` feature)
+//! * `renderer_html_http` - HTTP server renderer (requires `renderer-html-http` feature)
+//! * `renderer_html_lambda` - AWS Lambda serverless renderer (requires `renderer-html-lambda` feature)
+//! * `renderer_html_web_server` - Generic web server renderer (requires `renderer-html-web-server` feature)
+//! * `renderer_vanilla_js` - Vanilla JavaScript client-side renderer (requires `renderer-vanilla-js` feature)
 //!
 //! ## Build and Development Modules
 //!
-//! * [`js_bundler`] - JavaScript bundling utilities for web targets
-//! * [`simulator`] - Testing and simulation utilities
-//! * [`test_utils`] - Shared testing utilities and helpers
+//! * `js_bundler` - JavaScript bundling utilities for web targets (requires `js-bundler` feature)
+//! * `simulator` - Testing and simulation utilities (requires `simulator` feature)
+//! * `test_utils` - Shared testing utilities and helpers (requires `test-utils` feature)
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
