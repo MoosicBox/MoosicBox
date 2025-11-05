@@ -1,3 +1,8 @@
+//! Database models for `MoosicBox` configuration.
+//!
+//! This module contains data structures for configuration entities stored in the database,
+//! along with their database serialization implementations.
+
 use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue};
 
 /// Represents a `MoosicBox` profile stored in the database.
