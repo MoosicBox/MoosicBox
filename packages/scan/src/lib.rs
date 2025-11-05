@@ -61,6 +61,7 @@ pub mod music_api;
 /// Data structures and database update operations for scan results.
 pub mod output;
 
+/// Re-exports the scan models from `moosicbox_scan_models`.
 pub use moosicbox_scan_models as models;
 
 static CACHE_DIR: LazyLock<PathBuf> =

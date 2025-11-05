@@ -65,6 +65,7 @@ pub fn bind_services<
         crate::models::api::ApiScanPath,
     ))
 )]
+/// `OpenAPI` documentation structure for scan endpoints.
 pub struct Api;
 
 /// Query parameters for scan endpoints.
@@ -94,6 +95,7 @@ pub struct ScanQuery {
         )
     )
 )]
+/// Runs a synchronous scan for the specified origin(s), blocking until complete.
 #[post("/run-scan")]
 pub async fn run_scan_endpoint(
     query: web::Query<ScanQuery>,
@@ -142,6 +144,7 @@ pub async fn run_scan_endpoint(
         )
     )
 )]
+/// Starts an asynchronous scan for the specified origin(s) in the background.
 #[post("/start-scan")]
 pub async fn start_scan_endpoint(
     query: web::Query<ScanQuery>,
@@ -205,6 +208,7 @@ pub struct ScanPathQuery {
         )
     )
 )]
+/// Runs a local filesystem scan on a specific path.
 #[post("/run-scan-path")]
 pub async fn run_scan_path_endpoint(
     query: web::Query<ScanPathQuery>,
@@ -252,6 +256,7 @@ pub struct GetScanOriginsQuery {}
         )
     )
 )]
+/// Retrieves all enabled scan origins.
 #[actix_web::get("/scan-origins")]
 pub async fn get_scan_origins_endpoint(
     _query: web::Query<GetScanOriginsQuery>,
@@ -292,6 +297,7 @@ pub struct EnableScanOriginQuery {
         )
     )
 )]
+/// Enables a scan origin for future scans.
 #[post("/scan-origins")]
 pub async fn enable_scan_origin_endpoint(
     query: web::Query<EnableScanOriginQuery>,
@@ -332,6 +338,7 @@ pub struct DisableScanOriginQuery {
         )
     )
 )]
+/// Disables a scan origin to prevent future scans.
 #[delete("/scan-origins")]
 pub async fn disable_scan_origin_endpoint(
     query: web::Query<DisableScanOriginQuery>,
@@ -370,6 +377,7 @@ pub struct GetScanPathsQuery {}
         )
     )
 )]
+/// Retrieves all enabled local filesystem scan paths.
 #[actix_web::get("/scan-paths")]
 pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
@@ -415,6 +423,7 @@ pub struct AddScanPathQuery {
         )
     )
 )]
+/// Enables a local filesystem path for scanning.
 #[post("/scan-paths")]
 pub async fn add_scan_path_endpoint(
     query: web::Query<AddScanPathQuery>,
@@ -470,6 +479,7 @@ pub struct RemoveScanPathQuery {
         )
     )
 )]
+/// Disables a local filesystem path to prevent scanning.
 #[delete("/scan-paths")]
 pub async fn remove_scan_path_endpoint(
     query: web::Query<RemoveScanPathQuery>,
