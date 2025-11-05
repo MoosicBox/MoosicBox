@@ -17,10 +17,16 @@ use crate::Error;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ActionPayload {
     /// The action identifier (string or JSON value).
-    action: serde_json::Value,
+    ///
+    /// Can be either a simple string action name or a more complex JSON value
+    /// representing the action.
+    pub action: serde_json::Value,
     /// Optional value parameter for the action.
+    ///
+    /// Additional data to pass along with the action request. If present,
+    /// will be sent through the action channel for processing.
     #[serde(skip_serializing_if = "Option::is_none")]
-    value: Option<Value>,
+    pub value: Option<Value>,
 }
 
 /// Handles an action request from a client by parsing the payload and sending it to the action channel.
