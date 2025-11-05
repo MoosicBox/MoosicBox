@@ -551,12 +551,16 @@ impl From<SimulationRequest> for SimulationStub {
 /// # }
 /// ```
 pub struct SimulatorWebServer {
+    /// Registered scopes containing routes and nested scopes
     pub scopes: Vec<crate::Scope>,
+    /// Flat map of registered routes with their handlers
     pub routes: BTreeMap<(Method, String), RouteHandler>,
+    /// Application state container for extractors
     pub state: Arc<RwLock<crate::extractors::state::StateContainer>>,
 }
 
 impl SimulatorWebServer {
+    /// Register a single route with the simulator
     #[allow(dead_code)] // Used in tests and scope processing
     pub fn register_route(&mut self, method: Method, path: &str, handler: RouteHandler) {
         self.routes.insert((method, path.to_string()), handler);
@@ -883,6 +887,7 @@ impl WebServer for SimulatorWebServer {
 }
 
 impl WebServerBuilder {
+    /// Build a simulator web server instance
     #[must_use]
     pub fn build_simulator(self) -> Box<dyn WebServer> {
         Box::new(SimulatorWebServer {
