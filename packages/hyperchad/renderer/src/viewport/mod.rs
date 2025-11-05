@@ -6,8 +6,11 @@
 //! * `immediate` - Immediate mode viewport rendering (enabled with `viewport-immediate` feature)
 //! * `retained` - Retained mode viewport rendering (enabled with `viewport-retained` feature)
 
+/// Immediate mode viewport rendering with per-frame visibility calculations.
 #[cfg(feature = "viewport-immediate")]
 pub mod immediate;
+
+/// Retained mode viewport rendering with persistent widget positions.
 #[cfg(feature = "viewport-retained")]
 pub mod retained;
 
