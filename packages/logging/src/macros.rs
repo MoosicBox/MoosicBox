@@ -4,6 +4,10 @@
 //! logging configuration, allowing more detailed logging when trace-level logging
 //! is enabled.
 
+/// Re-export of the standard `log` crate for convenient access to its macros and types.
+///
+/// This allows users to access standard logging macros (such as `info!`, `debug!`,
+/// `trace!`, etc.) without adding a separate dependency on the `log` crate.
 pub use log;
 
 /// Logs a message at trace level if trace logging is enabled, otherwise at debug level.

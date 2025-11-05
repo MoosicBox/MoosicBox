@@ -11,6 +11,11 @@ use moosicbox_config::make_config_dir_path;
 use moosicbox_env_utils::default_env;
 use thiserror::Error;
 
+/// Re-export of the `free_log_client` crate for convenient access to its types and traits.
+///
+/// This allows users of `moosicbox_logging` to access `free_log_client` functionality
+/// (such as [`DynLayer`](free_log_client::DynLayer) and
+/// [`FreeLogLayer`](free_log_client::FreeLogLayer)) without adding a separate dependency.
 pub use free_log_client;
 
 /// Error type for logging initialization failures.
