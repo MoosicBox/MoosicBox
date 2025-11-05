@@ -1026,11 +1026,13 @@ pub mod calc {
     use hyperchad_transformer::Number;
 
     /// Convert any type that can be converted to Number into a Number
+    #[must_use]
     pub fn to_number<T: Into<Number>>(value: T) -> Number {
         value.into()
     }
 
     /// Convert a value to a percentage Number variant
+    #[must_use]
     pub fn to_percent_number<T>(value: T) -> Number
     where
         T: Into<Number>,
@@ -1051,6 +1053,7 @@ pub mod calc {
     }
 
     /// Convert a value to a viewport width Number variant
+    #[must_use]
     pub fn to_vw_number<T>(value: T) -> Number
     where
         T: Into<Number>,
@@ -1070,6 +1073,7 @@ pub mod calc {
     }
 
     /// Convert a value to a viewport height Number variant
+    #[must_use]
     pub fn to_vh_number<T>(value: T) -> Number
     where
         T: Into<Number>,
@@ -1089,6 +1093,7 @@ pub mod calc {
     }
 
     /// Convert a value to a dynamic viewport width Number variant
+    #[must_use]
     pub fn to_dvw_number<T>(value: T) -> Number
     where
         T: Into<Number>,
@@ -1108,6 +1113,7 @@ pub mod calc {
     }
 
     /// Convert a value to a dynamic viewport height Number variant
+    #[must_use]
     pub fn to_dvh_number<T>(value: T) -> Number
     where
         T: Into<Number>,
@@ -1341,6 +1347,7 @@ pub mod unit_functions {
     }
 
     /// Convert a value to viewport width units (vw).
+    #[must_use]
     pub fn vw<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1352,6 +1359,7 @@ pub mod unit_functions {
     }
 
     /// Convert a value to viewport height units (vh).
+    #[must_use]
     pub fn vh<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1362,6 +1370,7 @@ pub mod unit_functions {
     }
 
     /// Convert a value to dynamic viewport width units (dvw).
+    #[must_use]
     pub fn dvw<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1372,6 +1381,7 @@ pub mod unit_functions {
     }
 
     /// Convert a value to dynamic viewport height units (dvh).
+    #[must_use]
     pub fn dvh<T: Into<Number>>(value: T) -> Number {
         let num = value.into();
         match num {
@@ -1498,6 +1508,7 @@ pub mod color_functions {
     /// let green_color = rgb(0, 255, 0);
     /// let blue_color = rgb(0, 0, 255);
     /// ```
+    #[must_use]
     pub fn rgb<R, G, B>(red: R, green: G, blue: B) -> Color
     where
         R: ToRgbValue,
@@ -1534,6 +1545,7 @@ pub mod color_functions {
     /// // Percentage alpha (0% - 100%)
     /// let semi_transparent_blue = rgb_alpha(0, 0, 255, "75%");
     /// ```
+    #[must_use]
     pub fn rgb_alpha<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
     where
         R: ToRgbValue,
@@ -1572,6 +1584,7 @@ pub mod color_functions {
     /// // Percentage alpha (0% - 100%)
     /// let semi_transparent_blue = rgba(0, 0, 255, "50%");
     /// ```
+    #[must_use]
     pub fn rgba<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
     where
         R: ToRgbValue,
