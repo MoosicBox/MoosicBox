@@ -63,84 +63,163 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Key {
+    /// Escape key
     Escape,
+    /// Tab key
     Tab,
+    /// Up arrow key
     ArrowUp,
+    /// Down arrow key
     ArrowDown,
+    /// Left arrow key
     ArrowLeft,
+    /// Right arrow key
     ArrowRight,
+    /// Home key
     Home,
+    /// End key
     End,
+    /// Page Up key
     PageUp,
+    /// Page Down key
     PageDown,
+    /// Delete key
     Delete,
+    /// Backspace key
     Backspace,
+    /// Enter key
     Enter,
+    /// Insert key
     Insert,
+    /// F1 function key
     F1,
+    /// F2 function key
     F2,
+    /// F3 function key
     F3,
+    /// F4 function key
     F4,
+    /// F5 function key
     F5,
+    /// F6 function key
     F6,
+    /// F7 function key
     F7,
+    /// F8 function key
     F8,
+    /// F9 function key
     F9,
+    /// F10 function key
     F10,
+    /// F11 function key
     F11,
+    /// F12 function key
     F12,
+    /// Num Lock key
     NumLock,
+    /// Scroll Lock key
     ScrollLock,
+    /// Caps Lock key
     CapsLock,
+    /// Shift modifier key
     Shift,
+    /// Control modifier key
     Control,
+    /// Alt modifier key
     Alt,
+    /// Meta/Command/Windows modifier key
     Meta,
+    /// Letter A key
     A,
+    /// Letter B key
     B,
+    /// Letter C key
     C,
+    /// Letter D key
     D,
+    /// Letter E key
     E,
+    /// Letter F key
     F,
+    /// Letter G key
     G,
+    /// Letter H key
     H,
+    /// Letter I key
     I,
+    /// Letter J key
     J,
+    /// Letter K key
     K,
+    /// Letter L key
     L,
+    /// Letter M key
     M,
+    /// Letter N key
     N,
+    /// Letter O key
     O,
+    /// Letter P key
     P,
+    /// Letter Q key
     Q,
+    /// Letter R key
     R,
+    /// Letter S key
     S,
+    /// Letter T key
     T,
+    /// Letter U key
     U,
+    /// Letter V key
     V,
+    /// Letter W key
     W,
+    /// Letter X key
     X,
+    /// Letter Y key
     Y,
+    /// Letter Z key
     Z,
+    /// Number 0 key (top row)
     Key0,
+    /// Number 1 key (top row)
     Key1,
+    /// Number 2 key (top row)
     Key2,
+    /// Number 3 key (top row)
     Key3,
+    /// Number 4 key (top row)
     Key4,
+    /// Number 5 key (top row)
     Key5,
+    /// Number 6 key (top row)
     Key6,
+    /// Number 7 key (top row)
     Key7,
+    /// Number 8 key (top row)
     Key8,
+    /// Number 9 key (top row)
     Key9,
+    /// Numpad 0 key
     Numpad0,
+    /// Numpad 1 key
     Numpad1,
+    /// Numpad 2 key
     Numpad2,
+    /// Numpad 3 key
     Numpad3,
+    /// Numpad 4 key
     Numpad4,
+    /// Numpad 5 key
     Numpad5,
+    /// Numpad 6 key
     Numpad6,
+    /// Numpad 7 key
     Numpad7,
+    /// Numpad 8 key
     Numpad8,
+    /// Numpad 9 key
     Numpad9,
 }
 
@@ -260,21 +339,36 @@ pub struct HttpEventContext {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionTrigger {
+    /// Triggered on mouse click
     Click,
+    /// Triggered when clicking outside the element
     ClickOutside,
+    /// Triggered on mouse button down
     MouseDown,
+    /// Triggered on key down event
     KeyDown,
+    /// Triggered when mouse hovers over element
     Hover,
+    /// Triggered when element value changes
     Change,
+    /// Triggered when element is resized
     Resize,
+    /// Triggered on custom named event
     Event(String),
+    /// Triggered immediately when action is registered
     #[default]
     Immediate,
+    /// Triggered before HTTP request is sent
     HttpBeforeRequest,
+    /// Triggered after HTTP request completes (success or failure)
     HttpAfterRequest,
+    /// Triggered when HTTP request succeeds
     HttpRequestSuccess,
+    /// Triggered when HTTP request fails with error
     HttpRequestError,
+    /// Triggered when HTTP request is aborted
     HttpRequestAbort,
+    /// Triggered when HTTP request times out
     HttpRequestTimeout,
 }
 
@@ -413,10 +507,15 @@ impl std::fmt::Display for ActionEffect {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogLevel {
+    /// Error log level for critical issues
     Error,
+    /// Warning log level for concerning but non-critical issues
     Warn,
+    /// Info log level for informational messages
     Info,
+    /// Debug log level for debugging information
     Debug,
+    /// Trace log level for detailed tracing information
     Trace,
 }
 
@@ -1194,9 +1293,13 @@ impl<'a> TryFrom<&'a str> for ActionType {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StyleAction {
+    /// Set element visibility (visible or hidden)
     SetVisibility(Visibility),
+    /// Set element focus state
     SetFocus(bool),
+    /// Set element display property (true = displayed, false = not displayed)
     SetDisplay(bool),
+    /// Set element background color (None to remove background)
     SetBackground(Option<String>),
 }
 
