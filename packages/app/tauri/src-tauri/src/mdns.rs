@@ -1,3 +1,9 @@
+//! mDNS service discovery for `MoosicBox` servers on the local network.
+//!
+//! This module provides functionality to discover `MoosicBox` servers using
+//! mDNS/Zeroconf protocols. It automatically maintains a list of discovered servers
+//! and provides a Tauri command to retrieve them.
+
 use std::sync::{Arc, LazyLock};
 
 use serde::Serialize;

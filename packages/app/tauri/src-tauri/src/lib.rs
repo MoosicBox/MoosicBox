@@ -886,7 +886,14 @@ async fn handle_http_request(
 ///
 /// # Panics
 ///
-/// * If the `UPnP` listener fails to initialize
+/// * If the data directory cannot be obtained
+/// * If the application state fails to initialize (with `moosicbox-app-native` feature)
+/// * If the `STATE_LOCK` has already been set
+/// * If the `HTTP_APP` has already been set (with `moosicbox-app-native` feature)
+/// * If sending the `WaitForStartup` command fails (with `bundled` feature)
+/// * If the bundled app server fails to start (with `bundled` feature)
+/// * If the `UPNP_LISTENER_HANDLE` has already been set
+/// * If the Tauri application builder fails to build
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
