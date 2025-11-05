@@ -1,3 +1,25 @@
+//! Port reservation system for managing port allocation
+//!
+//! This module provides a thread-safe port reservation system that allows you to
+//! reserve and release ports from a specified range. This is useful for applications
+//! that need to dynamically allocate multiple network services on different ports
+//! while ensuring no conflicts occur.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "reservation")]
+//! # {
+//! use openport::PortReservation;
+//!
+//! let reservation = PortReservation::new(15000..16000);
+//! let port = reservation.reserve_port().expect("No ports available");
+//! assert!(reservation.is_reserved(port));
+//! reservation.release_port(port);
+//! assert!(!reservation.is_reserved(port));
+//! # }
+//! ```
+
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
