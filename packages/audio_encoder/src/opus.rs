@@ -30,7 +30,9 @@ impl From<::opus::Error> for EncoderError {
 
 /// Encodes audio samples using the audiopus encoder with custom framing.
 ///
-/// Returns the sample rate and encoded data with length-prefixed packets.
+/// Returns the sample rate and encoded data with length-prefixed packets. The output
+/// format begins with a 4-byte big-endian sample count, followed by a series of
+/// encoded packets, each prefixed with a 2-byte big-endian length.
 ///
 /// # Panics
 ///
@@ -135,6 +137,9 @@ pub fn encode_opus_float(
 }
 
 /// Copies an Ogg stream from one file to another, re-packaging all packets.
+///
+/// Reads all packets from the input Ogg stream and writes them to the output,
+/// preserving packet boundaries, stream serial numbers, and page structure.
 ///
 /// # Panics
 ///
