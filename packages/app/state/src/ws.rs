@@ -77,6 +77,12 @@ pub enum HandleWsMessageError {
 }
 
 impl AppState {
+    /// Establishes a `WebSocket` connection to the `MoosicBox` server.
+    ///
+    /// Creates and starts a `WebSocket` client connection, spawns a message handling loop,
+    /// and sends an initial connection ID request. The connection runs until cancelled
+    /// or an error occurs.
+    ///
     /// # Errors
     ///
     /// * If the existing websocket connection fails to close
@@ -222,6 +228,11 @@ impl AppState {
             .await?)
     }
 
+    /// Closes the active `WebSocket` connection.
+    ///
+    /// Terminates the `WebSocket` connection and aborts the message handling task.
+    /// Safe to call even if no connection is active.
+    ///
     /// # Errors
     ///
     /// * If the websocket connection fails to close
@@ -243,6 +254,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Queues a `WebSocket` message for sending or buffers it if not connected.
+    ///
+    /// Sends the message immediately if a connection exists, otherwise adds it to the
+    /// message buffer to be sent when the connection is established.
+    ///
     /// # Errors
     ///
     /// * If fails to handle playback update
@@ -272,6 +288,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Sends a `WebSocket` message to the server.
+    ///
+    /// Serializes and sends the message over the `WebSocket` connection. If `handle_update`
+    /// is true, also applies the update to local players asynchronously.
+    ///
     /// # Errors
     ///
     /// * If fails to handle playback update
@@ -339,6 +360,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Processes an incoming `WebSocket` message from the server.
+    ///
+    /// Handles various message types including session updates, connection info, audio
+    /// zones, and playback commands. Triggers appropriate state updates and notifies
+    /// registered listeners.
+    ///
     /// # Errors
     ///
     /// * If fails to handle playback update
@@ -543,6 +570,11 @@ impl AppState {
         }
     }
 
+    /// Sends all buffered `WebSocket` messages to the server.
+    ///
+    /// Processes all messages that were queued while the `WebSocket` connection was
+    /// not available. Called automatically when a connection is established.
+    ///
     /// # Errors
     ///
     /// * If any websocket messages fail to send
@@ -569,6 +601,11 @@ impl AppState {
         Ok(())
     }
 
+    /// Applies a playback update to local players and session state.
+    ///
+    /// Updates the local session state and applies the changes to all matching players.
+    /// Optionally triggers before/after event listeners based on `trigger_events`.
+    ///
     /// # Errors
     ///
     /// * If fails to update playback
