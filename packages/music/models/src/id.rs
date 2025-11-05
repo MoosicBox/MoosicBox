@@ -425,9 +425,13 @@ mod db {
 
     use super::Id;
 
+    /// Database wrapper for numeric IDs.
+    ///
+    /// Used for database queries and conversions for library/local content.
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
     #[serde(rename_all = "camelCase")]
     pub struct NumberId {
+        /// The numeric identifier
         pub id: i32,
     }
 
@@ -452,9 +456,13 @@ mod db {
         }
     }
 
+    /// Database wrapper for string IDs.
+    ///
+    /// Used for database queries and conversions for external API content.
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
     #[serde(rename_all = "camelCase")]
     pub struct StringId {
+        /// The string identifier
         pub id: String,
     }
 
