@@ -79,7 +79,7 @@ pub(crate) const POW10: [u128; 20] = {
 ///
 /// # Errors
 ///
-/// * If encounters an invalid digit in the `&str`
+/// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9)
 pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
     let bytes = b.as_bytes();
 
@@ -117,7 +117,7 @@ pub const fn parse_usize(b: &str) -> Result<usize, ParseIntError> {
 ///
 /// # Errors
 ///
-/// * If encounters an invalid digit in the `&str`
+/// * Returns [`ParseIntError::InvalidDigit`] if the string contains a character that is not a valid decimal digit (0-9) or if a sign character (+/-) appears in an invalid position
 pub const fn parse_isize(b: &str) -> Result<isize, ParseIntError> {
     let bytes = b.as_bytes();
 
