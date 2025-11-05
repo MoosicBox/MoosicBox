@@ -168,6 +168,10 @@ static PROVIDER: std::sync::LazyLock<SimulatorEnv> = std::sync::LazyLock::new(Si
 /// # Errors
 ///
 /// * If the environment variable is not found
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn var(name: &str) -> Result<String> {
     PROVIDER.var(name)
 }
@@ -225,26 +229,46 @@ pub fn var_exists(name: &str) -> bool {
 }
 
 /// Get all environment variables
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn vars() -> BTreeMap<String, String> {
     PROVIDER.vars()
 }
 
 /// Set a variable for testing (simulator only)
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn set_var(name: &str, value: &str) {
     PROVIDER.set_var(name, value);
 }
 
 /// Remove a variable (simulator only)
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn remove_var(name: &str) {
     PROVIDER.remove_var(name);
 }
 
 /// Clear all variables (simulator only)
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn clear() {
     PROVIDER.clear();
 }
 
 /// Reset to defaults (simulator only)
+///
+/// # Panics
+///
+/// * If the internal `RwLock` is poisoned
 pub fn reset() {
     PROVIDER.reset();
 }
