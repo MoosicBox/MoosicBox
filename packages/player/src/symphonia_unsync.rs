@@ -29,6 +29,11 @@ pub enum PlaybackError {
     Symphonia(#[from] symphonia::core::errors::Error),
 }
 
+/// Plays audio from a media source stream synchronously.
+///
+/// Probes the media stream format and returns a receiver for decoded audio buffers.
+/// This is a non-async version suitable for blocking contexts.
+///
 /// # Errors
 ///
 /// * If failed to play the `MediaSourceStream`

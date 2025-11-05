@@ -347,6 +347,9 @@ impl Player for LocalPlayer {
 impl LocalPlayer {
     /// Creates a new local player instance.
     ///
+    /// Initializes a local player with the specified source and playback type,
+    /// setting up audio output infrastructure and playback state management.
+    ///
     /// # Errors
     ///
     /// * If failed to generate a `LocalPlayer` `id`
