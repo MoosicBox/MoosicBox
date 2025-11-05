@@ -89,19 +89,33 @@ async fn search_for_cover(
 /// Represents a scanned track with metadata.
 #[derive(Debug, Clone)]
 pub struct ScanTrack {
+    /// Filesystem path to the track file, `None` for remote tracks.
     pub path: Option<String>,
+    /// Track number within the album.
     pub number: u32,
+    /// Track title.
     pub name: String,
+    /// Track duration in seconds.
     pub duration: f64,
+    /// File size in bytes.
     pub bytes: Option<u64>,
+    /// Audio format (e.g., FLAC, MP3).
     pub format: AudioFormat,
+    /// Bit depth (e.g., 16, 24).
     pub bit_depth: Option<u8>,
+    /// Audio bitrate in bits per second.
     pub audio_bitrate: Option<u32>,
+    /// Overall bitrate in bits per second.
     pub overall_bitrate: Option<u32>,
+    /// Sample rate in Hz.
     pub sample_rate: Option<u32>,
+    /// Number of audio channels.
     pub channels: Option<u8>,
+    /// Track source (Local or remote API).
     pub source: TrackApiSource,
+    /// Remote API track identifier.
     pub id: Option<Id>,
+    /// API source this track originates from.
     pub api_source: ApiSource,
 }
 
@@ -166,13 +180,21 @@ impl ScanTrack {
 #[derive(Debug, Clone)]
 pub struct ScanAlbum {
     artist: ScanArtist,
+    /// Album title.
     pub name: String,
+    /// Path to the album cover image.
     pub cover: Option<String>,
+    /// Whether a cover image search has been performed.
     pub searched_cover: bool,
+    /// Album release date in ISO 8601 format.
     pub date_released: Option<String>,
+    /// Album directory path for local albums.
     pub directory: Option<String>,
+    /// Collection of tracks in this album.
     pub tracks: Arc<RwLock<Vec<Arc<RwLock<ScanTrack>>>>>,
+    /// Remote API album identifier.
     pub id: Option<Id>,
+    /// API source this album originates from.
     pub api_source: ApiSource,
 }
 
@@ -351,11 +373,17 @@ impl ScanAlbum {
 /// Represents a scanned artist with metadata and albums.
 #[derive(Debug, Clone)]
 pub struct ScanArtist {
+    /// Artist name.
     pub name: String,
+    /// Path to the artist cover image.
     pub cover: Option<String>,
+    /// Whether a cover image search has been performed.
     pub searched_cover: bool,
+    /// Collection of albums by this artist.
     pub albums: Arc<RwLock<Vec<Arc<RwLock<ScanAlbum>>>>>,
+    /// Remote API artist identifier.
     pub id: Option<Id>,
+    /// API source this artist originates from.
     pub api_source: ApiSource,
 }
 
@@ -520,7 +548,9 @@ pub enum UpdateDatabaseError {
 /// Accumulates scanned items before writing to the database.
 #[derive(Clone)]
 pub struct ScanOutput {
+    /// Collection of scanned artists with their albums and tracks.
     pub artists: Arc<RwLock<Vec<Arc<RwLock<ScanArtist>>>>>,
+    /// Counter tracking the total number of items scanned.
     pub count: Arc<AtomicU32>,
 }
 
