@@ -1039,46 +1039,116 @@ impl Row {
     }
 }
 
+/// Core database abstraction trait providing unified interface across database backends
+///
+/// This trait defines the complete API for database operations including querying,
+/// inserting, updating, deleting, and schema management. It is implemented by all
+/// database backends (`SQLite`, `PostgreSQL`, `MySQL`, Turso) to provide a consistent
+/// interface regardless of the underlying database.
+///
+/// # Query Builders
+///
+/// The trait provides builder methods for constructing type-safe SQL queries:
+/// * [`select`](Database::select) - Build SELECT queries
+/// * [`insert`](Database::insert) - Build INSERT statements
+/// * [`update`](Database::update) - Build UPDATE statements
+/// * [`delete`](Database::delete) - Build DELETE statements
+/// * [`upsert`](Database::upsert) - Build UPSERT statements
+///
+/// # Schema Operations
+///
+/// When the `schema` feature is enabled, the trait also provides schema management:
+/// * [`create_table`](Database::create_table) - Create new tables
+/// * [`drop_table`](Database::drop_table) - Drop tables
+/// * [`create_index`](Database::create_index) - Create indexes
+/// * [`drop_index`](Database::drop_index) - Drop indexes
+/// * [`alter_table`](Database::alter_table) - Alter table structure
+///
+/// # Transactions
+///
+/// Use [`begin_transaction`](Database::begin_transaction) to create isolated
+/// transaction contexts for atomic operations.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use switchy_database::{Database, DatabaseError};
+///
+/// async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
+///     // Query with builder
+///     let users = db.select("users")
+///         .columns(&["id", "name"])
+///         .execute(db)
+///         .await?;
+///
+///     // Insert data
+///     let row = db.insert("users")
+///         .value("name", "Alice")
+///         .execute(db)
+///         .await?;
+///
+///     // Start transaction
+///     let tx = db.begin_transaction().await?;
+///     tx.update("users")
+///         .value("active", true)
+///         .execute(&*tx)
+///         .await?;
+///     tx.commit().await?;
+///
+///     Ok(())
+/// }
+/// ```
 #[async_trait]
 pub trait Database: Send + Sync + std::fmt::Debug {
+    /// Creates a SELECT query builder for the specified table
     fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
         query::select(table_name)
     }
+    /// Creates an UPDATE statement builder for the specified table
     fn update<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
         query::update(table_name)
     }
+    /// Creates an INSERT statement builder for the specified table
     fn insert<'a>(&self, table_name: &'a str) -> InsertStatement<'a> {
         query::insert(table_name)
     }
+    /// Creates an UPSERT statement builder for the specified table
     fn upsert<'a>(&self, table_name: &'a str) -> UpsertStatement<'a> {
         query::upsert(table_name)
     }
+    /// Creates an UPSERT statement builder that returns first result for the specified table
     fn upsert_first<'a>(&self, table_name: &'a str) -> UpsertStatement<'a> {
         query::upsert(table_name)
     }
+    /// Creates a multi-row UPSERT statement builder for the specified table
     fn upsert_multi<'a>(&self, table_name: &'a str) -> UpsertMultiStatement<'a> {
         query::upsert_multi(table_name)
     }
+    /// Creates a DELETE statement builder for the specified table
     fn delete<'a>(&self, table_name: &'a str) -> DeleteStatement<'a> {
         query::delete(table_name)
     }
 
     #[cfg(feature = "schema")]
+    /// Creates a CREATE TABLE statement builder for the specified table name
     fn create_table<'a>(&self, table_name: &'a str) -> schema::CreateTableStatement<'a> {
         schema::create_table(table_name)
     }
 
     #[cfg(feature = "schema")]
+    /// Creates a DROP TABLE statement builder for the specified table name
     fn drop_table<'a>(&self, table_name: &'a str) -> schema::DropTableStatement<'a> {
         schema::drop_table(table_name)
     }
 
     #[cfg(feature = "schema")]
+    /// Creates a CREATE INDEX statement builder for the specified index name
     fn create_index<'a>(&self, index_name: &'a str) -> schema::CreateIndexStatement<'a> {
         schema::create_index(index_name)
     }
 
     #[cfg(feature = "schema")]
+    /// Creates a DROP INDEX statement builder for the specified index and table
     fn drop_index<'a>(
         &self,
         index_name: &'a str,
@@ -1088,74 +1158,194 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     }
 
     #[cfg(feature = "schema")]
+    /// Creates an ALTER TABLE statement builder for the specified table name
     fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a> {
         schema::alter_table(table_name)
     }
 
+    /// Executes a SELECT query and returns all matching rows
+    ///
+    /// # Errors
+    ///
+    /// * If the query execution fails
+    /// * If there are connection errors
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
+
+    /// Executes a SELECT query and returns the first matching row, if any
+    ///
+    /// # Errors
+    ///
+    /// * If the query execution fails
+    /// * If there are connection errors
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
+
+    /// Executes an UPDATE statement and returns all affected rows
+    ///
+    /// # Errors
+    ///
+    /// * If the update execution fails
+    /// * If there are connection errors
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
     -> Result<Vec<Row>, DatabaseError>;
+
+    /// Executes an UPDATE statement and returns the first affected row, if any
+    ///
+    /// # Errors
+    ///
+    /// * If the update execution fails
+    /// * If there are connection errors
     async fn exec_update_first(
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
+
+    /// Executes an INSERT statement and returns the inserted row
+    ///
+    /// # Errors
+    ///
+    /// * If the insert execution fails
+    /// * If there are connection errors
+    /// * If no row was inserted
     async fn exec_insert(&self, statement: &InsertStatement<'_>) -> Result<Row, DatabaseError>;
+
+    /// Executes an UPSERT statement and returns all affected rows
+    ///
+    /// # Errors
+    ///
+    /// * If the upsert execution fails
+    /// * If there are connection errors
     async fn exec_upsert(&self, statement: &UpsertStatement<'_>)
     -> Result<Vec<Row>, DatabaseError>;
+
+    /// Executes an UPSERT statement and returns the first affected row
+    ///
+    /// # Errors
+    ///
+    /// * If the upsert execution fails
+    /// * If there are connection errors
+    /// * If no row was affected
     async fn exec_upsert_first(
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<Row, DatabaseError>;
+
+    /// Executes a multi-row UPSERT statement and returns all affected rows
+    ///
+    /// # Errors
+    ///
+    /// * If the upsert execution fails
+    /// * If there are connection errors
     async fn exec_upsert_multi(
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError>;
+
+    /// Executes a DELETE statement and returns all deleted rows
+    ///
+    /// # Errors
+    ///
+    /// * If the delete execution fails
+    /// * If there are connection errors
     async fn exec_delete(&self, statement: &DeleteStatement<'_>)
     -> Result<Vec<Row>, DatabaseError>;
+
+    /// Executes a DELETE statement and returns the first deleted row, if any
+    ///
+    /// # Errors
+    ///
+    /// * If the delete execution fails
+    /// * If there are connection errors
     async fn exec_delete_first(
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
 
-    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
-
+    /// Executes a raw SQL statement without returning results
+    ///
     /// # Errors
     ///
-    /// Will return `Err` if the close failed to trigger.
+    /// * If the statement execution fails
+    /// * If there are connection errors
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
+
+    /// Triggers the database connection to close
+    ///
+    /// # Errors
+    ///
+    /// * If the close failed to trigger
     fn trigger_close(&self) -> Result<(), DatabaseError> {
         Ok(())
     }
 
+    /// Closes the database connection
+    ///
+    /// # Errors
+    ///
+    /// * If the close operation fails
     async fn close(&self) -> Result<(), DatabaseError> {
         self.trigger_close()
     }
 
     #[cfg(feature = "schema")]
+    /// Executes a CREATE TABLE statement
+    ///
+    /// # Errors
+    ///
+    /// * If the table creation fails
+    /// * If the table already exists
+    /// * If there are connection errors
     async fn exec_create_table(
         &self,
         statement: &schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     #[cfg(feature = "schema")]
+    /// Executes a DROP TABLE statement
+    ///
+    /// # Errors
+    ///
+    /// * If the table drop fails
+    /// * If the table doesn't exist
+    /// * If there are connection errors
     async fn exec_drop_table(
         &self,
         statement: &schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     #[cfg(feature = "schema")]
+    /// Executes a CREATE INDEX statement
+    ///
+    /// # Errors
+    ///
+    /// * If the index creation fails
+    /// * If the index already exists
+    /// * If there are connection errors
     async fn exec_create_index(
         &self,
         statement: &schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     #[cfg(feature = "schema")]
+    /// Executes a DROP INDEX statement
+    ///
+    /// # Errors
+    ///
+    /// * If the index drop fails
+    /// * If the index doesn't exist
+    /// * If there are connection errors
     async fn exec_drop_index(
         &self,
         statement: &schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     #[cfg(feature = "schema")]
+    /// Executes an ALTER TABLE statement
+    ///
+    /// # Errors
+    ///
+    /// * If the alter table operation fails
+    /// * If the table doesn't exist
+    /// * If there are connection errors
     async fn exec_alter_table(
         &self,
         statement: &schema::AlterTableStatement<'_>,
@@ -1790,13 +1980,52 @@ pub trait DatabaseTransaction: Database + Send + Sync {
     ) -> Result<std::collections::BTreeSet<String>, DatabaseError>;
 }
 
+/// Trait for converting types from database representations with database context
+///
+/// Similar to `TryFrom` but provides access to the database instance during conversion.
+/// This is useful when converting database rows into domain objects that may need to
+/// perform additional queries to load related data.
+///
+/// # Type Parameters
+///
+/// * `T` - The input type to convert from (typically a database row or value)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use switchy_database::{TryFromDb, Database, DatabaseError, Row};
+/// use std::sync::Arc;
+///
+/// struct User {
+///     id: i64,
+///     name: String,
+/// }
+///
+/// #[async_trait]
+/// impl TryFromDb<Row> for User {
+///     type Error = DatabaseError;
+///
+///     async fn try_from_db(row: Row, db: Arc<Box<dyn Database>>) -> Result<Self, Self::Error> {
+///         Ok(User {
+///             id: row.get("id").unwrap().as_i64().unwrap(),
+///             name: row.get("name").unwrap().as_str().unwrap().to_string(),
+///         })
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait TryFromDb<T>
 where
     Self: Sized,
 {
+    /// The error type returned when conversion fails
     type Error;
 
+    /// Attempts to convert from `T` to `Self` with database context
+    ///
+    /// # Errors
+    ///
+    /// * Returns `Self::Error` if conversion fails
     async fn try_from_db(value: T, db: Arc<Box<dyn Database>>) -> Result<Self, Self::Error>;
 }
 
@@ -1833,13 +2062,47 @@ where
     }
 }
 
+/// Trait for converting types into database representations with database context
+///
+/// This is the reciprocal of [`TryFromDb`], providing the ability to convert domain
+/// objects into database representations while having access to the database instance.
+/// Automatically implemented for all types that implement [`TryFromDb`].
+///
+/// # Type Parameters
+///
+/// * `T` - The output type to convert into (typically a database row or value)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use switchy_database::{TryIntoDb, Database, DatabaseError};
+/// use std::sync::Arc;
+///
+/// struct User {
+///     id: i64,
+///     name: String,
+/// }
+///
+/// // Automatically available if User implements TryFromDb<Row>
+/// async fn save_user(user: User, db: Arc<Box<dyn Database>>) -> Result<(), DatabaseError> {
+///     // Convert user into database representation
+///     let _row: Row = user.try_into_db(db).await?;
+///     Ok(())
+/// }
+/// ```
 #[async_trait]
 pub trait TryIntoDb<T>
 where
     Self: Sized,
 {
+    /// The error type returned when conversion fails
     type Error;
 
+    /// Attempts to convert from `Self` to `T` with database context
+    ///
+    /// # Errors
+    ///
+    /// * Returns `Self::Error` if conversion fails
     async fn try_into_db(self, db: Arc<Box<dyn Database>>) -> Result<T, Self::Error>;
 }
 
