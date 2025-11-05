@@ -74,6 +74,17 @@ pub async fn get_download_locations(
         .to_value_type()?)
 }
 
+/// Creates or updates a download task in the database.
+///
+/// If a task already exists with the same file path, type, source, and IDs, it will be updated.
+///
+/// # Panics
+///
+/// * If serializing the download source to JSON fails
+///
+/// # Errors
+///
+/// * If the database operation fails
 pub async fn create_download_task(
     db: &LibraryDatabase,
     task: &CreateDownloadTask,
@@ -113,6 +124,13 @@ pub async fn create_download_task(
         .to_value_type()?)
 }
 
+/// Retrieves all download tasks from the database.
+///
+/// Tasks are sorted by ID in descending order (newest first).
+///
+/// # Errors
+///
+/// * If the database operation fails
 #[cfg(feature = "api")]
 pub async fn get_download_tasks(
     db: &LibraryDatabase,
@@ -125,6 +143,13 @@ pub async fn get_download_tasks(
         .to_value_type()?)
 }
 
+/// Deletes a download task from the database.
+///
+/// Returns the deleted task if found, or `None` if no task existed with that ID.
+///
+/// # Errors
+///
+/// * If the database operation fails
 #[cfg(feature = "api")]
 pub async fn delete_download_task(
     db: &LibraryDatabase,
