@@ -70,6 +70,8 @@ impl<T> WebsocketSender for TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
+    /// Sends a message to a specific connection, routing through tunnel if needed.
+    ///
     /// # Panics
     ///
     /// * If `connection_id` cannot be parsed as a `u64`
@@ -90,6 +92,7 @@ where
         Ok(())
     }
 
+    /// Sends a message to all connections, including both local and tunnel connections.
     async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         if self.send_tunnel(data, true, None, None).is_err() {
             log::error!("Failed to send tunnel message");
@@ -100,6 +103,8 @@ where
         Ok(())
     }
 
+    /// Sends a message to all connections except the specified one.
+    ///
     /// # Panics
     ///
     /// * If `connection_id` cannot be parsed as a `u64`
@@ -125,6 +130,7 @@ where
         Ok(())
     }
 
+    /// Sends a ping control message to the underlying connection.
     async fn ping(&self) -> Result<(), WebsocketSendError> {
         self.root_sender.ping().await
     }

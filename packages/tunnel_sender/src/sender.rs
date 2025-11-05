@@ -105,6 +105,8 @@ fn wrap_to_500<E: std::error::Error + Send + 'static>(e: E) -> TunnelRequestErro
 
 #[async_trait]
 impl WebsocketSender for TunnelSenderHandle {
+    /// Sends a message to a specific connection through the tunnel.
+    ///
     /// # Panics
     ///
     /// * If the `sender` `RwLock` is poisoned
@@ -125,6 +127,8 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// Sends a message to all connections through the tunnel.
+    ///
     /// # Panics
     ///
     /// * If the `sender` `RwLock` is poisoned
@@ -141,6 +145,8 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// Sends a message to all connections except the specified one through the tunnel.
+    ///
     /// # Panics
     ///
     /// * If the `sender` `RwLock` is poisoned
@@ -161,6 +167,8 @@ impl WebsocketSender for TunnelSenderHandle {
         Ok(())
     }
 
+    /// Sends a ping control message through the tunnel.
+    ///
     /// # Panics
     ///
     /// * If the `sender` `RwLock` is poisoned
