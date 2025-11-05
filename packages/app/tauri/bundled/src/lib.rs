@@ -66,7 +66,8 @@ impl service::Processor for service::Service {
     ///
     /// # Errors
     ///
-    /// * Returns an error if the server handle fails to join during shutdown
+    /// * If the server handle fails to join during shutdown
+    /// * If an IO error occurs in the embedded server during shutdown
     async fn process_command(
         ctx: Arc<RwLock<Context>>,
         command: Command,
