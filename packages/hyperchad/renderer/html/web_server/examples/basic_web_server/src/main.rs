@@ -1,3 +1,113 @@
+//! Basic web server example demonstrating `HyperChad` HTML renderer with web server integration.
+//!
+//! This example showcases a complete multi-page web application built with `HyperChad`,
+//! featuring server-side rendering, type-safe HTML generation, and JSON API endpoints.
+//! It demonstrates best practices for structuring a `HyperChad` web application with
+//! reusable components and clean routing.
+//!
+//! # Features
+//!
+//! * Server-side rendering with type-safe HTML generation using the `container!` macro
+//! * Component-based architecture with reusable page creation functions
+//! * Built-in routing for multiple pages (home, about, contact)
+//! * JSON API endpoints for dynamic functionality
+//! * Modern HTML structure with semantic elements and responsive design
+//! * Integration with Actix Web server via `HyperChad`'s web server backend
+//!
+//! # Architecture
+//!
+//! The application is structured around three main concepts:
+//!
+//! * **Page Components** - Functions that return `Container` instances with the page structure
+//! * **Router Configuration** - Central router that maps URL paths to handler functions
+//! * **Web Server Integration** - Actix Web backend that serves the rendered HTML
+//!
+//! # Routes
+//!
+//! The example implements the following routes:
+//!
+//! * `GET /` - Home page with welcome message and feature cards
+//! * `GET /about` - About page with framework information
+//! * `GET /contact` - Contact page with a form
+//! * `GET /api/status` - JSON API endpoint returning server status
+//!
+//! # Running the Example
+//!
+//! From the `MoosicBox` root directory:
+//!
+//! ```sh
+//! # Build and run
+//! nix develop .#fltk-hyperchad --command bash -c \
+//!   "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo run"
+//!
+//! # Or just build
+//! nix develop .#fltk-hyperchad --command bash -c \
+//!   "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo build"
+//! ```
+//!
+//! The server will start on `http://localhost:8343` by default.
+//!
+//! # Key Concepts
+//!
+//! ## Type-Safe HTML Generation
+//!
+//! HTML is generated using the `container!` macro, which provides compile-time safety
+//! and type checking for HTML structure:
+//!
+//! ```rust,ignore
+//! container! {
+//!     div class="page" {
+//!         header class="header" {
+//!             h1 { "Welcome!" }
+//!         }
+//!         main class="main" {
+//!             span { "Content goes here" }
+//!         }
+//!     }
+//! }.into()
+//! ```
+//!
+//! ## Component-Based Design
+//!
+//! Pages are created as reusable functions that return `Container` instances,
+//! promoting code reuse and maintainability:
+//!
+//! ```rust,ignore
+//! fn create_home_page() -> Container {
+//!     container! {
+//!         div class="page" {
+//!             // Page structure
+//!         }
+//!     }.into()
+//! }
+//! ```
+//!
+//! ## Async Route Handlers
+//!
+//! Routes are defined with async handlers that can return either `Container` for
+//! HTML pages or `Content::Raw` for API responses:
+//!
+//! ```rust,ignore
+//! router.add_route_result("/", |_req: RouteRequest| async move {
+//!     Ok(create_home_page())
+//! });
+//!
+//! router.add_route_result("/api/status", |_req: RouteRequest| async move {
+//!     let response = json!({"status": "ok"});
+//!     Ok(Content::Raw {
+//!         data: response.to_string().into(),
+//!         content_type: "application/json".to_string(),
+//!     })
+//! });
+//! ```
+//!
+//! # Technology Stack
+//!
+//! * **`HyperChad`** - Web framework with type-safe HTML generation and routing
+//! * **`Switchy`** - Async runtime abstraction for cross-platform async I/O
+//! * **Actix Web** - High-performance HTTP server (via `HyperChad` integration)
+//! * **Serde JSON** - JSON serialization for API responses
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
