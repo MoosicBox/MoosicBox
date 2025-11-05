@@ -69,6 +69,14 @@ pub struct GetAudioZones {
     limit: Option<u32>,
 }
 
+/// HTTP endpoint for retrieving a paginated list of audio zones.
+///
+/// Returns all configured audio zones with support for pagination via `offset` and `limit`
+/// query parameters.
+///
+/// # Errors
+///
+/// * If there is a database error while fetching audio zones
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
@@ -124,6 +132,14 @@ pub struct GetAudioZoneWithSessions {
     limit: Option<u32>,
 }
 
+/// HTTP endpoint for retrieving audio zones along with their active playback sessions.
+///
+/// Returns a paginated list of audio zones that currently have active playback sessions,
+/// combining data from both the configuration and library databases.
+///
+/// # Errors
+///
+/// * If there is a database error while fetching audio zones or sessions
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
@@ -180,6 +196,14 @@ pub struct CreateAudioZoneQuery {
     pub name: String,
 }
 
+/// HTTP endpoint for creating a new audio zone.
+///
+/// Creates a new audio zone with the specified name from the query parameters.
+/// If the `events` feature is enabled, triggers an audio zones updated event after creation.
+///
+/// # Errors
+///
+/// * If there is a database error while creating the audio zone
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
@@ -223,6 +247,15 @@ pub struct DeleteAudioZoneQuery {
     pub id: u64,
 }
 
+/// HTTP endpoint for deleting an audio zone.
+///
+/// Deletes the audio zone with the specified ID from the query parameters.
+/// If the `events` feature is enabled, triggers an audio zones updated event after deletion.
+///
+/// # Errors
+///
+/// * If there is a database error while deleting the audio zone
+/// * If no audio zone with the specified ID exists (returns HTTP 404)
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
@@ -263,6 +296,14 @@ pub async fn delete_audio_zone_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAudioZoneQuery {}
 
+/// HTTP endpoint for updating an existing audio zone.
+///
+/// Updates an audio zone's properties based on the data provided in the request body.
+/// If the `events` feature is enabled, triggers an audio zones updated event after the update.
+///
+/// # Errors
+///
+/// * If there is a database error while updating the audio zone
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Audio Zone"],
