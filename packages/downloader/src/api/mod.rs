@@ -55,6 +55,7 @@ pub fn bind_services<
         .service(remove_download_location_endpoint)
 }
 
+/// `OpenAPI` specification for the downloader API endpoints.
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
 #[openapi(
