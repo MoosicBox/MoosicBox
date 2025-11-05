@@ -52,6 +52,10 @@ mod simulator;
 use actix_web::{HttpRequest, Responder, get, web};
 #[cfg(feature = "actix")]
 use actix_web_opentelemetry::RequestMetrics;
+/// Middleware for tracing HTTP requests with OpenTelemetry.
+///
+/// This middleware automatically creates spans for incoming HTTP requests and records
+/// relevant metadata such as HTTP method, path, and status code.
 #[cfg(feature = "actix")]
 pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
@@ -174,6 +178,13 @@ pub fn get_http_metrics_handler() -> Box<dyn HttpMetricsHandler> {
 }
 
 /// Actix web endpoint for serving telemetry metrics.
+///
+/// This endpoint delegates to the configured [`HttpMetricsHandler`] to serve metrics
+/// in the appropriate format (e.g., Prometheus text format).
+///
+/// # Errors
+///
+/// * Returns errors from the underlying [`HttpMetricsHandler::call`] method
 #[allow(clippy::future_not_send)]
 #[cfg(feature = "actix")]
 #[tracing::instrument]
