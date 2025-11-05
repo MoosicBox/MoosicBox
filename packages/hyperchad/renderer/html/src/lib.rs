@@ -371,6 +371,11 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
     ///
     /// Generates a full HTML page including meta tags, CSS links, inline styles,
     /// and the rendered content wrapped in proper HTML structure.
+    ///
+    /// # Panics
+    ///
+    /// * If writing responsive CSS to an in-memory buffer fails (should never happen)
+    /// * If the generated CSS contains invalid UTF-8 (should never happen as CSS is ASCII)
     fn root_html(
         &self,
         _headers: &BTreeMap<String, String>,

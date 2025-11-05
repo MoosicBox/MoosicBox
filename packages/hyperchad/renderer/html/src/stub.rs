@@ -30,6 +30,7 @@ pub struct StubApp<T: HtmlTagRenderer> {
 
 impl<T: HtmlTagRenderer> StubApp<T> {
     /// Creates a new stub app with the given tag renderer.
+    #[must_use]
     pub const fn new(tag_renderer: T) -> Self {
         Self {
             tag_renderer,
