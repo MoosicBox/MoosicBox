@@ -635,6 +635,10 @@ pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'sta
 }
 
 impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R> {
+    /// Runs the application by parsing command-line arguments and executing the appropriate command.
+    ///
+    /// Supports subcommands: `serve`, `gen`, `clean`, and `dynamic-routes`.
+    ///
     /// # Errors
     ///
     /// * If the `App` fails to start
@@ -655,6 +659,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         }
     }
 
+    /// Handles the serve command by starting the application server and running the render loop.
+    ///
     /// # Errors
     ///
     /// * If the `App` fails to serve
@@ -694,6 +700,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         })
     }
 
+    /// Prints all dynamic routes registered in the router to stdout.
+    ///
     /// # Errors
     ///
     /// * If the `App` fails to generate the dynamic routes
@@ -724,6 +732,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(())
     }
 
+    /// Generates static output for all routes (synchronous version).
+    ///
     /// # Errors
     ///
     /// * If the `Renderer` fails to generate the output
@@ -742,6 +752,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(())
     }
 
+    /// Cleans the generated output directory (synchronous version).
+    ///
     /// # Errors
     ///
     /// * If the `Renderer` fails to clean the output
@@ -760,6 +772,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(())
     }
 
+    /// Starts serving the application and returns a runner (synchronous version).
+    ///
     /// # Errors
     ///
     /// * If the `App` fails to serve
