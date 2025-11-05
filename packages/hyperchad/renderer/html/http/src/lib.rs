@@ -40,6 +40,10 @@ use hyperchad_renderer::{Content, HtmlTagRenderer};
 use hyperchad_renderer_html::html::container_element_to_html;
 use hyperchad_router::{RouteRequest, Router};
 
+/// Re-export of the `http` crate for constructing HTTP requests and responses.
+///
+/// This re-export provides access to HTTP types like [`http::Response`], [`http::Request`],
+/// and [`http::StatusCode`] used by this crate's API.
 pub use http;
 
 #[cfg(feature = "actions")]
