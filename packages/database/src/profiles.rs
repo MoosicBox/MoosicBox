@@ -32,7 +32,7 @@
 //!
 //! # Actix-web Integration
 //!
-//! When the `api` feature is enabled, [`LibraryDatabase`] implements actix-web's
+//! When the `api` feature is enabled, [`LibraryDatabase`](crate::profiles::LibraryDatabase) implements actix-web's
 //! `FromRequest` trait, automatically extracting the database for the current
 //! profile from request headers:
 //!

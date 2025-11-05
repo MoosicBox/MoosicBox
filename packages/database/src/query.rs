@@ -42,7 +42,7 @@
 //!
 //! # Expression System
 //!
-//! The module provides an [`Expression`] trait and various expression types
+//! The module provides an [`Expression`](crate::query::Expression) trait and various expression types
 //! for building complex WHERE clauses and query conditions:
 //!
 //! * **Comparison**: `Eq`, `NotEq`, `Gt`, `Gte`, `Lt`, `Lte`

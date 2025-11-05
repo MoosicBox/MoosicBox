@@ -23,7 +23,7 @@
 //!
 //! # Actix-web Integration
 //!
-//! When the `api` feature is enabled, [`ConfigDatabase`] implements actix-web's
+//! When the `api` feature is enabled, [`ConfigDatabase`](crate::config::ConfigDatabase) implements actix-web's
 //! `FromRequest` trait, allowing automatic extraction in handlers:
 //!
 //! ```rust,ignore
