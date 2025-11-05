@@ -407,6 +407,11 @@ pub enum WebsocketMessageError {
 }
 
 impl WsServer {
+    /// Create a new WebSocket server instance.
+    ///
+    /// Initializes an empty server with no active connections. The server is ready
+    /// to accept WebSocket connections and route HTTP requests through tunnel connections.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sessions: BTreeMap::new(),
@@ -571,6 +576,18 @@ static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<BTreeMap<String, ConnId
 
 impl service::Handle {
     /// Register client message sender and obtain connection ID.
+    ///
+    /// Establishes a new WebSocket connection with the server and returns a unique
+    /// connection ID. The connection can be either a sender (handling HTTP requests)
+    /// or a client (initiating WebSocket requests).
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`CommanderError`] if the server command channel is closed or the server panicked.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the connection response channel is dropped before receiving the connection ID.
     pub async fn connect(
         &self,
         client_id: &str,
@@ -590,6 +607,18 @@ impl service::Handle {
         Ok(res_rx.await.unwrap())
     }
 
+    /// Send a WebSocket request to a client connection.
+    ///
+    /// Routes a WebSocket request from one connection to another client's connection.
+    /// The request is assigned a unique request ID for tracking the response.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WsRequestError`] if the database operation fails.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if sending the command to the server fails.
     pub async fn ws_request(
         &self,
         conn_id: ConnId,
@@ -611,6 +640,19 @@ impl service::Handle {
         Ok(())
     }
 
+    /// Broadcast or send a WebSocket message to client connections.
+    ///
+    /// Sends a WebSocket message to specific connections (via `to_connection_ids`),
+    /// broadcasts to all except specific connections (via `exclude_connection_ids`),
+    /// or broadcasts to all client connections.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WsRequestError`] if the database operation fails.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if sending the command to the server fails.
     pub async fn ws_message(&self, message: TunnelWsResponse) -> Result<(), WsRequestError> {
         self.send_command_async(Command::WsMessage { message })
             .await
@@ -619,6 +661,18 @@ impl service::Handle {
         Ok(())
     }
 
+    /// Send a WebSocket response back to the originating connection.
+    ///
+    /// Routes a WebSocket response back to the connection that initiated the request,
+    /// identified by the request ID in the response.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`WsRequestError`] if the database operation fails.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if sending the command to the server fails.
     pub async fn ws_response(&self, response: TunnelWsResponse) -> Result<(), WsRequestError> {
         self.send_command_async(Command::WsResponse { response })
             .await
@@ -627,7 +681,14 @@ impl service::Handle {
         Ok(())
     }
 
-    /// Unregister message sender and broadcast disconnection message to current room.
+    /// Unregister message sender and clean up connection resources.
+    ///
+    /// Removes the connection from the server and cleans up all associated state
+    /// including database records and in-memory caches.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if sending the disconnect command to the server fails.
     pub async fn disconnect(&self, conn: ConnId) {
         // unwrap: ws server should not have been dropped
         self.send_command_async(Command::Disconnect { conn })
@@ -635,6 +696,15 @@ impl service::Handle {
             .unwrap();
     }
 
+    /// Send an HTTP tunnel response to the request handler.
+    ///
+    /// Routes a response chunk from the client back to the HTTP request handler
+    /// that is waiting for the response. This is used for streaming HTTP responses
+    /// through the WebSocket tunnel.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if sending the response command to the server fails.
     pub async fn response(&self, conn_id: ConnId, response: TunnelResponse) {
         self.send_command_async(Command::Response { conn_id, response })
             .await

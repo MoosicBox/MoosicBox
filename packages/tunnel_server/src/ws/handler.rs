@@ -18,8 +18,23 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Echo text & binary messages received from the client, respond to ping messages, and monitor
-/// connection health to detect network issues and free up resources.
+/// Handle WebSocket connection lifecycle and message routing.
+///
+/// This function manages the WebSocket connection for a tunnel client. It handles
+/// incoming messages (ping/pong, text, binary), routes tunnel responses, maintains
+/// connection health via heartbeats, and cleans up resources on disconnection.
+///
+/// The function runs until the connection is closed by either the client or server,
+/// or until a heartbeat timeout occurs.
+///
+/// # Errors
+///
+/// * Returns [`CommanderError`] if communication with the WebSocket server fails.
+///
+/// # Panics
+///
+/// * Panics if sending a pong response fails.
+/// * Panics if parsing binary tunnel response data fails.
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub async fn handle_ws(
     ws_server: super::server::service::Handle,

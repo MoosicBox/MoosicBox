@@ -22,6 +22,16 @@ pub struct ConnectRequest {
     sender: Option<bool>,
 }
 
+/// WebSocket endpoint for establishing tunnel connections.
+///
+/// This endpoint upgrades an HTTP connection to WebSocket and establishes a
+/// persistent tunnel connection for the client. The connection can act as either
+/// a sender (responding to HTTP requests) or a client (initiating WebSocket requests).
+///
+/// # Errors
+///
+/// * Returns an error if the WebSocket handshake fails.
+/// * Returns [`ErrorUnauthorized`] if the signature token is invalid.
 #[get("/ws")]
 #[allow(clippy::similar_names, clippy::future_not_send)]
 pub async fn websocket(
