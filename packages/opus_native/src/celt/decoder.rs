@@ -223,7 +223,7 @@ impl CeltState {
 ///
 /// ```rust,no_run
 /// # #[cfg(feature = "celt")]
-/// # {
+/// # fn example() -> Result<(), moosicbox_opus_native::Error> {
 /// use moosicbox_opus_native::celt::CeltDecoder;
 /// use moosicbox_opus_native::{SampleRate, Channels};
 ///
@@ -236,7 +236,7 @@ impl CeltState {
 /// // Set band range for fullband
 /// decoder.set_start_band(0);
 /// decoder.set_end_band(21);
-/// # Ok::<(), moosicbox_opus_native::Error>(())
+/// # Ok(())
 /// # }
 /// ```
 pub struct CeltDecoder {
