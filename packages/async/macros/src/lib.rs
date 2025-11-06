@@ -306,6 +306,19 @@ fn inject_item(item: &mut Item, injector: &mut YieldInjector) {
 /// after each await point, enabling deterministic testing with the simulator runtime.
 ///
 /// When the `simulator` feature is disabled, this macro has no effect and returns the input unchanged.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_async_macros::inject_yields;
+///
+/// #[inject_yields]
+/// async fn fetch_data(url: &str) -> Result<String, std::io::Error> {
+///     // Yield points are automatically inserted after each .await
+///     let response = async { Ok("data".to_string()) }.await;
+///     response
+/// }
+/// ```
 #[allow(clippy::missing_const_for_fn)]
 #[proc_macro_attribute]
 pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {

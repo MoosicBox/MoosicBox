@@ -176,6 +176,7 @@ macro_rules! async_service_body {
         }
 
         impl Service {
+            #[must_use]
             pub fn new(ctx: $context) -> Self {
                 let (tx, rx) = $crate::unbounded();
                 Self {
@@ -187,6 +188,7 @@ macro_rules! async_service_body {
                 }
             }
 
+            #[must_use]
             pub fn with_name(mut self, name: &str) -> Self {
                 self.name = $crate::Arc::new(name.to_owned());
                 self
@@ -246,6 +248,7 @@ macro_rules! async_service_body {
                 )
             }
 
+            #[must_use]
             pub fn handle(&self) -> Handle {
                 Handle {
                     name: self.name.clone(),

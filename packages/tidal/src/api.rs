@@ -313,6 +313,14 @@ pub struct TidalDeviceAuthorizationQuery {
     )
 )]
 #[route("/auth/device-authorization", method = "POST")]
+/// Initiates Tidal device authorization flow.
+///
+/// Starts the OAuth 2.0 device authorization flow, returning a verification URL
+/// and device code for the user to complete authorization.
+///
+/// # Errors
+///
+/// * `ErrorInternalServerError` - If the HTTP request to Tidal's authorization endpoint fails
 pub async fn device_authorization_endpoint(
     query: web::Query<TidalDeviceAuthorizationQuery>,
 ) -> Result<Json<Value>> {
@@ -354,6 +362,14 @@ pub struct TidalDeviceAuthorizationTokenQuery {
     )
 )]
 #[route("/auth/device-authorization/token", method = "POST")]
+/// Completes Tidal device authorization by exchanging device code for access token.
+///
+/// Exchanges the device code from the authorization flow for an access token and
+/// optionally persists the credentials to the database.
+///
+/// # Errors
+///
+/// * `ErrorInternalServerError` - If the token exchange request fails or database persistence fails
 pub async fn device_authorization_token_endpoint(
     query: web::Query<TidalDeviceAuthorizationTokenQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
@@ -402,6 +418,16 @@ pub struct TidalTrackFileUrlQuery {
 )]
 #[route("/track/url", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Retrieves the playback URL for a Tidal track.
+///
+/// Returns the streaming URL for the specified track at the requested audio quality level.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the track ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackFileUrlQuery>,
@@ -451,6 +477,16 @@ pub struct TidalTrackPlaybackInfoQuery {
 )]
 #[route("/track/playback-info", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Retrieves detailed playback information for a Tidal track.
+///
+/// Returns metadata needed for track playback including audio quality, format, and streaming details.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the track ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackPlaybackInfoQuery>,
@@ -512,6 +548,15 @@ pub struct TidalFavoriteArtistsQuery {
 )]
 #[route("/favorites/artists", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches the user's favorite artists from Tidal.
+///
+/// Returns a paginated list of artists the authenticated user has marked as favorites.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
@@ -575,6 +620,16 @@ pub struct TidalAddFavoriteArtistsQuery {
 )]
 #[route("/favorites/artists", method = "POST")]
 #[allow(clippy::future_not_send)]
+/// Adds an artist to the user's Tidal favorites.
+///
+/// Marks the specified artist as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the artist ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteArtistsQuery>,
@@ -635,6 +690,16 @@ pub struct TidalRemoveFavoriteArtistsQuery {
 )]
 #[route("/favorites/artists", method = "DELETE")]
 #[allow(clippy::future_not_send)]
+/// Removes an artist from the user's Tidal favorites.
+///
+/// Unmarks the specified artist as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the artist ID does not exist or is not in favorites
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteArtistsQuery>,
@@ -701,6 +766,15 @@ pub struct TidalFavoriteAlbumsQuery {
 )]
 #[route("/favorites/albums", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches the user's favorite albums from Tidal.
+///
+/// Returns a paginated list of albums the authenticated user has marked as favorites.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
@@ -770,6 +844,16 @@ pub struct TidalAddFavoriteAlbumsQuery {
 )]
 #[route("/favorites/albums", method = "POST")]
 #[allow(clippy::future_not_send)]
+/// Adds an album to the user's Tidal favorites.
+///
+/// Marks the specified album as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the album ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteAlbumsQuery>,
@@ -830,6 +914,16 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
 )]
 #[route("/favorites/albums", method = "DELETE")]
 #[allow(clippy::future_not_send)]
+/// Removes an album from the user's Tidal favorites.
+///
+/// Unmarks the specified album as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the album ID does not exist or is not in favorites
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
@@ -890,6 +984,16 @@ pub struct TidalAddFavoriteTracksQuery {
 )]
 #[route("/favorites/tracks", method = "POST")]
 #[allow(clippy::future_not_send)]
+/// Adds a track to the user's Tidal favorites.
+///
+/// Marks the specified track as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the track ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteTracksQuery>,
@@ -950,6 +1054,16 @@ pub struct TidalRemoveFavoriteTracksQuery {
 )]
 #[route("/favorites/tracks", method = "DELETE")]
 #[allow(clippy::future_not_send)]
+/// Removes a track from the user's Tidal favorites.
+///
+/// Unmarks the specified track as a favorite for the authenticated user.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the track ID does not exist or is not in favorites
+/// * `ErrorInternalServerError` - If the request to Tidal fails
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteTracksQuery>,
@@ -1016,6 +1130,15 @@ pub struct TidalFavoriteTracksQuery {
 )]
 #[route("/favorites/tracks", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches the user's favorite tracks from Tidal.
+///
+/// Returns a paginated list of tracks the authenticated user has marked as favorites.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
@@ -1106,6 +1229,16 @@ impl From<AlbumType> for TidalAlbumType {
 )]
 #[route("/artists/albums", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches albums by a specific artist from Tidal.
+///
+/// Returns a paginated list of albums for the specified artist.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the artist ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
@@ -1169,6 +1302,16 @@ pub struct TidalAlbumTracksQuery {
 )]
 #[route("/albums/tracks", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches tracks from a specific album on Tidal.
+///
+/// Returns a paginated list of tracks for the specified album.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the album ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
@@ -1227,6 +1370,16 @@ pub struct TidalAlbumQuery {
 )]
 #[route("/albums", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches metadata for a specific album from Tidal.
+///
+/// Returns detailed information about the specified album including title, artist, tracks count, and quality.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the album ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
@@ -1282,6 +1435,16 @@ pub struct TidalArtistQuery {
 )]
 #[route("/artists", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches metadata for a specific artist from Tidal.
+///
+/// Returns detailed information about the specified artist including name, popularity, and cover art.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the artist ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
@@ -1337,6 +1500,16 @@ pub struct TidalTrackQuery {
 )]
 #[route("/tracks", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Fetches metadata for a specific track from Tidal.
+///
+/// Returns detailed information about the specified track including title, artist, album, duration, and quality.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorNotFound` - If the track ID does not exist
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
@@ -1406,6 +1579,15 @@ pub struct TidalSearchQuery {
 )]
 #[route("/search", method = "GET")]
 #[allow(clippy::future_not_send)]
+/// Searches Tidal's catalog for artists, albums, and tracks.
+///
+/// Performs a fuzzy search across Tidal's library and returns matching artists, albums, and tracks.
+/// Requires authentication via access token in the request header.
+///
+/// # Errors
+///
+/// * `ErrorUnauthorized` - If no valid access token is provided
+/// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,

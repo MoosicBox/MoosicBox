@@ -39,6 +39,14 @@ pub enum FramePacking {
 
 /// Decode frame length from packet data.
 ///
+/// Parses the frame length encoding from RFC 6716 Section 3.2.1.
+///
+/// # Returns
+///
+/// Returns a tuple of (`frame_length`, `bytes_consumed`) where:
+/// * `frame_length` - The decoded frame length in bytes (0-1275)
+/// * `bytes_consumed` - Number of bytes consumed from input (1 or 2)
+///
 /// # Errors
 ///
 /// * `PacketTooShort` - If the data is empty or doesn't contain enough bytes for the length encoding

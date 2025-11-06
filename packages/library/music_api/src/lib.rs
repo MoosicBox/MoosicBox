@@ -296,6 +296,9 @@ impl MusicApi for LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
+    /// # Panics
+    ///
+    /// * Will panic if the number of album versions exceeds `u32::MAX`
     async fn album_versions(
         &self,
         album_id: &Id,
@@ -524,6 +527,10 @@ impl MusicApi for LibraryMusicApi {
         }))
     }
 
+    /// # Panics
+    ///
+    /// * Will panic if the audio file cannot be opened or if metadata cannot be read when using
+    ///   `AudioFormat::Source`
     async fn track_size(
         &self,
         track: TrackOrId,

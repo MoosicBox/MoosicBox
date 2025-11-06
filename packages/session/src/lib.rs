@@ -52,12 +52,30 @@ use moosicbox_session_models::{
 use switchy_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 
 mod db;
+
+/// Session data models and types.
+///
+/// This module re-exports types from `moosicbox_session_models`, including:
+/// * [`models::Session`] - A playback session
+/// * [`models::SessionPlaylist`] - A session's playlist
+/// * [`models::CreateSession`] - Parameters for creating a new session
+/// * [`models::UpdateSession`] - Parameters for updating a session
+/// * [`models::Connection`] - A registered connection
+/// * [`models::RegisterPlayer`] - Parameters for registering a player
 pub use moosicbox_session_models as models;
 use thiserror::Error;
 
+/// REST API endpoints for session management.
+///
+/// Available when the `api` feature is enabled. Provides HTTP endpoints for
+/// managing sessions, playlists, connections, and players.
 #[cfg(feature = "api")]
 pub mod api;
 
+/// Event notification system for player updates.
+///
+/// Available when the `events` feature is enabled. Provides a subscription-based
+/// event system for listening to player state changes.
 #[cfg(feature = "events")]
 pub mod events;
 

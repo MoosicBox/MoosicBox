@@ -7,6 +7,8 @@ use crate::db::models::QobuzConfig;
 
 use self::models::{QobuzAppConfig, QobuzAppSecret};
 
+/// Creates or updates a Qobuz app secret for a specific timezone.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -28,6 +30,8 @@ pub async fn create_qobuz_app_secret(
     Ok(())
 }
 
+/// Creates or updates a Qobuz app configuration with bundle version and app ID.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -46,6 +50,8 @@ pub async fn create_qobuz_app_config(
         .to_value_type()?)
 }
 
+/// Creates or updates a Qobuz user configuration with authentication credentials.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -68,6 +74,8 @@ pub async fn create_qobuz_config(
     Ok(())
 }
 
+/// Retrieves all stored Qobuz app secrets from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -81,6 +89,8 @@ pub async fn get_qobuz_app_secrets(
         .to_value_type()?)
 }
 
+/// Retrieves the most recent Qobuz app configuration from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -96,6 +106,8 @@ pub async fn get_qobuz_app_config(
     Ok(app_configs.last().cloned())
 }
 
+/// Retrieves the most recent Qobuz user configuration from the database.
+///
 /// # Errors
 ///
 /// * If a database error occurs
@@ -111,6 +123,8 @@ pub async fn get_qobuz_config(
     Ok(configs.last().cloned())
 }
 
+/// Retrieves the Qobuz access token from the stored user configuration.
+///
 /// # Errors
 ///
 /// * If a database error occurs

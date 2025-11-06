@@ -13,6 +13,8 @@ pub mod models;
 
 use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
+/// Creates or updates a download location in the database.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -29,6 +31,8 @@ pub async fn create_download_location(
         .to_value_type()?)
 }
 
+/// Deletes a download location from the database.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -45,6 +49,8 @@ pub async fn delete_download_location(
         .to_value_type()?)
 }
 
+/// Retrieves a download location by ID from the database.
+///
 /// # Errors
 ///
 /// * If there was a database error
@@ -61,6 +67,8 @@ pub async fn get_download_location(
         .to_value_type()?)
 }
 
+/// Retrieves all download locations from the database.
+///
 /// # Errors
 ///
 /// * If there was a database error

@@ -79,6 +79,7 @@ pub fn init(database: Arc<Box<dyn Database>>) {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct ConfigDatabase {
+    /// The global database instance wrapped in Arc for thread-safe sharing
     pub database: Arc<Box<dyn Database>>,
 }
 

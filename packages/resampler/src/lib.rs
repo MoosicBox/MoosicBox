@@ -137,6 +137,10 @@ where
     /// Returns the resampled samples in an interleaved format. Returns `None`
     /// if the internal buffer does not yet contain enough samples to produce output
     /// (requires at least `duration` samples accumulated).
+    ///
+    /// # Panics
+    ///
+    /// * If the internal resampler's `process_into_buffer` operation fails
     pub fn resample(&mut self, input: &AudioBuffer<f32>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
         convert_samples(input, &mut self.input);
@@ -154,6 +158,11 @@ where
     /// Returns the resampled samples as an `AudioBuffer`. Returns `None` if the
     /// internal buffer does not yet contain enough samples to produce output
     /// (requires at least `duration` samples accumulated).
+    ///
+    /// # Panics
+    ///
+    /// * If the internal resampler's `process_into_buffer` operation fails
+    /// * If the audio is not stereo (2-channel) - the `to_audio_buffer` conversion will panic
     pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
@@ -167,6 +176,10 @@ where
     /// meet the required `duration` and produces the final resampled output.
     ///
     /// Returns `None` if the internal buffer is empty (no samples to flush).
+    ///
+    /// # Panics
+    ///
+    /// * If the internal resampler's `process_into_buffer` operation fails
     #[allow(unused)]
     pub fn flush(&mut self) -> Option<&[T]> {
         let len = self.input[0].len();

@@ -169,13 +169,24 @@ pub fn pick_random_unused_port() -> Option<Port> {
 /// This trait is implemented for [`Range<u16>`] and [`RangeInclusive<u16>`], allowing
 /// [`pick_unused_port`] to accept both exclusive and inclusive port ranges.
 pub trait PortRange {
-    /// Converts the range into an iterator of port numbers
+    /// Converts the range into an iterator of port numbers by consuming the range
+    ///
+    /// # Returns
+    ///
+    /// Returns an iterator that yields each port number in the range
     fn into_iter(self) -> impl Iterator<Item = u16>;
 
-    /// Converts the range into an iterator of port numbers
+    /// Creates an iterator of port numbers from a borrowed range
+    ///
+    /// # Returns
+    ///
+    /// Returns an iterator that yields each port number in the range
     fn iter(&self) -> impl Iterator<Item = u16>;
 }
 
+/// Implementation of [`PortRange`] for exclusive ranges (`start..end`)
+///
+/// Allows using exclusive port ranges with [`pick_unused_port`].
 impl PortRange for Range<u16> {
     #[inline]
     fn into_iter(self) -> impl Iterator<Item = u16> {
@@ -188,6 +199,9 @@ impl PortRange for Range<u16> {
     }
 }
 
+/// Implementation of [`PortRange`] for inclusive ranges (`start..=end`)
+///
+/// Allows using inclusive port ranges with [`pick_unused_port`].
 impl PortRange for RangeInclusive<u16> {
     #[inline]
     fn into_iter(self) -> impl Iterator<Item = u16> {

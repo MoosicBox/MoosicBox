@@ -111,6 +111,15 @@ impl Migration<'static> for AddUsersStatusColumn {
         Ok(())
     }
 
+    /// Rolls back the migration.
+    ///
+    /// Note: In this example, the down migration does nothing because the status column
+    /// removal is not critical for testing, and the table will be dropped by the previous
+    /// migration's down method anyway during the full cycle test.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     async fn down(&self, _db: &dyn Database) -> switchy_schema::Result<()> {
         // For this example, we'll just note that the column would be removed
         // In a real scenario, you might recreate the table without the status column

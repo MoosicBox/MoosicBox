@@ -36,6 +36,7 @@ pub struct Connection {
 }
 
 impl AsRef<Self> for Connection {
+    /// Returns a reference to this connection.
     fn as_ref(&self) -> &Self {
         self
     }
@@ -65,6 +66,7 @@ pub struct MusicApiSettings {
 }
 
 impl AsRef<Self> for MusicApiSettings {
+    /// Returns a reference to these music API settings.
     fn as_ref(&self) -> &Self {
         self
     }
@@ -113,6 +115,7 @@ pub struct DownloadSettings {
 }
 
 impl AsRef<Self> for DownloadSettings {
+    /// Returns a reference to these download settings.
     fn as_ref(&self) -> &Self {
         self
     }
@@ -128,6 +131,7 @@ pub struct ScanSettings {
 }
 
 impl AsRef<Self> for ScanSettings {
+    /// Returns a reference to these scan settings.
     fn as_ref(&self) -> &Self {
         self
     }

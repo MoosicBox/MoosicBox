@@ -186,6 +186,9 @@ macro_rules! impl_open_options {
 #[allow(unused)]
 macro_rules! impl_sync_fs {
     ($module:ident $(,)?) => {
+        /// Synchronous filesystem operations
+        ///
+        /// This module provides blocking filesystem operations that can be used in synchronous contexts.
         #[cfg(feature = "sync")]
         pub mod sync {
             pub use $crate::$module::sync::{
@@ -203,6 +206,9 @@ macro_rules! impl_sync_fs {
 #[allow(unused)]
 macro_rules! impl_async_fs {
     ($module:ident $(,)?) => {
+        /// Asynchronous filesystem operations
+        ///
+        /// This module provides non-blocking async filesystem operations for use in async contexts.
         #[cfg(feature = "async")]
         pub mod unsync {
             pub use $crate::$module::unsync::{
@@ -214,6 +220,7 @@ macro_rules! impl_async_fs {
 
             #[cfg(feature = "sync")]
             impl OpenOptions {
+                /// Converts async `OpenOptions` into sync `OpenOptions`
                 #[must_use]
                 pub const fn into_sync(self) -> crate::sync::OpenOptions {
                     crate::sync::OpenOptions {
