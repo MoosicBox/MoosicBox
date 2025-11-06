@@ -369,9 +369,9 @@ async-recursion = "1.1.1"
 async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
-aws-config = "1.8.8"
-aws-sdk-apigatewaymanagement = "1.87.0"
-aws-sdk-ssm = "1.97.0"
+aws-config = "1.8.10"
+aws-sdk-apigatewaymanagement = "1.88.0"
+aws-sdk-ssm = "1.98.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -389,10 +389,10 @@ color-backtrace = { version = "0.7.2", default-features = false, features = [
 ] }
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
-console-subscriber = "0.4.1"
+console-subscriber = "0.5.0"
 const-hex = "1.17.0"
 const_format = "0.2.35"
-convert_case = "0.8.0"
+convert_case = "0.9.0"
 cpal = "0.16.0"
 ctrlc = "3.5.1"
 deadpool-postgres = "0.14.1"
@@ -406,7 +406,7 @@ env_logger = "0.11.8"
 fdk-aac = "0.8.0"
 flacenc = "0.5.0"
 flate2 = "1.1.5"
-fltk = "1.5.20"
+fltk = "1.5.21"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
 futures = "0.3.31"
@@ -502,7 +502,7 @@ roxmltree = "0.21.1"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
-rust-embed = "8.8.0"
+rust-embed = "8.9.0"
 rust_decimal = { version = "1.39.0", default-features = false }
 rust_decimal_macros = { version = "1.39.0", default-features = false }
 rustc_version = "0.4.1"
@@ -532,18 +532,18 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
 static_init = "1.0.4"
 strum = "0.27.2"
 strum_macros = "0.27.2"
-swc_bundler = "34.0.0"
-swc_common = { version = "16.0.0", features = ["tty-emitter"] }
-swc_ecma_ast = "17.0.0"
-swc_ecma_codegen = "19.0.0"
-swc_ecma_loader = { version = "16.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "35.0.0"
-swc_ecma_parser = "26.0.1"
-swc_ecma_transforms_base = "29.0.0"
-swc_ecma_transforms_typescript = "32.0.0"
-swc_ecma_visit = "17.0.0"
+swc_bundler = "35.0.0"
+swc_common = { version = "17.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "18.0.0"
+swc_ecma_codegen = "20.0.0"
+swc_ecma_loader = { version = "17.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "36.0.1"
+swc_ecma_parser = "27.0.2"
+swc_ecma_transforms_base = "30.0.0"
+swc_ecma_transforms_typescript = "33.0.0"
+swc_ecma_visit = "18.0.0"
 symphonia = { version = "0.5.5", features = ["all"] }
-syn = "2.0.108"
+syn = "2.0.109"
 syntect = "5.3.0"
 tantivy = "0.25.0"
 tauri = { version = "2.9.2", features = ["protocol-asset"] }
@@ -569,14 +569,14 @@ tokio-test = "0.4.4"
 tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-webpki-roots",
 ] }
-tokio-util = "0.7.16"
+tokio-util = "0.7.17"
 toml = "0.9.8"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.32.0" }
 tracing-subscriber = "0.3.20"
 tracy-client = { version = "0.18.2", default-features = false }
 trybuild = "1.0.113"
-turso = "0.2.2"
+turso = "0.3.2"
 uaparser = "0.6.4"
 url = "2.5.7"
 urlencoding = "2.1.3"
