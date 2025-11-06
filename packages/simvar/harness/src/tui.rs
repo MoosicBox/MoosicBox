@@ -9,7 +9,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
     layout::{Alignment, Constraint, Direction, Layout, Position},
-    style::{Style, Stylize as _},
+    style::Style,
     widgets::{Block, Gauge, Paragraph},
 };
 
