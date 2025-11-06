@@ -230,7 +230,7 @@ impl LtpState {
 ///
 /// ```rust,no_run
 /// # #[cfg(feature = "silk")]
-/// # {
+/// # fn example() -> Result<(), moosicbox_opus_native::Error> {
 /// use moosicbox_opus_native::silk::SilkDecoder;
 /// use moosicbox_opus_native::{SampleRate, Channels};
 ///
@@ -239,7 +239,7 @@ impl LtpState {
 ///     Channels::Stereo,
 ///     20,  // 20ms frame
 /// )?;
-/// # Ok::<(), moosicbox_opus_native::Error>(())
+/// # Ok(())
 /// # }
 /// ```
 pub struct SilkDecoder {
