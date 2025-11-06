@@ -103,8 +103,8 @@ importers:
         specifier: ^9.1.2
         version: 9.1.2(eslint@8.57.1)
       eslint-plugin-astro:
-        specifier: ^1.4.0
-        version: 1.4.0(eslint@8.57.1)
+        specifier: ^1.5.0
+        version: 1.5.0(eslint@8.57.1)
       eslint-plugin-diff:
         specifier: ^2.0.3
         version: 2.0.3(eslint@8.57.1)
@@ -1512,8 +1512,8 @@ packages:
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
-  baseline-browser-mapping@2.8.24:
-    resolution: {integrity: sha512-uUhTRDPXamakPyghwrUcjaGvvBqGrWvBHReoiULMIpOJVM9IYzQh83Xk2Onx5HlGI2o10NNCzcs9TG/S3TkwrQ==}
+  baseline-browser-mapping@2.8.25:
+    resolution: {integrity: sha512-2NovHVesVF5TXefsGX1yzx1xgr7+m9JQenvz6FQY3qd+YXkKkYiv+vTCc7OriP9mcDZpTC5mAOYN4ocd29+erA==}
     hasBin: true
 
   boxen@8.0.1:
@@ -1924,8 +1924,8 @@ packages:
       eslint-import-resolver-webpack:
         optional: true
 
-  eslint-plugin-astro@1.4.0:
-    resolution: {integrity: sha512-BCHPj3gORh1RYFR3sZXY0/9N9lOOw4mQYUkMWFFoFqhZtYnytuzxlyCIr8tqMmSNdZ9P4SQNq5h4v8Amr2EE5Q==}
+  eslint-plugin-astro@1.5.0:
+    resolution: {integrity: sha512-IWy4kY3DKTJxd7g652zIWpBGFuxw7NIIt16kyqc8BlhnIKvI8yGJj+Maua0DiNYED3F/D8AmzoTTTA6A95WX9g==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: '>=8.57.0'
@@ -5496,7 +5496,7 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.8.24: {}
+  baseline-browser-mapping@2.8.25: {}
 
   boxen@8.0.1:
     dependencies:
@@ -5528,7 +5528,7 @@ snapshots:
 
   browserslist@4.27.0:
     dependencies:
-      baseline-browser-mapping: 2.8.24
+      baseline-browser-mapping: 2.8.25
       caniuse-lite: 1.0.30001753
       electron-to-chromium: 1.5.245
       node-releases: 2.0.27
@@ -5964,7 +5964,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-astro@1.4.0(eslint@8.57.1):
+  eslint-plugin-astro@1.5.0(eslint@8.57.1):
     dependencies:
       '@eslint-community/eslint-utils': 4.9.0(eslint@8.57.1)
       '@jridgewell/sourcemap-codec': 1.5.5
