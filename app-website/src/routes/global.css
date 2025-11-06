@@ -1,5 +1,6 @@
 body {
-    font-family: Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+    font-family:
+        Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
         'Helvetica Neue', sans-serif;
     width: 100%;
     overflow-x: hidden;
@@ -45,12 +46,12 @@ button {
 .navigation-bar-container {
     background: #080a0b;
     z-index: 17;
-    width: max(240px, min(280px, 15vw));
+    width: max(280px, min(280px, 15vw));
 }
 
 .navigation-bar-container,
 .navigation-bar {
-    width: max(240px, min(280px, 15vw));
+    width: max(280px, min(280px, 15vw));
     height: 100vh;
     position: relative;
 }
@@ -358,7 +359,7 @@ h6 {
     }
 
     .main-content.toggled .main-content-back-to-top {
-        left: calc((100% - max(240px, min(280px, 15vw))) / 2);
+        left: calc((100% - max(280px, min(280px, 15vw))) / 2);
     }
 
     .navigation-bar-container.default .mobile-toggle-expand-button {
@@ -379,7 +380,7 @@ h6 {
     }
 
     .main-content-back-to-top {
-        left: calc((100% - max(240px, min(280px, 15vw))) / 2);
+        left: calc((100% - max(280px, min(280px, 15vw))) / 2);
     }
 
     .main-content.default .main-content-back-to-top {
