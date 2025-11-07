@@ -196,13 +196,12 @@ impl HyperChadSimulator {
         self
     }
 
-    /// Run a test plan within the simulation environment
+    /// Runs a test plan within the simulation environment.
     ///
     /// # Errors
     ///
-    /// * If the simulation fails to start
-    /// * If the test plan execution fails
-    /// * If any renderer simulation fails
+    /// * `SimulatorError::SimulationFailed` - If the simulation fails to start or returns no results
+    /// * `SimulatorError::Simvar` - If the underlying simvar simulation fails
     #[cfg(feature = "test-utils")]
     pub fn run_test_plan(&self, plan: TestPlan) -> Result<TestResult, SimulatorError> {
         log::info!(
@@ -232,11 +231,11 @@ impl HyperChadSimulator {
         Ok(TestResult::success())
     }
 
-    /// Start the simulation server
+    /// Starts the simulation server.
     ///
     /// # Errors
     ///
-    /// * If the web server fails to start
+    /// * `SimulatorError::WebServer` - If the web server fails to start
     pub async fn start_simulation_server(&self) -> Result<(), SimulatorError> {
         if let Some(server) = &self.web_server {
             server.start().await?;
