@@ -34,6 +34,10 @@ pub struct ActionPayload {
 /// # Errors
 ///
 /// * Returns an error if the action channel fails to send the action
+///
+/// # Panics
+///
+/// * Panics if JSON serialization of the action value fails
 #[allow(clippy::future_not_send)]
 pub async fn handle_action<
     T: Send + Sync + Clone + 'static,
