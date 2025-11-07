@@ -198,6 +198,11 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
     /// # Errors
     ///
     /// * Returns an error if the event loop fails to run
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the server fails to bind to the configured address and port
+    /// * Panics if file path parsing fails for static asset routes
     #[allow(clippy::too_many_lines)]
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting");
