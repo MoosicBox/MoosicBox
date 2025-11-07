@@ -1,3 +1,27 @@
+//! Basic usage example for `switchy_schema` demonstrating type-safe database migrations.
+//!
+//! This example showcases the core features of `switchy_schema`:
+//!
+//! * Creating tables with type-safe schema builders
+//! * Adding indexes to improve query performance
+//! * Altering tables to add new columns
+//! * Running migrations with automatic tracking
+//! * Checking migration status and history
+//!
+//! The example creates a simple `users` table with migrations that:
+//!
+//! 1. Create the initial table structure with `id`, `name`, and `email` columns
+//! 2. Add an index on the `email` column for faster lookups
+//! 3. Add a `created_at` timestamp column with a default value
+//!
+//! # Running the Example
+//!
+//! ```bash
+//! cargo run --package basic_usage
+//! ```
+//!
+//! The example uses an in-memory SQLite database, so no external setup is required.
+
 use async_trait::async_trait;
 use std::sync::Arc;
 use switchy_database::schema::{Column, DataType};
