@@ -327,6 +327,10 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+/// `PostgreSQL` database transaction using `SQLx`
+///
+/// Represents an active transaction on a `PostgreSQL` connection. Provides ACID guarantees
+/// for a series of database operations. Must be explicitly committed or rolled back.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct PostgresSqlxTransaction {
@@ -334,6 +338,7 @@ pub struct PostgresSqlxTransaction {
 }
 
 impl PostgresSqlxTransaction {
+    /// Creates a new `PostgreSQL` transaction from an `SQLx` transaction
     #[must_use]
     pub fn new(transaction: Transaction<'static, Postgres>) -> Self {
         Self {
@@ -342,6 +347,10 @@ impl PostgresSqlxTransaction {
     }
 }
 
+/// `PostgreSQL` database connection pool using `SQLx`
+///
+/// Manages a pool of `PostgreSQL` connections for efficient connection reuse
+/// and concurrent query execution.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct PostgresSqlxDatabase {
@@ -351,6 +360,7 @@ pub struct PostgresSqlxDatabase {
 }
 
 impl PostgresSqlxDatabase {
+    /// Creates a new `PostgreSQL` database instance from an `SQLx` connection pool
     pub fn new(pool: Arc<Mutex<PgPool>>) -> Self {
         Self {
             pool,
@@ -358,6 +368,8 @@ impl PostgresSqlxDatabase {
         }
     }
 
+    /// Gets a connection from the pool, reusing existing connection if available
+    ///
     /// # Errors
     ///
     /// Will return `Err` if cannot get a connection
@@ -378,16 +390,25 @@ impl PostgresSqlxDatabase {
     }
 }
 
+/// Errors specific to `PostgreSQL` database operations using `SQLx`
+///
+/// Wraps errors from the underlying `SQLx` `PostgreSQL` driver plus additional error types
+/// for query validation and result handling.
 #[derive(Debug, Error)]
 pub enum SqlxDatabaseError {
+    /// Error from the underlying `SQLx` `PostgreSQL` driver
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// Returned row did not contain an ID column
     #[error("No ID")]
     NoId,
+    /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
+    /// The request was malformed or invalid
     #[error("Invalid request")]
     InvalidRequest,
+    /// UPSERT operation missing required unique constraint specification
     #[error("Missing unique")]
     MissingUnique,
 }

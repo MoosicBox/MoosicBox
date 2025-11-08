@@ -5,6 +5,7 @@
 
 #[allow(clippy::module_inception)]
 #[cfg(feature = "postgres-raw")]
+/// `PostgreSQL` database backend implementation using native `tokio-postgres`
 pub mod postgres;
 
 #[cfg(all(feature = "postgres-raw", feature = "schema"))]
