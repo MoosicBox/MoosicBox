@@ -242,7 +242,8 @@ jobs:
                         * What this module provides
                         * When to use items from this module
                         * Brief example if the module has a clear use case
-                      - Module docs in `lib.rs` or parent modules can use `/// Module description` on the `pub mod` line
+                      - **PREFERRED LOCATION**: For modules with their own file (e.g., `tokenizer.rs` or `tokenizer/mod.rs`), place documentation as `//!` comments at the TOP of the module file itself
+                      - **Alternative**: Module docs in `lib.rs` or parent modules can use `/// Module description` on the `pub mod` line, but this is less preferred for modules with their own files
                       - Module docs in the module file itself use `//!` at the top of the file
 
                       ## 📝 CODE EXAMPLES: Quality and Testability

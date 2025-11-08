@@ -145,12 +145,6 @@
 mod expression_parser;
 mod matcher;
 mod parser;
-
-/// Tokenizer for package filter expressions.
-///
-/// This module provides tokenization functionality for parsing filter expression strings
-/// into tokens for use by the expression parser. Handles operators, identifiers, quoted
-/// strings with escape sequences, and Unicode support.
 pub mod tokenizer;
 mod types;
 
