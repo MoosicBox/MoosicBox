@@ -37,29 +37,64 @@ use crate::{Action, ActionEffect, ActionType, ElementTarget, Key, Target};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CalcValue {
     /// Get visibility state of an element
-    Visibility { target: ElementTarget },
+    Visibility {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get display state of an element
-    Display { target: ElementTarget },
+    Display {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get string ID of an element
-    Id { target: ElementTarget },
+    Id {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get data attribute value from an element
-    DataAttrValue { attr: String, target: ElementTarget },
+    DataAttrValue {
+        /// Attribute name
+        attr: String,
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get current event value (e.g., input field value)
     EventValue,
     /// Get width in pixels of an element
-    WidthPx { target: ElementTarget },
+    WidthPx {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get height in pixels of an element
-    HeightPx { target: ElementTarget },
+    HeightPx {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get X position of an element
-    PositionX { target: ElementTarget },
+    PositionX {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get Y position of an element
-    PositionY { target: ElementTarget },
+    PositionY {
+        /// Target element
+        target: ElementTarget,
+    },
     /// Get mouse X coordinate (optionally relative to element)
-    MouseX { target: Option<ElementTarget> },
+    MouseX {
+        /// Optional target element for relative coordinates
+        target: Option<ElementTarget>,
+    },
     /// Get mouse Y coordinate (optionally relative to element)
-    MouseY { target: Option<ElementTarget> },
+    MouseY {
+        /// Optional target element for relative coordinates
+        target: Option<ElementTarget>,
+    },
     /// Get keyboard key value
-    Key { key: Key },
+    Key {
+        /// Keyboard key
+        key: Key,
+    },
 }
 
 impl CalcValue {

@@ -16,26 +16,44 @@ pub enum Statement {
     /// Expression statement (e.g., `hide("test");`)
     Expression(Expression),
     /// Variable assignment (e.g., `let x = get_visibility("test");`)
-    Let { name: String, value: Expression },
+    Let {
+        /// Variable name
+        name: String,
+        /// Value expression
+        value: Expression,
+    },
     /// If statement with optional else
     If {
+        /// Condition expression
         condition: Expression,
+        /// Then branch block
         then_block: Block,
+        /// Optional else branch block
         else_block: Option<Block>,
     },
     /// Match statement
     Match {
+        /// Expression to match against
         expr: Expression,
+        /// Match arms
         arms: Vec<MatchArm>,
     },
     /// For loop (for iteration over collections)
     For {
+        /// Pattern to bind iteration variable
         pattern: String,
+        /// Iterator expression
         iter: Expression,
+        /// Loop body
         body: Block,
     },
     /// While loop
-    While { condition: Expression, body: Block },
+    While {
+        /// Loop condition
+        condition: Expression,
+        /// Loop body
+        body: Block,
+    },
     /// Block statement
     Block(Block),
 }
@@ -70,8 +88,11 @@ pub enum Pattern {
     Wildcard,
     /// Enum variant pattern (e.g., `Visibility::Hidden`)
     Variant {
+        /// Name of the enum type
         enum_name: String,
+        /// Name of the variant
         variant: String,
+        /// Fields of the variant
         fields: Vec<Self>,
     },
 }
@@ -201,32 +222,58 @@ pub enum Expression {
     /// Element reference for object-oriented API
     ElementRef(Box<Self>),
     /// Function call
-    Call { function: String, args: Vec<Self> },
+    Call {
+        /// Function name
+        function: String,
+        /// Function arguments
+        args: Vec<Self>,
+    },
     /// Method call (e.g., `expr.method(args)`)
     MethodCall {
+        /// Receiver expression
         receiver: Box<Self>,
+        /// Method name
         method: String,
+        /// Method arguments
         args: Vec<Self>,
     },
     /// Field access (e.g., `obj.field`)
-    Field { object: Box<Self>, field: String },
+    Field {
+        /// Object expression
+        object: Box<Self>,
+        /// Field name
+        field: String,
+    },
     /// Binary operation
     Binary {
+        /// Left operand
         left: Box<Self>,
+        /// Binary operator
         op: BinaryOp,
+        /// Right operand
         right: Box<Self>,
     },
     /// Unary operation
-    Unary { op: UnaryOp, expr: Box<Self> },
+    Unary {
+        /// Unary operator
+        op: UnaryOp,
+        /// Operand expression
+        expr: Box<Self>,
+    },
     /// Conditional expression (e.g., `if condition { a } else { b }`)
     If {
+        /// Condition expression
         condition: Box<Self>,
+        /// Then branch expression
         then_branch: Box<Self>,
+        /// Optional else branch expression
         else_branch: Option<Box<Self>>,
     },
     /// Match expression
     Match {
+        /// Expression to match against
         expr: Box<Self>,
+        /// Match arms
         arms: Vec<MatchArm>,
     },
     /// Block expression
@@ -237,13 +284,18 @@ pub enum Expression {
     Tuple(Vec<Self>),
     /// Range expression (e.g., `1..10`)
     Range {
+        /// Optional start expression
         start: Option<Box<Self>>,
+        /// Optional end expression
         end: Option<Box<Self>>,
+        /// Whether the range is inclusive
         inclusive: bool,
     },
     /// Closure expression (e.g., `|param| { ... }`)
     Closure {
+        /// Parameter names
         params: Vec<String>,
+        /// Closure body
         body: Box<Self>,
     },
     /// Parenthesized expression for explicit grouping
@@ -455,51 +507,85 @@ impl Dsl {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BuiltinFunction {
     // Element targeting
+    /// Hide an element
     Hide,
+    /// Show an element
     Show,
+    /// Toggle element visibility
     Toggle,
+    /// Set element visibility
     SetVisibility,
+    /// Set element display property
     SetDisplay,
+    /// Set element background
     SetBackground,
 
     // Element references
+    /// Get element reference
     Element,
 
     // Getters
+    /// Get element visibility
     GetVisibility,
+    /// Get element display property
     GetDisplay,
+    /// Get element width
     GetWidth,
+    /// Get element height
     GetHeight,
+    /// Get element X position
     GetPositionX,
+    /// Get element Y position
     GetPositionY,
+    /// Get mouse X coordinate
     GetMouseX,
+    /// Get mouse Y coordinate
     GetMouseY,
+    /// Get element data attribute
     GetDataAttr,
+    /// Get event value
     GetEventValue,
 
     // Utilities
+    /// No operation
     NoOp,
+    /// Log a message
     Log,
+    /// Navigate to URL
     Navigate,
+    /// Custom action
     Custom,
 
     // Control flow helpers
+    /// If conditional
     If,
+    /// Match expression
     Match,
 
     // Arithmetic
+    /// Addition operation
     Add,
+    /// Subtraction operation
     Subtract,
+    /// Multiplication operation
     Multiply,
+    /// Division operation
     Divide,
+    /// Minimum of two values
     Min,
+    /// Maximum of two values
     Max,
+    /// Clamp value between min and max
     Clamp,
 
     // Logic
+    /// Equality comparison
     Eq,
+    /// Logical AND operation
     And,
+    /// Logical OR operation
     Or,
+    /// Logical NOT operation
     Not,
 }
 
