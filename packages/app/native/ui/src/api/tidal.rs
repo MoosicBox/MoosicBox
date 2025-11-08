@@ -8,8 +8,6 @@ use log::error;
 
 /// Retrieves the stored Tidal configuration from the database.
 ///
-/// # Errors
-///
 /// Returns `None` if the configuration cannot be retrieved or does not exist.
 pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
     match moosicbox_tidal::db::get_tidal_config(db).await {
@@ -25,8 +23,6 @@ pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
 ///
 /// Returns a URL that the user should visit to complete authentication.
 /// Starts a background task that polls for authorization completion.
-///
-/// # Errors
 ///
 /// Returns `None` if authentication cannot be started due to missing credentials,
 /// network errors, or invalid responses from the Tidal API.
