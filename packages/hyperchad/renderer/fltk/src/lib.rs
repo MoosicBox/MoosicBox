@@ -1267,7 +1267,7 @@ impl Renderer for FltkRenderer {
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// Will panic if the `DEBUG` `RwLock` is poisoned (only with the `debug` feature enabled).
     ///
     /// # Errors
     ///
@@ -1422,7 +1422,8 @@ impl Renderer for FltkRenderer {
     ///
     /// # Panics
     ///
-    /// Will panic if elements `Mutex` is poisoned.
+    /// * Will panic if the elements `RwLock` is poisoned.
+    /// * Will panic if `elements.primary` is `None`.
     async fn render(
         &self,
         elements: View,
