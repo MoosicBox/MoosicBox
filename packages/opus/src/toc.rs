@@ -50,19 +50,30 @@ impl TocByte {
         })
     }
 
-    /// Get configuration number.
+    /// Get the configuration number (0-31).
+    ///
+    /// The configuration number determines the Opus mode and bandwidth.
+    /// See RFC 6716 Table 2 for the complete mapping.
     #[must_use]
     pub const fn config(&self) -> u8 {
         self.config
     }
 
-    /// Check if stereo.
+    /// Check if the packet is encoded in stereo.
+    ///
+    /// Returns `true` for stereo audio, `false` for mono.
     #[must_use]
     pub const fn is_stereo(&self) -> bool {
         self.stereo
     }
 
-    /// Get frame count code.
+    /// Get the frame packing code (0-3).
+    ///
+    /// Returns the code that determines how frames are structured:
+    /// * 0: Single frame
+    /// * 1: Two equal frames
+    /// * 2: Two variable frames
+    /// * 3: Arbitrary number of frames
     #[must_use]
     pub const fn frame_code(&self) -> u8 {
         self.frame_code
