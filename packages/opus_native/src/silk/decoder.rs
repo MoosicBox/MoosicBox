@@ -3482,6 +3482,18 @@ impl SilkDecoder {
         subframe_index * samples_per_subframe
     }
 
+    /// Returns normative resampler delay in milliseconds for a given bandwidth.
+    ///
+    /// These delay values are specified in RFC 6716 Table 54 (lines 5766-5775).
+    /// The delays are normative and must be accounted for in decoder implementations.
+    ///
+    /// # Arguments
+    ///
+    /// * `bandwidth` - SILK bandwidth (Narrowband/Mediumband/Wideband)
+    ///
+    /// # Returns
+    ///
+    /// Resampler delay in milliseconds (0.0 for unsupported bandwidths)
     #[must_use]
     pub const fn resampler_delay_ms(bandwidth: Bandwidth) -> f32 {
         match bandwidth {

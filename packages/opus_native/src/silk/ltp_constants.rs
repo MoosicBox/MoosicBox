@@ -237,7 +237,21 @@ pub const LTP_FILTER_CB_2: &[[i8; 5]; 32] = &[
 /// Ltp scaling pdf (RFC 6716 Section 4.2.7)
 pub const LTP_SCALING_PDF: &[u8] = &[128, 64, 0];
 
-// RFC 6716 Section 4.2.7.6.3: LTP Scaling Factors in Q14 format (lines 4751-4753)
+/// Returns LTP scaling factor in Q14 format for the given index.
+///
+/// These scaling factors are specified in RFC 6716 Section 4.2.7.6.3 (lines 4751-4753).
+/// The values are in Q14 fixed-point format.
+///
+/// # Arguments
+///
+/// * `index` - LTP scaling index (0, 1, or 2)
+///
+/// # Returns
+///
+/// Scaling factor in Q14 format:
+/// * Index 0: 15565 (0.951 in Q14)
+/// * Index 1: 12288 (0.75 in Q14)
+/// * Index 2: 8192 (0.5 in Q14)
 #[must_use]
 pub const fn ltp_scaling_factor_q14(index: usize) -> u16 {
     match index {

@@ -11,6 +11,7 @@
 //! * Uniform integer decoding (`ec_dec_uint`)
 //! * Laplace distribution decoding (`ec_laplace_decode`)
 
+/// Range decoder implementation for Opus entropy coding
 pub mod decoder;
 
 pub use decoder::RangeDecoder;
