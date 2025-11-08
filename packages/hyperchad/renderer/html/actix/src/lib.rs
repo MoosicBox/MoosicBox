@@ -49,6 +49,11 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use actix_cors::Cors;
+
+/// Re-export of Actix Web's `HeaderMap` for convenient access to HTTP headers.
+///
+/// This allows users of this crate to work with HTTP headers without needing
+/// to import `actix_web::http::header::HeaderMap` directly.
 pub use actix_web::http::header::HeaderMap;
 use actix_web::{
     App, HttpRequest, HttpResponse,
@@ -62,6 +67,11 @@ use flume::Receiver;
 use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
 use moosicbox_env_utils::default_env_u16;
 
+/// Re-export of the Actix Web framework.
+///
+/// This re-export provides access to the underlying Actix Web types and utilities,
+/// allowing implementors of [`ActixResponseProcessor`] to use Actix Web's request
+/// and response types without needing a separate dependency.
 pub use actix_web;
 
 #[cfg(feature = "actions")]
