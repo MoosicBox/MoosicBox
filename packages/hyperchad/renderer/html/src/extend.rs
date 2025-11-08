@@ -23,6 +23,7 @@ pub struct HtmlRendererEventPub {
 /// Errors that can occur when publishing HTML renderer events.
 #[derive(Debug, Error)]
 pub enum HtmlRendererEventPubError {
+    /// Error occurred when sending an event through the channel.
     #[error(transparent)]
     Sender(#[from] Box<flume::SendError<RendererEvent>>),
 }
