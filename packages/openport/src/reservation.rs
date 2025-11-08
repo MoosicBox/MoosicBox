@@ -127,7 +127,6 @@ impl<R: PortRange> PortReservation<R> {
     /// # Parameters
     ///
     /// * `num_ports` - The number of ports to reserve
-    /// * `range` - The range of ports to reserve
     ///
     /// # Panics
     ///
@@ -168,10 +167,6 @@ impl<R: PortRange> PortReservation<R> {
     }
 
     /// Reserve a port for use
-    ///
-    /// # Parameters
-    ///
-    /// * `range` - The range of ports to reserve
     ///
     /// # Panics
     ///
