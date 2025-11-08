@@ -1,3 +1,9 @@
+//! Core WebSocket message processing and connection management.
+//!
+//! This module provides the implementation for handling WebSocket connections,
+//! processing messages, and managing session state. It includes connection
+//! lifecycle management, message routing, and broadcasting updates to clients.
+
 use core::fmt;
 use std::{
     collections::BTreeMap,
