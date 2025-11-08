@@ -1,3 +1,27 @@
+//! Event system for audio zone updates.
+//!
+//! This module provides an event listener system that triggers callbacks when audio zones are
+//! created, updated, or deleted. Listeners can be registered to receive notifications when
+//! audio zone state changes occur.
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use moosicbox_audio_zone::events;
+//! # async fn example() {
+//! // Register a listener for audio zone updates
+//! events::on_audio_zones_updated_event(|| async {
+//!     println!("Audio zones updated!");
+//!     Ok(())
+//! }).await;
+//!
+//! // Trigger the event when zones are modified
+//! if let Err(errors) = events::trigger_audio_zones_updated_event().await {
+//!     eprintln!("Event errors: {} error(s) occurred", errors.len());
+//! }
+//! # }
+//! ```
+
 use std::{
     future::Future,
     pin::Pin,
