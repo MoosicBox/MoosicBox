@@ -21,6 +21,7 @@ use switchy_database::{
 };
 use thiserror::Error;
 
+/// Database model types for library entities.
 pub mod models;
 
 use crate::{
