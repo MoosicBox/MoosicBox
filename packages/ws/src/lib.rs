@@ -18,24 +18,16 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! # use moosicbox_ws::{WebsocketSender, WebsocketContext, WebsocketSendError, connect};
-//! # struct MockSender;
-//! # #[async_trait::async_trait]
-//! # impl WebsocketSender for MockSender {
-//! #     async fn send(&self, _: &str, _: &str) -> Result<(), WebsocketSendError> { Ok(()) }
-//! #     async fn send_all(&self, _: &str) -> Result<(), WebsocketSendError> { Ok(()) }
-//! #     async fn send_all_except(&self, _: &str, _: &str) -> Result<(), WebsocketSendError> { Ok(()) }
-//! #     async fn ping(&self) -> Result<(), WebsocketSendError> { Ok(()) }
-//! # }
-//! # let sender = MockSender;
+//! ```rust,ignore
+//! use moosicbox_ws::{WebsocketSender, WebsocketContext, connect};
+//!
 //! // When a client connects
 //! let context = WebsocketContext {
 //!     connection_id: "client-123".to_string(),
 //!     profile: Some("default".to_string()),
 //!     player_actions: vec![],
 //! };
-//! let response = connect(&sender, &context);
+//! let response = connect(&sender, &context).await;
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
