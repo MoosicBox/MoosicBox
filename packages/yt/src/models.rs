@@ -1841,9 +1841,13 @@ impl AsModelResult<YtSearchResultsContents, ParseError> for Value {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchResults {
+    /// List of search result sections
     pub contents: Vec<YtSearchResultsContents>,
+    /// Pagination offset (starting position)
     pub offset: usize,
+    /// Maximum number of results per page
     pub limit: usize,
+    /// Total number of available results
     pub total: usize,
 }
 
