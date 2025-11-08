@@ -498,6 +498,10 @@ impl MusicApi for LibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// # Panics
+    ///
+    /// * Will panic if the regex pattern compilation fails (should never happen with a valid
+    ///   static pattern)
     async fn track_source(
         &self,
         track: TrackOrId,
