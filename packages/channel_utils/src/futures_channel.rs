@@ -4,6 +4,30 @@
 //! the standard unbounded channel with support for message prioritization. Messages can
 //! be sent with priority ordering, where higher priority values are processed before
 //! lower priority values.
+//!
+//! # Example
+//!
+//! ```rust
+//! use moosicbox_channel_utils::futures_channel::unbounded;
+//! use moosicbox_channel_utils::MoosicBoxSender;
+//! use futures_core::Stream;
+//!
+//! # async fn example() {
+//! // Create a prioritized channel
+//! let (tx, mut rx) = unbounded();
+//!
+//! // Configure priority function (higher values = higher priority)
+//! let tx = tx.with_priority(|msg: &String| msg.len());
+//!
+//! // Send messages - longer strings will be received first
+//! tx.send("hi".to_string()).unwrap();
+//! tx.send("hello world".to_string()).unwrap();
+//! tx.send("hey".to_string()).unwrap();
+//!
+//! // Receive messages in priority order
+//! // (Note: actual ordering depends on when the receiver polls)
+//! # }
+//! ```
 
 use std::{
     ops::Deref,
