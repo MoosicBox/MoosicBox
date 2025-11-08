@@ -19,6 +19,10 @@ use std::sync::{Arc, Mutex};
 
 use rand::{Rng as _, RngCore, SeedableRng, rngs::SmallRng};
 
+/// Re-export of the `rand` crate for access to distribution types and traits.
+///
+/// This allows users to access `rand`'s types like `Distribution`, `Uniform`, etc.
+/// without needing to add `rand` as a separate dependency.
 pub use rand;
 
 use crate::{GenericRng, Rng};
