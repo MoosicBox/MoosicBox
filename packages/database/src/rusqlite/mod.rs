@@ -196,6 +196,11 @@ fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
     }
 }
 
+/// `SQLite` database connection pool using `rusqlite`
+///
+/// Manages a pool of `SQLite` connections using round-robin selection for distributing
+/// queries across multiple connections. Each connection is protected by a mutex for
+/// thread-safe access.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct RusqliteDatabase {
@@ -204,6 +209,9 @@ pub struct RusqliteDatabase {
 }
 
 impl RusqliteDatabase {
+    /// Creates a new `SQLite` database instance from a vector of connections
+    ///
+    /// The connections are used in round-robin fashion to distribute load.
     #[must_use]
     pub const fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
         Self {
@@ -218,6 +226,10 @@ impl RusqliteDatabase {
     }
 }
 
+/// `SQLite` database transaction using `rusqlite`
+///
+/// Represents an active transaction on a `SQLite` connection. Provides ACID guarantees
+/// for a series of database operations. Must be explicitly committed or rolled back.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct RusqliteTransaction {
@@ -227,6 +239,7 @@ pub struct RusqliteTransaction {
 }
 
 impl RusqliteTransaction {
+    /// Creates a new `SQLite` transaction from a `rusqlite` connection
     #[must_use]
     pub const fn new(connection: Arc<Mutex<Connection>>) -> Self {
         Self {
@@ -426,17 +439,26 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+/// Errors specific to `SQLite` database operations using `rusqlite`
+///
+/// Wraps errors from the underlying `rusqlite` driver plus additional error types
+/// for query validation and result handling.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Error)]
 pub enum RusqliteDatabaseError {
+    /// Error from the underlying `rusqlite` driver
     #[error(transparent)]
     Rusqlite(#[from] rusqlite::Error),
+    /// Returned row did not contain an ID column
     #[error("No ID")]
     NoId,
+    /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
+    /// The request was malformed or invalid
     #[error("Invalid request")]
     InvalidRequest,
+    /// UPSERT operation missing required unique constraint specification
     #[error("Missing unique")]
     MissingUnique,
 }

@@ -266,6 +266,10 @@ impl<T: Expression + ?Sized> ToParam for T {
     }
 }
 
+/// `MySQL` database transaction using `SQLx`
+///
+/// Represents an active transaction on a `MySQL` connection. Provides ACID guarantees
+/// for a series of database operations. Must be explicitly committed or rolled back.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct MysqlSqlxTransaction {
@@ -273,6 +277,7 @@ pub struct MysqlSqlxTransaction {
 }
 
 impl MysqlSqlxTransaction {
+    /// Creates a new `MySQL` transaction from an `SQLx` transaction
     #[must_use]
     pub fn new(transaction: Transaction<'static, MySql>) -> Self {
         Self {
@@ -281,27 +286,41 @@ impl MysqlSqlxTransaction {
     }
 }
 
+/// `MySQL` database connection pool using `SQLx`
+///
+/// Manages a pool of `MySQL` connections for efficient connection reuse
+/// and concurrent query execution.
 #[derive(Debug)]
 pub struct MySqlSqlxDatabase {
     connection: Arc<Mutex<MySqlPool>>,
 }
 
 impl MySqlSqlxDatabase {
+    /// Creates a new `MySQL` database instance from an `SQLx` connection pool
     pub const fn new(connection: Arc<Mutex<MySqlPool>>) -> Self {
         Self { connection }
     }
 }
 
+/// Errors specific to `MySQL` database operations using `SQLx`
+///
+/// Wraps errors from the underlying `SQLx` `MySQL` driver plus additional error types
+/// for query validation and result handling.
 #[derive(Debug, Error)]
 pub enum SqlxDatabaseError {
+    /// Error from the underlying `SQLx` `MySQL` driver
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// Returned row did not contain an ID column
     #[error("No ID")]
     NoId,
+    /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
+    /// The request was malformed or invalid
     #[error("Invalid request")]
     InvalidRequest,
+    /// UPSERT operation missing required unique constraint specification
     #[error("Missing unique")]
     MissingUnique,
 }

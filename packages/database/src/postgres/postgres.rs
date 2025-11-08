@@ -328,12 +328,31 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+/// `PostgreSQL` database connection pool
+///
+/// Manages a pool of `PostgreSQL` connections using `deadpool-postgres` for efficient
+/// connection reuse and concurrent query execution.
 #[allow(clippy::module_name_repetitions)]
 pub struct PostgresDatabase {
     pool: Pool,
 }
 
 impl PostgresDatabase {
+    /// Creates a new `PostgreSQL` database instance from a connection pool
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use deadpool_postgres::{Pool, Config};
+    /// use switchy_database::postgres::postgres::PostgresDatabase;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::new();
+    /// let pool = config.create_pool(None, tokio_postgres::NoTls)?;
+    /// let db = PostgresDatabase::new(pool);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub const fn new(pool: Pool) -> Self {
         Self { pool }
@@ -355,6 +374,10 @@ impl std::fmt::Debug for PostgresDatabase {
     }
 }
 
+/// `PostgreSQL` database transaction
+///
+/// Represents an active transaction on a `PostgreSQL` connection. Provides ACID guarantees
+/// for a series of database operations. Must be explicitly committed or rolled back.
 pub struct PostgresTransaction {
     client: Arc<Mutex<deadpool_postgres::Object>>,
     committed: Arc<Mutex<bool>>,
@@ -362,6 +385,8 @@ pub struct PostgresTransaction {
 }
 
 impl PostgresTransaction {
+    /// Creates a new transaction by executing `BEGIN`
+    ///
     /// # Errors
     ///
     /// * If the transaction could not be started via `BEGIN`
@@ -388,23 +413,38 @@ impl std::fmt::Debug for PostgresTransaction {
     }
 }
 
+/// Errors specific to `PostgreSQL` database operations
+///
+/// Wraps errors from the underlying `tokio-postgres` driver and connection pool,
+/// plus additional error types for query validation and result handling.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Error)]
 pub enum PostgresDatabaseError {
+    /// Error from the underlying `tokio-postgres` driver
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
+    /// Error from the `deadpool-postgres` connection pool
     #[error(transparent)]
     Pool(#[from] PoolError),
+    /// Returned row did not contain an ID column
     #[error("No ID")]
     NoId,
+    /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
+    /// The request was malformed or invalid
     #[error("Invalid request")]
     InvalidRequest,
+    /// UPSERT operation missing required unique constraint specification
     #[error("Missing unique")]
     MissingUnique,
+    /// `PostgreSQL` type name not found in type registry
     #[error("Type Not Found: '{type_name}'")]
-    TypeNotFound { type_name: String },
+    TypeNotFound {
+        /// The name of the type that was not found
+        type_name: String,
+    },
+    /// Parameter type cannot be bound to `PostgreSQL` query
     #[error("Invalid parameter type: {0}")]
     InvalidParameterType(String),
 }

@@ -55,6 +55,22 @@ use std::{
 
 use crate::Database;
 
+/// Global registry of database profiles
+///
+/// This static provides thread-safe access to the global database profiles registry.
+/// Use this to register and retrieve database connections for different profiles.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::profiles::PROFILES;
+/// use std::sync::Arc;
+///
+/// # async fn example(db: Box<dyn switchy_database::Database>) {
+/// PROFILES.add("user1".to_string(), Arc::new(db));
+/// let db = PROFILES.get("user1").unwrap();
+/// # }
+/// ```
 pub static PROFILES: LazyLock<DatabaseProfiles> = LazyLock::new(DatabaseProfiles::default);
 
 /// Manager for multiple database connections indexed by profile names
@@ -193,6 +209,7 @@ impl DatabaseProfiles {
 /// ```
 #[derive(Debug, Clone)]
 pub struct LibraryDatabase {
+    /// The database instance for this profile
     pub database: Arc<Box<dyn Database>>,
 }
 
