@@ -118,20 +118,41 @@ impl FormValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FormStep {
     /// Fill multiple form fields at once.
-    FillForm { data: FormData },
+    FillForm {
+        /// Form data containing field values.
+        data: FormData,
+    },
     /// Fill a single form field.
-    FillField { selector: String, value: FormValue },
+    FillField {
+        /// CSS selector for the field.
+        selector: String,
+        /// Value to fill in the field.
+        value: FormValue,
+    },
     /// Select an option from a dropdown.
-    SelectOption { selector: String, value: String },
+    SelectOption {
+        /// CSS selector for the dropdown.
+        selector: String,
+        /// Value of the option to select.
+        value: String,
+    },
     /// Upload a file to a file input.
     UploadFile {
+        /// CSS selector for the file input.
         selector: String,
+        /// Path to the file to upload.
         file_path: PathBuf,
     },
     /// Submit a form.
-    SubmitForm { selector: String },
+    SubmitForm {
+        /// CSS selector for the form.
+        selector: String,
+    },
     /// Reset a form to its initial state.
-    ResetForm { selector: String },
+    ResetForm {
+        /// CSS selector for the form.
+        selector: String,
+    },
 }
 
 impl FormStep {

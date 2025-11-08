@@ -22,11 +22,20 @@ pub use workflow::*;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WaitStep {
     /// Wait for an element matching the selector to exist in the DOM.
-    ElementExists { selector: String },
+    ElementExists {
+        /// CSS selector to match the element.
+        selector: String,
+    },
     /// Wait for the URL to contain the specified fragment.
-    UrlContains { fragment: String },
+    UrlContains {
+        /// Fragment that should appear in the URL.
+        fragment: String,
+    },
     /// Wait for a fixed duration.
-    Duration { duration: Duration },
+    Duration {
+        /// Duration to wait.
+        duration: Duration,
+    },
 }
 
 /// Errors that can occur during test execution.
@@ -34,22 +43,48 @@ pub enum WaitStep {
 pub enum TestError {
     /// A test step failed with a specific reason.
     #[error("Test step failed: {step} - {reason}")]
-    StepFailed { step: String, reason: String },
+    StepFailed {
+        /// Description of the step that failed.
+        step: String,
+        /// Reason for the failure.
+        reason: String,
+    },
     /// A wait condition timed out.
     #[error("Wait timeout: {condition}")]
-    WaitTimeout { condition: String },
+    WaitTimeout {
+        /// Description of the condition that timed out.
+        condition: String,
+    },
     /// An element could not be found in the DOM.
     #[error("Element not found: {selector}")]
-    ElementNotFound { selector: String },
+    ElementNotFound {
+        /// CSS selector of the element that was not found.
+        selector: String,
+    },
     /// An HTTP request failed.
     #[error("HTTP request failed: {url} - {reason}")]
-    HttpRequestFailed { url: String, reason: String },
+    HttpRequestFailed {
+        /// URL of the failed request.
+        url: String,
+        /// Reason for the failure.
+        reason: String,
+    },
     /// Form validation failed.
     #[error("Form validation failed: {field} - {reason}")]
-    FormValidationFailed { field: String, reason: String },
+    FormValidationFailed {
+        /// Name of the field that failed validation.
+        field: String,
+        /// Reason for the validation failure.
+        reason: String,
+    },
     /// Navigation to a URL failed.
     #[error("Navigation failed: {url} - {reason}")]
-    NavigationFailed { url: String, reason: String },
+    NavigationFailed {
+        /// URL that failed to navigate to.
+        url: String,
+        /// Reason for the failure.
+        reason: String,
+    },
     /// JSON serialization or deserialization failed.
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),

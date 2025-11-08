@@ -12,37 +12,76 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InteractionStep {
     /// Click an element.
-    Click { selector: String },
+    Click {
+        /// CSS selector for the element to click.
+        selector: String,
+    },
     /// Double-click an element.
-    DoubleClick { selector: String },
+    DoubleClick {
+        /// CSS selector for the element to double-click.
+        selector: String,
+    },
     /// Right-click an element.
-    RightClick { selector: String },
+    RightClick {
+        /// CSS selector for the element to right-click.
+        selector: String,
+    },
     /// Hover over an element.
-    Hover { selector: String },
+    Hover {
+        /// CSS selector for the element to hover over.
+        selector: String,
+    },
     /// Focus an element.
-    Focus { selector: String },
+    Focus {
+        /// CSS selector for the element to focus.
+        selector: String,
+    },
     /// Blur an element.
-    Blur { selector: String },
+    Blur {
+        /// CSS selector for the element to blur.
+        selector: String,
+    },
     /// Press a keyboard key.
-    KeyPress { key: Key },
+    KeyPress {
+        /// Key to press.
+        key: Key,
+    },
     /// Press a sequence of keyboard keys.
-    KeySequence { keys: Vec<Key> },
+    KeySequence {
+        /// Keys to press in sequence.
+        keys: Vec<Key>,
+    },
     /// Scroll the page.
     Scroll {
+        /// Direction to scroll.
         direction: ScrollDirection,
+        /// Amount to scroll in pixels.
         amount: i32,
     },
     /// Drag and drop from one element to another.
     DragAndDrop {
+        /// CSS selector for the source element.
         from_selector: String,
+        /// CSS selector for the target element.
         to_selector: String,
     },
     /// Move the mouse to coordinates.
-    MouseMove { x: i32, y: i32 },
+    MouseMove {
+        /// X coordinate.
+        x: i32,
+        /// Y coordinate.
+        y: i32,
+    },
     /// Press a mouse button.
-    MouseDown { button: MouseButton },
+    MouseDown {
+        /// Button to press.
+        button: MouseButton,
+    },
     /// Release a mouse button.
-    MouseUp { button: MouseButton },
+    MouseUp {
+        /// Button to release.
+        button: MouseButton,
+    },
 }
 
 impl InteractionStep {
@@ -279,28 +318,39 @@ pub enum MouseButton {
 pub enum ControlStep {
     /// Repeat steps a fixed number of times.
     Loop {
+        /// Number of times to repeat.
         count: u32,
+        /// Steps to execute in each iteration.
         steps: Vec<crate::TestStep>,
     },
     /// Execute steps for each item in a data set.
     ForEach {
+        /// Data items to iterate over.
         data: Vec<serde_json::Value>,
+        /// Steps to execute for each item.
         steps: Vec<crate::TestStep>,
     },
     /// Execute multiple branches in parallel.
     Parallel {
+        /// Map of branch names to their steps.
         branches: BTreeMap<String, Vec<crate::TestStep>>,
     },
     /// Try steps with optional catch and finally blocks.
     Try {
+        /// Steps to execute in the try block.
         steps: Vec<crate::TestStep>,
+        /// Steps to execute if an error occurs.
         catch_steps: Option<Vec<crate::TestStep>>,
+        /// Steps to execute regardless of success or failure.
         finally_steps: Option<Vec<crate::TestStep>>,
     },
     /// Retry steps on failure with a maximum attempt count.
     Retry {
+        /// Steps to retry on failure.
         steps: Vec<crate::TestStep>,
+        /// Maximum number of attempts.
         max_attempts: u32,
+        /// Optional delay between retry attempts.
         delay: Option<Duration>,
     },
 }
