@@ -83,10 +83,14 @@ impl From<TidalArtist> for ApiGlobalSearchResult {
 /// Available image sizes for Tidal artist pictures.
 #[derive(Clone, Copy, Debug)]
 pub enum TidalArtistImageSize {
-    Max,    // 750
-    Large,  // 480
-    Medium, // 320
-    Small,  // 160
+    /// Maximum resolution (750x750 pixels).
+    Max,
+    /// Large resolution (480x480 pixels).
+    Large,
+    /// Medium resolution (320x320 pixels).
+    Medium,
+    /// Small resolution (160x160 pixels).
+    Small,
 }
 
 impl From<ImageCoverSize> for TidalArtistImageSize {
@@ -323,11 +327,16 @@ impl TryFrom<Album> for TidalAlbum {
 /// Available image sizes for Tidal album covers.
 #[derive(Clone, Copy, Debug)]
 pub enum TidalAlbumImageSize {
-    Max,       // 1280
-    Large,     // 640
-    Medium,    // 320
-    Small,     // 160
-    Thumbnail, // 80
+    /// Maximum resolution (1280x1280 pixels).
+    Max,
+    /// Large resolution (640x640 pixels).
+    Large,
+    /// Medium resolution (320x320 pixels).
+    Medium,
+    /// Small resolution (160x160 pixels).
+    Small,
+    /// Thumbnail resolution (80x80 pixels).
+    Thumbnail,
 }
 
 impl From<ImageCoverSize> for TidalAlbumImageSize {

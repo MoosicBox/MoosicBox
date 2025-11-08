@@ -142,6 +142,7 @@ pub struct ApiTidalAlbum {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
 pub enum ApiTrack {
+    /// Track from the Tidal music service.
     Tidal(ApiTidalTrack),
 }
 
