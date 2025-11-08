@@ -91,6 +91,7 @@ pub mod parse;
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(CalculationType))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum Calculation {
     /// A numeric value.
     Number(Box<Number>),
@@ -249,6 +250,7 @@ impl std::fmt::Display for Calculation {
 #[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(NumberType))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum Number {
     /// Floating-point absolute value.
     Real(f32),
@@ -884,6 +886,7 @@ impl From<&str> for OverrideCondition {
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(OverrideItemType))]
+#[strum_discriminants(vis(pub(crate)))]
 pub enum OverrideItem {
     /// Element ID override.
     StrId(String),
@@ -1453,6 +1456,27 @@ impl OverrideItem {
     }
 }
 
+/// Pattern matches on [`OverrideItem`] variants and executes an action with the inner value.
+///
+/// This macro simplifies handling of [`OverrideItem`] enums by matching all variants
+/// and binding the inner value to a specified identifier for use in an action expression.
+///
+/// # Parameters
+///
+/// * `$val` - The [`OverrideItem`] value to match against
+/// * `$name` - Identifier to bind the inner value to in each match arm
+/// * `$action` - Expression to execute for each matched variant, using `$name`
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use hyperchad_transformer::{OverrideItem, Number, override_item};
+/// let item = OverrideItem::Width(Number::from(100));
+/// let result: String = override_item!(&item, val, {
+///     // Action to perform with the value
+///     format!("Width: {:?}", val)
+/// });
+/// ```
 #[macro_export]
 macro_rules! override_item {
     ($val:expr, $name:ident, $action:expr) => {{

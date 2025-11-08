@@ -13,39 +13,116 @@ pub mod calc;
 /// Font metrics traits and types for text measurement during layout.
 pub mod font;
 
+/// Epsilon value for floating-point comparisons in layout calculations.
+///
+/// Used by float comparison macros to determine equality within a tolerance of 0.001.
 pub static EPSILON: f32 = 0.001;
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
 
+/// Compares two floats for approximate equality within epsilon tolerance.
+///
+/// Returns `true` if the absolute difference between `$a` and `$b` is less than
+/// [`EPSILON`](crate::layout::EPSILON) (0.001).
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::float_eq;
+/// assert!(float_eq!(1.0_f32, 1.0005_f32));
+/// assert!(!float_eq!(1.0_f32, 1.01_f32));
+/// ```
 #[macro_export]
 macro_rules! float_eq {
     ($a:expr, $b:expr $(,)?) => {{ ($a - $b).abs() < $crate::layout::EPSILON }};
 }
 
+/// Compares if float `$a` is less than `$b` with epsilon tolerance.
+///
+/// Returns `true` if `$a` is less than `$b` by at least [`EPSILON`](crate::layout::EPSILON).
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::float_lt;
+/// assert!(float_lt!(1.0, 2.0));
+/// assert!(!float_lt!(2.0, 1.0));
+/// ```
 #[macro_export]
 macro_rules! float_lt {
     ($a:expr, $b:expr $(,)?) => {{ $a - $b <= -$crate::layout::EPSILON }};
 }
 
+/// Compares if float `$a` is less than or approximately equal to `$b` with epsilon tolerance.
+///
+/// Returns `true` if `$a` is less than `$b` or within [`EPSILON`](crate::layout::EPSILON) of `$b`.
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::float_lte;
+/// assert!(float_lte!(1.0, 2.0));
+/// assert!(float_lte!(1.0, 1.0001));
+/// ```
 #[macro_export]
 macro_rules! float_lte {
     ($a:expr, $b:expr $(,)?) => {{ $a - $b < $crate::layout::EPSILON }};
 }
 
+/// Compares if float `$a` is greater than `$b` with epsilon tolerance.
+///
+/// Returns `true` if `$a` is greater than `$b` by at least [`EPSILON`](crate::layout::EPSILON).
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::float_gt;
+/// assert!(float_gt!(2.0, 1.0));
+/// assert!(!float_gt!(1.0, 2.0));
+/// ```
 #[macro_export]
 macro_rules! float_gt {
     ($a:expr, $b:expr $(,)?) => {{ $a - $b >= $crate::layout::EPSILON }};
 }
 
+/// Compares if float `$a` is greater than or approximately equal to `$b` with epsilon tolerance.
+///
+/// Returns `true` if `$a` is greater than `$b` or within [`EPSILON`](crate::layout::EPSILON) of `$b`.
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::float_gte;
+/// assert!(float_gte!(2.0, 1.0));
+/// assert!(float_gte!(1.0, 1.0001));
+/// ```
 #[macro_export]
 macro_rules! float_gte {
     ($a:expr, $b:expr $(,)?) => {{ $a - $b > -$crate::layout::EPSILON }};
 }
 
+/// Returns the minimum of two float values.
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::min_float;
+/// assert_eq!(min_float!(1.0, 2.0), 1.0);
+/// assert_eq!(min_float!(3.0, 1.5), 1.5);
+/// ```
 #[macro_export]
 macro_rules! min_float {
     ($a:expr, $b:expr $(,)?) => {{ if $a <= $b { $a } else { $b } }};
 }
 
+/// Returns the maximum of two float values.
+///
+/// # Examples
+///
+/// ```rust
+/// # use hyperchad_transformer::max_float;
+/// assert_eq!(max_float!(1.0, 2.0), 2.0);
+/// assert_eq!(max_float!(3.0, 1.5), 3.0);
+/// ```
 #[macro_export]
 macro_rules! max_float {
     ($a:expr, $b:expr $(,)?) => {{ if $a > $b { $a } else { $b } }};
