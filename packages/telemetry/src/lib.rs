@@ -126,15 +126,30 @@ pub fn get_resource_attr(name: &'static str) -> Resource {
 }
 
 /// HTTP metrics handler for Actix web applications.
+///
+/// Implementations of this trait provide metrics collection and reporting functionality
+/// for Actix web services. The trait combines both endpoint handling (serving metrics
+/// to external consumers) and middleware (collecting metrics from incoming requests).
 #[cfg(feature = "actix")]
 pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
     /// Handles HTTP metrics endpoint requests.
+    ///
+    /// This method is called when the metrics endpoint receives a request, and should
+    /// return the current metrics in an appropriate format (typically Prometheus text format).
+    ///
+    /// # Errors
+    ///
+    /// * Returns errors if metrics cannot be serialized or if the HTTP response cannot be constructed
     fn call(
         &self,
         request: HttpRequest,
     ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>;
 
     /// Returns the request metrics middleware.
+    ///
+    /// This middleware should be added to the Actix web application to collect metrics
+    /// from incoming HTTP requests, such as request counts, latencies, and status codes.
+    #[must_use]
     fn request_middleware(&self) -> RequestMetrics;
 }
 
