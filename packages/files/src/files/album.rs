@@ -43,18 +43,25 @@ pub enum AlbumCoverError {
     /// Album cover not found for the specified album ID
     #[error("Album cover not found for album: {0}")]
     NotFound(Id),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Error fetching cover from remote source
     #[error(transparent)]
     FetchCover(#[from] FetchCoverError),
+    /// Error fetching local album cover file
     #[error(transparent)]
     FetchLocalAlbumCover(#[from] FetchLocalAlbumCoverError),
+    /// IO error reading or writing cover file
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
+    /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to read cover file at the specified path
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
+    /// Invalid or unsupported API source
     #[error("Invalid source")]
     InvalidSource,
 }
@@ -139,10 +146,13 @@ pub enum FetchLocalAlbumCoverError {
     /// IO error reading cover file
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// No album cover available
     #[error("No Album Cover")]
     NoAlbumCover,
+    /// Invalid or unsupported source type
     #[error("Invalid source")]
     InvalidSource,
 }
