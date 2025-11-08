@@ -74,8 +74,11 @@ pub enum RequestError {
 /// via HTTP requests, supporting all standard music API operations.
 #[derive(Clone)]
 pub struct RemoteLibraryMusicApi {
+    /// Base URL of the remote `MoosicBox` server (e.g., `"http://localhost:8000"`).
     host: String,
+    /// The API source identifier for this connection.
     api_source: ApiSource,
+    /// Profile name to use for authentication/authorization.
     profile: String,
 }
 
@@ -103,6 +106,8 @@ impl MusicApi for RemoteLibraryMusicApi {
         &self.api_source
     }
 
+    /// Fetches a paginated list of artists from the remote server.
+    ///
     /// # Panics
     ///
     /// Panics if the number of artists returned exceeds `u32::MAX`.
@@ -436,6 +441,8 @@ impl MusicApi for RemoteLibraryMusicApi {
         })?))
     }
 
+    /// Fetches all available versions of a specific album from the remote server.
+    ///
     /// # Panics
     ///
     /// Panics if the number of album versions returned exceeds `u32::MAX`.
@@ -589,6 +596,8 @@ impl MusicApi for RemoteLibraryMusicApi {
         }))
     }
 
+    /// Fetches tracks by their IDs from the remote server.
+    ///
     /// # Panics
     ///
     /// Panics if the number of tracks returned exceeds `u32::MAX`.
@@ -674,6 +683,8 @@ impl MusicApi for RemoteLibraryMusicApi {
         })
     }
 
+    /// Fetches all tracks belonging to a specific album from the remote server.
+    ///
     /// # Panics
     ///
     /// Panics if the number of tracks returned exceeds `u32::MAX`.
