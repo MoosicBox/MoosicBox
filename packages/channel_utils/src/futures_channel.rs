@@ -132,7 +132,7 @@ impl<T: Send> PrioritizedSender<T> {
     ///
     /// # Errors
     ///
-    /// * If the send failed
+    /// * If the channel is disconnected and cannot accept messages
     pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
         self.inner.unbounded_send(msg)
     }
