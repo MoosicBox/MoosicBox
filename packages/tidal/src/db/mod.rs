@@ -61,8 +61,10 @@ pub async fn delete_tidal_config(
 /// Errors that can occur when retrieving Tidal configuration from the database.
 #[derive(Debug, Error)]
 pub enum GetTidalConfigError {
+    /// Database query or connection error.
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to parse configuration data from database result.
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
 }

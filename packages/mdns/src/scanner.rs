@@ -71,6 +71,10 @@ impl Context {
 }
 
 /// Async service implementation for the mDNS scanner.
+///
+/// This module provides the async service wrapper for the mDNS scanner, enabling
+/// background scanning of the network for `MoosicBox` servers. The service automatically
+/// handles lifecycle management through the `Processor` trait implementation.
 pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context, super::Error);
 }

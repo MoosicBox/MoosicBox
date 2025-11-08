@@ -4,8 +4,17 @@ use async_trait::async_trait;
 use futures::Stream;
 use rupnp::{Device, ssdp::SearchTarget};
 
+/// Trait for discovering `UPnP` devices on the network.
+///
+/// Implementors of this trait provide different strategies for discovering `UPnP` devices,
+/// such as using the standard `rupnp` library or simulating devices for testing.
 #[async_trait]
 pub trait UpnpScanner: Send + Sync {
+    /// Discovers `UPnP` devices on the network matching the search target.
+    ///
+    /// # Errors
+    ///
+    /// * If the discovery operation fails due to network or protocol errors
     async fn discover(
         &self,
         search_target: &SearchTarget,
@@ -13,6 +22,9 @@ pub trait UpnpScanner: Send + Sync {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Device, rupnp::Error>> + Send>>, rupnp::Error>;
 }
 
+/// Real `UPnP` scanner implementation using the `rupnp` library.
+///
+/// This scanner performs actual network discovery of `UPnP` devices using SSDP.
 #[allow(dead_code)]
 pub struct RupnpScanner;
 
@@ -42,6 +54,10 @@ pub mod simulator {
 
     use super::UpnpScanner;
 
+    /// Simulated `UPnP` scanner for testing purposes.
+    ///
+    /// This scanner returns an empty stream of devices, allowing testing
+    /// of `UPnP`-dependent code without requiring real devices on the network.
     pub struct SimulatorScanner;
 
     #[async_trait]

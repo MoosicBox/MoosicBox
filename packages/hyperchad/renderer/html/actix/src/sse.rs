@@ -55,13 +55,13 @@ impl EventData {
         }
     }
 
-    /// Sets `id` name field, returning a new data message.
+    /// Sets the event ID field and returns the modified message.
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
         self
     }
 
-    /// Sets `event` name field, returning a new data message.
+    /// Sets the event type field and returns the modified message.
     pub fn event(mut self, event: impl Into<String>) -> Self {
         self.event = Some(event.into());
         self
@@ -138,6 +138,11 @@ impl Event {
 /// * Returns an error if request preparation fails via `prepare_request`
 /// * Returns an error if content conversion fails via `to_body`
 /// * Returns an error if UTF-8 conversion of body content fails
+///
+/// # Panics
+///
+/// * Panics if JSON serialization of canvas update fails
+/// * Panics if compression encoding fails (gzip, deflate, or zstd)
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn handle_sse<
     T: Send + Sync + Clone + 'static,

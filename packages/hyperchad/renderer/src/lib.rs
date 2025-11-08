@@ -96,6 +96,8 @@ impl Content {
         ContentBuilder::default()
     }
 
+    /// Create a `Content::View` from any type that can be converted to a `View`.
+    ///
     /// # Errors
     ///
     /// * If the `view` fails to convert to a `View`

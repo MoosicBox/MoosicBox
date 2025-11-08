@@ -345,6 +345,9 @@ impl MusicApi for LibraryMusicApi {
         Ok(page)
     }
 
+    /// # Panics
+    ///
+    /// * Will panic if any page in the paging response doesn't have a total
     async fn artist_albums(
         &self,
         artist_id: &Id,

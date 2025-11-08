@@ -669,133 +669,217 @@ pub const EXCITATION_LSB_PDF: &[u8] = &[120, 0];
 // ====================================================================
 
 // Signal Type: Inactive, Quantization Offset: Low
-// RFC 6716 Table 52 line 5314: Pulse count 0, PDF {2, 254}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 0 (RFC 6716 Table 52 line 5314)
+///
+/// PDF: {2, 254}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_0: &[u8] = &[254, 0];
 
-// RFC 6716 Table 52 line 5316: Pulse count 1, PDF {207, 49}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 1 (RFC 6716 Table 52 line 5316)
+///
+/// PDF: {207, 49}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_1: &[u8] = &[49, 0];
 
-// RFC 6716 Table 52 line 5318: Pulse count 2, PDF {189, 67}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 2 (RFC 6716 Table 52 line 5318)
+///
+/// PDF: {189, 67}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_2: &[u8] = &[67, 0];
 
-// RFC 6716 Table 52 line 5327: Pulse count 3, PDF {179, 77}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 3 (RFC 6716 Table 52 line 5327)
+///
+/// PDF: {179, 77}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_3: &[u8] = &[77, 0];
 
-// RFC 6716 Table 52 line 5329: Pulse count 4, PDF {174, 82}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 4 (RFC 6716 Table 52 line 5329)
+///
+/// PDF: {174, 82}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_4: &[u8] = &[82, 0];
 
-// RFC 6716 Table 52 line 5331: Pulse count 5, PDF {163, 93}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 5 (RFC 6716 Table 52 line 5331)
+///
+/// PDF: {163, 93}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_5: &[u8] = &[93, 0];
 
-// RFC 6716 Table 52 line 5333: Pulse count 6+, PDF {157, 99}/256
+/// Sign PDF for inactive signal, low quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5333)
+///
+/// PDF: {157, 99}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_LOW_6PLUS: &[u8] = &[99, 0];
 
 // Signal Type: Inactive, Quantization Offset: High
-// RFC 6716 Table 52 line 5335: Pulse count 0, PDF {58, 198}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 0 (RFC 6716 Table 52 line 5335)
+///
+/// PDF: {58, 198}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_0: &[u8] = &[198, 0];
 
-// RFC 6716 Table 52 line 5337: Pulse count 1, PDF {245, 11}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 1 (RFC 6716 Table 52 line 5337)
+///
+/// PDF: {245, 11}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_1: &[u8] = &[11, 0];
 
-// RFC 6716 Table 52 line 5339: Pulse count 2, PDF {238, 18}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 2 (RFC 6716 Table 52 line 5339)
+///
+/// PDF: {238, 18}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_2: &[u8] = &[18, 0];
 
-// RFC 6716 Table 52 line 5341: Pulse count 3, PDF {232, 24}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 3 (RFC 6716 Table 52 line 5341)
+///
+/// PDF: {232, 24}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_3: &[u8] = &[24, 0];
 
-// RFC 6716 Table 52 line 5343: Pulse count 4, PDF {225, 31}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 4 (RFC 6716 Table 52 line 5343)
+///
+/// PDF: {225, 31}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_4: &[u8] = &[31, 0];
 
-// RFC 6716 Table 52 line 5345: Pulse count 5, PDF {220, 36}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 5 (RFC 6716 Table 52 line 5345)
+///
+/// PDF: {220, 36}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_5: &[u8] = &[36, 0];
 
-// RFC 6716 Table 52 line 5347: Pulse count 6+, PDF {211, 45}/256
+/// Sign PDF for inactive signal, high quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5347)
+///
+/// PDF: {211, 45}/256 converted to ICDF format
 pub const SIGN_PDF_INACTIVE_HIGH_6PLUS: &[u8] = &[45, 0];
 
 // Signal Type: Unvoiced, Quantization Offset: Low
-// RFC 6716 Table 52 line 5349: Pulse count 0, PDF {1, 255}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 0 (RFC 6716 Table 52 line 5349)
+///
+/// PDF: {1, 255}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_0: &[u8] = &[255, 0];
 
-// RFC 6716 Table 52 line 5351: Pulse count 1, PDF {210, 46}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 1 (RFC 6716 Table 52 line 5351)
+///
+/// PDF: {210, 46}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_1: &[u8] = &[46, 0];
 
-// RFC 6716 Table 52 line 5353: Pulse count 2, PDF {190, 66}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 2 (RFC 6716 Table 52 line 5353)
+///
+/// PDF: {190, 66}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_2: &[u8] = &[66, 0];
 
-// RFC 6716 Table 52 line 5355: Pulse count 3, PDF {178, 78}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 3 (RFC 6716 Table 52 line 5355)
+///
+/// PDF: {178, 78}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_3: &[u8] = &[78, 0];
 
-// RFC 6716 Table 52 line 5357: Pulse count 4, PDF {169, 87}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 4 (RFC 6716 Table 52 line 5357)
+///
+/// PDF: {169, 87}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_4: &[u8] = &[87, 0];
 
-// RFC 6716 Table 52 line 5359: Pulse count 5, PDF {162, 94}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 5 (RFC 6716 Table 52 line 5359)
+///
+/// PDF: {162, 94}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_5: &[u8] = &[94, 0];
 
-// RFC 6716 Table 52 line 5361-5362: Pulse count 6+, PDF {152, 104}/256
+/// Sign PDF for unvoiced signal, low quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5361-5362)
+///
+/// PDF: {152, 104}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_LOW_6PLUS: &[u8] = &[104, 0];
 
 // Signal Type: Unvoiced, Quantization Offset: High
-// RFC 6716 Table 52 line 5364: Pulse count 0, PDF {48, 208}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 0 (RFC 6716 Table 52 line 5364)
+///
+/// PDF: {48, 208}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_0: &[u8] = &[208, 0];
 
-// RFC 6716 Table 52 line 5366: Pulse count 1, PDF {242, 14}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 1 (RFC 6716 Table 52 line 5366)
+///
+/// PDF: {242, 14}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_1: &[u8] = &[14, 0];
 
-// RFC 6716 Table 52 line 5368: Pulse count 2, PDF {235, 21}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 2 (RFC 6716 Table 52 line 5368)
+///
+/// PDF: {235, 21}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_2: &[u8] = &[21, 0];
 
-// RFC 6716 Table 52 line 5370: Pulse count 3, PDF {224, 32}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 3 (RFC 6716 Table 52 line 5370)
+///
+/// PDF: {224, 32}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_3: &[u8] = &[32, 0];
 
-// RFC 6716 Table 52 line 5372: Pulse count 4, PDF {214, 42}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 4 (RFC 6716 Table 52 line 5372)
+///
+/// PDF: {214, 42}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_4: &[u8] = &[42, 0];
 
-// RFC 6716 Table 52 line 5374: Pulse count 5, PDF {205, 51}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 5 (RFC 6716 Table 52 line 5374)
+///
+/// PDF: {205, 51}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_5: &[u8] = &[51, 0];
 
-// RFC 6716 Table 52 line 5383: Pulse count 6+, PDF {190, 66}/256
+/// Sign PDF for unvoiced signal, high quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5383)
+///
+/// PDF: {190, 66}/256 converted to ICDF format
 pub const SIGN_PDF_UNVOICED_HIGH_6PLUS: &[u8] = &[66, 0];
 
 // Signal Type: Voiced, Quantization Offset: Low
-// RFC 6716 Table 52 line 5385: Pulse count 0, PDF {1, 255}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 0 (RFC 6716 Table 52 line 5385)
+///
+/// PDF: {1, 255}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_0: &[u8] = &[255, 0];
 
-// RFC 6716 Table 52 line 5387: Pulse count 1, PDF {162, 94}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 1 (RFC 6716 Table 52 line 5387)
+///
+/// PDF: {162, 94}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_1: &[u8] = &[94, 0];
 
-// RFC 6716 Table 52 line 5389-5390: Pulse count 2, PDF {152, 104}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 2 (RFC 6716 Table 52 line 5389-5390)
+///
+/// PDF: {152, 104}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_2: &[u8] = &[104, 0];
 
-// RFC 6716 Table 52 line 5392-5393: Pulse count 3, PDF {147, 109}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 3 (RFC 6716 Table 52 line 5392-5393)
+///
+/// PDF: {147, 109}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_3: &[u8] = &[109, 0];
 
-// RFC 6716 Table 52 line 5395-5396: Pulse count 4, PDF {144, 112}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 4 (RFC 6716 Table 52 line 5395-5396)
+///
+/// PDF: {144, 112}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_4: &[u8] = &[112, 0];
 
-// RFC 6716 Table 52 line 5398-5399: Pulse count 5, PDF {141, 115}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 5 (RFC 6716 Table 52 line 5398-5399)
+///
+/// PDF: {141, 115}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_5: &[u8] = &[115, 0];
 
-// RFC 6716 Table 52 line 5401-5402: Pulse count 6+, PDF {138, 118}/256
+/// Sign PDF for voiced signal, low quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5401-5402)
+///
+/// PDF: {138, 118}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_LOW_6PLUS: &[u8] = &[118, 0];
 
 // Signal Type: Voiced, Quantization Offset: High
-// RFC 6716 Table 52 line 5404: Pulse count 0, PDF {8, 248}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 0 (RFC 6716 Table 52 line 5404)
+///
+/// PDF: {8, 248}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_0: &[u8] = &[248, 0];
 
-// RFC 6716 Table 52 line 5406: Pulse count 1, PDF {203, 53}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 1 (RFC 6716 Table 52 line 5406)
+///
+/// PDF: {203, 53}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_1: &[u8] = &[53, 0];
 
-// RFC 6716 Table 52 line 5408: Pulse count 2, PDF {187, 69}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 2 (RFC 6716 Table 52 line 5408)
+///
+/// PDF: {187, 69}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_2: &[u8] = &[69, 0];
 
-// RFC 6716 Table 52 line 5410: Pulse count 3, PDF {176, 80}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 3 (RFC 6716 Table 52 line 5410)
+///
+/// PDF: {176, 80}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_3: &[u8] = &[80, 0];
 
-// RFC 6716 Table 52 line 5412: Pulse count 4, PDF {168, 88}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 4 (RFC 6716 Table 52 line 5412)
+///
+/// PDF: {168, 88}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_4: &[u8] = &[88, 0];
 
-// RFC 6716 Table 52 line 5414: Pulse count 5, PDF {161, 95}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 5 (RFC 6716 Table 52 line 5414)
+///
+/// PDF: {161, 95}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_5: &[u8] = &[95, 0];
 
-// RFC 6716 Table 52 line 5416-5417: Pulse count 6+, PDF {154, 102}/256
+/// Sign PDF for voiced signal, high quantization offset, pulse count 6+ (RFC 6716 Table 52 line 5416-5417)
+///
+/// PDF: {154, 102}/256 converted to ICDF format
 pub const SIGN_PDF_VOICED_HIGH_6PLUS: &[u8] = &[102, 0];

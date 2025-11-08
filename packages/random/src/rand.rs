@@ -41,6 +41,7 @@ impl RandRng {
     /// Creates a new random number generator from an optional seed.
     ///
     /// If `None` is provided, the RNG is seeded from entropy.
+    #[must_use]
     pub fn new<T: Into<u64>, S: Into<Option<T>>>(seed: S) -> Self {
         Self(Arc::new(Mutex::new(
             seed.into()

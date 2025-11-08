@@ -1,3 +1,17 @@
+//! HTTP API endpoints for playback control.
+//!
+//! This module provides RESTful API endpoints for controlling playback, including
+//! play, pause, stop, seek, and status operations. It uses Actix-web for HTTP handling
+//! and integrates with the core playback functionality.
+//!
+//! # Endpoints
+//!
+//! * Play operations: `play_track_endpoint`, `play_tracks_endpoint`, `play_album_endpoint`
+//! * Playback control: `pause_playback_endpoint`, `resume_playback_endpoint`, `stop_track_endpoint`
+//! * Seeking and position: `seek_track_endpoint`, `next_track_endpoint`, `previous_track_endpoint`
+//! * Status: `player_status_endpoint`
+//! * General updates: `update_playback_endpoint`
+
 #![allow(clippy::needless_for_each)]
 #![allow(clippy::future_not_send)]
 
@@ -211,9 +225,15 @@ async fn get_player(
     }
 }
 
+/// Retrieves tracks from the music API by parsing track ID ranges.
+///
+/// Parses a string containing track IDs or ranges (e.g., "1,3-5,7") and fetches
+/// the corresponding tracks from the music API.
+///
 /// # Errors
 ///
 /// * If failed to get the tracks from the `MusicApi`
+/// * If failed to parse the track ID ranges
 pub async fn get_track_or_ids_from_track_id_ranges(
     api: &dyn MusicApi,
     track_ids: &str,

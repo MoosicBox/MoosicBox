@@ -1,6 +1,6 @@
 //! Layout calculation implementation for containers.
 //!
-//! This module provides the [`Calculator`] type for performing layout calculations
+//! This module provides the [`Calculator`](crate::layout::calc::Calculator) type for performing layout calculations
 //! on container trees, including width/height calculation, flexbox layout, margin/padding,
 //! and element positioning.
 

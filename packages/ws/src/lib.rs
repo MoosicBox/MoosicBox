@@ -27,7 +27,7 @@
 //!     profile: Some("default".to_string()),
 //!     player_actions: vec![],
 //! };
-//! let response = connect(&sender, &context);
+//! let response = connect(&sender, &context).await;
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]

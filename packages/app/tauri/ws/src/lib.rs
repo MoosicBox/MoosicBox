@@ -252,6 +252,10 @@ impl WsClient {
     /// # Errors
     ///
     /// * Returns [`ConnectWsError::Unauthorized`] if the websocket connection is unauthorized
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the internal `RwLock` is poisoned
     pub async fn start(
         &self,
         client_id: Option<String>,
