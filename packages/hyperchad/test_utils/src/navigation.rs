@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NavigationStep {
     /// Navigate to a URL.
-    GoTo { url: String },
+    GoTo {
+        /// URL to navigate to.
+        url: String,
+    },
     /// Navigate back in history.
     GoBack,
     /// Navigate forward in history.
@@ -17,7 +20,10 @@ pub enum NavigationStep {
     /// Reload the current page.
     Reload,
     /// Set the URL hash fragment.
-    SetHash { hash: String },
+    SetHash {
+        /// Hash fragment to set (without the # symbol).
+        hash: String,
+    },
 }
 
 impl NavigationStep {
