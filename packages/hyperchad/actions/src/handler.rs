@@ -848,6 +848,7 @@ pub mod utils {
     }
 
     impl<'a, C: ActionContainer> ContainerElementFinder<'a, C> {
+        /// Creates a new container-based element finder
         pub const fn new(
             container: &'a C,
             positions: &'a BTreeMap<usize, (f32, f32)>,
@@ -1013,7 +1014,7 @@ pub mod example_integration {
         ///
         /// # Panics
         ///
-        /// * If mouse position is not set
+        /// * If the RwLock is poisoned (another thread panicked while holding the lock)
         pub fn update_mouse_position(&self, x: f32, y: f32) {
             *self.mouse_position.write().unwrap() = Some((x, y));
         }
