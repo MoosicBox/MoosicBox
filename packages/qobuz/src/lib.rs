@@ -194,6 +194,10 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 static CLIENT: LazyLock<switchy::http::Client> =
     LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
 
+/// Global `ApiSource` identifier for Qobuz music service.
+///
+/// Used to tag music items (artists, albums, tracks) with their originating source
+/// for multi-source library management.
 pub static API_SOURCE: LazyLock<ApiSource> =
     LazyLock::new(|| ApiSource::register("Qobuz", "Qobuz"));
 
@@ -1722,6 +1726,11 @@ impl From<TrackAudioQuality> for QobuzAudioQuality {
     }
 }
 
+/// Retrieves the streaming URL for a Qobuz track at the specified audio quality.
+///
+/// This function generates a signed request to obtain the direct file URL for streaming
+/// or downloading a track. The URL is time-limited and requires proper authentication.
+///
 /// # Panics
 ///
 /// * If time went backwards
