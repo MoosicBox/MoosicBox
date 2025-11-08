@@ -1,22 +1,37 @@
 use std::path::Path;
 
+/// Test resources and utilities for creating test workspaces.
+///
+/// This module provides helper functions and types for loading test workspaces,
+/// creating temporary workspace structures, and loading Cargo.lock files for testing.
 pub mod test_resources {
     use super::Path;
     use serde::{Deserialize, Serialize};
     use tempfile::TempDir;
 
+    /// Representation of a Cargo.lock file for testing.
+    ///
+    /// A simplified version of Cargo.lock used in test resources, serializable
+    /// to/from JSON for easy test fixture creation.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct CargoLock {
+        /// Cargo.lock format version (typically 3 or 4)
         pub version: u32,
+        /// List of locked packages with their versions and dependencies
         pub package: Vec<CargoLockPackage>,
     }
 
+    /// A single package entry in a test Cargo.lock file.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct CargoLockPackage {
+        /// Package name
         pub name: String,
+        /// Package version (semver string)
         pub version: String,
+        /// Package source (registry URL, git URL, or path)
         #[serde(skip_serializing_if = "Option::is_none")]
         pub source: Option<String>,
+        /// List of dependencies (name and version)
         #[serde(skip_serializing_if = "Option::is_none")]
         pub dependencies: Option<Vec<String>>,
     }

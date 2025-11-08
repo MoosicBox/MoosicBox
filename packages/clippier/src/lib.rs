@@ -47,6 +47,12 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Package filtering based on Cargo.toml properties.
+///
+/// This module provides functionality to filter workspace packages based on
+/// criteria applied to their Cargo.toml properties using a flexible filter syntax.
+/// Supports logical operators (AND, OR, NOT), various comparison operators,
+/// and Unicode support.
 pub mod package_filter;
 
 use std::{
@@ -94,6 +100,12 @@ pub mod git_diff;
 /// ```
 pub mod feature_validator;
 
+/// Testing utilities for workspace analysis.
+///
+/// This module provides test helpers and utilities for creating test workspaces
+/// and validating workspace analysis functionality.
+///
+/// Requires the `test-utils` feature or test configuration.
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
@@ -1896,11 +1908,28 @@ pub fn generate_dockerfile_from_git(
     Ok(())
 }
 
-/// Generates the content of a Dockerfile for a target package from git
+/// Generates Dockerfile content for a package built from a git repository.
+///
+/// Creates a multi-stage Dockerfile that clones the repository, builds the specified
+/// package with the given features, and packages it into a minimal final image.
+///
+/// # Arguments
+///
+/// * `git_url` - URL of the git repository to clone
+/// * `git_ref` - Git reference (branch, tag, or commit) to checkout
+/// * `target_package` - Name of the workspace package to build
+/// * `enabled_features` - Optional list of features to enable
+/// * `no_default_features` - Whether to disable default features
+/// * `base_image` - Docker base image for the build stage
+/// * `final_image` - Docker image for the final runtime stage
+/// * `args` - Additional arguments to pass to the binary
+/// * `custom_env_vars` - Environment variables for runtime
+/// * `build_env_vars` - Environment variables for build stage
+/// * `bin` - Optional binary name (if different from package name)
 ///
 /// # Errors
 ///
-/// * If IO error occurs
+/// * `std::fmt::Error` - If writing to the string fails
 #[allow(
     clippy::too_many_lines,
     clippy::too_many_arguments,
@@ -2034,11 +2063,14 @@ pub fn generate_dockerfile_content_from_git(
     Ok(content)
 }
 
-/// Generates the content of a .dockerignore file for git mode
+/// Generates `.dockerignore` file content for git-based builds.
+///
+/// Creates a minimal dockerignore file optimized for git-based Docker builds,
+/// excluding only essential directories (.git, target) and build artifacts.
 ///
 /// # Errors
 ///
-/// * If IO error occurs
+/// * `std::fmt::Error` - If writing to the string fails
 pub fn generate_dockerignore_content_for_git() -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write as _;
 
@@ -2054,11 +2086,28 @@ pub fn generate_dockerignore_content_for_git() -> Result<String, Box<dyn std::er
     Ok(content)
 }
 
-/// Generates the content of a Dockerfile for a target package
+/// Generates Dockerfile content for a workspace package.
+///
+/// Creates an optimized multi-stage Dockerfile that builds only the specified package
+/// and its workspace dependencies, packaging the result into a minimal final image.
+///
+/// # Arguments
+///
+/// * `dependencies` - List of (`package_name`, `package_path`) tuples for workspace dependencies
+/// * `target_package` - Name of the workspace package to build
+/// * `enabled_features` - Optional list of features to enable
+/// * `no_default_features` - Whether to disable default features
+/// * `base_image` - Docker base image for the build stage
+/// * `final_image` - Docker image for the final runtime stage
+/// * `args` - Additional arguments to pass to the binary
+/// * `build_args` - Optional cargo build arguments
+/// * `custom_env_vars` - Environment variables for runtime
+/// * `build_env_vars` - Environment variables for build stage
+/// * `bin` - Optional binary name (if different from package name)
 ///
 /// # Errors
 ///
-/// * If IO error occurs
+/// * `std::fmt::Error` - If writing to the string fails
 #[allow(
     clippy::too_many_lines,
     clippy::too_many_arguments,
@@ -3151,11 +3200,33 @@ pub fn handle_ci_steps_command(
     }
 }
 
-/// Handles the features command
+/// Generates a feature matrix for workspace packages.
+///
+/// Analyzes the workspace to determine all valid feature combinations for each package,
+/// optionally filtering by affected packages and applying feature constraints. Returns
+/// the matrix in JSON or raw format for use in CI/CD pipelines.
+///
+/// # Arguments
+///
+/// * `file` - Path to the workspace root or Cargo.toml
+/// * `only_affected` - Only include packages affected by changes
+/// * `change_ref` - Git reference for change detection (e.g., "origin/main")
+/// * `head_ref` - Git reference for the current state (e.g., "HEAD")
+/// * `skip_filters` - Package filters to skip (excluded packages)
+/// * `include_filters` - Package filters to include (only these packages)
+/// * `enable` - Features to enable for all packages
+/// * `disable` - Features to disable for all packages
+/// * `features` - Specific features to generate combinations for
+/// * `max_parallel` - Maximum parallel jobs (for rechunking)
+/// * `randomize` - Randomize the order of feature combinations
+/// * `seed` - Seed for randomization
+/// * `output` - Output format (JSON or raw)
 ///
 /// # Errors
 ///
-/// * If fails to process configs or find affected packages
+/// * `std::io::Error` - If file operations fail
+/// * `serde_json::Error` - If JSON serialization fails
+/// * `anyhow::Error` - If workspace processing or filtering fails
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
