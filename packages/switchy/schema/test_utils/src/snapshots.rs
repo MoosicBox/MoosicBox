@@ -190,18 +190,21 @@ impl MigrationSnapshotTest {
         }
     }
 
+    /// Set the directory containing migration files to test
     #[must_use]
     pub fn migrations_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.migrations_dir = Some(path.into());
         self
     }
 
+    /// Enable or disable schema assertion in snapshot
     #[must_use]
     pub const fn assert_schema(mut self, enabled: bool) -> Self {
         self.assert_schema = enabled;
         self
     }
 
+    /// Enable or disable migration sequence assertion in snapshot
     #[must_use]
     pub const fn assert_sequence(mut self, enabled: bool) -> Self {
         self.assert_sequence = enabled;
