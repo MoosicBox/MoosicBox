@@ -20,6 +20,10 @@ pub enum Error {
     PluginInvoke(#[from] tauri::plugin::mobile::PluginInvokeError),
 }
 
+/// Serializes errors as strings for transmission over IPC boundaries.
+///
+/// This implementation converts errors to their display string representation,
+/// making them compatible with Tauri's IPC serialization requirements.
 impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
