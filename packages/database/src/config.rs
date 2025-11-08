@@ -48,6 +48,12 @@ use crate::Database;
 static DATABASE: LazyLock<Arc<RwLock<Option<Arc<Box<dyn Database>>>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(None)));
 
+/// Initialize the global database instance
+///
+/// Sets the global database singleton that will be used by [`ConfigDatabase`]
+/// throughout the application. This should be called once at application startup
+/// before any database operations.
+///
 /// # Panics
 ///
 /// * If fails to get a writer to the `DATABASE` `RwLock`

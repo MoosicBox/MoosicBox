@@ -91,6 +91,12 @@ pub struct DatabaseProfiles {
 }
 
 impl DatabaseProfiles {
+    /// Register a database instance for the specified profile
+    ///
+    /// Associates a database connection with a profile name, making it available
+    /// for retrieval via [`get`](Self::get). If a database is already registered
+    /// for this profile, it will be replaced.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -102,6 +108,11 @@ impl DatabaseProfiles {
             .insert(profile, LibraryDatabase { database });
     }
 
+    /// Remove a database profile
+    ///
+    /// Removes the database associated with the specified profile name.
+    /// If the profile doesn't exist, this operation has no effect.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -109,6 +120,12 @@ impl DatabaseProfiles {
         self.profiles.write().unwrap().retain(|p, _| p != profile);
     }
 
+    /// Register a database and immediately retrieve it
+    ///
+    /// Convenience method that combines [`add`](Self::add) and [`get`](Self::get)
+    /// in a single operation. Registers the database for the specified profile
+    /// and returns the wrapped database instance.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
@@ -119,6 +136,11 @@ impl DatabaseProfiles {
         self.get(profile).unwrap()
     }
 
+    /// Retrieve the database for a specific profile
+    ///
+    /// Returns the database instance associated with the given profile name,
+    /// or `None` if no database is registered for that profile.
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
@@ -131,6 +153,12 @@ impl DatabaseProfiles {
             .find_map(|(p, db)| if p == profile { Some(db.clone()) } else { None })
     }
 
+    /// Get a list of all registered profile names
+    ///
+    /// Returns a vector containing the names of all profiles that have
+    /// databases registered. The order is determined by the internal
+    /// `BTreeMap` (alphabetically sorted).
+    ///
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
