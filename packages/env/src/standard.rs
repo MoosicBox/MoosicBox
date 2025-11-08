@@ -19,10 +19,16 @@ impl Default for StandardEnv {
 }
 
 impl EnvProvider for StandardEnv {
+    /// Get an environment variable as a string
+    ///
+    /// # Errors
+    ///
+    /// * If the environment variable is not found
     fn var(&self, name: &str) -> Result<String> {
         std::env::var(name).map_err(|_| EnvError::NotFound(name.to_string()))
     }
 
+    /// Get all environment variables
     fn vars(&self) -> BTreeMap<String, String> {
         std::env::vars().collect()
     }
