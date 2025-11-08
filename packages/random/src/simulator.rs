@@ -121,6 +121,7 @@ impl SimulatorRng {
     /// Creates a new simulator random number generator from an optional seed.
     ///
     /// If `None` is provided, the current thread-local seed is used.
+    #[must_use]
     pub fn new<T: Into<u64>, S: Into<Option<T>>>(seed: S) -> Self {
         let seed = seed.into().map(Into::into);
         Self(Arc::new(Mutex::new(SmallRng::seed_from_u64(
