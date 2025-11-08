@@ -139,12 +139,15 @@ impl<R: PortRange> PortReservation<R> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
     /// let ports = reservation.reserve_ports(10);
     /// for port in ports {
     ///     assert!(reservation.is_reserved(port));
     /// }
+    /// # }
     /// ```
     pub fn reserve_ports(&self, num_ports: usize) -> Vec<Port> {
         let mut reserved_ports = self.reserved_ports.lock().unwrap();
@@ -179,10 +182,13 @@ impl<R: PortRange> PortReservation<R> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
     /// let port = reservation.reserve_port();
     /// assert!(reservation.is_reserved(port.unwrap()));
+    /// # }
     /// ```
     pub fn reserve_port(&self) -> Option<Port> {
         let mut reserved_ports = self.reserved_ports.lock().unwrap();
@@ -212,6 +218,8 @@ impl<R: PortRange> PortReservation<R> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
     /// let ports = reservation.reserve_ports(10);
@@ -219,6 +227,7 @@ impl<R: PortRange> PortReservation<R> {
     /// for port in ports {
     ///     assert!(!reservation.is_reserved(port));
     /// }
+    /// # }
     /// ```
     pub fn release_ports(&self, ports: impl Iterator<Item = Port>) {
         let mut reserved_ports = self.reserved_ports.lock().unwrap();
@@ -240,11 +249,14 @@ impl<R: PortRange> PortReservation<R> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
     /// let ports = reservation.reserve_ports(10);
     /// reservation.release_port(ports[0]);
     /// assert!(!reservation.is_reserved(ports[0]));
+    /// # }
     /// ```
     pub fn release_port(&self, port: Port) {
         self.reserved_ports.lock().unwrap().remove(&port);
@@ -267,10 +279,13 @@ impl<R: PortRange> PortReservation<R> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "reservation")]
+    /// # {
     /// use openport::PortReservation;
     /// let reservation = PortReservation::new(15000..16000);
     /// let ports = reservation.reserve_ports(10);
     /// assert!(reservation.is_reserved(ports[0]));
+    /// # }
     /// ```
     pub fn is_reserved(&self, port: Port) -> bool {
         self.reserved_ports.lock().unwrap().contains(&port)
