@@ -2,6 +2,7 @@ use moosicbox_json_utils::ToValueType;
 use switchy::database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 
+/// Data models for Tidal database persistence.
 pub mod models;
 
 use crate::db::models::TidalConfig;
