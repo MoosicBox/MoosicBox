@@ -47,18 +47,25 @@ pub enum ArtistCoverError {
     /// Artist cover not found for the specified artist ID
     #[error("Artist cover not found for artist: {0} ({1})")]
     NotFound(Id, String),
+    /// Music API error
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Error fetching cover from remote source
     #[error(transparent)]
     FetchCover(#[from] FetchCoverError),
+    /// Error fetching local artist cover file
     #[error(transparent)]
     FetchLocalArtistCover(#[from] FetchLocalArtistCoverError),
+    /// IO error reading or writing cover file
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
+    /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Failed to read cover file at the specified path
     #[error("Failed to read file with path: {0} ({1})")]
     File(String, String),
+    /// Invalid or unsupported API source
     #[error("Invalid source")]
     InvalidSource,
 }
@@ -166,10 +173,13 @@ pub enum FetchLocalArtistCoverError {
     /// IO error reading cover file
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// No artist cover available
     #[error("No Artist Cover")]
     NoArtistCover,
+    /// Invalid or unsupported source type
     #[error("Invalid source")]
     InvalidSource,
 }
