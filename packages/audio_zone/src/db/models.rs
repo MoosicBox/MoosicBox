@@ -1,3 +1,9 @@
+//! Database model types for audio zone operations.
+//!
+//! This module defines the raw database models used for querying and storing audio zone data.
+//! These models are internal representations that map directly to database tables and are
+//! converted to domain models for use in the public API.
+
 use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue as _};
 
 /// Database model representing an audio zone.

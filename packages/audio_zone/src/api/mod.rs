@@ -1,3 +1,30 @@
+//! HTTP API endpoints for audio zone management.
+//!
+//! This module provides Actix-web route handlers for creating, reading, updating, and deleting
+//! audio zones via REST API. All endpoints support pagination and return JSON responses.
+//!
+//! # Endpoints
+//!
+//! * `GET /` - List audio zones with pagination
+//! * `GET /with-session` - List audio zones with their active playback sessions
+//! * `POST /` - Create a new audio zone
+//! * `PATCH /` - Update an existing audio zone
+//! * `DELETE /` - Delete an audio zone
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! use actix_web::{App, web};
+//! use moosicbox_audio_zone::api;
+//!
+//! # fn main() {
+//! let app = App::new()
+//!     .service(
+//!         api::bind_services(web::scope("/audio-zones"))
+//!     );
+//! # }
+//! ```
+
 #![allow(clippy::needless_for_each)]
 
 use actix_web::{
