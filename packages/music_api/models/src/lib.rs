@@ -372,7 +372,7 @@ pub trait FromId {
     ///
     /// # Panics
     ///
-    /// May panic if the string cannot be parsed into the ID type (implementation-dependent).
+    /// Panics if the string cannot be parsed into the ID type (implementation-dependent).
     fn into_id(str: &str) -> Self;
 }
 
@@ -391,6 +391,9 @@ impl FromId for u64 {
         self.to_string()
     }
 
+    /// # Panics
+    ///
+    /// Panics if the string cannot be parsed as a valid `u64` integer.
     fn into_id(str: &str) -> Self {
         str.parse::<Self>().unwrap()
     }
