@@ -74,6 +74,13 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Simulation utilities module.
+///
+/// Provides utility functions for managing worker threads and cancellation tokens
+/// in simulation environments. Includes thread-local and global cancellation support
+/// for gracefully terminating simulations and async operations.
+///
+/// Requires the `utils` feature flag.
 #[cfg(feature = "utils")]
 pub use simvar_utils as utils;
 
