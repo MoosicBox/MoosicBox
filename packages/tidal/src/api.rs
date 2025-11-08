@@ -429,6 +429,10 @@ pub struct TidalTrackFileUrlQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the track ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackFileUrlQuery>,
@@ -488,6 +492,10 @@ pub struct TidalTrackPlaybackInfoQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the track ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackPlaybackInfoQuery>,
@@ -558,6 +566,10 @@ pub struct TidalFavoriteArtistsQuery {
 ///
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
@@ -631,6 +643,10 @@ pub struct TidalAddFavoriteArtistsQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the artist ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteArtistsQuery>,
@@ -701,6 +717,10 @@ pub struct TidalRemoveFavoriteArtistsQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the artist ID does not exist or is not in favorites
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteArtistsQuery>,
@@ -776,6 +796,10 @@ pub struct TidalFavoriteAlbumsQuery {
 ///
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
@@ -855,6 +879,10 @@ pub struct TidalAddFavoriteAlbumsQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the album ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteAlbumsQuery>,
@@ -925,6 +953,10 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the album ID does not exist or is not in favorites
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
@@ -995,6 +1027,10 @@ pub struct TidalAddFavoriteTracksQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the track ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteTracksQuery>,
@@ -1065,6 +1101,10 @@ pub struct TidalRemoveFavoriteTracksQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the track ID does not exist or is not in favorites
 /// * `ErrorInternalServerError` - If the request to Tidal fails
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteTracksQuery>,
@@ -1140,6 +1180,10 @@ pub struct TidalFavoriteTracksQuery {
 ///
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
@@ -1240,6 +1284,10 @@ impl From<AlbumType> for TidalAlbumType {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the artist ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
@@ -1313,6 +1361,10 @@ pub struct TidalAlbumTracksQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the album ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
@@ -1381,6 +1433,10 @@ pub struct TidalAlbumQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the album ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
@@ -1446,6 +1502,10 @@ pub struct TidalArtistQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the artist ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
@@ -1511,6 +1571,10 @@ pub struct TidalTrackQuery {
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorNotFound` - If the track ID does not exist
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
@@ -1589,6 +1653,10 @@ pub struct TidalSearchQuery {
 ///
 /// * `ErrorUnauthorized` - If no valid access token is provided
 /// * `ErrorInternalServerError` - If the request to Tidal fails or the response cannot be parsed
+///
+/// # Panics
+///
+/// * If the access token header contains non-UTF8 data
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,
