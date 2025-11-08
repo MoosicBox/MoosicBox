@@ -103,6 +103,10 @@ impl Default for UpnpContext {
 moosicbox_async_service::async_service!(UpnpCommand, UpnpContext, ListenerError);
 
 impl Handle {
+    /// Subscribes to media info updates from a `UPnP` device.
+    ///
+    /// Returns a subscription ID that can be used to unsubscribe later.
+    ///
     /// # Errors
     ///
     /// * If failed to send the command
@@ -127,6 +131,10 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// Subscribes to position info updates from a `UPnP` device.
+    ///
+    /// Returns a subscription ID that can be used to unsubscribe later.
+    ///
     /// # Errors
     ///
     /// * If failed to send the command
@@ -151,6 +159,10 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// Subscribes to transport info updates from a `UPnP` device.
+    ///
+    /// Returns a subscription ID that can be used to unsubscribe later.
+    ///
     /// # Errors
     ///
     /// * If failed to send the command
@@ -175,6 +187,8 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// Unsubscribes from a previously created subscription.
+    ///
     /// # Errors
     ///
     /// * If failed to send the command
