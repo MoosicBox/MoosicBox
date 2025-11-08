@@ -7,8 +7,8 @@ use clippier::git_diff::{
 use clippier::test_utils::test_resources::{load_cargo_lock_for_git_diff, load_test_workspace};
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_build_external_dependency_map() {
+#[switchy_async::test]
+async fn test_build_external_dependency_map() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     let external_dep_map = build_external_dependency_map(temp_dir.path(), &workspace_members)
@@ -29,11 +29,12 @@ fn test_build_external_dependency_map() {
         ],
     }
     "###);
+    Ok(())
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_end_to_end_external_dependency_analysis() {
+#[switchy_async::test]
+async fn test_end_to_end_external_dependency_analysis() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load the comprehensive Cargo.lock from test resources
@@ -68,11 +69,12 @@ fn test_end_to_end_external_dependency_analysis() {
         "client",
     ]
     "###);
+    Ok(())
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_deep_transitive_dependency_change() {
+#[switchy_async::test]
+async fn test_deep_transitive_dependency_change() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load the complex deep dependencies Cargo.lock from test resources
@@ -109,11 +111,12 @@ fn test_deep_transitive_dependency_change() {
         "client",
     ]
     "###);
+    Ok(())
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_multiple_level_dependency_changes() {
+#[switchy_async::test]
+async fn test_multiple_level_dependency_changes() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Load comprehensive Cargo.lock that includes multiple-level dependencies
@@ -151,11 +154,12 @@ fn test_multiple_level_dependency_changes() {
         "models",
     ]
     "###);
+    Ok(())
 }
 
 #[cfg(feature = "git-diff")]
-#[test]
-fn test_no_transitive_impact() {
+#[switchy_async::test]
+async fn test_no_transitive_impact() -> Result<(), Box<dyn std::error::Error>> {
     let (temp_dir, workspace_members) = load_test_workspace("basic");
 
     // Create a test scenario where a dependency changes but doesn't affect workspace packages
@@ -185,10 +189,12 @@ fn test_no_transitive_impact() {
     insta::assert_debug_snapshot!(affected_workspace_packages, @r###"
     []
     "###);
+    Ok(())
 }
 
-#[test]
-fn test_git_submodules_with_chunking_and_spreading() {
+#[switchy_async::test]
+async fn test_git_submodules_with_chunking_and_spreading() -> Result<(), Box<dyn std::error::Error>>
+{
     use clippier::{OutputType, handle_features_command};
     use clippier_test_utilities::test_resources::load_test_workspace;
 
@@ -217,8 +223,11 @@ fn test_git_submodules_with_chunking_and_spreading() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
     )
+    .await
     .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
@@ -244,4 +253,5 @@ fn test_git_submodules_with_chunking_and_spreading() {
     for entry in without_submodules_entries {
         assert!(entry.get("gitSubmodules").is_none() || entry["gitSubmodules"].is_null());
     }
+    Ok(())
 }

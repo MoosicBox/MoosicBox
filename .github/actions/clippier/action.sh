@@ -300,6 +300,10 @@ build_clippier_command() {
             done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
         fi
 
+        # Runner allocation flags
+        [[ "$INPUT_ENABLE_RUNNER_ALLOCATION" == "true" ]] && cmd="$cmd --enable-runner-allocation"
+        [[ -n "$INPUT_GITHUB_TOKEN_FOR_RUNNERS" ]] && cmd="$cmd --github-token \"$INPUT_GITHUB_TOKEN_FOR_RUNNERS\""
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "affected-packages" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"
@@ -377,8 +381,17 @@ build_clippier_command() {
 
 run_clippier() {
     local cmd=$(build_clippier_command)
+    export RUST_LOG=off
     echo "Running: $cmd" >&2
-    eval "$cmd" | jq -c .
+
+    # Capture all output
+    local output=$(eval "$cmd")
+
+    # Print all but the last line to stderr (logs)
+    echo "$output" | head -n -1 >&2
+
+    # Parse only the last line as JSON
+    echo "$output" | tail -1 | jq -c .
 }
 
 inject_custom_reasoning() {
@@ -422,10 +435,6 @@ transform_output() {
         jq_filter="$jq_filter | map(.name |= sub(\"$INPUT_TRANSFORM_NAME_REGEX\"; \"$INPUT_TRANSFORM_NAME_REPLACEMENT\"))"
     fi
 
-    if [[ -n "$INPUT_OS_SUFFIX" ]]; then
-        jq_filter="$jq_filter | map(if .os != null then .os = (.os + \"$INPUT_OS_SUFFIX\") else . end)"
-    fi
-
     local properties_array="[\"$(echo "$INPUT_MATRIX_PROPERTIES" | sed 's/,/","/g')\"]"
     jq_filter="$jq_filter | map({
         \"name\": .name,
@@ -433,6 +442,7 @@ transform_output() {
         \"features\": .features,
         \"requiredFeatures\": (if .requiredFeatures != null then .requiredFeatures | join(\",\") else null end),
         \"os\": .os,
+        \"runner\": .runner,
         \"dependencies\": .dependencies,
         \"toolchains\": .toolchains,
         \"ciSteps\": .ciSteps,
@@ -660,7 +670,7 @@ generate_summary() {
                         "  **Why this package is affected:**\n" +
                         (.reasoning | map("  - " + .) | join("\n")) +
                         "\n  \n  **Jobs to run:**\n" +
-                        (.jobs | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) +
+                        (.jobs | map("  - **" + .runner + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) +
                         "\n  </details>"
                     else
                         .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
@@ -779,7 +789,7 @@ setup_ci_environment() {
 
     local name=$(echo "$package_json" | jq -r '.name // ""')
     local path=$(echo "$package_json" | jq -r '.path // "."')
-    local os=$(echo "$package_json" | jq -r '.os // "ubuntu-latest"')
+    local os=$(echo "$package_json" | jq -r '.os // "ubuntu"')
     local git_submodules=$(echo "$package_json" | jq -r '.gitSubmodules // false')
     local toolchains=$(echo "$package_json" | jq -r '.toolchains // [] | @json')
     local ci_toolchains=$(echo "$package_json" | jq -r '.ciToolchains // [] | @json')

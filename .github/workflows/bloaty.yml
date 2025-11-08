@@ -60,7 +60,7 @@ jobs:
                   transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
 
     bloaty:
-        runs-on: ${{ matrix.package.os }}
+        runs-on: ${{ matrix.package.runner }}
 
         needs: build-matrix
 

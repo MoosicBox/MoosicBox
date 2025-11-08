@@ -172,12 +172,7 @@ inputs:
     matrix-properties:
         description: "Comma-separated list of properties to include in matrix"
         required: false
-        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
-
-    os-suffix:
-        description: 'Suffix to add to OS field (e.g., "-latest")'
-        required: false
-        default: "-latest"
+        default: "name,path,features,requiredFeatures,os,runner,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
 
     generate-summary:
         description: "Generate GitHub workflow summary"
@@ -270,6 +265,16 @@ inputs:
         required: false
         default: "rustfmt, clippy"
 
+    enable-runner-allocation:
+        description: "Enable runner pool allocation"
+        required: false
+        default: "false"
+
+    github-token-for-runners:
+        description: "GitHub token for runner health checks"
+        required: false
+        default: ${{ github.token }}
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -349,7 +354,7 @@ runs:
               node-version: latest
 
         - name: Setup cmake
-          if: inputs.command == 'setup'
+          if: inputs.command == 'setup' && (runner.name == 'ubuntu-latest' || runner.name == 'macos-latest' || runner.name == 'windows-latest')
           uses: jwlawson/actions-setup-cmake@v2
           with:
               cmake-version: "3.x"
@@ -418,7 +423,6 @@ runs:
               INPUT_TRANSFORM_NAME_REGEX: ${{ inputs.transform-name-regex }}
               INPUT_TRANSFORM_NAME_REPLACEMENT: ${{ inputs.transform-name-replacement }}
               INPUT_MATRIX_PROPERTIES: ${{ inputs.matrix-properties }}
-              INPUT_OS_SUFFIX: ${{ inputs.os-suffix }}
               INPUT_GENERATE_SUMMARY: ${{ inputs.generate-summary }}
               INPUT_SUMMARY_TITLE: ${{ inputs.summary-title }}
               INPUT_SUMMARY_INCLUDE_SEED: ${{ inputs.summary-include-seed }}
@@ -434,6 +438,8 @@ runs:
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
+              INPUT_ENABLE_RUNNER_ALLOCATION: ${{ inputs.enable-runner-allocation }}
+              INPUT_GITHUB_TOKEN_FOR_RUNNERS: ${{ inputs.github-token-for-runners }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

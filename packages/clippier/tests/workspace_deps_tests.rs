@@ -18,7 +18,8 @@ fn test_workspace_dependency_resolution() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test simple dependency resolution
-    let result = clippier::find_workspace_dependencies(temp_dir.path(), "api", None, false);
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
+    let result = clippier::find_workspace_dependencies(&workspace_context, "api", None, false);
     assert!(result.is_ok());
 }
 
@@ -27,7 +28,8 @@ fn test_transitive_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test transitive dependency chain
-    let result = clippier::find_workspace_dependencies(temp_dir.path(), "web", None, false);
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
+    let result = clippier::find_workspace_dependencies(&workspace_context, "web", None, false);
     assert!(result.is_ok());
 }
 
@@ -36,8 +38,9 @@ fn test_feature_conditional_deps() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test feature-conditional dependencies
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::find_workspace_dependencies(
-        temp_dir.path(),
+        &workspace_context,
         "core",
         Some(&["database".to_string()]),
         false,
@@ -50,8 +53,9 @@ fn test_all_potential_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test all potential dependencies mode
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
     let result = clippier::find_workspace_dependencies(
-        temp_dir.path(),
+        &workspace_context,
         "core",
         None,
         true, // all_potential_deps = true
@@ -64,7 +68,8 @@ fn test_dev_build_dependencies() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test inclusion of dev and build dependencies
-    let result = clippier::find_workspace_dependencies(temp_dir.path(), "api", None, false);
+    let workspace_context = clippier::WorkspaceContext::new(temp_dir.path()).unwrap();
+    let result = clippier::find_workspace_dependencies(&workspace_context, "api", None, false);
     assert!(result.is_ok());
 }
 

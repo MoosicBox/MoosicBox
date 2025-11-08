@@ -2,8 +2,8 @@ use clippier::{OutputType, handle_features_command};
 use clippier_test_utilities::test_resources::load_test_workspace;
 use std::collections::HashSet;
 
-#[test]
-fn test_packages_filter_single_package() {
+#[switchy_async::test]
+async fn test_packages_filter_single_package() -> Result<(), Box<dyn std::error::Error>> {
     // Test filtering to a single package
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -29,11 +29,13 @@ fn test_packages_filter_single_package() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should only contain configs for the "api" package
     for config in &json {
@@ -43,10 +45,11 @@ fn test_packages_filter_single_package() {
         !json.is_empty(),
         "Should have at least one config for api package"
     );
+    Ok(())
 }
 
-#[test]
-fn test_packages_filter_multiple_packages() {
+#[switchy_async::test]
+async fn test_packages_filter_multiple_packages() -> Result<(), Box<dyn std::error::Error>> {
     // Test filtering to multiple packages
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -72,11 +75,13 @@ fn test_packages_filter_multiple_packages() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Collect unique package names - web has multiple configs (frontend-build, ssr-build)
     let package_names: HashSet<String> = json
@@ -93,10 +98,11 @@ fn test_packages_filter_multiple_packages() {
     assert!(!package_names.contains("core"));
     assert!(!package_names.contains("models"));
     assert!(!package_names.contains("shared-utils"));
+    Ok(())
 }
 
-#[test]
-fn test_packages_filter_empty_list() {
+#[switchy_async::test]
+async fn test_packages_filter_empty_list() -> Result<(), Box<dyn std::error::Error>> {
     // Test with empty packages list (should process all packages)
     let (temp_dir, _) = load_test_workspace("complex");
     let result_empty = handle_features_command(
@@ -122,8 +128,11 @@ fn test_packages_filter_empty_list() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
     let result_none = handle_features_command(
         temp_dir.path().to_str().unwrap(),
@@ -148,15 +157,15 @@ fn test_packages_filter_empty_list() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    // Both should process all packages
-    assert!(result_empty.is_ok());
-    assert!(result_none.is_ok());
-
-    let json_empty: Vec<serde_json::Value> = serde_json::from_str(&result_empty.unwrap()).unwrap();
-    let json_none: Vec<serde_json::Value> = serde_json::from_str(&result_none.unwrap()).unwrap();
+    // Both should process all packages (we got here, so both succeeded)
+    let json_empty: Vec<serde_json::Value> = serde_json::from_str(&result_empty).unwrap();
+    let json_none: Vec<serde_json::Value> = serde_json::from_str(&result_none).unwrap();
 
     // Should have processed all packages (6 base packages + web has 2 configs = 7 total configs, but we check unique names)
     let package_names: HashSet<String> = json_none
@@ -167,10 +176,11 @@ fn test_packages_filter_empty_list() {
 
     // Empty list and None should produce the same result
     assert_eq!(json_empty.len(), json_none.len());
+    Ok(())
 }
 
-#[test]
-fn test_packages_with_os_filter() {
+#[switchy_async::test]
+async fn test_packages_with_os_filter() -> Result<(), Box<dyn std::error::Error>> {
     // Test combining --packages with --os
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -196,11 +206,13 @@ fn test_packages_with_os_filter() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // All configs should be for ubuntu and only for api/web packages
     for config in &json {
@@ -208,10 +220,11 @@ fn test_packages_with_os_filter() {
         let name = config["name"].as_str().unwrap();
         assert!(name == "api" || name == "web" || name == "frontend-build" || name == "ssr-build");
     }
+    Ok(())
 }
 
-#[test]
-fn test_packages_with_chunking() {
+#[switchy_async::test]
+async fn test_packages_with_chunking() -> Result<(), Box<dyn std::error::Error>> {
     // Test combining --packages with --chunked
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -237,11 +250,13 @@ fn test_packages_with_chunking() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Web package should be processed (it has chunked=2 in clippier.toml)
     for config in &json {
@@ -258,10 +273,11 @@ fn test_packages_with_chunking() {
             );
         }
     }
+    Ok(())
 }
 
-#[test]
-fn test_packages_with_features_filter() {
+#[switchy_async::test]
+async fn test_packages_with_features_filter() -> Result<(), Box<dyn std::error::Error>> {
     // Test combining --packages with --features and --skip-features
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -287,11 +303,13 @@ fn test_packages_with_features_filter() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     for config in &json {
         let name = config["name"].as_str().unwrap();
@@ -305,10 +323,11 @@ fn test_packages_with_features_filter() {
             // Just verify it's an array - feature filtering might result in different features
         }
     }
+    Ok(())
 }
 
-#[test]
-fn test_packages_nonexistent_package() {
+#[switchy_async::test]
+async fn test_packages_nonexistent_package() -> Result<(), Box<dyn std::error::Error>> {
     // Test with package name that doesn't exist
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -334,18 +353,21 @@ fn test_packages_nonexistent_package() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should return empty array since package doesn't exist
     assert_eq!(json.len(), 0);
+    Ok(())
 }
 
-#[test]
-fn test_packages_mixed_valid_invalid() {
+#[switchy_async::test]
+async fn test_packages_mixed_valid_invalid() -> Result<(), Box<dyn std::error::Error>> {
     // Test with mix of valid and invalid package names
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -376,11 +398,13 @@ fn test_packages_mixed_valid_invalid() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should only contain configs for valid packages
     let package_names: HashSet<String> = json
@@ -393,10 +417,11 @@ fn test_packages_mixed_valid_invalid() {
     assert!(!package_names.contains("nonexistent"));
     assert!(!package_names.contains("fake_package"));
     assert!(package_names.len() >= 2); // At least api + web configs
+    Ok(())
 }
 
-#[test]
-fn test_packages_case_sensitivity() {
+#[switchy_async::test]
+async fn test_packages_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
     // Test that package names are case-sensitive
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -422,18 +447,21 @@ fn test_packages_case_sensitivity() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Json,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+    let json: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Should not find packages with wrong case
     assert_eq!(json.len(), 0);
+    Ok(())
 }
 
-#[test]
-fn test_packages_raw_output_format() {
+#[switchy_async::test]
+async fn test_packages_raw_output_format() -> Result<(), Box<dyn std::error::Error>> {
     // Test that --packages works with Raw output format
     let (temp_dir, _) = load_test_workspace("complex");
     let result = handle_features_command(
@@ -459,11 +487,13 @@ fn test_packages_raw_output_format() {
         None,
         &[],
         &[],
+        false,
+        None,
         OutputType::Raw,
-    );
+    )
+    .await?;
 
-    assert!(result.is_ok());
-    let output = result.unwrap();
+    let output = result;
 
     // Should have raw output (feature combinations separated by newlines)
     assert!(!output.is_empty());
@@ -471,4 +501,5 @@ fn test_packages_raw_output_format() {
     for line in output.lines() {
         assert!(!line.is_empty());
     }
+    Ok(())
 }

@@ -183,7 +183,7 @@ Combine conditions using `AND`, `OR`, `NOT`, and `()` for grouping:
       skip-if: 'description="Internal AND Testing"'
 ```
 
-**Operator Precedence**: `NOT` > `AND` > `OR`  
+**Operator Precedence**: `NOT` > `AND` > `OR`
 **Case Insensitive**: `AND`, `and`, `And` all work
 
 **Common Use Cases:**
@@ -447,12 +447,11 @@ Each check result contains the full output from the `affected-packages` command,
 
 ### Output Transformation
 
-| Input                        | Description                         | Default   |
-| ---------------------------- | ----------------------------------- | --------- |
-| `transform-name-regex`       | Regex substitution for package name | -         |
-| `transform-name-replacement` | Replacement string                  | `''`      |
-| `matrix-properties`          | Properties to include in matrix     | All       |
-| `os-suffix`                  | Suffix to add to OS field           | `-latest` |
+| Input                        | Description                         | Default |
+| ---------------------------- | ----------------------------------- | ------- |
+| `transform-name-regex`       | Regex substitution for package name | -       |
+| `transform-name-replacement` | Replacement string                  | `''`    |
+| `matrix-properties`          | Properties to include in matrix     | All     |
 
 ## Outputs
 

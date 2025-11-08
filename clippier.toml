@@ -1,0 +1,99 @@
+# ============================================================================
+# RUNNER POOLS - MoosicBox Infrastructure
+# ============================================================================
+
+[runner-pools]
+
+# ============================================================================
+# GitHub-Hosted Runners (Parent Pool)
+# ============================================================================
+
+[runner-pools.github-hosted]
+max_concurrent = 20 # Total across ALL OS types (public repo limit)
+
+# Health check for parent pool (optional)
+[runner-pools.github-hosted.health_check]
+type = "always_available"
+
+# Sub-pools (explicit .pools section)
+[runner-pools.github-hosted.pools.ubuntu-latest]
+label = "ubuntu-latest"
+os    = "ubuntu"
+
+[runner-pools.github-hosted.pools.macos-latest]
+label = "macos-latest"
+os    = "macos"
+
+[runner-pools.github-hosted.pools.windows-latest]
+label = "windows-latest"
+os    = "windows"
+
+# ============================================================================
+# Self-Hosted Runners
+# ============================================================================
+
+[runner-pools.mac-mini-runners]
+label          = "mac-mini-runners"
+max_concurrent = 20
+min_jobs       = 5
+os             = "macos"
+
+[runner-pools.mac-mini-runners.health_check]
+min_available = 1
+type          = "github_api"
+
+[runner-pools.ubuntu-runners]
+label          = "ubuntu-runners"
+max_concurrent = 10
+min_jobs       = 10
+os             = "ubuntu"
+
+[runner-pools.ubuntu-runners.health_check]
+min_available = 1
+type          = "github_api"
+
+[runner-pools.windows-runners]
+label          = "windows-runners"
+max_concurrent = 20
+min_jobs       = 20
+os             = "windows"
+
+[runner-pools.windows-runners.health_check]
+min_available = 1
+type          = "github_api"
+
+# ============================================================================
+# Priority Chains (Per OS)
+# ============================================================================
+
+[runner-pools.priority.ubuntu]
+pools = ["github-hosted.pools.ubuntu-latest", "ubuntu-runners"]
+
+[runner-pools.priority.macos]
+pools = ["github-hosted.pools.macos-latest", "mac-mini-runners"]
+
+[runner-pools.priority.windows]
+pools = ["github-hosted.pools.windows-latest", "windows-runners"]
+
+# ============================================================================
+# Allocation Strategy
+# ============================================================================
+
+[allocation-strategy]
+algorithm           = "capacity_waterfall"
+capacity_multiplier = 3.0
+
+# Cross-OS shared parent allocation
+[allocation-strategy.shared_parent]
+mode  = "priority"
+order = ["macos", "ubuntu", "windows"]
+
+# Per-OS overrides
+[allocation-strategy.ubuntu]
+capacity_multiplier = 5.0
+
+[allocation-strategy.macos]
+capacity_multiplier = 3.0
+
+[allocation-strategy.windows]
+capacity_multiplier = 3.0
