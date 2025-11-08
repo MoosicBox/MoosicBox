@@ -750,6 +750,12 @@ impl PlaybackHandler {
         .await
     }
 
+    /// Plays multiple tracks in sequence.
+    ///
+    /// Begins playback of the specified tracks with optional starting position,
+    /// seek offset, and volume settings. If a playback is already active, it will
+    /// be stopped before starting the new one.
+    ///
     /// # Panics
     ///
     /// * If the `playback` `RwLock` is poisoned
@@ -1003,6 +1009,11 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Skips to the next track in the playlist.
+    ///
+    /// Advances playback to the next track in the current playlist with optional
+    /// seek position. Returns an error if already at the end of the playlist.
+    ///
     /// # Panics
     ///
     /// * If the `playback` `RwLock` is poisoned
@@ -1047,6 +1058,11 @@ impl PlaybackHandler {
         .await
     }
 
+    /// Skips to the previous track in the playlist.
+    ///
+    /// Returns playback to the previous track in the current playlist with optional
+    /// seek position. Returns an error if already at the beginning of the playlist.
+    ///
     /// # Panics
     ///
     /// * If the `playback` `RwLock` is poisoned
@@ -1119,6 +1135,12 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// Updates playback state with multiple configuration options.
+    ///
+    /// This is the primary method for modifying playback state, including playing,
+    /// stopping, seeking, volume control, and playlist changes. It handles complex
+    /// state transitions like pause/resume and play/stop logic.
+    ///
     /// # Panics
     ///
     /// * If the `playback` `RwLock` is poisoned
