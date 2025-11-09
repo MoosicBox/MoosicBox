@@ -1014,7 +1014,7 @@ pub mod example_integration {
         ///
         /// # Panics
         ///
-        /// * If the RwLock is poisoned (another thread panicked while holding the lock)
+        /// * If the `RwLock` is poisoned (another thread panicked while holding the lock)
         pub fn update_mouse_position(&self, x: f32, y: f32) {
             *self.mouse_position.write().unwrap() = Some((x, y));
         }
