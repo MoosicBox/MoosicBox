@@ -235,6 +235,7 @@ inputs:
     clippier-version:
         description: "Git ref/tag for clippier (default: use from current repo)"
         required: false
+        default: "master"
 
     clippier-features:
         description: "Features to enable when building clippier"
@@ -354,12 +355,20 @@ runs:
           with:
               cmake-version: "3.x"
 
+        - name: Checkout MoosicBox for clippier
+          if: inputs.command != 'setup' && inputs.clippier-version != ''
+          uses: actions/checkout@v4
+          with:
+              repository: MoosicBox/MoosicBox
+              ref: ${{ inputs.clippier-version }}
+              path: .clippier-source
+
         - name: Cache clippier binary
           if: inputs.skip-cache != 'true' && inputs.command != 'setup'
           uses: actions/cache@v4
           with:
               path: ./target/release/clippier
-              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ hashFiles('packages/clippier/**') }}
+              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ hashFiles('.clippier-source/packages/clippier/**', 'packages/clippier/**') }}
 
         - name: Build clippier
           if: inputs.command != 'setup'
@@ -367,7 +376,19 @@ runs:
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
                 echo "Building clippier with features: ${{ inputs.clippier-features }}"
-                cargo build --package clippier --features "${{ inputs.clippier-features }}" --release
+
+                if [[ -n "${{ inputs.clippier-version }}" ]]; then
+                  echo "Building clippier from MoosicBox@${{ inputs.clippier-version }}"
+                  cd .clippier-source
+                  cargo build --package clippier --features "${{ inputs.clippier-features }}" --release
+                  mkdir -p ../target/release
+                  cp target/release/clippier ../target/release/
+                  cd ..
+                else
+                  echo "Building clippier from local repository"
+                  cargo build --package clippier --features "${{ inputs.clippier-features }}" --release
+                fi
+
                 chmod +x ./target/release/clippier
               else
                 echo "Using cached clippier binary"
