@@ -46,7 +46,7 @@
     "devDependencies": {
         "@solidjs/meta": "^0.29.4",
         "@solidjs/testing-library": "^0.8.10",
-        "@tauri-apps/cli": "^2.9.3",
+        "@tauri-apps/cli": "^2.9.4",
         "@testing-library/jest-dom": "^5.17.0",
         "@tsconfig/node18": "18.2.2",
         "@types/howler": "^2.2.12",
