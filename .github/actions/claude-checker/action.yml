@@ -3,13 +3,19 @@ description: "Generic Claude-based checker with orchestration features"
 author: "MoosicBox"
 
 inputs:
+    # === Command ===
+    command:
+        description: "Command to run: create-branch, create-pr, check"
+        required: false
+        default: "check"
+
     # === Authentication (Required) ===
     github_token:
         description: "GitHub token with write permissions"
         required: true
     claude_token:
         description: "Claude Code OAuth token"
-        required: true
+        required: false # Not required for create-branch and create-pr commands
 
     # === Prompt Template (One Required) ===
     prompt_template:
@@ -30,8 +36,24 @@ inputs:
 
     # === Behavior ===
     branch_name:
-        description: "Branch name (overrides template default)"
+        description: "Branch name (overrides template default, or used for create-branch/create-pr)"
         required: false
+    branch_prefix:
+        description: "Branch prefix for auto-generation (create-branch command)"
+        required: false
+        default: "claude-updates"
+    existing_branch:
+        description: "Use existing branch if it exists (create-branch command)"
+        required: false
+        default: "true"
+    git_user_name:
+        description: "Git user name for commits"
+        required: false
+        default: "github-actions[bot]"
+    git_user_email:
+        description: "Git user email"
+        required: false
+        default: "github-actions[bot]@users.noreply.github.com"
     commit_message:
         description: "Commit message (supports variables)"
         required: false
@@ -115,6 +137,28 @@ inputs:
         required: false
         default: "COMMIT_MESSAGE_END"
 
+    # === PR Creation (create-pr command) ===
+    pr_base_branch:
+        description: "Base branch for PR (create-pr command)"
+        required: false
+        default: "main"
+    pr_title:
+        description: "PR title (supports template variables, create-pr command)"
+        required: false
+        default: "📝 Automated updates from Claude"
+    pr_body:
+        description: "PR body (supports template variables, create-pr command)"
+        required: false
+        default: ""
+    pr_labels:
+        description: "Comma-separated PR labels (create-pr command)"
+        required: false
+        default: "automated"
+    pr_skip_if_no_changes:
+        description: "Skip PR creation if no changes (create-pr command)"
+        required: false
+        default: "true"
+
     # === Claude Config ===
     model:
         description: "Claude model"
@@ -170,26 +214,138 @@ outputs:
         description: "true if commit was created"
         value: ${{ steps.commit_changes.outputs.commit_created }}
 
+    # create-branch command outputs
+    branch_exists:
+        description: "true if branch already existed (create-branch)"
+        value: ${{ steps.create_branch.outputs.branch_exists }}
+    branch_action:
+        description: "created or checked_out (create-branch)"
+        value: ${{ steps.create_branch.outputs.branch_action }}
+
+    # create-pr command outputs
+    pr_created:
+        description: "true if PR was created or updated (create-pr)"
+        value: ${{ steps.create_pr.outputs.pr_created }}
+    pr_number:
+        description: "PR number (create-pr)"
+        value: ${{ steps.create_pr.outputs.pr_number }}
+    pr_url:
+        description: "PR URL (create-pr)"
+        value: ${{ steps.create_pr.outputs.pr_url }}
+    pr_action:
+        description: "created, updated, or skipped (create-pr)"
+        value: ${{ steps.create_pr.outputs.pr_action }}
+
 runs:
     using: "composite"
     steps:
+        - name: Validate command
+          shell: bash
+          run: |
+              COMMAND="${{ inputs.command }}"
+              case "$COMMAND" in
+                create-branch|create-pr|check)
+                  echo "✅ Valid command: $COMMAND"
+                  ;;
+                *)
+                  echo "❌ Error: Invalid command '$COMMAND'. Must be: create-branch, create-pr, or check"
+                  exit 1
+                  ;;
+              esac
+
         - name: Validate inputs
+          if: inputs.command == 'check'
           shell: bash
           run: |
               if [ -z "${{ inputs.prompt_template }}" ] && \
                  [ -z "${{ inputs.prompt_template_file }}" ] && \
                  [ -z "${{ inputs.prompt_template_text }}" ]; then
-                echo "❌ Error: One of prompt_template, prompt_template_file, or prompt_template_text must be provided"
+                echo "❌ Error: One of prompt_template, prompt_template_file, or prompt_template_text must be provided for 'check' command"
                 exit 1
               fi
+
+              if [ -z "${{ inputs.claude_token }}" ]; then
+                echo "❌ Error: claude_token is required for 'check' command"
+                exit 1
+              fi
+
               echo "✅ Input validation passed"
 
+        - name: Validate create-pr inputs
+          if: inputs.command == 'create-pr'
+          shell: bash
+          run: |
+              if [ -z "${{ inputs.branch_name }}" ]; then
+                echo "❌ Error: branch_name is required for 'create-pr' command"
+                exit 1
+              fi
+              echo "✅ create-pr validation passed"
+
+        # ========================================
+        # CREATE-BRANCH COMMAND
+        # ========================================
+
+        - name: Configure Git (create-branch)
+          if: inputs.command == 'create-branch'
+          shell: bash
+          run: |
+              git config user.name "${{ inputs.git_user_name }}"
+              git config user.email "${{ inputs.git_user_email }}"
+
+        - name: Create or checkout branch
+          if: inputs.command == 'create-branch'
+          id: create_branch
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              # Determine branch name
+              if [ -n "${{ inputs.branch_name }}" ]; then
+                BRANCH_NAME="${{ inputs.branch_name }}"
+                echo "Using provided branch name: $BRANCH_NAME"
+              else
+                BRANCH_DATE=$(date +%Y%m%d%H%M%S)
+                BRANCH_NAME="${{ inputs.branch_prefix }}-${BRANCH_DATE}-${{ github.run_id }}"
+                echo "Generated branch name: $BRANCH_NAME"
+              fi
+
+              echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+              # Check if branch exists
+              if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+                echo "branch_exists=true" >> $GITHUB_OUTPUT
+                echo "branch_action=checked_out" >> $GITHUB_OUTPUT
+                
+                if [ "${{ inputs.existing_branch }}" == "true" ]; then
+                  echo "📍 Branch $BRANCH_NAME already exists, checking out"
+                  git fetch origin "$BRANCH_NAME"
+                  git checkout "$BRANCH_NAME"
+                else
+                  echo "❌ Error: Branch $BRANCH_NAME already exists and existing_branch=false"
+                  exit 1
+                fi
+              else
+                echo "branch_exists=false" >> $GITHUB_OUTPUT
+                echo "branch_action=created" >> $GITHUB_OUTPUT
+                echo "🌱 Creating new branch: $BRANCH_NAME"
+                git checkout -b "$BRANCH_NAME"
+                git push origin "$BRANCH_NAME"
+              fi
+
+              echo "✅ Branch ready: $BRANCH_NAME"
+
+        # ========================================
+        # CHECK COMMAND (existing functionality)
+        # ========================================
+
         - name: Setup Node.js for template processing
+          if: inputs.command == 'check'
           uses: actions/setup-node@v4
           with:
               node-version: "20"
 
         - name: Install dependencies
+          if: inputs.command == 'check'
           shell: bash
           working-directory: ${{ github.action_path }}
           run: |
@@ -198,6 +354,7 @@ runs:
               fi
 
         - name: Resolve template and variables
+          if: inputs.command == 'check'
           id: resolve_template
           shell: bash
           working-directory: ${{ github.action_path }}
@@ -210,7 +367,8 @@ runs:
           run: |
               node src/resolve-template.js
 
-        - name: Setup branch
+        - name: Setup branch (check command)
+          if: inputs.command == 'check'
           id: setup_branch
           shell: bash
           env:
@@ -239,14 +397,15 @@ runs:
                 git checkout -b "$BRANCH_NAME"
               fi
 
-        - name: Setup git configuration
+        - name: Setup git configuration (check command)
+          if: inputs.command == 'check'
           shell: bash
           run: |
               git config user.name "MoosicBoxBot"
               git config user.email "MoosicBoxBot@gmail.com"
 
         - name: Check stream watcher prerequisites
-          if: inputs.enable_stream_watcher == 'true'
+          if: inputs.command == 'check' && inputs.enable_stream_watcher == 'true'
           shell: bash
           run: |
               # Verify inotify-tools is installed
@@ -275,7 +434,7 @@ runs:
               fi
 
         - name: Start stream watcher
-          if: inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
+          if: inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
           shell: bash
           run: |
               STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
@@ -294,6 +453,7 @@ runs:
               echo "📋 Stream file: $STREAM_FILE"
 
         - name: Run Claude Code
+          if: inputs.command == 'check'
           id: claude
           uses: BSteffaniak/claude-code-action@dev
           with:
@@ -303,7 +463,7 @@ runs:
               claude_args: ${{ inputs.claude_args }}
 
         - name: Stop stream watcher
-          if: always() && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
+          if: always() && inputs.command == 'check' && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
           shell: bash
           run: |
               if [ -f /tmp/stream_watcher_pid.txt ]; then
@@ -341,6 +501,7 @@ runs:
               fi
 
         - name: Detect changes
+          if: inputs.command == 'check'
           id: detect_changes
           shell: bash
           run: |
@@ -356,7 +517,7 @@ runs:
 
         - name: Commit changes
           id: commit_changes
-          if: inputs.auto_commit == 'true' && steps.detect_changes.outputs.has_changes == 'true'
+          if: inputs.command == 'check' && inputs.auto_commit == 'true' && steps.detect_changes.outputs.has_changes == 'true'
           shell: bash
           run: |
               # Check for uncommitted changes
@@ -414,7 +575,7 @@ runs:
               echo "✅ Commit created"
 
         - name: Add co-author attribution to commits
-          if: always() && inputs.enable_coauthor_attribution == 'true' && steps.commit_changes.outputs.commit_created == 'true'
+          if: always() && inputs.command == 'check' && inputs.enable_coauthor_attribution == 'true' && steps.commit_changes.outputs.commit_created == 'true'
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
@@ -528,7 +689,7 @@ runs:
 
         - name: Push changes with resilient retry
           id: push_changes
-          if: always() && inputs.enable_resilient_push == 'true'
+          if: always() && inputs.command == 'check' && inputs.enable_resilient_push == 'true'
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
@@ -634,7 +795,7 @@ runs:
               fi
 
         - name: Format and append execution details
-          if: always() && inputs.enable_execution_details == 'true' && steps.claude.outputs.execution_file != ''
+          if: always() && inputs.command == 'check' && inputs.enable_execution_details == 'true' && steps.claude.outputs.execution_file != ''
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
@@ -715,4 +876,109 @@ runs:
                 echo "✅ Appended execution details to comment #$COMMENT_ID"
               else
                 echo "⚠️ Failed to update comment"
+              fi
+
+        # ========================================
+        # CREATE-PR COMMAND
+        # ========================================
+
+        - name: Check for changes (create-pr)
+          if: inputs.command == 'create-pr'
+          id: check_pr_changes
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              # Fetch both branches to compare
+              git fetch origin ${{ inputs.pr_base_branch }} || true
+              git fetch origin ${{ inputs.branch_name }} || true
+
+              # Check for changes between base and head
+              if git diff origin/${{ inputs.pr_base_branch }}...origin/${{ inputs.branch_name }} --quiet; then
+                echo "has_changes=false" >> $GITHUB_OUTPUT
+                echo "ℹ️  No changes detected between ${{ inputs.pr_base_branch }} and ${{ inputs.branch_name }}"
+              else
+                echo "has_changes=true" >> $GITHUB_OUTPUT
+                CHANGED_FILES=$(git diff origin/${{ inputs.pr_base_branch }}...origin/${{ inputs.branch_name }} --name-only | wc -l)
+                echo "✅ Found changes: $CHANGED_FILES files modified"
+              fi
+
+        - name: Skip PR creation (no changes)
+          if: inputs.command == 'create-pr' && inputs.pr_skip_if_no_changes == 'true' && steps.check_pr_changes.outputs.has_changes == 'false'
+          id: skip_pr
+          shell: bash
+          run: |
+              echo "pr_created=false" >> $GITHUB_OUTPUT
+              echo "pr_action=skipped" >> $GITHUB_OUTPUT
+              echo "⏭️  Skipping PR creation - no changes detected"
+
+        - name: Check if PR exists
+          if: inputs.command == 'create-pr' && (inputs.pr_skip_if_no_changes == 'false' || steps.check_pr_changes.outputs.has_changes == 'true')
+          id: check_existing_pr
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              EXISTING_PR=$(gh pr list \
+                --head ${{ inputs.branch_name }} \
+                --base ${{ inputs.pr_base_branch }} \
+                --json number \
+                --jq '.[0].number' 2>/dev/null || echo "")
+
+              if [ -n "$EXISTING_PR" ]; then
+                echo "existing_pr=$EXISTING_PR" >> $GITHUB_OUTPUT
+                echo "📋 Found existing PR: #$EXISTING_PR"
+              else
+                echo "existing_pr=" >> $GITHUB_OUTPUT
+                echo "ℹ️  No existing PR found"
+              fi
+
+        - name: Create or update PR
+          if: inputs.command == 'create-pr' && (inputs.pr_skip_if_no_changes == 'false' || steps.check_pr_changes.outputs.has_changes == 'true')
+          id: create_pr
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              # Simple variable substitution (basic support for ${variable})
+              PR_TITLE="${{ inputs.pr_title }}"
+              PR_TITLE="${PR_TITLE//\$\{branch_name\}/${{ inputs.branch_name }}}"
+              PR_TITLE="${PR_TITLE//\$\{run_id\}/${{ github.run_id }}}"
+              PR_TITLE="${PR_TITLE//\$\{repository\}/${{ github.repository }}}"
+
+              PR_BODY="${{ inputs.pr_body }}"
+              PR_BODY="${PR_BODY//\$\{branch_name\}/${{ inputs.branch_name }}}"
+              PR_BODY="${PR_BODY//\$\{run_id\}/${{ github.run_id }}}"
+              PR_BODY="${PR_BODY//\$\{repository\}/${{ github.repository }}}"
+              PR_BODY="${PR_BODY//\$\{run_url\}/https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}}"
+
+              EXISTING_PR="${{ steps.check_existing_pr.outputs.existing_pr }}"
+
+              if [ -n "$EXISTING_PR" ]; then
+                echo "pr_action=updated" >> $GITHUB_OUTPUT
+                echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+                
+                gh pr edit $EXISTING_PR \
+                  --title "$PR_TITLE" \
+                  --body "$PR_BODY" 2>/dev/null || true
+                
+                PR_URL=$(gh pr view $EXISTING_PR --json url --jq '.url')
+                echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+                echo "pr_created=true" >> $GITHUB_OUTPUT
+                echo "✅ Updated PR #$EXISTING_PR: $PR_URL"
+              else
+                echo "pr_action=created" >> $GITHUB_OUTPUT
+                
+                PR_URL=$(gh pr create \
+                  --base ${{ inputs.pr_base_branch }} \
+                  --head ${{ inputs.branch_name }} \
+                  --title "$PR_TITLE" \
+                  --body "$PR_BODY" \
+                  --label "${{ inputs.pr_labels }}")
+                
+                PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+                echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+                echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+                echo "pr_created=true" >> $GITHUB_OUTPUT
+                echo "✅ Created PR #$PR_NUMBER: $PR_URL"
               fi
