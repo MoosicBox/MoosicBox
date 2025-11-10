@@ -141,7 +141,7 @@ inputs:
     pr_base_branch:
         description: "Base branch for PR (create-pr command)"
         required: false
-        default: "main"
+        default: "master"
     pr_title:
         description: "PR title (supports template variables, create-pr command)"
         required: false
@@ -581,7 +581,7 @@ runs:
               GH_TOKEN: ${{ inputs.github_token }}
           run: |
               # Count commits to process
-              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'master' }}"
               COMMITS_AHEAD=$(git rev-list --count origin/$DEFAULT_BRANCH..HEAD 2>/dev/null || echo "0")
 
               if [ "$COMMITS_AHEAD" = "0" ]; then
@@ -697,7 +697,7 @@ runs:
               git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git"
 
               TARGET_BRANCH="${{ steps.setup_branch.outputs.branch_name }}"
-              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'master' }}"
 
               # Check if there are commits to push
               COMMITS_AHEAD=$(git rev-list --count origin/$TARGET_BRANCH..HEAD 2>/dev/null || echo "0")
