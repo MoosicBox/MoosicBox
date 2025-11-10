@@ -324,6 +324,7 @@ This is an umbrella crate that re-exports the core AST types via the `ast` modul
 
 ```rust
 use gpipe::ast::*;
+use gpipe::ast::serde_yaml;
 use std::collections::BTreeMap;
 
 // Create a basic workflow using the AST types
