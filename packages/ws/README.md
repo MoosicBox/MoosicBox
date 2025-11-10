@@ -183,7 +183,7 @@ async fn update_playback(
         ..Default::default()
     };
 
-    // Update session and broadcast to all clients except sender
+    // Update session and broadcast to all clients
     update_session(config_db, &db, sender, None, &update).await?;
 
     Ok(())
