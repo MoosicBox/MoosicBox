@@ -1,0 +1,205 @@
+name: "Claude Checker"
+description: "Generic Claude-based checker with customizable prompt templates"
+author: "MoosicBox"
+
+inputs:
+    # === Authentication ===
+    github_token:
+        description: "GitHub token with write permissions"
+        required: true
+    claude_token:
+        description: "Claude Code OAuth token"
+        required: true
+
+    # === Prompt Template (one of these required) ===
+    prompt_template:
+        description: "Built-in template name: readme, rustdoc, examples, issue, pr, code-review"
+        required: false
+
+    prompt_template_file:
+        description: "Path to prompt template file"
+        required: false
+
+    prompt_template_text:
+        description: "Raw prompt template text (inline)"
+        required: false
+
+    # === Template Variables ===
+    template_vars:
+        description: |
+            YAML/JSON object of variables to inject into prompt template.
+            Merged with auto-detected variables and template defaults.
+            User values take highest priority.
+        required: false
+        default: "{}"
+
+    # === Verification ===
+    verification_profile:
+        description: "Built-in profile: auto, rust, typescript, python, go, custom"
+        required: false
+        default: "auto"
+
+    verification_config_file:
+        description: "Path to verification config YAML"
+        required: false
+        default: ".github/claude-verification.yml"
+
+    verification_config_inline:
+        description: "Inline verification config (YAML)"
+        required: false
+
+    # === Behavior ===
+    branch_name:
+        description: "Branch to commit to (overrides template default)"
+        required: false
+
+    commit_message:
+        description: "Commit message (supports template variables)"
+        required: false
+
+    auto_commit:
+        description: "Automatically commit changes"
+        required: false
+        default: "true"
+
+    # === Claude Config ===
+    model:
+        description: "Claude model"
+        required: false
+
+    max_tokens:
+        description: "Max tokens"
+        required: false
+
+    max_turns:
+        description: "Max turns"
+        required: false
+
+    claude_args:
+        description: "Additional Claude Code arguments"
+        required: false
+
+    # === Advanced ===
+    working_directory:
+        description: "Working directory for Claude execution"
+        required: false
+        default: "."
+
+outputs:
+    has_changes:
+        description: "true if changes were made"
+        value: ${{ steps.detect_changes.outputs.has_changes }}
+
+    files_changed:
+        description: "Space-separated list of changed files"
+        value: ${{ steps.detect_changes.outputs.files_changed }}
+
+    branch_name:
+        description: "Branch name used"
+        value: ${{ steps.setup_branch.outputs.branch_name }}
+
+    execution_file:
+        description: "Path to execution details file"
+        value: ${{ steps.claude.outputs.execution_file }}
+
+    resolved_template_vars:
+        description: "JSON object of all resolved template variables (for debugging)"
+        value: ${{ steps.resolve_template.outputs.resolved_vars }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Validate inputs
+          shell: bash
+          run: |
+              if [ -z "${{ inputs.prompt_template }}" ] && \
+                 [ -z "${{ inputs.prompt_template_file }}" ] && \
+                 [ -z "${{ inputs.prompt_template_text }}" ]; then
+                echo "❌ Error: One of prompt_template, prompt_template_file, or prompt_template_text must be provided"
+                exit 1
+              fi
+              echo "✅ Input validation passed"
+
+        - name: Setup Node.js for template processing
+          uses: actions/setup-node@v4
+          with:
+              node-version: "20"
+
+        - name: Install dependencies
+          shell: bash
+          working-directory: ${{ github.action_path }}
+          run: |
+              if [ ! -d "node_modules" ]; then
+                npm install
+              fi
+
+        - name: Resolve template and variables
+          id: resolve_template
+          shell: bash
+          working-directory: ${{ github.action_path }}
+          env:
+              PROMPT_TEMPLATE: ${{ inputs.prompt_template }}
+              PROMPT_TEMPLATE_FILE: ${{ inputs.prompt_template_file }}
+              PROMPT_TEMPLATE_TEXT: ${{ inputs.prompt_template_text }}
+              TEMPLATE_VARS: ${{ inputs.template_vars }}
+              GITHUB_CONTEXT: ${{ toJSON(github) }}
+          run: |
+              node src/resolve-template.js
+
+        - name: Setup branch
+          id: setup_branch
+          shell: bash
+          env:
+              RESOLVED_BRANCH_NAME: ${{ steps.resolve_template.outputs.branch_name }}
+              INPUT_BRANCH_NAME: ${{ inputs.branch_name }}
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              # Use explicit input branch, or resolved from template, or generate default
+              if [ -n "$INPUT_BRANCH_NAME" ]; then
+                BRANCH_NAME="$INPUT_BRANCH_NAME"
+              elif [ -n "$RESOLVED_BRANCH_NAME" ]; then
+                BRANCH_NAME="$RESOLVED_BRANCH_NAME"
+              else
+                BRANCH_NAME="claude-updates-${{ github.run_id }}"
+              fi
+
+              echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+              # Check if branch exists
+              if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+                echo "📍 Branch $BRANCH_NAME already exists, checking out"
+                git fetch origin "$BRANCH_NAME"
+                git checkout "$BRANCH_NAME"
+              else
+                echo "🌱 Creating new branch: $BRANCH_NAME"
+                git checkout -b "$BRANCH_NAME"
+              fi
+
+        - name: Setup git configuration
+          shell: bash
+          run: |
+              git config user.name "MoosicBoxBot"
+              git config user.email "MoosicBoxBot@gmail.com"
+
+        - name: Run Claude Code
+          id: claude
+          uses: BSteffaniak/claude-code-action@dev
+          with:
+              claude_code_oauth_token: ${{ inputs.claude_token }}
+              stream_output_file: ${{ runner.temp }}/claude-stream.jsonl
+              prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
+              claude_args: ${{ inputs.claude_args }}
+
+        - name: Detect changes
+          id: detect_changes
+          shell: bash
+          run: |
+              if [ -n "$(git status --porcelain)" ] || [ "$(git rev-list --count origin/${{ steps.setup_branch.outputs.branch_name }}..HEAD 2>/dev/null || echo 0)" != "0" ]; then
+                echo "has_changes=true" >> $GITHUB_OUTPUT
+                echo "files_changed=$(git diff --name-only HEAD 2>/dev/null | tr '\n' ' ')" >> $GITHUB_OUTPUT
+                echo "✅ Changes detected"
+              else
+                echo "has_changes=false" >> $GITHUB_OUTPUT
+                echo "files_changed=" >> $GITHUB_OUTPUT
+                echo "📭 No changes detected"
+              fi

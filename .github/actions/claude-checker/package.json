@@ -1,0 +1,16 @@
+{
+    "name": "claude-checker-action",
+    "version": "1.0.0",
+    "description": "Template resolver for Claude Checker action",
+    "main": "src/resolve-template.js",
+    "scripts": {
+        "test": "echo \"No tests yet\""
+    },
+    "dependencies": {
+        "js-yaml": "^4.1.0",
+        "gray-matter": "^4.0.3"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}
