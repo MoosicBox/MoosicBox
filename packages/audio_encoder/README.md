@@ -51,7 +51,7 @@ use moosicbox_audio_encoder::EncodeInfo;
 
 fn handle_encode_result(info: EncodeInfo) {
     println!("Output size: {} bytes", info.output_size);
-    println!("Input consumed: {} bytes", info.input_consumed);
+    println!("Input consumed: {} samples", info.input_consumed);
 }
 ```
 
