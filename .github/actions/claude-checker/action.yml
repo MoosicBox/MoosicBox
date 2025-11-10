@@ -45,10 +45,6 @@ inputs:
         description: "Enable live progress updates"
         required: false
         default: "false"
-    stream_watcher_script:
-        description: "Path to stream watcher script"
-        required: false
-        default: ".github/scripts/stream-watcher.sh"
     stream_comment_id:
         description: "Comment ID for live updates"
         required: false
@@ -263,10 +259,13 @@ runs:
                 echo "stream_watcher_enabled=true" >> $GITHUB_ENV
               fi
 
-              # Verify stream watcher script exists
-              if [ ! -f "${{ inputs.stream_watcher_script }}" ]; then
-                echo "⚠️ WARNING: Stream watcher script not found: ${{ inputs.stream_watcher_script }}"
+              # Stream watcher script is bundled with action
+              STREAM_WATCHER_SCRIPT="${{ github.action_path }}/scripts/stream-watcher.sh"
+              if [ ! -f "$STREAM_WATCHER_SCRIPT" ]; then
+                echo "⚠️ ERROR: Stream watcher script missing from action"
                 echo "stream_watcher_enabled=false" >> $GITHUB_ENV
+              else
+                echo "stream_watcher_script=$STREAM_WATCHER_SCRIPT" >> $GITHUB_ENV
               fi
 
               # Verify comment ID provided
@@ -281,7 +280,7 @@ runs:
           run: |
               STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
 
-              ${{ inputs.stream_watcher_script }} \
+              ${{ env.stream_watcher_script }} \
                 "$STREAM_FILE" \
                 "${{ github.repository }}" \
                 "${{ inputs.github_token }}" \
@@ -309,9 +308,9 @@ runs:
           run: |
               if [ -f /tmp/stream_watcher_pid.txt ]; then
                 WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
-                
+
                 echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
-                
+
                 # Graceful shutdown (30 seconds)
                 for i in {1..30}; do
                   if ! kill -0 $WATCHER_PID 2>/dev/null; then
@@ -320,19 +319,19 @@ runs:
                   fi
                   sleep 1
                 done
-                
+
                 # Force shutdown if still running
                 if kill -0 $WATCHER_PID 2>/dev/null; then
                   echo "⚠️ Stream watcher still running, sending SIGTERM..."
                   kill -TERM $WATCHER_PID 2>/dev/null || true
                   sleep 2
-                  
+
                   if kill -0 $WATCHER_PID 2>/dev/null; then
                     echo "⚠️ Forcing stream watcher to stop..."
                     kill -9 $WATCHER_PID 2>/dev/null || true
                   fi
                 fi
-                
+
                 # Show logs if available
                 if [ -f /tmp/stream-watcher.log ]; then
                   echo ""
@@ -387,13 +386,13 @@ runs:
               COMMIT_DESC=""
               if [ "${{ inputs.extract_commit_message }}" = "true" ] && [ -f output.txt ]; then
                 echo "📋 Extracting commit description from Claude output..."
-                
+
                 # Try JSONL format first (from claude-code-action)
                 COMMIT_DESC=$(grep "${{ inputs.commit_message_start_marker }}" output.txt 2>/dev/null | head -1 | \
-                  jq -r '.message.content[0].text | 
-                  split("${{ inputs.commit_message_start_marker }}\n")[1] | 
+                  jq -r '.message.content[0].text |
+                  split("${{ inputs.commit_message_start_marker }}\n")[1] |
                   split("\n${{ inputs.commit_message_end_marker }}")[0]' 2>/dev/null || echo "")
-                
+
                 # Try plain text format
                 if [ -z "$COMMIT_DESC" ]; then
                   COMMIT_DESC=$(sed -n '/${{ inputs.commit_message_start_marker }}/,/${{ inputs.commit_message_end_marker }}/p' output.txt 2>/dev/null | \
@@ -449,10 +448,10 @@ runs:
               # Try to find real email if not provided
               if [ -z "$COAUTHOR_EMAIL" ]; then
                 echo "🔍 Searching for email for $COAUTHOR_LOGIN..."
-                
+
                 # Try user profile API
                 COAUTHOR_EMAIL=$(gh api "/users/$COAUTHOR_LOGIN" --jq '.email // empty' 2>/dev/null || echo "")
-                
+
                 # Try recent commits
                 if [ -z "$COAUTHOR_EMAIL" ]; then
                   COAUTHOR_EMAIL=$(gh api "/users/$COAUTHOR_LOGIN/events/public" --jq '
@@ -461,7 +460,7 @@ runs:
                     | first // empty
                   ' 2>/dev/null || echo "")
                 fi
-                
+
                 # Fallback to noreply
                 if [ -z "$COAUTHOR_EMAIL" ] || [ "$COAUTHOR_EMAIL" = "null" ]; then
                   COAUTHOR_EMAIL="${COAUTHOR_ID}+${COAUTHOR_LOGIN}@users.noreply.github.com"
@@ -563,21 +562,21 @@ runs:
                   echo "⏱️ Timeout reached after ${ELAPSED}s"
                   break
                 fi
-                
+
                 echo "📤 Push attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
-                
+
                 if git push origin "$TARGET_BRANCH" 2>&1; then
                   echo "✅ Successfully pushed to $TARGET_BRANCH"
                   echo "push_status=success" >> $GITHUB_OUTPUT
                   echo "push_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
                   exit 0
                 fi
-                
+
                 echo "⚠️ Push rejected, attempting rebase..."
-                
+
                 # Fetch latest changes
                 git fetch origin "$TARGET_BRANCH"
-                
+
                 # Attempt rebase
                 if git rebase "origin/$TARGET_BRANCH" 2>&1; then
                   echo "✅ Rebase successful, retrying push..."
@@ -618,15 +617,15 @@ runs:
                 echo "fallback_branch=$FALLBACK_BRANCH" >> $GITHUB_OUTPUT
                 echo "original_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
                 echo "commits_count=$COMMITS_AHEAD" >> $GITHUB_OUTPUT
-                
+
                 # Create compare URL
                 COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${TARGET_BRANCH}...${FALLBACK_BRANCH}"
                 echo "compare_url=$COMPARE_URL" >> $GITHUB_OUTPUT
-                
+
                 echo ""
                 echo "⚠️ FALLBACK BRANCH CREATED"
                 echo "Compare: $COMPARE_URL"
-                
+
                 exit 0
               else
                 echo "❌ Failed to push even to fallback branch"
