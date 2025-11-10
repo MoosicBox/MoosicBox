@@ -1,9 +1,9 @@
 name: "Claude Checker"
-description: "Generic Claude-based checker with customizable prompt templates"
+description: "Generic Claude-based checker with orchestration features"
 author: "MoosicBox"
 
 inputs:
-    # === Authentication ===
+    # === Authentication (Required) ===
     github_token:
         description: "GitHub token with write permissions"
         required: true
@@ -11,77 +11,131 @@ inputs:
         description: "Claude Code OAuth token"
         required: true
 
-    # === Prompt Template (one of these required) ===
+    # === Prompt Template (One Required) ===
     prompt_template:
-        description: "Built-in template name: readme, rustdoc, examples, issue, pr, code-review"
+        description: "Built-in template: readme, rustdoc, examples, issue, pr, code-review"
         required: false
-
     prompt_template_file:
-        description: "Path to prompt template file"
+        description: "Path to custom template file"
         required: false
-
     prompt_template_text:
-        description: "Raw prompt template text (inline)"
+        description: "Inline template text"
         required: false
 
     # === Template Variables ===
     template_vars:
-        description: |
-            YAML/JSON object of variables to inject into prompt template.
-            Merged with auto-detected variables and template defaults.
-            User values take highest priority.
+        description: "YAML/JSON object of template variables"
         required: false
         default: "{}"
 
-    # === Verification ===
-    verification_profile:
-        description: "Built-in profile: auto, rust, typescript, python, go, custom"
-        required: false
-        default: "auto"
-
-    verification_config_file:
-        description: "Path to verification config YAML"
-        required: false
-        default: ".github/claude-verification.yml"
-
-    verification_config_inline:
-        description: "Inline verification config (YAML)"
-        required: false
-
     # === Behavior ===
     branch_name:
-        description: "Branch to commit to (overrides template default)"
+        description: "Branch name (overrides template default)"
         required: false
-
     commit_message:
-        description: "Commit message (supports template variables)"
+        description: "Commit message (supports variables)"
         required: false
-
     auto_commit:
         description: "Automatically commit changes"
         required: false
         default: "true"
 
+    # === Stream Watcher (Optional) ===
+    enable_stream_watcher:
+        description: "Enable live progress updates"
+        required: false
+        default: "false"
+    stream_watcher_script:
+        description: "Path to stream watcher script"
+        required: false
+        default: ".github/scripts/stream-watcher.sh"
+    stream_comment_id:
+        description: "Comment ID for live updates"
+        required: false
+    stream_comment_type:
+        description: "Comment type: issue, pr_issue_comment, pr_review_comment"
+        required: false
+
+    # === Execution Details (Optional) ===
+    enable_execution_details:
+        description: "Append execution details to comment"
+        required: false
+        default: "false"
+    execution_details_script:
+        description: "Path to execution details script"
+        required: false
+        default: ".github/scripts/format-execution-details.sh"
+    acknowledgment_comment_id:
+        description: "Comment ID to append details to"
+        required: false
+
+    # === Co-Author Attribution (Optional) ===
+    enable_coauthor_attribution:
+        description: "Add co-author to commits"
+        required: false
+        default: "false"
+    coauthor_login:
+        description: "Co-author GitHub username (auto-detected)"
+        required: false
+    coauthor_id:
+        description: "Co-author GitHub ID (auto-detected)"
+        required: false
+    coauthor_email:
+        description: "Co-author email (auto-detected)"
+        required: false
+    trigger_comment_url:
+        description: "Trigger URL (auto-detected)"
+        required: false
+
+    # === Resilient Push (Optional) ===
+    enable_resilient_push:
+        description: "Enable push with retry/rebase"
+        required: false
+        default: "true"
+    push_max_retries:
+        description: "Max push retry attempts"
+        required: false
+        default: "5"
+    push_timeout_seconds:
+        description: "Push timeout in seconds"
+        required: false
+        default: "30"
+    fallback_branch_prefix:
+        description: "Prefix for fallback branch"
+        required: false
+        default: "claude-fallback"
+
+    # === Commit Message Extraction ===
+    extract_commit_message:
+        description: "Extract commit description from output"
+        required: false
+        default: "true"
+    commit_message_start_marker:
+        description: "Start marker for extraction"
+        required: false
+        default: "COMMIT_MESSAGE_START"
+    commit_message_end_marker:
+        description: "End marker for extraction"
+        required: false
+        default: "COMMIT_MESSAGE_END"
+
     # === Claude Config ===
     model:
         description: "Claude model"
         required: false
-
     max_tokens:
         description: "Max tokens"
         required: false
-
     max_turns:
         description: "Max turns"
         required: false
-
     claude_args:
-        description: "Additional Claude Code arguments"
+        description: "Additional Claude args"
         required: false
 
     # === Advanced ===
     working_directory:
-        description: "Working directory for Claude execution"
+        description: "Working directory"
         required: false
         default: "."
 
@@ -89,22 +143,36 @@ outputs:
     has_changes:
         description: "true if changes were made"
         value: ${{ steps.detect_changes.outputs.has_changes }}
-
     files_changed:
-        description: "Space-separated list of changed files"
+        description: "Space-separated changed files"
         value: ${{ steps.detect_changes.outputs.files_changed }}
-
     branch_name:
-        description: "Branch name used"
+        description: "Branch used"
         value: ${{ steps.setup_branch.outputs.branch_name }}
-
     execution_file:
-        description: "Path to execution details file"
+        description: "Execution details file path"
         value: ${{ steps.claude.outputs.execution_file }}
-
     resolved_template_vars:
-        description: "JSON object of all resolved template variables (for debugging)"
+        description: "Resolved variables JSON"
         value: ${{ steps.resolve_template.outputs.resolved_vars }}
+
+    # Push outputs
+    push_status:
+        description: "Push status: success, no_changes, fallback, failed"
+        value: ${{ steps.push_changes.outputs.push_status }}
+    push_branch:
+        description: "Branch pushed to"
+        value: ${{ steps.push_changes.outputs.push_branch }}
+    fallback_branch:
+        description: "Fallback branch (if created)"
+        value: ${{ steps.push_changes.outputs.fallback_branch }}
+    compare_url:
+        description: "Compare URL for fallback"
+        value: ${{ steps.push_changes.outputs.compare_url }}
+
+    commit_created:
+        description: "true if commit was created"
+        value: ${{ steps.commit_changes.outputs.commit_created }}
 
 runs:
     using: "composite"
@@ -181,14 +249,97 @@ runs:
               git config user.name "MoosicBoxBot"
               git config user.email "MoosicBoxBot@gmail.com"
 
+        - name: Check stream watcher prerequisites
+          if: inputs.enable_stream_watcher == 'true'
+          shell: bash
+          run: |
+              # Verify inotify-tools is installed
+              if ! command -v inotifywait &> /dev/null; then
+                echo "⚠️ WARNING: inotify-tools not installed. Stream watcher will be disabled."
+                echo "Install with: sudo apt-get install -y inotify-tools"
+                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
+              else
+                echo "✅ inotify-tools found"
+                echo "stream_watcher_enabled=true" >> $GITHUB_ENV
+              fi
+
+              # Verify stream watcher script exists
+              if [ ! -f "${{ inputs.stream_watcher_script }}" ]; then
+                echo "⚠️ WARNING: Stream watcher script not found: ${{ inputs.stream_watcher_script }}"
+                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
+              fi
+
+              # Verify comment ID provided
+              if [ -z "${{ inputs.stream_comment_id }}" ]; then
+                echo "⚠️ WARNING: stream_comment_id not provided"
+                echo "stream_watcher_enabled=false" >> $GITHUB_ENV
+              fi
+
+        - name: Start stream watcher
+          if: inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
+          shell: bash
+          run: |
+              STREAM_FILE="${{ runner.temp }}/claude-stream.jsonl"
+
+              ${{ inputs.stream_watcher_script }} \
+                "$STREAM_FILE" \
+                "${{ github.repository }}" \
+                "${{ inputs.github_token }}" \
+                "${{ inputs.stream_comment_id }}" \
+                "${{ inputs.stream_comment_type }}" \
+                > /tmp/stream-watcher.log 2>&1 &
+
+              WATCHER_PID=$!
+              echo $WATCHER_PID > /tmp/stream_watcher_pid.txt
+              echo "🔄 Stream watcher started (PID: $WATCHER_PID)"
+              echo "📋 Stream file: $STREAM_FILE"
+
         - name: Run Claude Code
           id: claude
           uses: BSteffaniak/claude-code-action@dev
           with:
               claude_code_oauth_token: ${{ inputs.claude_token }}
-              stream_output_file: ${{ runner.temp }}/claude-stream.jsonl
+              stream_output_file: ${{ inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true' && format('{0}/claude-stream.jsonl', runner.temp) || '' }}
               prompt: ${{ steps.resolve_template.outputs.rendered_prompt }}
               claude_args: ${{ inputs.claude_args }}
+
+        - name: Stop stream watcher
+          if: always() && inputs.enable_stream_watcher == 'true' && env.stream_watcher_enabled == 'true'
+          shell: bash
+          run: |
+              if [ -f /tmp/stream_watcher_pid.txt ]; then
+                WATCHER_PID=$(cat /tmp/stream_watcher_pid.txt)
+                
+                echo "⏳ Waiting for stream watcher (PID: $WATCHER_PID) to complete..."
+                
+                # Graceful shutdown (30 seconds)
+                for i in {1..30}; do
+                  if ! kill -0 $WATCHER_PID 2>/dev/null; then
+                    echo "✅ Stream watcher completed"
+                    break
+                  fi
+                  sleep 1
+                done
+                
+                # Force shutdown if still running
+                if kill -0 $WATCHER_PID 2>/dev/null; then
+                  echo "⚠️ Stream watcher still running, sending SIGTERM..."
+                  kill -TERM $WATCHER_PID 2>/dev/null || true
+                  sleep 2
+                  
+                  if kill -0 $WATCHER_PID 2>/dev/null; then
+                    echo "⚠️ Forcing stream watcher to stop..."
+                    kill -9 $WATCHER_PID 2>/dev/null || true
+                  fi
+                fi
+                
+                # Show logs if available
+                if [ -f /tmp/stream-watcher.log ]; then
+                  echo ""
+                  echo "📋 Stream watcher logs:"
+                  cat /tmp/stream-watcher.log
+                fi
+              fi
 
         - name: Detect changes
           id: detect_changes
@@ -202,4 +353,367 @@ runs:
                 echo "has_changes=false" >> $GITHUB_OUTPUT
                 echo "files_changed=" >> $GITHUB_OUTPUT
                 echo "📭 No changes detected"
+              fi
+
+        - name: Commit changes
+          id: commit_changes
+          if: inputs.auto_commit == 'true' && steps.detect_changes.outputs.has_changes == 'true'
+          shell: bash
+          run: |
+              # Check for uncommitted changes
+              if [ -z "$(git status --porcelain)" ]; then
+                echo "📭 No uncommitted changes"
+                echo "commit_created=false" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+
+              echo "📝 Changes detected, preparing commit..."
+
+              # Remove output.txt if it exists (from claude-code-action)
+              rm -f output.txt
+
+              git add -A
+
+              # Get base commit message from template or input
+              BASE_COMMIT_MSG="${{ inputs.commit_message }}"
+              if [ -z "$BASE_COMMIT_MSG" ]; then
+                BASE_COMMIT_MSG="${{ steps.resolve_template.outputs.commit_message }}"
+              fi
+              if [ -z "$BASE_COMMIT_MSG" ]; then
+                BASE_COMMIT_MSG="chore: update via Claude checker"
+              fi
+
+              # Extract detailed description from Claude output if enabled
+              COMMIT_DESC=""
+              if [ "${{ inputs.extract_commit_message }}" = "true" ] && [ -f output.txt ]; then
+                echo "📋 Extracting commit description from Claude output..."
+                
+                # Try JSONL format first (from claude-code-action)
+                COMMIT_DESC=$(grep "${{ inputs.commit_message_start_marker }}" output.txt 2>/dev/null | head -1 | \
+                  jq -r '.message.content[0].text | 
+                  split("${{ inputs.commit_message_start_marker }}\n")[1] | 
+                  split("\n${{ inputs.commit_message_end_marker }}")[0]' 2>/dev/null || echo "")
+                
+                # Try plain text format
+                if [ -z "$COMMIT_DESC" ]; then
+                  COMMIT_DESC=$(sed -n '/${{ inputs.commit_message_start_marker }}/,/${{ inputs.commit_message_end_marker }}/p' output.txt 2>/dev/null | \
+                    sed '1d;$d' || echo "")
+                fi
+              fi
+
+              # Create commit
+              if [ -n "$COMMIT_DESC" ] && [ "$COMMIT_DESC" != "null" ]; then
+                echo "📋 Using detailed commit description:"
+                echo "$COMMIT_DESC"
+                git commit -m "$BASE_COMMIT_MSG" -m "$COMMIT_DESC"
+              else
+                echo "📋 Using base commit message: $BASE_COMMIT_MSG"
+                git commit -m "$BASE_COMMIT_MSG"
+              fi
+
+              echo "commit_created=true" >> $GITHUB_OUTPUT
+              echo "✅ Commit created"
+
+        - name: Add co-author attribution to commits
+          if: always() && inputs.enable_coauthor_attribution == 'true' && steps.commit_changes.outputs.commit_created == 'true'
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              # Count commits to process
+              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+              COMMITS_AHEAD=$(git rev-list --count origin/$DEFAULT_BRANCH..HEAD 2>/dev/null || echo "0")
+
+              if [ "$COMMITS_AHEAD" = "0" ]; then
+                echo "📭 No commits to add co-author to"
+                exit 0
+              fi
+
+              echo "📊 Found $COMMITS_AHEAD commit(s) to process"
+
+              # Determine co-author from inputs or event context
+              COAUTHOR_LOGIN="${{ inputs.coauthor_login }}"
+              COAUTHOR_ID="${{ inputs.coauthor_id }}"
+              COAUTHOR_EMAIL="${{ inputs.coauthor_email }}"
+
+              if [ -z "$COAUTHOR_LOGIN" ]; then
+                COAUTHOR_LOGIN="${{ github.event.comment.user.login || github.event.review.user.login || github.event.issue.user.login || github.actor }}"
+                COAUTHOR_ID="${{ github.event.comment.user.id || github.event.review.user.id || github.event.issue.user.id }}"
+              fi
+
+              if [ -z "$COAUTHOR_LOGIN" ]; then
+                echo "⚠️ Could not determine co-author, skipping"
+                exit 0
+              fi
+
+              # Try to find real email if not provided
+              if [ -z "$COAUTHOR_EMAIL" ]; then
+                echo "🔍 Searching for email for $COAUTHOR_LOGIN..."
+                
+                # Try user profile API
+                COAUTHOR_EMAIL=$(gh api "/users/$COAUTHOR_LOGIN" --jq '.email // empty' 2>/dev/null || echo "")
+                
+                # Try recent commits
+                if [ -z "$COAUTHOR_EMAIL" ]; then
+                  COAUTHOR_EMAIL=$(gh api "/users/$COAUTHOR_LOGIN/events/public" --jq '
+                    [.[] | select(.type == "PushEvent") | .payload.commits[]? | .author.email]
+                    | map(select(. != null and . != ""))
+                    | first // empty
+                  ' 2>/dev/null || echo "")
+                fi
+                
+                # Fallback to noreply
+                if [ -z "$COAUTHOR_EMAIL" ] || [ "$COAUTHOR_EMAIL" = "null" ]; then
+                  COAUTHOR_EMAIL="${COAUTHOR_ID}+${COAUTHOR_LOGIN}@users.noreply.github.com"
+                fi
+              fi
+
+              COAUTHOR_LINE="Co-authored-by: ${COAUTHOR_LOGIN} <${COAUTHOR_EMAIL}>"
+              echo "👥 Co-author: $COAUTHOR_LINE"
+
+              # Determine trigger URL
+              COMMENT_URL="${{ inputs.trigger_comment_url }}"
+              if [ -z "$COMMENT_URL" ]; then
+                COMMENT_URL="${{ github.event.comment.html_url || github.event.review.html_url || github.event.issue.html_url }}"
+              fi
+
+              if [ -n "$COMMENT_URL" ]; then
+                echo "🔗 Trigger URL: $COMMENT_URL"
+              fi
+
+              # Create rebase script to amend all commits
+              cat > /tmp/add_coauthor.sh << 'SCRIPT'
+              #!/bin/bash
+              MSG=$(git log -1 --pretty=%B)
+              MODIFIED=false
+
+              # Add trigger URL if not present
+              if [ -n "$COMMENT_URL" ] && ! echo "$MSG" | grep -qF "Triggered-by:"; then
+                if echo "$MSG" | tail -1 | grep -q '^$'; then
+                  MSG=$(printf '%sTriggered-by: %s\n' "$MSG" "$COMMENT_URL")
+                else
+                  MSG=$(printf '%s\n\nTriggered-by: %s\n' "$MSG" "$COMMENT_URL")
+                fi
+                MODIFIED=true
+              fi
+
+              # Add co-author if not present
+              if ! echo "$MSG" | grep -qF "$COAUTHOR_LINE"; then
+                if echo "$MSG" | tail -1 | grep -q '^$'; then
+                  MSG=$(printf '%s%s\n' "$MSG" "$COAUTHOR_LINE")
+                else
+                  MSG=$(printf '%s\n\n%s\n' "$MSG" "$COAUTHOR_LINE")
+                fi
+                MODIFIED=true
+              fi
+
+              # Amend if modified
+              if [ "$MODIFIED" = "true" ]; then
+                printf '%s' "$MSG" | git commit --amend -F -
+              fi
+              SCRIPT
+
+              chmod +x /tmp/add_coauthor.sh
+              export COAUTHOR_LINE
+              export COMMENT_URL
+
+              # Rebase and amend all commits
+              BASE_COMMIT=$(git merge-base HEAD origin/$DEFAULT_BRANCH 2>/dev/null || echo "origin/$DEFAULT_BRANCH")
+
+              if GIT_SEQUENCE_EDITOR=true git rebase -i --exec "/tmp/add_coauthor.sh" $BASE_COMMIT 2>&1; then
+                echo "✅ Added co-author to $COMMITS_AHEAD commit(s)"
+              else
+                echo "⚠️ Failed to add co-author, continuing anyway..."
+                git rebase --abort 2>/dev/null || true
+              fi
+
+        - name: Push changes with resilient retry
+          id: push_changes
+          if: always() && inputs.enable_resilient_push == 'true'
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              git remote set-url origin "https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git"
+
+              TARGET_BRANCH="${{ steps.setup_branch.outputs.branch_name }}"
+              DEFAULT_BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+
+              # Check if there are commits to push
+              COMMITS_AHEAD=$(git rev-list --count origin/$TARGET_BRANCH..HEAD 2>/dev/null || echo "0")
+
+              if [ "$COMMITS_AHEAD" = "0" ]; then
+                echo "📭 No commits to push"
+                echo "push_status=no_changes" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+
+              echo "📊 Found $COMMITS_AHEAD commit(s) to push to $TARGET_BRANCH"
+
+              # Resilient push with retry logic
+              MAX_RETRIES=${{ inputs.push_max_retries }}
+              RETRY_COUNT=0
+              BACKOFF=1
+              MAX_TIME=${{ inputs.push_timeout_seconds }}
+              START_TIME=$(date +%s)
+
+              while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                ELAPSED=$(($(date +%s) - START_TIME))
+                if [ $ELAPSED -gt $MAX_TIME ]; then
+                  echo "⏱️ Timeout reached after ${ELAPSED}s"
+                  break
+                fi
+                
+                echo "📤 Push attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
+                
+                if git push origin "$TARGET_BRANCH" 2>&1; then
+                  echo "✅ Successfully pushed to $TARGET_BRANCH"
+                  echo "push_status=success" >> $GITHUB_OUTPUT
+                  echo "push_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+                  exit 0
+                fi
+                
+                echo "⚠️ Push rejected, attempting rebase..."
+                
+                # Fetch latest changes
+                git fetch origin "$TARGET_BRANCH"
+                
+                # Attempt rebase
+                if git rebase "origin/$TARGET_BRANCH" 2>&1; then
+                  echo "✅ Rebase successful, retrying push..."
+                  RETRY_COUNT=$((RETRY_COUNT + 1))
+                  sleep $BACKOFF
+                  BACKOFF=$((BACKOFF * 2))
+                  continue
+                else
+                  # Check for conflicts
+                  if git status | grep -E "both modified|both added|both deleted|conflict" >/dev/null 2>&1; then
+                    echo "🚫 CONFLICTS DETECTED during rebase"
+                    git rebase --abort 2>/dev/null || true
+                    break
+                  else
+                    echo "⚠️ Rebase failed for non-conflict reason"
+                    git rebase --abort 2>/dev/null || true
+                    break
+                  fi
+                fi
+              done
+
+              # Create fallback branch if push failed
+              echo "🔀 Creating fallback branch..."
+              TIMESTAMP=$(date +%s)
+              FALLBACK_BRANCH="${{ inputs.fallback_branch_prefix }}-${{ github.run_id }}-${TIMESTAMP}"
+
+              # Ensure clean state
+              git rebase --abort 2>/dev/null || true
+
+              # Create fallback branch from current commits
+              git checkout -B "$FALLBACK_BRANCH"
+
+              echo "📤 Pushing to fallback branch: $FALLBACK_BRANCH"
+              if git push origin "$FALLBACK_BRANCH" 2>&1; then
+                echo "✅ Successfully pushed to fallback branch"
+                echo "push_status=fallback" >> $GITHUB_OUTPUT
+                echo "push_branch=$FALLBACK_BRANCH" >> $GITHUB_OUTPUT
+                echo "fallback_branch=$FALLBACK_BRANCH" >> $GITHUB_OUTPUT
+                echo "original_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+                echo "commits_count=$COMMITS_AHEAD" >> $GITHUB_OUTPUT
+                
+                # Create compare URL
+                COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${TARGET_BRANCH}...${FALLBACK_BRANCH}"
+                echo "compare_url=$COMPARE_URL" >> $GITHUB_OUTPUT
+                
+                echo ""
+                echo "⚠️ FALLBACK BRANCH CREATED"
+                echo "Compare: $COMPARE_URL"
+                
+                exit 0
+              else
+                echo "❌ Failed to push even to fallback branch"
+                echo "push_status=failed" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+
+        - name: Format and append execution details
+          if: always() && inputs.enable_execution_details == 'true' && steps.claude.outputs.execution_file != ''
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.github_token }}
+          run: |
+              EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+
+              if [ ! -f "$EXEC_FILE" ] || [ ! -s "$EXEC_FILE" ]; then
+                echo "⚠️ Execution file not found or empty"
+                exit 0
+              fi
+
+              echo "📊 Execution file found: $EXEC_FILE"
+
+              # Check if formatting script exists
+              if [ ! -f "${{ inputs.execution_details_script }}" ]; then
+                echo "⚠️ Execution details script not found: ${{ inputs.execution_details_script }}"
+                exit 0
+              fi
+
+              # Format execution details
+              ${{ inputs.execution_details_script }} "$EXEC_FILE" /tmp/execution_details.md
+
+              if [ ! -f /tmp/execution_details.md ]; then
+                echo "⚠️ Failed to generate execution details"
+                exit 0
+              fi
+
+              # Find comment to update (priority: ack > final > latest)
+              COMMENT_ID="${{ inputs.acknowledgment_comment_id }}"
+
+              if [ -z "$COMMENT_ID" ] && [ -f /tmp/claude_final_comment_id.txt ]; then
+                COMMENT_ID=$(cat /tmp/claude_final_comment_id.txt)
+                echo "📋 Using final comment ID: $COMMENT_ID"
+              fi
+
+              if [ -z "$COMMENT_ID" ]; then
+                # Find latest Claude/bot comment
+                ISSUE_NUM="${{ github.event.issue.number || github.event.pull_request.number }}"
+                if [ -n "$ISSUE_NUM" ]; then
+                  COMMENT_ID=$(gh api "/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
+                    --jq '.[-1] | select(.user.login == "claude[bot]" or (.user.login | test("Bot$"))) | .id' 2>/dev/null || echo "")
+                  echo "📋 Found latest bot comment ID: $COMMENT_ID"
+                fi
+              fi
+
+              if [ -z "$COMMENT_ID" ]; then
+                echo "⚠️ Could not find comment to update"
+                exit 0
+              fi
+
+              # Determine API endpoint
+              if [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+                API_ENDPOINT="/repos/${{ github.repository }}/pulls/comments/$COMMENT_ID"
+              else
+                API_ENDPOINT="/repos/${{ github.repository }}/issues/comments/$COMMENT_ID"
+              fi
+
+              echo "📝 Updating comment via: $API_ENDPOINT"
+
+              # Get current body and check if details already present
+              CURRENT_BODY=$(gh api "$API_ENDPOINT" --jq '.body' 2>/dev/null || echo "")
+
+              if [ -z "$CURRENT_BODY" ]; then
+                echo "⚠️ Could not fetch comment body"
+                exit 0
+              fi
+
+              if echo "$CURRENT_BODY" | grep -q "💭 How I worked on this"; then
+                echo "✅ Execution details already present"
+                exit 0
+              fi
+
+              # Append execution details
+              printf '%s\n\n%s' "$CURRENT_BODY" "$(cat /tmp/execution_details.md)" | \
+                gh api -X PATCH "$API_ENDPOINT" -F body=@- 2>/dev/null
+
+              if [ $? -eq 0 ]; then
+                echo "✅ Appended execution details to comment #$COMMENT_ID"
+              else
+                echo "⚠️ Failed to update comment"
               fi
