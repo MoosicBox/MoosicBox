@@ -11,7 +11,6 @@ This crate provides a bridge between Markdown content and HyperChad's Container 
 - **Backend Agnostic**: Generates HyperChad Containers, not HTML strings
 - **Emoji Support**: Convert `:emoji:` shortcodes to Unicode emojis (optional)
 - **XSS Protection**: Filters dangerous HTML tags and attributes (optional)
-- **Syntax Highlighting**: Code block syntax highlighting support (optional)
 
 ## Usage
 
@@ -30,4 +29,3 @@ println!("{}", container); // HTML output
 - `default` - Includes `emoji` and `xss-protection`
 - `emoji` - Enable emoji shortcode replacement (e.g., `:rocket:` → 🚀)
 - `xss-protection` - Filter dangerous HTML tags and attributes
-- `syntax-highlighting` - Enable code syntax highlighting via syntect
