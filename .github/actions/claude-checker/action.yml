@@ -520,20 +520,6 @@ runs:
           if: inputs.command == 'check' && inputs.auto_commit == 'true' && steps.detect_changes.outputs.has_changes == 'true'
           shell: bash
           run: |
-              # Remove output.txt if it exists (from claude-code-action)
-              rm -f output.txt
-
-              # Check for uncommitted changes
-              if [ -z "$(git status --porcelain)" ]; then
-                echo "📭 No uncommitted changes"
-                echo "commit_created=false" >> $GITHUB_OUTPUT
-                exit 0
-              fi
-
-              echo "📝 Changes detected, preparing commit..."
-
-              git add -A
-
               # Get base commit message from template or input
               BASE_COMMIT_MSG="${{ inputs.commit_message }}"
               if [ -z "$BASE_COMMIT_MSG" ]; then
@@ -560,6 +546,20 @@ runs:
                     sed '1d;$d' || echo "")
                 fi
               fi
+
+              # Remove output.txt if it exists (from claude-code-action)
+              rm -f output.txt
+
+              # Check for uncommitted changes
+              if [ -z "$(git status --porcelain)" ]; then
+                echo "📭 No uncommitted changes"
+                echo "commit_created=false" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+
+              echo "📝 Changes detected, preparing commit..."
+
+              git add -A
 
               # Create commit
               if [ -n "$COMMIT_DESC" ] && [ "$COMMIT_DESC" != "null" ]; then
