@@ -256,7 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔄 Rollback demonstration (optional):");
     println!("Uncommenting this will rollback the last migration...");
 
-    runner.rollback(db, switchy_schema::RollbackStrategy::Steps(1)).await?;
+    runner.rollback(db, switchy_schema::runner::RollbackStrategy::Steps(1)).await?;
     println!("✅ Rollback completed - created_at column removed");
 
     let post_rollback_users = db.select("users").execute(db).await?;

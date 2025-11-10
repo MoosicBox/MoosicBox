@@ -122,5 +122,5 @@ async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
 Uncomment the rollback section at the end of `main()` to see rollback in action:
 
 ```rust
-runner.rollback(db, switchy_schema::RollbackStrategy::Steps(1)).await?;
+runner.rollback(db, switchy_schema::runner::RollbackStrategy::Steps(1)).await?;
 ```
