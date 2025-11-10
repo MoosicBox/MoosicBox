@@ -520,6 +520,9 @@ runs:
           if: inputs.command == 'check' && inputs.auto_commit == 'true' && steps.detect_changes.outputs.has_changes == 'true'
           shell: bash
           run: |
+              # Remove output.txt if it exists (from claude-code-action)
+              rm -f output.txt
+
               # Check for uncommitted changes
               if [ -z "$(git status --porcelain)" ]; then
                 echo "📭 No uncommitted changes"
@@ -528,9 +531,6 @@ runs:
               fi
 
               echo "📝 Changes detected, preparing commit..."
-
-              # Remove output.txt if it exists (from claude-code-action)
-              rm -f output.txt
 
               git add -A
 
