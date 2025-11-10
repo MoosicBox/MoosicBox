@@ -84,7 +84,7 @@ The `init` function:
 # #[cfg(feature = "macros")]
 # {
 use moosicbox_logging::log;
-# #[cfg(feature = "free_log")]
+# #[cfg(feature = "macros")]
 use moosicbox_logging::debug_or_trace;
 
 fn example() {
@@ -92,7 +92,7 @@ fn example() {
     log::info!("Application started");
     log::debug!("Debug information");
 
-    # #[cfg(feature = "free_log")]
+    # #[cfg(feature = "macros")]
     # {
     // Conditional macro: logs at trace level if enabled, otherwise debug
     debug_or_trace!(
