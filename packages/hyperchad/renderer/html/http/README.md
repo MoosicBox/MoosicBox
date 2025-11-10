@@ -504,12 +504,13 @@ Core dependencies:
 - **hyperchad_renderer**: Renderer abstractions and traits
 - **thiserror**: Error handling
 - **flume**: Multi-producer, multi-consumer channels for action handling
+- **serde_json**: JSON serialization for internal use
 
 Optional dependencies (enabled by features):
 
-- **serde** & **serde_json**: JSON serialization for actions and API responses
-- **mime_guess**: Content-type detection for static assets
-- **switchy_async** & **switchy_fs**: Async file I/O for asset serving
+- **serde**: JSON deserialization for actions (enabled by `actions` feature)
+- **mime_guess**: Content-type detection for static assets (enabled by `assets` feature)
+- **switchy_async** & **switchy_fs**: Async file I/O for asset serving (enabled by `assets` feature)
 
 ## Integration
 
