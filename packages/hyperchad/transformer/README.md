@@ -37,12 +37,13 @@ The HyperChad Transformer package provides:
 ### Element Types
 
 - **Semantic HTML**: div, main, header, footer, section, aside
-- **Forms**: input, button, form elements
+- **Forms**: input, button, textarea, form elements
 - **Media**: images with responsive loading and sizing
 - **Navigation**: anchors with target and href support
 - **Typography**: headings (h1-h6), spans
 - **Lists**: ordered and unordered lists with items
 - **Tables**: complete table structure (table, thead, tbody, tr, td, th)
+- **Interactive**: details and summary elements for collapsible content
 - **Canvas**: Optional canvas element support
 
 ### Tree Operations
