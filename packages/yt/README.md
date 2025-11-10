@@ -115,10 +115,7 @@ async fn browse_favorite_artists() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Favorite Artists:");
     for artist in artists_result.page.items() {
-        println!("  {} (ID: {})", artist.title, artist.id);
-        if let Some(description) = &artist.description {
-            println!("    {}", description);
-        }
+        println!("  {} (ID: {})", artist.name, artist.id);
     }
 
     Ok(())
@@ -164,7 +161,7 @@ async fn manage_albums() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("  First 5 tracks:");
         for track in tracks_result.page.items() {
-            println!("    {}: {}", track.number, track.title);
+            println!("    {}: {}", track.track_number, track.title);
         }
     }
 
