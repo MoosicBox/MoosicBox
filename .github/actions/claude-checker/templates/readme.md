@@ -15,6 +15,28 @@ commit_message: "${package_name ? 'docs(' + package_name + '): update README for
 
 # README Accuracy Review${package_name ? ' for ' + package_name : ''}
 
+## 🔍 First: Check if README Exists
+
+Before reviewing, check if `${readme_path}` exists at `${package_path}/${readme_path}`:
+
+**If README does NOT exist:**
+
+- Create a new README.md from scratch
+- Base it on the actual code in `${package_path}/src/`
+- Check `${package_path}/Cargo.toml` for package metadata (name, description, dependencies)
+- Include standard sections: Description, Features (if applicable), Installation, Usage, License
+- Follow the public API documentation rules below
+- Keep it concise but complete for fundamental usage
+- Focus only on what users of this package need to know
+
+**If README exists:**
+
+- Review it for fundamental errors and omissions only (see constraints below)
+
+## Task
+
+${readme_path == 'README.md' || readme_path == './README.md' ? 'Review or create the root README for ' + project_name : 'Review or create the README for the ' + package_name + ' package'}
+
 ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ERRORS ONLY
 
 You may ONLY make changes for these reasons:
