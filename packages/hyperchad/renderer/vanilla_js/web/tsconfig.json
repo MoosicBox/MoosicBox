@@ -12,16 +12,9 @@
         "strict": true,
         "baseUrl": ".",
         "outDir": "./dist",
-        "lib": [
-            "ESNext.Array",
-            "DOM",
-            "ESNext",
-            "DOM.iterable"
-        ],
+        "lib": ["ESNext.Array", "DOM", "ESNext", "DOM.iterable"],
         "paths": {
-            "~/*": [
-                "./src/*"
-            ]
+            "~/*": ["./src/*"]
         }
     }
 }

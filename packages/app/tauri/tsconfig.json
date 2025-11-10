@@ -11,17 +11,11 @@
         "strict": true,
         "baseUrl": "./",
         "paths": {
-            "~/*": [
-                "./src/*"
-            ]
+            "~/*": ["./src/*"]
         }
     },
-    "types": [
-        "vitest"
-    ],
-    "exclude": [
-        "src-tauri"
-    ],
+    "types": ["vitest"],
+    "exclude": ["src-tauri"],
     "include": [
         "**/*.ts",
         "**/*.tsx",

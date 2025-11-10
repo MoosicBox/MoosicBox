@@ -7,11 +7,6 @@
         "allowSyntheticDefaultImports": true,
         "esModuleInterop": true
     },
-    "include": [
-        "vite.config.ts"
-    ],
-    "exclude": [
-        "node_modules",
-        "src-tauri"
-    ]
+    "include": ["vite.config.ts"],
+    "exclude": ["node_modules", "src-tauri"]
 }

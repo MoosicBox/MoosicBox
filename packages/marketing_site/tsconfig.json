@@ -12,16 +12,9 @@
         "jsx": "preserve",
         "strict": true,
         "baseUrl": "./",
-        "lib": [
-            "ESNext.Array",
-            "DOM",
-            "ESNext",
-            "DOM.iterable"
-        ],
+        "lib": ["ESNext.Array", "DOM", "ESNext", "DOM.iterable"],
         "paths": {
-            "~/*": [
-                "./src/*"
-            ]
+            "~/*": ["./src/*"]
         }
     }
 }
