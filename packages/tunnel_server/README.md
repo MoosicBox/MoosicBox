@@ -42,7 +42,7 @@ sudo apt install build-essential libssl-dev pkg-config libpq-dev
 # Clone and build
 git clone https://github.com/MoosicBox/MoosicBox.git
 cd MoosicBox
-cargo build --release --bin moosicbox_tunnel_server
+TUNNEL_ACCESS_TOKEN=your-secure-token cargo build --release --bin moosicbox_tunnel_server
 
 # Install binary
 sudo cp target/release/moosicbox_tunnel_server /usr/local/bin/
@@ -80,6 +80,12 @@ moosicbox_tunnel_server
 ```
 
 ### Environment Variables
+
+#### Build-Time Variables
+
+- `TUNNEL_ACCESS_TOKEN`: Required access token for general authorization (must be set during compilation)
+
+#### Runtime Variables
 
 - `PORT`: Server port (default: 8000)
 - `BIND_ADDR`: Bind address (default: 0.0.0.0)
@@ -142,20 +148,20 @@ export TOKIO_CONSOLE=1  # For tokio console debugging
 
 ```bash
 # Build with all features
-cargo build --release --bin moosicbox_tunnel_server
+TUNNEL_ACCESS_TOKEN=your-secure-token cargo build --release --bin moosicbox_tunnel_server
 
 # Build with specific features
-cargo build --release --bin moosicbox_tunnel_server --features postgres-raw
+TUNNEL_ACCESS_TOKEN=your-secure-token cargo build --release --bin moosicbox_tunnel_server --features postgres-raw
 ```
 
 ### Running in Development
 
 ```bash
 # Run with debug logging
-RUST_LOG=debug cargo run --bin moosicbox_tunnel_server
+TUNNEL_ACCESS_TOKEN=your-secure-token RUST_LOG=debug cargo run --bin moosicbox_tunnel_server
 
 # Run with tokio console
-TOKIO_CONSOLE=1 cargo run --bin moosicbox_tunnel_server
+TUNNEL_ACCESS_TOKEN=your-secure-token TOKIO_CONSOLE=1 cargo run --bin moosicbox_tunnel_server
 ```
 
 ## Implementation Notes
