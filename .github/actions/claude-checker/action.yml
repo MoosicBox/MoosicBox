@@ -188,7 +188,7 @@ outputs:
         value: ${{ steps.detect_changes.outputs.files_changed }}
     branch_name:
         description: "Branch used"
-        value: ${{ steps.setup_branch.outputs.branch_name }}
+        value: ${{ steps.create_branch.outputs.branch_name || steps.setup_branch.outputs.branch_name }}
     execution_file:
         description: "Execution details file path"
         value: ${{ steps.claude.outputs.execution_file }}
@@ -315,7 +315,7 @@ runs:
               if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
                 echo "branch_exists=true" >> $GITHUB_OUTPUT
                 echo "branch_action=checked_out" >> $GITHUB_OUTPUT
-                
+
                 if [ "${{ inputs.existing_branch }}" == "true" ]; then
                   echo "📍 Branch $BRANCH_NAME already exists, checking out"
                   git fetch origin "$BRANCH_NAME"
@@ -957,25 +957,25 @@ runs:
               if [ -n "$EXISTING_PR" ]; then
                 echo "pr_action=updated" >> $GITHUB_OUTPUT
                 echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
-                
+
                 gh pr edit $EXISTING_PR \
                   --title "$PR_TITLE" \
                   --body "$PR_BODY" 2>/dev/null || true
-                
+
                 PR_URL=$(gh pr view $EXISTING_PR --json url --jq '.url')
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
                 echo "pr_created=true" >> $GITHUB_OUTPUT
                 echo "✅ Updated PR #$EXISTING_PR: $PR_URL"
               else
                 echo "pr_action=created" >> $GITHUB_OUTPUT
-                
+
                 PR_URL=$(gh pr create \
                   --base ${{ inputs.pr_base_branch }} \
                   --head ${{ inputs.branch_name }} \
                   --title "$PR_TITLE" \
                   --body "$PR_BODY" \
                   --label "${{ inputs.pr_labels }}")
-                
+
                 PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
                 echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
