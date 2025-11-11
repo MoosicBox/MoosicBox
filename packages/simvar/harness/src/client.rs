@@ -1,3 +1,25 @@
+//! Client actor types and utilities.
+//!
+//! This module provides the [`Client`] type for modeling ephemeral actors in simulations.
+//! Clients run once and cannot be restarted, making them ideal for representing temporary
+//! tasks or one-time operations in a distributed system simulation.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use simvar_harness::{SimBootstrap, Sim, SimConfig};
+//! # struct MyBootstrap;
+//! # impl SimBootstrap for MyBootstrap {
+//! #     fn build_sim(&self, config: SimConfig) -> SimConfig { config }
+//! #     fn on_start(&self, sim: &mut impl Sim) {
+//! sim.client("test-client", async {
+//!     // Client logic here
+//!     Ok(())
+//! });
+//! #     }
+//! # }
+//! ```
+
 use std::pin::Pin;
 
 use scoped_tls::scoped_thread_local;
