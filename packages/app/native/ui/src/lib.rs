@@ -684,6 +684,11 @@ pub fn downloads(state: &State) -> Containers {
     )
 }
 
+/// Renders a complete page with the application layout.
+///
+/// Wraps the provided content in the full page structure including navigation,
+/// footer, and global UI elements.
+///
 /// # Panics
 ///
 /// * If the `API_SOURCES` `RwLock` is poisoned
