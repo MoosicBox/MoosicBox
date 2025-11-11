@@ -483,6 +483,26 @@ pub async fn get_sqlite_library_migrations() -> Result<
 /// # Errors
 ///
 /// * `MigrateError::Schema` - If the migration source fails to provide migrations
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_schema::get_sqlite_config_migrations;
+/// use switchy_schema_test_utils::MigrationTestBuilder;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let migrations = get_sqlite_config_migrations().await?;
+///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+///
+/// // Use with MigrationTestBuilder
+/// MigrationTestBuilder::new(migrations)
+///     .with_table_name("__moosicbox_schema_migrations")
+///     .run(&*db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "sqlite")]
 pub async fn get_sqlite_config_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
@@ -501,6 +521,28 @@ pub async fn get_sqlite_config_migrations() -> Result<
 /// # Errors
 ///
 /// * `MigrateError::Schema` - If the migration source fails to provide migrations
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use moosicbox_schema::get_postgres_library_migrations;
+/// use switchy_schema_test_utils::MigrationTestBuilder;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let migrations = get_postgres_library_migrations().await?;
+///
+/// let db = switchy_database_connection::init_postgres_sqlx(
+///     "postgres://user:pass@localhost/test"
+/// ).await?;
+///
+/// // Use with MigrationTestBuilder
+/// MigrationTestBuilder::new(migrations)
+///     .with_table_name("__moosicbox_schema_migrations")
+///     .run(&*db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "postgres")]
 pub async fn get_postgres_library_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
@@ -519,6 +561,28 @@ pub async fn get_postgres_library_migrations() -> Result<
 /// # Errors
 ///
 /// * `MigrateError::Schema` - If the migration source fails to provide migrations
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use moosicbox_schema::get_postgres_config_migrations;
+/// use switchy_schema_test_utils::MigrationTestBuilder;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let migrations = get_postgres_config_migrations().await?;
+///
+/// let db = switchy_database_connection::init_postgres_sqlx(
+///     "postgres://user:pass@localhost/test"
+/// ).await?;
+///
+/// // Use with MigrationTestBuilder
+/// MigrationTestBuilder::new(migrations)
+///     .with_table_name("__moosicbox_schema_migrations")
+///     .run(&*db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "postgres")]
 pub async fn get_postgres_config_migrations() -> Result<
     Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
