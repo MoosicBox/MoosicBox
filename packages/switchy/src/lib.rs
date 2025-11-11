@@ -170,6 +170,10 @@ pub mod unsync_macros {
     pub use switchy_async_macros::*;
 
     // For tokio runtime - re-export tokio::select! as select_internal
+    /// Internal implementation macro for `select!` using Tokio runtime.
+    ///
+    /// This macro is an implementation detail and should not be used directly.
+    /// Use [`switchy::unsync::select!`](crate::unsync::select) instead.
     #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
     #[macro_export]
     macro_rules! select_internal {
@@ -187,6 +191,10 @@ pub mod unsync_macros {
     pub use select_internal;
 
     // For tokio runtime - re-export tokio::join! as join_internal
+    /// Internal implementation macro for `join!` using Tokio runtime.
+    ///
+    /// This macro is an implementation detail and should not be used directly.
+    /// Use [`switchy::unsync::join!`](crate::unsync::join) instead.
     #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
     #[macro_export]
     macro_rules! join_internal {
@@ -204,6 +212,10 @@ pub mod unsync_macros {
     pub use join_internal;
 
     // For tokio runtime - re-export tokio::try_join! as try_join_internal
+    /// Internal implementation macro for `try_join!` using Tokio runtime.
+    ///
+    /// This macro is an implementation detail and should not be used directly.
+    /// Use [`switchy::unsync::try_join!`](crate::unsync::try_join) instead.
     #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
     #[macro_export]
     macro_rules! try_join_internal {
