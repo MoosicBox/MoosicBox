@@ -8,7 +8,6 @@
 //!
 //! ```rust,no_run
 //! use moosicbox_app_tauri_bundled::{Context, service};
-//! use moosicbox_async_service::{Arc, sync::RwLock};
 //!
 //! # fn main() {
 //! let runtime_handle = moosicbox_async_service::runtime::Handle::current();

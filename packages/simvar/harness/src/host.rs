@@ -1,3 +1,26 @@
+//! Host actor types and utilities.
+//!
+//! This module provides the [`Host`] type for modeling persistent actors that can be
+//! restarted during a simulation. Hosts are ideal for representing long-running services
+//! like servers, databases, or any component that should be able to recover from failures.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use simvar_harness::{SimBootstrap, Sim, SimConfig};
+//! # struct MyBootstrap;
+//! # impl SimBootstrap for MyBootstrap {
+//! #     fn build_sim(&self, config: SimConfig) -> SimConfig { config }
+//! #     fn on_start(&self, sim: &mut impl Sim) {
+//! sim.host("server", || async {
+//!     // Host factory - returns fresh instance on each restart
+//!     // Server logic here
+//!     Ok(())
+//! });
+//! #     }
+//! # }
+//! ```
+
 use std::pin::Pin;
 
 use scoped_tls::scoped_thread_local;

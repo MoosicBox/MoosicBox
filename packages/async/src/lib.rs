@@ -261,6 +261,8 @@ macro_rules! impl_async {
                 <Self as GenericRuntime>::block_on(self, f)
             }
 
+            /// Waits for the runtime to finish all pending tasks.
+            ///
             /// # Errors
             ///
             /// * If the `Runtime` fails to join
@@ -270,6 +272,8 @@ macro_rules! impl_async {
         }
 
         impl Builder {
+            /// Builds a new async runtime from the configured builder.
+            ///
             /// # Errors
             ///
             /// * If the underlying `Runtime` fails to build

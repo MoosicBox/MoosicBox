@@ -1,3 +1,13 @@
+//! Opus packet framing and parsing according to RFC 6716.
+//!
+//! This module implements the frame parsing logic specified in RFC 6716 Section 3.2,
+//! which handles the extraction of individual frames from Opus packets. Opus packets
+//! can contain 1 to 48 frames encoded in various ways (constant bitrate, variable bitrate,
+//! with or without padding).
+//!
+//! The primary entry point is the `parse_frames()` function, which takes a complete
+//! Opus packet and returns slices to each individual frame payload.
+
 use crate::{Error, Result, Toc};
 
 fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {

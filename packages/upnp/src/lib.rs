@@ -292,10 +292,13 @@ pub fn get_device_and_service_from_url(
 /// Errors that can occur when executing `UPnP` actions.
 #[derive(Debug, Error)]
 pub enum ActionError {
+    /// Error parsing XML response from `UPnP` device.
     #[error(transparent)]
     Roxml(#[from] roxmltree::Error),
+    /// Error from the underlying `UPnP` library.
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
+    /// Required property missing from `UPnP` action response.
     #[error("Missing property \"{0}\"")]
     MissingProperty(String),
 }
@@ -303,16 +306,31 @@ pub enum ActionError {
 /// Errors that can occur when scanning for `UPnP` devices and services.
 #[derive(Debug, Error)]
 pub enum ScanError {
+    /// `RenderingControl` service not found on the device.
     #[error("Failed to find `RenderingControl` service")]
     RenderingControlNotFound,
+    /// `MediaRenderer` service not found on the device.
     #[error("Failed to find MediaRenderer service")]
     MediaRendererNotFound,
+    /// `UPnP` device with the specified UDN not found in cache.
     #[error("Failed to find UPnP Device device_udn={device_udn}")]
-    DeviceUdnNotFound { device_udn: String },
+    DeviceUdnNotFound {
+        /// The device UDN that was not found.
+        device_udn: String,
+    },
+    /// `UPnP` device with the specified URL not found in cache.
     #[error("Failed to find UPnP Device device_url={device_url}")]
-    DeviceUrlNotFound { device_url: String },
+    DeviceUrlNotFound {
+        /// The device URL that was not found.
+        device_url: String,
+    },
+    /// `UPnP` service with the specified service ID not found on the device.
     #[error("Failed to find UPnP Service service_id={service_id}")]
-    ServiceIdNotFound { service_id: String },
+    ServiceIdNotFound {
+        /// The service ID that was not found.
+        service_id: String,
+    },
+    /// Error from the underlying `UPnP` library.
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
 }
@@ -1091,10 +1109,13 @@ pub struct UpnpDeviceScanner {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum UpnpDeviceScannerError {
+    /// No audio outputs are available.
     #[error("No outputs available")]
     NoOutputs,
+    /// Error from the underlying `UPnP` library.
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
+    /// Error scanning for `UPnP` devices or services.
     #[error(transparent)]
     Scan(#[from] ScanError),
 }

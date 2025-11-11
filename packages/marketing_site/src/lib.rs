@@ -95,6 +95,13 @@ static ASSETS_DIR: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
 /// Static asset routes for the marketing site.
 ///
 /// Includes JavaScript files, favicon, and public directory assets.
+///
+/// # Panics
+///
+/// * If the public assets directory path cannot be converted to a string (during initialization)
+/// * If asset path conversion to [`AssetPathTarget`] fails (during initialization)
+///
+/// [`AssetPathTarget`]: hyperchad::renderer::assets::AssetPathTarget
 #[cfg(feature = "assets")]
 pub static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> =
     LazyLock::new(|| {

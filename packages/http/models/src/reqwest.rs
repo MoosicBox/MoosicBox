@@ -5,6 +5,7 @@
 
 use crate::{Method, StatusCode};
 
+/// Converts this crate's `Method` into `reqwest`'s `Method`.
 impl From<Method> for reqwest::Method {
     fn from(value: Method) -> Self {
         match value {
@@ -21,6 +22,12 @@ impl From<Method> for reqwest::Method {
     }
 }
 
+/// Converts `reqwest`'s `StatusCode` into this crate's `StatusCode`.
+///
+/// # Panics
+///
+/// Panics if the status code value is not recognized (this should never happen for
+/// valid reqwest status codes).
 #[allow(clippy::fallible_impl_from)]
 impl From<reqwest::StatusCode> for StatusCode {
     fn from(value: reqwest::StatusCode) -> Self {

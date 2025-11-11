@@ -23,12 +23,16 @@ use crate::{
 /// Errors that can occur during music API scanning.
 #[derive(Debug, Error)]
 pub enum ScanError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Music API operation failed.
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Database update operation failed.
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
+    /// Failed to fetch and save bytes from remote URL.
     #[error(transparent)]
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }

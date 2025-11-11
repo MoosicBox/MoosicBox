@@ -544,6 +544,43 @@ pub enum DropBehavior {
     Restrict,
 }
 
+/// Builder for DROP TABLE SQL statements
+///
+/// Provides a fluent API for dropping database tables with optional IF EXISTS and
+/// CASCADE/RESTRICT behaviors. Use [`drop_table`] to construct.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use switchy_database::schema::drop_table;
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+/// // Drop a table, failing if it doesn't exist
+/// drop_table("old_users")
+///     .execute(db)
+///     .await?;
+///
+/// // Drop with IF EXISTS to avoid errors
+/// drop_table("maybe_exists")
+///     .if_exists(true)
+///     .execute(db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## CASCADE/RESTRICT Behavior
+///
+/// When the `cascade` feature is enabled:
+///
+/// ```rust,ignore
+/// // Fail if table has dependencies
+/// drop_table("users").restrict().execute(db).await?;
+///
+/// // Drop all dependent objects recursively
+/// drop_table("users").cascade().execute(db).await?;
+/// ```
 pub struct DropTableStatement<'a> {
     pub table_name: &'a str,
     pub if_exists: bool,
@@ -551,6 +588,16 @@ pub struct DropTableStatement<'a> {
     pub behavior: DropBehavior,
 }
 
+/// Creates a new DROP TABLE statement builder
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_database::schema::drop_table;
+///
+/// let stmt = drop_table("old_table")
+///     .if_exists(true);
+/// ```
 #[must_use]
 #[allow(clippy::missing_const_for_fn)] // Cannot be const due to conditional compilation
 pub fn drop_table(table_name: &str) -> DropTableStatement<'_> {

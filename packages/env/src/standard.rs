@@ -1,3 +1,25 @@
+//! Standard system environment variable access.
+//!
+//! This module provides access to real system environment variables via `std::env`.
+//! It implements the [`EnvProvider`](crate::EnvProvider) trait to offer a unified
+//! interface for environment variable operations.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "std")]
+//! # {
+//! use switchy_env::standard::{var, var_parse};
+//!
+//! # unsafe { std::env::set_var("PORT", "8080"); }
+//! // Get a variable as a string
+//! let port_str = var("PORT").unwrap();
+//!
+//! // Parse a variable as a specific type
+//! let port: u16 = var_parse("PORT").unwrap();
+//! # }
+//! ```
+
 use crate::{EnvError, EnvProvider, Result};
 use std::collections::BTreeMap;
 

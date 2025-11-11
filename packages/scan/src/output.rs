@@ -525,22 +525,31 @@ pub struct UpdateDatabaseResults {
 /// Errors that can occur when updating the database with scan results.
 #[derive(Debug, Error)]
 pub enum UpdateDatabaseError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Database operation failed.
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Type conversion failed.
     #[error(transparent)]
     TryFrom(#[from] TryFromError),
+    /// Invalid data encountered during update.
     #[error("Invalid data: {0}")]
     InvalidData(String),
+    /// Failed to populate search index.
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    /// Failed to recreate search index.
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
+    /// Failed to join asynchronous task.
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// Failed to convert ID type.
     #[error(transparent)]
     TryFromId(#[from] TryFromIdError),
+    /// Failed to parse date/time.
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
 }

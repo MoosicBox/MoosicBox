@@ -25,10 +25,13 @@ impl From<flume::SendError<usize>> for ListenerError {
 /// Errors that can occur in the `UPnP` listener service.
 #[derive(Debug, Error)]
 pub enum ListenerError {
+    /// Error joining an asynchronous task.
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// Error from the underlying `UPnP` library.
     #[error(transparent)]
     Rupnp(#[from] rupnp::Error),
+    /// Failed to send message through channel.
     #[error("Failed to send")]
     Send,
 }
@@ -36,31 +39,54 @@ pub enum ListenerError {
 /// Commands that can be sent to the `UPnP` listener service.
 #[derive(AsRefStr)]
 pub enum UpnpCommand {
+    /// Subscribe to media info updates from a `UPnP` device.
     SubscribeMediaInfo {
+        /// Polling interval for media info updates.
         interval: Duration,
+        /// `UPnP` instance ID to monitor.
         instance_id: u32,
+        /// Unique device name of the `UPnP` device.
         udn: String,
+        /// Service ID to monitor (e.g., "urn:upnp-org:serviceId:AVTransport").
         service_id: String,
+        /// Callback function invoked when media info changes.
         action: MediaInfoSubscriptionAction,
+        /// Channel sender for returning the subscription ID.
         tx: flume::Sender<usize>,
     },
+    /// Subscribe to position info updates from a `UPnP` device.
     SubscribePositionInfo {
+        /// Polling interval for position info updates.
         interval: Duration,
+        /// `UPnP` instance ID to monitor.
         instance_id: u32,
+        /// Unique device name of the `UPnP` device.
         udn: String,
+        /// Service ID to monitor (e.g., "urn:upnp-org:serviceId:AVTransport").
         service_id: String,
+        /// Callback function invoked when position info changes.
         action: PositionInfoSubscriptionAction,
+        /// Channel sender for returning the subscription ID.
         tx: flume::Sender<usize>,
     },
+    /// Subscribe to transport info updates from a `UPnP` device.
     SubscribeTransportInfo {
+        /// Polling interval for transport info updates.
         interval: Duration,
+        /// `UPnP` instance ID to monitor.
         instance_id: u32,
+        /// Unique device name of the `UPnP` device.
         udn: String,
+        /// Service ID to monitor (e.g., "urn:upnp-org:serviceId:AVTransport").
         service_id: String,
+        /// Callback function invoked when transport info changes.
         action: TransportInfoSubscriptionAction,
+        /// Channel sender for returning the subscription ID.
         tx: flume::Sender<usize>,
     },
+    /// Unsubscribe from a previously created subscription.
     Unsubscribe {
+        /// The subscription ID to cancel.
         subscription_id: usize,
     },
 }

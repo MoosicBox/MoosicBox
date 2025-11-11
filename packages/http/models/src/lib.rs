@@ -402,7 +402,8 @@ impl StatusCode {
     ///
     /// # Errors
     ///
-    /// * If the `u16` is not a valid HTTP status code
+    /// Returns `TryFromU16StatusCodeError` if:
+    /// * The `u16` value does not correspond to a valid HTTP status code
     pub fn try_from_u16(code: u16) -> Result<Self, TryFromU16StatusCodeError> {
         code.try_into()
     }
@@ -411,7 +412,7 @@ impl StatusCode {
     ///
     /// # Panics
     ///
-    /// * If the `u16` is not a valid HTTP status code
+    /// Panics if the `u16` value does not correspond to a valid HTTP status code.
     #[must_use]
     pub fn from_u16(code: u16) -> Self {
         Self::try_from_u16(code).unwrap()

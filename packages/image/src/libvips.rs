@@ -46,6 +46,10 @@ static VIPS: LazyLock<VipsApp> = LazyLock::new(|| {
 });
 
 /// Gets and clears the current libvips error buffer.
+///
+/// # Panics
+///
+/// Panics if the libvips library cannot be initialized on first access.
 #[must_use]
 pub fn get_error() -> String {
     let error = VIPS.error_buffer().unwrap_or_default().to_string();
@@ -60,6 +64,10 @@ pub fn get_error() -> String {
 /// * [`libvips::error::Error`] - If the image file cannot be loaded
 /// * [`libvips::error::Error`] - If the thumbnail generation fails
 /// * [`libvips::error::Error`] - If the image encoding to JPEG fails
+///
+/// # Panics
+///
+/// Panics if the libvips library cannot be initialized on first access.
 pub fn resize_local_file(
     width: u32,
     height: u32,
@@ -90,6 +98,10 @@ pub fn resize_local_file(
 /// * [`libvips::error::Error`] - If the image buffer cannot be decoded
 /// * [`libvips::error::Error`] - If the thumbnail generation fails
 /// * [`libvips::error::Error`] - If the image encoding to JPEG fails
+///
+/// # Panics
+///
+/// Panics if the libvips library cannot be initialized on first access.
 pub fn resize_bytes(width: u32, height: u32, bytes: &[u8]) -> Result<Bytes, libvips::error::Error> {
     let _app = &VIPS;
     let options = ops::ThumbnailBufferOptions {

@@ -66,11 +66,6 @@ fn max_message_size() -> usize {
 /// The `NetworkGraph` maintains the complete network topology including all nodes,
 /// their connections, and link characteristics like latency and packet loss.
 /// It supports dynamic topology changes including network partitions.
-/// A network topology graph representing nodes and links in the P2P simulation
-///
-/// The `NetworkGraph` maintains the complete network topology including all nodes,
-/// their connections, and link characteristics like latency and packet loss.
-/// It supports dynamic topology changes including network partitions.
 #[derive(Debug, Clone)]
 pub struct NetworkGraph {
     nodes: BTreeMap<SimulatorNodeId, NodeInfo>,

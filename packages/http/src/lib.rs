@@ -69,6 +69,12 @@ use strum::{AsRefStr, EnumString};
 use switchy_http_models::{Method, StatusCode};
 use thiserror::Error;
 
+/// Re-exported HTTP models and types from `switchy_http_models`.
+///
+/// This module provides common HTTP types including [`models::Method`] and
+/// [`models::StatusCode`] that work across different HTTP libraries.
+///
+/// See the [`switchy_http_models`] crate documentation for full details.
 pub use switchy_http_models as models;
 
 #[cfg(feature = "reqwest")]

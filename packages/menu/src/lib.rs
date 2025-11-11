@@ -12,4 +12,9 @@
 pub mod api;
 
 pub mod library;
+
+/// Re-exported menu model types.
+///
+/// This module provides access to all menu-related data models including album
+/// versions and API response types.
 pub use moosicbox_menu_models as models;
