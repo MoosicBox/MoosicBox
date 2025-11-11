@@ -64,10 +64,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Bootstrap configuration for the basic web server simulation
+/// Bootstrap configuration for the basic web server simulation.
+///
+/// This struct configures the simulation parameters including the server port,
+/// number of concurrent clients, and how frequently clients make requests.
 struct BasicWebServerBootstrap {
+    /// The TCP port on which the web server will listen
     server_port: u16,
+    /// The number of concurrent client actors to simulate
     client_count: usize,
+    /// The interval between consecutive requests from each client
     request_interval: Duration,
 }
 
@@ -131,7 +137,16 @@ impl SimBootstrap for BasicWebServerBootstrap {
     }
 }
 
-/// Start the web server with example endpoints
+/// Start the web server with example endpoints.
+///
+/// Creates and starts a web server listening on the specified port with three endpoints:
+/// * `GET /api/v1/health` - Returns health status
+/// * `GET /api/v1/status` - Returns server status with uptime
+/// * `POST /api/v1/echo` - Echoes the request with timestamp
+///
+/// # Panics
+///
+/// Panics if the current time cannot be obtained from the system clock when calling `.unwrap()` on time operations.
 #[allow(clippy::future_not_send)]
 async fn start_web_server(port: u16) -> HostResult {
     log::info!("Starting web server on port {port}");
@@ -196,7 +211,20 @@ async fn start_web_server(port: u16) -> HostResult {
     Ok(())
 }
 
-/// Run a client that makes periodic requests to the server
+/// Run a client that makes periodic requests to the server.
+///
+/// The client makes three types of requests in rotation:
+/// * Health check (`GET /api/v1/health`)
+/// * Status request (`GET /api/v1/status`)
+/// * Echo request (`POST /api/v1/echo`)
+///
+/// The client continues making requests until the simulation is cancelled.
+///
+/// # Panics
+///
+/// Panics if:
+/// * The current time cannot be obtained from the system clock when calling `.unwrap()`
+/// * JSON serialization of the echo request fails when calling `.unwrap()`
 async fn run_client(
     client_id: usize,
     server_port: u16,
@@ -288,23 +316,39 @@ async fn run_client(
     Ok(())
 }
 
-/// Request/Response types for the echo endpoint
+/// Request payload for the echo endpoint.
+///
+/// Sent by clients to the `POST /api/v1/echo` endpoint.
 #[derive(Debug, Serialize, Deserialize)]
 struct EchoRequest {
+    /// The message to be echoed back
     message: String,
+    /// Unix timestamp (seconds since epoch) when the request was created
     timestamp: u64,
 }
 
+/// Response payload from the echo endpoint.
+///
+/// Returned by the server in response to `POST /api/v1/echo` requests.
 #[derive(Debug, Serialize, Deserialize)]
 struct EchoResponse {
+    /// The echoed message content
     echo: String,
+    /// Unix timestamp (seconds since epoch) when the server received the request
     received_at: u64,
+    /// Unix timestamp (seconds since epoch) of the server's current time
     server_time: u64,
 }
 
+/// Response payload for the status endpoint.
+///
+/// Returned by the server in response to `GET /api/v1/status` requests.
 #[derive(Debug, Serialize, Deserialize)]
 struct StatusResponse {
+    /// The current status of the server (e.g., "running")
     status: String,
+    /// Number of seconds the server has been running
     uptime_seconds: u64,
+    /// Total number of requests served since server start
     requests_served: u64,
 }
