@@ -52,6 +52,7 @@ pub mod arb;
 #[cfg(feature = "handler")]
 pub mod handler;
 
+/// Domain-specific language (DSL) for defining actions in templates
 pub mod dsl;
 
 pub use hyperchad_transformer_models::{ElementTarget, Target};
