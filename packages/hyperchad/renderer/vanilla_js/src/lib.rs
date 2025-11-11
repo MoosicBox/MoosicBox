@@ -710,10 +710,24 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
 }
 
 impl HtmlTagRenderer for VanillaJsTagRenderer {
+    /// Registers a responsive trigger for conditional CSS rendering.
+    ///
+    /// Adds a named responsive trigger (e.g., for media queries or container queries) that can
+    /// be referenced by containers to apply conditional styling based on viewport or element size.
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
         self.default.responsive_triggers.insert(name, trigger);
     }
 
+    /// Renders HTML attributes for a container element.
+    ///
+    /// Generates HTML attributes including standard styling, interactive event handlers
+    /// (e.g., `v-onclick`, `v-onmouseover`), and htmx HTTP attributes (e.g., `hx-get`,
+    /// `hx-post`). This method extends the default HTML renderer with vanilla JavaScript
+    /// interactivity features.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing to the output stream fails.
     #[allow(clippy::too_many_lines)]
     fn element_attrs_to_html(
         &self,
@@ -907,6 +921,16 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         Ok(())
     }
 
+    /// Generates partial HTML for a container with responsive CSS.
+    ///
+    /// Converts the container's reactive conditions to CSS and prepends them to the content.
+    /// This is typically used for AJAX/htmx responses that update part of the page.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// * Converting reactive conditions to CSS fails (should never occur with valid containers)
+    /// * The generated CSS bytes are not valid UTF-8 (should never occur as CSS is ASCII)
     fn partial_html(
         &self,
         _headers: &BTreeMap<String, String>,
@@ -924,6 +948,17 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         format!("{responsive_css}\n\n{content}")
     }
 
+    /// Generates complete HTML document with head, body, and hyperchad JavaScript runtime.
+    ///
+    /// Creates a full HTML page including the document structure, metadata (title, description),
+    /// stylesheets, the hyperchad JavaScript runtime, and responsive CSS. This is used for
+    /// initial page loads or standalone HTML responses.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// * Converting reactive conditions to CSS fails (should never occur with valid containers)
+    /// * The generated CSS bytes are not valid UTF-8 (should never occur as CSS is ASCII)
     fn root_html(
         &self,
         _headers: &BTreeMap<String, String>,
