@@ -1,3 +1,31 @@
+//! Simulator environment for testing.
+//!
+//! This module provides a configurable environment with deterministic defaults
+//! for testing. It maintains its own set of environment variables separate from
+//! the system environment, allowing for controlled and reproducible tests.
+//!
+//! The simulator automatically initializes with real environment variables and
+//! adds simulator-specific defaults for common configuration values.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # #[cfg(feature = "simulator")]
+//! # {
+//! use switchy_env::simulator::{set_var, var, reset};
+//!
+//! // Set a test variable
+//! set_var("DATABASE_URL", "sqlite::memory:");
+//!
+//! // Access it like normal
+//! let db_url = var("DATABASE_URL").unwrap();
+//! assert_eq!(db_url, "sqlite::memory:");
+//!
+//! // Reset to defaults
+//! reset();
+//! # }
+//! ```
+
 use crate::{EnvError, EnvProvider, Result};
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
