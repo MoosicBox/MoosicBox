@@ -98,15 +98,20 @@ async fn get_origins_or_default(
 /// Errors that can occur during scanning operations.
 #[derive(Debug, Error)]
 pub enum ScanError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Local filesystem scan failed.
     #[cfg(feature = "local")]
     #[error(transparent)]
     Local(#[from] local::ScanError),
+    /// Music API operation failed.
     #[error(transparent)]
     MusicApi(#[from] moosicbox_music_api::Error),
+    /// Music API scan operation failed.
     #[error(transparent)]
     ScanMusicApi(#[from] music_api::ScanError),
+    /// Scan source is invalid or not supported.
     #[error("Invalid source")]
     InvalidSource,
 }

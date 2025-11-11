@@ -11,6 +11,7 @@ use crate::ScanOrigin;
 
 use self::models::ScanLocation;
 
+/// Data structures for scan location database records.
 pub mod models;
 
 /// Adds a local filesystem path to the database as a scan location.
