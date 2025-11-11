@@ -1,3 +1,47 @@
+//! # Async Simulated Example
+//!
+//! A demonstration of concurrent task spawning and execution using the switchy async runtime
+//! with simulation capabilities.
+//!
+//! ## What it demonstrates
+//!
+//! This example showcases:
+//!
+//! * **Task spawning** - Creating multiple concurrent tasks with `task::spawn`
+//! * **Nested futures** - Spawning tasks from within other tasks
+//! * **Random delays** - Using random number generation with async sleep
+//! * **Concurrent execution** - Multiple tasks running simultaneously
+//! * **Runtime management** - Proper runtime lifecycle and cleanup
+//! * **Simulation support** - Deterministic execution with seeded randomness
+//!
+//! ## Example output
+//!
+//! The program spawns 5 concurrent tasks with random sleep durations. Each task spawns
+//! an additional nested task with more random delays. The output shows timestamps
+//! demonstrating concurrent execution:
+//!
+//! ```text
+//! Begin Asynchronous Execution (seed=12345)
+//! block on
+//! Blocking Function Polled To Completion
+//! Spawned Fn #00: Start 1634664688
+//! Spawned Fn #01: Start 1634664688
+//! ...
+//! End of Asynchronous Execution
+//! ```
+//!
+//! ## Running the example
+//!
+//! Basic execution:
+//! ```bash
+//! cargo run --package async_simulated
+//! ```
+//!
+//! With simulation features for deterministic execution:
+//! ```bash
+//! cargo run --package async_simulated --features simulator
+//! ```
+
 use std::time::Duration;
 
 use switchy_async::{Error, runtime::Runtime, task, time};
