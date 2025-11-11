@@ -6,10 +6,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+/// Error returned when parsing integer ranges fails.
+///
+/// Re-exported from `moosicbox_parsing_utils` for convenience.
 pub use moosicbox_parsing_utils::integer_range::ParseIntegersError;
 
 use crate::ApiSource;
 
+/// Database integration types for ID handling.
+///
+/// Re-exports database-specific ID types when the `db` feature is enabled.
 #[cfg(feature = "db")]
 pub use db::*;
 
