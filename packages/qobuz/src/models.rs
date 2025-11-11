@@ -619,6 +619,11 @@ impl ToValueType<QobuzTrack> for &Value {
 }
 
 impl QobuzTrack {
+    /// Constructs a `QobuzTrack` from a JSON value with additional album context.
+    ///
+    /// This method is used when parsing track data that lacks complete album information
+    /// in the track object itself, requiring explicit album metadata to be provided.
+    ///
     /// # Errors
     ///
     /// * If failed to parse the properties into a `QobuzTrack`
