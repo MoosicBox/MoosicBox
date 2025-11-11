@@ -1,7 +1,8 @@
-/// Simulator runtime implementation.
-///
-///  This module provides a deterministic simulator runtime for testing async code
-/// with controlled time advancement and reproducible behavior.
+//! Simulator runtime implementation.
+//!
+//! This module provides a deterministic simulator runtime for testing async code
+//! with controlled time advancement and reproducible behavior.
+
 pub mod futures;
 pub mod runtime;
 pub mod task;
