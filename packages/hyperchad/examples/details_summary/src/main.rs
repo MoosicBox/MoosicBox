@@ -78,6 +78,11 @@ use log::info;
 #[cfg(feature = "assets")]
 use std::sync::LazyLock;
 
+/// Static assets served by the application.
+///
+/// Contains the vanilla JavaScript runtime required for `HyperChad`'s client-side interactivity.
+/// This includes the hashed JavaScript bundle that provides dynamic behavior without requiring
+/// a full framework.
 #[cfg(feature = "assets")]
 static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = LazyLock::new(|| {
     vec![
@@ -94,6 +99,21 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
     ]
 });
 
+/// Creates the main page demonstrating details/summary elements.
+///
+/// Builds a comprehensive demonstration page showcasing various use cases for HTML
+/// `<details>` and `<summary>` elements in `HyperChad`, including:
+///
+/// * Basic collapsible sections
+/// * Default open state
+/// * FAQ accordion pattern
+/// * Nested details elements
+/// * Styled details with custom appearance
+/// * Settings panels
+/// * Debug information panels
+/// * Details without summary elements
+///
+/// Returns a [`Containers`] instance containing the complete page structure ready for rendering.
 #[allow(clippy::too_many_lines, clippy::large_stack_frames)]
 fn create_main_page() -> Containers {
     container! {
@@ -524,12 +544,33 @@ fn create_main_page() -> Containers {
     }
 }
 
+/// Creates and configures the application router.
+///
+/// Sets up a single route at the root path (`/`) that serves the main demonstration page.
+/// The router handles incoming HTTP requests and returns the appropriate [`View`] response.
+///
+/// Returns a configured [`Router`] instance ready to handle requests.
 fn create_router() -> Router {
     Router::new().with_route("/", |_req: RouteRequest| async move {
         View::builder().with_primary(create_main_page()).build()
     })
 }
 
+/// Application entry point.
+///
+/// Initializes logging, creates the async runtime, sets up the router with the demonstration
+/// page, configures static assets (if enabled), and starts the web server.
+///
+/// The server listens on the port specified by the `PORT` environment variable, or defaults
+/// to port 8080 if not set.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The async runtime fails to initialize
+/// * Static asset routes are invalid or fail to register
+/// * The web server fails to bind to the specified port
+/// * The server encounters a fatal error during execution
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     info!("Starting HyperChad Details/Summary Example");
