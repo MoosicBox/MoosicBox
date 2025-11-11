@@ -1,5 +1,6 @@
 //! Multi-producer, single-consumer channel implementation for tokio runtime.
-//! This wraps flume to provide additional methods needed by the codebase.
+//!
+//! This wraps the MPMC channel implementation to provide MPSC-specific types and error handling.
 
 use std::task::{Context, Poll};
 
