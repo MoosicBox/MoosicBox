@@ -35,18 +35,25 @@ use crate::{
 /// Errors that can occur during local filesystem scanning.
 #[derive(Debug, Error)]
 pub enum ScanError {
+    /// Database fetch operation failed.
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    /// Failed to parse integer from string.
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
+    /// Failed to join asynchronous task.
     #[error(transparent)]
     Join(#[from] JoinError),
+    /// Audio tag parsing failed.
     #[error(transparent)]
     Tag(#[from] moosicbox_audiotags::error::Error),
+    /// I/O operation failed.
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
+    /// Database update operation failed.
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
+    /// Audio file parsing failed with Lofty.
     #[error(transparent)]
     Lofty(#[from] moosicbox_lofty::LoftyError),
 }
