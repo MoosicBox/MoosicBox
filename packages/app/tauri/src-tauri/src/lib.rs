@@ -19,7 +19,6 @@
 //!
 //! * [`run`] - Main entry point to start the Tauri application
 //! * [`on_playback_event`] - Callback for playback state changes
-//! * [`mdns`] - Module for mDNS service discovery of `MoosicBox` servers
 //! * [`TauriUpdateAppState`] - Structure for updating application state via Tauri commands
 //! * [`TauriPlayerError`] - Error type for Tauri player operations
 //!
