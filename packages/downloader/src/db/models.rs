@@ -1,3 +1,9 @@
+//! Database model types for download management.
+//!
+//! Provides types for storing and retrieving download tasks and download locations
+//! from the database. These types implement database serialization/deserialization
+//! traits for the `switchy_database` interface.
+
 use std::str::FromStr;
 
 use moosicbox_json_utils::{
