@@ -3440,6 +3440,7 @@ async fn upsert_and_get_row(
     }
 }
 
+/// Wrapper type for converting `DatabaseValue` to `MySQL` `SQLx`-specific parameter types
 #[derive(Debug, Clone)]
 pub struct MySqlDatabaseValue(DatabaseValue);
 

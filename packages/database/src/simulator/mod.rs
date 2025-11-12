@@ -126,6 +126,7 @@ use crate::{
 static DATABASE_REGISTRY: std::sync::LazyLock<Mutex<BTreeMap<String, Arc<RusqliteDatabase>>>> =
     std::sync::LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
+/// Database simulator that delegates all operations to an underlying rusqlite database
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SimulationDatabase {

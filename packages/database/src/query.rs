@@ -166,6 +166,10 @@ pub trait Expression: Send + Sync + Debug {
     /// Returns the type tag for this expression
     fn expression_type(&self) -> ExpressionType<'_>;
 
+    /// Extracts bindable parameters from this expression
+    ///
+    /// Returns only values that can be bound as query parameters, filtering out
+    /// NULL values and SQL function expressions like `NOW()`.
     fn params(&self) -> Option<Vec<&DatabaseValue>> {
         self.values().map(|x| {
             x.into_iter()
@@ -177,10 +181,18 @@ pub trait Expression: Send + Sync + Debug {
         })
     }
 
+    /// Extracts all database values from this expression
+    ///
+    /// Returns all [`DatabaseValue`] instances within this expression, including those
+    /// that cannot be bound as parameters. Default implementation returns `None`.
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
         None
     }
 
+    /// Checks if this expression represents a NULL value
+    ///
+    /// Returns `true` if this expression is a NULL value, `false` otherwise.
+    /// Default implementation returns `false`.
     fn is_null(&self) -> bool {
         false
     }
@@ -605,6 +617,20 @@ impl Expression for NotIn<'_> {
     }
 }
 
+/// Creates a sort expression for ORDER BY clauses
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::{sort, identifier, SortDirection};
+///
+/// // Sort by name ascending
+/// let sort_asc = sort(identifier("name"), SortDirection::Asc);
+///
+/// // Sort by age descending
+/// let sort_desc = sort(identifier("age"), SortDirection::Desc);
+/// ```
+#[must_use]
 pub fn sort<T>(expression: T, direction: SortDirection) -> Sort
 where
     T: Into<Box<dyn Expression>>,
@@ -615,6 +641,18 @@ where
     }
 }
 
+/// Creates an equality comparison expression (column = value)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::where_eq;
+/// use switchy_database::DatabaseValue;
+///
+/// // Compare column to value
+/// let filter = where_eq("user_id", DatabaseValue::Int64(123));
+/// ```
+#[must_use]
 pub fn where_eq<L, R>(left: L, right: R) -> Eq
 where
     L: Into<Identifier>,
@@ -626,6 +664,8 @@ where
     }
 }
 
+/// Creates a not-equal comparison expression (column != value)
+#[must_use]
 pub fn where_not_eq<L, R>(left: L, right: R) -> NotEq
 where
     L: Into<Identifier>,
@@ -637,6 +677,8 @@ where
     }
 }
 
+/// Creates a greater-than comparison expression (column > value)
+#[must_use]
 pub fn where_gt<L, R>(left: L, right: R) -> Gt
 where
     L: Into<Identifier>,
@@ -648,6 +690,8 @@ where
     }
 }
 
+/// Creates a greater-than-or-equal comparison expression (column >= value)
+#[must_use]
 pub fn where_gte<L, R>(left: L, right: R) -> Gte
 where
     L: Into<Identifier>,
@@ -659,6 +703,8 @@ where
     }
 }
 
+/// Creates a less-than comparison expression (column < value)
+#[must_use]
 pub fn where_lt<L, R>(left: L, right: R) -> Lt
 where
     L: Into<Identifier>,
@@ -670,6 +716,8 @@ where
     }
 }
 
+/// Creates a less-than-or-equal comparison expression (column <= value)
+#[must_use]
 pub fn where_lte<L, R>(left: L, right: R) -> Lte
 where
     L: Into<Identifier>,
@@ -681,16 +729,31 @@ where
     }
 }
 
+/// Creates a logical AND expression combining multiple boolean expressions
+///
+/// All conditions must be true for the AND expression to evaluate to true.
 #[must_use]
 pub fn where_and(conditions: Vec<Box<dyn BooleanExpression>>) -> And {
     And { conditions }
 }
 
+/// Creates a logical OR expression combining multiple boolean expressions
+///
+/// At least one condition must be true for the OR expression to evaluate to true.
 #[must_use]
 pub fn where_or(conditions: Vec<Box<dyn BooleanExpression>>) -> Or {
     Or { conditions }
 }
 
+/// Creates an INNER JOIN clause
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::join;
+///
+/// let join_clause = join("orders", "orders.user_id = users.id");
+/// ```
 #[must_use]
 pub const fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     Join {
@@ -700,6 +763,15 @@ pub const fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     }
 }
 
+/// Creates a LEFT JOIN clause
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::left_join;
+///
+/// let join_clause = left_join("orders", "orders.user_id = users.id");
+/// ```
 #[must_use]
 pub const fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
     Join {
@@ -737,6 +809,20 @@ impl Expression for Coalesce {
     }
 }
 
+/// Creates a COALESCE expression that returns the first non-NULL value
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::{coalesce, identifier};
+/// use switchy_database::DatabaseValue;
+///
+/// // Returns first non-NULL value from list
+/// let expr = coalesce(vec![
+///     Box::new(identifier("email")),
+///     Box::new(DatabaseValue::String("unknown@example.com".to_string())),
+/// ]);
+/// ```
 #[must_use]
 pub fn coalesce(values: Vec<Box<dyn Expression>>) -> Coalesce {
     Coalesce { values }
@@ -786,6 +872,20 @@ where
     }
 }
 
+/// Creates an IN expression (column IN (values...))
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::where_in;
+/// use switchy_database::DatabaseValue;
+///
+/// let filter = where_in("status", vec![
+///     DatabaseValue::String("active".to_string()),
+///     DatabaseValue::String("pending".to_string()),
+/// ]);
+/// ```
+#[must_use]
 pub fn where_in<'a, L, V>(left: L, values: V) -> In<'a>
 where
     L: Into<Identifier>,
@@ -797,6 +897,20 @@ where
     }
 }
 
+/// Creates a NOT IN expression (column NOT IN (values...))
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::where_not_in;
+/// use switchy_database::DatabaseValue;
+///
+/// let filter = where_not_in("status", vec![
+///     DatabaseValue::String("archived".to_string()),
+///     DatabaseValue::String("deleted".to_string()),
+/// ]);
+/// ```
+#[must_use]
 pub fn where_not_in<'a, L, V>(left: L, values: V) -> NotIn<'a>
 where
     L: Into<Identifier>,
@@ -808,6 +922,20 @@ where
     }
 }
 
+/// Helper macro to create boxed expression vectors for query builders
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::{boxed, query::{where_eq, where_gt}};
+/// use switchy_database::DatabaseValue;
+///
+/// // Create a vec of boxed expressions
+/// let conditions = boxed![
+///     where_eq("user_id", DatabaseValue::Int64(123)),
+///     where_gt("age", DatabaseValue::Int32(18)),
+/// ];
+/// ```
 #[macro_export]
 macro_rules! boxed {
     () => (
@@ -826,6 +954,7 @@ pub trait FilterableQuery
 where
     Self: Sized,
 {
+    /// Adds multiple filter conditions to the query
     #[must_use]
     fn filters(self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
         let mut this = self;
@@ -835,9 +964,11 @@ where
         this
     }
 
+    /// Adds a single filter condition to the WHERE clause
     #[must_use]
     fn filter(self, filter: Box<dyn BooleanExpression>) -> Self;
 
+    /// Conditionally adds a filter if the option contains a value
     #[must_use]
     fn filter_if_some<T: BooleanExpression + 'static>(self, filter: Option<T>) -> Self {
         if let Some(filter) = filter {
@@ -847,6 +978,7 @@ where
         }
     }
 
+    /// Adds an IN clause filter (column IN (values...))
     #[must_use]
     fn where_in<L, V>(self, left: L, values: V) -> Self
     where
@@ -856,6 +988,7 @@ where
         self.filter(Box::new(where_in(left, values)))
     }
 
+    /// Adds a NOT IN clause filter (column NOT IN (values...))
     #[must_use]
     fn where_not_in<L, V>(self, left: L, values: V) -> Self
     where
@@ -865,16 +998,19 @@ where
         self.filter(Box::new(where_not_in(left, values)))
     }
 
+    /// Adds a logical AND filter combining multiple conditions
     #[must_use]
     fn where_and(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
         self.filter(Box::new(where_and(conditions)))
     }
 
+    /// Adds a logical OR filter combining multiple conditions
     #[must_use]
     fn where_or(self, conditions: Vec<Box<dyn BooleanExpression>>) -> Self {
         self.filter(Box::new(where_or(conditions)))
     }
 
+    /// Adds an equality comparison filter (column = value)
     #[must_use]
     fn where_eq<L, R>(self, left: L, right: R) -> Self
     where
@@ -884,6 +1020,7 @@ where
         self.filter(Box::new(where_eq(left, right)))
     }
 
+    /// Adds a not-equal comparison filter (column != value)
     #[must_use]
     fn where_not_eq<L, R>(self, left: L, right: R) -> Self
     where
@@ -893,6 +1030,7 @@ where
         self.filter(Box::new(where_not_eq(left, right)))
     }
 
+    /// Adds a greater-than comparison filter (column > value)
     #[must_use]
     fn where_gt<L, R>(self, left: L, right: R) -> Self
     where
@@ -902,6 +1040,7 @@ where
         self.filter(Box::new(where_gt(left, right)))
     }
 
+    /// Adds a greater-than-or-equal comparison filter (column >= value)
     #[must_use]
     fn where_gte<L, R>(self, left: L, right: R) -> Self
     where
@@ -911,6 +1050,7 @@ where
         self.filter(Box::new(where_gte(left, right)))
     }
 
+    /// Adds a less-than comparison filter (column < value)
     #[must_use]
     fn where_lt<L, R>(self, left: L, right: R) -> Self
     where
@@ -920,6 +1060,7 @@ where
         self.filter(Box::new(where_lt(left, right)))
     }
 
+    /// Adds a less-than-or-equal comparison filter (column <= value)
     #[must_use]
     fn where_lte<L, R>(self, left: L, right: R) -> Self
     where
@@ -1001,6 +1142,18 @@ impl Expression for SelectQuery<'_> {
     }
 }
 
+/// Creates a SELECT query builder for the specified table
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use switchy_database::query::select;
+///
+/// let query = select("users")
+///     .columns(&["id", "name"])
+///     .execute(db)
+///     .await?;
+/// ```
 #[must_use]
 pub fn select(table_name: &str) -> SelectQuery<'_> {
     SelectQuery {
@@ -1026,18 +1179,21 @@ impl FilterableQuery for SelectQuery<'_> {
 }
 
 impl<'a> SelectQuery<'a> {
+    /// Adds DISTINCT modifier to return only unique rows
     #[must_use]
     pub const fn distinct(mut self) -> Self {
         self.distinct = true;
         self
     }
 
+    /// Specifies which columns to retrieve (default is all columns)
     #[must_use]
     pub const fn columns(mut self, columns: &'a [&'a str]) -> Self {
         self.columns = columns;
         self
     }
 
+    /// Adds multiple JOIN clauses to the query
     #[must_use]
     pub fn joins(mut self, joins: Vec<Join<'a>>) -> Self {
         for join in joins {
@@ -1050,6 +1206,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Adds an INNER JOIN clause
     #[must_use]
     pub fn join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(joins) = &mut self.joins {
@@ -1060,6 +1217,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Adds multiple LEFT JOIN clauses to the query
     #[must_use]
     pub fn left_joins(mut self, left_joins: Vec<Join<'a>>) -> Self {
         for left_join in left_joins {
@@ -1072,6 +1230,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Adds a LEFT JOIN clause
     #[must_use]
     pub fn left_join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(left_joins) = &mut self.joins {
@@ -1082,6 +1241,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Adds multiple ORDER BY clauses to the query
     #[must_use]
     pub fn sorts(mut self, sorts: Vec<Sort>) -> Self {
         for sort in sorts {
@@ -1094,6 +1254,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Adds a single ORDER BY clause
     #[must_use]
     pub fn sort<T>(mut self, expression: T, direction: SortDirection) -> Self
     where
@@ -1107,6 +1268,7 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
+    /// Limits the number of rows returned
     #[must_use]
     pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
