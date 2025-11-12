@@ -1,3 +1,8 @@
+//! Byte range parsing for HTTP partial content requests.
+//!
+//! Supports parsing RFC 7233 byte range specifications (e.g., "0-1023", "-100", "500-") for
+//! streaming media with partial content support. Used primarily for HTTP Range header processing.
+
 #![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;
