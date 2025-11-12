@@ -124,6 +124,7 @@ pub mod builder;
 /// Integration tests demonstrating new migration capabilities
 pub mod integration_tests;
 
+/// Snapshot testing utilities for migration verification
 #[cfg(feature = "snapshots")]
 pub mod snapshots;
 
