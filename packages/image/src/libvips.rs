@@ -6,9 +6,9 @@
 //!
 //! # Features
 //!
-//! * High-performance image resizing with [`resize_local_file`](crate::libvips::resize_local_file)
-//! * Resize from byte buffers with [`resize_bytes`](crate::libvips::resize_bytes)
-//! * Error handling utilities with [`get_error`](crate::libvips::get_error)
+//! * High-performance image resizing from files
+//! * Resize from byte buffers
+//! * Error handling utilities for libvips
 //! * Automatic color profile management (sRGB)
 //! * Thread-safe operations with lazy initialization
 //!
