@@ -1,5 +1,9 @@
 use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds};
 
+/// Font metrics implementation for FLTK rendering.
+///
+/// Provides text measurement capabilities for the FLTK renderer to calculate
+/// layout dimensions based on text content and font properties.
 pub struct FltkFontMetrics;
 
 impl FontMetrics for FltkFontMetrics {
