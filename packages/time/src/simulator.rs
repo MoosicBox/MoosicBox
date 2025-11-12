@@ -54,6 +54,7 @@ fn gen_epoch_offset() -> u64 {
 /// # Panics
 ///
 /// * If the `EPOCH_OFFSET` `RwLock` fails to write to
+/// * If the `SIMULATOR_EPOCH_OFFSET` environment variable is set but cannot be parsed as a `u64`
 pub fn reset_epoch_offset() {
     let value = gen_epoch_offset();
     log::trace!("reset_epoch_offset to seed={value}");
@@ -67,7 +68,8 @@ pub fn reset_epoch_offset() {
 ///
 /// # Panics
 ///
-/// * If the `EPOCH_OFFSET` `RwLock` fails to read from
+/// * If the `EPOCH_OFFSET` `RwLock` fails to read from or write to
+/// * If the `SIMULATOR_EPOCH_OFFSET` environment variable is set but cannot be parsed as a `u64`
 #[must_use]
 pub fn epoch_offset() -> u64 {
     let value = EPOCH_OFFSET.with_borrow(|x| *x.read().unwrap());
@@ -100,6 +102,7 @@ fn gen_step_multiplier() -> u64 {
 /// # Panics
 ///
 /// * If the `STEP_MULTIPLIER` `RwLock` fails to write to
+/// * If the `SIMULATOR_STEP_MULTIPLIER` environment variable is set but cannot be parsed as a `u64`
 pub fn reset_step_multiplier() {
     let value = gen_step_multiplier();
     log::trace!("reset_step_multiplier to seed={value}");
@@ -113,7 +116,8 @@ pub fn reset_step_multiplier() {
 ///
 /// # Panics
 ///
-/// * If the `STEP_MULTIPLIER` `RwLock` fails to read from
+/// * If the `STEP_MULTIPLIER` `RwLock` fails to read from or write to
+/// * If the `SIMULATOR_STEP_MULTIPLIER` environment variable is set but cannot be parsed as a `u64`
 #[must_use]
 pub fn step_multiplier() -> u64 {
     let value = STEP_MULTIPLIER.with_borrow(|x| *x.read().unwrap());
@@ -148,7 +152,7 @@ pub fn set_step(step: u64) -> u64 {
 ///
 /// # Panics
 ///
-/// * If the `STEP` `RwLock` fails to write to
+/// * If the `STEP` `RwLock` fails to read from or write to
 #[allow(clippy::must_use_candidate)]
 pub fn next_step() -> u64 {
     set_step(current_step() + 1)
