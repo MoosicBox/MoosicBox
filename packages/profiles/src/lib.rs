@@ -163,7 +163,10 @@ pub mod api {
     ///
     /// Use [`ProfileName`] if you need to ensure the profile exists before proceeding.
     #[derive(Debug)]
-    pub struct ProfileNameUnverified(pub String);
+    pub struct ProfileNameUnverified(
+        /// The profile name string extracted from the request.
+        pub String,
+    );
 
     impl From<ProfileNameUnverified> for String {
         fn from(value: ProfileNameUnverified) -> Self {
@@ -203,7 +206,10 @@ pub mod api {
     /// that the profile exists in the global [`PROFILES`] registry.
     ///
     /// If you don't need verification, use [`ProfileNameUnverified`] instead.
-    pub struct ProfileName(pub String);
+    pub struct ProfileName(
+        /// The verified profile name string that exists in the registry.
+        pub String,
+    );
 
     impl From<ProfileName> for String {
         fn from(value: ProfileName) -> Self {
