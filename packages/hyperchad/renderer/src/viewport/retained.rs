@@ -1,3 +1,56 @@
+//! Retained mode viewport rendering with persistent widget positions.
+//!
+//! This module provides viewport types for retained mode rendering, where widget positions
+//! are stored and reused across frames. This is more efficient for UIs where elements don't
+//! move frequently, as visibility calculations can use cached position data.
+//!
+//! # Key Types
+//!
+//! * `Viewport` - Hierarchical viewport with retained widget positions
+//! * `ViewportListener` - Monitors visibility changes and invokes callbacks
+//! * `ViewportPosition` - Trait for providing viewport dimensions and visibility checks
+//! * `WidgetPosition` - Trait for providing widget position and dimensions
+//!
+//! # Examples
+//!
+//! Implementing a simple widget position provider:
+//!
+//! ```rust
+//! # #[cfg(feature = "viewport-retained")]
+//! # {
+//! use hyperchad_renderer::viewport::retained::{WidgetPosition, ViewportPosition, Viewport};
+//!
+//! struct MyWidget {
+//!     x: i32,
+//!     y: i32,
+//!     width: i32,
+//!     height: i32,
+//! }
+//!
+//! impl WidgetPosition for MyWidget {
+//!     fn widget_x(&self) -> i32 { self.x }
+//!     fn widget_y(&self) -> i32 { self.y }
+//!     fn widget_w(&self) -> i32 { self.width }
+//!     fn widget_h(&self) -> i32 { self.height }
+//! }
+//!
+//! impl ViewportPosition for MyWidget {
+//!     fn viewport_x(&self) -> i32 { self.x }
+//!     fn viewport_y(&self) -> i32 { self.y }
+//!     fn viewport_w(&self) -> i32 { self.width }
+//!     fn viewport_h(&self) -> i32 { self.height }
+//!     fn as_widget_position(&self) -> Box<dyn WidgetPosition> {
+//!         Box::new(MyWidget {
+//!             x: self.x,
+//!             y: self.y,
+//!             width: self.width,
+//!             height: self.height,
+//!         })
+//!     }
+//! }
+//! # }
+//! ```
+
 use std::sync::Arc;
 
 /// Trait for types that provide widget position and dimensions.
