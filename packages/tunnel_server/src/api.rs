@@ -1,3 +1,10 @@
+//! HTTP API endpoints for tunnel server operations.
+//!
+//! This module provides the public HTTP API endpoints for the tunnel server, including:
+//! authentication endpoints (client registration, token generation), file proxying endpoints
+//! (tracks, album/artist covers), and the main tunnel endpoint that proxies arbitrary HTTP
+//! requests through WebSocket connections.
+
 #![allow(clippy::future_not_send)]
 
 use actix_web::error::{

@@ -1,3 +1,10 @@
+//! WebSocket connection handler for tunnel clients.
+//!
+//! This module implements the main WebSocket message loop that handles client
+//! connections. It manages heartbeats, message routing (text/binary), and graceful
+//! connection shutdown. The handler processes incoming WebSocket frames and routes
+//! tunnel responses back through the server.
+
 #![allow(clippy::future_not_send)]
 
 use std::time::Duration;

@@ -1,3 +1,10 @@
+//! WebSocket server implementation for managing tunnel connections.
+//!
+//! This module provides the core WebSocket server that manages client connections,
+//! routes HTTP requests through tunnels, handles WebSocket message passing, and
+//! coordinates connection lifecycle. It uses an async command-based architecture
+//! for thread-safe operation.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
