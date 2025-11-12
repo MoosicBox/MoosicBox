@@ -361,6 +361,7 @@ impl ContainerVecExt for Vec<Container> {
 /// }
 /// ```
 pub trait RenderContainer {
+    /// The error type returned when rendering fails.
     type Error;
 
     /// Render this value into the provided container vector.
