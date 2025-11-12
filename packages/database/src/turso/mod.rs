@@ -111,6 +111,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Transaction support for Turso database
 pub mod transaction;
 
 use thiserror::Error;
@@ -146,16 +147,22 @@ static ON_DELETE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
         .expect("ON DELETE regex pattern should compile")
 });
 
+/// Errors that can occur during Turso database operations
 #[derive(Debug, Error)]
 pub enum TursoDatabaseError {
+    /// Underlying Turso library error
     #[error(transparent)]
     Turso(#[from] turso::Error),
+    /// Database connection error
     #[error("Connection error: {0}")]
     Connection(String),
+    /// SQL query execution error
     #[error("Query error: {0}")]
     Query(String),
+    /// Transaction operation error
     #[error("Transaction error: {0}")]
     Transaction(String),
+    /// Unsupported data type conversion
     #[error("Unsupported type conversion: {0}")]
     UnsupportedType(String),
 }
@@ -166,6 +173,7 @@ impl From<turso::Error> for crate::DatabaseError {
     }
 }
 
+/// Turso Database implementation providing `SQLite`-compatible API
 #[derive(Debug)]
 pub struct TursoDatabase {
     database: turso::Database,

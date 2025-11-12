@@ -3762,6 +3762,7 @@ fn upsert_and_get_row(
 }
 
 #[allow(clippy::module_name_repetitions)]
+/// Wrapper type for converting `DatabaseValue` to rusqlite-specific parameter types
 #[derive(Debug, Clone)]
 pub struct RusqliteDatabaseValue(DatabaseValue);
 
