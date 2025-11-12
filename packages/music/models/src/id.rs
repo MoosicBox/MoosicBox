@@ -1,3 +1,9 @@
+//! Flexible ID types supporting both numeric and string identifiers.
+//!
+//! This module provides [`Id`] and [`ApiId`] types for identifying music entities across different
+//! API sources. Different sources use different ID formats - local/library sources typically use
+//! numeric IDs, while external APIs often use string IDs.
+
 use std::num::ParseIntError;
 
 use moosicbox_json_utils::{ParseError, ToValueType};
