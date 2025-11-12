@@ -1,3 +1,9 @@
+//! WebSocket API endpoint for establishing tunnel connections.
+//!
+//! This module provides the HTTP endpoint that upgrades connections to WebSocket
+//! for persistent tunnel communication. It handles the initial handshake and
+//! delegates to the handler module for the connection lifecycle.
+
 use crate::WS_SERVER_HANDLE;
 use crate::auth::SignatureAuthorized;
 use crate::ws::handler;

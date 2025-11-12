@@ -1,3 +1,9 @@
+//! Authentication and authorization for tunnel server API endpoints.
+//!
+//! This module provides request guards that validate different types of authentication:
+//! client access tokens, signature tokens (temporary), and the general tunnel access token.
+//! It also provides a token hashing utility for secure token comparison.
+
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{LazyLock, Mutex};
