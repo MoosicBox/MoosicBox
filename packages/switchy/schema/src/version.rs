@@ -62,14 +62,24 @@ use switchy_database::{
 pub const DEFAULT_MIGRATIONS_TABLE: &str = "__switchy_migrations";
 
 /// Migration record information
+///
+/// Contains complete metadata about a migration execution including
+/// timing information, status, and checksums for validation.
 #[derive(Debug, Clone)]
 pub struct MigrationRecord {
+    /// Unique migration identifier
     pub id: String,
+    /// Timestamp when migration execution started
     pub run_on: NaiveDateTime,
+    /// Timestamp when migration completed or failed (None for in-progress migrations)
     pub finished_on: Option<NaiveDateTime>,
+    /// Current execution status (`in_progress`, completed, or failed)
     pub status: MigrationStatus,
+    /// Error message if migration failed (None otherwise)
     pub failure_reason: Option<String>,
+    /// Hex-encoded SHA-256 checksum of the up migration (64 characters)
     pub up_checksum: String,
+    /// Hex-encoded SHA-256 checksum of the down migration (64 characters)
     pub down_checksum: String,
 }
 
