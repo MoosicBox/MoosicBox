@@ -520,6 +520,8 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
 /// # Examples
 ///
 /// ```rust,ignore
+/// use switchy_async_macros::internal_test;
+///
 /// #[internal_test]
 /// async fn my_internal_test() {
 ///     // Test code here
