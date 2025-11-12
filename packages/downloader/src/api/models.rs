@@ -1,3 +1,9 @@
+//! HTTP API model types for download service.
+//!
+//! Provides serializable types for HTTP API requests and responses, including
+//! download tasks, download locations, progress events, and API sources. These
+//! types are optimized for JSON serialization and API communication.
+
 use std::str::FromStr;
 
 use moosicbox_json_utils::{ParseError, ToValueType, serde_json::ToValue};
