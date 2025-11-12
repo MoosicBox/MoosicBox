@@ -71,7 +71,21 @@ use lambda_http::{
     service_fn,
 };
 
+/// Re-exported [`lambda_http`] crate for request/response types.
+///
+/// Provides access to HTTP request/response types, the `Request` and `Response`
+/// builders, and other HTTP-related utilities needed when implementing
+/// [`LambdaResponseProcessor`].
+///
+/// [`lambda_http`]: https://docs.rs/lambda_http
 pub use lambda_http;
+
+/// Re-exported [`lambda_runtime`] crate for Lambda runtime types.
+///
+/// Provides access to the `Error` type used throughout this crate's API,
+/// as well as other Lambda runtime utilities.
+///
+/// [`lambda_runtime`]: https://docs.rs/lambda_runtime
 pub use lambda_runtime;
 
 /// HTTP response content types for Lambda responses.
