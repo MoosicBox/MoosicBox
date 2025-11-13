@@ -178,7 +178,7 @@ jobs:
 | Input                   | Description                          | Default                            |
 | ----------------------- | ------------------------------------ | ---------------------------------- |
 | `branch_name`           | Branch name (required for create-pr) |                                    |
-| `pr_base_branch`        | Base branch for PR                   | `main`                             |
+| `pr_base_branch`        | Base branch for PR                   | `master`                           |
 | `pr_title`              | PR title (supports ${variables})     | `📝 Automated updates from Claude` |
 | `pr_body`               | PR body (supports ${variables})      | `""`                               |
 | `pr_labels`             | Comma-separated PR labels            | `automated`                        |
