@@ -246,6 +246,7 @@ impl Deref for LibraryDatabase {
 }
 
 #[cfg(feature = "api")]
+/// Actix-web integration for profile-based database access
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};

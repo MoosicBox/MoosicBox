@@ -1,3 +1,10 @@
+//! Database layer for tunnel server persistent storage.
+//!
+//! This module provides database operations for storing and retrieving tunnel connection
+//! data, authentication tokens (client access tokens, signature tokens, magic tokens),
+//! and client-to-connection mappings. It includes automatic reconnection logic for
+//! handling transient database connection failures.
+
 #![allow(clippy::module_name_repetitions, clippy::struct_field_names)]
 
 use std::{pin::Pin, sync::LazyLock};

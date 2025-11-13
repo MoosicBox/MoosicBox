@@ -108,6 +108,7 @@ fn format_sqlite_interval_sqlx(interval: &SqlInterval) -> Vec<String> {
     }
 }
 
+/// `SQLite` database transaction using `SQLx`
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SqliteSqlxTransaction {
@@ -115,6 +116,7 @@ pub struct SqliteSqlxTransaction {
 }
 
 impl SqliteSqlxTransaction {
+    /// Creates a new transaction wrapper from an `SQLx` transaction
     #[must_use]
     pub fn new(transaction: Transaction<'static, Sqlite>) -> Self {
         Self {
@@ -364,6 +366,7 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+/// `SQLite` database implementation using `SQLx`
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SqliteSqlxDatabase {
@@ -373,6 +376,8 @@ pub struct SqliteSqlxDatabase {
 }
 
 impl SqliteSqlxDatabase {
+    /// Creates a new database instance from an `SQLx` connection pool
+    #[must_use]
     pub fn new(pool: Arc<Mutex<SqlitePool>>) -> Self {
         Self {
             pool,
@@ -400,18 +405,25 @@ impl SqliteSqlxDatabase {
     }
 }
 
+/// Errors that can occur during `SQLite` `SQLx` database operations
 #[derive(Debug, Error)]
 pub enum SqlxDatabaseError {
+    /// Underlying `SQLx` error
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// INSERT operation did not return an ID
     #[error("No ID")]
     NoId,
+    /// Query returned no rows
     #[error("No row")]
     NoRow,
+    /// Invalid request format or parameters
     #[error("Invalid request")]
     InvalidRequest,
+    /// UPSERT operation missing required unique constraint columns
     #[error("Missing unique")]
     MissingUnique,
+    /// Unsupported or unknown database data type encountered
     #[error("Unsupported data type: {0}")]
     UnsupportedDataType(String),
 }
@@ -3259,6 +3271,7 @@ async fn upsert_and_get_row(
     }
 }
 
+/// Wrapper type for converting `DatabaseValue` to `SQLite` `SQLx`-specific parameter types
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]
 pub struct SqliteDatabaseValue(DatabaseValue);

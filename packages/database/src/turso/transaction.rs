@@ -34,6 +34,7 @@ static ON_DELETE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
         .expect("ON DELETE regex pattern should compile")
 });
 
+/// Turso database transaction with commit/rollback capabilities
 pub struct TursoTransaction {
     connection: turso::Connection,
     committed: AtomicBool,

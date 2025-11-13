@@ -90,6 +90,7 @@ struct ApiDoc;
 ///
 /// Returns a fully constructed [`OpenApi`] specification that includes all
 /// endpoint definitions, schemas, and metadata for the example web server.
+#[must_use]
 pub fn init() -> OpenApi {
     #[allow(unused)]
     fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {

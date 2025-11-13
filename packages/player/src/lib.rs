@@ -801,6 +801,11 @@ impl PlaybackHandler {
         self.play_playback(seek, retry_options).await
     }
 
+    /// Starts playback for the current playback session.
+    ///
+    /// This internal method initiates playback of all tracks in the session's playlist,
+    /// automatically advancing through tracks until completion or cancellation.
+    ///
     /// # Panics
     ///
     /// * If the `playback` `RwLock` is poisoned

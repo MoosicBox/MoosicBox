@@ -152,7 +152,10 @@ pub mod safe {
     };
     use std::ffi::c_int;
 
-    /// Error types returned by safe Opus operations.
+    /// Errors that can occur during Opus encoding and decoding operations.
+    ///
+    /// This enum represents all possible error conditions from the safe Opus API,
+    /// including encoder/decoder creation failures and encode/decode operation failures.
     #[derive(thiserror::Error, Debug)]
     pub enum OpusError {
         /// Failed to create an encoder, with libopus error code.

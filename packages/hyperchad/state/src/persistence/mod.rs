@@ -13,6 +13,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::Error;
 
+/// SQLite-backed state persistence implementation
 #[cfg(feature = "persistence-sqlite")]
 pub mod sqlite;
 

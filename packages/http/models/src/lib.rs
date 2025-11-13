@@ -79,6 +79,13 @@ impl std::fmt::Display for InvalidMethod {
 impl FromStr for Method {
     type Err = InvalidMethod;
 
+    /// Parses a string into an HTTP method.
+    ///
+    /// Accepts method names in any case (e.g., "GET", "Get", or "get").
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`InvalidMethod`] if the string is not a recognized HTTP method
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "GET" | "Get" | "get" => Self::Get,
@@ -96,6 +103,7 @@ impl FromStr for Method {
 }
 
 impl std::fmt::Display for Method {
+    /// Formats the HTTP method as its uppercase string representation (e.g., "GET", "POST").
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -238,6 +246,7 @@ pub enum StatusCode {
 }
 
 impl From<StatusCode> for u16 {
+    /// Converts a status code to its numeric u16 representation.
     fn from(value: StatusCode) -> Self {
         match value {
             StatusCode::Continue => 100,
@@ -314,6 +323,11 @@ pub struct TryFromU16StatusCodeError;
 impl TryFrom<u16> for StatusCode {
     type Error = TryFromU16StatusCodeError;
 
+    /// Attempts to convert a u16 to a status code.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`TryFromU16StatusCodeError`] if the u16 value does not correspond to a valid HTTP status code
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         Ok(match value {
             100 => Self::Continue,
@@ -457,6 +471,7 @@ impl StatusCode {
 }
 
 impl std::fmt::Display for StatusCode {
+    /// Formats the status code as its uppercase snake case string representation (e.g., "OK", `NOT_FOUND`).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }

@@ -1,3 +1,9 @@
+//! HTTP API endpoints for file services using Actix-web.
+//!
+//! Provides REST endpoints for streaming audio tracks, fetching cover images (albums and artists),
+//! retrieving track metadata, and accessing visualization data. All endpoints support both HEAD and
+//! GET requests where applicable, with byte range support for audio streaming.
+
 #![allow(clippy::needless_for_each)]
 
 use std::str::FromStr;

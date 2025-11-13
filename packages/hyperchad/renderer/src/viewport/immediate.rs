@@ -1,3 +1,41 @@
+//! Immediate mode viewport rendering with per-frame visibility calculations.
+//!
+//! This module provides viewport types for immediate mode rendering, where visibility
+//! is recalculated every frame. Viewports track position and dimensions dynamically
+//! and can be nested hierarchically for complex UI layouts.
+//!
+//! # Key Types
+//!
+//! * `Viewport` - Hierarchical viewport with parent-child relationships
+//! * `ViewportListener` - Tracks visibility changes for a position within a viewport
+//! * `Pos` - Position and dimensions for viewport calculations
+//!
+//! # Examples
+//!
+//! Creating a viewport listener to track visibility:
+//!
+//! ```rust
+//! # #[cfg(feature = "viewport-immediate")]
+//! # {
+//! use hyperchad_renderer::viewport::immediate::{ViewportListener, Viewport, Pos};
+//!
+//! # fn example() {
+//! let viewport = Viewport {
+//!     parent: None,
+//!     pos: Pos { x: 0.0, y: 0.0, w: 800.0, h: 600.0 },
+//!     viewport: Pos { x: 0.0, y: 0.0, w: 800.0, h: 600.0 },
+//! };
+//!
+//! let mut listener = ViewportListener::new(
+//!     Some(viewport),
+//!     100.0, 100.0, 50.0, 50.0
+//! );
+//!
+//! let ((visible, _), (dist, _)) = listener.check();
+//! # }
+//! # }
+//! ```
+
 /// Viewport for immediate mode rendering with hierarchical positioning.
 ///
 /// Represents a viewport in immediate mode, which recalculates visibility

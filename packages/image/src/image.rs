@@ -6,8 +6,8 @@
 //!
 //! # Features
 //!
-//! * Synchronous image resizing with [`try_resize_local_file`](crate::image::try_resize_local_file)
-//! * Asynchronous image resizing with [`try_resize_local_file_async`](crate::image::try_resize_local_file_async)
+//! * Synchronous image resizing
+//! * Asynchronous image resizing
 //! * Support for JPEG and WebP output formats
 //! * High-quality Lanczos3 filtering for image resizing
 //!
