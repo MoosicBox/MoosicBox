@@ -352,7 +352,9 @@ impl FeatureValidator {
                 let entry_feature = entry.split('/').nth(1).unwrap_or(feature_name);
 
                 if !expected.values().any(|e| e == entry) {
-                    let all_deps = extract_all_dependencies(cargo_value, false);
+                    // Include dev-dependencies when checking if a dependency is direct
+                    // because features CAN propagate to dev-dependencies (used in tests, examples, etc.)
+                    let all_deps = extract_all_dependencies(cargo_value, true);
                     let is_direct_dep = all_deps.iter().any(|(n, _)| n == &dep_name);
 
                     if !is_direct_dep {

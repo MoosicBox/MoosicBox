@@ -447,3 +447,77 @@ fail-on-warnings = []
     assert!(result_workspace.total_packages > 0);
     assert!(result_all.total_packages > 0);
 }
+
+/// Test that feature propagation to dev-dependencies is correctly validated
+#[test]
+fn test_dev_dependency_feature_propagation() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root_path = temp_dir.path();
+
+    // Create workspace with two packages
+    let workspace_cargo = r#"[workspace]
+members = ["main_pkg", "test_util"]
+
+[workspace.dependencies]
+test_util = { path = "test_util" }
+"#;
+    fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+    // Create test utility package with a feature
+    fs::create_dir(root_path.join("test_util")).unwrap();
+    fs::create_dir(root_path.join("test_util/src")).unwrap();
+    fs::write(root_path.join("test_util/src/lib.rs"), "").unwrap();
+
+    let test_util_cargo = r#"[package]
+name = "test_util"
+version = "0.1.0"
+
+[features]
+test-feature = []
+"#;
+    fs::write(root_path.join("test_util/Cargo.toml"), test_util_cargo).unwrap();
+
+    // Create main package that uses test_util as dev-dependency with feature propagation
+    fs::create_dir(root_path.join("main_pkg")).unwrap();
+    fs::create_dir(root_path.join("main_pkg/src")).unwrap();
+    fs::write(root_path.join("main_pkg/src/lib.rs"), "").unwrap();
+
+    let main_pkg_cargo = r#"[package]
+name = "main_pkg"
+version = "0.1.0"
+
+[dev-dependencies]
+test_util = { workspace = true }
+
+[features]
+test-feature = ["test_util/test-feature"]
+"#;
+    fs::write(root_path.join("main_pkg/Cargo.toml"), main_pkg_cargo).unwrap();
+
+    // Validate - should NOT report "test_util is not a direct dependency"
+    let config = ValidatorConfig {
+        features: None,
+        skip_features: None,
+        workspace_only: true,
+        output_format: OutputType::Json,
+    };
+
+    let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+    let result = validator.validate().unwrap();
+
+    // Check that there are no "incorrect propagations" errors for dev-dependencies
+    for error in &result.errors {
+        if error.package == "main_pkg" {
+            for feature_error in &error.errors {
+                if feature_error.feature == "test-feature" {
+                    // Should have no incorrect propagations
+                    assert!(
+                        feature_error.incorrect_propagations.is_empty(),
+                        "Dev-dependency feature propagation incorrectly flagged as error: {:?}",
+                        feature_error.incorrect_propagations
+                    );
+                }
+            }
+        }
+    }
+}
