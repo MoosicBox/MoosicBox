@@ -592,33 +592,33 @@ whoami = "1.6.1"
 xml = "1.1.0"
 
 [patch.crates-io]
-flacenc = { git = "https://github.com/BSteffaniak/flacenc-rs", branch = "unpin-built-version" }
-# actix-files             = { git = "https://github.com/actix/actix-web" }
-# actix-http              = { git = "https://github.com/actix/actix-web" }
-# actix-http-test         = { git = "https://github.com/actix/actix-web" }
-# actix-multipart         = { git = "https://github.com/actix/actix-web" }
-# actix-multipart-derive  = { git = "https://github.com/actix/actix-web" }
-# actix-router            = { git = "https://github.com/actix/actix-web" }
-# actix-test              = { git = "https://github.com/actix/actix-web" }
-# actix-web               = { git = "https://github.com/actix/actix-web" }
-# actix-web-actors        = { git = "https://github.com/actix/actix-web" }
-# actix-web-codegen       = { git = "https://github.com/actix/actix-web" }
-# actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
-# eframe                  = { git = "https://github.com/BSteffaniak/egui" }
-# egui                    = { git = "https://github.com/BSteffaniak/egui" }
-# egui_extras             = { git = "https://github.com/BSteffaniak/egui" }
-# notify-rust             = { git = "https://github.com/hoodie/notify-rust" }
-# opentelemetry           = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# opentelemetry-otlp      = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# opentelemetry_sdk       = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# pingora                 = { git = "https://github.com/cloudflare/pingora" }
-# pingora-core            = { git = "https://github.com/cloudflare/pingora" }
-# pingora-http            = { git = "https://github.com/cloudflare/pingora" }
-# pingora-load-balancing  = { git = "https://github.com/cloudflare/pingora" }
-# pingora-proxy           = { git = "https://github.com/cloudflare/pingora" }
-# tracing-opentelemetry   = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
-# utoipa                  = { git = "https://github.com/juhaku/utoipa" }
-# utoipa-rapidoc          = { git = "https://github.com/juhaku/utoipa" }
-# utoipa-redoc            = { git = "https://github.com/juhaku/utoipa" }
-# utoipa-scalar           = { git = "https://github.com/juhaku/utoipa" }
-# utoipa-swagger-ui       = { git = "https://github.com/juhaku/utoipa" }
+actix-files            = { git = "https://github.com/actix/actix-web" }
+actix-http             = { git = "https://github.com/actix/actix-web" }
+actix-http-test        = { git = "https://github.com/actix/actix-web" }
+actix-multipart        = { git = "https://github.com/actix/actix-web" }
+actix-multipart-derive = { git = "https://github.com/actix/actix-web" }
+actix-router           = { git = "https://github.com/actix/actix-web" }
+actix-test             = { git = "https://github.com/actix/actix-web" }
+actix-web              = { git = "https://github.com/actix/actix-web" }
+actix-web-actors       = { git = "https://github.com/actix/actix-web" }
+actix-web-codegen      = { git = "https://github.com/actix/actix-web" }
+eframe                 = { git = "https://github.com/BSteffaniak/egui" }
+egui                   = { git = "https://github.com/BSteffaniak/egui" }
+egui_extras            = { git = "https://github.com/BSteffaniak/egui" }
+flacenc                = { git = "https://github.com/BSteffaniak/flacenc-rs", branch = "unpin-built-version" }
+notify-rust            = { git = "https://github.com/hoodie/notify-rust" }
+opentelemetry          = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+opentelemetry-otlp     = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+opentelemetry_sdk      = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+tracing-opentelemetry  = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
+utoipa                 = { git = "https://github.com/juhaku/utoipa" }
+utoipa-rapidoc         = { git = "https://github.com/juhaku/utoipa" }
+utoipa-redoc           = { git = "https://github.com/juhaku/utoipa" }
+utoipa-scalar          = { git = "https://github.com/juhaku/utoipa" }
+utoipa-swagger-ui      = { git = "https://github.com/juhaku/utoipa" }
+
+# pingora                = { git = "https://github.com/cloudflare/pingora" }
+# pingora-core           = { git = "https://github.com/cloudflare/pingora" }
+# pingora-http           = { git = "https://github.com/cloudflare/pingora" }
+# pingora-load-balancing = { git = "https://github.com/cloudflare/pingora" }
+# pingora-proxy          = { git = "https://github.com/cloudflare/pingora" }
