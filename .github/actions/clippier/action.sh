@@ -798,7 +798,7 @@ generate_validation_summary() {
     # Error details (collapsible if errors exist)
     if [[ "$error_count" -gt 0 ]]; then
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "<details open>" >> $GITHUB_STEP_SUMMARY
+        echo "<details>" >> $GITHUB_STEP_SUMMARY
         echo "<summary>📋 Packages with errors ($error_count)</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
