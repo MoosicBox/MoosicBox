@@ -218,6 +218,11 @@ inputs:
         required: false
         default: "false"
 
+    generate-validation-summary:
+        description: "Generate validation results summary for validate-feature-propagation command"
+        required: false
+        default: "true"
+
     enable-docker-analysis:
         description: "Enable Docker package analysis and matrix generation"
         required: false
@@ -448,6 +453,7 @@ runs:
               INPUT_SUMMARY_TRIGGER_INPUT: ${{ inputs.summary-trigger-input }}
               INPUT_SUMMARY_SHOW_TRIGGER: ${{ inputs.summary-show-trigger }}
               INPUT_SUMMARY_SHOW_JOBS_DETAILS: ${{ inputs.summary-show-jobs-details }}
+              INPUT_GENERATE_VALIDATION_SUMMARY: ${{ inputs.generate-validation-summary }}
               INPUT_ENABLE_DOCKER_ANALYSIS: ${{ inputs.enable-docker-analysis }}
               INPUT_DOCKER_PACKAGES: ${{ inputs.docker-packages }}
               INPUT_DOCKER_NAME_PREFIX: ${{ inputs.docker-name-prefix }}

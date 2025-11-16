@@ -767,6 +767,75 @@ generate_docker_summary() {
     fi
 }
 
+generate_validation_summary() {
+    local validation_result="$1"
+
+    echo "" >> $GITHUB_STEP_SUMMARY
+    echo "## 🔍 Feature Propagation Validation" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    local total_packages=$(printf '%s' "$validation_result" | jq -r '.total_packages')
+    local valid_packages=$(printf '%s' "$validation_result" | jq -r '.valid_packages')
+    local error_count=$(printf '%s' "$validation_result" | jq '.errors | length')
+    local warning_count=$(printf '%s' "$validation_result" | jq '.warnings | length')
+
+    # Status badge
+    if [[ "$error_count" -eq 0 ]]; then
+        echo "✅ **Status**: All packages have proper feature propagation" >> $GITHUB_STEP_SUMMARY
+    else
+        echo "❌ **Status**: $error_count $(if [[ "$error_count" -eq 1 ]]; then echo "package has"; else echo "packages have"; fi) propagation errors" >> $GITHUB_STEP_SUMMARY
+    fi
+
+    echo "" >> $GITHUB_STEP_SUMMARY
+
+    # Summary stats
+    echo "📊 **Summary**:" >> $GITHUB_STEP_SUMMARY
+    echo "- **Total packages checked**: $total_packages" >> $GITHUB_STEP_SUMMARY
+    echo "- **Valid packages**: $valid_packages" >> $GITHUB_STEP_SUMMARY
+    echo "- **Packages with errors**: $error_count" >> $GITHUB_STEP_SUMMARY
+    [[ "$warning_count" -gt 0 ]] && echo "- **Warnings**: $warning_count" >> $GITHUB_STEP_SUMMARY
+
+    # Error details (collapsible if errors exist)
+    if [[ "$error_count" -gt 0 ]]; then
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "<details open>" >> $GITHUB_STEP_SUMMARY
+        echo "<summary>📋 Packages with errors ($error_count)</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Use jq to format each package's errors nicely
+        printf '%s' "$validation_result" | jq -r '
+            .errors[] |
+            "### `" + .package + "`\n" +
+            (.errors | map(
+                "**Feature**: `" + .feature + "`\n" +
+                (if (.missing_propagations | length) > 0 then
+                    "\n**Missing propagations** (" + (.missing_propagations | length | tostring) + "):\n" +
+                    (.missing_propagations | map("- `" + .dependency + "` → Expected: `" + .expected + "`\n  - " + .reason) | join("\n"))
+                else "" end) +
+                (if (.incorrect_propagations | length) > 0 then
+                    "\n**Incorrect propagations** (" + (.incorrect_propagations | length | tostring) + "):\n" +
+                    (.incorrect_propagations | map("- `" + .dependency + "` → Found: `" + .found + "`, Expected: `" + .expected + "`\n  - " + .reason) | join("\n"))
+                else "" end)
+            ) | join("\n\n")) + "\n"
+        ' >> $GITHUB_STEP_SUMMARY
+
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+    fi
+
+    # Warning details (collapsible if warnings exist)
+    if [[ "$warning_count" -gt 0 ]]; then
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "<details>" >> $GITHUB_STEP_SUMMARY
+        echo "<summary>⚠️ Warnings ($warning_count)</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        printf '%s' "$validation_result" | jq -r '.warnings[] | "- " + .' >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+    fi
+}
+
 setup_ci_environment() {
     echo "🔧 Setting up CI environment"
 
@@ -909,9 +978,20 @@ main() {
         if [[ "$ERROR_COUNT" -gt 0 ]]; then
             echo "❌ Validation failed: $ERROR_COUNT packages have feature propagation errors" >&2
             printf '%s' "$RAW_OUTPUT" | jq -r '.errors[] | "  - \(.package): \(.errors | length) \(if (.errors | length) == 1 then "error" else "errors" end)"' >&2
+
+            # Generate summary BEFORE exiting (so it appears even on failure)
+            if [[ "$INPUT_GENERATE_VALIDATION_SUMMARY" == "true" ]]; then
+                generate_validation_summary "$RAW_OUTPUT"
+            fi
+
             exit 1
         else
             echo "✅ All packages have proper feature propagation" >&2
+
+            # Generate success summary
+            if [[ "$INPUT_GENERATE_VALIDATION_SUMMARY" == "true" ]]; then
+                generate_validation_summary "$RAW_OUTPUT"
+            fi
         fi
     fi
 
