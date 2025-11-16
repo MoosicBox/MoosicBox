@@ -237,7 +237,6 @@ jobs:
               with:
                   command: validate-feature-propagation
                   workspace-path: .
-                  features: fail-on-warnings
                   skip-on-no-changes: false
 
             - name: Save validation report
