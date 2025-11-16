@@ -1,47 +1,6 @@
 [[config]]
-os = "ubuntu"
-skip-features = [
-    "admin-htmx-default",
-    "app-models-default",
-    "app-native-ui-default",
-    "arb-default",
-    "assert-default",
-    "async-service-default",
-    "audio-decoder-default",
-    "audio-encoder-default",
-    "audio-output-default",
-    "audio-zone-default",
-    "audio-zone-models-default",
-    "auth-default",
-    "channel-utils-default",
-    "config-default",
-    "downloader-default",
-    "env-utils-default",
-    "files-default",
-    "image-default",
-    "json-utils-default",
-    "library-default",
-    "library-models-default",
-    "load-balancer-default",
-    "logging-default",
-    "menu-default",
-    "middleware-default",
-    "music-api-default",
-    "paging-default",
-    "player-default",
-    "profiles-default",
-    "remote-library-default",
-    "resampler-default",
-    "scan-default",
-    "schema-default",
-    "search-default",
-    "session-default",
-    "session-models-default",
-    "stream-utils-default",
-    "tunnel-default",
-    "tunnel-sender-default",
-    "ws-default",
-]
+os            = "ubuntu"
+skip-features = ["*"]
 
 [[config.dependencies]]
 command = "sudo apt-get update && sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev"
