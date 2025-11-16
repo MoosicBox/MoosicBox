@@ -364,7 +364,7 @@ build_clippier_command() {
         [[ "$INPUT_ALL_POTENTIAL_DEPS" == "true" ]] && cmd="$cmd --all-potential-deps"
         cmd="$cmd --format json"
     elif [[ "$INPUT_COMMAND" == "validate-feature-propagation" ]]; then
-        cmd="$cmd $INPUT_WORKSPACE_PATH"
+        [[ -n "$INPUT_WORKSPACE_PATH" ]] && cmd="$cmd --path $INPUT_WORKSPACE_PATH"
         [[ -n "$INPUT_FEATURES" ]] && cmd="$cmd --features $INPUT_FEATURES"
         cmd="$cmd --output json"
     else
