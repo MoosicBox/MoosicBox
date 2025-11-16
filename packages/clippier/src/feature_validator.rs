@@ -27,6 +27,7 @@
 //! # fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = ValidatorConfig {
 //!     features: Some(vec!["fail-on-warnings".to_string()]),
+//!     skip_features: None,
 //!     workspace_only: true,
 //!     output_format: OutputType::Json,
 //! };
@@ -49,7 +50,7 @@ use anyhow::{Result, anyhow};
 use serde::Serialize;
 use toml::Value;
 
-use crate::OutputType;
+use crate::{OutputType, should_skip_feature};
 
 /// Type aliases for complex types
 type WorkspacePackages = BTreeSet<String>;
@@ -123,6 +124,8 @@ pub struct PackageValidationWarning {
 pub struct ValidatorConfig {
     /// Specific features to validate (None = validate all matching features)
     pub features: Option<Vec<String>>,
+    /// Features to skip during validation (defaults to `["default"]`)
+    pub skip_features: Option<Vec<String>>,
     /// Whether to validate workspace packages only
     pub workspace_only: bool,
     /// Output format
@@ -237,12 +240,25 @@ impl FeatureValidator {
             return Vec::new();
         };
 
+        // Build skip list: use provided skip_features, or default to ["default"]
+        // Keep as Vec<String> for glob pattern matching
+        let skip_features_vec: Vec<String> = self
+            .config
+            .skip_features
+            .clone()
+            .unwrap_or_else(|| vec!["default".to_string()]);
+
         self.config.features.as_ref().map_or_else(
             || {
-                // Check all features that have matching names in dependencies
+                // Auto-detect mode: Check all features that have matching names in dependencies
                 let mut features_to_check = Vec::new();
 
                 for feature_name in features_table.keys() {
+                    // Skip features using glob pattern matching (supports wildcards and negation)
+                    if should_skip_feature(feature_name, &skip_features_vec) {
+                        continue;
+                    }
+
                     // Check if any dependency has the same feature
                     if self.any_dependency_has_feature(cargo_value, feature_name) {
                         features_to_check.push(feature_name.clone());
@@ -252,9 +268,10 @@ impl FeatureValidator {
                 features_to_check
             },
             |specific_features| {
-                // Only check specified features that exist in this package
+                // Specific features mode: Only check specified features that exist in this package
                 specific_features
                     .iter()
+                    .filter(|f| !should_skip_feature(f, &skip_features_vec))
                     .filter(|f| features_table.contains_key(*f))
                     .cloned()
                     .collect()
@@ -867,8 +884,8 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: None,
+            skip_features: None,
             workspace_only: true,
-
             output_format: OutputType::Raw,
         };
 
@@ -884,8 +901,8 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: Some(vec!["fail-on-warnings".to_string()]),
+            skip_features: None,
             workspace_only: true,
-
             output_format: OutputType::Raw,
         };
 
@@ -904,8 +921,8 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: Some(vec!["fail-on-warnings".to_string()]),
+            skip_features: None,
             workspace_only: false, // Include external deps to catch the error
-
             output_format: OutputType::Raw,
         };
 
@@ -941,6 +958,7 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: Some(vec!["fail-on-warnings".to_string()]),
+            skip_features: None,
             workspace_only: true,
 
             output_format: OutputType::Raw,
@@ -962,6 +980,7 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: None, // Auto-detect
+            skip_features: None,
             workspace_only: true,
 
             output_format: OutputType::Raw,
@@ -983,6 +1002,7 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: None,
+            skip_features: None,
             workspace_only: true,
 
             output_format: OutputType::Raw,
@@ -1009,6 +1029,7 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: None,
+            skip_features: None,
             workspace_only: true,
 
             output_format: OutputType::Raw,
@@ -1031,6 +1052,7 @@ dev_dep = "1.0"
 
         let config = ValidatorConfig {
             features: None,
+            skip_features: None,
             workspace_only: true,
 
             output_format: OutputType::Raw,
@@ -1088,5 +1110,202 @@ dev_dep = "1.0"
         assert!(json.contains("test_pkg"));
         assert!(json.contains("test-feature"));
         assert!(json.contains("warn_pkg"));
+    }
+
+    /// Helper to create a test workspace with default feature
+    fn create_test_workspace_with_default_feature() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["test_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("test_pkg")).unwrap();
+        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
+        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+
+        let pkg_cargo = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+fail-on-warnings = []
+"#;
+        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+
+        temp_dir
+    }
+
+    /// Helper to create a test workspace with multiple features
+    fn create_test_workspace_with_multiple_features() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["test_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("test_pkg")).unwrap();
+        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
+        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+
+        let pkg_cargo = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+fail-on-warnings = []
+test-utils = []
+"#;
+        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+
+        temp_dir
+    }
+
+    #[test]
+    fn test_skip_features_default_behavior() {
+        // When skip_features is None, should default to skipping "default"
+        let temp_workspace = create_test_workspace_with_default_feature();
+        let config = ValidatorConfig {
+            features: Some(vec!["default".to_string(), "fail-on-warnings".to_string()]),
+            skip_features: None, // Should default to vec!["default"]
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+
+        // Should not validate "default" feature (skipped by default)
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        assert!(!features.contains(&"default".to_string()));
+        assert!(features.contains(&"fail-on-warnings".to_string()));
+    }
+
+    #[test]
+    fn test_skip_features_empty_validates_all() {
+        // When skip_features is Some(vec![]), should validate ALL features including default
+        let temp_workspace = create_test_workspace_with_default_feature();
+        let config = ValidatorConfig {
+            features: Some(vec!["default".to_string(), "fail-on-warnings".to_string()]),
+            skip_features: Some(vec![]),
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        assert!(features.contains(&"default".to_string()));
+        assert!(features.contains(&"fail-on-warnings".to_string()));
+    }
+
+    #[test]
+    fn test_skip_features_explicit_list() {
+        // Should skip only specified features
+        let temp_workspace = create_test_workspace_with_multiple_features();
+        let config = ValidatorConfig {
+            features: Some(vec![
+                "default".to_string(),
+                "test-utils".to_string(),
+                "fail-on-warnings".to_string(),
+            ]),
+            skip_features: Some(vec!["default".to_string(), "test-utils".to_string()]),
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        assert!(!features.contains(&"default".to_string()));
+        assert!(!features.contains(&"test-utils".to_string()));
+        assert!(features.contains(&"fail-on-warnings".to_string()));
+    }
+
+    #[test]
+    fn test_skip_features_with_specific_features_list() {
+        // skip_features should filter the specific features list too
+        let temp_workspace = create_test_workspace_with_default_feature();
+        let config = ValidatorConfig {
+            features: Some(vec!["default".to_string(), "fail-on-warnings".to_string()]),
+            skip_features: Some(vec!["default".to_string()]),
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        // Should only get fail-on-warnings, not default (even though both were in features list)
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0], "fail-on-warnings");
+    }
+
+    #[test]
+    fn test_skip_features_glob_patterns() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["test_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("test_pkg")).unwrap();
+        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
+        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+
+        let pkg_cargo = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+test-utils = []
+test-fixtures = []
+fail-on-warnings = []
+"#;
+        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+
+        // Skip all test-* features using glob pattern
+        let config = ValidatorConfig {
+            features: Some(vec![
+                "default".to_string(),
+                "test-utils".to_string(),
+                "test-fixtures".to_string(),
+                "fail-on-warnings".to_string(),
+            ]),
+            skip_features: Some(vec!["test-*".to_string()]),
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        // Should skip test-utils and test-fixtures, but keep default and fail-on-warnings
+        assert!(!features.contains(&"test-utils".to_string()));
+        assert!(!features.contains(&"test-fixtures".to_string()));
+        assert!(features.contains(&"default".to_string()));
+        assert!(features.contains(&"fail-on-warnings".to_string()));
     }
 }

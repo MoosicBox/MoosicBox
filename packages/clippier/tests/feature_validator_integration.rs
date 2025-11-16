@@ -288,6 +288,7 @@ fn test_complex_workspace_validation_success() {
 
     let config = ValidatorConfig {
         features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -317,6 +318,7 @@ fn test_complex_workspace_all_features() {
 
     let config = ValidatorConfig {
         features: None, // Auto-detect all features
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -350,6 +352,7 @@ fn test_workspace_with_errors() {
 
     let config = ValidatorConfig {
         features: None, // Check all features
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -405,6 +408,7 @@ fn test_single_package_project() {
 
     let config = ValidatorConfig {
         features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
         workspace_only: false,
 
         output_format: OutputType::Raw,
@@ -426,6 +430,7 @@ fn test_workspace_only_vs_all_packages() {
     // Test workspace-only validation
     let config_workspace_only = ValidatorConfig {
         features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -438,6 +443,7 @@ fn test_workspace_only_vs_all_packages() {
     // Test all packages validation
     let config_all = ValidatorConfig {
         features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
         workspace_only: false,
 
         output_format: OutputType::Raw,
@@ -466,6 +472,7 @@ fn test_json_output_format() {
             "fail-on-warnings".to_string(),
             "test-utils".to_string(),
         ]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Json,
@@ -497,6 +504,7 @@ fn test_specific_features_validation() {
     // Test validating only specific features
     let config = ValidatorConfig {
         features: Some(vec!["full".to_string(), "json".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -520,6 +528,7 @@ fn test_validator_with_nonexistent_feature() {
     // Test with a feature that doesn't exist in any package
     let config = ValidatorConfig {
         features: Some(vec!["nonexistent-feature".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -543,6 +552,7 @@ fn test_optional_dependency_handling() {
     // Focus on packages that use optional dependencies
     let config = ValidatorConfig {
         features: Some(vec!["full".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -567,6 +577,7 @@ fn test_workspace_root_discovery_from_subdirectory() {
 
     let config = ValidatorConfig {
         features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
         workspace_only: true,
 
         output_format: OutputType::Raw,
@@ -582,4 +593,136 @@ fn test_workspace_root_discovery_from_subdirectory() {
         "Should find multiple packages from subdirectory"
     );
     assert_eq!(result.errors.len(), 0);
+}
+
+#[test]
+fn test_validation_summary_with_errors() {
+    let workspace = create_error_workspace();
+    let root_path = workspace.path().to_path_buf();
+
+    let config = ValidatorConfig {
+        features: None,
+        skip_features: None,
+        workspace_only: true,
+        output_format: OutputType::Raw,
+    };
+
+    let validator = FeatureValidator::new(Some(root_path), config).unwrap();
+    let result = validator.validate().unwrap();
+
+    // Verify summary fields when errors exist
+    assert!(
+        !result.errors.is_empty(),
+        "Should have errors to display in summary"
+    );
+    assert!(result.total_packages > 0);
+    assert!(result.valid_packages < result.total_packages);
+    assert_eq!(
+        result.total_packages,
+        result.valid_packages + result.errors.len()
+    );
+}
+
+#[test]
+fn test_validation_summary_with_no_errors() {
+    let workspace = create_complex_workspace();
+    let root_path = workspace.path().to_path_buf();
+
+    let config = ValidatorConfig {
+        features: Some(vec!["fail-on-warnings".to_string()]),
+        skip_features: None,
+        workspace_only: true,
+        output_format: OutputType::Json,
+    };
+
+    let validator = FeatureValidator::new(Some(root_path), config).unwrap();
+    let result = validator.validate().unwrap();
+
+    // Verify summary fields when no errors
+    assert_eq!(result.errors.len(), 0);
+    assert!(result.valid_packages > 0);
+    assert_eq!(result.total_packages, result.valid_packages);
+}
+
+#[test]
+fn test_validation_result_json_serialization() {
+    use clippier::feature_validator::{
+        FeatureError, IncorrectPropagation, MissingPropagation, PackageValidationError,
+        ValidationResult,
+    };
+
+    let result = ValidationResult {
+        total_packages: 3,
+        valid_packages: 2,
+        errors: vec![PackageValidationError {
+            package: "test_pkg".to_string(),
+            errors: vec![FeatureError {
+                feature: "fail-on-warnings".to_string(),
+                missing_propagations: vec![MissingPropagation {
+                    dependency: "dep1".to_string(),
+                    expected: "dep1/fail-on-warnings".to_string(),
+                    reason: "Dependency has feature but not propagated".to_string(),
+                }],
+                incorrect_propagations: vec![IncorrectPropagation {
+                    entry: "nonexistent/feature".to_string(),
+                    reason: "Dependency doesn't have this feature".to_string(),
+                }],
+            }],
+        }],
+        warnings: vec![],
+    };
+
+    // Should serialize to valid JSON
+    let json = serde_json::to_string_pretty(&result).unwrap();
+    assert!(json.contains("test_pkg"));
+    assert!(json.contains("fail-on-warnings"));
+    assert!(json.contains("dep1"));
+    assert!(json.contains("missing_propagations"));
+    assert!(json.contains("incorrect_propagations"));
+
+    // Verify it's valid JSON that can be parsed
+    let _parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+}
+
+#[test]
+fn test_validation_summary_pluralization() {
+    use clippier::feature_validator::{PackageValidationError, ValidationResult};
+
+    // Test with 1 error
+    let result_singular = ValidationResult {
+        total_packages: 3,
+        valid_packages: 2,
+        errors: vec![PackageValidationError {
+            package: "test".to_string(),
+            errors: vec![],
+        }],
+        warnings: vec![],
+    };
+
+    assert_eq!(result_singular.errors.len(), 1);
+    assert_eq!(result_singular.valid_packages, 2);
+
+    // Test with multiple errors
+    let result_plural = ValidationResult {
+        total_packages: 5,
+        valid_packages: 3,
+        errors: vec![
+            PackageValidationError {
+                package: "test1".to_string(),
+                errors: vec![],
+            },
+            PackageValidationError {
+                package: "test2".to_string(),
+                errors: vec![],
+            },
+        ],
+        warnings: vec![],
+    };
+
+    assert_eq!(result_plural.errors.len(), 2);
+    assert_eq!(result_plural.valid_packages, 3);
+    assert_eq!(
+        result_plural.total_packages,
+        result_plural.valid_packages + result_plural.errors.len()
+    );
 }

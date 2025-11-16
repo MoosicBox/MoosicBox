@@ -231,6 +231,14 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         features: Option<Vec<String>>,
 
+        /// Features to skip during validation (comma-separated, supports glob patterns)
+        /// Supports wildcards (* and ?) and negation (! prefix)
+        /// Examples: "default,test-*", "*-codec", "*,!fail-on-warnings"
+        /// If not specified, defaults to skipping "default" feature
+        /// Use empty string to skip nothing: --skip-features ""
+        #[arg(long, value_delimiter = ',')]
+        skip_features: Option<Vec<String>>,
+
         /// Path to package or workspace (defaults to current directory)
         #[arg(long)]
         path: Option<PathBuf>,
@@ -451,6 +459,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
         Commands::ValidateFeaturePropagation {
             features,
+            skip_features,
             path,
             workspace_only,
             output,
@@ -458,6 +467,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let result = handle_validate_feature_propagation_command(
                 features,
+                skip_features,
                 path,
                 workspace_only,
                 output,

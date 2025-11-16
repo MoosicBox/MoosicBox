@@ -366,6 +366,7 @@ build_clippier_command() {
     elif [[ "$INPUT_COMMAND" == "validate-feature-propagation" ]]; then
         [[ -n "$INPUT_WORKSPACE_PATH" ]] && cmd="$cmd --path $INPUT_WORKSPACE_PATH"
         [[ -n "$INPUT_FEATURES" ]] && cmd="$cmd --features $INPUT_FEATURES"
+        [[ -n "$INPUT_SKIP_FEATURES" ]] && cmd="$cmd --skip-features $INPUT_SKIP_FEATURES"
         cmd="$cmd --output json"
     else
         echo "Error: Unknown command '$INPUT_COMMAND'"

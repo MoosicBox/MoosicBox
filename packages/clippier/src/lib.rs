@@ -25,6 +25,7 @@
 //! // Validate feature propagation across workspace
 //! let config = ValidatorConfig {
 //!     features: Some(vec!["fail-on-warnings".to_string()]),
+//!     skip_features: None,
 //!     workspace_only: true,
 //!     output_format: OutputType::Json,
 //! };
@@ -89,6 +90,7 @@ pub mod git_diff;
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let config = ValidatorConfig {
 ///     features: Some(vec!["fail-on-warnings".to_string()]),
+///     skip_features: None,
 ///     workspace_only: true,
 ///     output_format: OutputType::Json,
 /// };
@@ -4247,14 +4249,14 @@ pub fn process_workspace_configs(
 /// * If validation fails
 pub fn handle_validate_feature_propagation_command(
     features: Option<Vec<String>>,
+    skip_features: Option<Vec<String>>,
     path: Option<std::path::PathBuf>,
     workspace_only: bool,
     output: OutputType,
 ) -> Result<ValidationResult, Box<dyn std::error::Error>> {
-    use crate::feature_validator::{FeatureValidator, ValidatorConfig};
-
     let config = ValidatorConfig {
         features,
+        skip_features,
         workspace_only,
         output_format: output,
     };
@@ -5727,5 +5729,212 @@ os = "ubuntu"
         assert!(expanded.contains(&"enable-bob".to_string()));
         assert!(expanded.contains(&"enable-sally".to_string()));
         assert!(!expanded.contains(&"enable-experimental".to_string()));
+    }
+
+    // Tests for should_skip_feature glob pattern matching
+    #[test]
+    fn test_should_skip_feature_exact_match() {
+        assert!(should_skip_feature("default", &["default".to_string()]));
+        assert!(!should_skip_feature("test-utils", &["default".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_wildcard_suffix() {
+        assert!(should_skip_feature("test-utils", &["test-*".to_string()]));
+        assert!(should_skip_feature("test-foo", &["test-*".to_string()]));
+        assert!(!should_skip_feature("utils-test", &["test-*".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_wildcard_prefix() {
+        assert!(should_skip_feature("mp3-codec", &["*-codec".to_string()]));
+        assert!(should_skip_feature("flac-codec", &["*-codec".to_string()]));
+        assert!(!should_skip_feature("codec-mp3", &["*-codec".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_wildcard_anywhere() {
+        assert!(should_skip_feature(
+            "test_foo_bar",
+            &["*_foo_*".to_string()]
+        ));
+        assert!(should_skip_feature(
+            "prefix_foo_suffix",
+            &["*_foo_*".to_string()]
+        ));
+        assert!(!should_skip_feature(
+            "test_bar_baz",
+            &["*_foo_*".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_skip_feature_question_mark_single_char() {
+        assert!(should_skip_feature("test1", &["test?".to_string()]));
+        assert!(should_skip_feature("testX", &["test?".to_string()]));
+        assert!(!should_skip_feature("test12", &["test?".to_string()]));
+        assert!(!should_skip_feature("test", &["test?".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_skip_all_with_asterisk() {
+        assert!(should_skip_feature("anything", &["*".to_string()]));
+        assert!(should_skip_feature("default", &["*".to_string()]));
+        assert!(should_skip_feature("fail-on-warnings", &["*".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_negation_basic() {
+        // Negation with ! prefix should NOT skip the matched item
+        assert!(!should_skip_feature(
+            "keep-this",
+            &["!keep-this".to_string()]
+        ));
+        // Items that don't match the negation pattern are not affected (default is false)
+        assert!(!should_skip_feature(
+            "skip-this",
+            &["!keep-this".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_skip_feature_negation_overrides_wildcard() {
+        // "*" skips all, but "!fail-on-warnings" keeps it
+        let patterns = vec!["*".to_string(), "!fail-on-warnings".to_string()];
+
+        assert!(!should_skip_feature("fail-on-warnings", &patterns));
+        assert!(should_skip_feature("default", &patterns));
+        assert!(should_skip_feature("test-utils", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_negation_with_glob_pattern() {
+        // Skip all test-* features except test-important
+        let patterns = vec!["test-*".to_string(), "!test-important".to_string()];
+
+        assert!(should_skip_feature("test-utils", &patterns));
+        assert!(should_skip_feature("test-fixtures", &patterns));
+        assert!(!should_skip_feature("test-important", &patterns));
+        assert!(!should_skip_feature("production", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_multiple_patterns_no_overlap() {
+        let patterns = vec!["test-*".to_string(), "*-codec".to_string()];
+
+        assert!(should_skip_feature("test-utils", &patterns));
+        assert!(should_skip_feature("mp3-codec", &patterns));
+        assert!(!should_skip_feature("fail-on-warnings", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_order_matters_for_negation() {
+        // Last pattern wins
+        let patterns1 = vec!["*".to_string(), "!keep".to_string()];
+        let patterns2 = vec!["!keep".to_string(), "*".to_string()];
+
+        assert!(!should_skip_feature("keep", &patterns1)); // Kept by negation
+        assert!(should_skip_feature("keep", &patterns2)); // Skipped by wildcard
+    }
+
+    #[test]
+    fn test_should_skip_feature_empty_pattern_list() {
+        assert!(!should_skip_feature("anything", &[]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_complex_real_world_scenario() {
+        // Skip all codecs except opus, skip all test features except test-integration
+        let patterns = vec![
+            "*-codec".to_string(),
+            "!opus-codec".to_string(),
+            "test-*".to_string(),
+            "!test-integration".to_string(),
+        ];
+
+        // Codec tests
+        assert!(should_skip_feature("mp3-codec", &patterns));
+        assert!(should_skip_feature("flac-codec", &patterns));
+        assert!(!should_skip_feature("opus-codec", &patterns));
+
+        // Test feature tests
+        assert!(should_skip_feature("test-utils", &patterns));
+        assert!(should_skip_feature("test-fixtures", &patterns));
+        assert!(!should_skip_feature("test-integration", &patterns));
+
+        // Other features
+        assert!(!should_skip_feature("fail-on-warnings", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_case_sensitivity() {
+        // Patterns should be case-sensitive (Rust convention)
+        assert!(should_skip_feature("Test", &["Test".to_string()]));
+        assert!(!should_skip_feature("test", &["Test".to_string()]));
+        assert!(should_skip_feature("test", &["test".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_multiple_negations() {
+        let patterns = vec!["*".to_string(), "!keep1".to_string(), "!keep2".to_string()];
+
+        assert!(!should_skip_feature("keep1", &patterns));
+        assert!(!should_skip_feature("keep2", &patterns));
+        assert!(should_skip_feature("skip-this", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_overlapping_patterns() {
+        // Multiple patterns that could match the same feature
+        let patterns = vec!["test-*".to_string(), "*-utils".to_string()];
+
+        assert!(should_skip_feature("test-utils", &patterns)); // Matches both
+        assert!(should_skip_feature("test-fixtures", &patterns)); // Matches first
+        assert!(should_skip_feature("string-utils", &patterns)); // Matches second
+        assert!(!should_skip_feature("production", &patterns)); // Matches neither
+    }
+
+    #[test]
+    fn test_should_skip_feature_special_characters() {
+        // Test patterns with hyphens, underscores, numbers
+        assert!(should_skip_feature(
+            "test-2024-feature",
+            &["test-*".to_string()]
+        ));
+        assert!(should_skip_feature(
+            "feature_v1_2_3",
+            &["feature_v*".to_string()]
+        ));
+        assert!(should_skip_feature(
+            "enable-foo-bar-baz",
+            &["enable-*".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_skip_feature_empty_string() {
+        // Edge case: empty string feature name
+        assert!(!should_skip_feature("", &["test-*".to_string()]));
+        assert!(should_skip_feature("", &["*".to_string()]));
+    }
+
+    #[test]
+    fn test_should_skip_feature_negation_without_match() {
+        // Negation pattern that doesn't match anything shouldn't affect results
+        let patterns = vec!["test-*".to_string(), "!nonexistent".to_string()];
+
+        assert!(should_skip_feature("test-utils", &patterns));
+        assert!(!should_skip_feature("production", &patterns));
+    }
+
+    #[test]
+    fn test_should_skip_feature_complex_wildcards() {
+        // Test multiple wildcards in one pattern
+        assert!(should_skip_feature(
+            "prefix-middle-suffix",
+            &["prefix-*-suffix".to_string()]
+        ));
+        assert!(should_skip_feature("a-b-c-d-e", &["a-*-e".to_string()]));
+        assert!(!should_skip_feature("a-b-c-d", &["a-*-e".to_string()]));
     }
 }
