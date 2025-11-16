@@ -903,6 +903,18 @@ main() {
         fi
     fi
 
+    if [[ "$INPUT_COMMAND" == "validate-feature-propagation" ]]; then
+        # Check if there are validation errors
+        ERROR_COUNT=$(printf '%s' "$RAW_OUTPUT" | jq '.errors | length')
+        if [[ "$ERROR_COUNT" -gt 0 ]]; then
+            echo "❌ Validation failed: $ERROR_COUNT packages have feature propagation errors" >&2
+            printf '%s' "$RAW_OUTPUT" | jq -r '.errors[] | "  - \(.package): \(.errors | length) \(if (.errors | length) == 1 then "error" else "errors" end)"' >&2
+            exit 1
+        else
+            echo "✅ All packages have proper feature propagation" >&2
+        fi
+    fi
+
     if [[ "$INPUT_COMMAND" == "features" || "$INPUT_COMMAND" == "packages" ]]; then
         TRANSFORMED_OUTPUT=$(transform_output "$RAW_OUTPUT")
 
