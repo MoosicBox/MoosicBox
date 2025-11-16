@@ -138,6 +138,29 @@ os = "ubuntu"
 skip-features = ["*-default", "test-*", "!test-utils"]
 ```
 
+#### Wildcard Pattern Support in --features
+
+The `--features` flag also supports wildcard patterns for selecting features:
+
+```bash
+# Include all features starting with enable-
+clippier features Cargo.toml --features "enable-*" --output json
+
+# Include multiple wildcard patterns
+clippier features Cargo.toml --features "enable-*,test-*" --output json
+
+# Mix exact features with wildcards
+clippier features Cargo.toml --features "enable-*,production,default" --output json
+
+# Combine with skip-features for powerful filtering
+clippier features Cargo.toml \
+  --features "enable-*,test-*" \
+  --skip-features "test-integration" \
+  --output json
+```
+
+**Note:** The `--features` flag uses **inclusion** (expand matching features), while `--skip-features` uses **exclusion** (remove matching features). They can be combined for precise control.
+
 #### Deterministic Randomization with Seed
 
 Use a specific seed for reproducible randomized feature combinations:
@@ -166,14 +189,27 @@ This enables replaying the same randomized distribution by using the printed see
 
 Filter feature matrix generation to specific packages by name or by Cargo.toml properties:
 
-```bash
-# Process only specific packages by name
-clippier features . \
-  --packages moosicbox_server,moosicbox_audio_decoder \
-  --chunked 15 \
-  --max-parallel 256 \
-  --output json
+**Wildcard Pattern Support:**
 
+The `--packages` flag supports wildcard patterns for selecting packages:
+
+```bash
+# Process all packages starting with moosicbox_
+clippier features . --packages "moosicbox_*" --output json
+
+# Process all server packages except test servers
+clippier features . --packages "*_server,!*_test_server" --output json
+
+# Process specific API packages
+clippier features . --packages "moosicbox_*_api" --output json
+
+# Mix wildcards with exact names
+clippier features . --packages "moosicbox_server,moosicbox_*_api,core" --output json
+```
+
+**Property-Based Filtering:**
+
+```bash
 # Filter by package properties (exclude unpublished and examples)
 clippier features . \
   --skip-if "package.publish=false" \
@@ -185,13 +221,17 @@ clippier features . \
   --include-if "package.name^=moosicbox_" \
   --include-if "package.categories@=audio" \
   --output json
+```
 
-# Combine with other filters
+**Combined Filtering:**
+
+```bash
+# Combine wildcards with other filters
 clippier features . \
-  --packages moosicbox_server \
+  --packages "moosicbox_*_server" \
   --os ubuntu \
-  --features "default,postgres" \
-  --skip-features "fail-on-warnings" \
+  --features "enable-*,production" \
+  --skip-features "test-*" \
   --output json
 ```
 
@@ -199,7 +239,7 @@ This is particularly useful for:
 
 - **Focused testing**: Test only specific packages during development
 - **CI optimization**: Build matrix for selected components based on criteria
-- **Monorepo management**: Process subsets of large workspaces
+- **Monorepo management**: Process subsets of large workspaces with naming conventions
 - **Quality gates**: Filter by documentation completeness, categories, etc.
 
 #### Enhanced Change Impact Analysis
@@ -531,10 +571,10 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--spread`            | Spread features across jobs                                        | false        |
 | `--randomize`         | Randomize features before chunking/spreading                       | false        |
 | `--seed`              | Seed for deterministic randomization                               | -            |
-| `--features`          | Specific features to include                                       | -            |
+| `--features`          | Features to include (supports wildcards `*`, `?`)                  | -            |
 | `--skip-features`     | Features to exclude (supports wildcards `*`, `?` and negation `!`) | -            |
-| `--required-features` | Always-required features                                           | -            |
-| `--packages`          | Comma-separated list of packages to process                        | All packages |
+| `--required-features` | Always-required features (supports wildcards `*`, `?`)             | -            |
+| `--packages`          | Packages to process (supports wildcards `*`, `?`)                  | All packages |
 | `--changed-files`     | Filter by changed files                                            | -            |
 | `--git-base`          | Git base commit for external dep analysis                          | -            |
 | `--git-head`          | Git head commit for external dep analysis                          | -            |
@@ -543,18 +583,18 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Packages Command Options
 
-| Option                | Description                                 | Default      |
-| --------------------- | ------------------------------------------- | ------------ |
-| `--os`                | Target operating system                     | `ubuntu`     |
-| `--packages`          | Comma-separated list of packages to include | All packages |
-| `--changed-files`     | Filter by changed files                     | -            |
-| `--git-base`          | Git base commit for change detection        | -            |
-| `--git-head`          | Git head commit for change detection        | -            |
-| `--include-reasoning` | Include reasoning for affected packages     | false        |
-| `--max-parallel`      | Maximum number of packages to return        | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter    | -            |
-| `--include-if`        | Include only packages matching filter       | -            |
-| `--output`            | Output format: `json`, `raw`                | `json`       |
+| Option                | Description                                       | Default      |
+| --------------------- | ------------------------------------------------- | ------------ |
+| `--os`                | Target operating system                           | `ubuntu`     |
+| `--packages`          | Packages to include (supports wildcards `*`, `?`) | All packages |
+| `--changed-files`     | Filter by changed files                           | -            |
+| `--git-base`          | Git base commit for change detection              | -            |
+| `--git-head`          | Git head commit for change detection              | -            |
+| `--include-reasoning` | Include reasoning for affected packages           | false        |
+| `--max-parallel`      | Maximum number of packages to return              | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter          | -            |
+| `--include-if`        | Include only packages matching filter             | -            |
+| `--output`            | Output format: `json`, `raw`                      | `json`       |
 
 ### Workspace Dependencies Options
 
@@ -1649,8 +1689,42 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 
 - `*` - Matches zero or more characters
 - `?` - Matches exactly one character
-- `!pattern` - Negation (keeps matching features even if other patterns match)
+- `!pattern` - Negation (keeps matching features even if other patterns match) - **only for `--skip-features`**
 - Patterns evaluated left-to-right, last match wins
+
+### Feature Inclusion Patterns (`--features`)
+
+```bash
+# Include all features starting with enable-
+--features "enable-*"
+
+# Include multiple wildcard patterns
+--features "enable-*,test-*"
+
+# Mix wildcards with exact names
+--features "enable-*,production,default"
+
+# Combine with skip-features for precise control
+--features "enable-*,test-*" --skip-features "test-integration"
+```
+
+**Note:** `--features` expands wildcards to **include** matching features, while `--skip-features` **excludes** them.
+
+### Package Selection Patterns (`--packages`)
+
+```bash
+# Include all packages starting with moosicbox_
+--packages "moosicbox_*"
+
+# Include all server packages
+--packages "*_server"
+
+# Mix wildcards with exact names
+--packages "moosicbox_server,moosicbox_*_api,core"
+
+# Select specific API packages
+--packages "moosicbox_*_api"
+```
 
 ### Property-Based Filter Syntax
 
@@ -1723,23 +1797,32 @@ clippier packages . --output raw
 # Single package
 clippier features . --packages my_package
 
-# Multiple packages
+# Multiple packages (exact names)
 clippier features . --packages pkg1,pkg2,pkg3
 
-# With full names (including prefixes)
-clippier features . --packages moosicbox_server,moosicbox_auth
+# Wildcard patterns - all packages with prefix
+clippier features . --packages "moosicbox_*"
+
+# Wildcard patterns - all server packages
+clippier features . --packages "*_server"
+
+# Wildcard patterns - all API packages
+clippier features . --packages "moosicbox_*_api"
+
+# Mix wildcards with exact names
+clippier features . --packages "moosicbox_server,moosicbox_*_api,core"
 
 # Combined with OS filter
-clippier features . --packages server --os ubuntu
+clippier features . --packages "moosicbox_*_server" --os ubuntu
 
-# Combined with feature filter
-clippier features . --packages server --features "default,tls"
+# Combined with feature wildcards
+clippier features . --packages "*_server" --features "enable-*,production"
 
 # Combined with change detection
-clippier features . --packages server --changed-files "src/main.rs"
+clippier features . --packages "moosicbox_*" --changed-files "src/main.rs"
 
 # With chunking for CI
-clippier features . --packages server,auth --chunked 5 --max-parallel 10
+clippier features . --packages "*_server,*_api" --chunked 5 --max-parallel 10
 
 # For Docker generation
 clippier workspace-deps . my_package --all-potential-deps

@@ -891,6 +891,76 @@ pub fn should_skip_feature(feature: &str, patterns: &[String]) -> bool {
     should_skip
 }
 
+/// Checks if an item matches a pattern (supports wildcards and exact matches).
+///
+/// This is a simpler version of `should_skip_feature` without negation support,
+/// used for inclusion patterns.
+///
+/// # Examples
+///
+/// ```
+/// # use clippier::matches_pattern;
+/// assert!(matches_pattern("bob-default", "*-default"));
+/// assert!(matches_pattern("v1", "v?"));
+/// assert!(!matches_pattern("v10", "v?"));
+/// assert!(matches_pattern("exact", "exact"));
+/// ```
+#[must_use]
+pub fn matches_pattern(item: &str, pattern: &str) -> bool {
+    if pattern.contains('*') || pattern.contains('?') {
+        // Use globset for wildcard patterns
+        globset::Glob::new(pattern)
+            .ok()
+            .is_some_and(|g| g.compile_matcher().is_match(item))
+    } else {
+        // Exact match for non-wildcard patterns
+        item == pattern
+    }
+}
+
+/// Expands wildcard patterns in a list to match against available items.
+///
+/// Supports:
+/// * Exact matches: Returns the pattern as-is
+/// * Wildcards: Expands to all matching items from `available_items`
+/// * Negation: Not supported here (use with skip patterns instead)
+///
+/// # Examples
+///
+/// ```
+/// # use clippier::expand_pattern_list;
+/// let available = vec!["default".to_string(), "bob-default".to_string(), "sally-default".to_string(), "production".to_string()];
+/// let patterns = vec!["*-default".to_string(), "production".to_string()];
+/// let expanded = expand_pattern_list(&patterns, &available);
+/// assert!(expanded.contains(&"bob-default".to_string()));
+/// assert!(expanded.contains(&"sally-default".to_string()));
+/// assert!(expanded.contains(&"production".to_string()));
+/// assert!(!expanded.contains(&"default".to_string()));
+/// ```
+#[must_use]
+pub fn expand_pattern_list(patterns: &[String], available_items: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+
+    for pattern in patterns {
+        if pattern.contains('*') || pattern.contains('?') {
+            // Wildcard pattern - expand to all matching items
+            for item in available_items {
+                if matches_pattern(item, pattern) && !result.contains(item) {
+                    result.push(item.clone());
+                }
+            }
+        } else {
+            // Exact match - add as-is (even if it doesn't exist in available_items)
+            // This preserves the original behavior for exact matches
+            if !result.contains(pattern) {
+                result.push(pattern.clone());
+            }
+        }
+    }
+
+    result
+}
+
 /// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
@@ -905,15 +975,19 @@ pub fn fetch_features(
         return vec![];
     };
 
+    // Get all available features from Cargo.toml
+    let all_features: Vec<String> = features_table
+        .keys()
+        .filter(|k| !k.starts_with('_'))
+        .cloned()
+        .collect();
+
     let mut features: Vec<String> = specific_features.map_or_else(
-        || {
-            features_table
-                .keys()
-                .filter(|k| !k.starts_with('_'))
-                .cloned()
-                .collect()
+        || all_features.clone(),
+        |patterns| {
+            // Expand wildcard patterns in specific_features
+            expand_pattern_list(patterns, &all_features)
         },
-        <[String]>::to_vec,
     );
 
     if let Some(skip) = skip_features {
@@ -3352,17 +3426,24 @@ pub fn handle_features_command(
             }
         }
 
+        // Get all available package names for wildcard expansion
+        let all_package_names: Vec<String> = package_name_to_path.keys().cloned().collect();
+
+        // Expand wildcard patterns in selected_packages
+        let expanded_packages = expand_pattern_list(selected_packages, &all_package_names);
+        log::debug!("Expanded packages: {expanded_packages:?}");
+
         // Apply package filters if any
         let filtered_packages = if !skip_if.is_empty() || !include_if.is_empty() {
             package_filter::apply_filters(
-                selected_packages,
+                &expanded_packages,
                 &package_name_to_path,
                 &path,
                 skip_if,
                 include_if,
             )?
         } else {
-            selected_packages.to_vec()
+            expanded_packages
         };
 
         // Process only filtered packages
@@ -4159,24 +4240,31 @@ pub fn handle_packages_command(
         }
     }
 
+    // Get all available package names for wildcard expansion
+    let all_package_names: Vec<String> = package_name_to_path.keys().cloned().collect();
+
     // Apply package filters if any
     let filtered_packages = if !skip_if.is_empty() || !include_if.is_empty() {
         package_filter::apply_filters(
-            &package_name_to_path.keys().cloned().collect::<Vec<_>>(),
+            &all_package_names,
             &package_name_to_path,
             &path,
             skip_if,
             include_if,
         )?
     } else {
-        package_name_to_path.keys().cloned().collect()
+        all_package_names.clone()
     };
 
     let selected_packages: Vec<String> = if let Some(pkg_list) = packages
         && !pkg_list.is_empty()
     {
+        // Expand wildcard patterns in package list
+        let expanded_packages = expand_pattern_list(pkg_list, &all_package_names);
+        log::debug!("Expanded packages: {expanded_packages:?}");
+
         // Intersect user-specified packages with filtered packages
-        pkg_list
+        expanded_packages
             .iter()
             .filter(|p| filtered_packages.contains(p))
             .cloned()
@@ -4901,5 +4989,237 @@ skip-features = ["*-default"]
         assert_eq!(result.len(), 2);
         assert!(result.contains(&"api".to_string()));
         assert!(result.contains(&"web".to_string()));
+    }
+
+    #[test]
+    fn test_features_wildcard_expansion() {
+        // Test that --features supports wildcard expansion
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+enable-feature = []
+disable-test = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test with wildcard pattern in specific_features
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["enable-*".to_string()]), // specific_features with wildcard
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should only include enable-* features
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"enable-feature".to_string()));
+
+        // Should not include other features
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"disable-test".to_string()));
+        assert!(!feature_names.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_features_multiple_wildcard_patterns() {
+        // Test that --features supports multiple wildcard patterns
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+test-utils = []
+test-integration = []
+production = []
+development = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test with multiple wildcard patterns
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["enable-*".to_string(), "test-*".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include enable-* and test-* features
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"test-utils".to_string()));
+        assert!(feature_names.contains(&"test-integration".to_string()));
+
+        // Should not include other features
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"production".to_string()));
+        assert!(!feature_names.contains(&"development".to_string()));
+    }
+
+    #[test]
+    fn test_features_mixed_exact_and_wildcard() {
+        // Test mixing exact feature names with wildcard patterns
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+production = []
+development = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test with mix of exact and wildcard
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["enable-*".to_string(), "production".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include enable-* features and production
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+
+        // Should not include other features
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"development".to_string()));
+    }
+
+    #[test]
+    fn test_matches_pattern_helper() {
+        // Test the matches_pattern helper function
+        assert!(matches_pattern("bob-default", "*-default"));
+        assert!(matches_pattern("sally-default", "*-default"));
+        assert!(!matches_pattern("default", "*-default"));
+
+        assert!(matches_pattern("test-utils", "test-*"));
+        assert!(matches_pattern("test-integration", "test-*"));
+        assert!(!matches_pattern("utils", "test-*"));
+
+        assert!(matches_pattern("v1", "v?"));
+        assert!(matches_pattern("v2", "v?"));
+        assert!(!matches_pattern("v10", "v?"));
+
+        assert!(matches_pattern("exact", "exact"));
+        assert!(!matches_pattern("exact", "exac"));
+    }
+
+    #[test]
+    fn test_expand_pattern_list_helper() {
+        // Test the expand_pattern_list helper function
+        let available = vec![
+            "default".to_string(),
+            "bob-default".to_string(),
+            "sally-default".to_string(),
+            "enable-bob".to_string(),
+            "production".to_string(),
+        ];
+
+        // Test wildcard expansion
+        let patterns = vec!["*-default".to_string()];
+        let expanded = expand_pattern_list(&patterns, &available);
+        assert_eq!(expanded.len(), 2);
+        assert!(expanded.contains(&"bob-default".to_string()));
+        assert!(expanded.contains(&"sally-default".to_string()));
+
+        // Test mixed exact and wildcard
+        let patterns = vec!["*-default".to_string(), "production".to_string()];
+        let expanded = expand_pattern_list(&patterns, &available);
+        assert_eq!(expanded.len(), 3);
+        assert!(expanded.contains(&"bob-default".to_string()));
+        assert!(expanded.contains(&"sally-default".to_string()));
+        assert!(expanded.contains(&"production".to_string()));
+
+        // Test exact match for non-existent item (should still be included)
+        let patterns = vec!["nonexistent".to_string()];
+        let expanded = expand_pattern_list(&patterns, &available);
+        assert_eq!(expanded.len(), 1);
+        assert!(expanded.contains(&"nonexistent".to_string()));
     }
 }
