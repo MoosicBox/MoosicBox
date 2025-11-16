@@ -220,6 +220,41 @@ jobs:
                   name: cargo-machete.exe
                   path: ~/.cargo/bin/cargo-machete.exe
 
+    validate-feature-propagation:
+        name: Validate Feature Propagation
+        runs-on: ubuntu-latest
+        needs: [determine-affected-packages]
+        if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Validate fail-on-warnings propagation
+              id: validate
+              uses: ./.github/actions/clippier
+              with:
+                  command: validate-feature-propagation
+                  workspace-path: .
+                  features: fail-on-warnings
+                  skip-on-no-changes: false
+
+            - name: Save validation report
+              if: always()
+              shell: bash
+              run: |
+                  cat > validation-report.json <<'EOF'
+                  ${{ steps.validate.outputs.raw-output }}
+                  EOF
+
+            - name: Upload validation report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: feature-validation-report
+                  path: validation-report.json
+
     build:
         runs-on: ${{ matrix.package.os }}
 
