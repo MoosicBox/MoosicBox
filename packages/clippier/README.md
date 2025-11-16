@@ -161,6 +161,52 @@ clippier features Cargo.toml \
 
 **Note:** The `--features` flag uses **inclusion** (expand matching features), while `--skip-features` uses **exclusion** (remove matching features). They can be combined for precise control.
 
+#### Wildcard Pattern Support in --required-features
+
+The `--required-features` flag supports wildcard patterns for specifying required features. These patterns are **expanded to concrete feature names** in the JSON output, making them suitable for consumption by CI tools and scripts.
+
+```bash
+# Require all features starting with enable-
+clippier features Cargo.toml --required-features "enable-*" --output json
+
+# Require multiple wildcard patterns
+clippier features Cargo.toml --required-features "enable-*,test-*" --output json
+
+# Mix exact features with wildcards
+clippier features Cargo.toml --required-features "enable-*,production,default" --output json
+
+# Combine with other feature flags
+clippier features Cargo.toml \
+  --features "enable-*,production" \
+  --skip-features "test-*,!test-utils" \
+  --required-features "enable-*" \
+  --output json
+```
+
+**Important:** Unlike `--skip-features` (which removes features) and `--features` (which selects features to process), `--required-features` is **metadata** that gets included in the JSON output. Wildcards are expanded so downstream consumers receive concrete feature names, not glob patterns.
+
+**Example output:**
+
+```json
+{
+  "name": "my-package",
+  "features": ["default", "production", "enable-bob"],
+  "requiredFeatures": ["enable-bob", "enable-sally", "enable-feature"],
+  "os": "ubuntu-latest",
+  ...
+}
+```
+
+**Configuration File Usage:**
+
+```toml
+[[config]]
+os = "ubuntu"
+required-features = ["enable-*", "production"]
+```
+
+The wildcards will be expanded when the configuration is processed, ensuring the JSON output contains concrete feature names.
+
 #### Deterministic Randomization with Seed
 
 Use a specific seed for reproducible randomized feature combinations:
@@ -1022,6 +1068,7 @@ clippier features Cargo.toml \
   --spread \
   --randomize \
   --skip-features "dev,test" \
+  --required-features "production" \
   --output json > feature-matrix.json
 ```
 
@@ -1042,6 +1089,7 @@ clippier features Cargo.toml \
   --randomize \
   --seed 1234567890 \
   --skip-features "dev,test" \
+  --required-features "production" \
   --output json > feature-matrix.json
 ```
 
@@ -1551,7 +1599,8 @@ echo "🎯 Feature validation completed successfully!"
       --packages server,database \
       --os ubuntu \
       --features "production" \
-      --skip-features "dev,test"
+      --skip-features "dev,test" \
+      --required-features "production"
     ```
 
 3. **Use in CI/CD for component testing**: Create separate workflows for different components
@@ -1710,6 +1759,29 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 
 **Note:** `--features` expands wildcards to **include** matching features, while `--skip-features` **excludes** them.
 
+### Required Features Patterns (`--required-features`)
+
+```bash
+# Require all features starting with enable-
+--required-features "enable-*"
+
+# Require multiple wildcard patterns
+--required-features "enable-*,test-*"
+
+# Mix wildcards with exact names
+--required-features "enable-*,production,default"
+```
+
+**Note:** Wildcards are **expanded to concrete feature names** in the JSON output. This is metadata that gets included for downstream consumers.
+
+**Output example:**
+
+```json
+{
+    "requiredFeatures": ["enable-bob", "enable-sally", "enable-feature", "production"]
+}
+```
+
 ### Package Selection Patterns (`--packages`)
 
 ```bash
@@ -1817,6 +1889,13 @@ clippier features . --packages "moosicbox_*_server" --os ubuntu
 
 # Combined with feature wildcards
 clippier features . --packages "*_server" --features "enable-*,production"
+
+# Combined with all wildcard features (comprehensive example)
+clippier features . \
+  --packages "moosicbox_*_server" \
+  --features "enable-*,production" \
+  --skip-features "test-*,!test-utils" \
+  --required-features "enable-*"
 
 # Combined with change detection
 clippier features . --packages "moosicbox_*" --changed-files "src/main.rs"

@@ -961,6 +961,45 @@ pub fn expand_pattern_list(patterns: &[String], available_items: &[String]) -> V
     result
 }
 
+/// Expands wildcard patterns in a feature list against available features from Cargo.toml.
+///
+/// This is used to expand patterns like `enable-*` into concrete feature names.
+///
+/// # Examples
+///
+/// ```
+/// # use clippier::expand_features_from_cargo_toml;
+/// # use toml::Value;
+/// let cargo_toml_str = r#"
+/// [features]
+/// default = []
+/// enable-bob = []
+/// enable-sally = []
+/// production = []
+/// "#;
+/// let cargo_toml: Value = toml::from_str(cargo_toml_str).unwrap();
+/// let patterns = vec!["enable-*".to_string(), "production".to_string()];
+/// let expanded = expand_features_from_cargo_toml(&cargo_toml, &patterns);
+/// assert!(expanded.contains(&"enable-bob".to_string()));
+/// assert!(expanded.contains(&"enable-sally".to_string()));
+/// assert!(expanded.contains(&"production".to_string()));
+/// ```
+#[must_use]
+pub fn expand_features_from_cargo_toml(cargo_toml: &Value, patterns: &[String]) -> Vec<String> {
+    let Some(Value::Table(features_table)) = cargo_toml.get("features") else {
+        return vec![];
+    };
+
+    // Get all available features from Cargo.toml
+    let all_features: Vec<String> = features_table
+        .keys()
+        .filter(|k| !k.starts_with('_'))
+        .cloned()
+        .collect();
+
+    expand_pattern_list(patterns, &all_features)
+}
+
 /// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
@@ -1218,6 +1257,12 @@ pub fn process_configs(
                 randomize,
                 seed,
             );
+
+            // Expand wildcards in required_features
+            let expanded_required_features = required_features_override
+                .or(config.required_features.as_deref())
+                .map(|patterns| expand_features_from_cargo_toml(&value, patterns));
+
             match &features {
                 FeaturesList::Chunked(x) => {
                     for features in x {
@@ -1228,7 +1273,7 @@ pub fn process_configs(
                             &config,
                             path.to_str().unwrap(),
                             &name,
-                            required_features_override.or(config.required_features.as_deref()),
+                            expanded_required_features.as_deref(),
                             features,
                         )?);
                     }
@@ -1241,7 +1286,7 @@ pub fn process_configs(
                         &config,
                         path.to_str().unwrap(),
                         &name,
-                        required_features_override.or(config.required_features.as_deref()),
+                        expanded_required_features.as_deref(),
                         x,
                     )?);
                 }
@@ -5221,5 +5266,157 @@ os = "ubuntu"
         let expanded = expand_pattern_list(&patterns, &available);
         assert_eq!(expanded.len(), 1);
         assert!(expanded.contains(&"nonexistent".to_string()));
+    }
+
+    #[test]
+    fn test_required_features_wildcard_expansion() {
+        // Test that --required-features wildcards are expanded in the output
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+enable-feature = []
+production = []
+development = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test with wildcard pattern in required_features
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            None,                                                      // specific_features
+            None,                                                      // skip_features
+            Some(&["enable-*".to_string(), "production".to_string()]), // required_features
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let required_features = result[0]
+            .get("requiredFeatures")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let required_feature_names: Vec<String> = required_features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should have expanded enable-* to concrete feature names
+        assert!(required_feature_names.contains(&"enable-bob".to_string()));
+        assert!(required_feature_names.contains(&"enable-sally".to_string()));
+        assert!(required_feature_names.contains(&"enable-feature".to_string()));
+        assert!(required_feature_names.contains(&"production".to_string()));
+
+        // Should NOT contain the wildcard pattern itself
+        assert!(!required_feature_names.contains(&"enable-*".to_string()));
+
+        // Should not contain features that don't match
+        assert!(!required_feature_names.contains(&"default".to_string()));
+        assert!(!required_feature_names.contains(&"development".to_string()));
+    }
+
+    #[test]
+    fn test_required_features_from_config_file() {
+        // Test that required-features in config file also get expanded
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+test-utils = []
+test-integration = []
+test-e2e = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+required-features = ["test-*"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None,
+            None, // No command line override
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let required_features = result[0]
+            .get("requiredFeatures")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let required_feature_names: Vec<String> = required_features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should have expanded test-* from config file
+        assert!(required_feature_names.contains(&"test-utils".to_string()));
+        assert!(required_feature_names.contains(&"test-integration".to_string()));
+        assert!(required_feature_names.contains(&"test-e2e".to_string()));
+
+        // Should NOT contain the wildcard pattern
+        assert!(!required_feature_names.contains(&"test-*".to_string()));
+
+        // Should not contain non-matching features
+        assert!(!required_feature_names.contains(&"default".to_string()));
+        assert!(!required_feature_names.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_expand_features_from_cargo_toml_helper() {
+        // Test the expand_features_from_cargo_toml helper function
+        let cargo_toml_str = r"
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+production = []
+";
+        let cargo_toml: Value = toml::from_str(cargo_toml_str).unwrap();
+
+        // Test wildcard expansion
+        let patterns = vec!["enable-*".to_string()];
+        let expanded = expand_features_from_cargo_toml(&cargo_toml, &patterns);
+        assert_eq!(expanded.len(), 2);
+        assert!(expanded.contains(&"enable-bob".to_string()));
+        assert!(expanded.contains(&"enable-sally".to_string()));
+
+        // Test mixed patterns
+        let patterns = vec!["enable-*".to_string(), "production".to_string()];
+        let expanded = expand_features_from_cargo_toml(&cargo_toml, &patterns);
+        assert_eq!(expanded.len(), 3);
+        assert!(expanded.contains(&"enable-bob".to_string()));
+        assert!(expanded.contains(&"enable-sally".to_string()));
+        assert!(expanded.contains(&"production".to_string()));
     }
 }
