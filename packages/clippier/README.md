@@ -80,6 +80,64 @@ clippier features Cargo.toml \
   --output json
 ```
 
+#### Wildcard Pattern Support in skip-features
+
+The `--skip-features` flag supports powerful wildcard patterns and negation:
+
+**Wildcard Patterns:**
+
+```bash
+# Skip all features ending with -default
+clippier features Cargo.toml --skip-features "*-default" --output json
+
+# Skip all features starting with test-
+clippier features Cargo.toml --skip-features "test-*" --output json
+
+# Skip features with single character after prefix (v1, v2, but not v10)
+clippier features Cargo.toml --skip-features "v?" --output json
+
+# Combine multiple patterns
+clippier features Cargo.toml --skip-features "*-default,test-*,dev-*" --output json
+```
+
+**Negation Patterns (Skip All Except):**
+
+```bash
+# Skip everything except enable-bob
+clippier features Cargo.toml --skip-features "*,!enable-bob" --output json
+
+# Skip everything except features starting with enable-
+clippier features Cargo.toml --skip-features "*,!enable-*" --output json
+
+# Complex: skip *-default and test-* features, but keep test-utils
+clippier features Cargo.toml \
+  --skip-features "*-default,test-*,!test-utils" \
+  --output json
+```
+
+**Pattern Syntax:**
+
+| Pattern     | Matches                           | Example                                            |
+| ----------- | --------------------------------- | -------------------------------------------------- |
+| `*`         | Zero or more characters           | `*-default` matches `bob-default`, `sally-default` |
+| `?`         | Exactly one character             | `v?` matches `v1`, `v2` but not `v10`              |
+| `!pattern`  | Negation (keep matching features) | `!enable-bob` keeps `enable-bob`                   |
+| Exact match | No wildcards                      | `default` matches only `default`                   |
+
+**Pattern Evaluation:**
+
+- Patterns are evaluated in order from left to right
+- The last matching pattern determines if a feature is skipped
+- Negation (`!`) overrides previous skip patterns for matching features
+
+**Configuration File Usage:**
+
+```toml
+[[config]]
+os = "ubuntu"
+skip-features = ["*-default", "test-*", "!test-utils"]
+```
+
 #### Deterministic Randomization with Seed
 
 Use a specific seed for reproducible randomized feature combinations:
@@ -463,25 +521,25 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Features Command Options
 
-| Option                | Description                                  | Default      |
-| --------------------- | -------------------------------------------- | ------------ |
-| `--os`                | Target operating system                      | -            |
-| `--offset`            | Skip first N features                        | 0            |
-| `--max`               | Maximum number of features                   | All          |
-| `--max-parallel`      | Maximum parallel jobs                        | -            |
-| `--chunked`           | Group features into chunks                   | -            |
-| `--spread`            | Spread features across jobs                  | false        |
-| `--randomize`         | Randomize features before chunking/spreading | false        |
-| `--seed`              | Seed for deterministic randomization         | -            |
-| `--features`          | Specific features to include                 | -            |
-| `--skip-features`     | Features to exclude                          | -            |
-| `--required-features` | Always-required features                     | -            |
-| `--packages`          | Comma-separated list of packages to process  | All packages |
-| `--changed-files`     | Filter by changed files                      | -            |
-| `--git-base`          | Git base commit for external dep analysis    | -            |
-| `--git-head`          | Git head commit for external dep analysis    | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter     | -            |
-| `--include-if`        | Include only packages matching filter        | -            |
+| Option                | Description                                                        | Default      |
+| --------------------- | ------------------------------------------------------------------ | ------------ |
+| `--os`                | Target operating system                                            | -            |
+| `--offset`            | Skip first N features                                              | 0            |
+| `--max`               | Maximum number of features                                         | All          |
+| `--max-parallel`      | Maximum parallel jobs                                              | -            |
+| `--chunked`           | Group features into chunks                                         | -            |
+| `--spread`            | Spread features across jobs                                        | false        |
+| `--randomize`         | Randomize features before chunking/spreading                       | false        |
+| `--seed`              | Seed for deterministic randomization                               | -            |
+| `--features`          | Specific features to include                                       | -            |
+| `--skip-features`     | Features to exclude (supports wildcards `*`, `?` and negation `!`) | -            |
+| `--required-features` | Always-required features                                           | -            |
+| `--packages`          | Comma-separated list of packages to process                        | All packages |
+| `--changed-files`     | Filter by changed files                                            | -            |
+| `--git-base`          | Git base commit for external dep analysis                          | -            |
+| `--git-head`          | Git head commit for external dep analysis                          | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter                           | -            |
+| `--include-if`        | Include only packages matching filter                              | -            |
 
 ### Packages Command Options
 
@@ -1561,6 +1619,38 @@ echo "🎯 Feature validation completed successfully!"
 - Ensure output is captured correctly in scripts
 
 ## Quick Reference
+
+### Feature Skip Patterns (Wildcards & Negation)
+
+```bash
+# Wildcard patterns
+--skip-features "*-default"                    # Skip all *-default features
+--skip-features "test-*"                       # Skip all test-* features
+--skip-features "v?"                           # Skip v1, v2, v3 (not v10)
+--skip-features "*internal*"                   # Skip features containing "internal"
+
+# Negation patterns (skip all except)
+--skip-features "*,!enable-bob"                # Skip all except enable-bob
+--skip-features "*,!enable-*"                  # Skip all except enable-*
+--skip-features "*,!production,!default"       # Skip all except production and default
+
+# Complex combinations
+--skip-features "*-default,test-*,!test-utils" # Skip defaults and tests, keep test-utils
+--skip-features "v?,!v2"                       # Skip v1, v3 but keep v2
+--skip-features "*,!enable-*,!production"      # Only keep enable-* and production features
+
+# In configuration files
+[[config]]
+os = "ubuntu"
+skip-features = ["*-default", "test-*", "!test-utils"]
+```
+
+**Pattern Syntax:**
+
+- `*` - Matches zero or more characters
+- `?` - Matches exactly one character
+- `!pattern` - Negation (keeps matching features even if other patterns match)
+- Patterns evaluated left-to-right, last match wins
 
 ### Property-Based Filter Syntax
 

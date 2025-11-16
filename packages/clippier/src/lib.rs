@@ -841,6 +841,56 @@ fn find_workspace_root_from_package(
     Err("Workspace root not found".into())
 }
 
+/// Checks if a feature should be skipped based on patterns.
+///
+/// Supports:
+/// * Exact matches: `"default"` matches only `"default"`
+/// * Wildcards: `"*-default"` matches `"bob-default"`, `"sally-default"`, etc.
+/// * Single char wildcards: `"v?"` matches `"v1"`, `"v2"` but not `"v10"`
+/// * Negation: `"!enable-bob"` keeps `"enable-bob"` even if other patterns match
+///
+/// Patterns are evaluated in order, with the last matching pattern determining the result.
+///
+/// # Examples
+///
+/// ```
+/// # use clippier::should_skip_feature;
+/// // Skip all features ending with -default
+/// assert!(should_skip_feature("bob-default", &["*-default".to_string()]));
+/// assert!(!should_skip_feature("enable-bob", &["*-default".to_string()]));
+///
+/// // Skip everything except enable-bob
+/// assert!(should_skip_feature("feature1", &["*".to_string(), "!enable-bob".to_string()]));
+/// assert!(!should_skip_feature("enable-bob", &["*".to_string(), "!enable-bob".to_string()]));
+/// ```
+#[must_use]
+pub fn should_skip_feature(feature: &str, patterns: &[String]) -> bool {
+    let mut should_skip = false;
+
+    for pattern in patterns {
+        // Check for negation prefix (!)
+        let (is_negation, pattern_str) = pattern
+            .strip_prefix('!')
+            .map_or((false, pattern.as_str()), |p| (true, p));
+
+        let matches = if pattern_str.contains('*') || pattern_str.contains('?') {
+            // Use globset for wildcard patterns
+            globset::Glob::new(pattern_str)
+                .ok()
+                .is_some_and(|g| g.compile_matcher().is_match(feature))
+        } else {
+            // Exact match for non-wildcard patterns
+            feature == pattern_str
+        };
+
+        if matches {
+            should_skip = !is_negation;
+        }
+    }
+
+    should_skip
+}
+
 /// Fetches and filters features from a Cargo.toml file
 #[must_use]
 pub fn fetch_features(
@@ -867,7 +917,7 @@ pub fn fetch_features(
     );
 
     if let Some(skip) = skip_features {
-        features.retain(|f| !skip.contains(f));
+        features.retain(|f| !should_skip_feature(f, skip));
     }
 
     let offset = offset.unwrap_or(0) as usize;
@@ -4350,6 +4400,378 @@ skip-features = ["simd"]
         // Should contain other features
         assert!(feature_names.contains(&"feature1".to_string()));
         assert!(feature_names.contains(&"feature2".to_string()));
+    }
+
+    #[test]
+    fn test_wildcard_skip_features_suffix() {
+        // Test wildcard pattern matching with *-default
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+bob-default = []
+sally-default = []
+audio-default = []
+feature1 = []
+feature2 = []
+enable-bob = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["*-default"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should skip all features ending with -default
+        assert!(!feature_names.contains(&"bob-default".to_string()));
+        assert!(!feature_names.contains(&"sally-default".to_string()));
+        assert!(!feature_names.contains(&"audio-default".to_string()));
+
+        // Should keep other features
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"feature1".to_string()));
+        assert!(feature_names.contains(&"feature2".to_string()));
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+    }
+
+    #[test]
+    fn test_wildcard_skip_features_prefix() {
+        // Test wildcard pattern matching with test-*
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+test-utils = []
+test-integration = []
+test-e2e = []
+feature1 = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["test-*"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should skip all features starting with test-
+        assert!(!feature_names.contains(&"test-utils".to_string()));
+        assert!(!feature_names.contains(&"test-integration".to_string()));
+        assert!(!feature_names.contains(&"test-e2e".to_string()));
+
+        // Should keep other features
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"feature1".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_wildcard_skip_features_single_char() {
+        // Test single character wildcard with ?
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+v1 = []
+v2 = []
+v3 = []
+v10 = []
+version = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["v?"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should skip v1, v2, v3 (exactly 2 chars starting with v)
+        assert!(!feature_names.contains(&"v1".to_string()));
+        assert!(!feature_names.contains(&"v2".to_string()));
+        assert!(!feature_names.contains(&"v3".to_string()));
+
+        // Should keep v10 (3 chars) and version (7 chars)
+        assert!(feature_names.contains(&"v10".to_string()));
+        assert!(feature_names.contains(&"version".to_string()));
+        assert!(feature_names.contains(&"default".to_string()));
+    }
+
+    #[test]
+    fn test_negation_skip_all_except_one() {
+        // Test negation pattern: skip all except enable-bob
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+feature1 = []
+feature2 = []
+enable-bob = []
+enable-sally = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["*", "!enable-bob"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should only keep enable-bob
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+
+        // Should skip everything else
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"feature1".to_string()));
+        assert!(!feature_names.contains(&"feature2".to_string()));
+        assert!(!feature_names.contains(&"enable-sally".to_string()));
+    }
+
+    #[test]
+    fn test_negation_skip_all_except_pattern() {
+        // Test negation with wildcard: skip all except enable-*
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+feature1 = []
+enable-bob = []
+enable-sally = []
+enable-feature = []
+disable-test = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["*", "!enable-*"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should keep all enable-* features
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"enable-feature".to_string()));
+
+        // Should skip everything else
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"feature1".to_string()));
+        assert!(!feature_names.contains(&"disable-test".to_string()));
+    }
+
+    #[test]
+    fn test_complex_combined_patterns() {
+        // Test complex combination: skip *-default and test-*, but keep test-utils
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+bob-default = []
+sally-default = []
+test-integration = []
+test-e2e = []
+test-utils = []
+feature1 = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["*-default", "test-*", "!test-utils"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path, None, None, None, false, false, None, None, None, None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should skip all *-default features
+        assert!(!feature_names.contains(&"bob-default".to_string()));
+        assert!(!feature_names.contains(&"sally-default".to_string()));
+
+        // Should skip test-* features except test-utils
+        assert!(!feature_names.contains(&"test-integration".to_string()));
+        assert!(!feature_names.contains(&"test-e2e".to_string()));
+        assert!(feature_names.contains(&"test-utils".to_string())); // Kept by negation
+
+        // Should keep other features
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"feature1".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_command_line_wildcard_override() {
+        // Test combining command line wildcards with config file patterns
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+bob-default = []
+test-utils = []
+test-e2e = []
+feature1 = []
+simd = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["*-default"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            None,
+            Some(&["test-*".to_string()]), // Command line wildcard
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should skip *-default (from config) and test-* (from command line)
+        assert!(!feature_names.contains(&"bob-default".to_string()));
+        assert!(!feature_names.contains(&"test-utils".to_string()));
+        assert!(!feature_names.contains(&"test-e2e".to_string()));
+
+        // Should keep other features
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"feature1".to_string()));
+        assert!(feature_names.contains(&"simd".to_string()));
     }
 
     #[test]
