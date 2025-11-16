@@ -124,7 +124,7 @@ pub struct PackageValidationWarning {
 pub struct ValidatorConfig {
     /// Specific features to validate (None = validate all matching features)
     pub features: Option<Vec<String>>,
-    /// Features to skip during validation (defaults to `["default"]`)
+    /// Features to skip during validation (defaults to `["default", "_*"]`)
     pub skip_features: Option<Vec<String>>,
     /// Whether to validate workspace packages only
     pub workspace_only: bool,
@@ -240,13 +240,13 @@ impl FeatureValidator {
             return Vec::new();
         };
 
-        // Build skip list: use provided skip_features, or default to ["default"]
+        // Build skip list: use provided skip_features, or default to ["default", "_*"]
         // Keep as Vec<String> for glob pattern matching
         let skip_features_vec: Vec<String> = self
             .config
             .skip_features
             .clone()
-            .unwrap_or_else(|| vec!["default".to_string()]);
+            .unwrap_or_else(|| vec!["default".to_string(), "_*".to_string()]);
 
         self.config.features.as_ref().map_or_else(
             || {
@@ -1167,13 +1167,47 @@ test-utils = []
         temp_dir
     }
 
+    /// Helper to create a test workspace with underscore features
+    fn create_test_workspace_with_underscore_features() -> TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["test_pkg"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        fs::create_dir(root_path.join("test_pkg")).unwrap();
+        fs::create_dir(root_path.join("test_pkg/src")).unwrap();
+        fs::write(root_path.join("test_pkg/src/lib.rs"), "").unwrap();
+
+        let pkg_cargo = r#"[package]
+name = "test_pkg"
+version = "0.1.0"
+
+[features]
+default = []
+fail-on-warnings = []
+"_internal" = []
+"_private" = []
+"_debug" = []
+"#;
+        fs::write(root_path.join("test_pkg/Cargo.toml"), pkg_cargo).unwrap();
+
+        temp_dir
+    }
+
     #[test]
     fn test_skip_features_default_behavior() {
-        // When skip_features is None, should default to skipping "default"
-        let temp_workspace = create_test_workspace_with_default_feature();
+        // When skip_features is None, should default to skipping "default" and "_*"
+        let temp_workspace = create_test_workspace_with_underscore_features();
         let config = ValidatorConfig {
-            features: Some(vec!["default".to_string(), "fail-on-warnings".to_string()]),
-            skip_features: None, // Should default to vec!["default"]
+            features: Some(vec![
+                "default".to_string(),
+                "fail-on-warnings".to_string(),
+                "_internal".to_string(),
+            ]),
+            skip_features: None, // Should default to vec!["default", "_*"]
             workspace_only: true,
             output_format: OutputType::Raw,
         };
@@ -1181,11 +1215,12 @@ test-utils = []
         let validator =
             FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
 
-        // Should not validate "default" feature (skipped by default)
+        // Should skip both "default" and "_internal" (underscore features)
         let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
         let features = validator.get_features_to_check("test_pkg", pkg_cargo);
 
         assert!(!features.contains(&"default".to_string()));
+        assert!(!features.contains(&"_internal".to_string()));
         assert!(features.contains(&"fail-on-warnings".to_string()));
     }
 
@@ -1256,6 +1291,36 @@ test-utils = []
         // Should only get fail-on-warnings, not default (even though both were in features list)
         assert_eq!(features.len(), 1);
         assert_eq!(features[0], "fail-on-warnings");
+    }
+
+    #[test]
+    fn test_underscore_features_skipped_by_default() {
+        // All underscore features should be skipped by default
+        let temp_workspace = create_test_workspace_with_underscore_features();
+        let config = ValidatorConfig {
+            features: Some(vec![
+                "_internal".to_string(),
+                "_private".to_string(),
+                "_debug".to_string(),
+                "fail-on-warnings".to_string(),
+            ]),
+            skip_features: None, // Uses default: ["default", "_*"]
+            workspace_only: true,
+            output_format: OutputType::Raw,
+        };
+
+        let validator =
+            FeatureValidator::new(Some(temp_workspace.path().to_path_buf()), config).unwrap();
+
+        let pkg_cargo = validator.package_cargo_values.get("test_pkg").unwrap();
+        let features = validator.get_features_to_check("test_pkg", pkg_cargo);
+
+        // All underscore features should be skipped by the "_*" pattern
+        assert!(!features.contains(&"_internal".to_string()));
+        assert!(!features.contains(&"_private".to_string()));
+        assert!(!features.contains(&"_debug".to_string()));
+        // Public feature should NOT be skipped
+        assert!(features.contains(&"fail-on-warnings".to_string()));
     }
 
     #[test]

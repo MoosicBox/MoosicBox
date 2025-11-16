@@ -51,7 +51,7 @@ inputs:
         required: false
 
     skip-features:
-        description: "Features to exclude/skip (comma-separated, supports glob patterns like 'test-*', '*-codec'). For validate-feature-propagation, defaults to 'default' if not specified. Supports negation with '!' prefix"
+        description: "Features to exclude/skip (comma-separated, supports glob patterns like 'test-*', '*-codec'). For validate-feature-propagation, defaults to 'default,_*' if not specified. Supports negation with '!' prefix"
         required: false
 
     required-features:

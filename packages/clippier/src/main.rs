@@ -234,7 +234,7 @@ enum Commands {
         /// Features to skip during validation (comma-separated, supports glob patterns)
         /// Supports wildcards (* and ?) and negation (! prefix)
         /// Examples: "default,test-*", "*-codec", "*,!fail-on-warnings"
-        /// If not specified, defaults to skipping "default" feature
+        /// If not specified, defaults to skipping "default" feature and features starting with "_"
         /// Use empty string to skip nothing: --skip-features ""
         #[arg(long, value_delimiter = ',')]
         skip_features: Option<Vec<String>>,
