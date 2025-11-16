@@ -117,18 +117,19 @@ clippier features Cargo.toml \
 
 **Pattern Syntax:**
 
-| Pattern     | Matches                           | Example                                            |
-| ----------- | --------------------------------- | -------------------------------------------------- |
-| `*`         | Zero or more characters           | `*-default` matches `bob-default`, `sally-default` |
-| `?`         | Exactly one character             | `v?` matches `v1`, `v2` but not `v10`              |
-| `!pattern`  | Negation (keep matching features) | `!enable-bob` keeps `enable-bob`                   |
-| Exact match | No wildcards                      | `default` matches only `default`                   |
+| Pattern     | Matches                            | Example                                            |
+| ----------- | ---------------------------------- | -------------------------------------------------- |
+| `*`         | Zero or more characters            | `*-default` matches `bob-default`, `sally-default` |
+| `?`         | Exactly one character              | `v?` matches `v1`, `v2` but not `v10`              |
+| `!pattern`  | Negation (excludes matching items) | `*,!enable-bob` includes all except `enable-bob`   |
+| Exact match | No wildcards                       | `default` matches only `default`                   |
 
 **Pattern Evaluation:**
 
 - Patterns are evaluated in order from left to right
-- The last matching pattern determines if a feature is skipped
-- Negation (`!`) overrides previous skip patterns for matching features
+- For `--skip-features`: The last matching pattern determines if a feature is skipped
+- For `--features`, `--packages`, `--required-features`: Negations remove items from the result set
+- Negation (`!`) works in all wildcard-supporting arguments
 
 **Configuration File Usage:**
 
@@ -140,7 +141,7 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 
 #### Wildcard Pattern Support in --features
 
-The `--features` flag also supports wildcard patterns for selecting features:
+The `--features` flag supports wildcard patterns and negation for selecting features:
 
 ```bash
 # Include all features starting with enable-
@@ -152,6 +153,12 @@ clippier features Cargo.toml --features "enable-*,test-*" --output json
 # Mix exact features with wildcards
 clippier features Cargo.toml --features "enable-*,production,default" --output json
 
+# Use negation to include all except specific features
+clippier features Cargo.toml --features "*,!test-*" --output json
+
+# Include enable-* features except enable-experimental
+clippier features Cargo.toml --features "enable-*,!enable-experimental" --output json
+
 # Combine with skip-features for powerful filtering
 clippier features Cargo.toml \
   --features "enable-*,test-*" \
@@ -159,11 +166,11 @@ clippier features Cargo.toml \
   --output json
 ```
 
-**Note:** The `--features` flag uses **inclusion** (expand matching features), while `--skip-features` uses **exclusion** (remove matching features). They can be combined for precise control.
+**Note:** The `--features` flag uses **inclusion** (expand matching features), while `--skip-features` uses **exclusion** (remove matching features). Both support negation with `!` prefix. They can be combined for precise control.
 
 #### Wildcard Pattern Support in --required-features
 
-The `--required-features` flag supports wildcard patterns for specifying required features. These patterns are **expanded to concrete feature names** in the JSON output, making them suitable for consumption by CI tools and scripts.
+The `--required-features` flag supports wildcard patterns and negation for specifying required features. These patterns are **expanded to concrete feature names** in the JSON output, making them suitable for consumption by CI tools and scripts.
 
 ```bash
 # Require all features starting with enable-
@@ -175,15 +182,18 @@ clippier features Cargo.toml --required-features "enable-*,test-*" --output json
 # Mix exact features with wildcards
 clippier features Cargo.toml --required-features "enable-*,production,default" --output json
 
+# Use negation to require enable-* except enable-experimental
+clippier features Cargo.toml --required-features "enable-*,!enable-experimental" --output json
+
 # Combine with other feature flags
 clippier features Cargo.toml \
   --features "enable-*,production" \
   --skip-features "test-*,!test-utils" \
-  --required-features "enable-*" \
+  --required-features "enable-*,!enable-experimental" \
   --output json
 ```
 
-**Important:** Unlike `--skip-features` (which removes features) and `--features` (which selects features to process), `--required-features` is **metadata** that gets included in the JSON output. Wildcards are expanded so downstream consumers receive concrete feature names, not glob patterns.
+**Important:** Unlike `--skip-features` (which removes features) and `--features` (which selects features to process), `--required-features` is **metadata** that gets included in the JSON output. Wildcards and negations are expanded so downstream consumers receive concrete feature names, not glob patterns.
 
 **Example output:**
 
@@ -607,40 +617,40 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 
 ### Features Command Options
 
-| Option                | Description                                                        | Default      |
-| --------------------- | ------------------------------------------------------------------ | ------------ |
-| `--os`                | Target operating system                                            | -            |
-| `--offset`            | Skip first N features                                              | 0            |
-| `--max`               | Maximum number of features                                         | All          |
-| `--max-parallel`      | Maximum parallel jobs                                              | -            |
-| `--chunked`           | Group features into chunks                                         | -            |
-| `--spread`            | Spread features across jobs                                        | false        |
-| `--randomize`         | Randomize features before chunking/spreading                       | false        |
-| `--seed`              | Seed for deterministic randomization                               | -            |
-| `--features`          | Features to include (supports wildcards `*`, `?`)                  | -            |
-| `--skip-features`     | Features to exclude (supports wildcards `*`, `?` and negation `!`) | -            |
-| `--required-features` | Always-required features (supports wildcards `*`, `?`)             | -            |
-| `--packages`          | Packages to process (supports wildcards `*`, `?`)                  | All packages |
-| `--changed-files`     | Filter by changed files                                            | -            |
-| `--git-base`          | Git base commit for external dep analysis                          | -            |
-| `--git-head`          | Git head commit for external dep analysis                          | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter                           | -            |
-| `--include-if`        | Include only packages matching filter                              | -            |
+| Option                | Description                                                             | Default      |
+| --------------------- | ----------------------------------------------------------------------- | ------------ |
+| `--os`                | Target operating system                                                 | -            |
+| `--offset`            | Skip first N features                                                   | 0            |
+| `--max`               | Maximum number of features                                              | All          |
+| `--max-parallel`      | Maximum parallel jobs                                                   | -            |
+| `--chunked`           | Group features into chunks                                              | -            |
+| `--spread`            | Spread features across jobs                                             | false        |
+| `--randomize`         | Randomize features before chunking/spreading                            | false        |
+| `--seed`              | Seed for deterministic randomization                                    | -            |
+| `--features`          | Features to include (supports wildcards `*`, `?` and negation `!`)      | -            |
+| `--skip-features`     | Features to exclude (supports wildcards `*`, `?` and negation `!`)      | -            |
+| `--required-features` | Always-required features (supports wildcards `*`, `?` and negation `!`) | -            |
+| `--packages`          | Packages to process (supports wildcards `*`, `?` and negation `!`)      | All packages |
+| `--changed-files`     | Filter by changed files                                                 | -            |
+| `--git-base`          | Git base commit for external dep analysis                               | -            |
+| `--git-head`          | Git head commit for external dep analysis                               | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter                                | -            |
+| `--include-if`        | Include only packages matching filter                                   | -            |
 
 ### Packages Command Options
 
-| Option                | Description                                       | Default      |
-| --------------------- | ------------------------------------------------- | ------------ |
-| `--os`                | Target operating system                           | `ubuntu`     |
-| `--packages`          | Packages to include (supports wildcards `*`, `?`) | All packages |
-| `--changed-files`     | Filter by changed files                           | -            |
-| `--git-base`          | Git base commit for change detection              | -            |
-| `--git-head`          | Git head commit for change detection              | -            |
-| `--include-reasoning` | Include reasoning for affected packages           | false        |
-| `--max-parallel`      | Maximum number of packages to return              | -            |
-| `--skip-if`           | Skip packages matching Cargo.toml filter          | -            |
-| `--include-if`        | Include only packages matching filter             | -            |
-| `--output`            | Output format: `json`, `raw`                      | `json`       |
+| Option                | Description                                                        | Default      |
+| --------------------- | ------------------------------------------------------------------ | ------------ |
+| `--os`                | Target operating system                                            | `ubuntu`     |
+| `--packages`          | Packages to include (supports wildcards `*`, `?` and negation `!`) | All packages |
+| `--changed-files`     | Filter by changed files                                            | -            |
+| `--git-base`          | Git base commit for change detection                               | -            |
+| `--git-head`          | Git head commit for change detection                               | -            |
+| `--include-reasoning` | Include reasoning for affected packages                            | false        |
+| `--max-parallel`      | Maximum number of packages to return                               | -            |
+| `--skip-if`           | Skip packages matching Cargo.toml filter                           | -            |
+| `--include-if`        | Include only packages matching filter                              | -            |
+| `--output`            | Output format: `json`, `raw`                                       | `json`       |
 
 ### Workspace Dependencies Options
 
@@ -1738,8 +1748,9 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 
 - `*` - Matches zero or more characters
 - `?` - Matches exactly one character
-- `!pattern` - Negation (keeps matching features even if other patterns match) - **only for `--skip-features`**
-- Patterns evaluated left-to-right, last match wins
+- `!pattern` - Negation (excludes matching items from the result set)
+- Supported in: `--features`, `--skip-features`, `--required-features`, `--packages`
+- Patterns evaluated left-to-right
 
 ### Feature Inclusion Patterns (`--features`)
 
@@ -1753,11 +1764,17 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 # Mix wildcards with exact names
 --features "enable-*,production,default"
 
+# Use negation to include all except specific features
+--features "*,!test-*"
+
+# Include enable-* except enable-experimental
+--features "enable-*,!enable-experimental"
+
 # Combine with skip-features for precise control
 --features "enable-*,test-*" --skip-features "test-integration"
 ```
 
-**Note:** `--features` expands wildcards to **include** matching features, while `--skip-features` **excludes** them.
+**Note:** `--features` expands wildcards to **include** matching features. Supports negation with `!` prefix to exclude specific patterns.
 
 ### Required Features Patterns (`--required-features`)
 
@@ -1770,9 +1787,12 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 
 # Mix wildcards with exact names
 --required-features "enable-*,production,default"
+
+# Use negation to require enable-* except enable-experimental
+--required-features "enable-*,!enable-experimental"
 ```
 
-**Note:** Wildcards are **expanded to concrete feature names** in the JSON output. This is metadata that gets included for downstream consumers.
+**Note:** Wildcards and negations are **expanded to concrete feature names** in the JSON output. This is metadata that gets included for downstream consumers.
 
 **Output example:**
 
@@ -1794,9 +1814,17 @@ skip-features = ["*-default", "test-*", "!test-utils"]
 # Mix wildcards with exact names
 --packages "moosicbox_server,moosicbox_*_api,core"
 
+# Use negation to include all except test packages
+--packages "*,!*_test"
+
+# Include all server packages except test servers
+--packages "*_server,!*_test_server"
+
 # Select specific API packages
 --packages "moosicbox_*_api"
 ```
+
+**Note:** `--packages` supports negation with `!` prefix to exclude specific packages from the selection.
 
 ### Property-Based Filter Syntax
 

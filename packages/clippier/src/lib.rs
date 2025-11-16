@@ -923,7 +923,9 @@ pub fn matches_pattern(item: &str, pattern: &str) -> bool {
 /// Supports:
 /// * Exact matches: Returns the pattern as-is
 /// * Wildcards: Expands to all matching items from `available_items`
-/// * Negation: Not supported here (use with skip patterns instead)
+/// * Negation: `!pattern` removes matching items (processed after additions)
+///
+/// Patterns are evaluated in order. Negations remove items from the result set.
 ///
 /// # Examples
 ///
@@ -936,27 +938,62 @@ pub fn matches_pattern(item: &str, pattern: &str) -> bool {
 /// assert!(expanded.contains(&"sally-default".to_string()));
 /// assert!(expanded.contains(&"production".to_string()));
 /// assert!(!expanded.contains(&"default".to_string()));
+///
+/// // With negation
+/// let patterns = vec!["*".to_string(), "!bob-default".to_string()];
+/// let expanded = expand_pattern_list(&patterns, &available);
+/// assert!(!expanded.contains(&"bob-default".to_string()));
+/// assert!(expanded.contains(&"default".to_string()));
 /// ```
 #[must_use]
 pub fn expand_pattern_list(patterns: &[String], available_items: &[String]) -> Vec<String> {
     let mut result = Vec::new();
+    let mut to_remove = Vec::new();
 
     for pattern in patterns {
-        if pattern.contains('*') || pattern.contains('?') {
-            // Wildcard pattern - expand to all matching items
-            for item in available_items {
-                if matches_pattern(item, pattern) && !result.contains(item) {
-                    result.push(item.clone());
+        // Check for negation prefix (!)
+        let (is_negation, pattern_str) = pattern
+            .strip_prefix('!')
+            .map_or((false, pattern.as_str()), |p| (true, p));
+
+        if is_negation {
+            // Negation - mark items to remove
+            if pattern_str.contains('*') || pattern_str.contains('?') {
+                // Wildcard negation - collect matching items to remove
+                for item in available_items {
+                    if matches_pattern(item, pattern_str) && !to_remove.contains(item) {
+                        to_remove.push(item.clone());
+                    }
+                }
+            } else {
+                // Exact negation
+                let pattern_string = pattern_str.to_string();
+                if !to_remove.contains(&pattern_string) {
+                    to_remove.push(pattern_string);
                 }
             }
         } else {
-            // Exact match - add as-is (even if it doesn't exist in available_items)
-            // This preserves the original behavior for exact matches
-            if !result.contains(pattern) {
-                result.push(pattern.clone());
+            // Regular pattern - add items
+            if pattern_str.contains('*') || pattern_str.contains('?') {
+                // Wildcard - expand to all matching items
+                for item in available_items {
+                    if matches_pattern(item, pattern_str) && !result.contains(item) {
+                        result.push(item.clone());
+                    }
+                }
+            } else {
+                // Exact match - add as-is (even if it doesn't exist in available_items)
+                // This preserves the original behavior for exact matches
+                let pattern_string = pattern_str.to_string();
+                if !result.contains(&pattern_string) {
+                    result.push(pattern_string);
+                }
             }
         }
     }
+
+    // Remove negated items
+    result.retain(|item| !to_remove.contains(item));
 
     result
 }
@@ -5418,5 +5455,277 @@ production = []
         assert!(expanded.contains(&"enable-bob".to_string()));
         assert!(expanded.contains(&"enable-sally".to_string()));
         assert!(expanded.contains(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_features_negation_all_except_one() {
+        // Test --features with negation: include all except one specific feature
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+enable-experimental = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test: --features "*,!enable-experimental"
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["*".to_string(), "!enable-experimental".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include all features except enable-experimental
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+
+        // Should NOT include enable-experimental
+        assert!(!feature_names.contains(&"enable-experimental".to_string()));
+    }
+
+    #[test]
+    fn test_features_negation_wildcard() {
+        // Test --features with wildcard negation: include all except test-*
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+production = []
+test-utils = []
+test-integration = []
+test-e2e = []
+enable-bob = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test: --features "*,!test-*"
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&["*".to_string(), "!test-*".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include non-test features
+        assert!(feature_names.contains(&"default".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+
+        // Should NOT include any test-* features
+        assert!(!feature_names.contains(&"test-utils".to_string()));
+        assert!(!feature_names.contains(&"test-integration".to_string()));
+        assert!(!feature_names.contains(&"test-e2e".to_string()));
+    }
+
+    #[test]
+    fn test_features_negation_complex() {
+        // Test complex negation: enable-* except enable-experimental
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+enable-experimental = []
+production = []
+test-utils = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test: --features "enable-*,!enable-experimental,production"
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            Some(&[
+                "enable-*".to_string(),
+                "!enable-experimental".to_string(),
+                "production".to_string(),
+            ]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include enable-bob, enable-sally, and production
+        assert!(feature_names.contains(&"enable-bob".to_string()));
+        assert!(feature_names.contains(&"enable-sally".to_string()));
+        assert!(feature_names.contains(&"production".to_string()));
+
+        // Should NOT include enable-experimental, default, or test-utils
+        assert!(!feature_names.contains(&"enable-experimental".to_string()));
+        assert!(!feature_names.contains(&"default".to_string()));
+        assert!(!feature_names.contains(&"test-utils".to_string()));
+    }
+
+    #[test]
+    fn test_required_features_negation() {
+        // Test that --required-features also supports negation
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+enable-bob = []
+enable-sally = []
+enable-experimental = []
+production = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test: --required-features "enable-*,!enable-experimental"
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            None,
+            None,
+            Some(&["enable-*".to_string(), "!enable-experimental".to_string()]),
+        )
+        .unwrap();
+
+        assert!(!result.is_empty());
+        let required_features = result[0]
+            .get("requiredFeatures")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let required_feature_names: Vec<String> = required_features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should include enable-bob and enable-sally
+        assert!(required_feature_names.contains(&"enable-bob".to_string()));
+        assert!(required_feature_names.contains(&"enable-sally".to_string()));
+
+        // Should NOT include enable-experimental
+        assert!(!required_feature_names.contains(&"enable-experimental".to_string()));
+    }
+
+    #[test]
+    fn test_expand_pattern_list_with_negation() {
+        // Test the expand_pattern_list helper with negation
+        let available = vec![
+            "default".to_string(),
+            "enable-bob".to_string(),
+            "enable-sally".to_string(),
+            "enable-experimental".to_string(),
+            "production".to_string(),
+        ];
+
+        // Test: all except one
+        let patterns = vec!["*".to_string(), "!enable-experimental".to_string()];
+        let expanded = expand_pattern_list(&patterns, &available);
+        assert_eq!(expanded.len(), 4);
+        assert!(expanded.contains(&"default".to_string()));
+        assert!(expanded.contains(&"enable-bob".to_string()));
+        assert!(expanded.contains(&"enable-sally".to_string()));
+        assert!(expanded.contains(&"production".to_string()));
+        assert!(!expanded.contains(&"enable-experimental".to_string()));
+
+        // Test: wildcard with wildcard negation
+        let patterns = vec!["enable-*".to_string(), "!enable-experimental".to_string()];
+        let expanded = expand_pattern_list(&patterns, &available);
+        assert_eq!(expanded.len(), 2);
+        assert!(expanded.contains(&"enable-bob".to_string()));
+        assert!(expanded.contains(&"enable-sally".to_string()));
+        assert!(!expanded.contains(&"enable-experimental".to_string()));
     }
 }
