@@ -51,11 +51,9 @@ struct MySimBootstrap;
 impl SimBootstrap for MySimBootstrap {
     fn on_start(&self, sim: &mut impl Sim) {
         // Setup hosts and clients
-        sim.host("my-host", || {
-            Box::pin(async {
-                // Host logic
-                Ok(())
-            })
+        sim.host("my-host", || async {
+            // Host logic
+            Ok(())
         });
     }
 }
