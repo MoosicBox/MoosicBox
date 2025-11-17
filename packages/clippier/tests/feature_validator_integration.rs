@@ -293,6 +293,7 @@ fn test_complex_workspace_validation_success() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -324,6 +325,7 @@ fn test_complex_workspace_all_features() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -359,6 +361,7 @@ fn test_workspace_with_errors() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -416,6 +419,7 @@ fn test_single_package_project() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -439,6 +443,7 @@ fn test_workspace_only_vs_all_packages() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator_workspace =
@@ -453,6 +458,7 @@ fn test_workspace_only_vs_all_packages() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator_all = FeatureValidator::new(Some(root_path), config_all).unwrap();
@@ -483,6 +489,7 @@ fn test_json_output_format() {
 
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -516,6 +523,7 @@ fn test_specific_features_validation() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -541,6 +549,7 @@ fn test_validator_with_nonexistent_feature() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -566,6 +575,7 @@ fn test_optional_dependency_handling() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -592,6 +602,7 @@ fn test_workspace_root_discovery_from_subdirectory() {
 
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     // Start validation from a subdirectory
@@ -617,6 +628,7 @@ fn test_validation_summary_with_errors() {
         workspace_only: true,
         output_format: OutputType::Raw,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -646,6 +658,7 @@ fn test_validation_summary_with_no_errors() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -683,6 +696,8 @@ fn test_validation_result_json_serialization() {
             }],
         }],
         warnings: vec![],
+        overridden_errors: vec![],
+        override_summary: None,
     };
 
     // Should serialize to valid JSON
@@ -710,6 +725,8 @@ fn test_validation_summary_pluralization() {
             errors: vec![],
         }],
         warnings: vec![],
+        overridden_errors: vec![],
+        override_summary: None,
     };
 
     assert_eq!(result_singular.errors.len(), 1);
@@ -730,6 +747,8 @@ fn test_validation_summary_pluralization() {
             },
         ],
         warnings: vec![],
+        overridden_errors: vec![],
+        override_summary: None,
     };
 
     assert_eq!(result_plural.errors.len(), 2);

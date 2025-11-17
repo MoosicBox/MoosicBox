@@ -260,6 +260,47 @@ enum Commands {
         /// When disabled (default), accepts both `dep?/feature` and `dep/feature`
         #[arg(long, default_value_t = false)]
         strict_optional: bool,
+
+        /// Allow specific missing propagations (format: "[package:]feature:dependency")
+        /// Can be specified multiple times. Package is optional and defaults to all packages.
+        /// Examples: `"fail-on-warnings:tcp"`, `"server:async:sync_dep"`
+        #[arg(long, action = clap::ArgAction::Append)]
+        allow_missing: Vec<String>,
+
+        /// Allow specific incorrect propagations (format: "[package:]feature:entry")
+        /// Can be specified multiple times
+        #[arg(long, action = clap::ArgAction::Append)]
+        allow_incorrect: Vec<String>,
+
+        /// Suppress all validation for specific packages (supports wildcards)
+        /// Can be specified multiple times
+        #[arg(long, action = clap::ArgAction::Append)]
+        ignore_package: Vec<String>,
+
+        /// Suppress validation for specific features globally (supports wildcards)
+        /// Can be specified multiple times
+        #[arg(long, action = clap::ArgAction::Append)]
+        ignore_feature: Vec<String>,
+
+        /// Load overrides from clippier.toml configuration files
+        #[arg(long, default_value_t = true)]
+        use_config_overrides: bool,
+
+        /// Load overrides from Cargo.toml metadata
+        #[arg(long, default_value_t = true)]
+        use_cargo_metadata_overrides: bool,
+
+        /// Warn about expired overrides
+        #[arg(long, default_value_t = true)]
+        warn_expired: bool,
+
+        /// Fail validation if expired overrides exist
+        #[arg(long, default_value_t = false)]
+        fail_on_expired: bool,
+
+        /// Show verbose override information
+        #[arg(long, default_value_t = false)]
+        verbose_overrides: bool,
     },
     Packages {
         #[arg(index = 1)]
@@ -471,6 +512,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
             fail_on_error,
             strict_optional,
+            allow_missing,
+            allow_incorrect,
+            ignore_package,
+            ignore_feature,
+            use_config_overrides,
+            use_cargo_metadata_overrides,
+            warn_expired,
+            fail_on_expired,
+            verbose_overrides,
         } => {
             let result = handle_validate_feature_propagation_command(
                 features,
@@ -479,6 +529,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 workspace_only,
                 output,
                 strict_optional,
+                &allow_missing,
+                &allow_incorrect,
+                &ignore_package,
+                &ignore_feature,
+                use_config_overrides,
+                use_cargo_metadata_overrides,
+                warn_expired,
+                fail_on_expired,
+                verbose_overrides,
             )?;
 
             match output {
@@ -486,7 +545,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 OutputType::Json => println!("{}", serde_json::to_string_pretty(&result)?),
             }
 
-            if fail_on_error && !result.errors.is_empty() {
+            if fail_on_error
+                && (!result.errors.is_empty()
+                    || (fail_on_expired
+                        && result
+                            .override_summary
+                            .as_ref()
+                            .is_some_and(|s| s.expired > 0)))
+            {
                 std::process::exit(1);
             }
 

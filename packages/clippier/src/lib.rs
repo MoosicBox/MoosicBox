@@ -25,10 +25,8 @@
 //! // Validate feature propagation across workspace
 //! let config = ValidatorConfig {
 //!     features: Some(vec!["fail-on-warnings".to_string()]),
-//!     skip_features: None,
-//!     workspace_only: true,
 //!     output_format: OutputType::Json,
-//!     strict_optional_propagation: false,
+//!     ..Default::default()
 //! };
 //!
 //! let validator = FeatureValidator::new(None, config)?;
@@ -91,10 +89,8 @@ pub mod git_diff;
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let config = ValidatorConfig {
 ///     features: Some(vec!["fail-on-warnings".to_string()]),
-///     skip_features: None,
-///     workspace_only: true,
 ///     output_format: OutputType::Json,
-///     strict_optional_propagation: false,
+///     ..Default::default()
 /// };
 ///
 /// let validator = FeatureValidator::new(None, config)?;
@@ -257,8 +253,8 @@ pub struct ClippierConf {
     pub ci_steps: Option<VecOrItem<Step>>,
     /// Global cargo commands
     pub cargo: Option<VecOrItem<String>>,
-    /// Platform-specific configurations
-    pub config: Vec<ClippierConfiguration>,
+    /// Platform-specific configurations (optional to allow feature-validation-only configs)
+    pub config: Option<Vec<ClippierConfiguration>>,
     /// Global environment variables
     pub env: Option<BTreeMap<String, ClippierEnv>>,
     /// Parallelization configuration
@@ -760,23 +756,25 @@ fn collect_propagated_config(
             env: conf.env.unwrap_or_default(),
         };
 
-        for config in &conf.config {
-            let os_matches = os_filter.is_none() || os_filter == Some(&config.os);
+        if let Some(configs) = &conf.config {
+            for config in configs {
+                let os_matches = os_filter.is_none() || os_filter == Some(&config.os);
 
-            if os_matches {
-                if let Some(deps) = &config.dependencies {
-                    prop.dependencies.extend(deps.clone());
-                }
-                if let Some(steps) = &config.ci_steps {
-                    match steps {
-                        VecOrItem::Value(step) => prop.ci_steps.push(step.clone()),
-                        VecOrItem::Values(steps) => prop.ci_steps.extend(steps.clone()),
+                if os_matches {
+                    if let Some(deps) = &config.dependencies {
+                        prop.dependencies.extend(deps.clone());
+                    }
+                    if let Some(steps) = &config.ci_steps {
+                        match steps {
+                            VecOrItem::Value(step) => prop.ci_steps.push(step.clone()),
+                            VecOrItem::Values(steps) => prop.ci_steps.extend(steps.clone()),
+                        }
                     }
                 }
-            }
 
-            if config.git_submodules.is_some() {
-                prop.git_submodules = prop.git_submodules.or(config.git_submodules);
+                if config.git_submodules.is_some() {
+                    prop.git_submodules = prop.git_submodules.or(config.git_submodules);
+                }
             }
         }
 
@@ -1232,23 +1230,23 @@ pub fn process_configs(
 
     log::debug!("{} conf={conf:?}", path.display());
 
-    let configs = conf.as_ref().map_or_else(
-        || {
-            vec![ClippierConfiguration {
-                os: "ubuntu".to_string(),
-                dependencies: None,
-                env: None,
-                cargo: None,
-                name: None,
-                ci_steps: None,
-                skip_features: None,
-                required_features: None,
-                nightly: None,
-                git_submodules: None,
-            }]
-        },
-        |x| x.config.clone(),
-    );
+    let default_config = vec![ClippierConfiguration {
+        os: "ubuntu".to_string(),
+        dependencies: None,
+        env: None,
+        cargo: None,
+        name: None,
+        ci_steps: None,
+        skip_features: None,
+        required_features: None,
+        nightly: None,
+        git_submodules: None,
+    }];
+
+    let configs = conf
+        .as_ref()
+        .and_then(|x| x.config.clone())
+        .unwrap_or(default_config);
 
     let mut packages = vec![];
 
@@ -4249,6 +4247,7 @@ pub fn process_workspace_configs(
 /// # Errors
 ///
 /// * If validation fails
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub fn handle_validate_feature_propagation_command(
     features: Option<Vec<String>>,
     skip_features: Option<Vec<String>>,
@@ -4256,13 +4255,82 @@ pub fn handle_validate_feature_propagation_command(
     workspace_only: bool,
     output: OutputType,
     strict_optional_propagation: bool,
+    allow_missing: &[String],
+    allow_incorrect: &[String],
+    ignore_packages: &[String],
+    ignore_features: &[String],
+    use_config_overrides: bool,
+    use_cargo_metadata_overrides: bool,
+    warn_expired: bool,
+    fail_on_expired: bool,
+    verbose_overrides: bool,
 ) -> Result<ValidationResult, Box<dyn std::error::Error>> {
+    use crate::feature_validator::{
+        OverrideOptions, OverrideSource, OverrideType, ValidationOverride,
+    };
+
+    // Parse CLI overrides for allow-missing
+    let mut cli_overrides = Vec::new();
+    for entry in allow_missing {
+        let parts: Vec<&str> = entry.split(':').collect();
+        let (package, feature, dependency) = match parts.len() {
+            2 => (None, parts[0], parts[1]),
+            3 => (Some(parts[0].to_string()), parts[1], parts[2]),
+            _ => {
+                return Err(format!("Invalid --allow-missing format: {entry}. Expected '[package:]feature:dependency'").into());
+            }
+        };
+        cli_overrides.push(ValidationOverride {
+            feature: feature.to_string(),
+            dependency: dependency.to_string(),
+            package,
+            override_type: OverrideType::AllowMissing,
+            reason: Some("CLI override".to_string()),
+            expires: None,
+            source: OverrideSource::Cli,
+        });
+    }
+
+    // Parse CLI overrides for allow-incorrect
+    for entry in allow_incorrect {
+        let parts: Vec<&str> = entry.split(':').collect();
+        let (package, feature, dependency) = match parts.len() {
+            2 => (None, parts[0], parts[1]),
+            3 => (Some(parts[0].to_string()), parts[1], parts[2]),
+            _ => {
+                return Err(format!(
+                    "Invalid --allow-incorrect format: {entry}. Expected '[package:]feature:entry'"
+                )
+                .into());
+            }
+        };
+        cli_overrides.push(ValidationOverride {
+            feature: feature.to_string(),
+            dependency: dependency.to_string(),
+            package,
+            override_type: OverrideType::AllowIncorrect,
+            reason: Some("CLI override".to_string()),
+            expires: None,
+            source: OverrideSource::Cli,
+        });
+    }
+
     let config = ValidatorConfig {
         features,
         skip_features,
         workspace_only,
         output_format: output,
         strict_optional_propagation,
+        cli_overrides,
+        override_options: OverrideOptions {
+            use_config_overrides,
+            use_cargo_metadata_overrides,
+            warn_expired,
+            fail_on_expired,
+            verbose_overrides,
+        },
+        ignore_packages: ignore_packages.to_vec(),
+        ignore_features: ignore_features.to_vec(),
     };
 
     let validator = FeatureValidator::new(path, config)?;

@@ -569,6 +569,154 @@ The validator correctly handles optional dependencies using the `?` syntax:
 - `dep?/feature` - Propagates feature only when the optional dependency is activated
 - Required for dependencies marked with `optional = true` in Cargo.toml
 
+#### Overriding Validation Errors
+
+Sometimes you need to suppress specific validation errors on a case-by-case basis. Clippier supports three methods for overriding validation failures, with clear precedence rules:
+
+**Override Precedence (Highest to Lowest):**
+
+1. CLI arguments (temporary overrides for testing)
+2. Package-level `clippier.toml` (package-specific configuration)
+3. Package-level `Cargo.toml` metadata (inline configuration)
+4. Workspace-level `clippier.toml` (workspace-wide defaults)
+
+**CLI Overrides (Quick Testing):**
+
+```bash
+# Allow a specific missing propagation
+clippier validate-feature-propagation . \
+  --features "fail-on-warnings" \
+  --allow-missing "server:fail-on-warnings:legacy_dep"
+
+# Allow missing propagation for all packages
+clippier validate-feature-propagation . \
+  --allow-missing "fail-on-warnings:legacy_dep"
+
+# Ignore specific packages entirely
+clippier validate-feature-propagation . \
+  --ignore-package "experimental_*" \
+  --ignore-package "wip_module"
+
+# Ignore specific features globally
+clippier validate-feature-propagation . \
+  --ignore-feature "unstable-*"
+```
+
+**Package-Level clippier.toml (Recommended for Persistent Overrides):**
+
+```toml
+# packages/server/clippier.toml
+[feature-validation]
+[[feature-validation.override]]
+feature = "fail-on-warnings"
+dependency = "legacy_tcp"
+type = "allow-missing"
+reason = "Legacy dependency doesn't support fail-on-warnings - tracked in #123"
+expires = "2025-12-31"
+
+[[feature-validation.override]]
+feature = "async-*"
+dependency = "sync_util"
+type = "allow-missing"
+reason = "Utility crate is intentionally synchronous"
+```
+
+**Workspace-Level clippier.toml (Workspace-Wide Policies):**
+
+```toml
+# {workspace_root}/clippier.toml
+[feature-validation]
+[[feature-validation.override]]
+feature = "*"
+dependency = "external_vendor_*"
+type = "allow-missing"
+reason = "Vendor dependencies don't follow our feature conventions"
+```
+
+**Package Cargo.toml Metadata (Inline Configuration):**
+
+```toml
+# packages/server/Cargo.toml
+[package.metadata.clippier.feature-validation]
+[[package.metadata.clippier.feature-validation.override]]
+feature = "fail-on-warnings"
+dependency = "some_dep"
+type = "allow-missing"
+reason = "Dependency issue tracked in #456"
+```
+
+**Override Types:**
+
+- `allow-missing` - Allow a specific missing propagation
+- `allow-incorrect` - Allow a specific incorrect propagation
+- `suppress` - Suppress all validation for matching cases
+
+**Wildcard Support:**
+
+Overrides support wildcard patterns for flexible matching:
+
+```toml
+[[feature-validation.override]]
+feature = "async-*"        # Matches async-io, async-runtime, etc.
+dependency = "*_sync"      # Matches util_sync, core_sync, etc.
+type = "allow-missing"
+reason = "Sync dependencies don't support async features"
+```
+
+**Expiration Dates:**
+
+Add expiration dates to temporary overrides to ensure they're revisited:
+
+```toml
+[[feature-validation.override]]
+feature = "fail-on-warnings"
+dependency = "legacy_dep"
+type = "allow-missing"
+reason = "Migration in progress"
+expires = "2025-12-31"  # RFC 3339 or YYYY-MM-DD format
+```
+
+**Output with Overrides:**
+
+When overrides are applied, the validation output includes a summary:
+
+```
+🔍 Feature Propagation Validation Results
+=========================================
+Total packages checked: 147
+Valid packages: 147
+
+📋 Override Summary:
+  Applied: 3 overrides
+    - cli: 1
+    - package-clippier-toml: 2
+
+🔕 Overridden Errors (3):
+  📦 server:fail-on-warnings:legacy_tcp
+    Reason: Legacy dependency migration in progress
+    Source: PackageClippierToml
+    Expires: 2025-12-31
+
+✅ All packages correctly propagate features (with 3 overrides)!
+```
+
+**Advanced Override Options:**
+
+```bash
+# Disable config file overrides (use CLI only)
+clippier validate-feature-propagation . \
+  --no-use-config-overrides \
+  --allow-missing "fail-on-warnings:some_dep"
+
+# Fail if any overrides have expired
+clippier validate-feature-propagation . \
+  --fail-on-expired
+
+# Show detailed override information
+clippier validate-feature-propagation . \
+  --verbose-overrides
+```
+
 ### Docker Deployment
 
 Generate production-ready Dockerfiles with comprehensive dependency analysis:

@@ -105,6 +105,7 @@ fn test_unicode_in_skip_patterns() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -132,6 +133,7 @@ fn test_conflicting_patterns() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -164,6 +166,7 @@ members = []
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -201,6 +204,7 @@ version = "0.1.0"
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -259,6 +263,7 @@ test = []
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     // Should detect circular dependency or handle gracefully
@@ -301,6 +306,7 @@ this is not valid toml
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     // Should return error, not panic
@@ -319,6 +325,7 @@ fn test_skip_features_with_whitespace() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -342,6 +349,7 @@ fn test_nonexistent_feature_in_skip_list() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -364,6 +372,7 @@ fn test_skip_all_features_with_wildcard() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -390,6 +399,7 @@ fn test_skip_features_negation_edge_case() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -437,6 +447,7 @@ fail-on-warnings = []
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator_workspace =
@@ -450,6 +461,7 @@ fail-on-warnings = []
         workspace_only: false,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator_all = FeatureValidator::new(Some(root_path.to_path_buf()), config_all).unwrap();
@@ -513,6 +525,7 @@ test-feature = ["test_util/test-feature"]
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();

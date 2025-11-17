@@ -27,10 +27,8 @@
 //! # fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = ValidatorConfig {
 //!     features: Some(vec!["fail-on-warnings".to_string()]),
-//!     skip_features: None,
-//!     workspace_only: true,
 //!     output_format: OutputType::Json,
-//!     strict_optional_propagation: false,
+//!     ..Default::default()
 //! };
 //!
 //! let validator = FeatureValidator::new(None, config)?;
@@ -50,16 +48,116 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
-use serde::Serialize;
+use chrono;
+use serde::{Deserialize, Serialize};
 use toml::Value;
 
-use crate::{OutputType, should_skip_feature};
+use crate::{OutputType, matches_pattern, should_skip_feature};
 
 /// Type aliases for complex types
 type WorkspacePackages = BTreeSet<String>;
 type PackagePaths = BTreeMap<String, String>;
 type PackageCargoValues = BTreeMap<String, Value>;
 type WorkspaceData = (WorkspacePackages, PackagePaths, PackageCargoValues);
+
+/// Source of an override (for precedence tracking)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverrideSource {
+    /// CLI arguments (highest priority)
+    Cli = 0,
+    /// Package-level clippier.toml
+    PackageClippierToml = 1,
+    /// Package-level Cargo.toml metadata
+    CargoTomlMetadata = 2,
+    /// Workspace-level clippier.toml (lowest priority)
+    WorkspaceClippierToml = 3,
+}
+
+/// Type of override to apply
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverrideType {
+    /// Allow a specific missing propagation
+    AllowMissing,
+    /// Allow a specific incorrect propagation
+    AllowIncorrect,
+    /// Suppress all validation for matching cases
+    Suppress,
+}
+
+/// A validation override with its source
+#[derive(Debug, Clone)]
+pub struct ValidationOverride {
+    /// Feature name (supports wildcards)
+    pub feature: String,
+    /// Dependency name (supports wildcards)
+    pub dependency: String,
+    /// Optional package name filter (None = applies to all packages)
+    pub package: Option<String>,
+    /// Type of override
+    pub override_type: OverrideType,
+    /// Human-readable reason for the override
+    pub reason: Option<String>,
+    /// Optional expiration date (RFC 3339 format)
+    pub expires: Option<String>,
+    /// Source of this override (for precedence)
+    pub source: OverrideSource,
+}
+
+/// Helper type to support both single string and array of strings in TOML
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum StringOrArray {
+    /// Single dependency
+    Single(String),
+    /// Multiple dependencies
+    Multiple(Vec<String>),
+}
+
+impl StringOrArray {
+    /// Convert to a vector of strings (always returns a vec for uniform processing)
+    #[must_use]
+    pub fn to_vec(&self) -> Vec<String> {
+        match self {
+            Self::Single(s) => vec![s.clone()],
+            Self::Multiple(v) => v.clone(),
+        }
+    }
+}
+
+/// Configuration entry for overrides (from TOML files)
+#[derive(Debug, Clone, Deserialize)]
+pub struct OverrideConfigEntry {
+    /// Feature name (supports wildcards)
+    pub feature: String,
+    /// Dependency name or names (supports wildcards)
+    /// Can be a single string or an array of strings
+    ///
+    /// Examples:
+    /// - Single: `dependency = "some_dep"`
+    /// - Array: `dependencies = ["dep1", "dep2", "dep3"]`
+    /// - Alias: Both `dependency` and `dependencies` are accepted
+    #[serde(alias = "dependencies")]
+    pub dependency: StringOrArray,
+    /// Type of override
+    #[serde(rename = "type")]
+    pub override_type: OverrideType,
+    /// Human-readable reason for the override
+    pub reason: String,
+    /// Optional expiration date (RFC 3339 format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+}
+
+/// Feature validation configuration section (for clippier.toml and Cargo.toml)
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct FeatureValidationConfig {
+    /// List of validation overrides
+    #[serde(default, rename = "override")]
+    pub overrides: Vec<OverrideConfigEntry>,
+}
 
 /// Validation results for feature propagation
 #[derive(Debug, Serialize)]
@@ -72,6 +170,57 @@ pub struct ValidationResult {
     pub errors: Vec<PackageValidationError>,
     /// Non-critical warnings found during validation
     pub warnings: Vec<PackageValidationWarning>,
+    /// Errors that were overridden and suppressed
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub overridden_errors: Vec<OverriddenError>,
+    /// Summary of applied overrides
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_summary: Option<OverrideSummary>,
+}
+
+/// An error that was overridden by configuration
+#[derive(Debug, Serialize)]
+pub struct OverriddenError {
+    /// Package name
+    pub package: String,
+    /// Feature name
+    pub feature: String,
+    /// Dependency name
+    pub dependency: String,
+    /// Expected propagation
+    pub expected: String,
+    /// Original error reason
+    pub original_reason: String,
+    /// Override information
+    pub override_info: OverrideInfo,
+}
+
+/// Information about an applied override
+#[derive(Debug, Serialize)]
+pub struct OverrideInfo {
+    /// Type of override
+    #[serde(rename = "type")]
+    pub override_type: OverrideType,
+    /// Reason for the override
+    pub reason: Option<String>,
+    /// Source of the override
+    pub source: OverrideSource,
+    /// Expiration date if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<String>,
+}
+
+/// Summary of overrides applied during validation
+#[derive(Debug, Serialize)]
+pub struct OverrideSummary {
+    /// Total number of overrides applied
+    pub total_applied: usize,
+    /// Breakdown by source
+    pub by_source: BTreeMap<String, usize>,
+    /// Breakdown by type
+    pub by_type: BTreeMap<String, usize>,
+    /// Number of expired overrides
+    pub expired: usize,
 }
 
 /// Validation errors for a single package
@@ -95,7 +244,7 @@ pub struct FeatureError {
 }
 
 /// A feature propagation that is missing from the package definition
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MissingPropagation {
     /// Name of the dependency that should have the feature propagated
     pub dependency: String,
@@ -106,7 +255,7 @@ pub struct MissingPropagation {
 }
 
 /// An incorrect feature propagation in the package definition
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct IncorrectPropagation {
     /// The problematic feature propagation entry
     pub entry: String,
@@ -121,6 +270,36 @@ pub struct PackageValidationWarning {
     pub package: String,
     /// Warning message
     pub message: String,
+}
+
+/// Override behavior options
+#[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct OverrideOptions {
+    /// Load overrides from clippier.toml files
+    pub use_config_overrides: bool,
+    /// Load overrides from Cargo.toml metadata
+    pub use_cargo_metadata_overrides: bool,
+    /// Warn about expired overrides
+    pub warn_expired: bool,
+    /// Fail validation if expired overrides exist
+    pub fail_on_expired: bool,
+    /// Show verbose override information
+    pub verbose_overrides: bool,
+}
+
+impl OverrideOptions {
+    /// Create override options with all features enabled
+    #[must_use]
+    pub const fn enabled() -> Self {
+        Self {
+            use_config_overrides: true,
+            use_cargo_metadata_overrides: true,
+            warn_expired: true,
+            fail_on_expired: false,
+            verbose_overrides: false,
+        }
+    }
 }
 
 /// Configuration for feature validation
@@ -138,13 +317,68 @@ pub struct ValidatorConfig {
     /// When false (lenient mode), accepts both `dep?/feature` and `dep/feature` for optional deps.
     /// When true (strict mode), only accepts `dep?/feature` for optional deps.
     pub strict_optional_propagation: bool,
+    /// CLI-provided overrides (highest priority)
+    pub cli_overrides: Vec<ValidationOverride>,
+    /// Override behavior options
+    pub override_options: OverrideOptions,
+    /// Packages to ignore entirely (supports wildcards)
+    pub ignore_packages: Vec<String>,
+    /// Features to ignore globally (supports wildcards)
+    pub ignore_features: Vec<String>,
+}
+
+impl Default for ValidatorConfig {
+    fn default() -> Self {
+        Self {
+            features: None,
+            skip_features: None,
+            workspace_only: true,
+            output_format: OutputType::Raw,
+            strict_optional_propagation: false,
+            cli_overrides: Vec::new(),
+            override_options: OverrideOptions::enabled(),
+            ignore_packages: Vec::new(),
+            ignore_features: Vec::new(),
+        }
+    }
+}
+
+impl ValidatorConfig {
+    /// Create a config with defaults suitable for testing
+    ///
+    /// Similar to `Default::default()`, but with overrides disabled for predictable test behavior.
+    #[must_use]
+    pub fn test_default() -> Self {
+        Self {
+            features: None,
+            skip_features: None,
+            workspace_only: true,
+            output_format: OutputType::Raw,
+            strict_optional_propagation: false,
+            cli_overrides: Vec::new(),
+            override_options: OverrideOptions::default(),
+            ignore_packages: Vec::new(),
+            ignore_features: Vec::new(),
+        }
+    }
 }
 
 /// Main validator struct
 pub struct FeatureValidator {
     workspace_packages: BTreeSet<String>,
     package_cargo_values: BTreeMap<String, Value>,
+    package_paths: BTreeMap<String, String>,
+    workspace_root: PathBuf,
     config: ValidatorConfig,
+}
+
+/// Statistics for tracking applied overrides
+#[derive(Debug, Default)]
+struct OverrideStats {
+    total_applied: usize,
+    by_source: BTreeMap<String, usize>,
+    by_type: BTreeMap<String, usize>,
+    expired: usize,
 }
 
 impl FeatureValidator {
@@ -156,12 +390,14 @@ impl FeatureValidator {
     /// * Returns an error if workspace data cannot be loaded (invalid TOML, missing files, etc.)
     pub fn new(path: Option<PathBuf>, config: ValidatorConfig) -> Result<Self> {
         let workspace_root = find_workspace_root(path)?;
-        let (workspace_packages, _package_paths, package_cargo_values) =
+        let (workspace_packages, package_paths, package_cargo_values) =
             load_workspace_data(&workspace_root)?;
 
         Ok(Self {
             workspace_packages,
             package_cargo_values,
+            package_paths,
+            workspace_root,
             config,
         })
     }
@@ -175,7 +411,35 @@ impl FeatureValidator {
     pub fn validate(&self) -> Result<ValidationResult> {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
+        let mut overridden_errors = Vec::new();
         let mut valid_count = 0;
+
+        // Collect all overrides from all sources
+        let all_overrides = self.collect_all_overrides();
+
+        // Track override statistics
+        let mut override_stats = OverrideStats::default();
+
+        // Check for expired overrides
+        for override_rule in &all_overrides {
+            if let Some(ref expires) = override_rule.expires
+                && Self::is_expired(expires)
+            {
+                override_stats.expired += 1;
+                if self.config.override_options.warn_expired {
+                    warnings.push(PackageValidationWarning {
+                        package: override_rule
+                            .package
+                            .as_ref()
+                            .map_or_else(|| "*".to_string(), Clone::clone),
+                        message: format!(
+                            "Override expired: {}:{} (expired {})",
+                            override_rule.feature, override_rule.dependency, expires
+                        ),
+                    });
+                }
+            }
+        }
 
         let packages_to_check: Vec<(&String, &Value)> = if self.config.workspace_only {
             self.package_cargo_values
@@ -187,9 +451,26 @@ impl FeatureValidator {
         };
 
         for (package_name, cargo_value) in packages_to_check {
-            match self.validate_package(package_name, cargo_value) {
-                Ok(Some(error)) => errors.push(error),
-                Ok(None) => valid_count += 1,
+            // Check if package should be ignored
+            if self.should_ignore_package(package_name) {
+                valid_count += 1;
+                continue;
+            }
+
+            match self.validate_package_with_overrides(
+                package_name,
+                cargo_value,
+                &all_overrides,
+                &mut override_stats,
+            ) {
+                Ok((maybe_error, package_overridden)) => {
+                    if let Some(error) = maybe_error {
+                        errors.push(error);
+                    } else {
+                        valid_count += 1;
+                    }
+                    overridden_errors.extend(package_overridden);
+                }
                 Err(e) => warnings.push(PackageValidationWarning {
                     package: package_name.clone(),
                     message: format!("Failed to validate: {e}"),
@@ -197,49 +478,93 @@ impl FeatureValidator {
             }
         }
 
+        let override_summary = if !all_overrides.is_empty() || !overridden_errors.is_empty() {
+            Some(OverrideSummary {
+                total_applied: override_stats.total_applied,
+                by_source: override_stats.by_source,
+                by_type: override_stats.by_type,
+                expired: override_stats.expired,
+            })
+        } else {
+            None
+        };
+
         Ok(ValidationResult {
             total_packages: valid_count + errors.len(),
             valid_packages: valid_count,
             errors,
             warnings,
+            overridden_errors,
+            override_summary,
         })
     }
 
-    /// Validate a single package
-    fn validate_package(
+    /// Validate a single package with override support
+    fn validate_package_with_overrides(
         &self,
         package_name: &str,
         cargo_value: &Value,
-    ) -> Result<Option<PackageValidationError>> {
+        overrides: &[ValidationOverride],
+        stats: &mut OverrideStats,
+    ) -> Result<(Option<PackageValidationError>, Vec<OverriddenError>)> {
         let features_to_check = self.get_features_to_check(package_name, cargo_value);
 
         if features_to_check.is_empty() {
-            return Ok(None);
+            return Ok((None, Vec::new()));
         }
 
         let mut feature_errors = Vec::new();
+        let mut overridden_errors = Vec::new();
 
         for feature in features_to_check {
+            // Check if feature should be ignored globally
+            if self.should_ignore_feature(&feature) {
+                continue;
+            }
+
             let (missing, incorrect) =
                 self.validate_feature(package_name, &feature, cargo_value)?;
 
-            if !missing.is_empty() || !incorrect.is_empty() {
+            // Filter missing propagations by overrides
+            let (filtered_missing, overridden_missing) = Self::filter_missing_with_overrides(
+                package_name,
+                &feature,
+                missing,
+                overrides,
+                stats,
+            );
+
+            // Filter incorrect propagations by overrides
+            let (filtered_incorrect, overridden_incorrect) = Self::filter_incorrect_with_overrides(
+                package_name,
+                &feature,
+                incorrect,
+                overrides,
+                stats,
+            );
+
+            overridden_errors.extend(overridden_missing);
+            overridden_errors.extend(overridden_incorrect);
+
+            if !filtered_missing.is_empty() || !filtered_incorrect.is_empty() {
                 feature_errors.push(FeatureError {
                     feature: feature.clone(),
-                    missing_propagations: missing,
-                    incorrect_propagations: incorrect,
+                    missing_propagations: filtered_missing,
+                    incorrect_propagations: filtered_incorrect,
                 });
             }
         }
 
-        if feature_errors.is_empty() {
-            Ok(None)
+        let error = if feature_errors.is_empty() {
+            None
         } else {
-            Ok(Some(PackageValidationError {
+            Some(PackageValidationError {
                 package: package_name.to_string(),
                 errors: feature_errors,
-            }))
-        }
+            })
+        };
+
+        Ok((error, overridden_errors))
     }
 
     /// Get features to check for a package
@@ -398,6 +723,358 @@ impl FeatureValidator {
         }
 
         Ok((missing, incorrect))
+    }
+
+    /// Collect all overrides from all sources with precedence
+    fn collect_all_overrides(&self) -> Vec<ValidationOverride> {
+        let mut overrides = Vec::new();
+
+        // 1. Load from workspace clippier.toml (LOWEST priority - base defaults)
+        if self.config.override_options.use_config_overrides
+            && let Ok(workspace_overrides) = self.load_workspace_clippier_overrides()
+        {
+            overrides.extend(workspace_overrides);
+        }
+
+        // 2. Load from package-level Cargo.toml metadata (overrides workspace)
+        if self.config.override_options.use_cargo_metadata_overrides {
+            for (package_name, cargo_value) in &self.package_cargo_values {
+                let metadata_overrides =
+                    Self::load_cargo_metadata_overrides(package_name, cargo_value);
+                overrides.extend(metadata_overrides);
+            }
+        }
+
+        // 3. Load from package-level clippier.toml (overrides Cargo.toml)
+        if self.config.override_options.use_config_overrides {
+            for package_name in &self.workspace_packages {
+                if let Ok(package_overrides) = self.load_package_clippier_overrides(package_name) {
+                    overrides.extend(package_overrides);
+                }
+            }
+        }
+
+        // 4. Load from CLI args (HIGHEST priority - overrides everything)
+        overrides.extend(self.config.cli_overrides.clone());
+
+        // Sort by source priority (CLI=0 > PackageClippier=1 > CargoToml=2 > WorkspaceClippier=3)
+        overrides.sort_by_key(|o| o.source);
+
+        overrides
+    }
+
+    /// Load overrides from workspace-level clippier.toml
+    fn load_workspace_clippier_overrides(&self) -> Result<Vec<ValidationOverride>> {
+        let config_path = self.workspace_root.join("clippier.toml");
+        if !config_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let content = fs::read_to_string(&config_path)?;
+        let value: Value = toml::from_str(&content)?;
+
+        let mut overrides = Vec::new();
+        if let Some(feature_validation) = value.get("feature-validation")
+            && let Some(config) = feature_validation
+                .get("override")
+                .and_then(|v| v.as_array())
+        {
+            for entry in config {
+                if let Ok(override_entry) = entry.clone().try_into::<OverrideConfigEntry>() {
+                    // Expand array dependencies into individual overrides
+                    for dependency in override_entry.dependency.to_vec() {
+                        overrides.push(ValidationOverride {
+                            feature: override_entry.feature.clone(),
+                            dependency,
+                            package: None,
+                            override_type: override_entry.override_type,
+                            reason: Some(override_entry.reason.clone()),
+                            expires: override_entry.expires.clone(),
+                            source: OverrideSource::WorkspaceClippierToml,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(overrides)
+    }
+
+    /// Load overrides from package-level clippier.toml
+    fn load_package_clippier_overrides(
+        &self,
+        package_name: &str,
+    ) -> Result<Vec<ValidationOverride>> {
+        let package_path = self
+            .package_paths
+            .get(package_name)
+            .ok_or_else(|| anyhow!("Package path not found for {package_name}"))?;
+
+        let config_path = self.workspace_root.join(package_path).join("clippier.toml");
+        if !config_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let content = fs::read_to_string(&config_path)?;
+        let value: Value = toml::from_str(&content)?;
+
+        let mut overrides = Vec::new();
+        if let Some(feature_validation) = value.get("feature-validation")
+            && let Some(config) = feature_validation
+                .get("override")
+                .and_then(|v| v.as_array())
+        {
+            for entry in config {
+                if let Ok(override_entry) = entry.clone().try_into::<OverrideConfigEntry>() {
+                    // Expand array dependencies into individual overrides
+                    for dependency in override_entry.dependency.to_vec() {
+                        overrides.push(ValidationOverride {
+                            feature: override_entry.feature.clone(),
+                            dependency,
+                            package: Some(package_name.to_string()),
+                            override_type: override_entry.override_type,
+                            reason: Some(override_entry.reason.clone()),
+                            expires: override_entry.expires.clone(),
+                            source: OverrideSource::PackageClippierToml,
+                        });
+                    }
+                }
+            }
+        }
+        Ok(overrides)
+    }
+
+    /// Load overrides from Cargo.toml metadata
+    fn load_cargo_metadata_overrides(
+        package_name: &str,
+        cargo_value: &Value,
+    ) -> Vec<ValidationOverride> {
+        let mut overrides = Vec::new();
+
+        if let Some(metadata) = cargo_value
+            .get("package")
+            .and_then(|p| p.get("metadata"))
+            .and_then(|m| m.get("clippier"))
+            .and_then(|c| c.get("feature-validation"))
+            && let Some(config) = metadata.get("override").and_then(|v| v.as_array())
+        {
+            for entry in config {
+                if let Ok(override_entry) = entry.clone().try_into::<OverrideConfigEntry>() {
+                    // Expand array dependencies into individual overrides
+                    for dependency in override_entry.dependency.to_vec() {
+                        overrides.push(ValidationOverride {
+                            feature: override_entry.feature.clone(),
+                            dependency,
+                            package: Some(package_name.to_string()),
+                            override_type: override_entry.override_type,
+                            reason: Some(override_entry.reason.clone()),
+                            expires: override_entry.expires.clone(),
+                            source: OverrideSource::CargoTomlMetadata,
+                        });
+                    }
+                }
+            }
+        }
+
+        overrides
+    }
+
+    /// Check if an override matches a specific validation case
+    fn matches_override(
+        override_rule: &ValidationOverride,
+        package: &str,
+        feature: &str,
+        dependency: &str,
+    ) -> bool {
+        // Check package filter (if specified)
+        if let Some(ref pkg_pattern) = override_rule.package
+            && !matches_pattern(package, pkg_pattern)
+        {
+            return false;
+        }
+
+        // Check feature and dependency patterns
+        matches_pattern(feature, &override_rule.feature)
+            && matches_pattern(dependency, &override_rule.dependency)
+    }
+
+    /// Find the applicable override for a missing propagation (if any)
+    fn find_override_for_missing<'a>(
+        package: &str,
+        feature: &str,
+        dependency: &str,
+        overrides: &'a [ValidationOverride],
+    ) -> Option<&'a ValidationOverride> {
+        // Find first matching override (already sorted by priority)
+        overrides.iter().find(|override_rule| {
+            (override_rule.override_type == OverrideType::AllowMissing
+                || override_rule.override_type == OverrideType::Suppress)
+                && Self::matches_override(override_rule, package, feature, dependency)
+        })
+    }
+
+    /// Find the applicable override for an incorrect propagation (if any)
+    fn find_override_for_incorrect<'a>(
+        package: &str,
+        feature: &str,
+        entry: &str,
+        overrides: &'a [ValidationOverride],
+    ) -> Option<&'a ValidationOverride> {
+        // Extract dependency from entry (e.g., "dep/feature" -> "dep")
+        let dependency = entry
+            .split('/')
+            .next()
+            .unwrap_or(entry)
+            .trim_end_matches('?');
+
+        // Find first matching override (already sorted by priority)
+        overrides.iter().find(|override_rule| {
+            (override_rule.override_type == OverrideType::AllowIncorrect
+                || override_rule.override_type == OverrideType::Suppress)
+                && Self::matches_override(override_rule, package, feature, dependency)
+        })
+    }
+
+    /// Check if a package should be ignored entirely
+    fn should_ignore_package(&self, package: &str) -> bool {
+        self.config
+            .ignore_packages
+            .iter()
+            .any(|pattern| matches_pattern(package, pattern))
+    }
+
+    /// Check if a feature should be ignored globally
+    fn should_ignore_feature(&self, feature: &str) -> bool {
+        self.config
+            .ignore_features
+            .iter()
+            .any(|pattern| matches_pattern(feature, pattern))
+    }
+
+    /// Filter missing propagations by overrides
+    fn filter_missing_with_overrides(
+        package: &str,
+        feature: &str,
+        missing: Vec<MissingPropagation>,
+        overrides: &[ValidationOverride],
+        stats: &mut OverrideStats,
+    ) -> (Vec<MissingPropagation>, Vec<OverriddenError>) {
+        let mut filtered = Vec::new();
+        let mut overridden = Vec::new();
+
+        for prop in missing {
+            if let Some(override_rule) =
+                Self::find_override_for_missing(package, feature, &prop.dependency, overrides)
+            {
+                // This error is overridden
+                Self::record_override_stat(override_rule, stats);
+                overridden.push(OverriddenError {
+                    package: package.to_string(),
+                    feature: feature.to_string(),
+                    dependency: prop.dependency.clone(),
+                    expected: prop.expected.clone(),
+                    original_reason: prop.reason.clone(),
+                    override_info: OverrideInfo {
+                        override_type: override_rule.override_type,
+                        reason: override_rule.reason.clone(),
+                        source: override_rule.source,
+                        expires: override_rule.expires.clone(),
+                    },
+                });
+            } else {
+                // Keep this error
+                filtered.push(prop);
+            }
+        }
+
+        (filtered, overridden)
+    }
+
+    /// Filter incorrect propagations by overrides
+    fn filter_incorrect_with_overrides(
+        package: &str,
+        feature: &str,
+        incorrect: Vec<IncorrectPropagation>,
+        overrides: &[ValidationOverride],
+        stats: &mut OverrideStats,
+    ) -> (Vec<IncorrectPropagation>, Vec<OverriddenError>) {
+        let mut filtered = Vec::new();
+        let mut overridden = Vec::new();
+
+        for prop in incorrect {
+            if let Some(override_rule) =
+                Self::find_override_for_incorrect(package, feature, &prop.entry, overrides)
+            {
+                // This error is overridden
+                Self::record_override_stat(override_rule, stats);
+                let dependency = prop
+                    .entry
+                    .split('/')
+                    .next()
+                    .unwrap_or(&prop.entry)
+                    .trim_end_matches('?')
+                    .to_string();
+                overridden.push(OverriddenError {
+                    package: package.to_string(),
+                    feature: feature.to_string(),
+                    dependency,
+                    expected: prop.entry.clone(),
+                    original_reason: prop.reason.clone(),
+                    override_info: OverrideInfo {
+                        override_type: override_rule.override_type,
+                        reason: override_rule.reason.clone(),
+                        source: override_rule.source,
+                        expires: override_rule.expires.clone(),
+                    },
+                });
+            } else {
+                // Keep this error
+                filtered.push(prop);
+            }
+        }
+
+        (filtered, overridden)
+    }
+
+    /// Record statistics for an applied override
+    fn record_override_stat(override_rule: &ValidationOverride, stats: &mut OverrideStats) {
+        stats.total_applied += 1;
+
+        let source_key = match override_rule.source {
+            OverrideSource::Cli => "cli",
+            OverrideSource::PackageClippierToml => "package-clippier-toml",
+            OverrideSource::CargoTomlMetadata => "cargo-toml-metadata",
+            OverrideSource::WorkspaceClippierToml => "workspace-clippier-toml",
+        };
+        *stats.by_source.entry(source_key.to_string()).or_insert(0) += 1;
+
+        let type_key = match override_rule.override_type {
+            OverrideType::AllowMissing => "allow-missing",
+            OverrideType::AllowIncorrect => "allow-incorrect",
+            OverrideType::Suppress => "suppress",
+        };
+        *stats.by_type.entry(type_key.to_string()).or_insert(0) += 1;
+    }
+
+    /// Check if an expiration date has passed
+    fn is_expired(expires: &str) -> bool {
+        // Try to parse as RFC 3339 date
+        if let Ok(expiry_date) = chrono::DateTime::parse_from_rfc3339(expires) {
+            return chrono::Utc::now() > expiry_date;
+        }
+
+        // Try to parse as simple date (YYYY-MM-DD)
+        if let Ok(naive_date) = chrono::NaiveDate::parse_from_str(expires, "%Y-%m-%d") {
+            let expiry_datetime = naive_date
+                .and_hms_opt(23, 59, 59)
+                .unwrap()
+                .and_local_timezone(chrono::Utc)
+                .unwrap();
+            return chrono::Utc::now() > expiry_datetime;
+        }
+
+        // If we can't parse, assume not expired
+        false
     }
 
     /// Get expected propagations for a feature
@@ -587,6 +1264,20 @@ pub fn print_human_output(result: &ValidationResult) {
     println!("Total packages checked: {}", result.total_packages);
     println!("Valid packages: {}", result.valid_packages);
 
+    // Print override summary if present
+    if let Some(ref summary) = result.override_summary {
+        println!("\n📋 Override Summary:");
+        println!("  Applied: {} overrides", summary.total_applied);
+        if !summary.by_source.is_empty() {
+            for (source, count) in &summary.by_source {
+                println!("    - {source}: {count}");
+            }
+        }
+        if summary.expired > 0 {
+            println!("  ⚠️  Expired: {} overrides", summary.expired);
+        }
+    }
+
     if !result.warnings.is_empty() {
         println!("\n⚠️  Warnings:");
         for warning in &result.warnings {
@@ -594,8 +1285,34 @@ pub fn print_human_output(result: &ValidationResult) {
         }
     }
 
+    // Print overridden errors if present
+    if !result.overridden_errors.is_empty() {
+        println!(
+            "\n🔕 Overridden Errors ({}):",
+            result.overridden_errors.len()
+        );
+        for overridden in &result.overridden_errors {
+            println!(
+                "  📦 {}:{}:{}",
+                overridden.package, overridden.feature, overridden.dependency
+            );
+            if let Some(ref reason) = overridden.override_info.reason {
+                println!("    Reason: {reason}");
+            }
+            println!("    Source: {:?}", overridden.override_info.source);
+            if let Some(ref expires) = overridden.override_info.expires {
+                println!("    Expires: {expires}");
+            }
+        }
+    }
+
     if result.errors.is_empty() {
-        println!("\n✅ All packages correctly propagate features!");
+        let override_msg = if result.overridden_errors.is_empty() {
+            String::new()
+        } else {
+            format!(" (with {} overrides)", result.overridden_errors.len())
+        };
+        println!("\n✅ All packages correctly propagate features{override_msg}!");
     } else {
         println!(
             "\n❌ Found {} packages with incorrect feature propagation:",
@@ -910,7 +1627,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -928,7 +1645,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -949,7 +1666,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: false, // Include external deps to catch the error
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -988,7 +1705,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1011,7 +1728,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1034,7 +1751,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1062,7 +1779,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1086,7 +1803,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1134,6 +1851,8 @@ dev_dep = "1.0"
                 package: "warn_pkg".to_string(),
                 message: "Test warning".to_string(),
             }],
+            overridden_errors: vec![],
+            override_summary: None,
         };
 
         // Should be able to serialize to JSON
@@ -1241,7 +1960,7 @@ fail-on-warnings = []
             skip_features: None, // Should default to vec!["default", "_*"]
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator =
@@ -1265,7 +1984,7 @@ fail-on-warnings = []
             skip_features: Some(vec![]),
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator =
@@ -1291,7 +2010,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["default".to_string(), "test-utils".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator =
@@ -1314,7 +2033,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["default".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator =
@@ -1342,7 +2061,7 @@ fail-on-warnings = []
             skip_features: None, // Uses default: ["default", "_*"]
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator =
@@ -1396,7 +2115,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["test-*".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
-            strict_optional_propagation: false,
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -1459,6 +2178,7 @@ test-feature = ["pkg_b/test-feature"]
             workspace_only: true, // Workspace only
             output_format: OutputType::Raw,
             strict_optional_propagation: false, // Lenient mode
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -1520,6 +2240,7 @@ test-feature = ["pkg_b/test-feature"]
             workspace_only: true, // Workspace only
             output_format: OutputType::Raw,
             strict_optional_propagation: true, // Strict mode
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -1582,6 +2303,7 @@ test-feature = ["dep:pkg_b", "pkg_b?/test-feature"]
             workspace_only: true, // Workspace only
             output_format: OutputType::Raw,
             strict_optional_propagation: true, // Strict mode
+            ..ValidatorConfig::test_default()
         };
 
         let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -1593,5 +2315,136 @@ test-feature = ["dep:pkg_b", "pkg_b?/test-feature"]
             0,
             "Strict mode should accept dep?/feature syntax"
         );
+    }
+
+    #[test]
+    fn test_string_or_array_to_vec_single() {
+        let single = StringOrArray::Single("test".to_string());
+        assert_eq!(single.to_vec(), vec!["test".to_string()]);
+    }
+
+    #[test]
+    fn test_string_or_array_to_vec_multiple() {
+        let multiple = StringOrArray::Multiple(vec![
+            "dep1".to_string(),
+            "dep2".to_string(),
+            "dep3".to_string(),
+        ]);
+        assert_eq!(
+            multiple.to_vec(),
+            vec!["dep1".to_string(), "dep2".to_string(), "dep3".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_string_or_array_to_vec_empty() {
+        let empty = StringOrArray::Multiple(vec![]);
+        assert_eq!(empty.to_vec(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_override_config_entry_single_dependency() {
+        let toml_str = r#"
+feature = "test-feature"
+dependency = "single_dep"
+type = "allow-missing"
+reason = "Test reason"
+"#;
+        let parsed: OverrideConfigEntry = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(parsed.feature, "test-feature");
+        assert_eq!(parsed.dependency.to_vec(), vec!["single_dep".to_string()]);
+        assert!(matches!(parsed.override_type, OverrideType::AllowMissing));
+        assert_eq!(parsed.reason, "Test reason");
+        assert!(parsed.expires.is_none());
+    }
+
+    #[test]
+    fn test_override_config_entry_array_dependencies() {
+        let toml_str = r#"
+feature = "test-feature"
+dependencies = ["dep1", "dep2", "dep3"]
+type = "allow-missing"
+reason = "Test reason for multiple deps"
+"#;
+        let parsed: OverrideConfigEntry = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(parsed.feature, "test-feature");
+        assert_eq!(
+            parsed.dependency.to_vec(),
+            vec!["dep1".to_string(), "dep2".to_string(), "dep3".to_string()]
+        );
+        assert!(matches!(parsed.override_type, OverrideType::AllowMissing));
+        assert_eq!(parsed.reason, "Test reason for multiple deps");
+    }
+
+    #[test]
+    fn test_override_config_entry_alias_support() {
+        // Test that both 'dependency' and 'dependencies' work
+        let toml_single = r#"
+feature = "feat"
+dependency = "dep"
+type = "allow-missing"
+reason = "reason"
+"#;
+        let parsed_single: OverrideConfigEntry = toml::from_str(toml_single).unwrap();
+        assert_eq!(parsed_single.dependency.to_vec(), vec!["dep".to_string()]);
+
+        let toml_plural = r#"
+feature = "feat"
+dependencies = ["dep"]
+type = "allow-missing"
+reason = "reason"
+"#;
+        let parsed_plural: OverrideConfigEntry = toml::from_str(toml_plural).unwrap();
+        assert_eq!(parsed_plural.dependency.to_vec(), vec!["dep".to_string()]);
+    }
+
+    #[test]
+    fn test_override_config_entry_with_expiration() {
+        let toml_str = r#"
+feature = "test-feature"
+dependency = "dep"
+type = "allow-incorrect"
+reason = "Temporary override"
+expires = "2025-12-31T23:59:59Z"
+"#;
+        let parsed: OverrideConfigEntry = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(parsed.feature, "test-feature");
+        assert!(matches!(parsed.override_type, OverrideType::AllowIncorrect));
+        assert_eq!(parsed.expires, Some("2025-12-31T23:59:59Z".to_string()));
+    }
+
+    #[test]
+    fn test_override_config_entry_suppress_type() {
+        let toml_str = r#"
+feature = "*"
+dependencies = ["dep1", "dep2"]
+type = "suppress"
+reason = "Suppress all validation"
+"#;
+        let parsed: OverrideConfigEntry = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(parsed.feature, "*");
+        assert_eq!(parsed.dependency.to_vec().len(), 2);
+        assert!(matches!(parsed.override_type, OverrideType::Suppress));
+    }
+
+    #[test]
+    fn test_override_config_entry_wildcards_in_array() {
+        let toml_str = r#"
+feature = "profiling-*"
+dependencies = ["dep_*", "other_dep"]
+type = "allow-missing"
+reason = "Wildcard pattern test"
+"#;
+        let parsed: OverrideConfigEntry = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(parsed.feature, "profiling-*");
+        let deps = parsed.dependency.to_vec();
+        assert_eq!(deps.len(), 2);
+        assert_eq!(deps[0], "dep_*");
+        assert_eq!(deps[1], "other_dep");
     }
 }

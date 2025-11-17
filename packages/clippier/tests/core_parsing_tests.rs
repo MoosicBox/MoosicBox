@@ -680,7 +680,7 @@ fn test_clippier_configuration_git_submodules_deserialization() {
     "#;
 
     let conf: clippier::ClippierConf = toml::from_str(toml_str).unwrap();
-    assert_eq!(conf.config[0].git_submodules, Some(true));
+    assert_eq!(conf.config.as_ref().unwrap()[0].git_submodules, Some(true));
 }
 
 #[test]
@@ -692,7 +692,7 @@ fn test_git_submodules_optional_field() {
 
     let conf: clippier::ClippierConf = toml::from_str(toml_str).unwrap();
     assert_eq!(conf.git_submodules, None);
-    assert_eq!(conf.config[0].git_submodules, None);
+    assert_eq!(conf.config.as_ref().unwrap()[0].git_submodules, None);
 }
 
 #[test]

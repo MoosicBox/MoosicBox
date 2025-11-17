@@ -75,6 +75,7 @@ fn test_cli_skip_features_default_behavior() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -102,6 +103,7 @@ fn test_cli_skip_features_empty_string() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -125,6 +127,7 @@ fn test_cli_skip_features_wildcard_pattern() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -150,6 +153,7 @@ fn test_cli_skip_features_multiple_patterns() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -181,6 +185,7 @@ fn test_cli_skip_features_with_negation() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -215,6 +220,7 @@ fn test_cli_skip_features_specific_list() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -251,6 +257,7 @@ fn test_cli_skip_features_combined_with_explicit_features() {
         workspace_only: true,
         output_format: OutputType::Json,
         strict_optional_propagation: false,
+        ..ValidatorConfig::test_default()
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();

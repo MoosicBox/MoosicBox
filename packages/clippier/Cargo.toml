@@ -29,6 +29,7 @@ moosicbox_logging = { workspace = true, features = ["free_log"] }
 switchy_random    = { workspace = true, features = ["rand"] }
 
 anyhow     = { workspace = true }
+chrono     = { workspace = true }
 clap       = { workspace = true }
 globset    = { workspace = true }
 itertools  = { workspace = true }
