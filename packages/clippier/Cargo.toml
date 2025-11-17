@@ -17,7 +17,7 @@ examples = true
 independent = true
 
 [package.metadata.cargo-machete]
-ignored-dirs = ["test-resources"]
+ignored-dirs = ["test-resources", "tests/transforms/fixtures"]
 
 [[bin]]
 name              = "clippier"
@@ -77,3 +77,7 @@ required-features = ["git-diff", "test-utils"]
 [[test]]
 name              = "feature_validator_integration"
 required-features = ["test-utils"]
+
+[[test]]
+name              = "transforms_tests"
+required-features = ["transforms"]

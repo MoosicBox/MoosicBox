@@ -288,12 +288,22 @@ fn get_workspace_members(
     {
         for pattern in member_patterns {
             if let Some(pattern_str) = pattern.as_str() {
-                // Simple glob expansion - handle */foo pattern
+                // Simple glob expansion - handle patterns like "packages/*"
                 if pattern_str.contains('*') {
                     let parts: Vec<_> = pattern_str.split('/').collect();
-                    if parts[0] == "*" || parts[0] == "**" {
-                        // Scan directories
-                        if let Ok(entries) = std::fs::read_dir(workspace_root) {
+
+                    // Handle patterns like "packages/*" or "*"
+                    if parts.last() == Some(&"*") || parts.last() == Some(&"**") {
+                        let base_path = if parts.len() > 1 {
+                            workspace_root.join(parts[..parts.len() - 1].join("/"))
+                        } else {
+                            workspace_root.to_path_buf()
+                        };
+
+                        // Scan directories in the base path
+                        if base_path.exists()
+                            && let Ok(entries) = std::fs::read_dir(&base_path)
+                        {
                             for entry in entries.flatten() {
                                 if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
                                     let member_path = entry.path();

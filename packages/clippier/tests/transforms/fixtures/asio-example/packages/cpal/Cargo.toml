@@ -1,0 +1,8 @@
+[package]
+edition.workspace = true
+name              = "cpal"
+version           = "0.1.0"
+
+[features]
+asio    = [] # This feature requires ASIO SDK on Windows - not available on CI!
+default = []

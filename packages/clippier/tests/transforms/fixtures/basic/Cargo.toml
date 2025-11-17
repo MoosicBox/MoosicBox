@@ -1,0 +1,11 @@
+[workspace]
+members  = ["packages/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = "1.0"
+tokio = "1.0"

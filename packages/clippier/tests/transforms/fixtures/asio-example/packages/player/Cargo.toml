@@ -1,0 +1,11 @@
+[package]
+edition.workspace = true
+name              = "player"
+version           = "0.1.0"
+
+[dependencies]
+audio_output = { path = "../audio_output" }
+
+[features]
+asio    = ["audio_output/asio"] # Transitively enables cpal/asio
+default = []

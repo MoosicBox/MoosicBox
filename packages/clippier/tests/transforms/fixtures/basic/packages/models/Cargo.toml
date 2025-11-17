@@ -1,0 +1,11 @@
+[package]
+edition.workspace = true
+name              = "models"
+version           = "0.1.0"
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+[features]
+default       = []
+serialization = ["dep:serde"]

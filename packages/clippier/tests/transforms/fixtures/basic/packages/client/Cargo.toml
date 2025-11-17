@@ -1,0 +1,12 @@
+[package]
+edition.workspace = true
+name              = "client"
+version           = "0.1.0"
+
+[dependencies]
+api   = { path = "../api" }
+tokio = { workspace = true }
+
+[features]
+default = []
+full    = ["api/json"]

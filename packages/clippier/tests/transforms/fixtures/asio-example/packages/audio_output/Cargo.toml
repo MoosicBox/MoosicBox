@@ -1,0 +1,13 @@
+[package]
+edition.workspace = true
+name              = "audio_output"
+version           = "0.1.0"
+
+[dependencies]
+# Note: In real code this would be: cpal = { version = "0.15", optional = true }
+# For testing, we simulate it as a local dep
+cpal = { path = "../cpal", optional = true }
+
+[features]
+asio    = ["cpal/asio", "dep:cpal"] # Requires ASIO SDK on Windows!
+default = []

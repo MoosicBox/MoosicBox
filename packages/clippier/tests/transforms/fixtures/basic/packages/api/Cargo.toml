@@ -1,0 +1,14 @@
+[package]
+edition.workspace = true
+name              = "api"
+version           = "0.1.0"
+
+[dependencies]
+models = { path = "../models" }
+serde  = { workspace = true }
+tokio  = { workspace = true, features = ["rt"] }
+
+[features]
+async   = ["tokio/macros"]
+default = []
+json    = ["serde/derive"]

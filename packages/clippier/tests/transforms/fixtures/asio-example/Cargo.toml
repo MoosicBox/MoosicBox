@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "packages/audio_output",
+    "packages/cpal",
+    "packages/player",
+    "packages/server",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+cpal = "0.15"

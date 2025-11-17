@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+name              = "server"
+version           = "0.1.0"
+
+[dependencies]
+player = { path = "../player", optional = true }
+
+[features]
+audio = ["player"]
+default = []
+full = [
+    "audio",
+    "player/asio",
+] # This transitively enables audio_output/asio -> cpal/asio!
