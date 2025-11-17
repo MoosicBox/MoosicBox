@@ -277,8 +277,9 @@ async fn browse_artist_content() -> Result<(), Box<dyn std::error::Error>> {
     println!("Studio Albums:");
     for album in albums_result.page.items() {
         println!("  {} ({})", album.title,
-                 album.date_released.map(|d| d.format("%Y").to_string())
-                      .unwrap_or_default());
+                 album.release_date.as_ref()
+                      .and_then(|d| d.split('-').next())
+                      .unwrap_or(""));
     }
 
     // Get EPs and singles
