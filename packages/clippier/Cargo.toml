@@ -50,16 +50,18 @@ insta                   = { workspace = true, features = ["redactions", "yaml"] 
 test-log                = { workspace = true }
 
 [features]
-default = ["git-diff", "transforms"]
+default = ["git-diff", "transforms-vendored"]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
     "switchy_random/fail-on-warnings",
 ]
 
-git-diff   = ["dep:git2"]
-test-utils = []
-transforms = ["dep:mlua"]
+_transforms         = []
+git-diff            = ["dep:git2"]
+test-utils          = []
+transforms-system   = ["_transforms", "dep:mlua"]
+transforms-vendored = ["_transforms", "mlua/vendored"]
 
 # Automatically enable test-utils when running tests
 [[test]]
@@ -80,4 +82,4 @@ required-features = ["test-utils"]
 
 [[test]]
 name              = "transforms_tests"
-required-features = ["transforms"]
+required-features = ["_transforms"]

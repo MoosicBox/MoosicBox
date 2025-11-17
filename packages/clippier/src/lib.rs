@@ -55,7 +55,7 @@
 /// and Unicode support.
 pub mod package_filter;
 
-#[cfg(feature = "transforms")]
+#[cfg(feature = "_transforms")]
 pub mod transforms;
 
 use std::{

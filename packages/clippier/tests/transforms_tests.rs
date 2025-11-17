@@ -1,4 +1,4 @@
-#![cfg(feature = "transforms")]
+#![cfg(feature = "_transforms")]
 
 use clippier::transforms::{TransformContext, TransformEngine};
 use serde_json::json;
@@ -392,7 +392,7 @@ fn test_lua_helper_table_contains() {
             local packages = context:get_all_packages()
             local has_api = table.contains(packages, 'api')
             local has_missing = table.contains(packages, 'missing')
-            
+
             matrix[1].has_api = has_api
             matrix[1].has_missing = has_missing
             return matrix
@@ -422,7 +422,7 @@ fn test_lua_helper_table_find() {
             local found = table.find(matrix, function(entry)
                 return entry.value == 2
             end)
-            
+
             return {found}
         end
     ";
