@@ -28,7 +28,7 @@ PORT=3134 cargo run -- serve
 
 Then open your browser to: **http://localhost:3134**
 
-> **Note**: The default port is 8080. Set the `PORT` environment variable to use a different port.
+> **Note**: The default port is 8343. Set the `PORT` environment variable to use a different port.
 
 ### Production (expects external JS hosting):
 
