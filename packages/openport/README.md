@@ -199,6 +199,7 @@ pub type PortReservation = reservation::PortReservation<Range<Port>>;
 /// Trait for port range types (Range<u16> and RangeInclusive<u16>)
 pub trait PortRange {
     fn into_iter(self) -> impl Iterator<Item = u16>;
+    fn iter(&self) -> impl Iterator<Item = u16>;
 }
 ```
 
