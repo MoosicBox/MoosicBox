@@ -104,6 +104,7 @@ fn test_unicode_in_skip_patterns() {
         skip_features: Some(vec!["test-*".to_string()]), // Should skip both unicode test features
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -130,6 +131,7 @@ fn test_conflicting_patterns() {
         ]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -161,6 +163,7 @@ members = []
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -197,6 +200,7 @@ version = "0.1.0"
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -254,6 +258,7 @@ test = []
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     // Should detect circular dependency or handle gracefully
@@ -295,6 +300,7 @@ this is not valid toml
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     // Should return error, not panic
@@ -312,6 +318,7 @@ fn test_skip_features_with_whitespace() {
         skip_features: Some(vec![" default ".to_string(), "test-*  ".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -334,6 +341,7 @@ fn test_nonexistent_feature_in_skip_list() {
         ]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -355,6 +363,7 @@ fn test_skip_all_features_with_wildcard() {
         skip_features: Some(vec!["*".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -380,6 +389,7 @@ fn test_skip_features_negation_edge_case() {
         skip_features: Some(vec!["!fail-on-warnings".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -426,6 +436,7 @@ fail-on-warnings = []
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator_workspace =
@@ -438,6 +449,7 @@ fail-on-warnings = []
         skip_features: None,
         workspace_only: false,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator_all = FeatureValidator::new(Some(root_path.to_path_buf()), config_all).unwrap();
@@ -500,6 +512,7 @@ test-feature = ["test_util/test-feature"]
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();

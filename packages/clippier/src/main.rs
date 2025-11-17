@@ -254,6 +254,12 @@ enum Commands {
         /// Exit with error code if validation fails (for CI)
         #[arg(long, default_value_t = true)]
         fail_on_error: bool,
+
+        /// Require strict optional dependency propagation syntax
+        /// When enabled, optional dependencies MUST use `dep?/feature` syntax
+        /// When disabled (default), accepts both `dep?/feature` and `dep/feature`
+        #[arg(long, default_value_t = false)]
+        strict_optional: bool,
     },
     Packages {
         #[arg(index = 1)]
@@ -464,6 +470,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             workspace_only,
             output,
             fail_on_error,
+            strict_optional,
         } => {
             let result = handle_validate_feature_propagation_command(
                 features,
@@ -471,6 +478,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 path,
                 workspace_only,
                 output,
+                strict_optional,
             )?;
 
             match output {

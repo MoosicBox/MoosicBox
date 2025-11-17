@@ -367,6 +367,7 @@ build_clippier_command() {
         [[ -n "$INPUT_WORKSPACE_PATH" ]] && cmd="$cmd --path $INPUT_WORKSPACE_PATH"
         [[ -n "$INPUT_FEATURES" ]] && cmd="$cmd --features $INPUT_FEATURES"
         [[ -n "$INPUT_SKIP_FEATURES" ]] && cmd="$cmd --skip-features $INPUT_SKIP_FEATURES"
+        [[ "$INPUT_STRICT_OPTIONAL" == "true" ]] && cmd="$cmd --strict-optional"
         cmd="$cmd --output json"
     else
         echo "Error: Unknown command '$INPUT_COMMAND'"

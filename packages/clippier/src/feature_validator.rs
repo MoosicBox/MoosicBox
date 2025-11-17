@@ -30,6 +30,7 @@
 //!     skip_features: None,
 //!     workspace_only: true,
 //!     output_format: OutputType::Json,
+//!     strict_optional_propagation: false,
 //! };
 //!
 //! let validator = FeatureValidator::new(None, config)?;
@@ -41,6 +42,8 @@
 //! # Ok(())
 //! # }
 //! ```
+
+#![allow(clippy::similar_names)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -130,6 +133,11 @@ pub struct ValidatorConfig {
     pub workspace_only: bool,
     /// Output format
     pub output_format: OutputType,
+    /// Require strict `?` syntax for optional dependencies (default: false)
+    ///
+    /// When false (lenient mode), accepts both `dep?/feature` and `dep/feature` for optional deps.
+    /// When true (strict mode), only accepts `dep?/feature` for optional deps.
+    pub strict_optional_propagation: bool,
 }
 
 /// Main validator struct
@@ -330,7 +338,20 @@ impl FeatureValidator {
 
         // Find missing propagations
         for (dep_name, expected_entry) in &expected {
-            if !actual.contains(expected_entry) {
+            let is_propagated = if self.config.strict_optional_propagation {
+                // Strict mode: require exact match (dep?/feature for optional deps)
+                actual.contains(expected_entry)
+            } else {
+                // Lenient mode: accept both dep?/feature and dep/feature for optional deps
+                if expected_entry.contains('?') {
+                    let without_question = expected_entry.replace("?/", "/");
+                    actual.contains(expected_entry) || actual.contains(&without_question)
+                } else {
+                    actual.contains(expected_entry)
+                }
+            };
+
+            if !is_propagated {
                 missing.push(MissingPropagation {
                     dependency: dep_name.clone(),
                     expected: expected_entry.clone(),
@@ -889,6 +910,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -906,6 +928,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -926,6 +949,7 @@ dev_dep = "1.0"
             skip_features: None,
             workspace_only: false, // Include external deps to catch the error
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -964,6 +988,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -986,6 +1011,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1008,6 +1034,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1035,6 +1062,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1058,6 +1086,7 @@ dev_dep = "1.0"
             workspace_only: true,
 
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -1212,6 +1241,7 @@ fail-on-warnings = []
             skip_features: None, // Should default to vec!["default", "_*"]
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator =
@@ -1235,6 +1265,7 @@ fail-on-warnings = []
             skip_features: Some(vec![]),
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator =
@@ -1260,6 +1291,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["default".to_string(), "test-utils".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator =
@@ -1282,6 +1314,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["default".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator =
@@ -1309,6 +1342,7 @@ fail-on-warnings = []
             skip_features: None, // Uses default: ["default", "_*"]
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator =
@@ -1362,6 +1396,7 @@ fail-on-warnings = []
             skip_features: Some(vec!["test-*".to_string()]),
             workspace_only: true,
             output_format: OutputType::Raw,
+            strict_optional_propagation: false,
         };
 
         let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
@@ -1374,5 +1409,189 @@ fail-on-warnings = []
         assert!(!features.contains(&"test-fixtures".to_string()));
         assert!(features.contains(&"default".to_string()));
         assert!(features.contains(&"fail-on-warnings".to_string()));
+    }
+
+    #[test]
+    fn test_lenient_optional_propagation_accepts_both_styles() {
+        // Lenient mode (default) should accept both dep?/feature and dep/feature for optional deps
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["pkg_a", "pkg_b"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create pkg_b (dependency)
+        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
+        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        let pkg_b_cargo = r#"[package]
+name = "pkg_b"
+version = "0.1.0"
+
+[features]
+test-feature = []
+"#;
+        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+
+        // Create pkg_a (depends on pkg_b)
+        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
+        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+
+        // Package with optional dependency using dep/feature syntax (without ?)
+        let pkg_a_cargo = r#"[package]
+name = "pkg_a"
+version = "0.1.0"
+
+[dependencies]
+pkg_b = { path = "../pkg_b", optional = true }
+
+[features]
+test-feature = ["pkg_b/test-feature"]
+"#;
+        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            features: Some(vec!["test-feature".to_string()]),
+            skip_features: None,
+            workspace_only: true, // Workspace only
+            output_format: OutputType::Raw,
+            strict_optional_propagation: false, // Lenient mode
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // In lenient mode, dep/feature should be accepted for optional deps
+        assert_eq!(
+            result.errors.len(),
+            0,
+            "Lenient mode should accept dep/feature syntax"
+        );
+    }
+
+    #[test]
+    fn test_strict_optional_propagation_requires_question_mark() {
+        // Strict mode should only accept dep?/feature for optional deps
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["pkg_a", "pkg_b"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create pkg_b (dependency)
+        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
+        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        let pkg_b_cargo = r#"[package]
+name = "pkg_b"
+version = "0.1.0"
+
+[features]
+test-feature = []
+"#;
+        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+
+        // Create pkg_a (depends on pkg_b)
+        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
+        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+
+        // Package with optional dependency using dep/feature syntax (without ?)
+        let pkg_a_cargo = r#"[package]
+name = "pkg_a"
+version = "0.1.0"
+
+[dependencies]
+pkg_b = { path = "../pkg_b", optional = true }
+
+[features]
+test-feature = ["pkg_b/test-feature"]
+"#;
+        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            features: Some(vec!["test-feature".to_string()]),
+            skip_features: None,
+            workspace_only: true, // Workspace only
+            output_format: OutputType::Raw,
+            strict_optional_propagation: true, // Strict mode
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // In strict mode, dep/feature should NOT be accepted for optional deps
+        assert!(
+            !result.errors.is_empty(),
+            "Strict mode should reject dep/feature syntax"
+        );
+        assert_eq!(result.errors[0].package, "pkg_a");
+        assert!(!result.errors[0].errors[0].missing_propagations.is_empty());
+    }
+
+    #[test]
+    fn test_strict_mode_accepts_question_mark_syntax() {
+        // Strict mode should accept dep?/feature for optional deps
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let workspace_cargo = r#"[workspace]
+members = ["pkg_a", "pkg_b"]
+"#;
+        fs::write(root_path.join("Cargo.toml"), workspace_cargo).unwrap();
+
+        // Create pkg_b (dependency)
+        fs::create_dir(root_path.join("pkg_b")).unwrap();
+        fs::create_dir(root_path.join("pkg_b/src")).unwrap();
+        fs::write(root_path.join("pkg_b/src/lib.rs"), "").unwrap();
+        let pkg_b_cargo = r#"[package]
+name = "pkg_b"
+version = "0.1.0"
+
+[features]
+test-feature = []
+"#;
+        fs::write(root_path.join("pkg_b/Cargo.toml"), pkg_b_cargo).unwrap();
+
+        // Create pkg_a (depends on pkg_b)
+        fs::create_dir(root_path.join("pkg_a")).unwrap();
+        fs::create_dir(root_path.join("pkg_a/src")).unwrap();
+        fs::write(root_path.join("pkg_a/src/lib.rs"), "").unwrap();
+
+        // Package with optional dependency using dep?/feature syntax (with ?)
+        let pkg_a_cargo = r#"[package]
+name = "pkg_a"
+version = "0.1.0"
+
+[dependencies]
+pkg_b = { path = "../pkg_b", optional = true }
+
+[features]
+test-feature = ["dep:pkg_b", "pkg_b?/test-feature"]
+"#;
+        fs::write(root_path.join("pkg_a/Cargo.toml"), pkg_a_cargo).unwrap();
+
+        let config = ValidatorConfig {
+            features: Some(vec!["test-feature".to_string()]),
+            skip_features: None,
+            workspace_only: true, // Workspace only
+            output_format: OutputType::Raw,
+            strict_optional_propagation: true, // Strict mode
+        };
+
+        let validator = FeatureValidator::new(Some(root_path.to_path_buf()), config).unwrap();
+        let result = validator.validate().unwrap();
+
+        // In strict mode, dep?/feature should be accepted
+        assert_eq!(
+            result.errors.len(),
+            0,
+            "Strict mode should accept dep?/feature syntax"
+        );
     }
 }

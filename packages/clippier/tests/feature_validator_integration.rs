@@ -292,6 +292,7 @@ fn test_complex_workspace_validation_success() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -322,6 +323,7 @@ fn test_complex_workspace_all_features() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -356,6 +358,7 @@ fn test_workspace_with_errors() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -412,6 +415,7 @@ fn test_single_package_project() {
         workspace_only: false,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -434,6 +438,7 @@ fn test_workspace_only_vs_all_packages() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator_workspace =
@@ -447,6 +452,7 @@ fn test_workspace_only_vs_all_packages() {
         workspace_only: false,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator_all = FeatureValidator::new(Some(root_path), config_all).unwrap();
@@ -476,6 +482,7 @@ fn test_json_output_format() {
         workspace_only: true,
 
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -508,6 +515,7 @@ fn test_specific_features_validation() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -532,6 +540,7 @@ fn test_validator_with_nonexistent_feature() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -556,6 +565,7 @@ fn test_optional_dependency_handling() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -581,6 +591,7 @@ fn test_workspace_root_discovery_from_subdirectory() {
         workspace_only: true,
 
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     // Start validation from a subdirectory
@@ -605,6 +616,7 @@ fn test_validation_summary_with_errors() {
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Raw,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();
@@ -633,6 +645,7 @@ fn test_validation_summary_with_no_errors() {
         skip_features: None,
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(root_path), config).unwrap();

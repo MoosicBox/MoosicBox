@@ -74,6 +74,7 @@ fn test_cli_skip_features_default_behavior() {
         skip_features: None, // Should default to vec!["default"]
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -100,6 +101,7 @@ fn test_cli_skip_features_empty_string() {
         skip_features: Some(vec![]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -122,6 +124,7 @@ fn test_cli_skip_features_wildcard_pattern() {
         skip_features: Some(vec!["test-*".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -146,6 +149,7 @@ fn test_cli_skip_features_multiple_patterns() {
         skip_features: Some(vec!["*-codec".to_string(), "test-*".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -176,6 +180,7 @@ fn test_cli_skip_features_with_negation() {
         skip_features: Some(vec!["*".to_string(), "!fail-on-warnings".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -209,6 +214,7 @@ fn test_cli_skip_features_specific_list() {
         ]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();
@@ -244,6 +250,7 @@ fn test_cli_skip_features_combined_with_explicit_features() {
         skip_features: Some(vec!["default".to_string(), "test-*".to_string()]),
         workspace_only: true,
         output_format: OutputType::Json,
+        strict_optional_propagation: false,
     };
 
     let validator = FeatureValidator::new(Some(workspace.path().to_path_buf()), config).unwrap();

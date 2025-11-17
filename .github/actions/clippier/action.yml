@@ -54,6 +54,11 @@ inputs:
         description: "Features to exclude/skip (comma-separated, supports glob patterns like 'test-*', '*-codec'). For validate-feature-propagation, defaults to 'default,_*' if not specified. Supports negation with '!' prefix"
         required: false
 
+    strict-optional:
+        description: "Require strict optional dependency propagation syntax (for validate-feature-propagation command). When enabled, optional dependencies MUST use 'dep?/feature' syntax. When disabled (default), accepts both 'dep?/feature' and 'dep/feature'"
+        required: false
+        default: "false"
+
     required-features:
         description: "Always-required features (comma-separated)"
         required: false
@@ -417,6 +422,7 @@ runs:
               INPUT_SEED: ${{ inputs.seed }}
               INPUT_FEATURES: ${{ inputs.features }}
               INPUT_SKIP_FEATURES: ${{ inputs.skip-features }}
+              INPUT_STRICT_OPTIONAL: ${{ inputs.strict-optional }}
               INPUT_REQUIRED_FEATURES: ${{ inputs.required-features }}
               INPUT_PACKAGES: ${{ inputs.packages }}
               INPUT_SKIP_IF: ${{ inputs.skip-if }}

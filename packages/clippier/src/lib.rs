@@ -28,6 +28,7 @@
 //!     skip_features: None,
 //!     workspace_only: true,
 //!     output_format: OutputType::Json,
+//!     strict_optional_propagation: false,
 //! };
 //!
 //! let validator = FeatureValidator::new(None, config)?;
@@ -93,6 +94,7 @@ pub mod git_diff;
 ///     skip_features: None,
 ///     workspace_only: true,
 ///     output_format: OutputType::Json,
+///     strict_optional_propagation: false,
 /// };
 ///
 /// let validator = FeatureValidator::new(None, config)?;
@@ -4253,12 +4255,14 @@ pub fn handle_validate_feature_propagation_command(
     path: Option<std::path::PathBuf>,
     workspace_only: bool,
     output: OutputType,
+    strict_optional_propagation: bool,
 ) -> Result<ValidationResult, Box<dyn std::error::Error>> {
     let config = ValidatorConfig {
         features,
         skip_features,
         workspace_only,
         output_format: output,
+        strict_optional_propagation,
     };
 
     let validator = FeatureValidator::new(path, config)?;
