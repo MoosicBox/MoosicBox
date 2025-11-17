@@ -39,14 +39,14 @@ default = ["async", "simulator", "std", "sync", "tokio"]
 
 fail-on-warnings = ["switchy_async?/fail-on-warnings"]
 
-simulator = ["dep:bytes", "sync"]
+simulator = ["dep:bytes", "switchy_async?/simulator", "sync"]
 simulator-real-fs = [
     "dep:scoped-tls",
     "dep:switchy_async",
     "switchy_async/rt-multi-thread",
 ]
 std = ["dep:tempfile", "sync"]
-tokio = ["async", "dep:tokio", "switchy_async/fs", "switchy_async/tokio"]
+tokio = ["async", "dep:tokio", "switchy_async?/fs", "switchy_async?/tokio"]
 
 async = ["dep:switchy_async", "switchy_async/io"]
-sync  = []
+sync  = ["switchy_async?/sync"]

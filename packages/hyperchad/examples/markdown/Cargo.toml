@@ -51,7 +51,11 @@ actix = ["hyperchad/renderer-html-actix"]
 assets = ["hyperchad/renderer-assets"]
 default = ["actix", "dev", "vanilla-js"]
 dev = ["assets"]
-fail-on-warnings = ["hyperchad/fail-on-warnings", "switchy/fail-on-warnings"]
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "hyperchad_markdown/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]
 vanilla-js = [
     "hyperchad/renderer-vanilla-js",
     "hyperchad/renderer-vanilla-js-plugin-actions",

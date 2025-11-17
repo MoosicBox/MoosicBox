@@ -38,6 +38,7 @@ tokio          = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 default = []
 
 fail-on-warnings = [
+    "moosicbox_opus?/fail-on-warnings",
     "moosicbox_stream_utils/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_http/fail-on-warnings",

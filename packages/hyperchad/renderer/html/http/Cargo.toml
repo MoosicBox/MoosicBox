@@ -48,13 +48,14 @@ fail-on-warnings = [
     "switchy_fs?/fail-on-warnings",
 ]
 
-debug = []
+debug = ["hyperchad_renderer_html/debug"]
 
 assets = [
     "dep:mime_guess",
     "dep:switchy_async",
     "dep:switchy_fs",
     "hyperchad_renderer/assets",
+    "hyperchad_renderer_html/assets",
 ]
 
 _json = []
@@ -63,6 +64,12 @@ actions = [
     "_json",
     "dep:serde",
     "hyperchad_renderer/logic",
+    "hyperchad_renderer_html/actions",
     "hyperchad_router/serde",
 ]
-json = ["_json", "hyperchad_renderer/json"]
+json = [
+    "_json",
+    "hyperchad_renderer/json",
+    "hyperchad_renderer_html/json",
+    "hyperchad_router/json",
+]

@@ -80,10 +80,26 @@ wgpu = ["eframe/wgpu"]
 wayland = ["eframe/wayland"]
 x11     = ["eframe/x11"]
 
-profiling         = ["dep:profiling"]
-profiling-puffin  = ["dep:puffin", "dep:puffin_http", "profiling"]
-profiling-tracing = ["dep:tracing-subscriber", "profiling"]
-profiling-tracy   = ["dep:tracy-client", "profiling"]
+profiling = ["dep:profiling", "hyperchad_transformer/profiling"]
+profiling-puffin = [
+    "dep:puffin",
+    "dep:puffin_http",
+    "hyperchad_renderer/profiling-puffin",
+    "hyperchad_transformer/profiling-puffin",
+    "profiling",
+]
+profiling-tracing = [
+    "dep:tracing-subscriber",
+    "hyperchad_renderer/profiling-tracing",
+    "hyperchad_transformer/profiling-tracing",
+    "profiling",
+]
+profiling-tracy = [
+    "dep:tracy-client",
+    "hyperchad_renderer/profiling-tracy",
+    "hyperchad_transformer/profiling-tracy",
+    "profiling",
+]
 
 debug = []
 

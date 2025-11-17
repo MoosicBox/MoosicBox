@@ -92,8 +92,24 @@ profiling = [
     "moosicbox_resampler/profiling",
 ]
 
-api     = ["dep:actix-web", "dep:moosicbox_profiles", "moosicbox_music_api/api"]
-openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
+api = [
+    "dep:actix-web",
+    "dep:moosicbox_profiles",
+    "moosicbox_audio_output/api",
+    "moosicbox_logging/api",
+    "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "moosicbox_profiles?/api",
+    "moosicbox_session/api",
+    "switchy_database/api",
+]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_audio_output/openapi",
+    "moosicbox_music_api/openapi",
+    "moosicbox_music_models/openapi",
+    "moosicbox_session/openapi",
+]
 
 # Player audio outputs
 asio               = ["moosicbox_audio_output/asio"]
@@ -117,8 +133,21 @@ decoder-flac = ["format-flac", "moosicbox_audio_decoder/flac"]
 decoder-mp3  = ["format-mp3", "moosicbox_audio_decoder/mp3"]
 decoder-opus = ["format-opus", "moosicbox_audio_decoder/opus"]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_audio_decoder/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_session/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_audio_decoder/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_session/all-os-formats",
+]
 
 format-aac  = ["moosicbox_music_models/aac", "moosicbox_session/aac"]
 format-flac = ["moosicbox_music_models/flac", "moosicbox_session/flac"]

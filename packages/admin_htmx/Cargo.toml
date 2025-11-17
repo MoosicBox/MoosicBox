@@ -56,8 +56,17 @@ fail-on-warnings = [
 qobuz = ["dep:moosicbox_music_api", "dep:moosicbox_qobuz"]
 tidal = ["base64", "dep:moosicbox_music_api", "dep:moosicbox_tidal"]
 
-scan = ["dep:moosicbox_scan"]
+scan = ["dep:moosicbox_scan", "moosicbox_qobuz?/scan", "moosicbox_tidal?/scan"]
 
 base64 = ["dep:base64"]
 
-api = ["dep:actix-web", "moosicbox_music_api/api"]
+api = [
+    "dep:actix-web",
+    "moosicbox_config/api",
+    "moosicbox_music_api/api",
+    "moosicbox_profiles/api",
+    "moosicbox_qobuz?/api",
+    "moosicbox_scan?/api",
+    "moosicbox_tidal?/api",
+    "switchy_database/api",
+]

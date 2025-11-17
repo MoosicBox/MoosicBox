@@ -54,15 +54,15 @@ fail-on-warnings = [
     "switchy/fail-on-warnings",
 ]
 
-async      = []
+async      = ["switchy/async"]
 database   = ["switchy/database", "switchy/database-connection"]
-fs         = ["switchy/fs"]
+fs         = ["switchy/fs", "switchy/fs-tokio"]
 http       = ["switchy/http"]
 mdns       = ["switchy/mdns"]
-random     = []
-tcp        = []
+random     = ["switchy/random"]
+tcp        = ["switchy/tcp"]
 telemetry  = ["switchy/telemetry"]
-time       = []
+time       = ["switchy/time"]
 upnp       = ["switchy/upnp"]
 web-server = ["dep:moosicbox_web_server", "moosicbox_web_server/simulator"]
 

@@ -187,9 +187,19 @@ fail-on-warnings = [
 
 telemetry = ["dep:switchy_telemetry"]
 
-tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
+tls = [
+    "actix-web/openssl",
+    "dep:openssl",
+    "dep:rcgen",
+    "switchy_database/tls",
+    "switchy_database_connection/tls",
+]
 
-base64 = ["moosicbox_tunnel?/base64", "moosicbox_tunnel_sender?/base64"]
+base64 = [
+    "moosicbox_admin_htmx?/base64",
+    "moosicbox_tunnel?/base64",
+    "moosicbox_tunnel_sender?/base64",
+]
 tunnel = [
     "dep:moosicbox_auth",
     "dep:moosicbox_tunnel",
@@ -198,14 +208,31 @@ tunnel = [
 ]
 
 # Player audio outputs
-asio = ["moosicbox_player?/asio"]
-cpal = ["moosicbox_player?/cpal"]
-jack = ["moosicbox_player?/jack"]
+asio = ["moosicbox_audio_output/asio", "moosicbox_player?/asio"]
+cpal = ["moosicbox_audio_output/cpal", "moosicbox_player?/cpal"]
+jack = ["moosicbox_audio_output/jack", "moosicbox_player?/jack"]
 
 static-token-auth = ["dep:qstring"]
 
-all-encoders    = ["all-os-encoders", "encoder-mp3"]
-all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
+all-encoders = [
+    "all-os-encoders",
+    "encoder-mp3",
+    "moosicbox_files/all-encoders",
+    "moosicbox_library?/all-encoders",
+    "moosicbox_library_music_api?/all-encoders",
+    "moosicbox_player?/all-encoders",
+    "moosicbox_tunnel_sender?/all-encoders",
+]
+all-os-encoders = [
+    "encoder-aac",
+    "encoder-flac",
+    "encoder-opus",
+    "moosicbox_files/all-os-encoders",
+    "moosicbox_library?/all-os-encoders",
+    "moosicbox_library_music_api?/all-os-encoders",
+    "moosicbox_player?/all-os-encoders",
+    "moosicbox_tunnel_sender?/all-os-encoders",
+]
 
 encoder-aac = [
     "format-aac",
@@ -240,8 +267,21 @@ encoder-opus = [
     "moosicbox_tunnel_sender?/encoder-opus",
 ]
 
-all-decoders    = ["all-os-decoders", "decoder-mp3"]
-all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
+all-decoders = [
+    "all-os-decoders",
+    "decoder-mp3",
+    "moosicbox_downloader?/all-decoders",
+    "moosicbox_files/all-decoders",
+    "moosicbox_player?/all-decoders",
+]
+all-os-decoders = [
+    "decoder-aac",
+    "decoder-flac",
+    "decoder-opus",
+    "moosicbox_downloader?/all-os-decoders",
+    "moosicbox_files/all-os-decoders",
+    "moosicbox_player?/all-os-decoders",
+]
 
 decoder-aac = [
     "format-aac",
@@ -251,25 +291,50 @@ decoder-aac = [
 ]
 decoder-flac = [
     "format-flac",
-    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_downloader?/decoder-flac",
     "moosicbox_files/decoder-flac",
     "moosicbox_player?/decoder-flac",
 ]
 decoder-mp3 = [
     "format-mp3",
-    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_downloader?/decoder-mp3",
     "moosicbox_files/decoder-mp3",
     "moosicbox_player?/decoder-mp3",
 ]
 decoder-opus = [
     "format-opus",
-    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_downloader?/decoder-opus",
     "moosicbox_files/decoder-opus",
     "moosicbox_player?/decoder-opus",
 ]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_downloader?/all-formats",
+    "moosicbox_files/all-formats",
+    "moosicbox_library?/all-formats",
+    "moosicbox_library_music_api?/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_player?/all-formats",
+    "moosicbox_scan?/all-formats",
+    "moosicbox_session/all-formats",
+    "moosicbox_tunnel_sender?/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_downloader?/all-os-formats",
+    "moosicbox_files/all-os-formats",
+    "moosicbox_library?/all-os-formats",
+    "moosicbox_library_music_api?/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_player?/all-os-formats",
+    "moosicbox_scan?/all-os-formats",
+    "moosicbox_session/all-os-formats",
+    "moosicbox_tunnel_sender?/all-os-formats",
+]
 
 format-aac = [
     "moosicbox_downloader?/format-aac",
@@ -318,7 +383,7 @@ format-opus = [
 
 postgres = [
     "dep:moosicbox_schema",
-    "moosicbox_schema/postgres",
+    "moosicbox_schema?/postgres",
     "switchy_database/postgres",
     "switchy_database_connection/creds",
     "switchy_database_connection/postgres",
@@ -337,7 +402,8 @@ postgres-sqlx = [
 ]
 sqlite = [
     "dep:moosicbox_schema",
-    "moosicbox_schema/sqlite",
+    "moosicbox_schema?/sqlite",
+    "switchy_database/sqlite",
     "switchy_database_connection/sqlite",
 ]
 sqlite-rusqlite = [
@@ -354,9 +420,14 @@ sqlite-sqlx = [
 admin-htmx = ["admin-htmx-api"]
 downloader = ["dep:throttle", "moosicbox_downloader/api"]
 library = ["moosicbox_library/api", "moosicbox_library_music_api/api"]
-player = ["dep:moosicbox_library", "dep:moosicbox_player"]
+player = [
+    "dep:moosicbox_library",
+    "dep:moosicbox_player",
+    "switchy_upnp?/player",
+]
 scan = [
     "dep:throttle",
+    "moosicbox_admin_htmx?/scan",
     "moosicbox_qobuz?/scan",
     "moosicbox_scan/api",
     "moosicbox_tidal?/scan",
@@ -369,9 +440,14 @@ all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "dep:moosicbox_qobuz",
+    "moosicbox_admin_htmx?/qobuz",
     "moosicbox_music_api_api?/auth-username-password",
 ]
-tidal = ["dep:moosicbox_tidal", "moosicbox_music_api_api?/auth-poll"]
+tidal = [
+    "dep:moosicbox_tidal",
+    "moosicbox_admin_htmx?/tidal",
+    "moosicbox_music_api_api?/auth-poll",
+]
 yt = ["dep:moosicbox_yt"]
 
 # APIs
@@ -463,4 +539,16 @@ profiling-tracy = [
     "profiling/profile-with-tracy",
 ]
 
-simulator = []
+simulator = [
+    "moosicbox_search?/simulator",
+    "switchy_async/simulator",
+    "switchy_database/simulator",
+    "switchy_database_connection/simulator",
+    "switchy_env/simulator",
+    "switchy_fs/simulator",
+    "switchy_mdns/simulator",
+    "switchy_random/simulator",
+    "switchy_telemetry?/simulator",
+    "switchy_time/simulator",
+    "switchy_upnp?/simulator",
+]

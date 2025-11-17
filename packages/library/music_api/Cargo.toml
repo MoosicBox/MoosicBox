@@ -53,10 +53,32 @@ fail-on-warnings = [
     "switchy_database/fail-on-warnings",
 ]
 
-api = ["dep:actix-web", "moosicbox_profiles/api", "switchy_database/api"]
+api = [
+    "dep:actix-web",
+    "moosicbox_audio_output?/api",
+    "moosicbox_files/api",
+    "moosicbox_library/api",
+    "moosicbox_menu_models/api",
+    "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "moosicbox_profiles/api",
+    "moosicbox_scan/api",
+    "switchy_database/api",
+]
 
-all-encoders    = ["all-os-encoders", "encoder-mp3"]
-all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
+all-encoders = [
+    "all-os-encoders",
+    "encoder-mp3",
+    "moosicbox_files/all-encoders",
+    "moosicbox_library/all-encoders",
+]
+all-os-encoders = [
+    "encoder-aac",
+    "encoder-flac",
+    "encoder-opus",
+    "moosicbox_files/all-os-encoders",
+    "moosicbox_library/all-os-encoders",
+]
 
 encoder-aac = [
     "dep:moosicbox_audio_output",
@@ -64,6 +86,7 @@ encoder-aac = [
     "format-aac",
     "moosicbox_audio_output/aac",
     "moosicbox_files/encoder-aac",
+    "moosicbox_library/encoder-aac",
 ]
 encoder-flac = [
     "dep:moosicbox_audio_output",
@@ -71,6 +94,7 @@ encoder-flac = [
     "format-flac",
     "moosicbox_audio_output/flac",
     "moosicbox_files/encoder-flac",
+    "moosicbox_library/encoder-flac",
 ]
 encoder-mp3 = [
     "dep:moosicbox_audio_output",
@@ -78,6 +102,7 @@ encoder-mp3 = [
     "format-mp3",
     "moosicbox_audio_output/mp3",
     "moosicbox_files/encoder-mp3",
+    "moosicbox_library/encoder-mp3",
 ]
 encoder-opus = [
     "dep:moosicbox_audio_output",
@@ -85,12 +110,44 @@ encoder-opus = [
     "format-opus",
     "moosicbox_audio_output/opus",
     "moosicbox_files/encoder-opus",
+    "moosicbox_library/encoder-opus",
 ]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_files/all-formats",
+    "moosicbox_library/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_scan/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_files/all-os-formats",
+    "moosicbox_library/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_scan/all-os-formats",
+]
 
-format-aac  = ["moosicbox_files/format-aac", "moosicbox_music_models/aac"]
-format-flac = ["moosicbox_files/format-flac", "moosicbox_music_models/flac"]
-format-mp3  = ["moosicbox_files/format-mp3", "moosicbox_music_models/mp3"]
-format-opus = ["moosicbox_files/format-opus", "moosicbox_music_models/opus"]
+format-aac = [
+    "moosicbox_files/format-aac",
+    "moosicbox_library/format-aac",
+    "moosicbox_music_models/aac",
+]
+format-flac = [
+    "moosicbox_files/format-flac",
+    "moosicbox_library/format-flac",
+    "moosicbox_music_models/flac",
+]
+format-mp3 = [
+    "moosicbox_files/format-mp3",
+    "moosicbox_library/format-mp3",
+    "moosicbox_music_models/mp3",
+]
+format-opus = [
+    "moosicbox_files/format-opus",
+    "moosicbox_library/format-opus",
+    "moosicbox_music_models/opus",
+]

@@ -102,14 +102,14 @@ all-async = [
     "async-util",
 ]
 
-async                 = ["dep:switchy_async"]
-async-fs              = ["async", "switchy_async?/fs"]
+async                 = ["dep:switchy_async", "switchy_fs?/async"]
+async-fs              = ["async", "switchy_async?/fs", "switchy_fs?/async"]
 async-io              = ["async", "switchy_async?/io"]
 async-net             = ["async", "switchy_async?/net"]
 async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
 
 async-sync  = ["async", "switchy_async?/sync"]
-async-time  = ["async", "switchy_async?/time"]
+async-time  = ["async", "switchy_async?/time", "time"]
 async-tokio = ["async", "dep:tokio", "switchy_async?/tokio"]
 async-util  = ["async", "switchy_async?/util"]
 
@@ -234,7 +234,7 @@ database-connection-tls = [
 ]
 database-connection-turso = [
     "database-connection",
-    "switchy_database_connection?/turso",
+    "switchy_database_connection?/database-connection-turso",
 ]
 
 all-fs = [
@@ -247,7 +247,7 @@ all-fs = [
     "fs-tokio",
 ]
 
-fs                   = ["dep:switchy_fs"]
+fs                   = ["dep:switchy_fs", "switchy_async?/fs"]
 fs-async             = ["fs", "switchy_fs?/async"]
 fs-simulator         = ["fs", "switchy_fs?/simulator"]
 fs-simulator-real-fs = ["fs", "switchy_fs?/simulator-real-fs"]
@@ -309,7 +309,7 @@ telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
 
 all-time = ["time", "time-simulator", "time-std"]
 
-time           = ["dep:switchy_time"]
+time           = ["dep:switchy_time", "switchy_async?/time"]
 time-simulator = ["switchy_time?/simulator", "time"]
 time-std       = ["switchy_time?/std", "time"]
 

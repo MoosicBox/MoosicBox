@@ -44,7 +44,7 @@ fail-on-warnings = [
     "switchy_database?/fail-on-warnings",
 ]
 
-api     = ["moosicbox_music_models/api", "switchy_database/api"]
+api     = ["moosicbox_music_models/api", "switchy_database?/api"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 db = [
@@ -54,8 +54,13 @@ db = [
     "moosicbox_music_models/db",
 ]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-formats = ["all-os-formats", "moosicbox_music_models/all-formats", "mp3"]
+all-os-formats = [
+    "aac",
+    "flac",
+    "moosicbox_music_models/all-os-formats",
+    "opus",
+]
 
 aac  = ["moosicbox_music_models/aac"]
 flac = ["moosicbox_music_models/flac"]

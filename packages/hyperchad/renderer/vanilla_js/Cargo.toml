@@ -48,12 +48,13 @@ fail-on-warnings = [
     "hyperchad_transformer/fail-on-warnings",
 ]
 
-debug = []
+debug = ["hyperchad_renderer_html/debug"]
 
 hash   = ["dep:md5"]
 script = []
 
 all-plugins = [
+    "hyperchad_renderer_vanilla_js_hash/all-plugins",
     "plugin-actions",
     "plugin-canvas",
     "plugin-event",
@@ -69,6 +70,7 @@ all-plugins = [
 
 _actions = []
 plugin-actions = [
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions",
     "plugin-actions-change",
     "plugin-actions-click",
     "plugin-actions-click-outside",

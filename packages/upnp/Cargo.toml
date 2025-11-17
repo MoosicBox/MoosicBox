@@ -76,14 +76,27 @@ fail-on-warnings = [
     "switchy_random?/fail-on-warnings",
 ]
 
-api = ["dep:actix-web"]
+api = [
+    "dep:actix-web",
+    "moosicbox_audio_output?/api",
+    "moosicbox_logging?/api",
+    "moosicbox_music_api?/api",
+    "moosicbox_player?/api",
+    "moosicbox_session?/api",
+]
 listener = [
     "dep:flume",
     "dep:moosicbox_async_service",
     "dep:strum",
     "dep:strum_macros",
 ]
-openapi = ["dep:utoipa"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_audio_output?/openapi",
+    "moosicbox_music_api?/openapi",
+    "moosicbox_player?/openapi",
+    "moosicbox_session?/openapi",
+]
 player = [
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_output",
@@ -99,4 +112,9 @@ player = [
     "listener",
 ]
 
-simulator = []
+simulator = [
+    "switchy_async/simulator",
+    "switchy_env/simulator",
+    "switchy_http?/simulator",
+    "switchy_random?/simulator",
+]

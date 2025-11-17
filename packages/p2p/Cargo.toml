@@ -29,9 +29,12 @@ thiserror = { workspace = true }
 # - Phase 8.1: proptest (dev-dependency)
 
 [features]
-default          = ["simulator"]
-fail-on-warnings = []
-simulator        = []
+default = ["simulator"]
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+]
+simulator = ["switchy_async/simulator", "switchy_random/simulator"]
 # NOTE: iroh feature will be added in Phase 7.1
 # NOTE: test-utils feature will be added in Phase 8.1
 

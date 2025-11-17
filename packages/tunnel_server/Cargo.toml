@@ -98,11 +98,13 @@ fail-on-warnings = [
 base64 = ["moosicbox_tunnel/base64"]
 
 sqlite = [
+    "switchy_database/sqlite",
     "switchy_database_connection/sqlite",
     "switchy_database_connection/sqlite-sqlx",
 ]
 
 postgres = [
+    "switchy_database/postgres",
     "switchy_database_connection/creds",
     "switchy_database_connection/postgres",
     "switchy_database_connection/tls",
@@ -112,7 +114,15 @@ postgres-native-tls = [
     "switchy_database_connection/postgres-native-tls",
 ]
 postgres-openssl = ["postgres", "switchy_database_connection/postgres-openssl"]
-postgres-raw = ["postgres", "switchy_database_connection/postgres-raw"]
-postgres-sqlx = ["postgres", "switchy_database_connection/postgres-sqlx"]
+postgres-raw = [
+    "postgres",
+    "switchy_database/postgres-raw",
+    "switchy_database_connection/postgres-raw",
+]
+postgres-sqlx = [
+    "postgres",
+    "switchy_database/postgres-sqlx",
+    "switchy_database_connection/postgres-sqlx",
+]
 
 telemetry = ["dep:switchy_telemetry", "dep:tracing"]

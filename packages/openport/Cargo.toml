@@ -37,7 +37,7 @@ fail-on-warnings = ["switchy_random?/fail-on-warnings"]
 
 # Add `pick_random_unused_port` pub fn that allows finding a random port
 # within the range 15000..25000
-rand = ["dep:switchy_random"]
+rand = ["dep:switchy_random", "switchy_random?/rand"]
 
 # Enable port reservation functionality
 reservation = []

@@ -92,7 +92,16 @@ all = [
     "transformer-models",
 ]
 
-serde = ["actions-serde", "renderer-serde", "transformer-models-serde"]
+serde = [
+    "actions-serde",
+    "hyperchad_actions?/serde",
+    "hyperchad_color?/serde",
+    "hyperchad_renderer?/serde",
+    "hyperchad_router?/serde",
+    "hyperchad_transformer_models?/serde",
+    "renderer-serde",
+    "transformer-models-serde",
+]
 
 app = ["dep:hyperchad_app"]
 
@@ -102,6 +111,8 @@ state-sqlite = ["hyperchad_state?/persistence-sqlite", "state"]
 actions = [
     "dep:hyperchad_actions",
     "hyperchad_app?/actions",
+    "hyperchad_renderer_html?/actions",
+    "hyperchad_renderer_html_actix?/actions",
     "hyperchad_renderer_html_http?/actions",
 ]
 actions-logic = [
@@ -149,7 +160,11 @@ renderer-profiling-tracy = [
 ]
 renderer-serde = ["hyperchad_renderer?/serde"]
 
-renderer-egui = ["dep:hyperchad_renderer_egui", "hyperchad_app?/egui"]
+renderer-egui = [
+    "dep:hyperchad_renderer_egui",
+    "hyperchad_app?/egui",
+    "hyperchad_simulator?/renderer-egui",
+]
 renderer-egui-debug = ["hyperchad_app?/debug", "hyperchad_renderer_egui?/debug"]
 renderer-egui-glow = [
     "hyperchad_app?/egui-glow",
@@ -179,7 +194,11 @@ renderer-egui-wgpu = [
 ]
 renderer-egui-x11 = ["hyperchad_app?/x11", "hyperchad_renderer_egui?/x11"]
 
-renderer-fltk = ["dep:hyperchad_renderer_fltk", "hyperchad_app?/fltk"]
+renderer-fltk = [
+    "dep:hyperchad_renderer_fltk",
+    "hyperchad_app?/fltk",
+    "hyperchad_simulator?/renderer-fltk",
+]
 renderer-fltk-debug = ["hyperchad_app?/debug", "hyperchad_renderer_fltk?/debug"]
 renderer-fltk-format = [
     "hyperchad_app?/format",
@@ -194,6 +213,7 @@ renderer-html = [
     "dep:hyperchad_renderer_html",
     "hyperchad_app?/html",
     "hyperchad_renderer/html",
+    "hyperchad_simulator?/renderer-html",
 ]
 renderer-html-actions = [
     "hyperchad_app?/actions",
@@ -236,6 +256,7 @@ renderer-html-web-server-actix = [
 renderer-vanilla-js = [
     "dep:hyperchad_renderer_vanilla_js",
     "hyperchad_app?/vanilla-js",
+    "hyperchad_simulator?/renderer-vanilla-js",
     "renderer-html",
 ]
 renderer-vanilla-js-all-plugins = [
@@ -347,33 +368,104 @@ transformer-logic = ["hyperchad_transformer?/logic"]
 transformer-models       = ["dep:hyperchad_transformer_models"]
 transformer-models-serde = ["hyperchad_transformer_models?/serde"]
 
-benchmark = ["hyperchad_app/benchmark", "renderer-benchmark"]
-debug = ["hyperchad_app/debug", "renderer-egui-debug", "renderer-fltk-debug"]
-format = ["hyperchad_app/format", "router-format"]
+benchmark = [
+    "hyperchad_app?/benchmark",
+    "hyperchad_renderer?/benchmark",
+    "hyperchad_transformer?/benchmark",
+    "renderer-benchmark",
+]
+debug = [
+    "hyperchad_app?/debug",
+    "hyperchad_renderer_egui?/debug",
+    "hyperchad_renderer_fltk?/debug",
+    "hyperchad_renderer_html?/debug",
+    "hyperchad_renderer_html_actix?/debug",
+    "hyperchad_renderer_html_http?/debug",
+    "hyperchad_renderer_html_lambda?/debug",
+    "hyperchad_renderer_html_web_server?/debug",
+    "hyperchad_renderer_vanilla_js?/debug",
+    "renderer-egui-debug",
+    "renderer-fltk-debug",
+]
+format = [
+    "hyperchad_app?/format",
+    "hyperchad_renderer_fltk?/format",
+    "hyperchad_router?/format",
+    "hyperchad_transformer?/format",
+    "router-format",
+]
 json = [
     "hyperchad_app?/json",
+    "hyperchad_renderer?/json",
+    "hyperchad_renderer_html?/json",
+    "hyperchad_renderer_html_http?/json",
+    "hyperchad_renderer_html_lambda?/json",
+    "hyperchad_router?/json",
     "renderer-html-http-json",
     "renderer-html-json",
     "renderer-json",
     "router-json",
 ]
-unsafe = ["renderer-fltk-unsafe"]
-wayland = ["hyperchad_app/wayland", "renderer-egui-wayland"]
-x11 = ["hyperchad_app/x11", "renderer-egui-x11"]
+unsafe = [
+    "hyperchad_app?/unsafe",
+    "hyperchad_renderer_fltk?/unsafe",
+    "renderer-fltk-unsafe",
+]
+wayland = [
+    "hyperchad_app?/wayland",
+    "hyperchad_renderer_egui?/wayland",
+    "renderer-egui-wayland",
+]
+x11 = [
+    "hyperchad_app?/x11",
+    "hyperchad_renderer_egui?/x11",
+    "renderer-egui-x11",
+]
 
 profiling-puffin = [
+    "hyperchad_app?/profiling-puffin",
+    "hyperchad_renderer?/profiling-puffin",
+    "hyperchad_renderer_egui?/profiling-puffin",
+    "hyperchad_transformer?/profiling-puffin",
     "renderer-egui-profiling-puffin",
     "renderer-profiling-puffin",
 ]
 profiling-tracing = [
+    "hyperchad_app?/profiling-tracing",
+    "hyperchad_renderer?/profiling-tracing",
+    "hyperchad_renderer_egui?/profiling-tracing",
+    "hyperchad_transformer?/profiling-tracing",
     "renderer-egui-profiling-tracing",
     "renderer-profiling-tracing",
 ]
-profiling-tracy = ["renderer-egui-profiling-tracy", "renderer-profiling-tracy"]
+profiling-tracy = [
+    "hyperchad_app?/profiling-tracy",
+    "hyperchad_renderer?/profiling-tracy",
+    "hyperchad_renderer_egui?/profiling-tracy",
+    "hyperchad_transformer?/profiling-tracy",
+    "renderer-egui-profiling-tracy",
+    "renderer-profiling-tracy",
+]
 
-logic = ["actions-logic", "renderer-logic", "transformer-logic"]
+logic = [
+    "actions-logic",
+    "hyperchad_actions?/logic",
+    "hyperchad_app?/logic",
+    "hyperchad_renderer?/logic",
+    "hyperchad_template?/logic",
+    "hyperchad_transformer?/logic",
+    "renderer-logic",
+    "transformer-logic",
+]
 
 # Simulation features
 simulation = ["simulator", "test-utils"]
-simulator  = ["dep:hyperchad_simulator"]
-test-utils = ["dep:hyperchad_test_utils"]
+simulator = [
+    "dep:hyperchad_simulator",
+    "hyperchad_renderer_html_web_server?/simulator",
+    "hyperchad_simulator?/renderer-egui",
+    "hyperchad_simulator?/renderer-fltk",
+    "hyperchad_simulator?/renderer-html",
+    "hyperchad_simulator?/renderer-vanilla-js",
+]
+test-utils = ["dep:hyperchad_test_utils", "hyperchad_simulator?/test-utils"]

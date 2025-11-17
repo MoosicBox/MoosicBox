@@ -28,6 +28,10 @@ default = ["simulator", "std"]
 
 fail-on-warnings = ["switchy_random?/fail-on-warnings"]
 
-chrono    = ["dep:chrono"]
-simulator = ["dep:scoped-tls", "dep:switchy_random"]
-std       = []
+chrono = ["dep:chrono"]
+simulator = [
+    "dep:scoped-tls",
+    "dep:switchy_random",
+    "switchy_random?/simulator",
+]
+std = []

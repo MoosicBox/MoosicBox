@@ -26,7 +26,7 @@ test-case                          = { workspace = true }
 [features]
 default = ["celt", "hybrid", "silk"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_resampler?/fail-on-warnings"]
 
 resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
 

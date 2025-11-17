@@ -62,7 +62,7 @@ fail-on-warnings = [
 ]
 
 player    = ["moosicbox_server/player"]
-telemetry = ["moosicbox_server/telemetry"]
+telemetry = ["moosicbox_server/telemetry", "simvar/telemetry"]
 upnp      = ["moosicbox_server/upnp", "player", "simvar/upnp"]
 
 sqlite = ["moosicbox_server/sqlite"]

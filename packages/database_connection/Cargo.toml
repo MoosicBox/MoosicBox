@@ -64,7 +64,7 @@ creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 
-mysql = ["dep:tokio"]
+mysql = ["dep:tokio", "switchy_database/mysql"]
 mysql-sqlx = ["mysql", "sqlx", "sqlx/mysql", "switchy_database/mysql-sqlx"]
 postgres = ["dep:tokio", "switchy_database/postgres"]
 postgres-native-tls = ["dep:native-tls", "dep:postgres-native-tls"]
@@ -82,11 +82,11 @@ postgres-sqlx = [
     "sqlx/tls-rustls",
     "switchy_database/postgres-sqlx",
 ]
-sqlite = ["dep:tokio"]
+sqlite = ["dep:tokio", "switchy_database/sqlite"]
 sqlite-rusqlite = ["dep:rusqlite", "sqlite", "switchy_database/sqlite-rusqlite"]
 sqlite-sqlx = ["sqlite", "sqlx", "sqlx/sqlite", "switchy_database/sqlite-sqlx"]
 turso = ["sqlite", "switchy_database/turso"]
 
 database-connection-turso = ["turso"]
 
-simulator = ["switchy_database/simulator"]
+simulator = ["switchy_database/simulator", "switchy_env/simulator"]

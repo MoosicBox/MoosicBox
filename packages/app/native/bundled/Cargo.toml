@@ -45,23 +45,37 @@ fail-on-warnings = [
 
 tunnel = ["moosicbox_server/tunnel"]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = ["all-os-formats", "format-mp3", "moosicbox_server/all-formats"]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_server/all-os-formats",
+]
 
 format-aac  = ["moosicbox_server/format-aac"]
 format-flac = ["moosicbox_server/format-flac"]
 format-mp3  = ["moosicbox_server/format-mp3"]
 format-opus = ["moosicbox_server/format-opus"]
 
-all-decoders    = ["all-os-decoders", "decoder-mp3"]
-all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
+all-decoders = [
+    "all-os-decoders",
+    "decoder-mp3",
+    "moosicbox_server/all-decoders",
+]
+all-os-decoders = [
+    "decoder-aac",
+    "decoder-flac",
+    "decoder-opus",
+    "moosicbox_server/all-os-decoders",
+]
 
 decoder-aac  = ["moosicbox_server/decoder-aac"]
 decoder-flac = ["moosicbox_server/decoder-flac"]
 decoder-mp3  = ["moosicbox_server/decoder-mp3"]
 decoder-opus = ["moosicbox_server/decoder-opus"]
 
-all-sources = ["qobuz", "tidal", "yt"]
+all-sources = ["moosicbox_server/all-sources", "qobuz", "tidal", "yt"]
 
 qobuz = [
     "format-flac",

@@ -80,7 +80,7 @@ egui-v1 = ["egui", "hyperchad_renderer_egui/v1"]
 egui-v2 = ["egui", "hyperchad_renderer_egui/v2"]
 egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
 fltk = ["dep:hyperchad_renderer_fltk", "logic"]
-html = ["dep:hyperchad_renderer_html"]
+html = ["dep:hyperchad_renderer_html", "hyperchad_renderer/html"]
 vanilla-js = [
     "dep:hyperchad_renderer_vanilla_js",
     "html",
@@ -108,7 +108,12 @@ web-server-simulator = ["hyperchad_renderer_html?/web-server-simulator"]
 wayland = ["hyperchad_renderer_egui?/wayland"]
 x11     = ["hyperchad_renderer_egui?/x11"]
 
-debug = ["hyperchad_renderer_egui?/debug", "hyperchad_renderer_fltk?/debug"]
+debug = [
+    "hyperchad_renderer_egui?/debug",
+    "hyperchad_renderer_fltk?/debug",
+    "hyperchad_renderer_html?/debug",
+    "hyperchad_renderer_vanilla_js?/debug",
+]
 format = ["hyperchad_renderer_fltk?/format", "hyperchad_router/format"]
 profiling-puffin = [
     "hyperchad_renderer/profiling-puffin",

@@ -36,16 +36,20 @@ fail-on-warnings = [
 ]
 
 openapi = [
-    "auth-poll",
-    "auth-username-password",
     "dep:utoipa",
     "moosicbox_music_api/openapi",
-    "moosicbox_music_models?/openapi",
+    "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
 ]
 
 db = ["moosicbox_music_models?/db"]
 
-api = ["dep:futures", "moosicbox_music_models/api"]
+api = [
+    "dep:futures",
+    "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "moosicbox_profiles/api",
+]
 
 _auth                  = []
 auth-poll              = ["_auth", "moosicbox_music_api/auth-poll"]

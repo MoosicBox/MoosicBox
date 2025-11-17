@@ -188,32 +188,66 @@ unsafe              = ["hyperchad/unsafe"]
 
 benchmark = ["hyperchad/benchmark"]
 
-all-decoders    = ["all-os-decoders", "decoder-mp3"]
-all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
+all-decoders = [
+    "all-os-decoders",
+    "decoder-mp3",
+    "moosicbox_app_native_bundled?/all-decoders",
+    "moosicbox_downloader/all-decoders",
+    "moosicbox_player/all-decoders",
+]
+all-os-decoders = [
+    "decoder-aac",
+    "decoder-flac",
+    "decoder-opus",
+    "moosicbox_app_native_bundled?/all-os-decoders",
+    "moosicbox_downloader/all-os-decoders",
+    "moosicbox_player/all-os-decoders",
+]
 
 decoder-aac = [
     "format-aac",
     "moosicbox_app_native_bundled?/decoder-aac",
     "moosicbox_downloader/decoder-aac",
+    "moosicbox_player/decoder-aac",
 ]
 decoder-flac = [
     "format-flac",
     "moosicbox_app_native_bundled?/decoder-flac",
     "moosicbox_downloader/decoder-flac",
+    "moosicbox_player/decoder-flac",
 ]
 decoder-mp3 = [
     "format-mp3",
     "moosicbox_app_native_bundled?/decoder-mp3",
     "moosicbox_downloader/decoder-mp3",
+    "moosicbox_player/decoder-mp3",
 ]
 decoder-opus = [
     "format-opus",
     "moosicbox_app_native_bundled?/decoder-opus",
     "moosicbox_downloader/decoder-opus",
+    "moosicbox_player/decoder-opus",
 ]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_app_native_bundled?/all-formats",
+    "moosicbox_app_native_ui/all-formats",
+    "moosicbox_downloader/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_player/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_app_native_bundled?/all-os-formats",
+    "moosicbox_app_native_ui/all-os-formats",
+    "moosicbox_downloader/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_player/all-os-formats",
+]
 
 format-aac = [
     "moosicbox_app_native_bundled?/format-aac",
@@ -221,6 +255,7 @@ format-aac = [
     "moosicbox_app_state/aac",
     "moosicbox_downloader/format-aac",
     "moosicbox_music_models/aac",
+    "moosicbox_player/format-aac",
 ]
 format-flac = [
     "moosicbox_app_native_bundled?/format-flac",
@@ -228,6 +263,7 @@ format-flac = [
     "moosicbox_app_state/flac",
     "moosicbox_downloader/format-flac",
     "moosicbox_music_models/flac",
+    "moosicbox_player/format-flac",
 ]
 format-mp3 = [
     "moosicbox_app_native_bundled?/format-mp3",
@@ -235,6 +271,7 @@ format-mp3 = [
     "moosicbox_app_state/mp3",
     "moosicbox_downloader/format-mp3",
     "moosicbox_music_models/mp3",
+    "moosicbox_player/format-mp3",
 ]
 format-opus = [
     "moosicbox_app_native_bundled?/format-opus",
@@ -242,21 +279,34 @@ format-opus = [
     "moosicbox_app_state/opus",
     "moosicbox_downloader/format-opus",
     "moosicbox_music_models/opus",
+    "moosicbox_player/format-opus",
 ]
 
-all-sources = ["qobuz", "tidal", "yt"]
+all-sources = [
+    "moosicbox_app_native_bundled?/all-sources",
+    "moosicbox_app_state/all-sources",
+    "qobuz",
+    "tidal",
+    "yt",
+]
 
 qobuz = [
     "format-flac",
     "moosicbox_app_native_bundled?/qobuz",
+    "moosicbox_app_state/qobuz",
     "moosicbox_music_api_api/auth-username-password",
 ]
 tidal = [
     "format-flac",
     "moosicbox_app_native_bundled?/tidal",
+    "moosicbox_app_state/tidal",
     "moosicbox_music_api_api/auth-poll",
 ]
-yt = ["format-flac", "moosicbox_app_native_bundled?/yt"]
+yt = [
+    "format-flac",
+    "moosicbox_app_native_bundled?/yt",
+    "moosicbox_app_state/yt",
+]
 
 assets        = ["hyperchad/renderer-assets"]
 static-routes = ["hyperchad/router-static-routes"]

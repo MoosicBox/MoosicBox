@@ -44,7 +44,11 @@ fail-on-warnings = [
     "switchy_database/fail-on-warnings",
 ]
 
-openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
+]
 
 db = ["moosicbox_music_models/db", "switchy_database/api"]
 

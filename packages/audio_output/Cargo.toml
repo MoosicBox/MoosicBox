@@ -76,17 +76,24 @@ oboe-shared-stdcxx = ["cpal/oboe-shared-stdcxx"]
 aac = [
     "dep:fdk-aac",
     "dep:moosicbox_audio_encoder",
-    "moosicbox_audio_encoder/aac",
+    "moosicbox_audio_decoder/aac",
+    "moosicbox_audio_encoder?/aac",
 ]
-flac = ["dep:moosicbox_audio_encoder", "moosicbox_audio_encoder/flac"]
+flac = [
+    "dep:moosicbox_audio_encoder",
+    "moosicbox_audio_decoder/flac",
+    "moosicbox_audio_encoder?/flac",
+]
 mp3 = [
     "dep:moosicbox_audio_encoder",
     "dep:mp3lame-encoder",
-    "moosicbox_audio_encoder/mp3",
+    "moosicbox_audio_decoder/mp3",
+    "moosicbox_audio_encoder?/mp3",
 ]
 opus = [
     "dep:moosicbox_audio_encoder",
     "dep:ogg",
     "dep:opus",
-    "moosicbox_audio_encoder/opus",
+    "moosicbox_audio_decoder/opus",
+    "moosicbox_audio_encoder?/opus",
 ]

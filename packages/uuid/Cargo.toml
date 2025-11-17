@@ -30,5 +30,10 @@ fail-on-warnings = [
     "switchy_random?/fail-on-warnings",
 ]
 
-simulator = ["dep:switchy_env", "dep:switchy_random"]
-uuid      = []
+simulator = [
+    "dep:switchy_env",
+    "dep:switchy_random",
+    "switchy_env?/simulator",
+    "switchy_random?/simulator",
+]
+uuid = []

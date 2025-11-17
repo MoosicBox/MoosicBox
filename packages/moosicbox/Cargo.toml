@@ -201,54 +201,71 @@ _flac = ["moosicbox_app_native_ui?/flac"]
 qobuz = [
     "_flac",
     "dep:moosicbox_qobuz",
+    "moosicbox_admin_htmx?/qobuz",
     "moosicbox_app_models?/auth-username-password",
 ]
-tidal = ["_flac", "dep:moosicbox_tidal", "moosicbox_app_models?/auth-poll"]
+tidal = [
+    "_flac",
+    "dep:moosicbox_tidal",
+    "moosicbox_admin_htmx?/tidal",
+    "moosicbox_app_models?/auth-poll",
+]
 yt = ["_flac", "dep:moosicbox_yt"]
 
 tunnel-base64        = ["moosicbox_tunnel?/base64"]
 tunnel-sender-base64 = ["moosicbox_tunnel_sender?/base64"]
 
-admin-htmx        = ["dep:moosicbox_admin_htmx"]
-app-models        = ["dep:moosicbox_app_models"]
-app-native-ui     = ["dep:moosicbox_app_native_ui"]
-arb               = ["dep:moosicbox_arb"]
-assert            = ["dep:moosicbox_assert"]
-async-service     = ["dep:moosicbox_async_service"]
-audio-decoder     = ["dep:moosicbox_audio_decoder"]
-audio-encoder     = ["dep:moosicbox_audio_encoder"]
-audio-output      = ["dep:moosicbox_audio_output"]
-audio-zone        = ["dep:moosicbox_audio_zone"]
+admin-htmx = ["dep:moosicbox_admin_htmx"]
+app-models = ["dep:moosicbox_app_models"]
+app-native-ui = ["dep:moosicbox_app_native_ui"]
+arb = ["dep:moosicbox_arb"]
+assert = ["dep:moosicbox_assert"]
+async-service = ["dep:moosicbox_async_service"]
+audio-decoder = ["dep:moosicbox_audio_decoder"]
+audio-encoder = ["dep:moosicbox_audio_encoder"]
+audio-output = ["dep:moosicbox_audio_output"]
+audio-zone = ["dep:moosicbox_audio_zone"]
 audio-zone-models = ["dep:moosicbox_audio_zone_models"]
-auth              = ["dep:moosicbox_auth"]
-channel-utils     = ["dep:moosicbox_channel_utils"]
-config            = ["dep:moosicbox_config"]
-downloader        = ["dep:moosicbox_downloader"]
-env-utils         = ["dep:moosicbox_env_utils"]
-files             = ["dep:moosicbox_files"]
-image             = ["dep:moosicbox_image"]
-json-utils        = ["dep:moosicbox_json_utils"]
-library           = ["dep:moosicbox_library"]
-library-models    = ["dep:moosicbox_library_models"]
-load-balancer     = ["dep:moosicbox_load_balancer"]
-logging           = ["dep:moosicbox_logging"]
-menu              = ["dep:moosicbox_menu"]
-middleware        = ["dep:moosicbox_middleware"]
-music-api         = ["dep:moosicbox_music_api"]
-paging            = ["dep:moosicbox_paging"]
-player            = ["dep:moosicbox_player"]
-profiles          = ["dep:moosicbox_profiles"]
-remote-library    = ["dep:moosicbox_remote_library"]
-resampler         = ["dep:moosicbox_resampler"]
-scan              = ["dep:moosicbox_scan"]
-schema            = ["dep:moosicbox_schema"]
-search            = ["dep:moosicbox_search"]
-session           = ["dep:moosicbox_session"]
-session-models    = ["dep:moosicbox_session_models"]
-stream-utils      = ["dep:moosicbox_stream_utils"]
-tunnel            = ["dep:moosicbox_tunnel"]
-tunnel-sender     = ["dep:moosicbox_tunnel_sender"]
-ws                = ["dep:moosicbox_ws"]
+auth = ["dep:moosicbox_auth"]
+channel-utils = ["dep:moosicbox_channel_utils"]
+config = ["dep:moosicbox_config"]
+downloader = ["dep:moosicbox_downloader"]
+env-utils = ["dep:moosicbox_env_utils"]
+files = ["dep:moosicbox_files", "moosicbox_files?/files"]
+image = [
+    "dep:moosicbox_files",
+    "dep:moosicbox_image",
+    "moosicbox_files?/image",
+    "moosicbox_image?/image",
+]
+json-utils = ["dep:moosicbox_json_utils"]
+library = ["dep:moosicbox_library"]
+library-models = ["dep:moosicbox_library_models"]
+load-balancer = ["dep:moosicbox_load_balancer"]
+logging = ["dep:moosicbox_logging"]
+menu = ["dep:moosicbox_menu"]
+middleware = ["dep:moosicbox_middleware"]
+music-api = ["dep:moosicbox_music_api"]
+paging = ["dep:moosicbox_paging"]
+player = ["dep:moosicbox_player"]
+profiles = ["dep:moosicbox_profiles"]
+remote-library = ["dep:moosicbox_remote_library"]
+resampler = ["dep:moosicbox_resampler"]
+scan = [
+    "dep:moosicbox_scan",
+    "moosicbox_admin_htmx?/scan",
+    "moosicbox_qobuz?/scan",
+    "moosicbox_tidal?/scan",
+    "moosicbox_yt?/scan",
+]
+schema = ["dep:moosicbox_schema"]
+search = ["dep:moosicbox_search"]
+session = ["dep:moosicbox_session"]
+session-models = ["dep:moosicbox_session_models"]
+stream-utils = ["dep:moosicbox_stream_utils"]
+tunnel = ["dep:moosicbox_tunnel", "moosicbox_middleware?/tunnel"]
+tunnel-sender = ["dep:moosicbox_tunnel_sender"]
+ws = ["dep:moosicbox_ws", "moosicbox_ws?/ws"]
 
 admin-htmx-default        = ["moosicbox_admin_htmx/default"]
 app-models-default        = ["moosicbox_app_models/default"]

@@ -47,7 +47,7 @@ fail-on-warnings = [
     "moosicbox_music_models/fail-on-warnings",
 ]
 
-aac  = ["moosicbox_files/encoder-aac"]
-flac = ["moosicbox_files/encoder-flac"]
-mp3  = ["moosicbox_files/encoder-mp3"]
-opus = ["moosicbox_files/encoder-opus"]
+aac  = ["moosicbox_files/encoder-aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_files/encoder-flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_files/encoder-mp3", "moosicbox_music_models/mp3"]
+opus = ["moosicbox_files/encoder-opus", "moosicbox_music_models/opus"]

@@ -50,10 +50,17 @@ fail-on-warnings = [
 arb = [
     "dep:moosicbox_arb",
     "dep:quickcheck",
+    "hyperchad_color?/arb",
     "hyperchad_transformer_models/arb",
 ]
 logic = []
 
-serde = ["dep:serde", "dep:serde_json", "hyperchad_transformer_models/serde"]
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+    "hyperchad_color?/serde",
+    "hyperchad_transformer_models/serde",
+    "moosicbox_arb?/serde",
+]
 
 handler = ["dep:hyperchad_color", "logic"]

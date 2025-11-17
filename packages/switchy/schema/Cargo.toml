@@ -55,17 +55,27 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 default = ["all-discovery", "auto-reverse", "decimal", "uuid"]
 
 fail-on-warnings = [
+    "moosicbox_json_utils/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_fs?/fail-on-warnings",
 ]
 
 all-discovery = ["code", "directory", "embedded"]
-auto-reverse  = ["switchy_database/auto-reverse"]
-code          = []
-decimal       = ["switchy_database/decimal", "switchy_schema_test_utils/decimal"]
-directory     = ["dep:switchy_fs"]
-embedded      = ["dep:include_dir"]
-snapshots     = []
-test-utils    = []
-uuid          = ["switchy_database/uuid", "switchy_schema_test_utils/uuid"]
-validation    = []
+auto-reverse = ["switchy_database/auto-reverse"]
+code = []
+decimal = [
+    "moosicbox_json_utils/decimal",
+    "switchy_database/decimal",
+    "switchy_schema_test_utils/decimal",
+]
+directory = ["dep:switchy_fs"]
+embedded = ["dep:include_dir"]
+snapshots = []
+test-utils = []
+uuid = [
+    "moosicbox_json_utils/uuid",
+    "switchy_database/uuid",
+    "switchy_schema_test_utils/uuid",
+]
+validation = []

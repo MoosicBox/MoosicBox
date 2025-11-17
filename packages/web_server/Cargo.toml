@@ -61,7 +61,7 @@ actix = [
     "switchy_http_models/actix",
 ]
 
-serde = ["dep:serde_json"]
+serde = ["dep:serde_json", "switchy_http_models/serde"]
 
 compress = []
 cors     = ["dep:actix-cors", "dep:moosicbox_web_server_cors"]

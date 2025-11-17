@@ -69,10 +69,34 @@ fail-on-warnings = [
     "switchy_upnp?/fail-on-warnings",
 ]
 
-aac  = ["moosicbox_music_models/aac"]
-flac = ["moosicbox_music_models/flac"]
-mp3  = ["moosicbox_music_models/mp3"]
-opus = ["moosicbox_music_models/opus"]
+aac = [
+    "moosicbox_audio_output/aac",
+    "moosicbox_music_models/aac",
+    "moosicbox_remote_library/aac",
+    "moosicbox_session/aac",
+    "moosicbox_ws/aac",
+]
+flac = [
+    "moosicbox_audio_output/flac",
+    "moosicbox_music_models/flac",
+    "moosicbox_remote_library/flac",
+    "moosicbox_session/flac",
+    "moosicbox_ws/flac",
+]
+mp3 = [
+    "moosicbox_audio_output/mp3",
+    "moosicbox_music_models/mp3",
+    "moosicbox_remote_library/mp3",
+    "moosicbox_session/mp3",
+    "moosicbox_ws/mp3",
+]
+opus = [
+    "moosicbox_audio_output/opus",
+    "moosicbox_music_models/opus",
+    "moosicbox_remote_library/opus",
+    "moosicbox_session/opus",
+    "moosicbox_ws/opus",
+]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

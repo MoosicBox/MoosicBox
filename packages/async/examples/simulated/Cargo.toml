@@ -24,4 +24,8 @@ fail-on-warnings = [
     "switchy_time/fail-on-warnings",
 ]
 
-simulator = ["switchy_async/simulator"]
+simulator = [
+    "switchy_async/simulator",
+    "switchy_random/simulator",
+    "switchy_time/simulator",
+]

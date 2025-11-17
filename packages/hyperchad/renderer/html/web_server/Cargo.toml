@@ -47,6 +47,6 @@ debug = []
 actix = ["moosicbox_web_server/actix"]
 
 # Enable simulator feature in moosicbox_web_server
-simulator = ["moosicbox_web_server/simulator"]
+simulator = ["moosicbox_web_server/simulator", "switchy_env/simulator"]
 
 assets = ["hyperchad_renderer/assets"]

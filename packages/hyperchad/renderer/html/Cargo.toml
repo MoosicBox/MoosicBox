@@ -57,10 +57,19 @@ fail-on-warnings = [
     "switchy_http_models/fail-on-warnings",
 ]
 
-debug = []
+debug = [
+    "hyperchad_renderer_html_actix?/debug",
+    "hyperchad_renderer_html_lambda?/debug",
+    "hyperchad_renderer_html_web_server?/debug",
+]
 
-actix      = ["dep:hyperchad_renderer_html_actix", "extend"]
-lambda     = ["dep:hyperchad_renderer_html_lambda"]
+actix = [
+    "dep:hyperchad_renderer_html_actix",
+    "extend",
+    "hyperchad_renderer_html_web_server?/actix",
+    "switchy_http_models/actix",
+]
+lambda = ["dep:hyperchad_renderer_html_lambda"]
 web-server = ["dep:hyperchad_renderer_html_web_server", "extend"]
 
 web-server-actix = ["hyperchad_renderer_html_web_server?/actix", "web-server"]

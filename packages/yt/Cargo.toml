@@ -69,8 +69,22 @@ fail-on-warnings = [
     "switchy_time/fail-on-warnings",
 ]
 
-api     = ["dep:actix-web", "switchy_database/api", "switchy_database/api"]
-db      = []
-openapi = ["dep:utoipa", "moosicbox_music_api/openapi"]
+api = [
+    "dep:actix-web",
+    "moosicbox_files/api",
+    "moosicbox_menu_models/api",
+    "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "switchy_database/api",
+]
+db = ["moosicbox_music_models/db"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_files/openapi",
+    "moosicbox_menu_models/openapi",
+    "moosicbox_music_api/openapi",
+    "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
+]
 
 scan = ["db", "moosicbox_music_api_helpers/scan"]

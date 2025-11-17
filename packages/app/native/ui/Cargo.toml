@@ -60,8 +60,19 @@ fail-on-warnings = [
     "switchy_env/fail-on-warnings",
 ]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-formats = [
+    "all-os-formats",
+    "moosicbox_downloader/all-formats",
+    "moosicbox_music_models/all-formats",
+    "mp3",
+]
+all-os-formats = [
+    "aac",
+    "flac",
+    "moosicbox_downloader/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "opus",
+]
 
 _any-format = []
 aac = [

@@ -68,8 +68,11 @@ simulator = [
     "dep:switchy_random",
     "dep:switchy_time",
     "dep:tokio",
-    "switchy_async_macros/simulator",
-    "switchy_time/simulator",
+    "macros",
+    "switchy_async_macros?/simulator",
+    "switchy_random?/simulator",
+    "switchy_time?/simulator",
+    "time",
 ]
 tokio = ["_any_backend", "dep:futures", "dep:tokio", "dep:tokio-util"]
 

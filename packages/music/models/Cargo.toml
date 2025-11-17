@@ -51,12 +51,12 @@ fail-on-warnings = [
     "switchy_database?/fail-on-warnings",
 ]
 
-api     = ["switchy_database/api"]
+api     = ["switchy_database?/api"]
 openapi = ["dep:utoipa"]
 
 db = ["dep:switchy_database", "moosicbox_json_utils/database"]
 
-tantivy = ["dep:tantivy"]
+tantivy = ["dep:tantivy", "moosicbox_json_utils/tantivy"]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]

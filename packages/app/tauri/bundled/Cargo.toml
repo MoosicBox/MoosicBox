@@ -51,10 +51,22 @@ fail-on-warnings = [
 
 tunnel = ["moosicbox_server/tunnel"]
 
-decoder-aac  = ["moosicbox_server/decoder-aac"]
-decoder-flac = ["moosicbox_server/decoder-flac"]
-decoder-mp3  = ["moosicbox_server/decoder-mp3"]
+decoder-aac = [
+    "moosicbox_downloader/decoder-aac",
+    "moosicbox_server/decoder-aac",
+]
+decoder-flac = [
+    "moosicbox_downloader/decoder-flac",
+    "moosicbox_server/decoder-flac",
+]
+decoder-mp3 = [
+    "moosicbox_downloader/decoder-mp3",
+    "moosicbox_server/decoder-mp3",
+]
 
-format-aac  = ["moosicbox_server/format-aac"]
-format-flac = ["moosicbox_server/format-flac"]
-format-mp3  = ["moosicbox_server/format-mp3"]
+format-aac = ["moosicbox_downloader/format-aac", "moosicbox_server/format-aac"]
+format-flac = [
+    "moosicbox_downloader/format-flac",
+    "moosicbox_server/format-flac",
+]
+format-mp3 = ["moosicbox_downloader/format-mp3", "moosicbox_server/format-mp3"]

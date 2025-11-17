@@ -120,36 +120,81 @@ custom-protocol = ["tauri/custom-protocol"]
 android = []
 desktop = ["all-os-decoders", "moosicbox_app_tauri_bundled?/tunnel"]
 
-bundled = ["all-sources", "dep:moosicbox_app_tauri_bundled"]
-client  = ["dep:moosicbox_app_client"]
+bundled = [
+    "all-sources",
+    "dep:moosicbox_app_tauri_bundled",
+    "moosicbox_app_native?/bundled",
+]
+client = ["dep:moosicbox_app_client"]
 
-all-decoders    = ["all-os-decoders", "decoder-mp3"]
-all-os-decoders = ["decoder-aac", "decoder-flac"]
+all-decoders = [
+    "all-os-decoders",
+    "decoder-mp3",
+    "moosicbox_app_native?/all-decoders",
+    "moosicbox_player/all-decoders",
+]
+all-os-decoders = [
+    "decoder-aac",
+    "decoder-flac",
+    "moosicbox_app_native?/all-os-decoders",
+    "moosicbox_player/all-os-decoders",
+]
 
-decoder-aac  = ["moosicbox_app_native?/decoder-aac"]
-decoder-flac = ["moosicbox_app_native?/decoder-flac"]
-decoder-mp3  = ["moosicbox_app_native?/decoder-mp3"]
+decoder-aac = [
+    "moosicbox_app_native?/decoder-aac",
+    "moosicbox_app_tauri_bundled?/decoder-aac",
+    "moosicbox_player/decoder-aac",
+]
+decoder-flac = [
+    "moosicbox_app_native?/decoder-flac",
+    "moosicbox_app_tauri_bundled?/decoder-flac",
+    "moosicbox_player/decoder-flac",
+]
+decoder-mp3 = [
+    "moosicbox_app_native?/decoder-mp3",
+    "moosicbox_app_tauri_bundled?/decoder-mp3",
+    "moosicbox_player/decoder-mp3",
+]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_app_native?/all-formats",
+    "moosicbox_app_native_ui?/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_player/all-formats",
+    "moosicbox_session/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "moosicbox_app_native?/all-os-formats",
+    "moosicbox_app_native_ui?/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_player/all-os-formats",
+    "moosicbox_session/all-os-formats",
+]
 
 format-aac = [
     "moosicbox_app_native?/format-aac",
     "moosicbox_app_state/aac",
     "moosicbox_app_tauri_bundled?/format-aac",
     "moosicbox_music_models/aac",
+    "moosicbox_player/format-aac",
 ]
 format-flac = [
     "moosicbox_app_native?/format-flac",
     "moosicbox_app_state/flac",
     "moosicbox_app_tauri_bundled?/format-flac",
     "moosicbox_music_models/flac",
+    "moosicbox_player/format-flac",
 ]
 format-mp3 = [
     "moosicbox_app_native?/format-mp3",
     "moosicbox_app_state/mp3",
     "moosicbox_app_tauri_bundled?/format-mp3",
     "moosicbox_music_models/mp3",
+    "moosicbox_player/format-mp3",
 ]
 
 # Player audio outputs
@@ -159,7 +204,13 @@ jack = ["moosicbox_player/jack"]
 
 devtools = ["tauri/devtools"]
 
-all-sources = ["qobuz", "tidal", "yt"]
+all-sources = [
+    "moosicbox_app_native?/all-sources",
+    "moosicbox_app_state/all-sources",
+    "qobuz",
+    "tidal",
+    "yt",
+]
 
 qobuz = ["moosicbox_app_native?/qobuz", "moosicbox_app_state/qobuz"]
 tidal = ["moosicbox_app_native?/tidal", "moosicbox_app_state/tidal"]

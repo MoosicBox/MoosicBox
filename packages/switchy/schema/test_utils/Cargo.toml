@@ -47,9 +47,17 @@ fail-on-warnings = [
     "switchy_database_connection?/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
 ]
-snapshots = ["dep:insta", "dep:serde", "dep:serde_json", "sqlite"]
+snapshots = [
+    "dep:insta",
+    "dep:serde",
+    "dep:serde_json",
+    "sqlite",
+    "switchy_schema/snapshots",
+]
 sqlite = [
     "dep:switchy_database_connection",
-    "switchy_database_connection/sqlite-sqlx",
+    "switchy_database/sqlite",
+    "switchy_database_connection?/sqlite",
+    "switchy_database_connection?/sqlite-sqlx",
 ]
 uuid = ["switchy_database/uuid", "switchy_schema/uuid"]

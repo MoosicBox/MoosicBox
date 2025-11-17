@@ -106,7 +106,7 @@ fail-on-warnings = [
 
 tls = ["sqlx?/tls-rustls"]
 
-api = ["dep:actix-web", "dep:futures"]
+api = ["dep:actix-web", "dep:futures", "moosicbox_profiles/api"]
 
 _any_backend = []
 
@@ -164,7 +164,11 @@ sqlite-sqlx = [
 sqlx = ["_any_backend"]
 turso = ["_any_backend", "dep:regex", "dep:turso", "placeholder-question-mark"]
 
-simulator = ["sqlite-rusqlite"]
+simulator = [
+    "sqlite-rusqlite",
+    "switchy_async/simulator",
+    "switchy_time/simulator",
+]
 
 # Placeholder handler features
 all-placeholders = [

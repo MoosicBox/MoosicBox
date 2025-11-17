@@ -50,6 +50,7 @@ fail-on-warnings = [
     "moosicbox_json_utils?/fail-on-warnings",
     "moosicbox_profiles?/fail-on-warnings",
     "switchy_database?/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
 ]
 
 db = [
@@ -61,5 +62,10 @@ db = [
 
 file = []
 
-api     = ["db", "dep:actix-web", "switchy_database?/api"]
+api = [
+    "db",
+    "dep:actix-web",
+    "moosicbox_profiles?/api",
+    "switchy_database?/api",
+]
 openapi = ["dep:utoipa"]

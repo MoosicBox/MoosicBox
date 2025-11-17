@@ -60,8 +60,13 @@ simd = ["hyperchad_transformer/simd"]
 format              = ["hyperchad_transformer/format"]
 syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
 
-json  = ["hyperchad_renderer/json"]
-serde = ["dep:serde", "dep:serde_json", "dep:serde_urlencoded"]
+json = ["hyperchad_renderer/json"]
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_urlencoded",
+    "hyperchad_renderer/serde",
+]
 
 form = ["dep:base64", "dep:hyper_old", "dep:mime_old", "serde"]
 

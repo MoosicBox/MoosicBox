@@ -92,8 +92,15 @@ fail-on-warnings = [
 api = [
     "dep:actix-web",
     "dep:moosicbox_auth",
+    "moosicbox_auth?/api",
+    "moosicbox_config/api",
+    "moosicbox_files/api",
+    "moosicbox_library/api",
     "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
     "moosicbox_scan_models/api",
+    "moosicbox_search/api",
+    "switchy_database/api",
 ]
 local = [
     "dep:async-recursion",
@@ -103,12 +110,32 @@ local = [
 ]
 openapi = [
     "dep:utoipa",
+    "moosicbox_auth?/openapi",
+    "moosicbox_config/openapi",
+    "moosicbox_files/openapi",
+    "moosicbox_library/openapi",
+    "moosicbox_music_api/openapi",
     "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
     "moosicbox_scan_models/openapi",
+    "moosicbox_search/openapi",
 ]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-formats = [
+    "all-os-formats",
+    "moosicbox_files/all-formats",
+    "moosicbox_library/all-formats",
+    "moosicbox_music_models/all-formats",
+    "mp3",
+]
+all-os-formats = [
+    "aac",
+    "flac",
+    "moosicbox_files/all-os-formats",
+    "moosicbox_library/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "opus",
+]
 
 aac  = ["moosicbox_library/format-aac", "moosicbox_music_models/aac"]
 flac = ["moosicbox_library/format-flac", "moosicbox_music_models/flac"]

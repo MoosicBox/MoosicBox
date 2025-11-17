@@ -45,4 +45,4 @@ fail-on-warnings = [
 
 actix = ["dep:actix-web", "dep:actix-web-opentelemetry", "dep:futures-util"]
 
-simulator = ["dep:tracing-subscriber"]
+simulator = ["dep:tracing-subscriber", "switchy_env/simulator"]

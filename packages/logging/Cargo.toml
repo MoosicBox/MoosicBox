@@ -30,7 +30,7 @@ fail-on-warnings = [
 ]
 
 
-api = ["free_log_client/api"]
+api = ["free_log_client/api", "moosicbox_config?/api"]
 
 free_log = ["dep:moosicbox_config", "dep:moosicbox_env_utils"]
 

@@ -69,10 +69,21 @@ api = [
     "moosicbox_library_music_api/api",
     "moosicbox_menu_models/api",
     "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "moosicbox_profiles?/api",
+    "moosicbox_scan/api",
+    "moosicbox_search/api",
+    "moosicbox_session/api",
+    "switchy_database/api",
 ]
 openapi = [
     "dep:utoipa",
     "moosicbox_library/openapi",
     "moosicbox_menu_models/openapi",
+    "moosicbox_music_api/openapi",
     "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
+    "moosicbox_scan/openapi",
+    "moosicbox_search/openapi",
+    "moosicbox_session/openapi",
 ]

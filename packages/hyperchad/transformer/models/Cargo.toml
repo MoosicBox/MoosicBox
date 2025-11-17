@@ -42,4 +42,4 @@ fail-on-warnings = [
 arb    = ["dep:moosicbox_arb", "dep:quickcheck"]
 layout = []
 
-serde = ["dep:serde"]
+serde = ["dep:serde", "moosicbox_arb?/serde"]

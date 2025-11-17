@@ -52,4 +52,4 @@ scanner = [
     "dep:switchy_async",
 ]
 
-simulator = []
+simulator = ["switchy_async?/simulator"]

@@ -62,10 +62,22 @@ fail-on-warnings = [
     "switchy_time/fail-on-warnings",
 ]
 
-api = ["dep:actix-web", "moosicbox_library_models/api", "switchy_database/api"]
+api = [
+    "dep:actix-web",
+    "moosicbox_library_models/api",
+    "moosicbox_menu_models/api",
+    "moosicbox_music_api_models/api",
+    "moosicbox_music_models/api",
+    "moosicbox_search/api",
+    "switchy_database/api",
+]
 openapi = [
     "dep:utoipa",
     "moosicbox_library_models/openapi",
+    "moosicbox_menu_models/openapi",
+    "moosicbox_music_api_models/openapi",
+    "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
     "moosicbox_search/openapi",
 ]
 
@@ -77,8 +89,19 @@ encoder-flac = ["format-flac"]
 encoder-mp3  = ["format-mp3"]
 encoder-opus = ["format-opus"]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_library_models/all-formats",
+    "moosicbox_music_models/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_library_models/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+]
 
 format-aac  = ["moosicbox_library_models/aac", "moosicbox_music_models/aac"]
 format-flac = ["moosicbox_library_models/flac", "moosicbox_music_models/flac"]

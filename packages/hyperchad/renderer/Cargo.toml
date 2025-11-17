@@ -55,7 +55,7 @@ viewport           = []
 viewport-immediate = ["viewport"]
 viewport-retained  = ["viewport"]
 
-html = []
+html = ["hyperchad_transformer/html"]
 json = ["dep:serde_json"]
 
 assets = []

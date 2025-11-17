@@ -77,26 +77,57 @@ fail-on-warnings = [
 api = [
     "dep:actix-web",
     "dep:moosicbox_auth",
+    "moosicbox_auth?/api",
+    "moosicbox_config/api",
+    "moosicbox_files/api",
     "moosicbox_music_api/api",
+    "moosicbox_music_models/api",
+    "moosicbox_scan/api",
     "switchy_database/api",
 ]
 openapi = [
     "dep:utoipa",
+    "moosicbox_auth?/openapi",
+    "moosicbox_config/openapi",
+    "moosicbox_files/openapi",
     "moosicbox_music_api/openapi",
     "moosicbox_music_models/openapi",
     "moosicbox_paging/openapi",
+    "moosicbox_scan/openapi",
 ]
 
-all-decoders    = ["all-os-decoders", "decoder-mp3"]
-all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
+all-decoders = [
+    "all-os-decoders",
+    "decoder-mp3",
+    "moosicbox_files/all-decoders",
+]
+all-os-decoders = [
+    "decoder-aac",
+    "decoder-flac",
+    "decoder-opus",
+    "moosicbox_files/all-os-decoders",
+]
 
 decoder-aac  = ["format-aac", "moosicbox_files/decoder-aac"]
 decoder-flac = ["format-flac", "moosicbox_files/decoder-flac"]
 decoder-mp3  = ["format-mp3", "moosicbox_files/decoder-mp3"]
 decoder-opus = ["format-opus", "moosicbox_files/decoder-opus"]
 
-all-formats    = ["all-os-formats", "format-mp3"]
-all-os-formats = ["format-aac", "format-flac", "format-opus"]
+all-formats = [
+    "all-os-formats",
+    "format-mp3",
+    "moosicbox_files/all-formats",
+    "moosicbox_music_models/all-formats",
+    "moosicbox_scan/all-formats",
+]
+all-os-formats = [
+    "format-aac",
+    "format-flac",
+    "format-opus",
+    "moosicbox_files/all-os-formats",
+    "moosicbox_music_models/all-os-formats",
+    "moosicbox_scan/all-os-formats",
+]
 
 format-aac  = ["moosicbox_files/format-aac", "moosicbox_music_models/aac"]
 format-flac = ["moosicbox_files/format-flac", "moosicbox_music_models/flac"]

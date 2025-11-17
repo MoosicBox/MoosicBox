@@ -51,9 +51,20 @@ fail-on-warnings = [
     "switchy_async?/fail-on-warnings",
 ]
 
-openapi = ["moosicbox_music_api_models/openapi"]
+openapi = [
+    "moosicbox_menu_models/openapi",
+    "moosicbox_music_api_models/openapi",
+    "moosicbox_music_models/openapi",
+    "moosicbox_paging/openapi",
+]
 
-api = ["dep:actix-web", "moosicbox_profiles/api"]
+api = [
+    "dep:actix-web",
+    "moosicbox_menu_models/api",
+    "moosicbox_music_api_models/api",
+    "moosicbox_music_models/api",
+    "moosicbox_profiles/api",
+]
 
 _auth = []
 all-auth = ["auth-poll", "auth-username-password"]

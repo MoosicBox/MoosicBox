@@ -55,11 +55,26 @@ fail-on-warnings = [
     "switchy_fs/fail-on-warnings",
 ]
 
-api = ["db", "dep:actix-web", "moosicbox_music_models/api"]
-db = ["moosicbox_music_models/db"]
+api = [
+    "db",
+    "dep:actix-web",
+    "moosicbox_config/api",
+    "moosicbox_music_api_models/api",
+    "moosicbox_music_models/api",
+]
+db = [
+    "moosicbox_config/db",
+    "moosicbox_music_api_models/db",
+    "moosicbox_music_models/db",
+]
 openapi = [
+    "moosicbox_config/openapi",
     "moosicbox_music_api_models/openapi",
     "moosicbox_music_models/openapi",
 ]
 
-simulator = ["switchy_fs/simulator"]
+simulator = [
+    "switchy_async/simulator",
+    "switchy_async/time",
+    "switchy_fs/simulator",
+]
