@@ -178,6 +178,7 @@ use hyperchad_renderer::transformer::actions::logic::Value;
 
 // With actions feature enabled
 let (action_tx, action_rx) = flume::unbounded();
+let (_renderer_tx, renderer_rx) = flume::unbounded();
 let app = ActixApp::new(processor, renderer_rx)
     .with_action_tx(action_tx);
 
