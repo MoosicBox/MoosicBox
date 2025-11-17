@@ -1,0 +1,3 @@
+[[config]]
+os            = "windows"
+skip-features = ["asio"]

@@ -27,5 +27,6 @@ sudo apt install libwebkit2gtk-4.1-dev \
 [[config]]
 os = "macos"
 
-# [[config]]
-# os = "windows"
+[[config]]
+os            = "windows"
+skip-features = ["asio"]

@@ -23,8 +23,9 @@ os = "macos"
 command  = "brew install jack"
 features = ["jack"]
 
-# [[config]]
-# os = "windows"
+[[config]]
+os            = "windows"
+skip-features = ["asio"]
 
 # [[config.dependencies]]
 # command  = "winget install -e --id Jackaudio.JACK2 --accept-source-agreements --accept-package-agreements"
