@@ -214,7 +214,7 @@ Links sessions to playlists for playback management.
 
 ## Error Handling
 
-The library uses `DatabaseFetchError` for database operations and `CreatePlayersError` for player creation failures.
+The library uses `DatabaseFetchError` for database operations.
 
 ## Dependencies
 
