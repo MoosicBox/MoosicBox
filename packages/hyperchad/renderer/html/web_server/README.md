@@ -20,6 +20,13 @@ use hyperchad_renderer_html_web_server::*;
 use hyperchad_renderer::{Handle, ToRenderRunner};
 use flume::unbounded;
 use async_trait::async_trait;
+use std::sync::Arc;
+
+// Define your request data type
+#[derive(Clone)]
+struct MyRequestType {
+    path: String,
+}
 
 // Implement WebServerResponseProcessor for your response type
 #[derive(Clone)]
