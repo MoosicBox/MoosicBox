@@ -42,6 +42,7 @@ thiserror  = { workspace = true }
 toml       = { workspace = true }
 
 git2 = { workspace = true, optional = true }
+mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
 
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
@@ -49,7 +50,7 @@ insta                   = { workspace = true, features = ["redactions", "yaml"] 
 test-log                = { workspace = true }
 
 [features]
-default = ["git-diff"]
+default = ["git-diff", "transforms"]
 
 fail-on-warnings = [
     "moosicbox_logging/fail-on-warnings",
@@ -58,6 +59,7 @@ fail-on-warnings = [
 
 git-diff   = ["dep:git2"]
 test-utils = []
+transforms = ["dep:mlua"]
 
 # Automatically enable test-utils when running tests
 [[test]]

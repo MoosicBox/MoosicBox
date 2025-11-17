@@ -58,6 +58,7 @@
           cmake
           ninja
           openssl
+          lua5_4 # Required for mlua crate with lua54 feature
         ];
 
         # Audio packages (common to many apps)

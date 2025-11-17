@@ -55,6 +55,9 @@
 /// and Unicode support.
 pub mod package_filter;
 
+#[cfg(feature = "transforms")]
+pub mod transforms;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
