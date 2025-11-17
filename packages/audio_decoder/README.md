@@ -55,7 +55,13 @@ all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]
 
 # Development
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_opus?/fail-on-warnings",
+    "moosicbox_stream_utils/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 profiling = ["dep:profiling"]
 ```
 
