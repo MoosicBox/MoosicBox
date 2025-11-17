@@ -216,13 +216,13 @@ fn json_response_examples() -> Result<Vec<HttpResponse>, moosicbox_web_server::E
 
 ```rust
 #[cfg(feature = "cors")]
-use moosicbox_web_server::{WebServerBuilder, cors::Cors};
+use moosicbox_web_server::{WebServerBuilder, cors::Cors, Method};
 
 #[cfg(feature = "cors")]
 fn server_with_cors() {
     let cors = Cors::default()
         .allow_origin("https://example.com")
-        .allowed_methods(["GET", "POST", "PUT", "DELETE"])
+        .allowed_methods([Method::Get, Method::Post, Method::Put, Method::Delete])
         .allowed_headers(["Content-Type", "Authorization"]);
 
     let server = WebServerBuilder::new()
