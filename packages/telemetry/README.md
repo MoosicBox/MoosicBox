@@ -134,7 +134,7 @@ impl HttpMetricsHandler for CustomMetricsHandler {
         Box::pin(async {
             // Custom metrics collection logic
             let metrics_data = collect_custom_metrics().await;
-            Ok(HttpResponse::Ok().body(metrics_data))
+            Ok(HttpResponse::with_body(actix_web::http::StatusCode::OK, metrics_data))
         })
     }
 
