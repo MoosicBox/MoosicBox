@@ -88,12 +88,7 @@ profiling-puffin = [
     "hyperchad_transformer/profiling-puffin",
     "profiling",
 ]
-profiling-tracing = [
-    "dep:tracing-subscriber",
-    "hyperchad_renderer/profiling-tracing",
-    "hyperchad_transformer/profiling-tracing",
-    "profiling",
-]
+profiling-tracing = ["dep:tracing-subscriber", "profiling"]
 profiling-tracy = [
     "dep:tracy-client",
     "hyperchad_renderer/profiling-tracy",

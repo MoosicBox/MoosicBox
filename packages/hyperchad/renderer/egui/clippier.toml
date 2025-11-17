@@ -1,0 +1,7 @@
+# Clippier configuration for hyperchad_renderer_egui
+
+[[feature-validation.override]]
+dependencies = ["hyperchad_renderer", "hyperchad_transformer"]
+feature      = "profiling-tracing"
+reason       = "egui uses puffin internally; incompatible with tracing profiling backend"
+type         = "allow-missing"
