@@ -24,6 +24,12 @@ impl Migration<'static> for AddUsersBioColumn {
         "002_add_users_bio"
     }
 
+    /// Applies the migration forward, adding a bio column to the users table with a default empty string value.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the ALTER TABLE statement fails
+    /// * Returns an error if the database connection fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Add bio column with default value for existing users
         // Using raw SQL since ALTER TABLE ADD COLUMN isn't supported by schema builder yet
@@ -32,6 +38,11 @@ impl Migration<'static> for AddUsersBioColumn {
         Ok(())
     }
 
+    /// Rolls back the migration (no-op in this example).
+    ///
+    /// # Errors
+    ///
+    /// This implementation does not return errors, but the signature returns Result for consistency with the Migration trait.
     async fn down(&self, _db: &dyn Database) -> switchy_schema::Result<()> {
         // For this example, we'll just note that the column would be removed
         // In a real scenario, you might recreate the table without the bio column
@@ -53,12 +64,25 @@ impl Migration<'static> for AddEmailIndex {
         "003_add_email_index"
     }
 
+    /// Applies the migration forward, creating an index on the email column of the users table.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the CREATE INDEX statement fails
+    /// * Returns an error if an index with the same name already exists
+    /// * Returns an error if the database connection fails
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("CREATE INDEX idx_users_email_migration ON users(email)")
             .await?;
         Ok(())
     }
 
+    /// Rolls back the migration, dropping the email index.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the DROP INDEX statement fails
+    /// * Returns an error if the database connection fails
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("DROP INDEX idx_users_email_migration").await?;
         Ok(())
@@ -70,6 +94,12 @@ impl Migration<'static> for AddEmailIndex {
 }
 
 /// Setup function that creates initial data in the database
+///
+/// # Errors
+///
+/// * Returns an error if table creation fails
+/// * Returns an error if any INSERT statement fails
+/// * Returns an error if the database connection fails
 async fn setup_initial_data(db: &dyn Database) -> std::result::Result<(), DatabaseError> {
     println!("  📊 Setting up initial data...");
 
