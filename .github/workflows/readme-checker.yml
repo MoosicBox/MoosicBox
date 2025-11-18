@@ -50,6 +50,11 @@ on:
                 type: string
                 default: ""
 
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -58,9 +63,7 @@ jobs:
         name: Create or use existing branch
         runs-on: ubuntu-latest
         outputs:
-            branch-name: ${{ steps.branch.outputs.name }}
-            branch-date: ${{ steps.branch.outputs.date }}
-            is-new: ${{ steps.branch.outputs.is_new }}
+            branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -68,60 +71,15 @@ jobs:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
 
-            - name: Determine branch to use
+            - name: Create branch
               id: branch
-              run: |
-                  if [ -n "${{ inputs.existing_branch }}" ]; then
-                    BRANCH_NAME="${{ inputs.existing_branch }}"
-
-                    if ! git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
-                      echo "❌ Error: Branch '$BRANCH_NAME' does not exist"
-                      exit 1
-                    fi
-
-                    echo "Using existing branch: $BRANCH_NAME"
-                    echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-                    echo "is_new=false" >> $GITHUB_OUTPUT
-
-                    if [[ "$BRANCH_NAME" =~ readme-updates-([0-9]{14}) ]]; then
-                      echo "date=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-                    else
-                      echo "date=existing" >> $GITHUB_OUTPUT
-                    fi
-                  else
-                    BRANCH_DATE=$(date +%Y%m%d%H%M%S)
-                    BRANCH_NAME="readme-updates-${BRANCH_DATE}-${{ github.run_id }}"
-
-                    RETRY_SUFFIX=""
-                    if [ "${{ github.run_attempt }}" -gt 1 ]; then
-                      RETRY_SUFFIX="-${{ github.run_attempt }}"
-                    fi
-
-                    FULL_BRANCH="${BRANCH_NAME}${RETRY_SUFFIX}"
-
-                    echo "Creating new branch: $FULL_BRANCH"
-                    echo "name=$FULL_BRANCH" >> $GITHUB_OUTPUT
-                    echo "date=$BRANCH_DATE" >> $GITHUB_OUTPUT
-                    echo "is_new=true" >> $GITHUB_OUTPUT
-                  fi
-
-            - name: Configure Git
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-
-            - name: Create new branch
-              if: steps.branch.outputs.is_new == 'true'
-              run: |
-                  git checkout -b ${{ steps.branch.outputs.name }}
-                  git push origin ${{ steps.branch.outputs.name }}
-
-            - name: Checkout existing branch
-              if: steps.branch.outputs.is_new == 'false'
-              run: |
-                  git fetch origin ${{ steps.branch.outputs.name }}
-                  git checkout ${{ steps.branch.outputs.name }}
-                  echo "✅ Checked out existing branch: ${{ steps.branch.outputs.name }}"
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-branch
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_prefix: readme-updates
+                  branch_name: ${{ inputs.existing_branch }}
+                  existing_branch: ${{ inputs.existing_branch != '' && 'true' || 'false' }}
 
     determine-packages:
         name: Determine packages to update
@@ -184,227 +142,42 @@ jobs:
 
             - name: Update README with Claude
               if: steps.check_readme.outputs.exists == 'true'
-              uses: BSteffaniak/claude-code-action@dev
+              uses: ./.github/actions/claude-checker
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  command: check
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  prompt_template: readme
 
-                  prompt: |
-                      ${{
-                        (inputs.existing_branch != '' && inputs.prompt_override != '' &&
-                          format('# Additional README Refinement for {0}
+                  template_vars: |
+                      package_name: ${{ matrix.package.name }}
+                      package_path: ${{ matrix.package.path }}
+                      custom_guidelines: ${{ inputs.prompt_override }}
 
-                      This is a refinement pass on an existing README update branch.
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  auto_commit: true
+                  enable_resilient_push: true
+                  push_max_retries: 5
+                  extract_commit_message: true
 
-                      ## Previous Context
-                      The README at `{1}/README.md` has already been reviewed and potentially updated.
+                  model: ${{ inputs.model }}
+                  max_tokens: ${{ inputs.max_tokens }}
+                  max_turns: ${{ inputs.max_turns }}
+                  claude_args: --allowedTools Edit,Read,Write,Bash
 
-                      ## Additional Guidance
-                      {2}
+            - name: Format README with prettier
+              if: always() && steps.check_readme.outputs.exists == 'true'
+              run: |
+                  README_PATH="${{ matrix.package.path }}/README.md"
+                  if [ -f "$README_PATH" ]; then
+                    npx -y prettier --write "$README_PATH"
 
-                      ## Requirements
-                      - Review the current state of the README
-                      - Apply the additional guidance above
-                      - Only make changes that align with the new guidance
-                      - Preserve previous improvements unless they conflict with new guidance
-
-                      Focus on incremental improvements based on the additional guidance.',
-                          matrix.package.name, matrix.package.path, inputs.prompt_override))
-                        ||
-                        (inputs.prompt_override != '' && inputs.prompt_override)
-                        ||
-                        (vars.README_UPDATE_PROMPT != '' && vars.README_UPDATE_PROMPT)
-                        ||
-                        format('# README Accuracy Review for {0}
-
-                      ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ERRORS ONLY
-
-                      You may ONLY make changes for these reasons:
-
-                      **Fundamentally Incorrect:**
-                      - README claims a feature that doesn''t exist in the code at `{1}/`
-                      - Code examples show wrong function signatures (don''t match actual code in `{1}/src/`)
-                      - Dependencies listed don''t match `{1}/Cargo.toml`
-                      - Module/file references don''t match actual structure
-                      - Links are broken or point to wrong locations
-
-                      **Fundamentally Incomplete:**
-                      - A major implemented feature is completely missing from README
-                      - Critical usage information is absent (e.g., how to use the main API)
-
-                      **FORBIDDEN Changes (even if you think they would be "better"):**
-                      - ❌ Rewording for clarity, style, or tone
-                      - ❌ Reorganizing sections or structure
-                      - ❌ Formatting/markdown improvements
-                      - ❌ Adding more examples when basics are already covered
-                      - ❌ Expanding descriptions that are already accurate
-                      - ❌ Minor completeness improvements
-                      - ❌ Changing future tense to present or vice versa (if already marked correctly)
-                      - ❌ Removing features that are configured/enabled even if not fully implemented
-                      - ❌ Nitpicking wording differences when the meaning is substantially the same
-                      - ❌ Including specific line numbers in code references (e.g., `src/file.rs:123`) - line numbers change frequently and should be omitted
-                      - ❌ Including specific counts of tests/test cases (e.g., "5 test cases", "10 tests") - test counts change frequently and should be omitted
-
-                      **Decision Rule:**
-                      Before making ANY change, ask yourself:
-                      1. "Would a user be MISLED or UNABLE TO USE this package because of this issue?"
-                      2. "Am I removing information that is technically accurate based on configuration/capabilities?"
-                      - If either is NO → Leave it alone
-                      - If both are YES → Fix it (it''s fundamental)
-
-                      **Examples of FORBIDDEN changes:**
-                      - Changing "System notifications, tray integration, and OS-specific features" to just "System notification support" (removing configured capabilities)
-                      - Changing "Media keys, notifications, and system tray" to "Media keys and notifications" (removing tray mention when capability exists)
-                      - Simplifying feature lists that accurately describe configured functionality
-
-                      ## 📖 PUBLIC API FOCUS - Do Not Document Internals
-
-                      READMEs are for **users of the package**, not maintainers. Only document the public-facing API.
-
-                      **DO Document:**
-                      - ✅ Public functions, structs, traits (items with `pub` visibility)
-                      - ✅ Cargo features users can enable (e.g., `--features async`)
-                      - ✅ Main entry points and usage patterns
-                      - ✅ Public configuration options
-                      - ✅ Integration examples for users
-
-                      **DO NOT Document:**
-                      - ❌ Internal macros (`macro_rules!` not in public API)
-                      - ❌ Private or crate-private items (`pub(crate)`, `pub(super)`, or non-pub items)
-                      - ❌ Implementation details (caches, thread pools, internal state)
-                      - ❌ Test utilities or `#[cfg(test)]` code
-                      - ❌ Build scripts or internal feature implementations
-                      - ❌ Helper functions only used within the crate
-
-                      **How to identify internal items when reviewing code:**
-                      1. Check visibility: `pub` without qualifiers = Public ✅ | `pub(crate)` or no `pub` = Internal ❌
-                      2. Check if exported in `lib.rs` or module root = Public ✅
-                      3. Internal naming patterns (`_helper`, `internal_*`) = Internal ❌
-                      4. Only called within same crate = Internal ❌
-
-                      **Decision Rule for Documentation:**
-                      When considering whether to document something, ask: "Would a user of this library as a dependency need to know this?"
-                      - YES (it''s a public API they''ll call) → Document it
-                      - NO (it''s internal implementation) → Leave it out or remove it
-
-                      ## 📝 Commit Message Instructions
-
-                      If you make changes to the README, you MUST provide a commit message description.
-
-                      At the END of your response, include a section formatted EXACTLY as follows:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Brief description of what changed and why (1-2 sentences)
-                      - Additional changes if applicable
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Example:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Removed claim about WebSocket support as the feature is not implemented in the codebase
-                      - Added documentation for the new `connect_async` method which is exported in lib.rs but was missing from README
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Requirements:
-                      - Keep each bullet point concise (1-2 sentences max)
-                      - Focus on WHAT changed and WHY (the fundamental issue)
-                      - Use bullet points with dashes (-)
-                      - Do not include code snippets or line numbers
-                      - If no changes needed, output "No changes required - documentation is accurate"
-
-                      ## Verification Process
-
-                      1. **🚫 MANDATORY Git History Regression Check**
-
-                         Before making ANY change to the README, you MUST check git history for the SPECIFIC LINES you want to modify.
-
-                         **Required Commands:**
-                         For each line or section you want to change, run:
-                         ```bash
-                         # Replace LINE_NUMBER with the actual line number you want to modify
-                         # Add +/- 5 lines of context to catch related changes
-                         git log -L LINE_NUMBER,+1:{1}/README.md --format="%H %s%n%b"
-
-                         # For a section spanning multiple lines (e.g., lines 240-250):
-                         git log -L 240,250:{1}/README.md --format="%H %s%n%b"
-                         ```
-
-                         **What to Look For:**
-                         - **Revert commits**: Messages containing "revert", "revert back to", "prefer X format", "changed back to"
-                         - **PR discussion references**: Look for "Triggered-by:" URLs in commit messages
-                         - **Explicit reasoning**: Commit messages explaining "prefer X because Y" or "more concise", "better for readability"
-                         - **Multiple attempts**: If the same change appears 2+ times in history, this is a STRONG SIGNAL
-
-                         **Blocking Rules (NON-NEGOTIABLE):**
-                         - ❌ **If you find a revert commit for the exact change you want to make**: STOP. DO NOT make that change.
-                         - ❌ **If the same change was reverted 2+ times**: HARD STOP. The maintainers have decided against it.
-                         - ❌ **If a commit contains "Triggered-by:" with a GitHub PR/discussion URL**: You MUST read that discussion to understand the reasoning before proceeding.
-                         - ❌ **If unclear after reading history**: Leave it alone. Document the uncertainty in your output for human review.
-
-                         **Decision Process:**
-                         1. Run `git log -L` for the specific line(s) you want to change
-                         2. Read ALL commit messages in the history (no arbitrary limits - check FULL history)
-                         3. If you see a revert or "Triggered-by:" reference:
-                            a. Extract the discussion URL if present
-                            b. Understand why the change was reverted
-                            c. If your proposed change matches what was reverted: BLOCK IT
-                         4. Document your findings in a `REGRESSION_CHECK` block (format below)
-
-                         **Required Output Format:**
-                         For EVERY change you consider making, include this in your response:
-                         ```
-                         REGRESSION_CHECK_START
-                         File: {1}/README.md
-                         Line(s): [specific line numbers]
-                         Proposed change: [brief description of what you wanted to do]
-                         Git history checked: YES
-                         Revert found: [YES/NO]
-                         Revert details: [commit hash and reasoning if YES, otherwise "None found"]
-                         Decision: [PROCEED/BLOCKED - explanation]
-                         REGRESSION_CHECK_END
-                         ```
-
-                         **Example of BLOCKED change:**
-                         ```
-                         REGRESSION_CHECK_START
-                         File: packages/clippier/README.md
-                         Line(s): 244
-                         Proposed change: Change --features "feature1,feature2" to --features feature1 --features feature2
-                         Git history checked: YES
-                         Revert found: YES
-                         Revert details: Commit 27bb0ed83 reverted this exact change with reasoning "prefer comma-separated for conciseness" and references PR discussion at https://github.com/MoosicBox/MoosicBox/pull/175#discussion_r2462901200
-                         Decision: BLOCKED - This change was already discussed and reverted. Will not make it again.
-                         REGRESSION_CHECK_END
-                         ```
-
-                      2. **Check Claims Against Code**
-                         - Read the code at `{1}/src/` to verify README claims
-                         - Compare API examples with actual function signatures
-                         - Check `{1}/Cargo.toml` for dependency accuracy
-
-                      3. **Identify Only Fundamental Issues**
-                         - Focus on factual errors and critical omissions
-                         - Ignore style, wording, or organizational preferences
-
-                      ## Scope
-
-                      Only modify `{1}/README.md`. Do not change any code files.
-
-                      ## Output
-
-                      - If the README is fundamentally accurate and complete: **Make NO changes**
-                      - If you find fundamental errors: Fix them with minimal edits
-                      - Do not "improve" things that are already correct',
-                          matrix.package.name, matrix.package.path)
-                      }}
-
-                  claude_args: |
-                      --allowedTools Edit,Read,Write
-                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
-                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
-                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
+                    if [ -n "$(git status --porcelain)" ]; then
+                      git add "$README_PATH"
+                      git commit --amend --no-edit
+                      git push --force-with-lease origin ${{ needs.create-branch.outputs.branch-name }}
+                    fi
+                  fi
 
             - name: Upload Claude output for review
               if: always() && steps.check_readme.outputs.exists == 'true'
@@ -414,86 +187,6 @@ jobs:
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
-
-            - name: Format README with prettier
-              if: steps.check_readme.outputs.exists == 'true'
-              run: |
-                  # Check if README was modified by Claude
-                  if git diff --name-only | grep -q "${{ matrix.package.path }}/README.md" || \
-                     git diff --cached --name-only | grep -q "${{ matrix.package.path }}/README.md"; then
-
-                    echo "📝 README modified, running prettier..."
-
-                    if ! npx -y prettier --write "${{ matrix.package.path }}/README.md"; then
-                      echo "⚠️ Prettier failed - continuing with unformatted README"
-                      echo "This may indicate malformed markdown in Claude's output"
-                    else
-                      echo "✅ Prettier formatting complete"
-                    fi
-                  else
-                    echo "ℹ️ No README changes detected, skipping prettier"
-                  fi
-
-            - name: Commit changes with resilient push
-              if: steps.check_readme.outputs.exists == 'true'
-              run: |
-                  # Remove output.txt so it doesn't get committed
-                  rm -f output.txt
-
-                  # Check if any changes were made by Claude
-                  if [ -n "$(git status --porcelain)" ]; then
-
-                    echo "📝 Changes detected, preparing commit..."
-                    git add -A
-
-                    # Extract commit message from Claude output (JSONL format)
-                    if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
-                    fi
-
-                    if [ -n "$COMMIT_DESC" ]; then
-                      echo "📋 Extracted commit description:"
-                      echo "$COMMIT_DESC"
-                      git commit -m "docs(${{ matrix.package.name }}): update README for accuracy" -m "$COMMIT_DESC"
-                    else
-                      echo "⚠️ No commit description found, using simple message"
-                      git commit -m "docs(${{ matrix.package.name }}): update README for accuracy"
-                    fi
-
-                    MAX_RETRIES=5
-                    RETRY_COUNT=0
-                    PUSH_SUCCESS=false
-
-                    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = "false" ]; do
-                      echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-
-                      if git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}; then
-                        if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
-                          echo "✅ Successfully pushed changes"
-                          PUSH_SUCCESS=true
-                        else
-                          echo "⚠️ Push failed, will retry..."
-                          RETRY_COUNT=$((RETRY_COUNT + 1))
-                          sleep $((RETRY_COUNT * 2))
-                        fi
-                      else
-                        echo "⚠️ Rebase failed, resolving and retrying..."
-                        git rebase --abort || true
-                        git fetch origin ${{ needs.create-branch.outputs.branch-name }}
-                        RETRY_COUNT=$((RETRY_COUNT + 1))
-                        sleep $((RETRY_COUNT * 2))
-                      fi
-                    done
-
-                    if [ "$PUSH_SUCCESS" = "false" ]; then
-                      echo "❌ Failed to push after $MAX_RETRIES attempts"
-                      exit 1
-                    fi
-                  else
-                    echo "ℹ️ No changes detected, skipping commit"
-                    echo "📋 Git status shows:"
-                    git status --short
-                  fi
 
     update-root-readme:
         name: Update root README
@@ -514,221 +207,41 @@ jobs:
                   git config user.email "MoosicBoxBot@gmail.com"
 
             - name: Update root README with Claude
-              uses: BSteffaniak/claude-code-action@dev
+              uses: ./.github/actions/claude-checker
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  command: check
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  prompt_template: readme
 
-                  prompt: |
-                      ${{
-                        (inputs.existing_branch != '' && inputs.prompt_override != '' &&
-                          format('# Additional Root README Refinement
+                  template_vars: |
+                      package_path: .
+                      is_root_readme: true
+                      custom_guidelines: ${{ inputs.prompt_override }}
 
-                      This is a refinement pass on an existing README update branch.
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  auto_commit: true
+                  enable_resilient_push: true
+                  push_max_retries: 5
+                  extract_commit_message: true
 
-                      ## Previous Context
-                      The root README.md has already been reviewed and potentially updated.
+                  model: ${{ inputs.model }}
+                  max_tokens: ${{ inputs.max_tokens }}
+                  max_turns: ${{ inputs.max_turns }}
+                  claude_args: --allowedTools Edit,Read,Write,Bash
 
-                      ## Additional Guidance
-                      {0}
+            - name: Format README with prettier
+              if: always()
+              run: |
+                  if [ -f "README.md" ]; then
+                    npx -y prettier --write "README.md"
 
-                      ## Requirements
-                      - Review the current state of the README
-                      - Apply the additional guidance above
-                      - Only make changes that align with the new guidance
-                      - Preserve previous improvements unless they conflict with new guidance
-
-                      Focus on incremental improvements based on the additional guidance.',
-                          inputs.prompt_override))
-                        ||
-                        (inputs.prompt_override != '' && inputs.prompt_override)
-                        ||
-                        (vars.ROOT_README_UPDATE_PROMPT != '' && vars.ROOT_README_UPDATE_PROMPT)
-                        ||
-                        '# Root README Accuracy Review
-
-                      ## ⚠️ CRITICAL CONSTRAINT: FUNDAMENTAL ERRORS ONLY
-
-                      You may ONLY make changes for these reasons:
-
-                      **Fundamentally Incorrect:**
-                      - README claims a major feature that doesn''t exist in the codebase
-                      - Installation/setup instructions that are completely wrong
-                      - Technology/platform claims that are false
-                      - Command examples that don''t work
-                      - Broken links to documentation or resources
-
-                      **Fundamentally Incomplete:**
-                      - Major implemented features completely missing from README
-                      - Critical setup steps absent
-                      - Essential prerequisites not mentioned
-
-                      **FORBIDDEN Changes (even if you think they would be "better"):**
-                      - ❌ Rewording for clarity, style, or tone
-                      - ❌ Reorganizing sections
-                      - ❌ Marketing copy improvements
-                      - ❌ Adding more detail when basics are covered
-                      - ❌ Formatting/markdown changes
-                      - ❌ Expanding package descriptions that are already accurate
-                      - ❌ Minor completeness improvements
-                      - ❌ Removing features that are configured/enabled even if not fully implemented
-                      - ❌ Nitpicking wording differences when the meaning is substantially the same
-                      - ❌ Including specific line numbers in code references (e.g., `src/file.rs:123`) - line numbers change frequently and should be omitted
-                      - ❌ Including specific counts of tests/test cases (e.g., "5 test cases", "10 tests") - test counts change frequently and should be omitted
-
-                      **Decision Rule:**
-                      Before making ANY change, ask:
-                      1. "Would someone reading this be fundamentally MISLED about what this project does or how to use it?"
-                      2. "Am I removing information that is technically accurate based on configuration/capabilities?"
-                      - If either is NO → Leave it alone
-                      - If both are YES → Fix it (it''s fundamental)
-
-                      **Examples of FORBIDDEN changes:**
-                      - Changing "System notifications, tray integration, and OS-specific features" to just "System notification support" (removing configured capabilities)
-                      - Changing "Media keys, notifications, and system tray" to "Media keys and notifications" (removing tray mention when capability exists)
-                      - Simplifying feature lists that accurately describe configured functionality
-
-                      ## 📖 USER-FACING FOCUS - Don''t Document Implementation Details
-
-                      The root README is for **users and potential contributors**, not deep implementation details.
-
-                      **DO Document:**
-                      - ✅ What the project does (high-level purpose)
-                      - ✅ How to install and run it
-                      - ✅ Major features users will interact with
-                      - ✅ Public APIs and user-facing interfaces
-                      - ✅ Configuration options for deployment
-                      - ✅ Getting started guide
-
-                      **DO NOT Document:**
-                      - ❌ Internal architecture implementation details
-                      - ❌ Development tooling specifics (save for DEVELOPMENT.md)
-                      - ❌ Internal macros or helper utilities
-                      - ❌ Build system internals
-                      - ❌ Implementation-specific optimizations (caches, thread pools, etc.)
-                      - ❌ Internal module organization (unless relevant to users)
-
-                      **Decision Rule for Documentation:**
-                      Ask: "Does a user evaluating or using MoosicBox need to know this?"
-                      - YES (helps them understand/use the project) → Document it
-                      - NO (only relevant to maintainers/contributors) → Leave it out
-
-                      **Focus on:** What users need to evaluate, install, configure, and use MoosicBox successfully.
-
-                      ## 📝 Commit Message Instructions
-
-                      If you make changes to the root README, you MUST provide a commit message description.
-
-                      At the END of your response, include a section formatted EXACTLY as follows:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Brief description of what changed and why (1-2 sentences)
-                      - Additional changes if applicable
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Example:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Corrected installation command from npm to cargo based on actual build system
-                      - Removed claim about Docker support as docker-compose.yml is not present in repository
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Requirements:
-                      - Keep each bullet point concise (1-2 sentences max)
-                      - Focus on WHAT changed and WHY (the fundamental issue)
-                      - Use bullet points with dashes (-)
-                      - Do not include code snippets or line numbers
-                      - If no changes needed, output "No changes required - documentation is accurate"
-
-                      ## Verification Process
-
-                      1. **🚫 MANDATORY Git History Regression Check**
-
-                         Before making ANY change to the README, you MUST check git history for the SPECIFIC LINES you want to modify.
-
-                         **Required Commands:**
-                         For each line or section you want to change, run:
-                         ```bash
-                         # Replace LINE_NUMBER with the actual line number you want to modify
-                         # Add +/- 5 lines of context to catch related changes
-                         git log -L LINE_NUMBER,+1:README.md --format="%H %s%n%b"
-
-                         # For a section spanning multiple lines (e.g., lines 50-60):
-                         git log -L 50,60:README.md --format="%H %s%n%b"
-                         ```
-
-                         **What to Look For:**
-                         - **Revert commits**: Messages containing "revert", "revert back to", "prefer X format", "changed back to"
-                         - **PR discussion references**: Look for "Triggered-by:" URLs in commit messages
-                         - **Explicit reasoning**: Commit messages explaining "prefer X because Y" or "more concise", "better for readability"
-                         - **Multiple attempts**: If the same change appears 2+ times in history, this is a STRONG SIGNAL
-
-                         **Blocking Rules (NON-NEGOTIABLE):**
-                         - ❌ **If you find a revert commit for the exact change you want to make**: STOP. DO NOT make that change.
-                         - ❌ **If the same change was reverted 2+ times**: HARD STOP. The maintainers have decided against it.
-                         - ❌ **If a commit contains "Triggered-by:" with a GitHub PR/discussion URL**: You MUST read that discussion to understand the reasoning before proceeding.
-                         - ❌ **If unclear after reading history**: Leave it alone. Document the uncertainty in your output for human review.
-
-                         **Decision Process:**
-                         1. Run `git log -L` for the specific line(s) you want to change
-                         2. Read ALL commit messages in the history (no arbitrary limits - check FULL history)
-                         3. If you see a revert or "Triggered-by:" reference:
-                            a. Extract the discussion URL if present
-                            b. Understand why the change was reverted
-                            c. If your proposed change matches what was reverted: BLOCK IT
-                         4. Document your findings in a `REGRESSION_CHECK` block (format below)
-
-                         **Required Output Format:**
-                         For EVERY change you consider making, include this in your response:
-                         ```
-                         REGRESSION_CHECK_START
-                         File: README.md
-                         Line(s): [specific line numbers]
-                         Proposed change: [brief description of what you wanted to do]
-                         Git history checked: YES
-                         Revert found: [YES/NO]
-                         Revert details: [commit hash and reasoning if YES, otherwise "None found"]
-                         Decision: [PROCEED/BLOCKED - explanation]
-                         REGRESSION_CHECK_END
-                         ```
-
-                         **Example of BLOCKED change:**
-                         ```
-                         REGRESSION_CHECK_START
-                         File: README.md
-                         Line(s): 125
-                         Proposed change: Change CLI example format from X to Y
-                         Git history checked: YES
-                         Revert found: YES
-                         Revert details: Commit abc123 reverted this exact change with reasoning "prefer X for better readability" and references PR discussion
-                         Decision: BLOCKED - This change was already discussed and reverted. Will not make it again.
-                         REGRESSION_CHECK_END
-                         ```
-
-                      2. **Check Major Claims**
-                         - Verify listed features actually exist in the codebase
-                         - Test that installation instructions are accurate
-                         - Confirm technology stack claims
-
-                      3. **Identify Only Fundamental Issues**
-                         - Focus on factual errors and critical omissions
-                         - Ignore wording preferences and organizational choices
-
-                      ## Output
-
-                      - If the README is fundamentally accurate and complete: **Make NO changes**
-                      - If you find fundamental errors: Fix them with minimal edits
-                      - Do not "improve" things that are already correct
-                      - Preserve the existing tone and marketing approach'
-                      }}
-
-                  claude_args: |
-                      --allowedTools Edit,Read,Write
-                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.README_CLAUDE_MODEL && format('--model {0}', vars.README_CLAUDE_MODEL) || '' }}
-                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.README_MAX_TOKENS && format('--max-tokens {0}', vars.README_MAX_TOKENS) || '' }}
-                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.README_MAX_TURNS && format('--max-turns {0}', vars.README_MAX_TURNS) || '' }}
+                    if [ -n "$(git status --porcelain)" ]; then
+                      git add README.md
+                      git commit --amend --no-edit
+                      git push --force-with-lease origin ${{ needs.create-branch.outputs.branch-name }}
+                    fi
+                  fi
 
             - name: Upload Claude output for review
               if: always()
@@ -738,84 +251,6 @@ jobs:
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
-
-            - name: Format README with prettier
-              run: |
-                  # Check if README was modified by Claude
-                  if git diff --name-only | grep -q "^README.md$" || \
-                     git diff --cached --name-only | grep -q "^README.md$"; then
-
-                    echo "📝 Root README modified, running prettier..."
-
-                    if ! npx -y prettier --write "README.md"; then
-                      echo "⚠️ Prettier failed - continuing with unformatted README"
-                      echo "This may indicate malformed markdown in Claude's output"
-                    else
-                      echo "✅ Prettier formatting complete"
-                    fi
-                  else
-                    echo "ℹ️ No README changes detected, skipping prettier"
-                  fi
-
-            - name: Commit changes with resilient push
-              run: |
-                  # Remove output.txt so it doesn't get committed
-                  rm -f output.txt
-
-                  # Check if any changes were made by Claude
-                  if [ -n "$(git status --porcelain)" ]; then
-
-                    echo "📝 Changes detected, preparing commit..."
-                    git add -A
-
-                    # Extract commit message from Claude output (JSONL format)
-                    if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
-                    fi
-
-                    if [ -n "$COMMIT_DESC" ]; then
-                      echo "📋 Extracted commit description:"
-                      echo "$COMMIT_DESC"
-                      git commit -m "docs(root): update README for accuracy" -m "$COMMIT_DESC"
-                    else
-                      echo "⚠️ No commit description found, using simple message"
-                      git commit -m "docs(root): update README for accuracy"
-                    fi
-
-                    MAX_RETRIES=5
-                    RETRY_COUNT=0
-                    PUSH_SUCCESS=false
-
-                    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = "false" ]; do
-                      echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-
-                      if git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}; then
-                        if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
-                          echo "✅ Successfully pushed changes"
-                          PUSH_SUCCESS=true
-                        else
-                          echo "⚠️ Push failed, will retry..."
-                          RETRY_COUNT=$((RETRY_COUNT + 1))
-                          sleep $((RETRY_COUNT * 2))
-                        fi
-                      else
-                        echo "⚠️ Rebase failed, resolving and retrying..."
-                        git rebase --abort || true
-                        git fetch origin ${{ needs.create-branch.outputs.branch-name }}
-                        RETRY_COUNT=$((RETRY_COUNT + 1))
-                        sleep $((RETRY_COUNT * 2))
-                      fi
-                    done
-
-                    if [ "$PUSH_SUCCESS" = "false" ]; then
-                      echo "❌ Failed to push after $MAX_RETRIES attempts"
-                      exit 1
-                    fi
-                  else
-                    echo "ℹ️ No changes detected, skipping commit"
-                    echo "📋 Git status shows:"
-                    git status --short
-                  fi
 
     create-pr:
         name: Create Pull Request
@@ -846,78 +281,55 @@ jobs:
 
             - name: Create Pull Request
               if: steps.check_changes.outputs.has_changes == 'true'
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-              run: |
-                  EXISTING_PR=$(gh pr list --head ${{ needs.create-branch.outputs.branch-name }} --json number --jq '.[0].number' || echo "")
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-pr
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  pr_base_branch: master
+                  pr_title: "📝 Automated README Accuracy Updates"
+                  pr_body: |
+                      ## 🤖 Automated README Accuracy Review
 
-                  PR_BODY=$(cat <<'EOF'
-                  ## 🤖 Automated README Accuracy Review
+                      This PR contains automated updates to ensure all README files accurately reflect the current state of the codebase.
 
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '### 🔄 This is a refinement pass on an existing branch' || '' }}
+                      ### 📋 What was reviewed:
+                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ Root README.md\n- ✅ All package READMEs' }}
 
-                  This PR contains automated updates to ensure all README files accurately reflect the current state of the codebase.
+                      ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
 
-                  ### 📋 What was reviewed:
-                  ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ Root README.md\n- ✅ All package READMEs' }}
+                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
 
-                  ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
+                      ### 🔍 Review focus:
+                      - Verified that claimed features are actually implemented
+                      - Marked future/planned features clearly
+                      - Updated outdated information
+                      - Ensured code examples match actual APIs
+                      - Checked dependency claims against Cargo.toml files
 
-                  ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
+                      ### ⚙️ Process:
+                      - Used parallel job execution (one per package)
+                      - Each package README reviewed independently by Claude
+                      - All changes consolidated on branch: `${branch_name}`
 
-                  ### 🔍 Review focus:
-                  - Verified that claimed features are actually implemented
-                  - Marked future/planned features clearly
-                  - Updated outdated information
-                  - Ensured code examples match actual APIs
-                  - Checked dependency claims against Cargo.toml files
+                      ### 📝 Review Guidelines:
+                      1. **Verify Accuracy**: Check that updates correctly reflect the code
+                      2. **Future Features**: Ensure planned features are appropriately marked
+                      3. **Completeness**: Confirm no important features were removed incorrectly
+                      4. **Tone**: Verify documentation maintains appropriate technical tone
 
-                  ### ⚙️ Process:
-                  - Used parallel job execution (one per package)
-                  - Each package README reviewed independently by Claude
-                  - All changes consolidated on branch: `${{ needs.create-branch.outputs.branch-name }}`
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '- **Refinement mode**: Building on previous updates' || '' }}
+                      ### ⚠️ Important Notes:
+                      - This is an automated review - human oversight is essential
+                      - Claude may be overly conservative or miss nuances
+                      - Please review all changes carefully before merging
 
-                  ### 📝 Review Guidelines:
-                  1. **Verify Accuracy**: Check that updates correctly reflect the code
-                  2. **Future Features**: Ensure planned features are appropriately marked
-                  3. **Completeness**: Confirm no important features were removed incorrectly
-                  4. **Tone**: Verify documentation maintains appropriate technical tone
+                      ---
 
-                  ### ⚠️ Important Notes:
-                  - This is an automated review - human oversight is essential
-                  - Claude may be overly conservative or miss nuances
-                  - Please review all changes carefully before merging
-
-                  ---
-
-                  **Generated by**: [Claude Code Action](https://github.com/marketplace/actions/claude-code-action-official)
-                  **Branch**: `${{ needs.create-branch.outputs.branch-name }}`
-                  **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '**Refinement of**: Previous updates on this branch' || '**Initial run**: New branch created' }}
-                  EOF
-                  )
-
-                  if [ -n "$EXISTING_PR" ]; then
-                    echo "✅ PR #$EXISTING_PR already exists, updating it"
-                    gh pr edit $EXISTING_PR --body "$PR_BODY"
-                    echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
-                    echo "pr_url=$(gh pr view $EXISTING_PR --json url --jq '.url')" >> $GITHUB_OUTPUT
-                  else
-                    echo "📝 Creating new PR"
-                    PR_URL=$(gh pr create \
-                      --base master \
-                      --head ${{ needs.create-branch.outputs.branch-name }} \
-                      --title '📝 Automated README Accuracy Updates (${{ needs.create-branch.outputs.branch-date }})' \
-                      --label documentation,automated,readme-updates \
-                      --body "$PR_BODY")
-
-                    echo "✅ Created PR: $PR_URL"
-                    echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-
-                    PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-                    echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-                  fi
+                      **Generated by**: [Claude Checker Action](https://github.com/MoosicBox/MoosicBox/tree/master/.github/actions/claude-checker)
+                      **Branch**: `${branch_name}`
+                      **Run**: ${run_url}
+                  pr_labels: "automated,documentation,readme-updates"
+                  pr_skip_if_no_changes: true
 
             - name: No changes summary
               if: steps.check_changes.outputs.has_changes == 'false'

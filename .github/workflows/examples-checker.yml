@@ -17,16 +17,6 @@ on:
                 type: string
                 default: ""
 
-            mode:
-                description: "Mode: validate-only, create-missing, or full"
-                required: false
-                type: choice
-                options:
-                    - "full"
-                    - "validate-only"
-                    - "create-missing"
-                default: "full"
-
             model:
                 description: "Claude model to use (leave empty for latest default)"
                 required: false
@@ -54,6 +44,11 @@ on:
                 type: string
                 default: ""
 
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -62,9 +57,7 @@ jobs:
         name: Create or use existing branch
         runs-on: ubuntu-latest
         outputs:
-            branch-name: ${{ steps.branch.outputs.name }}
-            branch-date: ${{ steps.branch.outputs.date }}
-            is-new: ${{ steps.branch.outputs.is_new }}
+            branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -72,60 +65,15 @@ jobs:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
 
-            - name: Determine branch to use
+            - name: Create branch
               id: branch
-              run: |
-                  if [ -n "${{ inputs.existing_branch }}" ]; then
-                    BRANCH_NAME="${{ inputs.existing_branch }}"
-
-                    if ! git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
-                      echo "❌ Error: Branch '$BRANCH_NAME' does not exist"
-                      exit 1
-                    fi
-
-                    echo "Using existing branch: $BRANCH_NAME"
-                    echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-                    echo "is_new=false" >> $GITHUB_OUTPUT
-
-                    if [[ "$BRANCH_NAME" =~ examples-updates-([0-9]{14}) ]]; then
-                      echo "date=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-                    else
-                      echo "date=existing" >> $GITHUB_OUTPUT
-                    fi
-                  else
-                    BRANCH_DATE=$(date +%Y%m%d%H%M%S)
-                    BRANCH_NAME="examples-updates-${BRANCH_DATE}-${{ github.run_id }}"
-
-                    RETRY_SUFFIX=""
-                    if [ "${{ github.run_attempt }}" -gt 1 ]; then
-                      RETRY_SUFFIX="-${{ github.run_attempt }}"
-                    fi
-
-                    FULL_BRANCH="${BRANCH_NAME}${RETRY_SUFFIX}"
-
-                    echo "Creating new branch: $FULL_BRANCH"
-                    echo "name=$FULL_BRANCH" >> $GITHUB_OUTPUT
-                    echo "date=$BRANCH_DATE" >> $GITHUB_OUTPUT
-                    echo "is_new=true" >> $GITHUB_OUTPUT
-                  fi
-
-            - name: Configure Git
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-
-            - name: Create new branch
-              if: steps.branch.outputs.is_new == 'true'
-              run: |
-                  git checkout -b ${{ steps.branch.outputs.name }}
-                  git push origin ${{ steps.branch.outputs.name }}
-
-            - name: Checkout existing branch
-              if: steps.branch.outputs.is_new == 'false'
-              run: |
-                  git fetch origin ${{ steps.branch.outputs.name }}
-                  git checkout ${{ steps.branch.outputs.name }}
-                  echo "✅ Checked out existing branch: ${{ steps.branch.outputs.name }}"
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-branch
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_prefix: examples-updates
+                  branch_name: ${{ inputs.existing_branch }}
+                  existing_branch: ${{ inputs.existing_branch != '' && 'true' || 'false' }}
 
     determine-packages:
         name: Determine packages to update
@@ -188,370 +136,28 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
-            - name: Check for package-specific agents context
-              id: check-agents-context
-              run: |
-                  AGENTS_FILE="${{ matrix.package.path }}/AGENTS_EXAMPLES.md"
-                  if [ -f "$AGENTS_FILE" ]; then
-                    echo "✅ Found AGENTS_EXAMPLES.md for ${{ matrix.package.name }}"
-                    echo "has-context=true" >> $GITHUB_OUTPUT
-                    # Read the file content and store it
-                    echo "context<<EOF" >> $GITHUB_OUTPUT
-                    cat "$AGENTS_FILE" >> $GITHUB_OUTPUT
-                    echo "EOF" >> $GITHUB_OUTPUT
-                  else
-                    echo "ℹ️ No AGENTS_EXAMPLES.md found for ${{ matrix.package.name }}"
-                    echo "has-context=false" >> $GITHUB_OUTPUT
-                    echo "context=" >> $GITHUB_OUTPUT
-                  fi
-
             - name: Ensure and validate examples
-              if: inputs.mode == 'full' || inputs.mode == 'validate-only' || inputs.mode == 'create-missing'
-              uses: BSteffaniak/claude-code-action@dev
+              uses: ./.github/actions/claude-checker
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  command: check
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-
-                  claude_args: |
-                      --allowedTools Edit,Read,Write,Bash
-                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.RUSTDOC_CLAUDE_MODEL && format('--model {0}', vars.RUSTDOC_CLAUDE_MODEL) || '' }}
-                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.RUSTDOC_MAX_TOKENS && format('--max-tokens {0}', vars.RUSTDOC_MAX_TOKENS) || '' }}
-                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.RUSTDOC_MAX_TURNS && format('--max-turns {0}', vars.RUSTDOC_MAX_TURNS) || '' }}
-
-                  prompt: |
-                      ${{
-                        format('# Ensure Examples Coverage and Quality for {0}
-
-                      ## Task
-
-                      Improve examples coverage and documentation for the `{0}` package by adding new examples where beneficial and enhancing existing documentation.
-
-                      ## Context
-
-                      **Package**: {0}
-                      **Package path**: {1}
-                      **Mode**: {2}
-                      {3}
-                      ## ⚠️ CRITICAL: Feature Understanding Requirement
-
-                      **DO NOT CREATE EXAMPLES FOR FEATURES YOU DO NOT COMPLETELY UNDERSTAND.**
-
-                      Before creating any example:
-
-                      1. **Thoroughly read and understand the package''s source code**
-                         - Read ALL public API documentation
-                         - Understand the purpose and behavior of each function/type
-                         - Identify dependencies and how they interact
-
-                      2. **Only create examples for features you are ABSOLUTELY CERTAIN about**
-                         - If you''re unsure about how a feature works, DO NOT create an example
-                         - If the API is unclear or poorly documented, DO NOT guess
-                         - If you cannot find sufficient documentation, DO NOT proceed
-
-                      3. **Verify your understanding before writing code**
-                         - Check existing tests for usage patterns
-                         - Look for similar examples in the codebase
-                         - Ensure your understanding matches the actual implementation
-
-                      **INCOMPLETE, INCORRECT, OR SPECULATIVE EXAMPLES ARE WORSE THAN NO EXAMPLES.**
-
-                      Examples serve as authoritative documentation. Creating examples based on assumptions or incomplete understanding:
-                      - Misleads users about how to use the API correctly
-                      - Creates maintenance burden when examples need to be fixed
-                      - Damages trust in the project''s documentation quality
-                      - May demonstrate anti-patterns or incorrect usage
-
-                      **When in doubt, DO NOT CREATE THE EXAMPLE.** It is better to have no example than a wrong example.
-
-                      ## Phase 1: Determine if Package Should Have Examples
-
-                      First, analyze if this package should have examples at all:
-
-                      1. **Read package metadata and code**:
-                         - Read `{1}/Cargo.toml` to understand the package purpose and description
-                         - Read `{1}/src/lib.rs` (or `{1}/src/main.rs`) to understand the public API
-                         - Check if it has substantive functionality or is just re-exports/macros
-                         - Review the README.md to see if comprehensive inline examples already exist
-
-                      2. **Decision criteria - SKIP examples if the package**:
-                         - Is purely compile-time macros with comprehensive inline doc examples (e.g., `moosicbox_env_utils`, `moosicbox_assert`)
-                         - Only defines traits/types with no implementations (e.g., `moosicbox_json_utils` if it''s just trait definitions)
-                         - Is just data structures with no behavior (e.g., pure model/state packages)
-                         - Has no public API beyond re-exports
-                         - Already has comprehensive inline examples in README.md that adequately demonstrate usage
-                         - Is a trivial utility with self-explanatory single-function API
-
-                      3. **CREATE/VALIDATE examples if the package**:
-                         - Has substantive runtime functionality
-                         - Provides services, utilities, or libraries meant to be used directly
-                         - Would benefit from runnable examples to help users understand usage
-                         - Is any of these types: servers, clients, codecs, protocols, I/O, networking, databases, audio/video processing, file systems, etc.
-                         - Has a non-trivial API that would benefit from demonstration
-
-                      ## Phase 2: Check Current State
-
-                      Check if `{1}/examples/` directory exists and contains example subdirectories with Cargo.toml files.
-
-                      ## Phase 3: Take Action Based on State and Analysis
-
-                      ### If package should NOT have examples:
-
-                      Output a clear explanation:
-                      ```
-                      Package {0} does not need examples - [explain why: e.g., "it provides only compile-time macros with comprehensive inline documentation", or "it only defines traits without implementations", etc.]
-                      ```
-
-                      Then output: "No changes required - package does not need examples"
-
-                      ### If examples directory EXISTS with examples AND package should have examples:
-
-                      **Review existing examples to identify opportunities for improvement**:
-
-                      1. **List what examples already exist**:
-                         - Survey the `{1}/examples/` directory
-                         - Note what use cases are currently demonstrated
-
-                      2. **Identify gaps in coverage**:
-                         - What important features/use cases are NOT demonstrated?
-                         - Are there common workflows users would need that lack examples?
-                         - Look at the package API - what public functionality has no example?
-
-                      3. **Assess documentation quality** (non-invasive review):
-                         - Do READMEs exist for all examples?
-                         - Are READMEs missing sections from the template?
-                         - Could explanations be clearer or more comprehensive?
-                         - Are there outdated or incorrect instructions?
-
-                      4. **Decide on improvements**:
-                         - Should new examples be added for uncovered use cases?
-                         - Would improving existing READMEs add value?
-                         - Can you enhance documentation without changing code?
-
-                      5. **DO NOT validate or fix existing example code**:
-                         - Assume existing examples compile correctly (CI validates this)
-                         - Do not modify existing example code to fix compilation issues
-                         - Only improve documentation/READMEs for existing examples
-                         - Focus on ADDING new examples rather than fixing old ones
-
-                      ### If NO examples exist AND package should have examples:
-
-                      **Create a new, comprehensive example** that demonstrates the primary use case:
-
-                      1. **Determine example name and purpose**:
-                         - Choose a descriptive name (e.g., "basic_usage", "decode_audio", "http_server", "simple_config")
-                         - Focus on one main feature or use case
-                         - Keep it simple and educational
-                         - Study similar packages for patterns
-
-                      2. **Create example structure**:
-                         ```
-                         {1}/examples/[example_name]/
-                           src/
-                             main.rs
-                           Cargo.toml
-                           README.md
-                         ```
-
-                      3. **Add example to workspace Cargo.toml** (CRITICAL STEP):
-                         - Open the root `Cargo.toml` file at the repository root
-                         - Find the `[workspace]` section and the `members` array
-                         - Add your new example path: `"{1}/examples/[example_name]",`
-                         - Insert it in alphabetical order relative to other examples from the same package
-                         - Maintain consistent formatting (quotes, commas, indentation)
-                         - Example: If creating `packages/player/examples/basic_playback`, add:
-                           ```toml
-                           "packages/player/examples/basic_playback",
-                           ```
-                         - This is REQUIRED for the example to be part of the workspace and use workspace dependencies
-
-                      4. **Ensure it compiles and follows all standards** (see below)
-
-                      ## Example Standards
-
-                      All examples (whether created or validated) MUST follow these standards:
-
-                      ### Code (src/main.rs) Requirements
-
-                      - **Clippy compliant** - include these attributes:
-                        ```rust
-                        #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
-                        #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-                        #![allow(clippy::multiple_crate_versions)]
-                        ```
-                      - Complete, runnable program with `main()` function
-                      - Proper error handling using `Result` and `?` operator
-                      - Clear inline comments explaining each step
-                      - Print output so users can verify it works
-                      - Demonstrates realistic usage patterns
-                      - Compiles without errors or warnings
-                      - Uses minimal dependencies (only what is needed)
-
-                      ### Cargo.toml Requirements
-
-                      ```toml
-                      [package]
-                      name = "{0}_[example_name]_example"
-                      version = "0.1.0"
-                      edition = {{ workspace = true }}
-                      publish = false
-                      description = "Example demonstrating [feature] in {0}"
-                      license = {{ workspace = true }}
-                      repository = {{ workspace = true }}
-                      keywords = ["example", "{0}", "[feature]"]
-
-                      [[bin]]
-                      name = "[example_name]_example"
-                      path = "src/main.rs"
-
-                      [dependencies]
-                      {0} = {{ workspace = true, features = ["..."] }}
-                      # Add only necessary dependencies
-
-                      [features]
-                      default = []
-                      fail-on-warnings = ["{0}/fail-on-warnings"]
-                      ```
-
-                      ### README.md MUST Include These Sections
-
-                      Every example README.md must have ALL 11 sections:
-
-                      1. **Title**: "# [Feature] Example"
-                      2. **Summary**: Brief description (1-2 sentences) of what this demonstrates
-                      3. **What This Example Demonstrates**: Bullet list of features shown
-                      4. **Prerequisites**: What user needs to know/have
-                      5. **Running the Example**: Exact commands with full paths (e.g., `cargo run --manifest-path packages/{0}/examples/[name]/Cargo.toml`)
-                      6. **Expected Output**: What users should see when running
-                      7. **Code Walkthrough**: Key code sections with explanations and snippets
-                      8. **Key Concepts**: Important ideas/patterns explained
-                      9. **Testing the Example**: How to interact/verify (if applicable)
-                      10. **Troubleshooting**: Common issues and solutions (if applicable)
-                      11. **Related Examples**: Links to similar examples (if any exist)
-
-                      ## Reference Examples (Gold Standard)
-
-                      Study these examples for style and structure:
-                      - `packages/hyperchad/examples/details_summary/` - Comprehensive web component example
-                      - `packages/web_server/examples/simple_get/` - Server example with excellent documentation
-                      - `packages/async/examples/cancel/` - Runtime example with clear walkthrough
-                      - `packages/fs/examples/temp_dir/` - Filesystem utilities example
-
-                      ## Constraints
-
-                      - **⚠️ CRITICAL: DO NOT CREATE EXAMPLES FOR FEATURES YOU DO NOT COMPLETELY UNDERSTAND**
-                        - Thoroughly read and understand the package''s source code before creating examples
-                        - Only create examples for features you are ABSOLUTELY CERTAIN about
-                        - If unsure about how a feature works, DO NOT create an example
-                        - Incomplete or incorrect examples are WORSE than no examples
-                        - Examples serve as authoritative documentation - wrong examples mislead users
-                        - **When in doubt, DO NOT CREATE THE EXAMPLE**
-                        - See "⚠️ CRITICAL: Feature Understanding Requirement" section above for full details
-                      - DO NOT change existing examples'' core purpose or demonstrated features
-                      - DO NOT add unnecessary features or complexity
-                      - DO NOT make breaking changes to API usage
-                      - DO NOT create examples for packages that don''t need them OR features you don''t fully understand
-                      - DO NOT fix compilation errors in pre-existing examples (that''s CI''s job)
-                      - DO NOT modify existing example code to fix clippy warnings
-                      - DO ensure NEW or MODIFIED examples compile without errors or warnings
-                      - DO add ALL new examples to the workspace Cargo.toml members list (CRITICAL - workflow will fail without this)
-                      - DO improve READMEs and documentation of existing examples
-                      - DO add missing README sections to existing examples
-                      - DO make READMEs accurate and complete
-                      - DO follow the README template structure exactly
-                      - DO ensure code snippets in README match actual code
-                      - DO format all files properly
-                      - DO make examples practical and realistic
-                      - DO focus on the most common/important use case for new examples
-
-                      ## 📝 Commit Message Instructions
-
-                      If you make changes to examples, you MUST provide a commit message description.
-
-                      At the END of your response, include a section formatted EXACTLY as follows:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Brief description of changes (1-2 sentences per major item)
-                      - Focus on what was created, improved, or fixed
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Example:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Created new basic_usage example demonstrating primary API usage patterns
-                      - Improved README for decode_audio example to include all required sections
-                      - Added missing module-level documentation to examples
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Requirements:
-                      - Keep each bullet point concise (1-2 sentences max)
-                      - Focus on WHAT changed and WHY (new examples, documentation improvements, etc.)
-                      - Use bullet points with dashes (-)
-                      - Do not include code snippets or line numbers
-                      - If no changes needed, output "No changes required - examples coverage is adequate" or "No changes required - package does not need examples"
-
-                      ## Verification Commands
-
-                      After making changes to examples, you MUST run these commands:
-
-                      **For NEW examples you create**:
-
-                      First, verify the workspace Cargo.toml was updated:
-                      ```bash
-                      # Verify your example was added to the workspace
-                      grep "{1}/examples/\[example_name\]" Cargo.toml
-                      ```
-
-                      Then verify compilation:
-                      ```bash
-                      cd {1}/examples/[example_name]
-                      cargo fmt
-                      cargo check
-                      cargo clippy -- -D warnings
-                      npx prettier --write README.md
-                      ```
-                      All commands must succeed before proceeding.
-
-                      **For existing examples where you only modified documentation**:
-                      ```bash
-                      cd {1}/examples/[example_name]
-                      npx prettier --write README.md
-                      ```
-
-                      **Do NOT run cargo check/clippy on existing examples** unless you created them or modified their code.
-
-                      ## Output Format
-
-                      Your response should conclude with one of the following:
-
-                      ### If you make changes:
-
-                      Provide your commit message as specified in the "📝 Commit Message Instructions" section above.
-
-                      ### If no changes needed:
-
-                      Output one of:
-                      - "No changes required - examples coverage is adequate"
-                      - "No changes required - package does not need examples"
-
-                      ## Mode-Specific Behavior
-
-                      - **validate-only**: Only review and improve documentation/READMEs of existing examples, do not create new ones
-                      - **create-missing**: Only add new examples where gaps exist, do not modify existing examples
-                      - **full**: Both improve existing documentation and add new examples where beneficial',
-                          matrix.package.name, matrix.package.path, inputs.mode || 'full',
-                      steps.check-agents-context.outputs.has-context == 'true' && format('
-
-                      ## 📦 Package-Specific Guidelines
-
-                      The following context has been provided by the package maintainers:
-
-                      {0}
-
-                      **Note**: These guidelines should inform your decisions but do not override the core requirements above.
-                      ', steps.check-agents-context.outputs.context) || '')
-                      }}
+                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  prompt_template: examples
+
+                  template_vars: |
+                      package_name: ${{ matrix.package.name }}
+                      package_path: ${{ matrix.package.path }}
+
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  auto_commit: true
+                  enable_resilient_push: true
+                  push_max_retries: 5
+                  extract_commit_message: true
+
+                  model: ${{ inputs.model }}
+                  max_tokens: ${{ inputs.max_tokens }}
+                  max_turns: ${{ inputs.max_turns }}
+                  claude_args: --allowedTools Edit,Read,Write,Bash
 
             - name: Upload Claude output for review
               if: always()
@@ -561,54 +167,6 @@ jobs:
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
-
-            - name: Commit changes with resilient push
-              run: |
-                  # Remove output.txt so it doesn't get committed
-                  rm -f output.txt
-
-                  # Check if any changes were made by Claude
-                  if [ -n "$(git status --porcelain)" ]; then
-
-                    echo "📝 Changes detected, preparing commit..."
-                    git add -A
-
-                    # Extract commit message from Claude output (JSONL format)
-                    if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
-                    fi
-
-                    if [ -n "$COMMIT_DESC" ]; then
-                      echo "📋 Extracted commit description:"
-                      echo "$COMMIT_DESC"
-                      git commit -m "docs(${{ matrix.package.name }}): update examples" -m "$COMMIT_DESC"
-                    else
-                      echo "⚠️ No commit description found, using simple message"
-                      git commit -m "docs(${{ matrix.package.name }}): update examples"
-                    fi
-
-                    MAX_RETRIES=5
-                    RETRY_COUNT=0
-
-                    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-                      if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
-                        echo "✅ Changes pushed successfully"
-                        break
-                      else
-                        RETRY_COUNT=$((RETRY_COUNT + 1))
-                        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                          echo "⚠️ Push failed, attempt $RETRY_COUNT/$MAX_RETRIES. Retrying..."
-                          sleep $((RETRY_COUNT * 2))
-                          git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}
-                        else
-                          echo "❌ Failed to push after $MAX_RETRIES attempts"
-                          exit 1
-                        fi
-                      fi
-                    done
-                  else
-                    echo "✅ No changes for this package"
-                  fi
 
     create-pr:
         name: Create Pull Request
@@ -639,42 +197,53 @@ jobs:
 
             - name: Create Pull Request
               if: steps.check_changes.outputs.has_changes == 'true'
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-              run: |
-                  EXISTING_PR=$(gh pr list --head "${{ needs.create-branch.outputs.branch-name }}" --json number --jq '.[0].number' || echo "")
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-pr
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  pr_base_branch: master
+                  pr_title: "📚 Automated Examples Updates"
+                  pr_body: |
+                      ## 🤖 Automated Examples Updates
 
-                  if [ -n "$EXISTING_PR" ]; then
-                    echo "📝 Pull request already exists: #$EXISTING_PR"
-                    echo "Updating PR description..."
-                    gh pr edit "$EXISTING_PR" \
-                      --body "Automated examples updates from examples-checker workflow
+                      This PR contains automated updates and validation of example code.
 
-                  ## Changes
-                  - Updated and validated existing examples
-                  - Created new examples for packages lacking coverage
-                  - Ensured all examples follow MoosicBox standards
+                      ### 📋 What was reviewed:
+                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ All packages with examples' }}
 
-                  **Triggered by**: ${{ github.event_name == 'schedule' && 'Scheduled run' || 'Manual trigger' }}
-                  **Mode**: ${{ inputs.mode || 'full' }}"
-                  else
-                    echo "✨ Creating new pull request..."
-                    gh pr create \
-                      --title "examples: Update and create examples" \
-                      --body "Automated examples updates from examples-checker workflow
+                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
 
-                  ## Changes
-                  - Updated and validated existing examples
-                  - Created new examples for packages lacking coverage
-                  - Ensured all examples follow MoosicBox standards
+                      ### Changes:
+                      - Updated and validated existing examples
+                      - Created new examples for packages lacking coverage
+                      - Ensured all examples follow MoosicBox standards
 
-                  **Triggered by**: ${{ github.event_name == 'schedule' && 'Scheduled run' || 'Manual trigger' }}
-                  **Mode**: ${{ inputs.mode || 'full' }}" \
-                      --base master \
-                      --head "${{ needs.create-branch.outputs.branch-name }}"
-                  fi
+                      ### ⚙️ Process:
+                      - Used parallel job execution (one per package)
+                      - Each package examples reviewed independently by Claude
+                      - All changes consolidated on branch: `${branch_name}`
 
-            - name: Summary
+                      ### 📝 Review Guidelines:
+                      1. **Verify Examples Compile**: Ensure all examples build successfully
+                      2. **Check Documentation**: Confirm README files are complete
+                      3. **Validate Coverage**: Ensure important features are demonstrated
+                      4. **Test Examples**: Run examples to verify they work as documented
+
+                      ### ⚠️ Important Notes:
+                      - This is an automated review - human oversight is essential
+                      - All examples should compile and run
+                      - Please review all changes carefully before merging
+
+                      ---
+
+                      **Generated by**: [Claude Checker Action](https://github.com/MoosicBox/MoosicBox/tree/master/.github/actions/claude-checker)
+                      **Branch**: `${branch_name}`
+                      **Run**: ${run_url}
+                  pr_labels: "automated,documentation,examples"
+                  pr_skip_if_no_changes: true
+
+            - name: No changes summary
               if: steps.check_changes.outputs.has_changes == 'false'
               run: |
                   echo "✅ No changes needed - all examples are up to date!"

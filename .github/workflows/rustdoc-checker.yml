@@ -50,6 +50,11 @@ on:
                 type: string
                 default: ""
 
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -58,9 +63,7 @@ jobs:
         name: Create or use existing branch
         runs-on: ubuntu-latest
         outputs:
-            branch-name: ${{ steps.branch.outputs.name }}
-            branch-date: ${{ steps.branch.outputs.date }}
-            is-new: ${{ steps.branch.outputs.is_new }}
+            branch-name: ${{ steps.branch.outputs.branch_name }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -68,60 +71,15 @@ jobs:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
 
-            - name: Determine branch to use
+            - name: Create branch
               id: branch
-              run: |
-                  if [ -n "${{ inputs.existing_branch }}" ]; then
-                    BRANCH_NAME="${{ inputs.existing_branch }}"
-
-                    if ! git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
-                      echo "❌ Error: Branch '$BRANCH_NAME' does not exist"
-                      exit 1
-                    fi
-
-                    echo "Using existing branch: $BRANCH_NAME"
-                    echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-                    echo "is_new=false" >> $GITHUB_OUTPUT
-
-                    if [[ "$BRANCH_NAME" =~ rustdoc-updates-([0-9]{14}) ]]; then
-                      echo "date=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-                    else
-                      echo "date=existing" >> $GITHUB_OUTPUT
-                    fi
-                  else
-                    BRANCH_DATE=$(date +%Y%m%d%H%M%S)
-                    BRANCH_NAME="rustdoc-updates-${BRANCH_DATE}-${{ github.run_id }}"
-
-                    RETRY_SUFFIX=""
-                    if [ "${{ github.run_attempt }}" -gt 1 ]; then
-                      RETRY_SUFFIX="-${{ github.run_attempt }}"
-                    fi
-
-                    FULL_BRANCH="${BRANCH_NAME}${RETRY_SUFFIX}"
-
-                    echo "Creating new branch: $FULL_BRANCH"
-                    echo "name=$FULL_BRANCH" >> $GITHUB_OUTPUT
-                    echo "date=$BRANCH_DATE" >> $GITHUB_OUTPUT
-                    echo "is_new=true" >> $GITHUB_OUTPUT
-                  fi
-
-            - name: Configure Git
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-
-            - name: Create new branch
-              if: steps.branch.outputs.is_new == 'true'
-              run: |
-                  git checkout -b ${{ steps.branch.outputs.name }}
-                  git push origin ${{ steps.branch.outputs.name }}
-
-            - name: Checkout existing branch
-              if: steps.branch.outputs.is_new == 'false'
-              run: |
-                  git fetch origin ${{ steps.branch.outputs.name }}
-                  git checkout ${{ steps.branch.outputs.name }}
-                  echo "✅ Checked out existing branch: ${{ steps.branch.outputs.name }}"
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-branch
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_prefix: rustdoc-updates
+                  branch_name: ${{ inputs.existing_branch }}
+                  existing_branch: ${{ inputs.existing_branch != '' && 'true' || 'false' }}
 
     determine-packages:
         name: Determine packages to update
@@ -192,408 +150,28 @@ jobs:
 
             - name: Update rustdoc with Claude
               if: steps.check_lib.outputs.exists == 'true'
-              uses: BSteffaniak/claude-code-action@dev
+              uses: ./.github/actions/claude-checker
               with:
-                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  command: check
                   github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-
-                  prompt: |
-                      ${{
-                        (inputs.existing_branch != '' && inputs.prompt_override != '' &&
-                          format('# Additional Rustdoc Refinement for {0}
-
-                      This is a refinement pass on an existing rustdoc update branch.
-
-                      ## Previous Context
-                      The rustdoc for package `{1}` has already been reviewed and potentially updated.
-
-                      ## Additional Guidance
-                      {2}
-
-                      ## Requirements
-                      - Review the current state of the rustdoc comments
-                      - Apply the additional guidance above
-                      - Only make changes that align with the new guidance
-                      - Preserve previous improvements unless they conflict with new guidance
-
-                      Focus on incremental improvements based on the additional guidance.',
-                          matrix.package.name, matrix.package.path, inputs.prompt_override))
-                        ||
-                        (inputs.prompt_override != '' && inputs.prompt_override)
-                        ||
-                        (vars.RUSTDOC_UPDATE_PROMPT != '' && vars.RUSTDOC_UPDATE_PROMPT)
-                        ||
-                        format('# Rustdoc Completeness Review for {0}
-
-                      ## 🎯 HIGHEST PRIORITY: Crate and Module Documentation
-
-                      **MOST CRITICAL** - These docs are the first thing users see:
-
-                      **Crate-Level Documentation (`lib.rs`):**
-                      - MUST have `//!` doc comments at the top of `lib.rs` explaining:
-                        * What this crate does (1-2 sentences)
-                        * Primary use cases
-                        * Basic usage example (if not trivial)
-                        * Links to main entry points (key structs/functions)
-                      - This is the landing page for `cargo doc` - it''s essential
-
-                      **Module-Level Documentation:**
-                      - Each public module (`pub mod`) MUST have `//!` doc comments at the top explaining:
-                        * What this module provides
-                        * When to use items from this module
-                        * Brief example if the module has a clear use case
-                      - **PREFERRED LOCATION**: For modules with their own file (e.g., `tokenizer.rs` or `tokenizer/mod.rs`), place documentation as `//!` comments at the TOP of the module file itself
-                      - **Alternative**: Module docs in `lib.rs` or parent modules can use `/// Module description` on the `pub mod` line, but this is less preferred for modules with their own files
-                      - Module docs in the module file itself use `//!` at the top of the file
-
-                      ## 📝 CODE EXAMPLES: Quality and Testability
-
-                      **CRITICAL**: All code examples MUST compile and run successfully.
-
-                      **Code Example Requirements:**
-
-                      **Use Rust Code Blocks (not text):**
-                      - ✅ Use ```rust for code that should compile
-                      - ❌ Never use ```text or plain ``` for Rust examples
-                      - Rust code blocks are automatically tested by `cargo test --doc`
-
-                      **Feature-Gated Examples:**
-                      When examples require specific features, use hidden lines with `#` prefix:
-                      ```rust
-                      //! # Example with feature-gated code:
-                      //! ```rust
-                      //! # #[cfg(feature = "embedded")]
-                      //! # {{
-                      //! # use crate::include_dir::include_dir;
-                      //! let dir = include_dir!("assets");
-                      //! # }}
-                      //! ```
-                      ```
-
-                      **Hidden Setup Code:**
-                      Use `#` prefix to hide boilerplate while keeping examples compilable:
-                      ```rust
-                      /// ```rust
-                      /// # use crate::Client;
-                      /// # fn main() -> Result<(), Box<dyn std::error::Error>> {{
-                      /// let client = Client::new("localhost:8080");
-                      /// let response = client.connect()?;
-                      /// # Ok(())
-                      /// # }}
-                      /// ```
-                      ```
-
-                      **no_run for Examples with Side Effects:**
-                      For examples that compile but shouldn''t execute (I/O, network, etc.):
-                      ```rust
-                      /// ```rust,no_run
-                      /// use crate::start_server;
-                      /// start_server("0.0.0.0:8080");  // Would actually bind a port
-                      /// ```
-                      ```
-
-                      **ignore for Platform-Specific:**
-                      Only use `ignore` for truly platform-specific code:
-                      ```rust
-                      /// ```rust,ignore
-                      /// #[cfg(target_os = "linux")]
-                      /// use crate::linux_specific_function;
-                      /// ```
-                      ```
-
-                      **Example Quality Checklist:**
-                      - Uses ```rust not ```text
-                      - Compiles without errors
-                      - Imports are shown or hidden with `#`
-                      - Feature gates use `# #[cfg(feature = "...")]` if needed
-                      - Side effects use `no_run` attribute
-                      - Error handling is shown (Result types, ?)
-                      - Example demonstrates actual API usage
-
-                      ## 📐 DOCUMENTATION COMPLETENESS REQUIREMENTS
-
-                      **CRITICAL**: Every public API item MUST have complete documentation.
-
-                      **Minimum Requirements for ALL public items:**
-                      1. **Summary line**: One-line description of what it is/does (REQUIRED for everything)
-                      2. **Additional context**: More detailed explanation if the item is non-trivial
-                      3. **Type-specific sections** (see below)
-
-                      **Functions/Methods MUST have:**
-                      - Summary describing what the function does
-                      - Explanation of parameters if non-obvious
-                      - Return value explanation if non-obvious
-                      - `# Errors` section if returns `Result` (list ALL error variants with asterisks)
-                      - `# Panics` section if can panic (including `.unwrap()`, `.expect()`, indexing, arithmetic overflow, etc.)
-                      - `# Safety` section for `unsafe` functions
-                      - `# Examples` section for complex/non-obvious functions (optional for simple ones)
-
-                      **Structs MUST have:**
-                      - Summary describing what the struct represents
-                      - Purpose and typical use cases
-                      - Document public fields individually (what each field represents)
-                      - `# Examples` showing how to construct and use (if not trivial)
-
-                      **Enums MUST have:**
-                      - Summary describing what the enum represents
-                      - Document variants individually (what each variant means)
-                      - When to use each variant (if not obvious)
-
-                      **Traits MUST have:**
-                      - Summary describing the trait''s purpose
-                      - Contract/requirements for implementers
-                      - Associated types/constants explained
-                      - Required methods explained
-
-                      **Constants MUST have:**
-                      - Summary describing what the constant represents
-                      - Why this specific value
-                      - Units if applicable (seconds, bytes, etc.)
-
-                      ## ⚠️ REQUIRED CHANGES: Missing and Incomplete Documentation
-
-                      You MUST make changes for these reasons:
-
-                      **Missing Documentation (MUST be added):**
-                      - **ANY public API item without a doc comment summary** - Every `pub fn`, `pub struct`, `pub enum`, `pub trait`, `pub const`, `pub type` MUST have at least a one-line summary explaining its purpose
-                      - **Missing crate-level documentation** - `lib.rs` without `//!` comments at the top
-                      - **Missing module-level documentation** - Public modules without `//!` or `///` comments
-                      - Missing `# Errors` sections when function returns `Result`
-                      - Missing `# Panics` sections when function can panic (or uses `.unwrap()`, `.expect()`, indexing, etc.)
-                      - Missing `# Safety` sections on `unsafe` functions
-                      - Public struct fields without individual documentation
-                      - Public enum variants without individual documentation
-                      - Function parameters not explained when non-obvious
-
-                      **Incomplete Documentation (MUST be completed):**
-                      - Doc comments that ONLY have `# Errors`, `# Panics`, or other sections without ANY summary text above them
-                      - Structs with a summary but public fields lacking individual docs
-                      - Enums with a summary but variants lacking individual docs
-                      - Functions with `# Errors` but missing specific error conditions (must list ALL error variants)
-                      - Functions with `# Panics` but missing specific panic conditions
-                      - Re-exported items (via `pub use`) that lack docs at re-export site
-
-                      **Incorrect Documentation (MUST be fixed):**
-                      - Doc comments claim behavior that doesn''t match the actual code
-                      - Function signatures documented don''t match actual implementation
-                      - Error conditions documented don''t match actual `Err` returns
-                      - **Examples in docs that would fail to compile or run** (CRITICAL)
-                      - **Examples using ```text instead of ```rust** (prevents doc testing)
-                      - **Examples missing necessary feature gates or hidden setup code**
-                      - Links to items that don''t exist
-
-                      ## 🔍 DETECTION PATTERNS FOR MISSING DOCS
-
-                      When scanning code, look for these patterns that indicate missing/incomplete documentation:
-
-                      **Functions that MUST have `# Panics` sections:**
-                      - Uses `.unwrap()` or `.expect()` on `Option` or `Result`
-                      - Uses array/slice indexing (`foo[i]`)
-                      - Uses arithmetic that could overflow
-                      - Calls functions that can panic
-                      - Locks mutexes/RwLocks (can panic if poisoned)
-
-                      **Functions that MUST have `# Errors` sections:**
-                      - Returns `Result<T, E>`
-                      - Propagates errors with `?` operator
-                      - List EVERY error variant that can be returned (check match arms, function calls)
-
-                      **Code patterns requiring documentation:**
-                      - `pub fn` without `///` above it - ALWAYS needs docs
-                      - `pub struct` without `///` above it - ALWAYS needs docs
-                      - `pub enum` without `///` above it - ALWAYS needs docs
-                      - `pub const` without `///` above it - ALWAYS needs docs
-                      - `pub trait` without `///` above it - ALWAYS needs docs
-                      - `pub type` without `///` above it - ALWAYS needs docs
-                      - Doc comment with `# Errors` or `# Panics` but NO text before the first `#` - INCOMPLETE
-
-                      ## ✅ PERMITTED Changes vs ❌ FORBIDDEN Changes
-
-                      **PERMITTED (Required for completeness):**
-                      - ✅ Adding summary descriptions to ANY public item without one
-                      - ✅ Adding summary text to doc comments that only have `# Errors`/`# Panics` sections
-                      - ✅ Adding missing `# Errors`, `# Panics`, `# Safety` sections
-                      - ✅ Adding docs to public struct fields and enum variants
-                      - ✅ Completing incomplete error/panic documentation
-                      - ✅ Fixing incorrect documentation
-                      - ✅ Adding `#[must_use]` to constructors and getters (per AGENTS.md)
-
-                      **FORBIDDEN (Do not change existing adequate docs):**
-                      - ❌ Rewording existing adequate docs for clarity, style, or tone
-                      - ❌ Reorganizing doc structure when already clear
-                      - ❌ Expanding descriptions that are already adequate
-                      - ❌ Documenting internal/private items (`pub(crate)`, `pub(super)`, or non-`pub`)
-                      - ❌ Changing doc formatting when already correct
-                      - ❌ Including specific line numbers in references (e.g., `lib.rs:123`) - line numbers change frequently
-
-                      **Decision Rule:**
-                      Before making ANY change, ask yourself:
-                      1. "Is this a PUBLIC API item (plain `pub`, not `pub(crate)`)?"
-                      2. "Does it have a clear summary description of what it does/is?"
-                      3. "Are all required sections present (`# Errors` for Result, `# Panics` for panicking functions, etc.)?"
-                      - If any answer is NO → Document it
-                      - If all are YES → Leave it alone
-
-                      ## 📖 PUBLIC API FOCUS - Do Not Document Internals
-
-                      Rustdoc is for **users of the crate**, not maintainers. Only document the public API.
-
-                      **DO Document:**
-                      - ✅ **Crate-level docs** - `//!` comments at top of `lib.rs` (HIGHEST PRIORITY)
-                      - ✅ **Module-level docs** - `//!` comments at top of module files or `///` on `pub mod` declarations
-                      - ✅ **Compilable examples** - Use ```rust blocks that compile, hide boilerplate with `#`
-                      - ✅ Public functions, structs, traits, enums, constants (items with `pub` visibility)
-                      - ✅ Public struct fields and enum variants
-                      - ✅ Function parameters and return values
-                      - ✅ Error conditions (with `# Errors` section using asterisk bullet points)
-                      - ✅ Panic conditions (with `# Panics` section)
-                      - ✅ Safety requirements (with `# Safety` section for `unsafe`)
-                      - ✅ Examples for complex functions (but don''t overdo it)
-
-                      **DO NOT Document:**
-                      - ❌ Internal items (`pub(crate)`, `pub(super)`, or non-pub items)
-                      - ❌ Private fields or methods
-                      - ❌ Implementation details (how it works internally)
-                      - ❌ Test utilities or `#[cfg(test)]` code
-                      - ❌ Helper functions only used within the crate
-                      - ❌ Macros not part of the public API
-
-                      **How to identify public items:**
-                      1. Item must have `pub` without qualifiers (not `pub(crate)` or `pub(super)`)
-                      2. Item must be exported in `lib.rs` or module root (via `pub use` or `pub mod`)
-                      3. Parent module must also be public
-
-                      **Special Notes from AGENTS.md:**
-                      - Use asterisks (*) for bullet points in doc comments, not dashes
-                      - Add `#[must_use]` attribute to constructors and getters (this is code, not just doc)
-                      - Document ALL error conditions in `# Errors` sections
-                      - Use proper markdown formatting in doc comments
-                      - **Always use ```rust for code examples, never ```text**
-                      - **Use `# ` prefix to hide boilerplate in examples (setup, imports, main wrapper)**
-                      - **Use ```rust,no_run for examples with side effects (I/O, network, etc.)**
-
-                      ## 📝 Commit Message Instructions
-
-                      If you make changes to rustdoc comments, you MUST provide a commit message description.
-
-                      At the END of your response, include a section formatted EXACTLY as follows:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Brief description of documentation changes (1-2 sentences per major item)
-                      - Focus on what was missing or incorrect
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Example:
-                      ```
-                      COMMIT_MESSAGE_START
-                      - Added crate-level documentation to lib.rs explaining the purpose and main features of the crate
-                      - Added module-level documentation to `format` module describing supported audio formats
-                      - Fixed code examples in `parse_config` to use compilable ```rust blocks with hidden setup code
-                      - Converted ```text examples to ```rust,no_run for I/O operations in `start_server`
-                      - Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
-                      - Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
-                      - Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
-                      COMMIT_MESSAGE_END
-                      ```
-
-                      Requirements:
-                      - Keep each bullet point concise (1-2 sentences max)
-                      - Focus on WHAT was documented/fixed and WHY (what was missing or incorrect)
-                      - Use bullet points with dashes (-)
-                      - Do not include code snippets or line numbers
-                      - If no changes needed, output "No changes required - documentation is adequate"
-
-                      ## Verification Process
-
-                      1. **Check Git History First**
-                         - Before making ANY change to doc comments, run `git blame` on the specific file
-                         - Check `git log` for the file/function you want to modify
-                         - Look for commit messages that explain why docs were written a certain way
-                         - If docs were recently added/updated with clear rationale, be extra cautious
-
-                      2. **Identify Public APIs**
-                         - Read `{1}/src/lib.rs` to see what''s publicly exported
-                         - Check `pub use` statements and `pub mod` declarations
-                         - Only consider items with plain `pub` visibility (not `pub(crate)`)
-
-                      3. **Check Crate and Module Documentation FIRST**
-                         - Verify `{1}/src/lib.rs` has `//!` doc comments at the very top
-                         - If missing or inadequate, add crate-level docs explaining what the crate does and its main use cases
-                         - Check each `pub mod` for module-level documentation
-                         - Module docs can be `///` on the `pub mod` line in `lib.rs`, or `//!` at top of the module file
-                         - These are the most important docs - they provide context for everything else
-
-                      4. **Check Documentation Against Code**
-                         - Read the actual function implementations in `{1}/src/`
-                         - Verify documented behavior matches actual code
-                         - Check if documented errors match actual `Err` returns
-                         - Ensure documented panics match actual `panic!` calls
-
-                      5. **Run Verification Commands**
-                         - After making changes, run `cargo fmt` to format
-                         - Run `cargo clippy --package {0} --all-targets -- -D warnings` to check for issues
-                         - **Run `cargo test --doc --package {0}` to verify all examples compile and run**
-                         - Run `cargo doc --package {0} --no-deps` to verify docs build correctly
-                         - These MUST pass before committing
-                         - **If doc tests fail, fix the examples or add appropriate attributes (no_run, ignore)**
-
-                      6. **Completeness Check**
-                         - After documenting, search for patterns in all files under `{1}/src/`:
-                           * `pub fn` - verify EVERY match has a `///` comment with summary
-                           * `pub struct` - verify EVERY match has a `///` comment with summary
-                           * `pub enum` - verify EVERY match has a `///` comment with summary
-                           * `pub trait` - verify EVERY match has a `///` comment with summary
-                           * `pub const` - verify EVERY match has a `///` comment with summary
-                           * `pub type` - verify EVERY match has a `///` comment with summary
-                         - If any public items are missing docs, document them
-                         - Special attention to items in `api.rs`, `lib.rs`, and `mod.rs` files
-
-                      ## Scope and Execution Order
-
-                      Execute in this STRICT order:
-
-                      **PHASE 1 - Crate/Module Level (REQUIRED):**
-                      - Ensure `{1}/src/lib.rs` has comprehensive crate-level `//!` documentation at the top
-                      - Ensure all public modules have module-level documentation
-                      - DO NOT proceed to phase 2 until phase 1 is complete
-
-                      **PHASE 2 - Top-Level Public Items (REQUIRED):**
-                      - Document all public items directly in `lib.rs`
-                      - Document all items in top-level public modules
-
-                      **PHASE 3 - All Other Public Items (REQUIRED):**
-                      - Document remaining public structs, enums, traits across all files
-                      - Document remaining public functions across all files
-                      - Document all public struct fields and enum variants
-                      - Pay special attention to:
-                        * Items in `api.rs` files (endpoint functions, query structs, response types)
-                        * Items in `models.rs` or `models/` directories
-                        * Re-exported items
-
-                      **PHASE 4 - Completion Check (REQUIRED):**
-                      - Verify NO public item lacks documentation (use patterns in step 6 above)
-                      - Run all verification commands
-                      - Generate commit message listing ALL changes
-
-                      **Scope:**
-                      - Modify source files in `{1}/src/` to add/fix doc comments
-                      - Only modify `.rs` files, not Cargo.toml or other config
-                      - Focus on ALL public items, not just obvious ones
-
-                      ## Output
-
-                      - If ALL public APIs have complete documentation: **Make NO changes**
-                      - If you find ANY missing or incomplete docs: Fix them
-                      - After changes, MUST run verification commands before considering work complete',
-                          matrix.package.name, matrix.package.path)
-                      }}
-
-                  claude_args: |
-                      --allowedTools Edit,Read,Write,Bash
-                      ${{ inputs.model && format('--model {0}', inputs.model) || vars.RUSTDOC_CLAUDE_MODEL && format('--model {0}', vars.RUSTDOC_CLAUDE_MODEL) || '' }}
-                      ${{ inputs.max_tokens && format('--max-tokens {0}', inputs.max_tokens) || vars.RUSTDOC_MAX_TOKENS && format('--max-tokens {0}', vars.RUSTDOC_MAX_TOKENS) || '' }}
-                      ${{ inputs.max_turns && format('--max-turns {0}', inputs.max_turns) || vars.RUSTDOC_MAX_TURNS && format('--max-turns {0}', vars.RUSTDOC_MAX_TURNS) || '' }}
+                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  prompt_template: rustdoc
+
+                  template_vars: |
+                      package_name: ${{ matrix.package.name }}
+                      package_path: ${{ matrix.package.path }}
+                      custom_guidelines: ${{ inputs.prompt_override }}
+
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  auto_commit: true
+                  enable_resilient_push: true
+                  push_max_retries: 5
+                  extract_commit_message: true
+
+                  model: ${{ inputs.model }}
+                  max_tokens: ${{ inputs.max_tokens }}
+                  max_turns: ${{ inputs.max_turns }}
+                  claude_args: --allowedTools Edit,Read,Write,Bash
 
             - name: Upload Claude output for review
               if: always() && steps.check_lib.outputs.exists == 'true'
@@ -603,67 +181,6 @@ jobs:
                   path: output.txt
                   if-no-files-found: ignore
                   retention-days: 7
-
-            - name: Commit changes with resilient push
-              if: steps.check_lib.outputs.exists == 'true'
-              run: |
-                  # Remove output.txt so it doesn't get committed
-                  rm -f output.txt
-
-                  # Check if any changes were made by Claude
-                  if [ -n "$(git status --porcelain)" ]; then
-
-                    echo "📝 Changes detected, preparing commit..."
-                    git add -A
-
-                    # Extract commit message from Claude output (JSONL format)
-                    if [ -f output.txt ]; then
-                      COMMIT_DESC=$(grep "COMMIT_MESSAGE_START" output.txt | head -1 | jq -r '.message.content[0].text | split("COMMIT_MESSAGE_START\n")[1] | split("\nCOMMIT_MESSAGE_END")[0]')
-                    fi
-
-                    if [ -n "$COMMIT_DESC" ]; then
-                      echo "📋 Extracted commit description:"
-                      echo "$COMMIT_DESC"
-                      git commit -m "docs(${{ matrix.package.name }}): improve rustdoc for public APIs" -m "$COMMIT_DESC"
-                    else
-                      echo "⚠️ No commit description found, using simple message"
-                      git commit -m "docs(${{ matrix.package.name }}): improve rustdoc for public APIs"
-                    fi
-
-                    MAX_RETRIES=5
-                    RETRY_COUNT=0
-                    PUSH_SUCCESS=false
-
-                    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = "false" ]; do
-                      echo "Push attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-
-                      if git pull --rebase origin ${{ needs.create-branch.outputs.branch-name }}; then
-                        if git push origin ${{ needs.create-branch.outputs.branch-name }}; then
-                          echo "✅ Successfully pushed changes"
-                          PUSH_SUCCESS=true
-                        else
-                          echo "⚠️ Push failed, will retry..."
-                          RETRY_COUNT=$((RETRY_COUNT + 1))
-                          sleep $((RETRY_COUNT * 2))
-                        fi
-                      else
-                        echo "⚠️ Rebase failed, resolving and retrying..."
-                        git rebase --abort || true
-                        git fetch origin ${{ needs.create-branch.outputs.branch-name }}
-                        RETRY_COUNT=$((RETRY_COUNT + 1))
-                        sleep $((RETRY_COUNT * 2))
-                      fi
-                    done
-
-                    if [ "$PUSH_SUCCESS" = "false" ]; then
-                      echo "❌ Failed to push after $MAX_RETRIES attempts"
-                      exit 1
-                    fi
-                  else
-                    echo "ℹ️ No changes detected, skipping commit"
-                    echo "📋 Git status shows:"
-                    git status --short
-                  fi
 
     create-pr:
         name: Create Pull Request
@@ -694,80 +211,57 @@ jobs:
 
             - name: Create Pull Request
               if: steps.check_changes.outputs.has_changes == 'true'
-              env:
-                  GH_TOKEN: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-              run: |
-                  EXISTING_PR=$(gh pr list --head ${{ needs.create-branch.outputs.branch-name }} --json number --jq '.[0].number' || echo "")
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-pr
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  pr_base_branch: master
+                  pr_title: "📚 Automated Rustdoc Accuracy Updates"
+                  pr_body: |
+                      ## 🤖 Automated Rustdoc Accuracy Review
 
-                  PR_BODY=$(cat <<'EOF'
-                  ## 🤖 Automated Rustdoc Accuracy Review
+                      This PR contains automated updates to ensure all public API rustdoc is accurate and complete.
 
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '### 🔄 This is a refinement pass on an existing branch' || '' }}
+                      ### 📋 What was reviewed:
+                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ All packages with library sources' }}
 
-                  This PR contains automated updates to ensure all public API rustdoc is accurate and complete.
+                      ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
 
-                  ### 📋 What was reviewed:
-                  ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ All packages with library sources' }}
+                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
 
-                  ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
+                      ### 🔍 Review focus:
+                      - Added missing doc comments to public APIs
+                      - Added/fixed `# Errors`, `# Panics`, and `# Safety` sections
+                      - Verified documented behavior matches actual code
+                      - Ensured examples in docs compile
+                      - Fixed broken doc links
 
-                  ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
+                      ### ⚙️ Process:
+                      - Used parallel job execution (one per package)
+                      - Each package rustdoc reviewed independently by Claude
+                      - All changes verified with `cargo clippy` and `cargo doc`
+                      - All changes consolidated on branch: `${branch_name}`
 
-                  ### 🔍 Review focus:
-                  - Added missing doc comments to public APIs
-                  - Added/fixed `# Errors`, `# Panics`, and `# Safety` sections
-                  - Verified documented behavior matches actual code
-                  - Ensured examples in docs compile
-                  - Fixed broken doc links
+                      ### 📝 Review Guidelines:
+                      1. **Verify Accuracy**: Check that docs correctly reflect the code
+                      2. **Public API Only**: Ensure no internal items were documented
+                      3. **Completeness**: Confirm `# Errors` and `# Panics` sections are accurate
+                      4. **Consistency**: Verify doc style follows project conventions
 
-                  ### ⚙️ Process:
-                  - Used parallel job execution (one per package)
-                  - Each package rustdoc reviewed independently by Claude
-                  - All changes verified with `cargo clippy` and `cargo doc`
-                  - All changes consolidated on branch: `${{ needs.create-branch.outputs.branch-name }}`
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '- **Refinement mode**: Building on previous updates' || '' }}
+                      ### ⚠️ Important Notes:
+                      - This is an automated review - human oversight is essential
+                      - Claude focuses on public API documentation only
+                      - All changes passed `cargo clippy` and `cargo doc` verification
+                      - Please review all changes carefully before merging
 
-                  ### 📝 Review Guidelines:
-                  1. **Verify Accuracy**: Check that docs correctly reflect the code
-                  2. **Public API Only**: Ensure no internal items were documented
-                  3. **Completeness**: Confirm `# Errors` and `# Panics` sections are accurate
-                  4. **Consistency**: Verify doc style follows project conventions
+                      ---
 
-                  ### ⚠️ Important Notes:
-                  - This is an automated review - human oversight is essential
-                  - Claude focuses on public API documentation only
-                  - All changes passed `cargo clippy` and `cargo doc` verification
-                  - Please review all changes carefully before merging
-
-                  ---
-
-                  **Generated by**: [Claude Code Action](https://github.com/marketplace/actions/claude-code-action-official)
-                  **Branch**: `${{ needs.create-branch.outputs.branch-name }}`
-                  **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-                  ${{ needs.create-branch.outputs.is-new == 'false' && '**Refinement of**: Previous updates on this branch' || '**Initial run**: New branch created' }}
-                  EOF
-                  )
-
-                  if [ -n "$EXISTING_PR" ]; then
-                    echo "✅ PR #$EXISTING_PR already exists, updating it"
-                    gh pr edit $EXISTING_PR --body "$PR_BODY"
-                    echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
-                    echo "pr_url=$(gh pr view $EXISTING_PR --json url --jq '.url')" >> $GITHUB_OUTPUT
-                  else
-                    echo "📝 Creating new PR"
-                    PR_URL=$(gh pr create \
-                      --base master \
-                      --head ${{ needs.create-branch.outputs.branch-name }} \
-                      --title '📚 Automated Rustdoc Accuracy Updates (${{ needs.create-branch.outputs.branch-date }})' \
-                      --label documentation,automated,rustdoc-updates \
-                      --body "$PR_BODY")
-
-                    echo "✅ Created PR: $PR_URL"
-                    echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-
-                    PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-                    echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-                  fi
+                      **Generated by**: [Claude Checker Action](https://github.com/MoosicBox/MoosicBox/tree/master/.github/actions/claude-checker)
+                      **Branch**: `${branch_name}`
+                      **Run**: ${run_url}
+                  pr_labels: "automated,documentation,rustdoc-updates"
+                  pr_skip_if_no_changes: true
 
             - name: No changes summary
               if: steps.check_changes.outputs.has_changes == 'false'
