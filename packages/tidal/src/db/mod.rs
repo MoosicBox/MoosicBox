@@ -1,3 +1,8 @@
+//! Database operations for persisting Tidal authentication credentials.
+//!
+//! This module handles storage and retrieval of OAuth tokens and user configuration
+//! in the database, enabling persistent authentication across sessions.
+
 use moosicbox_json_utils::ToValueType;
 use switchy::database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;

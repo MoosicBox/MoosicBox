@@ -1,3 +1,8 @@
+//! Data models for Tidal database persistence.
+//!
+//! This module defines the database schema models for storing Tidal OAuth
+//! configuration and authentication tokens.
+
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
