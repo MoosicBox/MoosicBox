@@ -1597,13 +1597,22 @@ pub mod color_functions {
         rgb_alpha(red, green, blue, alpha)
     }
 
-    /// Helper type for alpha values that can be converted from various numeric types
+    /// Helper type for alpha values that can be converted from various numeric types.
+    ///
+    /// This enum supports three different ways to specify alpha (opacity) values,
+    /// allowing flexible alpha specification in RGBA colors.
     pub enum AlphaValue {
-        /// Float value in the range 0.0 - 1.0 representing opacity
+        /// Float value in the range 0.0 - 1.0 representing opacity.
+        ///
+        /// Values are clamped to the 0.0-1.0 range and converted to 0-255 when needed.
         Float(f32),
-        /// Integer value in the range 0 - 255 representing opacity
+        /// Integer value in the range 0 - 255 representing opacity.
+        ///
+        /// This directly represents the alpha channel value in RGB color space.
         Integer(u8),
-        /// Percentage value in the range 0% - 100% representing opacity
+        /// Percentage value in the range 0.0 - 100.0 representing opacity.
+        ///
+        /// Values are clamped to the 0.0-100.0 range and converted to 0-255 when needed.
         Percentage(f32),
     }
 
