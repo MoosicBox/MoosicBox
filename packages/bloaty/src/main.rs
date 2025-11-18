@@ -16,6 +16,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
+/// Command-line arguments for the bloaty binary size analysis tool.
 #[derive(Parser)]
 #[command(
     author,
@@ -51,18 +52,30 @@ struct Args {
     output_format: Vec<String>,
 }
 
+/// File handles for the different output report formats.
 struct ReportFiles {
+    /// Optional text format report file handle.
     text: Option<fs::File>,
+    /// Optional JSONL format report file handle.
     jsonl: Option<fs::File>,
 }
 
+/// Context for tracking analysis state and output files across package analysis runs.
 struct AnalysisContext {
+    /// Unix timestamp when the analysis was started.
     timestamp: u64,
+    /// Base filename for output reports (without extension).
     base_filename: String,
+    /// File handles for active report outputs.
     report_files: ReportFiles,
+    /// In-memory JSON report structure being built during analysis.
     json_report: serde_json::Value,
 }
 
+/// Parses and normalizes command-line arguments.
+///
+/// Expands comma-separated values in package, skip-packages, skip-features, tool, and
+/// output-format arguments into individual items.
 fn parse_args() -> Args {
     let mut args = Args::parse();
 
@@ -99,6 +112,11 @@ fn parse_args() -> Args {
     args
 }
 
+/// Verifies that all requested cargo tools are installed.
+///
+/// # Panics
+///
+/// Exits the process with status code 1 if any required tools are not available.
 fn check_tools_availability(tools: &[String]) {
     let mut any_unavailable = false;
 
@@ -114,6 +132,12 @@ fn check_tools_availability(tools: &[String]) {
     }
 }
 
+/// Creates report output files based on command-line arguments.
+///
+/// # Errors
+///
+/// * File creation fails
+/// * Writing initial report headers fails
 fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
     let timestamp = switchy_time::now()
         .duration_since(UNIX_EPOCH)
@@ -163,6 +187,12 @@ fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
     })
 }
 
+/// Writes a JSONL package start event to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_package_start(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.jsonl {
         writeln!(
@@ -178,6 +208,12 @@ fn write_jsonl_package_start(ctx: &mut AnalysisContext, package_name: &str) -> R
     Ok(())
 }
 
+/// Writes a JSONL package end event to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_package_end(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.jsonl {
         writeln!(
@@ -193,6 +229,12 @@ fn write_jsonl_package_end(ctx: &mut AnalysisContext, package_name: &str) -> Res
     Ok(())
 }
 
+/// Writes a JSONL target start event to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_target_start(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -213,6 +255,12 @@ fn write_jsonl_target_start(
     Ok(())
 }
 
+/// Writes a JSONL target end event to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_target_end(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -233,6 +281,12 @@ fn write_jsonl_target_end(
     Ok(())
 }
 
+/// Writes a JSONL base rlib size record to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_base_size(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -256,6 +310,12 @@ fn write_jsonl_base_size(
     Ok(())
 }
 
+/// Writes a JSONL feature rlib size record to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_feature(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -285,6 +345,11 @@ fn write_jsonl_feature(
     Ok(())
 }
 
+/// Writes a package header to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_package_header(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.text {
         writeln!(report, "\nPackage: {package_name}")?;
@@ -293,6 +358,11 @@ fn write_text_package_header(ctx: &mut AnalysisContext, package_name: &str) -> R
     Ok(())
 }
 
+/// Writes a target header to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_target_header(ctx: &mut AnalysisContext, target_name: &str) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.text {
         writeln!(report, "\nTarget: {target_name}")?;
@@ -301,6 +371,11 @@ fn write_text_target_header(ctx: &mut AnalysisContext, target_name: &str) -> Res
     Ok(())
 }
 
+/// Writes a base rlib size to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_base_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.text {
         writeln!(report, "Base size: {}", ByteSize(base_size))?;
@@ -308,6 +383,11 @@ fn write_text_base_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()>
     Ok(())
 }
 
+/// Writes a feature rlib size to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_feature(
     ctx: &mut AnalysisContext,
     feature: &str,
@@ -328,6 +408,11 @@ fn write_text_feature(
     Ok(())
 }
 
+/// Determines whether a feature should be skipped based on filter patterns.
+///
+/// # Errors
+///
+/// * Invalid regex pattern in `skip_feature_pattern`
 fn should_skip_feature(feature: &str, args: &Args) -> Result<bool> {
     if args.skip_features.contains(&feature.to_string()) {
         return Ok(true);
@@ -343,6 +428,11 @@ fn should_skip_feature(feature: &str, args: &Args) -> Result<bool> {
     Ok(false)
 }
 
+/// Determines whether a package should be analyzed based on include/exclude filters.
+///
+/// # Errors
+///
+/// * Invalid regex pattern in `package_pattern` or `skip_package_pattern`
 fn should_analyze_package(pkg_name: &str, args: &Args) -> Result<bool> {
     // If specific packages are specified, check if this package is in the list
     if !args.package.is_empty() && !args.package.contains(&pkg_name.to_string()) {
@@ -373,6 +463,16 @@ fn should_analyze_package(pkg_name: &str, args: &Args) -> Result<bool> {
     Ok(true)
 }
 
+/// Analyzes a single target, measuring size impact of all features.
+///
+/// Builds the target with no features (base size), then with each feature individually,
+/// recording both rlib and binary sizes (if applicable).
+///
+/// # Errors
+///
+/// * Building the target fails
+/// * Measuring the built artifact fails
+/// * Writing to report files fails
 fn analyze_target(
     ctx: &mut AnalysisContext,
     pkg: &cargo_metadata::Package,
@@ -489,6 +589,11 @@ fn analyze_target(
     Ok(target_json)
 }
 
+/// Writes a base binary size to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_base_binary_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()> {
     if let Some(report) = &mut ctx.report_files.text {
         writeln!(report, "Base binary size: {}", ByteSize(base_size))?;
@@ -496,6 +601,11 @@ fn write_text_base_binary_size(ctx: &mut AnalysisContext, base_size: u64) -> Res
     Ok(())
 }
 
+/// Writes a feature binary size to the text report.
+///
+/// # Errors
+///
+/// * Writing to the text report file fails
 fn write_text_binary_feature(
     ctx: &mut AnalysisContext,
     feature: &str,
@@ -516,6 +626,12 @@ fn write_text_binary_feature(
     Ok(())
 }
 
+/// Writes a JSONL base binary size record to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_base_binary_size(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -539,6 +655,12 @@ fn write_jsonl_base_binary_size(
     Ok(())
 }
 
+/// Writes a JSONL feature binary size record to the report.
+///
+/// # Errors
+///
+/// * JSON serialization fails
+/// * Writing to the JSONL report file fails
 fn write_jsonl_binary_feature(
     ctx: &mut AnalysisContext,
     package_name: &str,
@@ -568,6 +690,13 @@ fn write_jsonl_binary_feature(
     Ok(())
 }
 
+/// Analyzes a workspace package, running requested tools and measuring feature sizes.
+///
+/// # Errors
+///
+/// * Package filtering fails
+/// * Running analysis tools fails
+/// * Writing to report files fails
 fn analyze_package(
     ctx: &mut AnalysisContext,
     pkg: &cargo_metadata::Package,
@@ -649,6 +778,13 @@ fn analyze_package(
     Ok(())
 }
 
+/// Writes the final consolidated JSON report if JSON output is enabled.
+///
+/// # Errors
+///
+/// * Creating the JSON report file fails
+/// * Serializing the JSON report fails
+/// * Writing to the JSON report file fails
 fn write_final_json_report(ctx: &AnalysisContext, args: &Args) -> Result<()> {
     let should_output_json = args.output_format.contains(&"json".to_string())
         || args.output_format.contains(&"all".to_string());
@@ -663,6 +799,14 @@ fn write_final_json_report(ctx: &AnalysisContext, args: &Args) -> Result<()> {
     Ok(())
 }
 
+/// Executes bloaty binary size analysis across workspace packages.
+///
+/// # Errors
+///
+/// * Loading workspace metadata fails
+/// * Setting up report files fails
+/// * Analyzing packages fails
+/// * Writing final reports fails
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -684,6 +828,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Builds an rlib with optional features and measures its size.
+///
+/// # Errors
+///
+/// * Cargo clean fails
+/// * Cargo build fails
+/// * Finding the built rlib fails
+/// * Reading rlib metadata fails
 fn build_and_measure_rlib(
     manifest: &Utf8Path,
     target_dir: &Utf8Path,
@@ -723,6 +875,13 @@ fn build_and_measure_rlib(
     Err(anyhow::anyhow!("rlib for {crate_name} not found"))
 }
 
+/// Builds a binary with optional features and measures its size.
+///
+/// # Errors
+///
+/// * Cargo clean fails
+/// * Cargo build fails
+/// * Reading binary metadata fails
 fn build_and_measure_binary(
     manifest: &Utf8Path,
     target_dir: &Utf8Path,
@@ -755,6 +914,7 @@ fn build_and_measure_binary(
     Ok(fs::metadata(&binary_path)?.len())
 }
 
+/// Checks if a cargo tool is installed and available.
 fn tool_available(tool: &str) -> bool {
     Command::new("cargo")
         .arg(tool)
