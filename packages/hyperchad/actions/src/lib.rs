@@ -313,6 +313,7 @@ impl Key {
 }
 
 impl std::fmt::Display for Key {
+    /// Formats the key as its string representation
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -410,6 +411,11 @@ pub struct Action {
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for Action {
+    /// Formats the action as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid actions)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -442,6 +448,7 @@ impl ActionEffect {
 }
 
 impl From<Vec<Self>> for ActionEffect {
+    /// Converts a vector of `ActionEffect`s into a single multi-effect action
     fn from(value: Vec<Self>) -> Self {
         Self {
             action: ActionType::MultiEffect(value),
@@ -451,6 +458,7 @@ impl From<Vec<Self>> for ActionEffect {
 }
 
 impl From<Vec<ActionType>> for ActionEffect {
+    /// Converts a vector of `ActionType`s into a single multi-action effect
     fn from(value: Vec<ActionType>) -> Self {
         Self {
             action: ActionType::Multi(value),
@@ -483,6 +491,7 @@ impl ActionEffect {
 }
 
 impl From<ActionType> for ActionEffect {
+    /// Converts an `ActionType` into an `ActionEffect` with default timing settings
     fn from(value: ActionType) -> Self {
         Self {
             action: value,
@@ -492,6 +501,7 @@ impl From<ActionType> for ActionEffect {
 }
 
 impl From<Box<ActionType>> for ActionEffect {
+    /// Converts a boxed `ActionType` into an `ActionEffect`
     fn from(value: Box<ActionType>) -> Self {
         (*value).into()
     }
@@ -499,6 +509,11 @@ impl From<Box<ActionType>> for ActionEffect {
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for ActionEffect {
+    /// Formats the action effect as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid action effects)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -1255,12 +1270,14 @@ impl ActionType {
 
 #[cfg(feature = "logic")]
 impl From<logic::If> for ActionType {
+    /// Converts a conditional `If` into a `Logic` action type
     fn from(value: logic::If) -> Self {
         Self::Logic(value)
     }
 }
 
 impl From<ActionType> for Action {
+    /// Converts an `ActionType` into an `Action` with immediate trigger and default timing
     fn from(value: ActionType) -> Self {
         Self {
             trigger: ActionTrigger::default(),
@@ -1276,6 +1293,11 @@ impl From<ActionType> for Action {
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for ActionType {
+    /// Formats the action type as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid action types)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -1285,6 +1307,12 @@ impl std::fmt::Display for ActionType {
 impl<'a> TryFrom<&'a str> for ActionType {
     type Error = serde_json::Error;
 
+    /// Parses an `ActionType` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `ActionType`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
@@ -1306,6 +1334,11 @@ pub enum StyleAction {
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for StyleAction {
+    /// Formats the style action as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid style actions)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -1315,6 +1348,12 @@ impl std::fmt::Display for StyleAction {
 impl<'a> TryFrom<&'a str> for StyleAction {
     type Error = serde_json::Error;
 
+    /// Parses a `StyleAction` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `StyleAction`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
