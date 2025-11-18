@@ -42,36 +42,61 @@ use moosicbox_web_server::{Error, HttpResponse, Json, Query, RequestData};
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use serde::{Deserialize, Serialize};
 
-// Query parameters for search
+/// Query parameters for search endpoints.
+///
+/// Used to extract and validate search query parameters from URL query strings.
+/// Demonstrates how to handle required and optional query parameters.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)] // Fields are demonstrated in Debug output
 struct SearchQuery {
+    /// Search query term (required)
     q: String,
+    /// Maximum number of results to return (optional)
     limit: Option<u32>,
+    /// Number of results to skip for pagination (optional)
     offset: Option<u32>,
 }
 
-// JSON payload for user updates
+/// JSON payload for user update requests.
+///
+/// Used to deserialize and validate JSON request bodies for user update operations.
+/// All fields are optional to support partial updates.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize, Serialize)]
 struct UserUpdate {
+    /// Updated user name (optional)
     name: Option<String>,
+    /// Updated email address (optional)
     email: Option<String>,
+    /// Updated user biography (optional)
     bio: Option<String>,
 }
 
-// Response structure
+/// Standard API response structure.
+///
+/// Provides a consistent response format for all API endpoints with
+/// status information, a message, and optional data payload.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Serialize)]
 #[allow(dead_code)] // Used in example handlers
 struct ApiResponse {
+    /// Whether the request was successful
     success: bool,
+    /// Human-readable message describing the result
     message: String,
+    /// Optional data payload containing response details
     data: Option<serde_json::Value>,
 }
 
-// Handler combining Query + RequestData
+/// Handles search requests by combining query parameters with request metadata.
+///
+/// Demonstrates how to use multiple extractors (`Query` and `RequestData`) in a
+/// single handler to access both parsed query parameters and raw request information.
+///
+/// # Errors
+///
+/// * Serialization fails when converting the response to JSON
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn search_handler(
@@ -98,7 +123,14 @@ async fn search_handler(
     Ok(HttpResponse::ok().with_body(json_response))
 }
 
-// Handler combining Json + RequestData
+/// Handles user update requests by combining JSON payload with request metadata.
+///
+/// Demonstrates how to use multiple extractors (`Json` and `RequestData`) in a
+/// single handler to access both parsed JSON body and raw request information.
+///
+/// # Errors
+///
+/// * Serialization fails when converting the response to JSON
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn update_handler(json: Json<UserUpdate>, data: RequestData) -> Result<HttpResponse, Error> {
@@ -124,7 +156,14 @@ async fn update_handler(json: Json<UserUpdate>, data: RequestData) -> Result<Htt
     Ok(HttpResponse::ok().with_body(json_response))
 }
 
-// JSON-based info handler
+/// Returns request information as a JSON response.
+///
+/// Demonstrates extracting request metadata using `RequestData` and
+/// returning a structured JSON response with details about the request.
+///
+/// # Errors
+///
+/// * Serialization fails when converting the response to JSON
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn json_info_handler(data: RequestData) -> Result<HttpResponse, Error> {
@@ -146,7 +185,14 @@ async fn json_info_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(json_response))
 }
 
-// Handler with two RequestData extractors (for demonstration)
+/// Demonstrates using multiple instances of the same extractor.
+///
+/// Shows that the same extractor type can be used multiple times in a single handler.
+/// Both `RequestData` instances will contain identical information from the same request.
+///
+/// # Errors
+///
+/// * Serialization fails when converting the response to JSON
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn double_data_handler(
@@ -169,6 +215,10 @@ async fn double_data_handler(
     Ok(HttpResponse::ok().with_body(json_response))
 }
 
+/// Runs examples using the Actix Web backend.
+///
+/// Creates and displays route configurations for combined extractor examples
+/// using the Actix Web framework.
 #[cfg(feature = "actix")]
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend Combined Extractor Examples...");
@@ -213,6 +263,15 @@ fn run_actix_examples() {
     println!("   Backend: Actix Web");
 }
 
+/// Runs examples using the Simulator backend and tests extractor combinations.
+///
+/// Creates route configurations and tests various extractor combinations using
+/// the simulator backend, demonstrating how extractors work in practice.
+///
+/// # Errors
+///
+/// * Request extraction fails if the request is malformed
+/// * Query deserialization fails if query parameters are invalid
 #[cfg(feature = "simulator")]
 #[cfg(not(feature = "actix"))]
 fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
@@ -305,6 +364,15 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Entry point for the combined extractors example.
+///
+/// Demonstrates multiple extractors working together in handler functions.
+/// Runs examples using either the Actix or Simulator backend depending on
+/// enabled features.
+///
+/// # Errors
+///
+/// * Simulator examples fail if request extraction or deserialization fails
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Combined Extractors Examples - Multiple Extractors Together");
