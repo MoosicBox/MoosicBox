@@ -87,6 +87,24 @@ inputs:
         description: "Comment ID to append details to"
         required: false
 
+    # === Execution Details Artifacts (Optional) ===
+    enable_execution_details_artifact:
+        description: "Upload execution details as artifact"
+        required: false
+        default: "false"
+    artifact_name_prefix:
+        description: "Prefix for artifact name (e.g., 'rustdoc', 'readme')"
+        required: false
+        default: ""
+    artifact_package_name:
+        description: "Package name for artifact naming (e.g., 'clippier')"
+        required: false
+        default: ""
+    artifact_retention_days:
+        description: "Artifact retention days"
+        required: false
+        default: "30"
+
     # === Co-Author Attribution (Optional) ===
     enable_coauthor_attribution:
         description: "Add co-author to commits"
@@ -190,8 +208,14 @@ outputs:
         description: "Branch used"
         value: ${{ steps.create_branch.outputs.branch_name || steps.setup_branch.outputs.branch_name }}
     execution_file:
-        description: "Execution details file path"
+        description: "Execution details file path (JSON)"
         value: ${{ steps.claude.outputs.execution_file }}
+    execution_details_file:
+        description: "Formatted execution details markdown file path"
+        value: ${{ steps.format_execution_details.outputs.details_file }}
+    artifact_uploaded:
+        description: "true if execution details artifact was uploaded"
+        value: ${{ steps.upload_execution_details.outputs.uploaded }}
     resolved_template_vars:
         description: "Resolved variables JSON"
         value: ${{ steps.resolve_template.outputs.resolved_vars }}
@@ -896,6 +920,63 @@ runs:
                 echo "✅ Appended execution details to comment #$COMMENT_ID"
               else
                 echo "⚠️ Failed to update comment"
+              fi
+
+        - name: Format execution details for artifact
+          if: always() && inputs.command == 'check' && inputs.enable_execution_details_artifact == 'true' && steps.claude.outputs.execution_file != ''
+          id: format_execution_details
+          shell: bash
+          run: |
+              EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+              PACKAGE_NAME="${{ inputs.artifact_package_name }}"
+
+              # Generate output file path
+              if [ -n "$PACKAGE_NAME" ]; then
+                  OUTPUT_FILE="/tmp/execution-details-${PACKAGE_NAME}.md"
+              else
+                  OUTPUT_FILE="/tmp/execution-details.md"
+              fi
+
+              if [ -f "$EXEC_FILE" ] && [ -s "$EXEC_FILE" ]; then
+                  echo "📊 Formatting execution details for artifact..."
+
+                  # Check if formatting script exists
+                  if [ ! -f "${{ inputs.execution_details_script }}" ]; then
+                      echo "⚠️ Execution details script not found: ${{ inputs.execution_details_script }}"
+                      exit 0
+                  fi
+
+                  # Format execution details
+                  ${{ inputs.execution_details_script }} "$EXEC_FILE" "$OUTPUT_FILE"
+
+                  if [ -f "$OUTPUT_FILE" ]; then
+                      echo "✅ Created execution details artifact: $OUTPUT_FILE"
+                      echo "details_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+                  else
+                      echo "⚠️ Failed to generate execution details"
+                  fi
+              else
+                  echo "ℹ️ No execution file available"
+              fi
+
+        - name: Upload execution details artifact
+          if: always() && inputs.command == 'check' && inputs.enable_execution_details_artifact == 'true' && steps.format_execution_details.outputs.details_file != ''
+          uses: actions/upload-artifact@v4
+          with:
+              name: ${{ inputs.artifact_name_prefix != '' && format('execution-details-{0}-{1}', inputs.artifact_name_prefix, inputs.artifact_package_name) || format('execution-details-{0}', inputs.artifact_package_name || 'default') }}
+              path: ${{ steps.format_execution_details.outputs.details_file }}
+              retention-days: ${{ inputs.artifact_retention_days }}
+              if-no-files-found: warn
+
+        - name: Set artifact uploaded flag
+          if: always() && inputs.command == 'check' && inputs.enable_execution_details_artifact == 'true'
+          id: upload_execution_details
+          shell: bash
+          run: |
+              if [ -f "${{ steps.format_execution_details.outputs.details_file }}" ]; then
+                  echo "uploaded=true" >> $GITHUB_OUTPUT
+              else
+                  echo "uploaded=false" >> $GITHUB_OUTPUT
               fi
 
         # ========================================
