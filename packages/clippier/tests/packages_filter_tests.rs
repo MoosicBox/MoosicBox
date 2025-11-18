@@ -29,6 +29,10 @@ fn test_packages_filter_single_package() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -72,6 +76,10 @@ fn test_packages_filter_multiple_packages() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -122,6 +130,10 @@ fn test_packages_filter_empty_list() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -148,6 +160,10 @@ fn test_packages_filter_empty_list() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -196,6 +212,10 @@ fn test_packages_with_os_filter() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -237,6 +257,10 @@ fn test_packages_with_chunking() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -287,6 +311,10 @@ fn test_packages_with_features_filter() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -334,6 +362,10 @@ fn test_packages_nonexistent_package() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -376,6 +408,10 @@ fn test_packages_mixed_valid_invalid() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -422,6 +458,10 @@ fn test_packages_case_sensitivity() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -459,6 +499,10 @@ fn test_packages_raw_output_format() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Raw,
     );
 

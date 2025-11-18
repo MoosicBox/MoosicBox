@@ -300,6 +300,20 @@ build_clippier_command() {
             done < <(echo "$INPUT_IGNORE_PATTERNS" | tr ',' '\n')
         fi
 
+        # Handle transform scripts - can be comma-separated
+        if [[ -n "$INPUT_TRANSFORM_SCRIPTS" ]]; then
+            IFS=',' read -ra SCRIPTS <<< "$INPUT_TRANSFORM_SCRIPTS"
+            for script in "${SCRIPTS[@]}"; do
+                # Trim whitespace and skip empty
+                script=$(echo "$script" | xargs)
+                if [[ -n "$script" ]]; then
+                    cmd="$cmd --transform-scripts \"$script\""
+                fi
+            done
+        fi
+
+        [[ "$INPUT_TRANSFORM_TRACE" == "true" ]] && cmd="$cmd --transform-trace"
+
         cmd="$cmd --output json"
     elif [[ "$INPUT_COMMAND" == "affected-packages" ]]; then
         cmd="$cmd $INPUT_WORKSPACE_PATH"

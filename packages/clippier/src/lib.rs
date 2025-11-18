@@ -3443,6 +3443,7 @@ pub fn handle_ci_steps_command(
     clippy::too_many_lines,
     clippy::cognitive_complexity
 )]
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn handle_features_command(
     file: &str,
     os: Option<&str>,
@@ -3464,6 +3465,8 @@ pub fn handle_features_command(
     ignore_patterns: Option<&[String]>,
     skip_if: &[String],
     include_if: &[String],
+    #[cfg(feature = "_transforms")] transform_scripts: &[std::path::PathBuf],
+    #[cfg(feature = "_transforms")] transform_trace: bool,
     output: OutputType,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::str::FromStr;
@@ -3876,6 +3879,29 @@ pub fn handle_features_command(
     // Apply max_parallel re-chunking if specified (redistribute instead of truncate)
     if let Some(max_parallel_limit) = max_parallel {
         packages = apply_max_parallel_rechunking(packages, max_parallel_limit as usize, chunked)?;
+    }
+
+    // Apply Lua transforms if specified
+    #[cfg(feature = "_transforms")]
+    if !transform_scripts.is_empty() {
+        log::info!("Applying {} transform script(s)", transform_scripts.len());
+
+        let engine = if transform_trace {
+            crate::transforms::TransformEngine::with_trace(&path, true)?
+        } else {
+            crate::transforms::TransformEngine::new(&path)?
+        };
+
+        for script_path in transform_scripts {
+            log::info!("Applying transform: {}", script_path.display());
+            let script = std::fs::read_to_string(script_path)?;
+            engine.apply_transform(&mut packages, &script)?;
+        }
+
+        log::info!(
+            "Transforms applied successfully. Matrix size: {}",
+            packages.len()
+        );
     }
 
     let result = match output {

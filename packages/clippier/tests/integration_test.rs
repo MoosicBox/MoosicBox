@@ -217,6 +217,10 @@ fn test_git_submodules_with_chunking_and_spreading() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     )
     .unwrap();

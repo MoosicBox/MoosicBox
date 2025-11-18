@@ -135,6 +135,10 @@ fn test_basic_chunking_respects_limit() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -176,6 +180,10 @@ fn test_basic_chunking_respects_limit() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -223,6 +231,10 @@ fn test_basic_spreading_distributes_features() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -273,6 +285,10 @@ fn test_chunking_and_spreading_combination() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -326,6 +342,10 @@ fn test_max_parallel_with_chunking() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -378,6 +398,10 @@ fn test_changed_files_respects_chunking_and_spreading() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -437,6 +461,10 @@ fn test_chunking_with_small_limit() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -484,6 +512,10 @@ fn test_empty_workspace_with_chunking_spreading() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -573,6 +605,10 @@ serde = "1.0"
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -625,6 +661,10 @@ fn test_complex_scenario_all_flags() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -675,6 +715,10 @@ fn test_chunking_without_spreading() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -729,6 +773,10 @@ fn test_spreading_without_chunking() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 

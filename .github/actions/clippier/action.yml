@@ -242,6 +242,15 @@ inputs:
         required: false
         default: ""
 
+    transform-scripts:
+        description: "Lua transform scripts to apply to matrix (comma-separated paths relative to workspace root)"
+        required: false
+
+    transform-trace:
+        description: "Enable trace mode for transform debugging"
+        required: false
+        default: "false"
+
     clippier-version:
         description: "Git ref/tag for clippier (default: use from current repo)"
         required: false
@@ -463,6 +472,8 @@ runs:
               INPUT_ENABLE_DOCKER_ANALYSIS: ${{ inputs.enable-docker-analysis }}
               INPUT_DOCKER_PACKAGES: ${{ inputs.docker-packages }}
               INPUT_DOCKER_NAME_PREFIX: ${{ inputs.docker-name-prefix }}
+              INPUT_TRANSFORM_SCRIPTS: ${{ inputs.transform-scripts }}
+              INPUT_TRANSFORM_TRACE: ${{ inputs.transform-trace }}
               INPUT_PACKAGE_JSON: ${{ inputs.package-json }}
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}

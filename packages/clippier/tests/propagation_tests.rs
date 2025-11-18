@@ -27,6 +27,10 @@ fn test_git_submodules_propagates_through_build_deps() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -73,6 +77,10 @@ fn test_git_submodules_propagates_through_dev_and_regular_deps() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -119,6 +127,10 @@ fn test_dependencies_propagate_and_merge() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -177,6 +189,10 @@ fn test_dependencies_propagate_to_root() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -235,6 +251,10 @@ fn test_ci_steps_propagate_and_preserve_order() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -297,6 +317,10 @@ fn test_env_vars_propagate_with_overlay() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -360,6 +384,10 @@ fn test_nightly_does_not_propagate() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -403,6 +431,10 @@ fn test_propagation_with_all_workspace_packages() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -449,6 +481,10 @@ fn test_external_deps_dont_break_propagation() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 

@@ -137,6 +137,16 @@ enum Commands {
         #[arg(long, action = clap::ArgAction::Append)]
         include_if: Vec<String>,
 
+        /// Lua transform scripts to apply to the generated matrix (can be specified multiple times)
+        #[cfg(feature = "_transforms")]
+        #[arg(long, action = clap::ArgAction::Append)]
+        transform_scripts: Vec<PathBuf>,
+
+        /// Enable trace mode for transform debugging
+        #[cfg(feature = "_transforms")]
+        #[arg(long)]
+        transform_trace: bool,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -403,6 +413,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ignore,
             skip_if,
             include_if,
+            #[cfg(feature = "_transforms")]
+            transform_scripts,
+            #[cfg(feature = "_transforms")]
+            transform_trace,
             output,
         } => handle_features_command(
             &file,
@@ -431,6 +445,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             &skip_if,
             &include_if,
+            #[cfg(feature = "_transforms")]
+            &transform_scripts,
+            #[cfg(feature = "_transforms")]
+            transform_trace,
             output,
         )?,
         Commands::WorkspaceDeps {

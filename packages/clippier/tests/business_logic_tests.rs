@@ -254,6 +254,10 @@ fn test_ci_steps_with_command_and_toolchain() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -325,6 +329,10 @@ fn test_ci_steps_mixed_entries() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -387,6 +395,10 @@ fn test_ci_steps_with_features() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -440,6 +452,10 @@ fn test_ci_steps_json_output_structure() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -536,6 +552,10 @@ fn test_handle_features_command_basic() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Raw,
     );
 
@@ -722,6 +742,10 @@ fn test_handle_features_command_comprehensive() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -855,6 +879,10 @@ serde = "1.0"
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -902,6 +930,10 @@ serde = "1.0"
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
@@ -1106,6 +1138,10 @@ fn test_handle_features_command_with_git_submodules() {
         None,
         &[],
         &[],
+        #[cfg(feature = "_transforms")]
+        &[],
+        #[cfg(feature = "_transforms")]
+        false,
         OutputType::Json,
     );
 
