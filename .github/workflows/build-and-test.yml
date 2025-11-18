@@ -121,6 +121,7 @@ jobs:
                   skip-features: fail-on-warnings
                   include-reasoning: true
                   transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
+                  transform-scripts: .clippier/transforms/asio-filter.lua
                   git-strategy: workflow-history
                   ignore: |
                       **/*.md
