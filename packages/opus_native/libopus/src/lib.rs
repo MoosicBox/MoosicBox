@@ -193,6 +193,7 @@ pub mod safe {
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
         /// * `InvalidChannels` - channels not 1 or 2
         /// * `EncoderCreateFailed` - libopus encoder creation failed
+        #[must_use]
         pub fn new(sample_rate: u32, channels: u8, application: c_int) -> Result<Self, OpusError> {
             if ![8000, 12000, 16000, 24000, 48000].contains(&sample_rate) {
                 return Err(OpusError::InvalidSampleRate);
@@ -274,6 +275,7 @@ pub mod safe {
         /// * `InvalidSampleRate` - sample rate not one of 8000, 12000, 16000, 24000, 48000 Hz
         /// * `InvalidChannels` - channels not 1 or 2
         /// * `DecoderCreateFailed` - libopus decoder creation failed
+        #[must_use]
         pub fn new(sample_rate: u32, channels: u8) -> Result<Self, OpusError> {
             if ![8000, 12000, 16000, 24000, 48000].contains(&sample_rate) {
                 return Err(OpusError::InvalidSampleRate);
