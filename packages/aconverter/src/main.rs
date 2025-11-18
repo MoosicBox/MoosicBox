@@ -152,7 +152,7 @@ pub enum TagTrackFileError {
 ///
 /// # Panics
 ///
-/// * If the output file is not a valid string
+/// * If the output path cannot be converted to a UTF-8 string
 pub fn tag_track_file(input_path: &Path, output_path: &Path) -> Result<(), TagTrackFileError> {
     log::debug!(
         "Reading source tags from input_path={}",
