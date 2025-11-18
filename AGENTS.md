@@ -21,7 +21,7 @@
     #![allow(clippy::multiple_crate_versions)]
     ```
 - **Rustdoc Error docs**: Use asterisks (\*) for bullet points, document all error conditions
-- **Must use**: Add `#[must_use]` to constructors and getters
+- **Must use**: Add `#[must_use]` to constructors and getters that return direct types (Self, String, Vec, etc.), but NOT to Result/Option-returning functions (these are already must_use)
 
 ### Package Organization
 

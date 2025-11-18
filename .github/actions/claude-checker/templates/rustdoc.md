@@ -33,14 +33,15 @@ Check that ALL public APIs in ${target_path} have:
 4. **Error docs** - Error conditions documented with `# Errors`
 5. **Example docs** - Complex functions have `# Examples`
 6. **Panic docs** - Functions that panic have `# Panics`
-7. **Must-use** - Constructors and getters have `#[must_use]`
+7. **Must-use** - Constructors and getters that don't return Result or Option have `#[must_use]` (Result/Option are already must_use by default)
 
 ## Rustdoc Style (from AGENTS.md)
 
 - Use asterisks (\*) for bullet points in error docs
 - Document all error conditions
 - Include examples for complex functions
-- Add `#[must_use]` to constructors and getters
+- Add `#[must_use]` to constructors and getters that return direct types (Self, String, Vec, etc.)
+- DO NOT add `#[must_use]` to functions returning Result or Option - these types already have the attribute
 
 ## Verification (MANDATORY)
 
@@ -62,5 +63,14 @@ If changes made:
 
 - Commit message: "${commit_message}"
 - DO NOT push
+
+## Response Guidelines
+
+When responding to users:
+
+- NEVER reference files in /tmp or other temporary directories - users cannot access these
+- Always include plans, summaries, and important information directly in your comment response
+- If you create a plan or analysis, paste the full content in your response, not just a file path
+- Remember: you run on an ephemeral server - any files you create are only accessible during your execution
 
 ${custom_guidelines}
