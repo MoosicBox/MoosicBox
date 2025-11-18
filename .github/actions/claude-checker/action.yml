@@ -575,14 +575,20 @@ runs:
 
               git add -A
 
-              # Create commit
+              # Create commit using heredoc to prevent command injection
               if [ -n "$COMMIT_DESC" ] && [ "$COMMIT_DESC" != "null" ]; then
                 echo "📋 Using detailed commit description:"
                 echo "$COMMIT_DESC"
-                git commit -m "$BASE_COMMIT_MSG" -m "$COMMIT_DESC"
+                git commit -F - <<'EOF'
+              $BASE_COMMIT_MSG
+
+              $COMMIT_DESC
+              EOF
               else
                 echo "📋 Using base commit message: $BASE_COMMIT_MSG"
-                git commit -m "$BASE_COMMIT_MSG"
+                git commit -F - <<'EOF'
+              $BASE_COMMIT_MSG
+              EOF
               fi
 
               echo "commit_created=true" >> $GITHUB_OUTPUT
@@ -972,9 +978,13 @@ runs:
                 echo "pr_action=updated" >> $GITHUB_OUTPUT
                 echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
 
+                # Use heredoc to prevent command injection from backticks in PR body
                 gh pr edit $EXISTING_PR \
                   --title "$PR_TITLE" \
-                  --body "$PR_BODY" 2>/dev/null || true
+                  --body "$(cat <<'EOF'
+              $PR_BODY
+              EOF
+              )" 2>/dev/null || true
 
                 PR_URL=$(gh pr view $EXISTING_PR --json url --jq '.url')
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
@@ -983,11 +993,15 @@ runs:
               else
                 echo "pr_action=created" >> $GITHUB_OUTPUT
 
+                # Use heredoc to prevent command injection from backticks in PR body
                 PR_URL=$(gh pr create \
                   --base ${{ inputs.pr_base_branch }} \
                   --head ${{ inputs.branch_name }} \
                   --title "$PR_TITLE" \
-                  --body "$PR_BODY" \
+                  --body "$(cat <<'EOF'
+              $PR_BODY
+              EOF
+              )" \
                   --label "${{ inputs.pr_labels }}")
 
                 PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
