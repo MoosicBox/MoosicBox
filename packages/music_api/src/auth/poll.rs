@@ -1,3 +1,9 @@
+//! Poll-based authentication implementation.
+//!
+//! This module provides `PollAuth`, which implements an authentication flow that polls
+//! for authentication status until success or timeout. This is typically used for OAuth-style
+//! flows where the user authenticates on a separate device or browser.
+
 use std::time::Duration;
 
 use switchy_async::futures::FutureExt as _;
