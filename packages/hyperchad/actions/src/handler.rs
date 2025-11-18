@@ -296,7 +296,7 @@ pub struct ActionTimingManager {
 }
 
 impl ActionTimingManager {
-    /// Check if action should be throttled
+    /// Checks if an action should be throttled based on timing
     pub fn should_throttle(&mut self, element_id: usize, throttle_ms: u64) -> bool {
         if let Some((instant, throttle)) = self.throttle.get(&element_id) {
             let ms = switchy_time::instant_now()
@@ -312,13 +312,13 @@ impl ActionTimingManager {
         false
     }
 
-    /// Start delay off timer
+    /// Starts a delay-off timer for an element
     pub fn start_delay_off(&mut self, element_id: usize, delay_ms: u64) {
         self.delay_off
             .insert(element_id, (switchy_time::instant_now(), delay_ms));
     }
 
-    /// Check if delay off has expired
+    /// Checks if the delay-off timer has expired for an element
     #[must_use]
     pub fn is_delay_off_expired(&self, element_id: usize) -> bool {
         if let Some((instant, delay)) = self.delay_off.get(&element_id) {
@@ -331,12 +331,12 @@ impl ActionTimingManager {
         }
     }
 
-    /// Clear throttle for element
+    /// Clears the throttle timer for an element
     pub fn clear_throttle(&mut self, element_id: usize) {
         self.throttle.remove(&element_id);
     }
 
-    /// Clear delay off for element
+    /// Clears the delay-off timer for an element
     pub fn clear_delay_off(&mut self, element_id: usize) {
         self.delay_off.remove(&element_id);
     }
@@ -364,7 +364,8 @@ where
     B: StyleManager<Option<Color>>,
     D: StyleManager<bool>,
 {
-    /// Create new action handler
+    /// Creates a new action handler
+    #[must_use]
     pub fn new(
         finder: F,
         visibility_manager: V,
@@ -380,7 +381,8 @@ where
         }
     }
 
-    /// Get element ID from target
+    /// Gets the element ID from a target selector
+    #[must_use]
     pub fn get_element_id(&self, target: &ElementTarget, self_id: usize) -> Option<usize> {
         match target {
             ElementTarget::StrId(str_id) => {
@@ -407,7 +409,8 @@ where
         }
     }
 
-    /// Calculate dynamic value
+    /// Calculates a dynamic value by evaluating computed values
+    #[must_use]
     pub fn calc_value(
         &self,
         value: &Value,
@@ -507,7 +510,7 @@ where
         }
     }
 
-    /// Handle a style action
+    /// Handles a style action and returns success status
     pub fn handle_style_action(
         &mut self,
         action: &StyleAction,
@@ -550,7 +553,7 @@ where
         }
     }
 
-    /// Unhandle a style action (cleanup)
+    /// Cleans up a style action (reverses its effects)
     pub fn unhandle_style_action(
         &mut self,
         action: &StyleAction,
@@ -580,7 +583,7 @@ where
         }
     }
 
-    /// Handle an action
+    /// Handles an action and returns success status
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     pub fn handle_action(
         &mut self,
@@ -729,7 +732,7 @@ where
         }
     }
 
-    /// Unhandle an action (cleanup)
+    /// Cleans up an action (reverses its effects)
     pub fn unhandle_action(
         &mut self,
         action: &ActionType,
@@ -767,22 +770,25 @@ where
         }
     }
 
-    /// Get current visibility override for element
+    /// Gets the current visibility override for an element
+    #[must_use]
     pub fn get_visibility_override(&self, element_id: usize) -> Option<&Option<Visibility>> {
         self.visibility_manager.get_current_value(element_id)
     }
 
-    /// Get current background override for element
+    /// Gets the current background override for an element
+    #[must_use]
     pub fn get_background_override(&self, element_id: usize) -> Option<&Option<Color>> {
         self.background_manager.get_current_value(element_id)
     }
 
-    /// Get current display override for element
+    /// Gets the current display override for an element
+    #[must_use]
     pub fn get_display_override(&self, element_id: usize) -> Option<&bool> {
         self.display_manager.get_current_value(element_id)
     }
 
-    /// Clear all overrides for an element
+    /// Clears all overrides for an element
     pub fn clear_element_overrides(&mut self, element_id: usize) {
         self.visibility_manager.clear_element(element_id);
         self.background_manager.clear_element(element_id);
@@ -830,7 +836,8 @@ pub mod utils {
         BTreeMapStyleManager<bool>,
     >;
 
-    /// Create a default action handler with BTreeMap-based style managers
+    /// Creates a default action handler with BTreeMap-based style managers
+    #[must_use]
     pub fn create_default_handler<F: ElementFinder>(finder: F) -> DefaultActionHandler<F> {
         ActionHandler::new(
             finder,

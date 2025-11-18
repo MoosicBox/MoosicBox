@@ -306,6 +306,11 @@ pub enum Expression {
 }
 
 impl std::fmt::Display for Expression {
+    /// Formats the expression (only supports literals and variables currently)
+    ///
+    /// # Panics
+    ///
+    /// * If the expression type is not yet implemented for display
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Literal(literal) => std::fmt::Display::fmt(literal, f),
@@ -427,6 +432,7 @@ impl Literal {
 }
 
 impl std::fmt::Display for Literal {
+    /// Formats the literal value as a string
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::String(x) => f.write_str(x),
@@ -621,6 +627,7 @@ pub enum DslValue {
 }
 
 impl From<Literal> for DslValue {
+    /// Converts a `Literal` into a `DslValue`
     fn from(lit: Literal) -> Self {
         #[allow(clippy::cast_precision_loss)]
         match lit {
@@ -634,6 +641,10 @@ impl From<Literal> for DslValue {
 }
 
 impl From<DslValue> for ActionEffect {
+    /// Converts a `DslValue` into an `ActionEffect`
+    ///
+    /// For element references, creates a custom action. For non-action values,
+    /// creates a no-op action.
     fn from(value: DslValue) -> Self {
         match value {
             DslValue::Action(action) => action,

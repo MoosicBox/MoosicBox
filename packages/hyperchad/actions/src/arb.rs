@@ -35,11 +35,13 @@ use crate::{
     Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
 };
 
+/// Helper function to create a generator with half the size, capped at max
 fn half_g_max(g: &Gen, max: usize) -> Gen {
     Gen::new(std::cmp::min(max, g.size() / 2))
 }
 
 impl Arbitrary for ActionTrigger {
+    /// Generates an arbitrary `ActionTrigger` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         let half_g = &mut half_g_max(g, 10);
         g.choose(&[
@@ -62,6 +64,7 @@ impl Arbitrary for ActionTrigger {
 }
 
 impl Arbitrary for StyleAction {
+    /// Generates an arbitrary `StyleAction` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
             0 => Self::SetVisibility(Visibility::arbitrary(g)),
@@ -72,6 +75,7 @@ impl Arbitrary for StyleAction {
 }
 
 impl Arbitrary for LogLevel {
+    /// Generates an arbitrary `LogLevel` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         *g.choose(&[
             Self::Error,
@@ -86,6 +90,7 @@ impl Arbitrary for LogLevel {
 
 #[cfg(feature = "logic")]
 impl Arbitrary for crate::logic::CalcValue {
+    /// Generates an arbitrary `CalcValue` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         Self::Visibility {
             target: ElementTarget::arbitrary(g),
@@ -95,6 +100,7 @@ impl Arbitrary for crate::logic::CalcValue {
 
 #[cfg(feature = "logic")]
 impl Arbitrary for crate::logic::Value {
+    /// Generates an arbitrary `Value` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
             0 => Self::Calc(Arbitrary::arbitrary(g)),
@@ -106,6 +112,7 @@ impl Arbitrary for crate::logic::Value {
 
 #[cfg(feature = "logic")]
 impl Arbitrary for crate::logic::Condition {
+    /// Generates an arbitrary `Condition` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         Self::Eq(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
     }
@@ -113,6 +120,7 @@ impl Arbitrary for crate::logic::Condition {
 
 #[cfg(feature = "logic")]
 impl Arbitrary for crate::logic::If {
+    /// Generates an arbitrary `If` conditional for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         Self {
             condition: Arbitrary::arbitrary(g),
@@ -123,6 +131,7 @@ impl Arbitrary for crate::logic::If {
 }
 
 impl Arbitrary for ActionType {
+    /// Generates an arbitrary `ActionType` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         let g = &mut half_g_max(g, 10);
 
@@ -153,6 +162,7 @@ impl Arbitrary for ActionType {
 }
 
 impl Arbitrary for Action {
+    /// Generates an arbitrary `Action` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         let trigger = ActionTrigger::arbitrary(g);
 
@@ -179,6 +189,7 @@ impl Arbitrary for Action {
 }
 
 impl Arbitrary for ActionEffect {
+    /// Generates an arbitrary `ActionEffect` for property-based testing
     fn arbitrary(g: &mut Gen) -> Self {
         Self {
             action: Arbitrary::arbitrary(g),

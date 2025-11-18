@@ -183,6 +183,7 @@ pub enum Value {
 }
 
 impl From<Key> for Value {
+    /// Converts a keyboard `Key` into a `Value`
     fn from(value: Key) -> Self {
         Self::Key(value)
     }
@@ -285,24 +286,28 @@ impl Value {
 }
 
 impl From<CalcValue> for Value {
+    /// Converts a `CalcValue` into a `Value`
     fn from(value: CalcValue) -> Self {
         Self::Calc(value)
     }
 }
 
 impl From<Visibility> for Value {
+    /// Converts a `Visibility` into a `Value`
     fn from(value: Visibility) -> Self {
         Self::Visibility(value)
     }
 }
 
 impl From<f32> for Value {
+    /// Converts an `f32` into a `Value`
     fn from(value: f32) -> Self {
         Self::Real(value)
     }
 }
 
 impl From<f64> for Value {
+    /// Converts an `f64` into a `Value` (with precision loss)
     fn from(value: f64) -> Self {
         #[allow(clippy::cast_possible_truncation)]
         Self::Real(value as f32)
@@ -310,6 +315,7 @@ impl From<f64> for Value {
 }
 
 impl From<LayoutDirection> for Value {
+    /// Converts a `LayoutDirection` into a `Value`
     fn from(value: LayoutDirection) -> Self {
         Self::LayoutDirection(value)
     }
@@ -413,6 +419,11 @@ impl<T, C> IfExpression<T, C> {
 
 #[cfg(feature = "serde")]
 impl<T: Serialize, C: Serialize> std::fmt::Display for IfExpression<T, C> {
+    /// Formats the conditional expression as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid conditional expressions)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -424,6 +435,12 @@ impl<'a, T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> TryFrom<&'a
 {
     type Error = serde_json::Error;
 
+    /// Parses an `IfExpression` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `IfExpression`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
@@ -557,6 +574,7 @@ impl Arithmetic {
 }
 
 impl From<Arithmetic> for Value {
+    /// Converts an `Arithmetic` operation into a `Value`
     fn from(value: Arithmetic) -> Self {
         Self::Arithmetic(Box::new(value))
     }
@@ -594,6 +612,11 @@ impl If {
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for If {
+    /// Formats the conditional as JSON
+    ///
+    /// # Panics
+    ///
+    /// * If serialization fails (should not happen for valid conditionals)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -603,6 +626,12 @@ impl std::fmt::Display for If {
 impl<'a> TryFrom<&'a str> for If {
     type Error = serde_json::Error;
 
+    /// Parses an `If` conditional from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `If`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
@@ -960,6 +989,7 @@ pub fn if_responsive_any<T: Into<String>>(targets: impl Into<Vec<T>>) -> Respons
 
 // Add From implementations for specific enum types to handle responsive expressions
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::LayoutDirection {
+    /// Converts a responsive conditional expression into a `LayoutDirection`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
@@ -968,6 +998,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Layo
 }
 
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::TextAlign {
+    /// Converts a responsive conditional expression into a `TextAlign`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
@@ -976,6 +1007,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Text
 }
 
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::AlignItems {
+    /// Converts a responsive conditional expression into an `AlignItems`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
@@ -984,6 +1016,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Alig
 }
 
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::JustifyContent {
+    /// Converts a responsive conditional expression into a `JustifyContent`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
@@ -992,6 +1025,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Just
 }
 
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Position {
+    /// Converts a responsive conditional expression into a `Position`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
@@ -1000,6 +1034,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Posi
 }
 
 impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::LayoutOverflow {
+    /// Converts a responsive conditional expression into a `LayoutOverflow`
     fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
         if_expr
             .default
