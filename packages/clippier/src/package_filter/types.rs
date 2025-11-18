@@ -63,6 +63,8 @@ pub struct PackageFilter {
 
 impl PackageFilter {
     /// Get the property name for display purposes.
+    ///
+    /// Returns the full property path joined with dots (e.g., "package.metadata.workspaces.independent").
     #[must_use]
     pub fn property_display(&self) -> String {
         self.property_path.join(".")

@@ -1,3 +1,8 @@
+//! Clippier - Rust workspace analysis and automation CLI tool.
+//!
+//! This binary provides a command-line interface for workspace analysis, CI/CD generation,
+//! dependency management, and feature validation in Rust workspace projects.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
