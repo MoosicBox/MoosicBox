@@ -3,6 +3,10 @@
 //! This example demonstrates advanced usage patterns with non-static lifetimes,
 //! showing how to create migrations that borrow data and use explicit lifetime management.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 use switchy_database::{
@@ -38,6 +42,8 @@ struct ColumnConfig {
 }
 
 impl DatabaseConfig {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // HashMap::new() is not const
     fn new() -> Self {
         let mut tables = HashMap::new();
 
@@ -117,7 +123,8 @@ struct ConfigBasedMigration<'a> {
 }
 
 impl<'a> ConfigBasedMigration<'a> {
-    fn new(id: String, config: &'a DatabaseConfig, table_name: &'a str) -> Self {
+    #[must_use]
+    const fn new(id: String, config: &'a DatabaseConfig, table_name: &'a str) -> Self {
         Self {
             id,
             config,
@@ -158,7 +165,7 @@ impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
     async fn down(&self, db: &dyn Database) -> Result<()> {
         if let Some(table_config) = self.config.tables.get(self.table_name) {
             let full_table_name = format!("{}{}", self.config.table_prefix, table_config.name);
-            let drop_sql = format!("DROP TABLE IF EXISTS {}", full_table_name);
+            let drop_sql = format!("DROP TABLE IF EXISTS {full_table_name}");
             db.exec_raw(&drop_sql).await?;
         }
         Ok(())
@@ -175,7 +182,8 @@ struct ConfigBasedMigrationSource<'a> {
 }
 
 impl<'a> ConfigBasedMigrationSource<'a> {
-    fn new(config: &'a DatabaseConfig) -> Self {
+    #[must_use]
+    const fn new(config: &'a DatabaseConfig) -> Self {
         Self { config }
     }
 }
@@ -188,7 +196,7 @@ impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
         // Create migrations for each table in the configuration
         for table_name in self.config.tables.keys() {
             let migration = ConfigBasedMigration::new(
-                format!("create_{}", table_name),
+                format!("create_{table_name}"),
                 self.config,
                 table_name,
             );
@@ -212,7 +220,7 @@ fn create_table_migration<'a>(
 
     for (col_name, data_type) in columns {
         create_stmt = create_stmt.column(Column {
-            name: col_name.to_string(),
+            name: (*col_name).to_string(),
             nullable: false,
             auto_increment: *col_name == primary_key,
             data_type: data_type.clone(),
@@ -223,7 +231,7 @@ fn create_table_migration<'a>(
     create_stmt = create_stmt.primary_key(primary_key);
 
     CodeMigration::new(
-        format!("create_{}", table_name),
+        format!("create_{table_name}"),
         Box::new(create_stmt),
         None,
     )
@@ -302,7 +310,7 @@ async fn main() -> Result<()> {
 
     let product_migration = create_table_migration(table_name, &columns, primary_key);
     println!("  - Generated migration: {}", product_migration.id());
-    println!("  - Borrows table name: '{}'", table_name);
+    println!("  - Borrows table name: '{table_name}'");
     println!("  - Borrows column definitions and primary key");
 
     // Example 3: Schema generation from borrowed data
