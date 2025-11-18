@@ -13,6 +13,28 @@ use serde::{Deserialize, Serialize};
 /// * MVP functions: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
 /// * Operators: `==`, `!=`, `&&`, `||`, `!`, property access with `.`
 /// * Complete Expression enum with all node types
+///
+/// # Examples
+///
+/// ```
+/// use gpipe_ast::{Expression, BinaryOperator};
+///
+/// // Create a simple boolean expression: github.ref == 'refs/heads/main'
+/// let expr = Expression::binary_op(
+///     Expression::variable(["github", "ref"]),
+///     BinaryOperator::Equal,
+///     Expression::string("refs/heads/main"),
+/// );
+///
+/// // Create a function call: contains(github.event.head_commit.message, '[skip ci]')
+/// let contains_expr = Expression::function_call(
+///     "contains",
+///     vec![
+///         Expression::variable(["github", "event", "head_commit", "message"]),
+///         Expression::string("[skip ci]"),
+///     ],
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Expression {
     /// String literal value
