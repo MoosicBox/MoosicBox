@@ -32,6 +32,7 @@ static DIMENSIONS: LazyLock<RwLock<(f32, f32)>> = LazyLock::new(|| RwLock::new((
 /// # Panics
 ///
 /// * If the `DIMENSIONS` lock is poisoned
+#[must_use]
 pub fn get_dimensions() -> (f32, f32) {
     *DIMENSIONS.read().unwrap()
 }
