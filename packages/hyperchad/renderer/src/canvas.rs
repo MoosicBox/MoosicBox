@@ -33,7 +33,12 @@ use hyperchad_color::Color;
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct Pos(pub f32, pub f32);
+pub struct Pos(
+    /// X coordinate
+    pub f32,
+    /// Y coordinate
+    pub f32,
+);
 
 /// Actions that can be performed on a canvas
 #[derive(Debug, Clone)]
