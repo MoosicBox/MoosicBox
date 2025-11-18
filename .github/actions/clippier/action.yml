@@ -259,7 +259,7 @@ inputs:
     clippier-features:
         description: "Features to enable when building clippier"
         required: false
-        default: "git-diff"
+        default: "git-diff,transforms-vendored"
 
     cache-key-prefix:
         description: "Prefix for cache key"
