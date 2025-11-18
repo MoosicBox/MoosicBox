@@ -56,13 +56,20 @@ use std::time::Duration;
 /// * -30 minutes → -30 minutes (preserved as-is)
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SqlInterval {
+    /// Number of years (can be negative for past intervals)
     pub years: i32,
+    /// Number of months (can be negative for past intervals)
     pub months: i32,
+    /// Number of days (can be negative for past intervals)
     pub days: i32,
+    /// Number of hours (can be negative for past intervals)
     pub hours: i64,
+    /// Number of minutes (can be negative for past intervals)
     pub minutes: i64,
+    /// Number of seconds (can be negative for past intervals)
     pub seconds: i64,
-    pub nanos: u32, // 0-999_999_999
+    /// Number of nanoseconds (always 0-999,999,999)
+    pub nanos: u32,
 }
 
 impl SqlInterval {

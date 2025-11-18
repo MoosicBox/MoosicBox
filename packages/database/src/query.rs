@@ -1306,6 +1306,9 @@ pub struct UpsertMultiStatement<'a> {
     pub unique: Option<Vec<Box<dyn Expression>>>,
 }
 
+/// Creates a new multi-row UPSERT statement builder
+///
+/// Constructs an UPSERT statement that can insert or update multiple rows in a single operation.
 #[must_use]
 pub fn upsert_multi(table_name: &str) -> UpsertMultiStatement<'_> {
     UpsertMultiStatement {
@@ -1316,6 +1319,9 @@ pub fn upsert_multi(table_name: &str) -> UpsertMultiStatement<'_> {
 }
 
 impl<'a> UpsertMultiStatement<'a> {
+    /// Sets the values to upsert as multiple rows
+    ///
+    /// Each inner vector represents one row with column-value pairs.
     pub fn values<T: Into<Box<dyn Expression>>>(
         &mut self,
         values: Vec<Vec<(&'a str, T)>>,
@@ -1329,6 +1335,9 @@ impl<'a> UpsertMultiStatement<'a> {
         self
     }
 
+    /// Sets the unique columns that identify conflicts
+    ///
+    /// These columns determine when to update instead of insert.
     pub fn unique(&mut self, unique: Vec<Box<dyn Expression>>) -> &mut Self {
         self.unique.replace(unique);
         self
@@ -1350,6 +1359,9 @@ pub struct InsertStatement<'a> {
     pub values: Vec<(&'a str, Box<dyn Expression>)>,
 }
 
+/// Creates a new INSERT statement builder
+///
+/// Constructs an INSERT statement for adding rows to the specified table.
 #[must_use]
 pub fn insert(table_name: &str) -> InsertStatement<'_> {
     InsertStatement {
@@ -1359,6 +1371,7 @@ pub fn insert(table_name: &str) -> InsertStatement<'_> {
 }
 
 impl<'a> InsertStatement<'a> {
+    /// Sets multiple column-value pairs at once
     #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
         for value in values {
@@ -1367,6 +1380,7 @@ impl<'a> InsertStatement<'a> {
         self
     }
 
+    /// Adds a single column-value pair to the insert
     #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
@@ -1395,6 +1409,9 @@ pub struct UpdateStatement<'a> {
     pub limit: Option<usize>,
 }
 
+/// Creates a new UPDATE statement builder
+///
+/// Constructs an UPDATE statement for modifying existing rows in the specified table.
 #[must_use]
 pub fn update(table_name: &str) -> UpdateStatement<'_> {
     UpdateStatement {
@@ -1418,6 +1435,7 @@ impl FilterableQuery for UpdateStatement<'_> {
 }
 
 impl<'a> UpdateStatement<'a> {
+    /// Sets multiple column-value pairs to update
     #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
         for value in values {
@@ -1426,18 +1444,21 @@ impl<'a> UpdateStatement<'a> {
         self
     }
 
+    /// Sets a single column to a new value
     #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
         self
     }
 
+    /// Specifies unique columns for conflict resolution
     #[must_use]
     pub const fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
+    /// Limits the number of rows to update
     #[must_use]
     pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
@@ -1473,6 +1494,9 @@ pub struct UpsertStatement<'a> {
     pub limit: Option<usize>,
 }
 
+/// Creates a new UPSERT statement builder
+///
+/// Constructs an UPSERT statement for inserting or updating rows on conflict.
 #[must_use]
 pub fn upsert(table_name: &str) -> UpsertStatement<'_> {
     UpsertStatement {
@@ -1496,6 +1520,7 @@ impl FilterableQuery for UpsertStatement<'_> {
 }
 
 impl<'a> UpsertStatement<'a> {
+    /// Sets multiple column-value pairs to upsert
     #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
         for value in values {
@@ -1504,6 +1529,7 @@ impl<'a> UpsertStatement<'a> {
         self
     }
 
+    /// Sets a single column-value pair to upsert
     #[must_use]
     pub fn value<T: Into<Box<dyn Expression>>>(mut self, name: &'a str, value: T) -> Self {
         self.values.push((name, value.into()));
@@ -1582,6 +1608,9 @@ pub struct DeleteStatement<'a> {
     pub limit: Option<usize>,
 }
 
+/// Creates a new DELETE statement builder
+///
+/// Constructs a DELETE statement for removing rows from the specified table.
 #[must_use]
 pub fn delete(table_name: &str) -> DeleteStatement<'_> {
     DeleteStatement {

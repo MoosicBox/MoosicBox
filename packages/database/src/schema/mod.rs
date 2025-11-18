@@ -283,17 +283,26 @@ use crate::{Database, DatabaseError, DatabaseValue};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
     // Text types
+    /// Variable-length text without size limit
     Text,
+    /// Variable-length string with maximum length
     VarChar(u16),
+    /// Fixed-length string with padding
     Char(u16),
 
     // Integer types
+    /// 8-bit signed integer (-128 to 127)
     TinyInt,
+    /// 16-bit signed integer (-32,768 to 32,767)
     SmallInt,
+    /// 32-bit signed integer (-2,147,483,648 to 2,147,483,647)
     Int,
+    /// 64-bit signed integer
     BigInt,
-    Serial,    // Auto-incrementing integer (PostgreSQL)
-    BigSerial, // Auto-incrementing bigint (PostgreSQL)
+    /// Auto-incrementing integer (`PostgreSQL` `SERIAL`)
+    Serial,
+    /// Auto-incrementing 64-bit integer (`PostgreSQL` `BIGSERIAL`)
+    BigSerial,
 
     // TODO: Unsigned integer types - schema support pending
     // TinyIntUnsigned,  // 0-255 (MySQL) or 0-127 (PostgreSQL/SQLite)
@@ -302,19 +311,28 @@ pub enum DataType {
     // BigIntUnsigned,   // 0-18446744073709551615 (MySQL only)
 
     // Floating point types
+    /// Single-precision floating point (32-bit)
     Real,
+    /// Double-precision floating point (64-bit)
     Double,
+    /// Fixed-precision decimal with precision and scale
     Decimal(u8, u8),
-    Money, // Monetary type
+    /// Monetary type for currency values
+    Money,
 
     // Boolean type
+    /// Boolean true/false value
     Bool,
 
     // Date/Time types
-    Date,      // Date without time
-    Time,      // Time without date
-    DateTime,  // Date and time
-    Timestamp, // Timestamp (distinct from DateTime)
+    /// Date without time component
+    Date,
+    /// Time without date component
+    Time,
+    /// Date and time combined
+    DateTime,
+    /// Timestamp (may have different timezone behavior than `DateTime`)
+    Timestamp,
 
     // Binary types
     Blob,                // Binary data
