@@ -1,3 +1,8 @@
+//! Username and password authentication implementation.
+//!
+//! This module provides `UsernamePasswordAuth`, which implements a traditional username
+//! and password authentication flow. The login handler is customizable via the builder pattern.
+
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use crate::Error;
