@@ -85,16 +85,13 @@ pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
 
 /// Encodes PCM audio samples to MP3 format.
 ///
+/// Returns the encoded MP3 data and encoding information including output size and
+/// input samples consumed. The encoder flushes remaining data to ensure complete
+/// encoding of the input buffer.
+///
 /// # Errors
 ///
 /// * If the encoder fails to encode the input bytes
-///
-/// # Safety
-///
-/// Uses `unsafe` to set the buffer length after encoding. This is safe because:
-/// * `mp3lame_encoder::Encoder::encode` and `flush` return the number of bytes written
-/// * The returned `encoded_size` is guaranteed to be within the allocated capacity
-/// * The buffer was properly allocated with sufficient capacity before the operation
 pub fn encode_mp3(
     encoder: &mut mp3lame_encoder::Encoder,
     input: &[i16],
