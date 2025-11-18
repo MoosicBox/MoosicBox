@@ -102,11 +102,17 @@ impl RemoteLibraryMusicApi {
 
 #[async_trait]
 impl MusicApi for RemoteLibraryMusicApi {
+    /// Returns the API source identifier for this remote library connection.
     fn source(&self) -> &ApiSource {
         &self.api_source
     }
 
     /// Fetches a paginated list of artists from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     ///
     /// # Panics
     ///
@@ -188,6 +194,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(page)
     }
 
+    /// Fetches a single artist by ID from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         let request = CLIENT
             .request(
@@ -222,18 +234,34 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(Some(value.into()))
     }
 
+    /// Adds an artist to the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn add_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Adding artist is not implemented",
         ))
     }
 
+    /// Removes an artist from the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn remove_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Removing artist is not implemented",
         ))
     }
 
+    /// Fetches the artist associated with a specific album from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn album_artist(
         &self,
         album_id: &Id,
@@ -271,6 +299,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(Some(value.into()))
     }
 
+    /// Fetches the cover image source for a given artist from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn artist_cover_source(
         &self,
         artist: &Artist,
@@ -305,6 +339,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         }))
     }
 
+    /// Fetches a paginated list of albums from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn albums(
         &self,
         request: &AlbumsRequest,
@@ -405,6 +445,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(page)
     }
 
+    /// Fetches a single album by ID from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         let request = CLIENT
             .request(
@@ -442,6 +488,11 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     /// Fetches all available versions of a specific album from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     ///
     /// # Panics
     ///
@@ -518,6 +569,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(page)
     }
 
+    /// Fetches all albums by a specific artist from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn artist_albums(
         &self,
         artist_id: &Id,
@@ -550,18 +607,34 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Adds an album to the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn add_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Adding album is not implemented",
         ))
     }
 
+    /// Removes an album from the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn remove_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Removing album is not implemented",
         ))
     }
 
+    /// Fetches the cover image source for a given album from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn album_cover_source(
         &self,
         album: &Album,
@@ -597,6 +670,12 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     /// Fetches tracks by their IDs from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - When `track_ids` is `None` (fetching all tracks is not supported)
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code
     ///
     /// # Panics
     ///
@@ -685,6 +764,11 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     /// Fetches all tracks belonging to a specific album from the remote server.
     ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
+    ///
     /// # Panics
     ///
     /// Panics if the number of tracks returned exceeds `u32::MAX`.
@@ -762,6 +846,12 @@ impl MusicApi for RemoteLibraryMusicApi {
         })
     }
 
+    /// Fetches a single track by ID from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         let track_ids_str = track_id.to_string();
 
@@ -800,18 +890,34 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(tracks.next())
     }
 
+    /// Adds a track to the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn add_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Adding track is not implemented",
         ))
     }
 
+    /// Removes a track from the library.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn remove_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Removing track is not implemented",
         ))
     }
 
+    /// Fetches the audio source URL for a given track from the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code (other than 404)
     async fn track_source(
         &self,
         track: TrackOrId,
@@ -835,6 +941,11 @@ impl MusicApi for RemoteLibraryMusicApi {
             }))
     }
 
+    /// Fetches the size of a track file in bytes.
+    ///
+    /// # Errors
+    ///
+    /// * [`moosicbox_music_api::Error::UnsupportedAction`] - This operation is not supported for remote libraries
     async fn track_size(
         &self,
         _track: TrackOrId,
@@ -846,10 +957,19 @@ impl MusicApi for RemoteLibraryMusicApi {
         ))
     }
 
+    /// Returns whether this API implementation supports search functionality.
+    ///
+    /// Remote library APIs always support search.
     fn supports_search(&self) -> bool {
         true
     }
 
+    /// Performs a global search across artists, albums, and tracks on the remote server.
+    ///
+    /// # Errors
+    ///
+    /// * [`RequestError::Request`] - HTTP client error occurred
+    /// * [`RequestError::Unsuccessful`] - Server returned unsuccessful status code
     async fn search(
         &self,
         query: &str,
