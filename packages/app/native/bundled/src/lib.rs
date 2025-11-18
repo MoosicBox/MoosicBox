@@ -73,9 +73,8 @@ impl service::Processor for service::Service {
     ///
     /// # Errors
     ///
-    /// * Returns an error if handling a `RunEvent` fails (propagated from `handle_event`)
-    /// * Returns an error if the server task panicked when waiting for shutdown
-    /// * Returns an error if the server returned an I/O error during shutdown
+    /// * Returns an error if the server task panicked when waiting for shutdown (during `WaitForShutdown`)
+    /// * Returns an error if the server returned an I/O error during shutdown (during `WaitForShutdown`)
     async fn process_command(
         ctx: Arc<RwLock<Context>>,
         command: Command,
