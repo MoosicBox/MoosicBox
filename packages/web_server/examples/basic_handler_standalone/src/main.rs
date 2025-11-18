@@ -38,7 +38,14 @@
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use moosicbox_web_server::{Error, HttpResponse, RequestData};
 
-// Simple handler with just RequestData
+/// Handles requests by extracting and displaying basic request information.
+///
+/// This handler demonstrates the simplest use of `RequestData` to extract
+/// basic request metadata without any JSON or query parsing.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be constructed.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn basic_info_handler(data: RequestData) -> Result<HttpResponse, Error> {
@@ -53,7 +60,14 @@ async fn basic_info_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler with two RequestData extractors (for demonstration)
+/// Handles requests using multiple `RequestData` extractors.
+///
+/// This handler demonstrates that the same extractor can be used multiple times
+/// in a single handler function, which can be useful for certain handler patterns.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be constructed.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn double_data_handler(
@@ -70,7 +84,14 @@ async fn double_data_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Error demo handler
+/// Demonstrates basic error handling without complex parsing.
+///
+/// This handler shows how to access query string data through `RequestData`
+/// without needing separate query parsing or serde dependencies.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be constructed.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
@@ -81,6 +102,10 @@ async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Runs the example handlers with the Actix Web backend.
+///
+/// This function sets up and displays the route configuration for running
+/// the basic handler examples using the production Actix Web server backend.
 #[cfg(feature = "actix")]
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend Basic Handler Examples...");
@@ -110,6 +135,15 @@ fn run_actix_examples() {
     println!("   Backend: Actix Web");
 }
 
+/// Runs the example handlers with the Simulator backend.
+///
+/// This function sets up the route configuration and runs test simulations
+/// to demonstrate the basic handler functionality using the test simulator backend.
+///
+/// # Errors
+///
+/// * Failed to extract `RequestData` from the simulated request
+/// * Failed to construct the simulated HTTP request
 #[cfg(feature = "simulator")]
 #[cfg(not(feature = "actix"))]
 fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
@@ -180,6 +214,14 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Entry point for the basic handler example.
+///
+/// Runs the appropriate backend examples based on the enabled feature flags.
+/// Requires either the `actix` or `simulator` feature to be enabled.
+///
+/// # Errors
+///
+/// * Backend-specific errors from running the simulator examples
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Basic Handler Examples - RequestData Only");
