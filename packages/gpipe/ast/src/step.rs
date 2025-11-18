@@ -13,6 +13,33 @@ use std::collections::BTreeMap;
 /// Steps can either use an action or run a shell command.
 /// According to the specification, steps should be represented as enum variants
 /// (`UseAction` vs `RunScript`) rather than optional fields.
+///
+/// # Examples
+///
+/// ```
+/// use gpipe_ast::Step;
+/// use std::collections::BTreeMap;
+///
+/// // Create a step that runs a shell command
+/// let run_step = Step::RunScript {
+///     id: Some("test".to_string()),
+///     run: "cargo test".to_string(),
+///     env: BTreeMap::new(),
+///     if_condition: None,
+///     continue_on_error: false,
+///     working_directory: Some("./packages/core".to_string()),
+/// };
+///
+/// // Create a step that uses an action
+/// let action_step = Step::UseAction {
+///     id: None,
+///     uses: "checkout".to_string(),
+///     with: BTreeMap::from([("ref".to_string(), "main".to_string())]),
+///     env: BTreeMap::new(),
+///     if_condition: None,
+///     continue_on_error: false,
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Step {

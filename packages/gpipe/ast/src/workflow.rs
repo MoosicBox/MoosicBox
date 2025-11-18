@@ -10,7 +10,12 @@ use std::collections::BTreeMap;
 
 /// Top-level workflow definition according to the generic workflow schema.
 ///
-/// Structure:
+/// A workflow represents a complete CI/CD pipeline configuration with triggers,
+/// reusable actions, and jobs that execute steps. Workflows can be serialized
+/// to/from YAML and executed by compatible runners.
+///
+/// # Structure
+///
 /// ```yaml
 /// version: 1.0
 /// name: string
@@ -46,6 +51,47 @@ use std::collections::BTreeMap;
 ///         id: step-id
 ///         if: ${{ expression }}
 ///         continue-on-error: boolean
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use gpipe_ast::{Workflow, Trigger, TriggerType, TriggerConfig, Job, Step};
+/// use std::collections::BTreeMap;
+///
+/// let workflow = Workflow {
+///     version: "1.0".to_string(),
+///     name: "Test Workflow".to_string(),
+///     triggers: vec![Trigger {
+///         trigger_type: TriggerType::Push,
+///         config: TriggerConfig {
+///             branches: Some(vec!["main".to_string()]),
+///             types: None,
+///             cron: None,
+///         },
+///     }],
+///     actions: BTreeMap::new(),
+///     jobs: BTreeMap::from([(
+///         "test".to_string(),
+///         Job {
+///             needs: vec![],
+///             env: BTreeMap::new(),
+///             strategy: None,
+///             steps: vec![Step::RunScript {
+///                 id: None,
+///                 run: "echo 'Hello, World!'".to_string(),
+///                 env: BTreeMap::new(),
+///                 if_condition: None,
+///                 continue_on_error: false,
+///                 working_directory: None,
+///             }],
+///             if_condition: None,
+///         },
+///     )]),
+/// };
+///
+/// // Serialize to YAML
+/// let yaml = gpipe_ast::serde_yaml::to_string(&workflow).unwrap();
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Workflow {
