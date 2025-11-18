@@ -143,6 +143,20 @@ impl Viewport {
         self.position.viewport_h()
     }
 
+    /// Checks if a widget is visible within this viewport hierarchy.
+    ///
+    /// Recursively checks visibility through parent viewports. The widget is only
+    /// visible if it's visible in both the current viewport and all ancestor viewports.
+    ///
+    /// # Parameters
+    ///
+    /// * `widget` - The widget to check for visibility
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// * `bool` - Whether the widget is visible in this viewport and all parent viewports
+    /// * `u32` - Combined distance from viewports if not visible, 0 if visible
     fn is_widget_visible(&self, widget: &dyn WidgetPosition) -> (bool, u32) {
         let (visible_in_current_viewport, dist) =
             self.position.is_widget_visible(&**self.widget, widget);
