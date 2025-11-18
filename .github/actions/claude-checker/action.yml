@@ -367,6 +367,20 @@ runs:
           run: |
               node src/resolve-template.js
 
+        - name: Output resolved prompt for debugging
+          if: inputs.command == 'check'
+          shell: bash
+          run: |
+              echo "📋 ========================================="
+              echo "📊 Resolved Variables:"
+              echo "${{ steps.resolve_template.outputs.resolved_vars }}"
+              echo ""
+              echo "📋 ========================================="
+              echo "📋 RESOLVED PROMPT (with all variables interpolated):"
+              echo "📋 ========================================="
+              echo "${{ steps.resolve_template.outputs.rendered_prompt }}"
+              echo "📋 ========================================="
+
         - name: Setup branch (check command)
           if: inputs.command == 'check'
           id: setup_branch
