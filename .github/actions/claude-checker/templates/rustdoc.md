@@ -9,10 +9,34 @@ package_path: '.'
 target_path: 'src/**/*.rs'
 branch_name: 'docs/rustdoc-updates-${run_id}'
 custom_guidelines: ''
+is_refinement_pass: 'false'
+refinement_context: ''
 commit_message: 'docs(${package_name}): complete rustdoc for public APIs'
 ---
 
-You are helping ensure complete rustdoc documentation for ${project_name}.
+${is_refinement_pass == 'true' ? '# Additional Rustdoc Refinement for ' + package_name + '
+
+This is a refinement pass on an existing rustdoc update branch.
+
+## Previous Context
+
+The rustdoc at `' + package_path + '/src/` has already been reviewed and potentially updated.
+
+' + (refinement_context != '' ? '## What Was Done Previously
+' + refinement_context + '
+
+' : '') + '## Requirements for Refinement
+
+- Review the current state of the rustdoc
+- Apply additional improvements based on any new guidance below
+- Only make changes that add value beyond previous updates
+- Preserve previous improvements unless they conflict with new guidance
+
+Focus on incremental improvements based on the additional guidance.
+
+---
+
+' : ''}You are helping ensure complete rustdoc documentation for ${project_name}.
 
 IMPORTANT: Follow the repository's AGENTS.md for guidance on rustdoc standards.
 

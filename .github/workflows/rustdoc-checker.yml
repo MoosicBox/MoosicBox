@@ -156,6 +156,7 @@ jobs:
                       package_name: ${{ matrix.package.name }}
                       package_path: ${{ matrix.package.path }}
                       custom_guidelines: ${{ inputs.prompt_override }}
+                      is_refinement_pass: ${{ inputs.existing_branch != '' && inputs.prompt_override != '' && 'true' || 'false' }}
 
                   branch_name: ${{ needs.create-branch.outputs.branch-name }}
                   auto_commit: true
