@@ -1,6 +1,25 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+//! HTTP Events Example for `HyperChad`
+//!
+//! This example demonstrates how to use HTTP request lifecycle event handlers in `HyperChad`.
+//! It showcases all six HTTP event types that can be attached to elements:
+//!
+//! * `fx-http-before-request` - Fires before the HTTP request starts
+//! * `fx-http-after-request` - Fires after request completes (success or error)
+//! * `fx-http-success` - Fires on successful response (2xx status)
+//! * `fx-http-error` - Fires on HTTP error or network failure
+//! * `fx-http-abort` - Fires when request is aborted
+//! * `fx-http-timeout` - Fires when request exceeds timeout (30s default)
+//!
+//! The example creates a simple task creation interface with three test buttons:
+//! - **Add Task**: Normal successful request with 500ms delay
+//! - **Test Error**: Always fails to demonstrate error handling
+//! - **Test Slow**: 3-second delay to test loading states
+//!
+//! Open the browser console to see `log()` messages and the Network tab to observe
+//! `fetch()` calls being intercepted by the actions-http-events plugin.
 
 use hyperchad::{
     app::AppBuilder,
@@ -13,6 +32,9 @@ use log::info;
 #[cfg(feature = "assets")]
 use std::sync::LazyLock;
 
+/// Static assets to be served by the web server.
+///
+/// This includes the `HyperChad` vanilla-js runtime script with a hashed filename for cache busting.
 #[cfg(feature = "assets")]
 static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = LazyLock::new(|| {
     vec![
@@ -29,6 +51,15 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
     ]
 });
 
+/// Creates the "Add Task" button with HTTP event handlers.
+///
+/// This button demonstrates a successful HTTP request flow with event handlers for:
+/// * `before-request` - Shows loading spinner, hides messages
+/// * `after-request` - Hides loading spinner
+/// * `success` - Shows success message
+/// * `error` - Shows error message
+/// * `abort` - Logs abort message
+/// * `timeout` - Shows error message and logs timeout
 fn create_add_task_button() -> Containers {
     container! {
         button
@@ -77,6 +108,12 @@ fn create_add_task_button() -> Containers {
     }
 }
 
+/// Creates the "Test Error" button that always triggers an error response.
+///
+/// This button demonstrates error handling in HTTP event handlers:
+/// * `before-request` - Shows loading spinner, hides messages
+/// * `after-request` - Hides loading spinner
+/// * `error` - Shows error message
 fn create_error_button() -> Containers {
     container! {
         button
@@ -110,6 +147,12 @@ fn create_error_button() -> Containers {
     }
 }
 
+/// Creates the "Test Slow" button that simulates a slow 3-second request.
+///
+/// This button demonstrates handling of slow requests with loading states:
+/// * `before-request` - Shows loading spinner, hides messages
+/// * `after-request` - Hides loading spinner
+/// * `success` - Shows success message
 fn create_slow_button() -> Containers {
     container! {
         button
@@ -144,6 +187,10 @@ fn create_slow_button() -> Containers {
     }
 }
 
+/// Creates the task input field.
+///
+/// This is a simple text input for entering task names, which gets cleared
+/// after successful task creation via fragment replacement.
 fn task_input() -> Containers {
     container! {
         input
@@ -158,6 +205,16 @@ fn task_input() -> Containers {
     }
 }
 
+/// Creates the main page layout with all UI components.
+///
+/// The page includes:
+/// * Header with title and description
+/// * Success/error message displays (initially hidden)
+/// * Loading spinner (fixed position, initially hidden)
+/// * Task creation form with input and three test buttons
+/// * Event explanation section describing all six HTTP event types
+/// * Developer info section with debugging tips
+/// * Footer
 #[allow(clippy::too_many_lines)]
 fn create_main_page() -> Container {
     container! {
@@ -331,6 +388,13 @@ fn create_main_page() -> Container {
     .into()
 }
 
+/// Creates the application router with all route handlers.
+///
+/// Routes:
+/// * `/` - Main page displaying the HTTP events demo interface
+/// * `/api/tasks` - Normal task creation endpoint (500ms delay)
+/// * `/api/tasks/error` - Error endpoint that always fails
+/// * `/api/tasks/slow` - Slow endpoint with 3-second delay
 fn create_router() -> Router {
     Router::new()
         // Main page
@@ -365,6 +429,20 @@ fn create_router() -> Router {
         })
 }
 
+/// Entry point for the HTTP Events example application.
+///
+/// This function:
+/// * Initializes logging via `env_logger`
+/// * Creates an async runtime using `switchy`
+/// * Sets up the router with demo routes
+/// * Builds and runs the `HyperChad` application on `http://localhost:8080`
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The async runtime fails to initialize
+/// * Static asset registration fails (when `assets` feature is enabled)
+/// * The web server fails to start or bind to port 8080
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::init();
