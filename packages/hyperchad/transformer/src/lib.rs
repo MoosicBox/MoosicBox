@@ -2552,6 +2552,11 @@ impl Container {
         }
     }
 
+    /// Replaces this container with multiple elements in the tree.
+    ///
+    /// Finds this container's parent in the tree and replaces this container with the provided
+    /// replacement elements. Returns the original container that was replaced.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is the root node
@@ -2578,6 +2583,12 @@ impl Container {
         original
     }
 
+    /// Replaces all children of a container identified by numeric ID.
+    ///
+    /// Finds the container with the given ID and replaces all of its children with the provided
+    /// replacement elements. Returns the original children that were replaced, or `None` if
+    /// no container with the given ID exists.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2597,6 +2608,12 @@ impl Container {
         Some(original)
     }
 
+    /// Replaces all children of a container identified by string ID.
+    ///
+    /// Finds the container with the given string ID and replaces all of its children with the
+    /// provided replacement elements. Returns the original children that were replaced, or
+    /// `None` if no container with the given string ID exists.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2616,6 +2633,12 @@ impl Container {
         Some(original)
     }
 
+    /// Replaces all children of a container by numeric ID and recalculates layout (requires `layout` feature).
+    ///
+    /// Finds the container with the given ID, replaces all of its children with the provided
+    /// replacement elements, and then performs a partial layout recalculation. Returns `true`
+    /// if the container was found and replaced, `false` otherwise.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2637,6 +2660,12 @@ impl Container {
         true
     }
 
+    /// Replaces all children of a container by string ID and recalculates layout (requires `layout` feature).
+    ///
+    /// Finds the container with the given string ID, replaces all of its children with the
+    /// provided replacement elements, and then performs a partial layout recalculation. Returns
+    /// `true` if the container was found and replaced, `false` otherwise.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2658,6 +2687,12 @@ impl Container {
         true
     }
 
+    /// Replaces a container identified by numeric ID with multiple elements.
+    ///
+    /// Finds the container with the given ID and replaces it with the provided replacement
+    /// elements. Returns the original container that was replaced, or `None` if no container
+    /// with the given ID exists.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2679,6 +2714,12 @@ impl Container {
         Some(original)
     }
 
+    /// Replaces a container by numeric ID with multiple elements and recalculates layout (requires `layout` feature).
+    ///
+    /// Finds the container with the given ID, replaces it with the provided replacement elements,
+    /// and then performs a partial layout recalculation. Returns `true` if the container was
+    /// found and replaced, `false` otherwise.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2700,6 +2741,12 @@ impl Container {
         true
     }
 
+    /// Replaces a container identified by string ID with multiple elements.
+    ///
+    /// Finds the container with the given string ID and replaces it with the provided replacement
+    /// elements. Returns the original container that was replaced, or `None` if no container
+    /// with the given string ID exists.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -2732,6 +2779,12 @@ impl Container {
         Some(original)
     }
 
+    /// Replaces a container by string ID with multiple elements and recalculates layout (requires `layout` feature).
+    ///
+    /// Finds the container with the given string ID, replaces it with the provided replacement
+    /// elements, and then performs a partial layout recalculation. Returns the replaced container
+    /// if found, or `None` otherwise.
+    ///
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
@@ -3831,6 +3884,11 @@ impl Container {
         Ok(())
     }
 
+    /// Converts this container to an HTML string with default formatting.
+    ///
+    /// Generates HTML representation of the container and its children with basic options.
+    /// For more control over formatting and syntax highlighting, use [`display_to_string`](Self::display_to_string).
+    ///
     /// # Errors
     ///
     /// * If fails to write to the writer
@@ -3852,6 +3910,11 @@ impl Container {
         )
     }
 
+    /// Converts this container to a formatted HTML string with syntax highlighting.
+    ///
+    /// Generates HTML representation of the container and its children with pretty formatting
+    /// and syntax highlighting enabled (if the respective features are enabled).
+    ///
     /// # Errors
     ///
     /// * If fails to write to the writer
@@ -3873,6 +3936,11 @@ impl Container {
         )
     }
 
+    /// Converts this container to an HTML string with full formatting control.
+    ///
+    /// Generates HTML representation of the container and its children with options for
+    /// debug attributes, raw element wrapping, formatting, and syntax highlighting.
+    ///
     /// # Errors
     ///
     /// * If fails to write to the writer
@@ -4179,6 +4247,11 @@ pub struct TableIterMut<'a> {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
+    /// Creates an iterator over table rows and heading cells.
+    ///
+    /// Returns a [`TableIter`] that provides iterators over the table's heading row (if present)
+    /// and body rows. Each row iterator yields individual cell containers.
+    ///
     /// # Panics
     ///
     /// Will panic if `Element` is not a table
@@ -4237,6 +4310,11 @@ impl Container {
         TableIter { headings, rows }
     }
 
+    /// Creates a mutable iterator over table rows and heading cells.
+    ///
+    /// Returns a [`TableIterMut`] that provides mutable iterators over the table's heading row
+    /// (if present) and body rows. Each row iterator yields mutable references to cell containers.
+    ///
     /// # Panics
     ///
     /// Will panic if `Element` is not a table
@@ -4248,6 +4326,12 @@ impl Container {
         self.table_iter_mut_with_observer(None::<fn(&mut Self)>)
     }
 
+    /// Creates a mutable iterator over table rows with an observer callback.
+    ///
+    /// Returns a [`TableIterMut`] that provides mutable iterators over the table's heading row
+    /// (if present) and body rows. The optional observer function is called for each row element
+    /// during iteration, allowing for side effects or validation.
+    ///
     /// # Panics
     ///
     /// Will panic if `Element` is not a table
