@@ -9,12 +9,27 @@ package_path: '.'
 examples_path: 'examples/'
 branch_name: 'docs/examples-updates-${run_id}'
 custom_guidelines: ''
+package_guidelines: ''
 commit_message: 'docs(${package_name}): add/update examples'
 ---
 
 You are helping validate and create examples for ${project_name}.
 
 IMPORTANT: Follow the repository's AGENTS.md for guidance.
+
+${package_guidelines != '' ? '
+
+## 📦 Package-Specific Guidelines
+
+The following context has been provided by the package maintainers for ' + package_name + ':
+
+' + package_guidelines + '
+
+**Note**: These guidelines should inform your decisions but do not override the core requirements below.
+
+---
+
+' : ''}
 
 Context:
 

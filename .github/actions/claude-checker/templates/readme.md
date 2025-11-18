@@ -10,10 +10,34 @@ package_name: "${package_path != '.' ? derive_package_name(package_path) : ''}"
 is_root_readme: "${readme_path == 'README.md' || readme_path == './README.md'}"
 branch_name: "${is_root_readme ? 'docs/root-readme-updates-' + run_id : 'docs/readme-updates-' + run_id}"
 custom_guidelines: ''
+is_refinement_pass: 'false'
+refinement_context: ''
 commit_message: "${package_name ? 'docs(' + package_name + '): update README for accuracy' : 'docs(root): update README for accuracy'}"
 ---
 
-# README Accuracy Review${package_name ? ' for ' + package_name : ''}
+${is_refinement_pass == 'true' ? '# Additional README Refinement' + (package_name ? ' for ' + package_name : '') + '
+
+This is a refinement pass on an existing README update branch.
+
+## Previous Context
+
+The README at `' + (package_path != '.' ? package_path + '/' : '') + 'README.md` has already been reviewed and potentially updated.
+
+' + (refinement_context != '' ? '## What Was Done Previously
+' + refinement_context + '
+
+' : '') + '## Requirements for Refinement
+
+- Review the current state of the README
+- Apply the additional guidance below
+- Only make changes that align with the new guidance
+- Preserve previous improvements unless they conflict with new guidance
+
+Focus on incremental improvements based on the additional guidance.
+
+---
+
+' : ''}# README Accuracy Review${package_name ? ' for ' + package_name : ''}
 
 ## 🔍 First: Check if README Exists
 

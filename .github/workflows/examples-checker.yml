@@ -136,6 +136,23 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
+            - name: Check for package-specific agents context
+              id: check-agents-context
+              run: |
+                  AGENTS_FILE="${{ matrix.package.path }}/AGENTS_EXAMPLES.md"
+                  if [ -f "$AGENTS_FILE" ]; then
+                    echo "✅ Found AGENTS_EXAMPLES.md for ${{ matrix.package.name }}"
+                    echo "has-context=true" >> $GITHUB_OUTPUT
+                    # Read the file content and store it
+                    echo "context<<EOF" >> $GITHUB_OUTPUT
+                    cat "$AGENTS_FILE" >> $GITHUB_OUTPUT
+                    echo "EOF" >> $GITHUB_OUTPUT
+                  else
+                    echo "ℹ️ No AGENTS_EXAMPLES.md found for ${{ matrix.package.name }}"
+                    echo "has-context=false" >> $GITHUB_OUTPUT
+                    echo "context=" >> $GITHUB_OUTPUT
+                  fi
+
             - name: Ensure and validate examples
               uses: ./.github/actions/claude-checker
               with:
@@ -147,6 +164,7 @@ jobs:
                   template_vars: |
                       package_name: ${{ matrix.package.name }}
                       package_path: ${{ matrix.package.path }}
+                      package_guidelines: ${{ steps.check-agents-context.outputs.context }}
 
                   branch_name: ${{ needs.create-branch.outputs.branch-name }}
                   auto_commit: true
