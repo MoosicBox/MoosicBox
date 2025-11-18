@@ -1,3 +1,8 @@
+//! Simulator runtime types and builders.
+//!
+//! This module provides the runtime and handle types for the simulator backend,
+//! which provides deterministic execution for testing async code.
+
 use std::{
     future::Future,
     pin::Pin,

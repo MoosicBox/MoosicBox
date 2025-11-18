@@ -1,3 +1,8 @@
+//! Future types for the simulator runtime.
+//!
+//! This module provides sleep, interval, and timeout futures that work with
+//! the simulator's controlled time advancement.
+
 use std::{
     fmt,
     future::Future,

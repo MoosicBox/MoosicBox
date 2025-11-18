@@ -1,3 +1,7 @@
+//! Task spawning and execution for the simulator runtime.
+//!
+//! This module provides task spawning functions and types for the simulator backend.
+
 pub use super::runtime::{JoinHandle, spawn, spawn_blocking, spawn_local};
 
 pub use tokio::task::yield_now;
