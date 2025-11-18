@@ -124,6 +124,10 @@ pub struct Cors {
     pub max_age: Option<u32>,
 }
 
+/// Creates a restrictive default CORS configuration.
+///
+/// By default, no origins, methods, or headers are allowed. Use the builder
+/// methods to configure the allowed cross-origin behavior.
 #[allow(clippy::derivable_impls)]
 impl Default for Cors {
     fn default() -> Self {
