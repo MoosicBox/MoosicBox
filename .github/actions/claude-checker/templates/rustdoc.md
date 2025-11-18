@@ -59,11 +59,36 @@ Before creating ANY commit, you MUST run:
 If ANY check fails, fix the issues before committing.
 NEVER commit code that doesn't pass all checks.
 
-## Commit
+## 📝 Commit Message Instructions
 
-If changes made:
+If you make changes to rustdoc, you MUST provide a commit message description.
 
-- Commit message: "${commit_message}"
+At the END of your response, include a section formatted EXACTLY as follows:
+
+```
+COMMIT_MESSAGE_START
+- Brief description of documentation changes (1-2 sentences per major item)
+- Focus on what was missing or incorrect
+COMMIT_MESSAGE_END
+```
+
+Example:
+
+```
+COMMIT_MESSAGE_START
+- Added missing `# Errors` section to `parse_config` function documenting ConfigError and IoError cases
+- Fixed `connect` function docs to correctly state it returns ConnectionPool instead of Connection
+- Added `#[must_use]` attribute to constructor methods per AGENTS.md guidelines
+COMMIT_MESSAGE_END
+```
+
+Requirements:
+
+- Keep each bullet point concise (1-2 sentences max)
+- Focus on WHAT was documented/fixed and WHY (what was missing or incorrect)
+- Use bullet points with dashes (-)
+- Do not include code snippets or line numbers
+- If no changes needed, output "No changes required - documentation is adequate"
 - DO NOT push
 
 ## Response Guidelines

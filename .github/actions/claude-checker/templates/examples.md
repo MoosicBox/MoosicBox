@@ -54,11 +54,36 @@ Before creating ANY commit, you MUST run:
 
 If ANY check fails, fix the issues before committing.
 
-## Commit
+## 📝 Commit Message Instructions
 
-If changes made:
+If you make changes to examples, you MUST provide a commit message description.
 
-- Commit message: "${commit_message}"
+At the END of your response, include a section formatted EXACTLY as follows:
+
+```
+COMMIT_MESSAGE_START
+- Brief description of example changes (1-2 sentences per major item)
+- Focus on what was added, fixed, or improved
+COMMIT_MESSAGE_END
+```
+
+Example:
+
+```
+COMMIT_MESSAGE_START
+- Added new `basic_usage.rs` example demonstrating core API functionality
+- Fixed `advanced.rs` example to use correct async runtime setup
+- Updated example README with clearer explanations of each example's purpose
+COMMIT_MESSAGE_END
+```
+
+Requirements:
+
+- Keep each bullet point concise (1-2 sentences max)
+- Focus on WHAT was changed and WHY (what was missing or broken)
+- Use bullet points with dashes (-)
+- Do not include code snippets or line numbers
+- If no changes needed, output "No changes required - examples are adequate"
 - DO NOT push
 
 ${custom_guidelines}
