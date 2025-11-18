@@ -257,6 +257,9 @@ macro_rules! impl_async {
         pub use $module::try_join;
 
         impl $module::runtime::Runtime {
+            /// Runs a future to completion on the runtime.
+            ///
+            /// This blocks the current thread until the future completes.
             pub fn block_on<F: Future>(&self, f: F) -> F::Output {
                 <Self as GenericRuntime>::block_on(self, f)
             }

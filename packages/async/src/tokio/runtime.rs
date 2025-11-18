@@ -1,3 +1,8 @@
+//! Tokio runtime types and builders.
+//!
+//! This module provides the runtime and handle types for the Tokio backend,
+//! including builders for configuring and creating runtimes.
+
 use std::{
     sync::{Arc, Weak},
     time::Duration,

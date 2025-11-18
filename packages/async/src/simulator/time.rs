@@ -1,3 +1,8 @@
+//! Time utilities for the simulator runtime.
+//!
+//! This module provides sleep, interval, and timeout functions that work with
+//! the simulator's controlled time advancement.
+
 use std::future::IntoFuture;
 
 use crate::simulator::futures::{Sleep, Timeout};
@@ -7,6 +12,9 @@ pub use crate::simulator::futures::{Elapsed, Interval};
 pub use std::time::Duration;
 
 // Re-export simulator functionality
+/// Simulator-specific time utilities.
+///
+/// This module provides functions for controlling simulator time behavior.
 pub mod simulator {
     pub use switchy_time::simulator::with_real_time;
 }
