@@ -371,11 +371,35 @@ pub mod html {
 
     #[async_trait]
     impl<T: HtmlApp + ToRenderRunner + Send + Sync> Generator for HtmlRenderer<T> {
+        /// Generates static HTML files for all registered static routes.
+        ///
+        /// # Errors
+        ///
+        /// * [`Error::IO`] if file I/O operations fail during generation
+        ///
+        /// # Panics
+        ///
+        /// * If the `static-routes` feature is not enabled (feature-gated panic)
+        /// * If file write operations fail during generation
+        /// * If JSON serialization fails for JSON content
+        /// * If the static routes `RwLock` is poisoned
         #[cfg(not(feature = "static-routes"))]
         async fn generate(&self, _router: &Router, _output: Option<String>) -> Result<(), Error> {
             panic!("Must have `static-routes` enabled to generate");
         }
 
+        /// Generates static HTML files for all registered static routes.
+        ///
+        /// # Errors
+        ///
+        /// * [`Error::IO`] if file I/O operations fail during generation
+        ///
+        /// # Panics
+        ///
+        /// * If file write operations fail during generation
+        /// * If JSON serialization fails for JSON content
+        /// * If the static routes `RwLock` is poisoned
+        /// * If route processing fails
         #[allow(clippy::too_many_lines)]
         #[cfg(feature = "static-routes")]
         async fn generate(&self, router: &Router, output: Option<String>) -> Result<(), Error> {
