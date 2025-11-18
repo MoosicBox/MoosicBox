@@ -197,7 +197,7 @@ impl Default for AppBuilder {
 }
 
 impl AppBuilder {
-    /// Creates a new empty `AppBuilder`.
+    /// Creates a new empty `AppBuilder` with default configuration.
     #[must_use]
     pub const fn new() -> Self {
         Self {

@@ -144,6 +144,10 @@ mod egui {
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
     /// Calculator for egui font metrics and layout calculations.
+    ///
+    /// This struct wraps an optional `Calculator` that uses egui's font metrics system
+    /// to perform precise layout calculations for text rendering. It is used by the
+    /// egui renderer to ensure accurate sizing and positioning of UI elements.
     #[derive(Clone)]
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
@@ -273,7 +277,10 @@ mod fltk {
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
-    /// Type alias for the fltk renderer.
+    /// Type alias for the FLTK renderer.
+    ///
+    /// This renderer provides native GUI rendering using the FLTK (Fast Light Toolkit)
+    /// library, suitable for desktop applications with a lightweight GUI.
     pub type FltkRenderer = hyperchad_renderer_fltk::FltkRenderer;
 
     #[async_trait]
@@ -361,6 +368,9 @@ pub mod html {
     use crate::{Cleaner, Error, Generator};
 
     /// Type alias for a stub HTML renderer (no backend server).
+    ///
+    /// This renderer generates HTML output but does not include a web server backend.
+    /// It is primarily used for static site generation or testing purposes.
     pub type HtmlStubRenderer = hyperchad_renderer_html::HtmlRenderer<
         hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_html::DefaultHtmlTagRenderer>,
     >;
@@ -658,6 +668,9 @@ pub mod html {
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with Actix web server backend.
+        ///
+        /// This renderer serves HTML content using the Actix web framework, providing
+        /// a full-featured web server for dynamic HTML applications.
         pub type HtmlActixRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::actix::ActixApp<
                 hyperchad_renderer_html::actix::PreparedRequest,
@@ -715,6 +728,9 @@ pub mod html {
             use crate::{App, AppBuilder, BuilderError};
 
             /// Type alias for an HTML renderer with vanilla JavaScript and Actix web server backend.
+            ///
+            /// This renderer combines Actix web server with vanilla JavaScript client-side
+            /// interactivity, providing a complete web application stack without heavy frameworks.
             pub type HtmlVanillaJsActixRenderer = hyperchad_renderer_html::HtmlRenderer<
                 hyperchad_renderer_html::actix::ActixApp<
                     hyperchad_renderer_html::actix::PreparedRequest,
@@ -787,6 +803,9 @@ pub mod html {
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with AWS Lambda backend.
+        ///
+        /// This renderer enables serverless deployment of HTML applications on AWS Lambda,
+        /// providing scalable, pay-per-use web hosting without managing servers.
         pub type HtmlLambdaRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::lambda::LambdaApp<
                 hyperchad_renderer_html::lambda::PreparedRequest,
@@ -844,6 +863,9 @@ pub mod html {
             use crate::{App, AppBuilder, BuilderError};
 
             /// Type alias for an HTML renderer with vanilla JavaScript and AWS Lambda backend.
+            ///
+            /// This renderer combines AWS Lambda serverless deployment with vanilla JavaScript
+            /// client-side interactivity for scalable, framework-free web applications.
             pub type HtmlVanillaJsLambdaRenderer = hyperchad_renderer_html::HtmlRenderer<
                 hyperchad_renderer_html::lambda::LambdaApp<
                     hyperchad_renderer_html::lambda::PreparedRequest,
@@ -907,6 +929,9 @@ pub mod html {
         use crate::{App, AppBuilder, BuilderError};
 
         /// Type alias for an HTML renderer with vanilla JavaScript (no backend server).
+        ///
+        /// This renderer generates HTML with vanilla JavaScript interactivity but without
+        /// a server backend. Primarily used for static site generation or client-only apps.
         pub type HtmlVanillaJsRenderer = hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::stub::StubApp<
                 hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
