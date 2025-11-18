@@ -28,6 +28,11 @@ mod real_fs_support {
         pub(super) static REAL_FS: RealFs
     }
 
+    /// Executes a function using the actual filesystem instead of the simulator
+    ///
+    /// This function temporarily switches to using real filesystem operations within
+    /// the provided closure, allowing you to interact with the actual disk even when
+    /// the simulator is enabled.
     pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
         REAL_FS.set(&RealFs, f)
     }
