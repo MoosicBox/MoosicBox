@@ -394,7 +394,7 @@ build_clippier_command() {
 run_clippier() {
     local cmd=$(build_clippier_command)
     echo "Running: $cmd" >&2
-    eval "$cmd" | jq -c .
+    eval "$cmd" | tail -1 | jq -c .
 }
 
 inject_custom_reasoning() {
