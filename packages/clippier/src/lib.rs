@@ -3941,7 +3941,7 @@ pub fn handle_workspace_deps_command(
                 .map(|(name, path)| PackageInfo { name, path })
                 .collect(),
         };
-        serde_json::to_string_pretty(&result)?
+        serde_json::to_string(&result)?
     } else {
         let mut results = Vec::new();
         for (name, path) in deps {
@@ -4153,7 +4153,7 @@ pub fn handle_affected_packages_command(
         };
 
         match output {
-            OutputType::Json => serde_json::to_string_pretty(&result)?,
+            OutputType::Json => serde_json::to_string(&result)?,
             OutputType::Raw => if is_affected { "true" } else { "false" }.to_string(),
         }
     } else {
@@ -4162,7 +4162,7 @@ pub fn handle_affected_packages_command(
         };
 
         match output {
-            OutputType::Json => serde_json::to_string_pretty(&result)?,
+            OutputType::Json => serde_json::to_string(&result)?,
             OutputType::Raw => {
                 let mut results = Vec::new();
                 for package in result.affected_packages {

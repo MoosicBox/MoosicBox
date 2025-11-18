@@ -560,7 +560,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match output {
                 OutputType::Raw => print_human_output(&result),
-                OutputType::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+                OutputType::Json => println!("{}", serde_json::to_string(&result)?),
             }
 
             if fail_on_error
