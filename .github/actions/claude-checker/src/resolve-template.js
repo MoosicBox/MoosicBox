@@ -32,6 +32,15 @@ async function main() {
         // Apply user overrides
         resolvedVars = { ...resolvedVars, ...userVars };
 
+        // Re-render all string values to pick up user-provided variables
+        // This ensures variables like commit_message get properly interpolated
+        // after user vars (package_name, package_path, etc.) are available
+        for (const [key, value] of Object.entries(resolvedVars)) {
+            if (typeof value === 'string' && value.includes('${')) {
+                resolvedVars[key] = renderTemplate(value, resolvedVars);
+            }
+        }
+
         // Step 5: Render template with resolved variables
         const renderedPrompt = renderTemplate(templateBody, resolvedVars);
 
