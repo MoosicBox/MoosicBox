@@ -33,8 +33,12 @@ pub use eframe;
 pub use hyperchad_renderer::*;
 
 /// Represents a view to be rendered.
+///
+/// This enum wraps the different types of views that can be rendered by the egui renderer.
 pub enum RenderView {
     /// A container view with its contents.
+    ///
+    /// Contains a `Container` with layout information and child elements to render.
     View(Container),
 }
 
