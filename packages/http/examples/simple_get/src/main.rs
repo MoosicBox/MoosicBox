@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Simple HTTP GET request example using the `switchy_http` crate.
 //!
 //! This binary demonstrates basic HTTP GET request functionality by accepting a URL
