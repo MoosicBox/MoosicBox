@@ -28,7 +28,6 @@ tauri::ios_plugin_binding!(init_plugin_player);
 /// Returns an error if:
 /// * Plugin registration fails on the native side
 /// * The native plugin class cannot be found
-#[must_use]
 pub fn init<R: Runtime, C: DeserializeOwned>(
     _app: &AppHandle<R>,
     api: &PluginApi<R, C>,
