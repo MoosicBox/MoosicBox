@@ -1,3 +1,9 @@
+//! HTTP API endpoints for Tidal integration.
+//!
+//! This module provides Actix Web route handlers for the Tidal music streaming service,
+//! including device authorization, favorites management (artists, albums, tracks),
+//! track playback information retrieval, and search functionality.
+
 #![allow(clippy::needless_for_each)]
 #![allow(clippy::module_name_repetitions)]
 

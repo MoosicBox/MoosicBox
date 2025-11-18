@@ -1,3 +1,9 @@
+//! Tidal API data models and type conversions.
+//!
+//! This module contains structs representing Tidal's API data structures including
+//! artists, albums, tracks, and search results. It provides conversions between
+//! Tidal-specific types and MoosicBox common types.
+
 use std::fmt::Display;
 
 use moosicbox_date_utils::chrono::{self, parse_date_time};
