@@ -94,14 +94,19 @@ pub use switchy;
 ///
 /// [`Client`]: client::Client
 pub mod client;
+
 mod config;
-mod formatting;
+
+/// Time formatting utilities.
+pub mod formatting;
+
 /// Host actor types and utilities.
 ///
 /// Provides the [`Host`] type for modeling persistent actors that can be restarted.
 ///
 /// [`Host`]: host::Host
 pub mod host;
+
 mod logging;
 /// Interaction planning utilities.
 ///
@@ -109,6 +114,7 @@ mod logging;
 ///
 /// [`InteractionPlan`]: plan::InteractionPlan
 pub mod plan;
+
 #[cfg(feature = "tui")]
 mod tui;
 
