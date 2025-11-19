@@ -1,3 +1,8 @@
+//! Date and time parsing utilities using the `chrono` crate.
+//!
+//! This module re-exports all types from the `chrono` crate and provides
+//! the [`parse_date_time`] function for flexible date/time string parsing.
+
 pub use chrono::*;
 
 /// Parses a date/time string into a `NaiveDateTime`.
