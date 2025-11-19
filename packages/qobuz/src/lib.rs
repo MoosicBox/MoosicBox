@@ -2037,6 +2037,15 @@ pub struct QobuzMusicApiBuilder {
 }
 
 impl QobuzMusicApiBuilder {
+    /// Creates a new builder instance.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            #[cfg(feature = "db")]
+            db: None,
+        }
+    }
+
     /// Sets the database connection (builder pattern, consumes self).
     #[cfg(feature = "db")]
     #[must_use]
@@ -2144,8 +2153,8 @@ pub struct QobuzMusicApi {
 impl QobuzMusicApi {
     /// Creates a new builder for configuring and constructing a `QobuzMusicApi` instance.
     #[must_use]
-    pub fn builder() -> QobuzMusicApiBuilder {
-        QobuzMusicApiBuilder::default()
+    pub const fn builder() -> QobuzMusicApiBuilder {
+        QobuzMusicApiBuilder::new()
     }
 }
 

@@ -79,6 +79,7 @@ pub async fn create_qobuz_config(
 /// # Errors
 ///
 /// * If a database error occurs
+#[must_use]
 pub async fn get_qobuz_app_secrets(
     db: &LibraryDatabase,
 ) -> Result<Vec<QobuzAppSecret>, DatabaseFetchError> {
@@ -94,6 +95,7 @@ pub async fn get_qobuz_app_secrets(
 /// # Errors
 ///
 /// * If a database error occurs
+#[must_use]
 pub async fn get_qobuz_app_config(
     db: &LibraryDatabase,
 ) -> Result<Option<QobuzAppConfig>, DatabaseFetchError> {
@@ -111,6 +113,7 @@ pub async fn get_qobuz_app_config(
 /// # Errors
 ///
 /// * If a database error occurs
+#[must_use]
 pub async fn get_qobuz_config(
     db: &LibraryDatabase,
 ) -> Result<Option<QobuzConfig>, DatabaseFetchError> {
@@ -128,6 +131,7 @@ pub async fn get_qobuz_config(
 /// # Errors
 ///
 /// * If a database error occurs
+#[must_use]
 pub async fn get_qobuz_access_token(
     db: &LibraryDatabase,
 ) -> Result<Option<String>, DatabaseFetchError> {
