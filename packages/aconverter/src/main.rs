@@ -46,24 +46,33 @@ use moosicbox_music_api::models::TrackSource;
 use moosicbox_music_models::{AudioFormat, TrackApiSource, from_extension_to_audio_format};
 use thiserror::Error;
 
+/// Command-line arguments for the audio converter.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// Input audio file path.
     #[arg(index = 1)]
     file: String,
 
+    /// Output audio file path.
     #[arg(short, long)]
     output: String,
 
+    /// Target audio encoding format (e.g., "AAC", "FLAC", "MP3", "OPUS").
+    ///
+    /// If not specified, the format is inferred from the output file extension.
     #[arg(short, long)]
     encoding: Option<String>,
 
+    /// Image width for embedded artwork (reserved for future use).
     #[arg(long)]
     width: Option<u32>,
 
+    /// Image height for embedded artwork (reserved for future use).
     #[arg(long)]
     height: Option<u32>,
 
+    /// Audio quality setting (0-100, default: 80).
     #[arg(short, long, default_value_t = 80)]
     quality: u8,
 }
