@@ -1,3 +1,13 @@
+//! AWS Lambda runtime support for the `MoosicBox` marketing site.
+//!
+//! This module provides the core AWS Lambda handler implementation for serving
+//! the marketing site in a serverless environment. It manages the async runtime,
+//! initializes tracing, and configures the application for Lambda execution.
+//!
+//! # Environment Variables
+//!
+//! * `MAX_THREADS` - Maximum blocking threads for async runtime (default: 64)
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
