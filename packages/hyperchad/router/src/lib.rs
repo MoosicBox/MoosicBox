@@ -182,16 +182,24 @@ pub enum ParseError {
 }
 
 #[cfg(feature = "form")]
+/// Serde deserializers for multipart form data.
+///
+/// This module provides custom deserializers for converting form field data into
+/// strongly-typed Rust structures.
 mod form_deserializer {
     use serde::de::{self, Deserializer, IntoDeserializer, MapAccess, Visitor};
     use std::collections::BTreeMap;
     use std::fmt;
 
+    /// Deserializer for multipart form data.
+    ///
+    /// Converts a map of form fields into a Rust structure using serde.
     pub struct FormDataDeserializer {
         fields: std::collections::btree_map::IntoIter<String, String>,
     }
 
     impl FormDataDeserializer {
+        /// Create a new form data deserializer from a map of field names to values.
         pub fn new(data: BTreeMap<String, String>) -> Self {
             Self {
                 fields: data.into_iter(),
@@ -199,17 +207,23 @@ mod form_deserializer {
         }
     }
 
+    /// Deserializer for individual form field string values.
+    ///
+    /// Attempts to parse string values into appropriate types with automatic
+    /// type inference for booleans, numbers, and strings.
     pub struct StringValueDeserializer {
         value: String,
     }
 
     impl StringValueDeserializer {
+        /// Create a new string value deserializer.
         #[allow(clippy::missing_const_for_fn)]
         pub fn new(value: String) -> Self {
             Self { value }
         }
     }
 
+    /// Deserialization error for form data.
     #[derive(Debug)]
     pub struct DeserializeError(String);
 
@@ -449,12 +463,14 @@ mod form_deserializer {
         }
     }
 
+    /// Map accessor for iterating over form fields during deserialization.
     struct FieldsMapAccess {
         fields: std::collections::btree_map::IntoIter<String, String>,
         value: Option<String>,
     }
 
     impl FieldsMapAccess {
+        /// Create a new map accessor from a form field iterator.
         #[allow(clippy::missing_const_for_fn)]
         fn new(fields: std::collections::btree_map::IntoIter<String, String>) -> Self {
             Self {
@@ -1780,6 +1796,9 @@ impl Router {
     }
 }
 
+/// Generate a route handler function from an infallible async handler.
+///
+/// Wraps the handler to convert its response into the expected [`RouteFunc`] signature.
 fn gen_route_func<
     C: TryInto<Content>,
     Response: Into<Option<C>>,
@@ -1809,6 +1828,9 @@ where
     }))
 }
 
+/// Generate a route handler function from a fallible async handler.
+///
+/// Wraps the handler to convert its `Result` response into the expected [`RouteFunc`] signature.
 fn gen_route_func_result<
     C: TryInto<Content>,
     Response: Into<Option<C>>,
