@@ -32,7 +32,7 @@ pub mod qobuz;
 pub mod scan;
 #[cfg(feature = "tidal")]
 pub mod tidal;
-pub(crate) mod util;
+pub mod util;
 
 /// Binds all admin HTMX endpoints to the provided Actix web scope.
 ///
