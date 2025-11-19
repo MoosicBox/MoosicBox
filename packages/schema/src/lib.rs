@@ -54,7 +54,10 @@ pub enum MigrateError {
 }
 
 /// Check if migration execution should be skipped based on environment variable
+///
+/// Returns `true` if `MOOSICBOX_SKIP_MIGRATION_EXECUTION` is set to "1".
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
+#[must_use]
 fn should_skip_migrations() -> bool {
     switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
         .as_deref()
@@ -63,7 +66,10 @@ fn should_skip_migrations() -> bool {
 }
 
 /// Check if migrations table should be dropped based on environment variable
+///
+/// Returns `true` if `MOOSICBOX_DROP_MIGRATIONS_TABLE` is set to "1".
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
+#[must_use]
 fn should_drop_migrations_table() -> bool {
     switchy_env::var("MOOSICBOX_DROP_MIGRATIONS_TABLE")
         .as_deref()
@@ -371,8 +377,13 @@ static POSTGRES_CONFIG_MIGRATIONS_DIR: include_dir::Dir =
 static POSTGRES_LIBRARY_MIGRATIONS_DIR: include_dir::Dir =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres");
 
-/// Load migrations from a directory
+/// Load migrations from an embedded directory
+///
+/// Scans the provided directory for migration subdirectories containing `up.sql` and
+/// optionally `down.sql` files, and returns a `CodeMigrationSource` with all discovered
+/// migrations sorted by directory name (which includes timestamps).
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[must_use]
 fn load_migrations_from_dir(dir: &include_dir::Dir) -> CodeMigrationSource<'static> {
     let mut source = CodeMigrationSource::new();
 
@@ -415,22 +426,30 @@ fn load_migrations_from_dir(dir: &include_dir::Dir) -> CodeMigrationSource<'stat
     source
 }
 
+/// Load embedded `SQLite` configuration migrations
 #[cfg(feature = "sqlite")]
+#[must_use]
 fn sqlite_config_migrations() -> CodeMigrationSource<'static> {
     load_migrations_from_dir(&SQLITE_CONFIG_MIGRATIONS_DIR)
 }
 
+/// Load embedded `SQLite` library migrations
 #[cfg(feature = "sqlite")]
+#[must_use]
 fn sqlite_library_migrations() -> CodeMigrationSource<'static> {
     load_migrations_from_dir(&SQLITE_LIBRARY_MIGRATIONS_DIR)
 }
 
+/// Load embedded `PostgreSQL` configuration migrations
 #[cfg(feature = "postgres")]
+#[must_use]
 fn postgres_config_migrations() -> CodeMigrationSource<'static> {
     load_migrations_from_dir(&POSTGRES_CONFIG_MIGRATIONS_DIR)
 }
 
+/// Load embedded `PostgreSQL` library migrations
 #[cfg(feature = "postgres")]
+#[must_use]
 fn postgres_library_migrations() -> CodeMigrationSource<'static> {
     load_migrations_from_dir(&POSTGRES_LIBRARY_MIGRATIONS_DIR)
 }
@@ -593,26 +612,42 @@ pub async fn get_postgres_config_migrations() -> Result<
     Ok(source.migrations().await?)
 }
 
+/// Stub function when `SQLite` feature is not enabled
+///
+/// Returns an empty migration source.
 #[cfg(not(feature = "sqlite"))]
 #[allow(unused, clippy::missing_const_for_fn)]
+#[must_use]
 fn sqlite_config_migrations() -> CodeMigrationSource<'static> {
     CodeMigrationSource::new()
 }
 
+/// Stub function when `SQLite` feature is not enabled
+///
+/// Returns an empty migration source.
 #[cfg(not(feature = "sqlite"))]
 #[allow(unused, clippy::missing_const_for_fn)]
+#[must_use]
 fn sqlite_library_migrations() -> CodeMigrationSource<'static> {
     CodeMigrationSource::new()
 }
 
+/// Stub function when `postgres` feature is not enabled
+///
+/// Returns an empty migration source.
 #[cfg(not(feature = "postgres"))]
 #[allow(unused, clippy::missing_const_for_fn)]
+#[must_use]
 fn postgres_config_migrations() -> CodeMigrationSource<'static> {
     CodeMigrationSource::new()
 }
 
+/// Stub function when `postgres` feature is not enabled
+///
+/// Returns an empty migration source.
 #[cfg(not(feature = "postgres"))]
 #[allow(unused, clippy::missing_const_for_fn)]
+#[must_use]
 fn postgres_library_migrations() -> CodeMigrationSource<'static> {
     CodeMigrationSource::new()
 }
