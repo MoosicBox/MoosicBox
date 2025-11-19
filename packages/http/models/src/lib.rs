@@ -67,6 +67,9 @@ pub enum Method {
 }
 
 /// Error returned when parsing an invalid HTTP method string.
+///
+/// This error is returned by [`Method::from_str`] when attempting to parse
+/// a string that does not match any known HTTP method.
 #[derive(Debug, thiserror::Error)]
 pub struct InvalidMethod;
 
@@ -316,6 +319,9 @@ impl From<StatusCode> for u16 {
 }
 
 /// Error returned when converting an invalid u16 to a status code.
+///
+/// This error is returned when attempting to convert a `u16` value that does not
+/// correspond to any recognized HTTP status code.
 #[derive(Debug, thiserror::Error)]
 #[error("TryFromU16StatusCodeError")]
 pub struct TryFromU16StatusCodeError;
