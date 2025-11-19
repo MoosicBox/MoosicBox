@@ -4,7 +4,7 @@
 //! for audio playback. It handles audio output, volume control, seeking, and playback
 //! state management for local audio files and streams.
 //!
-//! The [`LocalPlayer`] struct is the main entry point for local playback functionality,
+//! The `LocalPlayer` struct is the main entry point for local playback functionality,
 //! managing audio output devices, playback state coordination, and progress tracking.
 
 #![allow(clippy::module_name_repetitions)]
