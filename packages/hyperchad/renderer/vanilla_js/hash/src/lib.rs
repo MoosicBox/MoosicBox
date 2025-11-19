@@ -1,4 +1,4 @@
-//! Generates a unique hash based on enabled plugin features for the HyperChad Vanilla JS renderer.
+//! Generates a unique hash based on enabled plugin features for the `HyperChad` Vanilla JS renderer.
 //!
 //! This crate computes a hash string from the set of enabled plugin features to ensure
 //! that different feature builds produce distinct output directories and don't overwrite
@@ -16,6 +16,10 @@
 //!
 //! The hash value changes based on which plugin features are enabled at compile time,
 //! ensuring that builds with different feature sets don't conflict.
+
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 use const_hex::{Buffer, const_encode};
 use sha2_const_stable::Sha256;
