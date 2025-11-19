@@ -603,18 +603,18 @@ runs:
 
               git add -A
 
-              # Create commit using heredoc to prevent command injection
+              # Create commit using heredoc with variable expansion
               if [ -n "$COMMIT_DESC" ] && [ "$COMMIT_DESC" != "null" ]; then
                 echo "📋 Using detailed commit description:"
                 echo "$COMMIT_DESC"
-                git commit -F - <<'EOF'
+                cat <<EOF | git commit -F -
               $BASE_COMMIT_MSG
 
               $COMMIT_DESC
               EOF
               else
                 echo "📋 Using base commit message: $BASE_COMMIT_MSG"
-                git commit -F - <<'EOF'
+                cat <<EOF | git commit -F -
               $BASE_COMMIT_MSG
               EOF
               fi
