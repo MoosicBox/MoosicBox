@@ -9,6 +9,7 @@ use log::error;
 /// Retrieves the stored Tidal configuration from the database.
 ///
 /// Returns `None` if the configuration cannot be retrieved or does not exist.
+#[must_use]
 pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
     match moosicbox_tidal::db::get_tidal_config(db).await {
         Ok(config) => config,
@@ -26,6 +27,7 @@ pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
 ///
 /// Returns `None` if authentication cannot be started due to missing credentials,
 /// network errors, or invalid responses from the Tidal API.
+#[must_use]
 pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
     let client_id = match switchy_env::var("TIDAL_CLIENT_ID") {
         Ok(id) => id,
@@ -95,6 +97,7 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
 /// Runs a library scan for Tidal content.
 ///
 /// Returns `true` if the scan completed successfully, `false` otherwise.
+#[must_use]
 pub async fn run_scan(db: &LibraryDatabase) -> bool {
     match moosicbox_scan::run_scan(
         Some(vec![moosicbox_scan::ScanOrigin::Tidal]),
