@@ -1,3 +1,12 @@
+//! Example demonstrating nested GET routes with the `MoosicBox` web server.
+//!
+//! This example shows how to create a web server with nested scopes and routes,
+//! including CORS configuration and query parameter handling.
+
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use moosicbox_web_server::{HttpResponse, Scope};
 
 #[tokio::main]
