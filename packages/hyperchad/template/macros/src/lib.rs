@@ -32,7 +32,16 @@ use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::quote;
 use syn::parse::{ParseStream, Parser};
 
-/// Preprocess the token stream to handle numeric literals with units
+/// Preprocesses the token stream to handle numeric literals with CSS units.
+///
+/// Combines numeric tokens followed by unit identifiers or `%` into string literals,
+/// enabling syntax like `100%`, `50vw`, `3.14rem` without requiring quotes.
+///
+/// # Examples
+///
+/// - `100%` becomes `"100%"`
+/// - `50vw` becomes `"50vw"`
+/// - `1.5em` becomes `"1.5em"`
 fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
     let mut output = Vec::new();
     let tokens: Vec<proc_macro2::TokenTree> = input.into_iter().collect();
