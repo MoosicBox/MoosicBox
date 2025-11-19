@@ -35,15 +35,15 @@ Check that ALL public APIs in ${target_path} have:
 4. **Error docs** - Error conditions documented with `# Errors`
 5. **Example docs** - Complex functions have `# Examples`
 6. **Panic docs** - Functions that panic have `# Panics`
-7. **Must-use** - Constructors and getters that return direct types (Self, String, Vec, etc.) have `#[must_use]`. Note: While Result/Option types are marked must_use, functions returning them are NOT automatically must_use - clippy will suggest it via `must_use_candidate` lint.
+7. **Must-use** - Constructors and getters (including those returning Option/Result) have `#[must_use]`. Note: While Result/Option types are marked must_use, functions returning them are NOT automatically must_use - you must explicitly add the attribute. Clippy will suggest it via `must_use_candidate` lint.
 
 ## Rustdoc Style (from AGENTS.md)
 
 - Use asterisks (\*) for bullet points in error docs
 - Document all error conditions
 - Include examples for complex functions
-- Add `#[must_use]` to constructors and getters that return direct types (Self, String, Vec, etc.)
-- For functions returning Result/Option: While these types are `#[must_use]`, the function itself is NOT automatically must_use. Clippy's `must_use_candidate` lint will suggest adding it. For simple getters, use `#[allow(clippy::must_use_candidate)]` instead.
+- Add `#[must_use]` to constructors and getters (including those returning Option/Result types)
+- For functions returning Result/Option: While these types are `#[must_use]`, the function itself is NOT automatically must_use. You must explicitly add `#[must_use]` to the function. Clippy's `must_use_candidate` lint will suggest where to add it.
 - **CRITICAL: NEVER remove existing `#[must_use]` directives** - these have been intentionally added and must be preserved
 
 ## Verification (MANDATORY)
