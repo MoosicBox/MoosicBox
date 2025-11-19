@@ -11,11 +11,18 @@ use hyperchad_actions::dsl::{
     BinaryOp, Block, Expression, Literal, MatchArm, Pattern, Statement, UnaryOp,
 };
 
+/// Variable scope for tracking defined variables during code generation
+///
+/// Maintains a list of variable names that are currently in scope.
 #[derive(Default, Clone, Debug)]
 pub struct Scope {
     variables: VecDeque<String>,
 }
 
+/// Code generation context that manages variable scopes
+///
+/// The context maintains a stack of scopes, with the most recent scope at the front.
+/// This allows proper handling of nested scopes in control flow structures.
 #[derive(Clone, Debug)]
 pub struct Context {
     scopes: VecDeque<Scope>,
@@ -31,6 +38,9 @@ impl Default for Context {
 }
 
 impl Context {
+    /// Adds a variable to the current scope
+    ///
+    /// The variable is added to the front of the most recent scope.
     pub fn add_variable(&mut self, name: &str) {
         self.scopes
             .front_mut()
@@ -39,6 +49,10 @@ impl Context {
             .push_front(name.to_string());
     }
 
+    /// Checks if a variable is defined in any scope
+    ///
+    /// Searches through all scopes from most recent to oldest.
+    #[must_use]
     pub fn is_variable_defined(&self, name: impl AsRef<str>) -> bool {
         let name = name.as_ref();
         self.scopes
@@ -46,7 +60,14 @@ impl Context {
             .any(|scope| scope.variables.iter().any(|x| x == name))
     }
 
-    /// Resolve enum variants generically (`Type::Variant` -> appropriate representation)
+    /// Resolves enum variants generically
+    ///
+    /// Converts a pattern like `Type::Variant` into appropriate Rust code representation.
+    ///
+    /// # Must use
+    ///
+    /// The returned token stream should be used in code generation
+    #[must_use]
     fn resolve_enum_variant(enum_type: &str, variant: &str) -> TokenStream {
         let enum_ident = format_ident!("{}", enum_type);
         let variant_ident = format_ident!("{}", variant);
@@ -231,7 +252,16 @@ fn generate_statement_push(
     }
 }
 
-/// Generate code for a statement
+/// Generates Rust code for a statement
+///
+/// This is the main entry point for statement code generation. It produces token streams
+/// that represent `HyperChad` action types.
+///
+/// # Errors
+///
+/// * Returns error if expression code generation fails
+/// * Returns error if block code generation fails
+/// * Returns error if match arm code generation fails
 #[allow(clippy::too_many_lines)]
 pub fn generate_statement_code(
     context: &mut Context,
@@ -491,7 +521,19 @@ fn generate_pattern_code(pattern: &Pattern) -> TokenStream {
     }
 }
 
-/// Generate code for an expression
+/// Generates Rust code for an expression
+///
+/// Converts DSL expressions into token streams that represent `HyperChad` logic values,
+/// actions, or raw Rust code depending on the expression type.
+///
+/// # Errors
+///
+/// * Returns error if literal code generation fails
+/// * Returns error if function call code generation fails
+/// * Returns error if method call code generation fails
+/// * Returns error if binary operation code generation fails
+/// * Returns error if nested expression generation fails
+/// * Returns error if raw Rust code cannot be parsed
 #[allow(clippy::too_many_lines)]
 pub fn generate_expression_code(
     context: &mut Context,
