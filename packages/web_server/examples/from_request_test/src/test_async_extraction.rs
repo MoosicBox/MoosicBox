@@ -1,6 +1,20 @@
+//! Test binary for asynchronous `FromRequest` trait extraction.
+//!
+//! This binary validates the asynchronous extraction logic of the `FromRequest` trait
+//! implementation, including Future types and async/await support. It tests various
+//! types including `RequestData`, `String`, and `i32`, and verifies consistency between
+//! synchronous and asynchronous extraction methods.
+
 use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 
-// Helper function to create a test HttpRequest with known data
+/// Creates a test `HttpRequest` with predefined headers and query parameters.
+///
+/// This helper constructs an `HttpRequest::Stub` using the simulator with:
+/// * Method: POST
+/// * Path: `/api/users`
+/// * Query: `filter=active&limit=10`
+/// * Headers: user-agent, content-type, accept
+/// * Remote address: `192.168.1.100:3000`
 fn create_test_request() -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
@@ -14,6 +28,11 @@ fn create_test_request() -> HttpRequest {
     HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
 }
 
+/// Creates a test `HttpRequest` with a custom query string.
+///
+/// # Arguments
+///
+/// * `query` - The query string to include in the request
 fn create_test_request_with_query(query: &str) -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
@@ -22,6 +41,16 @@ fn create_test_request_with_query(query: &str) -> HttpRequest {
     HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
 }
 
+/// Tests asynchronous extraction of `RequestData` from an `HttpRequest`.
+///
+/// Validates that all fields (method, path, query, headers, etc.) are correctly
+/// extracted asynchronously from a simulated HTTP request using the async API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * `RequestData` async extraction fails
+/// * Any extracted field doesn't match expected values
 async fn test_request_data_async_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing RequestData async extraction...");
 
@@ -58,6 +87,16 @@ async fn test_request_data_async_extraction() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+/// Tests consistency between synchronous and asynchronous extraction.
+///
+/// Validates that both sync and async extraction methods produce identical results
+/// when given the same input request.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Sync and async extraction produce different results
+/// * One method succeeds while the other fails
 async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing async vs sync extraction consistency...");
 
@@ -100,6 +139,16 @@ async fn test_async_vs_sync_consistency() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+/// Tests asynchronous extraction of `i32` from query string.
+///
+/// Validates both successful parsing of valid signed integers and proper error handling
+/// for invalid input using async extraction.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Valid `i32` values fail to parse asynchronously
+/// * Invalid input doesn't produce expected error
 async fn test_async_i32_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing i32 async extraction...");
 
@@ -139,6 +188,16 @@ async fn test_async_i32_extraction() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Tests that Future types are properly implemented for async extraction.
+///
+/// Validates that the futures returned by `from_request_async` can be correctly
+/// awaited and resolve to the expected values for various types.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Any future fails to resolve
+/// * Resolved values don't match expected content
 async fn test_future_types() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing Future types are properly implemented...");
 
@@ -178,6 +237,14 @@ async fn test_future_types() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Main entry point for asynchronous `FromRequest` extraction tests.
+///
+/// Runs a comprehensive test suite validating asynchronous extraction of various types
+/// from HTTP requests, including Future type support and sync/async consistency.
+///
+/// # Errors
+///
+/// Returns an error if any test fails.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Testing asynchronous extraction with FromRequest trait...");
