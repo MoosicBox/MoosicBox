@@ -629,10 +629,13 @@ pub trait HtmlApp {
     }
 
     /// Returns a slice of CSS URLs.
+    #[must_use]
     fn css_urls(&self) -> &[String];
     /// Returns a slice of CSS paths.
+    #[must_use]
     fn css_paths(&self) -> &[String];
     /// Returns a slice of inline CSS blocks.
+    #[must_use]
     fn inline_css_blocks(&self) -> &[String];
 }
 
