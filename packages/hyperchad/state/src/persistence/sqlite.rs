@@ -76,6 +76,10 @@ impl SqlitePersistence {
 
 #[async_trait]
 impl StatePersistence for SqlitePersistence {
+    /// # Errors
+    ///
+    /// * [`Error::Serde`] - If the value cannot be serialized to JSON
+    /// * [`Error::Database`] - If the database upsert operation fails
     async fn set<T: Serialize + Send + Sync>(
         &self,
         key: impl Into<String> + Send + Sync,
@@ -97,6 +101,11 @@ impl StatePersistence for SqlitePersistence {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the database select operation fails
+    /// * [`Error::InvalidDbConfiguration`] - If the returned row does not contain a value column or the value is not a string
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -124,6 +133,10 @@ impl StatePersistence for SqlitePersistence {
         Ok(serde_json::from_str(value_str)?)
     }
 
+    /// # Errors
+    ///
+    /// * [`Error::Serde`] - If the stored value cannot be deserialized from JSON
+    /// * [`Error::Database`] - If the database delete operation fails
     async fn take<T: DeserializeOwned + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -143,6 +156,9 @@ impl StatePersistence for SqlitePersistence {
             .transpose()?)
     }
 
+    /// # Errors
+    ///
+    /// * [`Error::Database`] - If the database delete operation fails
     async fn clear(&self) -> Result<(), Error> {
         self.db.delete("state").execute(&*self.db).await?;
         Ok(())
