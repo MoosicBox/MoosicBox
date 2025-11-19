@@ -1,3 +1,18 @@
+//! `HyperChad` Markdown Example
+//!
+//! This example demonstrates the `hyperchad_markdown` package, which provides
+//! backend-agnostic markdown rendering with full type safety. It showcases:
+//!
+//! - Converting Markdown to `HyperChad` `Container` structures
+//! - Full `CommonMark` and GitHub Flavored Markdown support
+//! - Emoji support via shortcodes (`:rocket:`, `:star:`, etc.)
+//! - Built-in XSS protection
+//! - Tables, task lists, code blocks, and all standard markdown features
+//! - Integration with `HyperChad`'s routing and rendering system
+//!
+//! The example creates a web server that renders a comprehensive markdown demo page,
+//! displaying various markdown features in a styled, interactive format.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -532,6 +547,19 @@ fn create_router() -> Router {
     })
 }
 
+/// Runs the `HyperChad` Markdown example web server.
+///
+/// This function initializes the server and demonstrates markdown rendering
+/// by creating a demo page with various markdown features. The server runs
+/// on `http://localhost:8080` and serves a single route (`/`) that displays
+/// the markdown demo.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The runtime cannot be created
+/// * The server fails to bind to the specified port
+/// * The application fails to start
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     info!("Starting HyperChad Markdown Example");
