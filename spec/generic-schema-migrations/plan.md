@@ -553,6 +553,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 - [x] `packages/switchy/schema/test_utils/src/lib.rs` - Database creation helpers ✅ **CRITICAL**
     - [x] Feature-gated in-memory database helper:
+
         ```rust
         #[cfg(feature = "sqlite")]
         pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, switchy_database_connection::InitSqliteSqlxDatabaseError>
@@ -561,6 +562,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         - ✓ Uses `switchy_database_connection::init_sqlite_sqlx(None)` for in-memory SQLite
         - ✓ Proper error handling with specific error type
         - ✓ Comprehensive documentation with error section
+
     - [x] All test functions accept `&dyn Database` as parameter:
         - ✓ User provides the database instance they want to test against
         - ✓ Allows testing with any database type
@@ -606,6 +608,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         - [x] Add unit tests for this functionality
 
     - [x] **Pre-seeded state verification** - Test with existing data:
+
         ```rust
         pub async fn verify_migrations_with_state<'a, F, Fut>(
             db: &dyn Database,
@@ -644,6 +647,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 - [x] `packages/switchy/schema/test_utils/src/lib.rs` - Advanced mutation testing ✅ **IMPORTANT**
     - [x] **Interleaved state mutations** - Test with data changes between migrations:
+
         ```rust
         pub async fn verify_migrations_with_mutations<'a, M>(
             db: &dyn Database,
@@ -831,11 +835,13 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 - [x] Update core migration types from `Box<dyn Migration>` to `Arc<dyn Migration>` ✅ **CRITICAL**
     - [x] Update `MigrationSource` trait return type:
+
         ```rust
         async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
         ```
 
         - ✓ Changed from `Box<dyn Migration>` to `Arc<dyn Migration>`
+
     - [x] Update all MigrationSource implementations:
         - ✓ `EmbeddedMigrationSource` - uses `Arc::new()` instead of `Box::new()`
         - ✓ `DirectoryMigrationSource` - uses `Arc::new()` instead of `Box::new()`
@@ -3229,6 +3235,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
             - ✓ Uses `.if_not_exists(true)` at line 137 instead of DROP TABLE
         - [x] Create table with new schema:
             - ✓ New columns added: `finished_on` (lines 152-158), `status` (lines 159-165), `failure_reason` (lines 166-172)
+
         ```
         CONCEPTUAL SCHEMA (not literal SQL):
         {table_name} (
@@ -3258,6 +3265,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
                     - ✓ Lines 166-172
         - [x] ~~No migration logic needed - clean slate approach~~ **IMPLEMENTATION**: Uses idempotent table creation, no data loss
             - ✓ `.execute(db)` at line 173 after `.if_not_exists(true)` at line 137
+
     - [x] Update `record_migration()` to:
         - ✓ Implementation at `packages/switchy/schema/src/version.rs:220-230`
         - [x] Insert with explicit values:
@@ -14222,6 +14230,7 @@ This ensures:
         ```
         Implemented in `rusqlite_table_exists()` helper function (lines 2864-2873) and trait methods for RusqliteDatabase (lines 456-459) and RusqliteTransaction (lines 700-702)
     - [x] `get_table_columns()`:
+
         ```sql
         PRAGMA table_info(table_name)
         ```
@@ -14238,6 +14247,7 @@ This ensures:
               All supported types implemented in `sqlite_type_to_data_type()` (lines 2878-2883)
         - [x] Unsupported types: BLOB, JSON, custom types (Phase 16.5 will add these)
               Returns `DatabaseError::UnsupportedDataType` for unmapped types (line 2884)
+
     - [x] `column_exists()`:
         - [x] Use PRAGMA table_info and search for column name
               Implemented in `rusqlite_column_exists()` helper (lines 2943-2950) and trait methods for both Database and Transaction
