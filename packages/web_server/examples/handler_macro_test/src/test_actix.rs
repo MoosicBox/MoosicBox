@@ -1,18 +1,36 @@
+//! Test suite for handler macro system with Actix backend.
+//!
+//! This binary demonstrates and tests the handler macro system's compatibility
+//! with the Actix backend, verifying that extractors work correctly without
+//! Send bound issues.
+
 use moosicbox_web_server::{Headers, HttpResponse, Method, Path, Query, RequestInfo, Route};
 use serde::Deserialize;
 
-// Test handler with NO parameters - completely Send-safe!
+/// Test handler with no parameters - completely Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn simple_handler() -> Result<HttpResponse, moosicbox_web_server::Error> {
     Ok(HttpResponse::ok().with_body("Simple handler response - no params!"))
 }
 
-// Test handler with RequestInfo extractor - Send-safe!
+/// Test handler with RequestInfo extractor - Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn info_handler(info: RequestInfo) -> Result<HttpResponse, moosicbox_web_server::Error> {
     let response = format!("Request to {} via {:?}", info.path, info.method);
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Test handler with Headers extractor - Send-safe!
+/// Test handler with Headers extractor - Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn headers_handler(headers: Headers) -> Result<HttpResponse, moosicbox_web_server::Error> {
     let user_agent = headers
         .user_agent()
@@ -22,13 +40,20 @@ async fn headers_handler(headers: Headers) -> Result<HttpResponse, moosicbox_web
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Test handler with Query extractor - Send-safe!
+/// Query parameters for search endpoint.
 #[derive(Deserialize)]
 struct SearchQuery {
+    /// Search term (optional).
     q: Option<String>,
+    /// Maximum number of results to return (optional).
     limit: Option<u32>,
 }
 
+/// Test handler with Query extractor - Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn query_handler(
     Query(query): Query<SearchQuery>,
 ) -> Result<HttpResponse, moosicbox_web_server::Error> {
@@ -38,7 +63,11 @@ async fn query_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Test handler with Path extractor - Send-safe!
+/// Test handler with Path extractor - Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn path_handler(
     Path(user_id): Path<u32>,
 ) -> Result<HttpResponse, moosicbox_web_server::Error> {
@@ -46,7 +75,11 @@ async fn path_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Test handler with multiple extractors - Send-safe!
+/// Test handler with multiple extractors - Send-safe.
+///
+/// # Errors
+///
+/// Returns an error if the response cannot be created.
 async fn multi_handler(
     info: RequestInfo,
     headers: Headers,
