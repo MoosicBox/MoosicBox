@@ -44,6 +44,7 @@ pub enum Command {
 }
 
 impl std::fmt::Display for Command {
+    /// Formats the command using its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -57,14 +58,23 @@ pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context);
 }
 
+/// Service processor implementation for the bundled native application.
+///
+/// Handles command processing, startup, and shutdown lifecycle events.
 #[moosicbox_async_service::async_trait]
 impl service::Processor for service::Service {
     type Error = service::Error;
 
+    /// Initializes the service on startup.
+    ///
+    /// Currently performs no initialization and always succeeds.
     async fn on_start(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
+    /// Cleans up resources on service shutdown.
+    ///
+    /// Currently performs no cleanup and always succeeds.
     async fn on_shutdown(_ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
         Ok(())
     }
