@@ -39,6 +39,8 @@ use switchy_database::{
 use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_album_versions};
 
 impl AsId for LibraryTrack {
+    /// Converts the track to its database ID value.
+    ///
     /// # Panics
     ///
     /// * If the track ID cannot be converted to `i64`
@@ -48,6 +50,8 @@ impl AsId for LibraryTrack {
 }
 
 impl AsModel<LibraryArtist> for &switchy_database::Row {
+    /// Converts a database row to a library artist.
+    ///
     /// # Panics
     ///
     /// * If the row cannot be converted to a `LibraryArtist`
@@ -57,6 +61,11 @@ impl AsModel<LibraryArtist> for &switchy_database::Row {
 }
 
 impl ToValueType<LibraryArtist> for &switchy_database::Row {
+    /// Parses a library artist from a database row.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields (`id`, `title`) are missing or have invalid types
     fn to_value_type(self) -> Result<LibraryArtist, ParseError> {
         let id = self.to_value("id")?;
 
@@ -73,6 +82,11 @@ impl ToValueType<LibraryArtist> for &switchy_database::Row {
 }
 
 impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
+    /// Converts a database row to a library artist with error handling.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields (`id`, `title`) are missing or have invalid types
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         let id = self.to_value("id")?;
 
@@ -89,6 +103,8 @@ impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
 }
 
 impl AsId for LibraryArtist {
+    /// Converts the artist to its database ID value.
+    ///
     /// # Panics
     ///
     /// * If the artist ID cannot be converted to `i64`
@@ -99,6 +115,12 @@ impl AsId for LibraryArtist {
 
 impl MissingValue<LibraryAlbumType> for &switchy_database::Row {}
 impl ToValueType<LibraryAlbumType> for &switchy_database::Row {
+    /// Parses a library album type from a database row.
+    ///
+    /// # Errors
+    ///
+    /// * If the `album_type` field is missing
+    /// * If the value cannot be converted to a valid `LibraryAlbumType`
     fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
         self.get("album_type")
             .ok_or_else(|| ParseError::MissingValue("album_type".into()))?
@@ -106,6 +128,12 @@ impl ToValueType<LibraryAlbumType> for &switchy_database::Row {
     }
 }
 impl ToValueType<LibraryAlbumType> for DatabaseValue {
+    /// Parses a library album type from a database value.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If the string cannot be parsed as a valid `LibraryAlbumType`
     fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
         LibraryAlbumType::from_str(
             self.as_str()
@@ -116,6 +144,8 @@ impl ToValueType<LibraryAlbumType> for DatabaseValue {
 }
 
 impl AsModel<LibraryAlbum> for &switchy_database::Row {
+    /// Converts a database row to a library album.
+    ///
     /// # Panics
     ///
     /// * If the row cannot be converted to a `LibraryAlbum`
@@ -126,6 +156,13 @@ impl AsModel<LibraryAlbum> for &switchy_database::Row {
 
 impl MissingValue<LibraryAlbum> for &switchy_database::Row {}
 impl ToValueType<LibraryAlbum> for &switchy_database::Row {
+    /// Parses a library album from a database row.
+    ///
+    /// Sets the album source to Local and initializes an empty versions list.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields (`id`, `title`, `artist_id`) are missing or have invalid types
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
@@ -157,6 +194,13 @@ impl ToValueType<LibraryAlbum> for &switchy_database::Row {
 }
 
 impl AsModelResult<LibraryAlbum, ParseError> for &switchy_database::Row {
+    /// Converts a database row to a library album with error handling.
+    ///
+    /// Sets the album source to Local and initializes an empty versions list.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields (`id`, `title`, `artist_id`, `artist_api_sources`) are missing or have invalid types
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
@@ -186,6 +230,14 @@ impl AsModelResult<LibraryAlbum, ParseError> for &switchy_database::Row {
 }
 
 impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<switchy_database::Row> {
+    /// Converts multiple database rows to library albums with version aggregation.
+    ///
+    /// Processes rows that may contain multiple versions per album, aggregating them
+    /// and sorting by quality.
+    ///
+    /// # Errors
+    ///
+    /// * If any row contains invalid or missing required fields
     #[allow(clippy::too_many_lines)]
     fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
         let mut results: Vec<LibraryAlbum> = vec![];
@@ -276,6 +328,14 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<switchy_datab
 
 #[async_trait::async_trait]
 impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
+    /// Converts a database row to a library album with async version fetching.
+    ///
+    /// Fetches album version qualities from the database asynchronously.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields are missing or have invalid types
+    /// * If version quality query fails
     async fn as_model_query(
         &self,
         db: std::sync::Arc<Box<dyn Database>>,
@@ -309,6 +369,8 @@ impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
 }
 
 impl AsId for LibraryAlbum {
+    /// Converts the album to its database ID value.
+    ///
     /// # Panics
     ///
     /// * If the album ID cannot be converted to `i64`
@@ -318,6 +380,8 @@ impl AsId for LibraryAlbum {
 }
 
 impl AsModel<LibraryTrack> for &switchy_database::Row {
+    /// Converts a database row to a library track.
+    ///
     /// # Panics
     ///
     /// * If the row cannot be converted to a `LibraryTrack`
@@ -327,6 +391,13 @@ impl AsModel<LibraryTrack> for &switchy_database::Row {
 }
 
 impl ToValueType<LibraryTrack> for &switchy_database::Row {
+    /// Parses a library track from a database row.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields are missing or have invalid types
+    /// * If the `format` field contains an invalid audio format string
+    ///
     /// # Panics
     ///
     /// * If the `source` field contains an invalid `TrackApiSource` value
@@ -375,6 +446,13 @@ impl ToValueType<LibraryTrack> for &switchy_database::Row {
 }
 
 impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
+    /// Converts a database row to a library track with error handling.
+    ///
+    /// # Errors
+    ///
+    /// * If required fields are missing or have invalid types
+    /// * If the `format` field contains an invalid audio format string
+    ///
     /// # Panics
     ///
     /// * If the `source` field contains an invalid `TrackApiSource` value

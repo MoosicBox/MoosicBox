@@ -23,6 +23,9 @@ use serde::{Deserialize, Serialize};
 use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack};
 
 impl From<LibraryArtist> for ApiArtist {
+    /// Converts a library artist to an API artist representation.
+    ///
+    /// Performs a two-step conversion through the generic `Artist` type.
     fn from(value: LibraryArtist) -> Self {
         let artist: Artist = value.into();
         artist.into()
@@ -30,12 +33,18 @@ impl From<LibraryArtist> for ApiArtist {
 }
 
 impl From<&LibraryAlbum> for ApiAlbum {
+    /// Converts a library album reference to an API album representation.
+    ///
+    /// Clones the album and delegates to the owned conversion.
     fn from(value: &LibraryAlbum) -> Self {
         value.clone().into()
     }
 }
 
 impl From<LibraryAlbum> for ApiAlbum {
+    /// Converts a library album to an API album representation.
+    ///
+    /// Converts file paths to boolean flags (e.g., `contains_cover`) and sets the API source to library.
     fn from(value: LibraryAlbum) -> Self {
         Self {
             album_id: value.id.into(),
@@ -93,6 +102,9 @@ pub struct ApiLibraryAlbum {
 }
 
 impl From<ApiLibraryAlbum> for ApiAlbum {
+    /// Converts an API library album to a generic API album representation.
+    ///
+    /// Converts version qualities and sets the API source to library.
     fn from(value: ApiLibraryAlbum) -> Self {
         Self {
             album_id: value.album_id.into(),
@@ -157,6 +169,9 @@ impl TryFrom<ApiLibraryAlbum> for Album {
 }
 
 impl From<LibraryAlbum> for ApiLibraryAlbum {
+    /// Converts a library album to an API library album representation.
+    ///
+    /// Converts file paths to boolean flags and version qualities to API representations.
     fn from(value: LibraryAlbum) -> Self {
         Self {
             album_id: value.id,
@@ -177,6 +192,9 @@ impl From<LibraryAlbum> for ApiLibraryAlbum {
 }
 
 impl From<LibraryTrack> for ApiTrack {
+    /// Converts a library track to an API track representation.
+    ///
+    /// Performs a two-step conversion through the generic `Track` type.
     fn from(value: LibraryTrack) -> Self {
         let track: Track = value.into();
         track.into()
@@ -238,12 +256,18 @@ pub struct ApiLibraryTrack {
 }
 
 impl From<&ApiLibraryTrack> for LibraryTrack {
+    /// Converts an API library track reference to a library track.
+    ///
+    /// Clones the track and delegates to the owned conversion.
     fn from(value: &ApiLibraryTrack) -> Self {
         value.clone().into()
     }
 }
 
 impl From<ApiLibraryTrack> for LibraryTrack {
+    /// Converts an API library track to a library track.
+    ///
+    /// Sets file and artwork paths to `None` since API representations use boolean flags instead.
     fn from(value: ApiLibraryTrack) -> Self {
         Self {
             id: value.track_id,
@@ -276,6 +300,9 @@ impl From<ApiLibraryTrack> for LibraryTrack {
 }
 
 impl From<ApiLibraryTrack> for Track {
+    /// Converts an API library track to a generic track.
+    ///
+    /// Sets file and artwork to `None` and API source to library.
     fn from(value: ApiLibraryTrack) -> Self {
         Self {
             id: value.track_id.into(),
