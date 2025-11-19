@@ -91,6 +91,11 @@ pub enum RendererType {
 }
 
 impl std::fmt::Display for RendererType {
+    /// Formats the renderer type as a lowercase string.
+    ///
+    /// # Errors
+    ///
+    /// Returns a formatting error if the output buffer cannot be written to.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Html => write!(f, "html"),
@@ -115,6 +120,10 @@ pub struct AppConfig {
 }
 
 impl Default for AppConfig {
+    /// Creates a default application configuration for testing.
+    ///
+    /// Returns a configuration with the name "test-app", a single root route ("/"),
+    /// and no static assets or environment variables.
     fn default() -> Self {
         Self {
             name: "test-app".to_string(),
@@ -126,7 +135,7 @@ impl Default for AppConfig {
 }
 
 /// Mock data for simulation environment.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SimulationData {
     /// Simulated user data.
     pub users: Vec<serde_json::Value>,
@@ -134,6 +143,19 @@ pub struct SimulationData {
     pub api_responses: BTreeMap<String, serde_json::Value>,
     /// Simulated database state mapped from key to value.
     pub database_state: BTreeMap<String, serde_json::Value>,
+}
+
+impl Default for SimulationData {
+    /// Creates an empty simulation data set.
+    ///
+    /// Returns a `SimulationData` instance with no users, API responses, or database state.
+    fn default() -> Self {
+        Self {
+            users: Vec::new(),
+            api_responses: BTreeMap::new(),
+            database_state: BTreeMap::new(),
+        }
+    }
 }
 
 /// Simulator for testing `HyperChad` applications across different renderer implementations.
@@ -302,12 +324,18 @@ impl HyperChadSimulator {
 }
 
 impl Default for HyperChadSimulator {
+    /// Creates a new simulator with default configuration.
+    ///
+    /// Equivalent to calling [`HyperChadSimulator::new`].
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Clone for HyperChadSimulator {
+    /// Creates a clone of the simulator.
+    ///
+    /// All fields are cloned, including the shared web server reference.
     fn clone(&self) -> Self {
         Self {
             app_config: self.app_config.clone(),
