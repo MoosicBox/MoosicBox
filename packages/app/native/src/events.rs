@@ -1,3 +1,10 @@
+//! Event handlers for application state changes and playback updates.
+//!
+//! This module contains event listeners that respond to changes in the application state,
+//! such as playback session updates, audio zone changes, and server connection updates.
+//! These handlers update the UI in response to state changes and manage the current
+//! playback session selection.
+
 use hyperchad::renderer::View;
 use moosicbox_app_native_ui::state::State;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
