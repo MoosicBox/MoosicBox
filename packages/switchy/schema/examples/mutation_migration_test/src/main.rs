@@ -16,6 +16,9 @@ use switchy_schema::migration::Migration;
 use switchy_schema_test_utils::{create_empty_in_memory, verify_migrations_with_mutations};
 
 /// Migration that creates a users table
+///
+/// Creates a table with columns for user information including id, name, email,
+/// status, and creation timestamp. Includes a unique constraint on the email field.
 struct CreateUsersTable;
 
 #[async_trait]
@@ -24,6 +27,12 @@ impl Migration<'static> for CreateUsersTable {
         "001_create_users"
     }
 
+    /// Creates the users table with a unique email constraint.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when creating the table
+    /// * Index creation fails for the unique email constraint
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Create users table using schema query builder
         db.create_table("users")
@@ -73,6 +82,11 @@ impl Migration<'static> for CreateUsersTable {
         Ok(())
     }
 
+    /// Drops the users table.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when dropping the table
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("DROP TABLE users").await?;
         Ok(())
@@ -84,6 +98,9 @@ impl Migration<'static> for CreateUsersTable {
 }
 
 /// Migration that creates a posts table
+///
+/// Creates a table for blog posts with columns for id, user_id (foreign key),
+/// title, content, published status, and creation timestamp.
 struct CreatePostsTable;
 
 #[async_trait]
@@ -92,6 +109,11 @@ impl Migration<'static> for CreatePostsTable {
         "002_create_posts"
     }
 
+    /// Creates the posts table with a reference to the users table.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when creating the table
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Create posts table using schema query builder
         db.create_table("posts")
@@ -143,6 +165,11 @@ impl Migration<'static> for CreatePostsTable {
         Ok(())
     }
 
+    /// Drops the posts table.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when dropping the table
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("DROP TABLE posts").await?;
         Ok(())
@@ -154,6 +181,9 @@ impl Migration<'static> for CreatePostsTable {
 }
 
 /// Migration that adds an analytics table
+///
+/// Creates a table for tracking user events with columns for id, user_id (optional),
+/// event_type, event_data (JSON), and timestamp.
 struct CreateAnalyticsTable;
 
 #[async_trait]
@@ -162,6 +192,11 @@ impl Migration<'static> for CreateAnalyticsTable {
         "003_create_analytics"
     }
 
+    /// Creates the analytics table for event tracking.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when creating the table
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Create analytics table using schema query builder
         db.create_table("analytics")
@@ -206,6 +241,11 @@ impl Migration<'static> for CreateAnalyticsTable {
         Ok(())
     }
 
+    /// Drops the analytics table.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when dropping the table
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("DROP TABLE analytics").await?;
         Ok(())
@@ -217,6 +257,9 @@ impl Migration<'static> for CreateAnalyticsTable {
 }
 
 /// Migration that adds indexes for performance
+///
+/// Creates indexes on foreign key columns and commonly queried fields to improve
+/// query performance on the posts and analytics tables.
 struct AddPerformanceIndexes;
 
 #[async_trait]
@@ -225,6 +268,11 @@ impl Migration<'static> for AddPerformanceIndexes {
         "004_add_performance_indexes"
     }
 
+    /// Creates performance indexes on posts and analytics tables.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when creating any of the indexes
     async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         db.exec_raw("CREATE INDEX idx_posts_user_id ON posts(user_id)")
             .await?;
@@ -237,6 +285,11 @@ impl Migration<'static> for AddPerformanceIndexes {
         Ok(())
     }
 
+    /// Drops the performance indexes.
+    ///
+    /// # Errors
+    ///
+    /// * Database execution fails when dropping any of the indexes
     async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
         // Use IF EXISTS to avoid errors if tables are already dropped
         db.exec_raw("DROP INDEX IF EXISTS idx_posts_user_id")
@@ -256,10 +309,19 @@ impl Migration<'static> for AddPerformanceIndexes {
 }
 
 /// Custom executable for inserting test data
+///
+/// Inserts three test users (Alice, Bob, Carol) into the users table with
+/// different status values for testing purposes.
 struct InsertTestUsers;
 
 #[async_trait]
 impl Executable for InsertTestUsers {
+    /// Inserts test users into the users table.
+    ///
+    /// # Errors
+    ///
+    /// * Database insertion fails for any of the test users
+    /// * Unique constraint violation if users already exist
     async fn execute(&self, db: &dyn Database) -> std::result::Result<(), DatabaseError> {
         // Insert test users using query builder
         db.insert("users")
@@ -288,10 +350,19 @@ impl Executable for InsertTestUsers {
 }
 
 /// Custom executable for inserting test posts
+///
+/// Inserts four test posts with varying published status and associated with
+/// different test users.
 struct InsertTestPosts;
 
 #[async_trait]
 impl Executable for InsertTestPosts {
+    /// Inserts test posts into the posts table.
+    ///
+    /// # Errors
+    ///
+    /// * Database insertion fails for any of the test posts
+    /// * Foreign key constraint violation if referenced users don't exist
     async fn execute(&self, db: &dyn Database) -> std::result::Result<(), DatabaseError> {
         // Insert test posts using query builder
         db.insert("posts")
@@ -331,10 +402,17 @@ impl Executable for InsertTestPosts {
 }
 
 /// Custom executable for inserting analytics data
+///
+/// Inserts analytics events including login and post creation events for the test users.
 struct InsertAnalyticsData;
 
 #[async_trait]
 impl Executable for InsertAnalyticsData {
+    /// Inserts analytics data into the analytics table.
+    ///
+    /// # Errors
+    ///
+    /// * Database insertion fails for any of the analytics events
     async fn execute(&self, db: &dyn Database) -> std::result::Result<(), DatabaseError> {
         // Insert analytics data using query builder
         db.insert("analytics")
@@ -376,6 +454,17 @@ impl Executable for InsertAnalyticsData {
     }
 }
 
+/// Demonstrates mutation migration testing by running migrations with interleaved data changes.
+///
+/// This example shows how to use `verify_migrations_with_mutations` to test migrations
+/// with realistic data patterns, ensuring that migrations work correctly when data is
+/// being modified between migration steps.
+///
+/// # Errors
+///
+/// * Database creation fails
+/// * Any migration or mutation operation fails
+/// * Verification or rollback fails
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Mutation Migration Test Example");
@@ -466,6 +555,9 @@ mod tests {
     use switchy_schema_test_utils::TestError;
     use switchy_schema_test_utils::mutations::MutationProvider;
 
+    /// Tests individual mutations can be applied successfully.
+    ///
+    /// Verifies that test users can be inserted after creating the users table.
     #[switchy_async::test]
     async fn test_individual_mutations() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
@@ -488,6 +580,9 @@ mod tests {
         Ok(())
     }
 
+    /// Tests foreign key constraints work correctly.
+    ///
+    /// Verifies that posts can be inserted with valid user_id references.
     #[switchy_async::test]
     async fn test_foreign_key_constraints() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
@@ -517,6 +612,10 @@ mod tests {
         Ok(())
     }
 
+    /// Tests the complete mutation migration flow with test utilities.
+    ///
+    /// Verifies that all migrations can be applied and rolled back with interleaved
+    /// data mutations using the `verify_migrations_with_mutations` helper.
     #[switchy_async::test]
     async fn test_mutations_with_test_utils() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
@@ -541,6 +640,10 @@ mod tests {
         Ok(())
     }
 
+    /// Tests indexes can be created on tables with existing data.
+    ///
+    /// Verifies that performance indexes can be added to populated tables and
+    /// successfully rolled back.
     #[switchy_async::test]
     async fn test_index_creation_on_populated_tables() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await.unwrap();
@@ -575,6 +678,10 @@ mod tests {
         Ok(())
     }
 
+    /// Tests the `BTreeMap` implementation of `MutationProvider`.
+    ///
+    /// Verifies that mutations can be retrieved from a `BTreeMap` and that
+    /// nonexistent mutations return `None`.
     #[switchy_async::test]
     async fn test_btreemap_mutation_provider() {
         let mut mutations: BTreeMap<String, Arc<dyn Executable>> = BTreeMap::new();
