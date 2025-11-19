@@ -90,12 +90,12 @@ generate_run_matrix_summary() {
             echo "**Duration:** ${duration}s" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
-            # Command (collapsible)
+            # Script (collapsible)
             echo "<details>" >> $GITHUB_STEP_SUMMARY
-            echo "<summary><b>📋 Command</b></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>📋 Script</b></summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-            echo "(cd $working_dir; $cmd)" >> $GITHUB_STEP_SUMMARY
+            echo "$cmd" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "</details>" >> $GITHUB_STEP_SUMMARY
@@ -206,13 +206,11 @@ run_matrix_command() {
     echo "🎯 Strategy: $strategy"
     [[ -n "$label" ]] && echo "🏷️  Label: $label"
 
-    # Parse commands (newline or comma-separated)
-    mapfile -t COMMAND_TEMPLATES < <(echo "$commands" | tr ',' '\n' | sed '/^[[:space:]]*$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    # Treat entire commands input as a single script template
+    local script_template="$commands"
 
-    echo "🔧 Commands to run:"
-    for cmd_template in "${COMMAND_TEMPLATES[@]}"; do
-        echo "  - $cmd_template"
-    done
+    echo "🔧 Script template to execute per iteration:"
+    echo "$script_template" | sed 's/^/  /' # Indent for display
 
     # Generate feature combinations based on strategy
     mapfile -t FEATURE_COMBINATIONS < <(generate_feature_combinations "$features" "$strategy")
@@ -238,115 +236,116 @@ run_matrix_command() {
         echo ""
         echo "### Iteration $((iteration + 1))/$total_iterations: Features [$feature_combo]"
 
-        # Run each command template for this feature combination
-        for cmd_template in "${COMMAND_TEMPLATES[@]}"; do
-            # Resolve template variables
-            local command=$(render_template \
-                "$cmd_template" \
-                "$package_json" \
-                "$feature_combo" \
-                "$required_features" \
-                "$iteration" \
-                "$total_iterations")
+        # Render the entire script with template variables
+        local rendered_script=$(render_template \
+            "$script_template" \
+            "$package_json" \
+            "$feature_combo" \
+            "$required_features" \
+            "$iteration" \
+            "$total_iterations")
 
-            # Check for doctest and lib target
-            if [[ "$command" =~ "test --doc" && "$INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK" != "true" ]]; then
-                local package_path_clean="${package_path#./}"
-                if ! cargo metadata --format-version=1 --no-deps 2>/dev/null | \
-                    jq -e ".packages[] | select(.manifest_path | contains(\"${package_path_clean}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
-                    echo "⏭️  Skipping doctest - no library target found"
-                    continue
-                fi
+        # Check for doctest and lib target
+        if [[ "$rendered_script" =~ "test --doc" && "$INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK" != "true" ]]; then
+            local package_path_clean="${package_path#./}"
+            if ! cargo metadata --format-version=1 --no-deps 2>/dev/null | \
+                jq -e ".packages[] | select(.manifest_path | contains(\"${package_path_clean}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+                echo "⏭️  Skipping iteration - no library target found for doctest"
+                continue
             fi
+        fi
 
-            total_runs=$((total_runs + 1))
+        total_runs=$((total_runs + 1))
 
-            # Create temp file for output
-            local output_file=$(mktemp)
-            local start_time=$(date +%s.%N)
+        # Create temp file for output
+        local output_file=$(mktemp)
+        local start_time=$(date +%s.%N)
 
-            echo "RUNNING \`$command\`"
+        echo "RUNNING script for features [$feature_combo]"
+        if [[ "$verbose" == "true" ]]; then
+            echo "Script content:"
+            echo "$rendered_script" | sed 's/^/  /'
+        fi
 
-            # Execute command
-            local exit_code=0
-            if [[ "$verbose" == "true" ]]; then
-                # Show output in real-time for verbose mode
-                if (cd "$working_dir" && eval "$command" 2>&1 | tee "$output_file"); then
-                    echo "✅ SUCCESS \`$command\`"
-                else
-                    exit_code=$?
-                    echo "❌ FAILED \`$command\` (exit code: $exit_code)" >&2
-                fi
+        # Execute the entire script as bash
+        local exit_code=0
+        if [[ "$verbose" == "true" ]]; then
+            # Show output in real-time for verbose mode
+            if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" 2>&1 | tee "$output_file"); then
+                echo "✅ SUCCESS for features [$feature_combo]"
             else
-                # Capture output silently
-                if (cd "$working_dir" && eval "$command" > "$output_file" 2>&1); then
-                    echo "✅ SUCCESS \`$command\`"
-                else
-                    exit_code=$?
-                    echo "❌ FAILED \`$command\` (exit code: $exit_code)" >&2
-                fi
+                exit_code=$?
+                echo "❌ FAILED for features [$feature_combo] (exit code: $exit_code)" >&2
             fi
-
-            local end_time=$(date +%s.%N)
-            local duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
-
-            # Track results
-            if [[ "$exit_code" -eq 0 ]]; then
-                total_passed=$((total_passed + 1))
-                rm -f "$output_file"
+        else
+            # Capture output silently
+            if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" > "$output_file" 2>&1); then
+                echo "✅ SUCCESS for features [$feature_combo]"
             else
-                total_failed=$((total_failed + 1))
-
-                # Create failure JSON
-                local failure_json=$(jq -n \
-                    --arg pkg "$package_name" \
-                    --arg path "$package_path" \
-                    --arg features "$feature_combo" \
-                    --arg req_features "$required_features" \
-                    --arg cmd "$command" \
-                    --arg cmd_template "$cmd_template" \
-                    --argjson exit_code "$exit_code" \
-                    --arg output_file "$output_file" \
-                    --arg duration "$duration" \
-                    --argjson iteration "$iteration" \
-                    '{
-                        package: $pkg,
-                        path: $path,
-                        feature_combo: $features,
-                        required_features: $req_features,
-                        command: $cmd,
-                        command_template: $cmd_template,
-                        exit_code: $exit_code,
-                        output_file: $output_file,
-                        duration_secs: ($duration | tonumber),
-                        iteration: $iteration
-                    }')
-
-                ALL_FAILURES+=("$failure_json")
-
-                # Show error details immediately
-                echo "COMMAND: (cd $working_dir; $command)" >&2
-
-                # Fail fast if requested
-                if [[ "$fail_fast" == "true" ]]; then
-                    echo "🛑 Fail-fast mode enabled, stopping"
-
-                    if [[ "$generate_summary" == "true" ]]; then
-                        local failures_array=$(printf '%s\n' "${ALL_FAILURES[@]}" | jq -s .)
-                        generate_run_matrix_summary \
-                            "$package_name" \
-                            "$working_dir" \
-                            "$label" \
-                            "$total_runs" \
-                            "$total_passed" \
-                            "$total_failed" \
-                            "$failures_array"
-                    fi
-
-                    exit 1
-                fi
+                exit_code=$?
+                echo "❌ FAILED for features [$feature_combo] (exit code: $exit_code)" >&2
             fi
-        done
+        fi
+
+        local end_time=$(date +%s.%N)
+        local duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
+
+        # Track results
+        if [[ "$exit_code" -eq 0 ]]; then
+            total_passed=$((total_passed + 1))
+            rm -f "$output_file"
+        else
+            total_failed=$((total_failed + 1))
+
+            # Create failure JSON
+            local failure_json=$(jq -n \
+                --arg pkg "$package_name" \
+                --arg path "$package_path" \
+                --arg features "$feature_combo" \
+                --arg req_features "$required_features" \
+                --arg script "$rendered_script" \
+                --arg script_template "$script_template" \
+                --argjson exit_code "$exit_code" \
+                --arg output_file "$output_file" \
+                --arg duration "$duration" \
+                --argjson iteration "$iteration" \
+                '{
+                    package: $pkg,
+                    path: $path,
+                    feature_combo: $features,
+                    required_features: $req_features,
+                    command: $script,
+                    command_template: $script_template,
+                    exit_code: $exit_code,
+                    output_file: $output_file,
+                    duration_secs: ($duration | tonumber),
+                    iteration: $iteration
+                }')
+
+            ALL_FAILURES+=("$failure_json")
+
+            # Show error details immediately
+            echo "SCRIPT executed in: (cd $working_dir; bash -e -o pipefail <<< '\$SCRIPT')" >&2
+
+            # Fail fast if requested
+            if [[ "$fail_fast" == "true" ]]; then
+                echo "🛑 Fail-fast mode enabled, stopping"
+
+                if [[ "$generate_summary" == "true" ]]; then
+                    local failures_array=$(printf '%s\n' "${ALL_FAILURES[@]}" | jq -s .)
+                    generate_run_matrix_summary \
+                        "$package_name" \
+                        "$working_dir" \
+                        "$label" \
+                        "$total_runs" \
+                        "$total_passed" \
+                        "$total_failed" \
+                        "$failures_array"
+                fi
+
+                exit 1
+            fi
+        fi
     done
 
     # Generate summary
