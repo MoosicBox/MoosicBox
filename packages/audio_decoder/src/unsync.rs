@@ -88,6 +88,15 @@ pub fn decode(
     decode_track(reader, track_info, decode_opts)
 }
 
+/// Decodes a track and returns a channel receiver for decoded audio buffers.
+///
+/// This function spawns a background thread to perform decoding and sends decoded
+/// buffers through a channel for consumption.
+///
+/// # Errors
+///
+/// * Returns [`DecodeError::AudioDecode`] if the track is not found
+/// * Returns [`DecodeError::Symphonia`] if creating the codec fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::similar_names)]
 fn decode_track(
@@ -182,12 +191,19 @@ fn decode_track(
     Ok(receiver)
 }
 
+/// Finds the first track with a supported codec.
+///
+/// Returns the first track that doesn't have a null codec type.
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
     tracks
         .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }
 
+/// Converts expected end-of-stream errors into success.
+///
+/// This function treats "end of stream" `UnexpectedEof` errors as successful completion,
+/// while preserving other errors.
 fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), DecodeError> {
     match result {
         Err(DecodeError::Symphonia(Error::IoError(err)))

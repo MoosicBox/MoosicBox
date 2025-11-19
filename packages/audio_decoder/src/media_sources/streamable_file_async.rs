@@ -55,9 +55,16 @@ impl StreamableFileAsync {
         }
     }
 
-    /// Gets the next chunk in the sequence.
+    /// Fetches a chunk of data from the remote URL.
     ///
-    /// Returns the received bytes by sending them via `tx`.
+    /// This method performs an HTTP range request to fetch a chunk of the file
+    /// and sends the result through the provided channel.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the HTTP request fails
+    /// * Panics if reading the response body fails
+    /// * Panics if sending the result through the channel fails
     async fn read_chunk(tx: Sender<(usize, Vec<u8>)>, url: String, start: usize, file_size: usize) {
         let end = (start + CHUNK_SIZE).min(file_size);
 
@@ -78,11 +85,14 @@ impl StreamableFileAsync {
         tx.send_async((start, chunk)).await.unwrap();
     }
 
-    /// Polls all receivers.
+    /// Polls all receivers for completed chunk downloads.
     ///
-    /// If there is data to receive, then write it to the buffer.
+    /// This method checks if any pending chunk downloads have completed and writes
+    /// the received data to the internal buffer. Changes are committed to the
+    /// `downloaded` range set.
     ///
-    /// Changes made are commited to `downloaded`.
+    /// When `should_buffer` is true, this method blocks waiting for data to ensure
+    /// the read position is available before returning.
     fn try_write_chunk(&mut self, should_buffer: bool) {
         let mut completed_downloads = Vec::new();
 
@@ -117,11 +127,16 @@ impl StreamableFileAsync {
             .retain(|(id, _)| !completed_downloads.contains(id));
     }
 
-    /// Determines if a chunk should be downloaded by getting
-    /// the downloaded range that contains `self.read_position`.
+    /// Determines if a new chunk should be downloaded.
     ///
-    /// Returns `true` and the start index of the chunk
-    /// if one should be downloaded.
+    /// This method analyzes the current read position, downloaded ranges, and buffer length
+    /// to decide whether to fetch the next chunk. It returns a tuple containing:
+    /// * A boolean indicating whether a chunk should be fetched
+    /// * The start position for the chunk to fetch
+    ///
+    /// A chunk is fetched when the read position approaches the end of the currently
+    /// downloaded range and no download is already in progress for that chunk.
+    #[must_use]
     fn should_get_chunk(&self, buf_len: usize) -> (bool, usize) {
         let closest_range = self.downloaded.get(&self.read_position);
 
@@ -213,6 +228,11 @@ impl Read for StreamableFileAsync {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Seek for StreamableFileAsync {
+    /// Seeks to a position in the remote file.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an I/O error if the seek position is invalid or cannot be converted to `usize`
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
             #[allow(clippy::cast_possible_truncation)]
@@ -253,10 +273,16 @@ impl Seek for StreamableFileAsync {
 }
 
 impl MediaSource for StreamableFileAsync {
+    /// Returns whether this media source is seekable.
+    ///
+    /// Always returns `true` for streamable files.
     fn is_seekable(&self) -> bool {
         true
     }
 
+    /// Returns the total byte length of the media source.
+    ///
+    /// Returns the size of the remote file.
     fn byte_len(&self) -> Option<u64> {
         Some(self.buffer.len() as u64)
     }

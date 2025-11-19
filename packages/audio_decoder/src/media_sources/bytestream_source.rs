@@ -24,6 +24,10 @@ pub struct ByteStreamSource {
     abort: CancellationToken,
 }
 
+/// Internal fetcher that manages reading from a byte stream in the background.
+///
+/// This struct handles the asynchronous fetching of data from a stream, buffering it,
+/// and coordinating with the main [`ByteStreamSource`] through channels.
 struct ByteStreamSourceFetcher {
     start: u64,
     end: Option<u64>,
@@ -39,6 +43,15 @@ struct ByteStreamSourceFetcher {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ByteStreamSourceFetcher {
+    /// Creates a new byte stream fetcher.
+    ///
+    /// # Parameters
+    ///
+    /// * `stream` - The byte stream to read from
+    /// * `start` - The starting byte position
+    /// * `end` - The ending byte position, if known
+    /// * `autostart` - Whether to immediately start fetching data
+    /// * `stream_abort` - Cancellation token to stop the stream
     pub fn new(
         stream: ByteStreamType,
         start: u64,
@@ -69,6 +82,10 @@ impl ByteStreamSourceFetcher {
         fetcher
     }
 
+    /// Starts fetching data from the stream in a background task.
+    ///
+    /// This method spawns an async task that reads from the stream and sends
+    /// the received bytes through the internal channel.
     fn start_fetch(&mut self, mut stream: ByteStreamType) {
         let sender = self.sender.clone();
         let ready_receiver = self.ready_receiver.clone();
@@ -112,6 +129,7 @@ impl ByteStreamSourceFetcher {
         ));
     }
 
+    /// Aborts the fetching task and resets the cancellation token.
     fn abort(&mut self) {
         self.abort.cancel();
 
@@ -236,6 +254,10 @@ impl Read for ByteStreamSource {
 impl Seek for ByteStreamSource {
     /// Seeks to a position in the stream.
     ///
+    /// # Errors
+    ///
+    /// * Returns an I/O error if the seek position is invalid or cannot be converted to `usize`
+    ///
     /// # Panics
     ///
     /// * Panics if seeking from end when the stream size is unknown
@@ -277,11 +299,18 @@ impl Seek for ByteStreamSource {
 }
 
 impl MediaSource for ByteStreamSource {
+    /// Returns whether this media source is seekable.
+    ///
+    /// A byte stream is seekable only if both the `seekable` flag is set
+    /// and the size is known.
     fn is_seekable(&self) -> bool {
         log::debug!("seekable={} size={:?}", self.seekable, self.size);
         self.seekable && self.size.is_some()
     }
 
+    /// Returns the total byte length of the media source.
+    ///
+    /// Returns the size of the stream, if known.
     fn byte_len(&self) -> Option<u64> {
         log::debug!("byte_len={:?}", self.size);
         self.size
