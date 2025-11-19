@@ -68,11 +68,16 @@ pub fn try_resize_local_file(
 
 /// Error type for image resize operations.
 #[derive(Debug, Error)]
+#[must_use]
 pub enum ResizeImageError {
-    /// Image processing error.
+    /// Image processing error from the `image` crate.
+    ///
+    /// This error occurs when image decoding, processing, or encoding fails.
     #[error(transparent)]
     Image(#[from] image::error::ImageError),
-    /// Task join error.
+    /// Task join error from the async runtime.
+    ///
+    /// This error occurs when the blocking task fails to complete successfully.
     #[error(transparent)]
     Join(#[from] switchy_async::task::JoinError),
 }
