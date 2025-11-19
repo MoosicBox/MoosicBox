@@ -1,3 +1,8 @@
+//! Utility functions for Opus decoding.
+//!
+//! This module provides utility functions used across the Opus decoder implementation,
+//! including mathematical operations like integer logarithms.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
