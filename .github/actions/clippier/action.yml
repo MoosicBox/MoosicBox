@@ -346,6 +346,11 @@ inputs:
         required: false
         default: "false"
 
+    run-matrix-stream-output:
+        description: "Stream command output to console in real-time (true/false)"
+        required: false
+        default: "true"
+
     run-matrix-working-directory:
         description: "Working directory for commands (defaults to matrix.package.path)"
         required: false
@@ -596,6 +601,7 @@ runs:
               INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: ${{ inputs.run-matrix-max-output-lines }}
               INPUT_RUN_MATRIX_FAIL_FAST: ${{ inputs.run-matrix-fail-fast }}
               INPUT_RUN_MATRIX_VERBOSE: ${{ inputs.run-matrix-verbose }}
+              INPUT_RUN_MATRIX_STREAM_OUTPUT: ${{ inputs.run-matrix-stream-output }}
               INPUT_RUN_MATRIX_WORKING_DIRECTORY: ${{ inputs.run-matrix-working-directory }}
               INPUT_RUN_MATRIX_LABEL: ${{ inputs.run-matrix-label }}
               INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK: ${{ inputs.run-matrix-skip-doctest-check }}

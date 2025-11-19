@@ -215,7 +215,8 @@ generate_run_matrix_summary() {
 #   INPUT_RUN_MATRIX_STRATEGY: Execution strategy (sequential, combined, etc.)
 #   INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE: Continue on failure (default: true)
 #   INPUT_RUN_MATRIX_FAIL_FAST: Stop on first failure (default: false)
-#   INPUT_RUN_MATRIX_VERBOSE: Show all output (default: false)
+#   INPUT_RUN_MATRIX_VERBOSE: Show script content before execution (default: false)
+#   INPUT_RUN_MATRIX_STREAM_OUTPUT: Stream output to console in real-time (default: true)
 #   INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: Lines of output to capture (default: 200)
 #   INPUT_RUN_MATRIX_WORKING_DIRECTORY: Custom working directory
 #   INPUT_RUN_MATRIX_LABEL: Custom label for summary
@@ -250,6 +251,7 @@ run_matrix_command() {
     local continue_on_failure="${INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE:-true}"
     local fail_fast="${INPUT_RUN_MATRIX_FAIL_FAST:-false}"
     local verbose="${INPUT_RUN_MATRIX_VERBOSE:-false}"
+    local stream_output="${INPUT_RUN_MATRIX_STREAM_OUTPUT:-true}"
     local max_output_lines="${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}"
     local working_dir="${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
     local label="${INPUT_RUN_MATRIX_LABEL}"
@@ -336,8 +338,10 @@ run_matrix_command() {
 
         # Execute the entire script as bash
         local exit_code=0
-        if [[ "$verbose" == "true" ]]; then
-            # Show output in real-time for verbose mode
+
+        # Determine whether to stream output based on stream_output setting
+        if [[ "$stream_output" == "true" ]]; then
+            # Stream output to console while capturing to file
             if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" 2>&1 | tee "$output_file"); then
                 echo "✅ SUCCESS for features [$feature_combo]"
             else
@@ -345,7 +349,7 @@ run_matrix_command() {
                 echo "❌ FAILED for features [$feature_combo] (exit code: $exit_code)" >&2
             fi
         else
-            # Capture output silently
+            # Silent mode - only capture to file
             if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" > "$output_file" 2>&1); then
                 echo "✅ SUCCESS for features [$feature_combo]"
             else
