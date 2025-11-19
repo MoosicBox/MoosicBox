@@ -13,6 +13,15 @@
 use moosicbox_web_server::{HttpResponse, Scope, path, utoipa};
 use utoipa::{OpenApi as _, openapi::OpenApi};
 
+/// Entry point for the OpenAPI example web server.
+///
+/// Initializes logging, configures CORS, sets up the OpenAPI specification,
+/// and starts the web server with example endpoints.
+///
+/// # Errors
+///
+/// * Logging initialization fails
+/// * Server startup encounters an error
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None)?;
@@ -76,6 +85,11 @@ pub static API: std::sync::LazyLock<utoipa::openapi::OpenApi> = std::sync::LazyL
         .build()
 });
 
+/// Base OpenAPI documentation structure.
+///
+/// This empty structure serves as the foundation for the OpenAPI specification,
+/// which is extended with custom API definitions through the `nest_api` function
+/// in the [`init`] function.
 #[derive(utoipa::OpenApi)]
 #[openapi()]
 struct ApiDoc;
