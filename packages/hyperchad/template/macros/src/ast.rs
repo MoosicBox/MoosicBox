@@ -1,3 +1,9 @@
+//! Abstract syntax tree (AST) types for the `HyperChad` template macro.
+//!
+//! This module defines the AST structures used to parse and represent HTML-like templates
+//! in the `container!` macro. The AST supports elements, attributes, control flow, literals,
+//! and dynamic expressions that are eventually transformed into `Vec<Container>` structures.
+
 use std::fmt::{self, Display, Formatter};
 
 use proc_macro2::TokenStream;
@@ -17,8 +23,13 @@ use syn::{
     },
 };
 
+/// A collection of markup nodes.
+///
+/// Represents the top-level structure of a template, containing zero or more
+/// [`Markup`] nodes that will be rendered as HTML or other output formats.
 #[derive(Debug, Clone)]
 pub struct Markups<E> {
+    /// The individual markup nodes in this collection.
     pub markups: Vec<Markup<E>>,
 }
 
@@ -43,21 +54,37 @@ impl<E: ToTokens> ToTokens for Markups<E> {
     }
 }
 
+/// A single markup node in a template.
+///
+/// Represents different types of content that can appear in a template:
+/// literals, expressions, elements, control flow, and more.
 #[derive(Debug, Clone)]
 pub enum Markup<E> {
+    /// A block containing nested markup nodes.
     Block(Block<E>),
+    /// A literal value (string, integer, or float).
     Lit(ContainerLit),
+    /// A numeric literal with optional units (e.g., `100%`, `50vw`, `3.14`).
     NumericLit(NumericLit),
+    /// A dynamic Rust expression wrapped in parentheses.
     Splice {
+        /// The parentheses token.
         paren_token: Box<Paren>,
+        /// The Rust expression to evaluate.
         expr: Box<Expr>,
     },
+    /// A brace-wrapped expression or concatenation of literals and expressions.
     BraceSplice {
+        /// The braces token.
         brace_token: Brace,
+        /// The items to concatenate (literals and expressions).
         items: Vec<Markup<NoElement>>,
     },
+    /// An HTML element.
     Element(E),
+    /// Control flow constructs (`@if`, `@for`, `@while`, `@match`, `@let`).
     ControlFlow(Box<ControlFlow<E>>),
+    /// A semicolon (used for void elements).
     Semi(Semi),
 }
 
@@ -673,10 +700,17 @@ impl ToTokens for NoElement {
     }
 }
 
+/// An HTML element with optional name, attributes, and body.
+///
+/// Represents elements like `div.container { ... }`, `button hx-post="/submit" { "Click" }`,
+/// or anonymous containers like `.wrapper #main { ... }`.
 #[derive(Debug, Clone)]
 pub struct ContainerElement {
+    /// The element's tag name (e.g., `div`, `button`), or `None` for anonymous containers.
     pub name: Option<ElementName>,
+    /// The element's attributes (classes, IDs, and named attributes).
     pub attrs: Vec<ContainerAttribute>,
+    /// The element's body (void with `;` or block with `{ ... }`).
     pub body: ElementBody,
 }
 
@@ -766,12 +800,18 @@ impl ToTokens for ContainerElement {
     }
 }
 
-// Re-export as Element for compatibility
+/// Type alias for [`ContainerElement`] for compatibility.
 pub type Element = ContainerElement;
 
+/// The body of an HTML element.
+///
+/// Elements can either be void (self-closing with `;`) or have a block body
+/// containing child markup nodes.
 #[derive(Debug, Clone)]
 pub enum ElementBody {
+    /// A void element terminated with `;` (e.g., `input type="text";`).
     Void(Semi),
+    /// A block element containing child nodes (e.g., `div { "content" }`).
     Block(Block<ContainerElement>),
 }
 
@@ -812,9 +852,14 @@ impl ToTokens for ElementBody {
     }
 }
 
+/// A block of markup nodes enclosed in braces.
+///
+/// Represents `{ ... }` containing zero or more [`Markup`] nodes.
 #[derive(Debug, Clone)]
 pub struct Block<E> {
+    /// The braces token.
     pub brace_token: Brace,
+    /// The markup nodes inside the block.
     pub markups: Markups<E>,
 }
 
@@ -839,19 +884,33 @@ impl<E: ToTokens> ToTokens for Block<E> {
     }
 }
 
+/// An HTML element attribute.
+///
+/// Represents CSS classes (`.class`), IDs (`#id`), or named attributes
+/// (`attr="value"`, `attr`, `attr=[condition]`).
 #[derive(Debug, Clone)]
 pub enum ContainerAttribute {
+    /// A CSS class attribute (e.g., `.container`, `.active[condition]`).
     Class {
+        /// The dot token.
         dot_token: Dot,
+        /// The class name.
         name: ContainerNameOrMarkup,
+        /// Optional condition to toggle the class.
         toggler: Option<Toggler>,
     },
+    /// An ID attribute (e.g., `#main`, `#(dynamic_id)`).
     Id {
+        /// The pound token.
         pound_token: Pound,
+        /// The ID value.
         name: ContainerNameOrMarkup,
     },
+    /// A named attribute (e.g., `type="text"`, `disabled`, `hidden=[condition]`).
     Named {
+        /// The attribute name.
         name: AttributeName,
+        /// The attribute type (value, optional, or empty).
         attr_type: AttributeType,
     },
 }
@@ -923,9 +982,15 @@ impl ToTokens for ContainerAttribute {
     }
 }
 
+/// A name or dynamic markup for class/ID attributes.
+///
+/// Supports both static names (e.g., `container`) and dynamic expressions
+/// (e.g., `(compute_class())`).
 #[derive(Debug, Clone)]
 pub enum ContainerNameOrMarkup {
+    /// A static attribute name.
     Name(AttributeName),
+    /// A dynamic markup expression.
     Markup(Markup<NoElement>),
 }
 
@@ -966,16 +1031,27 @@ impl Display for ContainerNameOrMarkup {
     }
 }
 
+/// The type of value for a named attribute.
+///
+/// Supports normal values (`attr="value"`), optional values (`attr=[condition]`),
+/// and empty/boolean attributes (`disabled`, `checked[is_checked]`).
 #[derive(Debug, Clone)]
 pub enum AttributeType {
+    /// Normal attribute with a value (e.g., `type="text"`).
     Normal {
+        /// The equals token.
         eq_token: Eq,
+        /// The attribute value.
         value: Markup<NoElement>,
     },
+    /// Optional attribute with a condition (e.g., `disabled=[is_disabled]`).
     Optional {
+        /// The equals token.
         eq_token: Eq,
+        /// The condition that controls whether the attribute is present.
         toggler: Toggler,
     },
+    /// Empty/boolean attribute, optionally conditional (e.g., `disabled`, `checked[condition]`).
     Empty(Option<Toggler>),
 }
 
@@ -1066,8 +1142,12 @@ impl ToTokens for AttributeType {
     }
 }
 
+/// An HTML element tag name.
+///
+/// Represents the name of an HTML element (e.g., `div`, `button`, `input`).
 #[derive(Debug, Clone)]
 pub struct ElementName {
+    /// The element's tag name identifier.
     pub name: Ident,
 }
 
@@ -1100,8 +1180,12 @@ impl Display for ElementName {
     }
 }
 
+/// An attribute name supporting kebab-case and colon-separated names.
+///
+/// Supports attribute names like `type`, `hx-post`, `data-value`, `aria:label`, etc.
 #[derive(Debug, Clone)]
 pub struct AttributeName {
+    /// The name fragments separated by hyphens or colons.
     pub name: Punctuated<AttributeNameFragment, AttributeNamePunct>,
 }
 
@@ -1161,11 +1245,19 @@ impl Display for AttributeName {
     }
 }
 
+/// A fragment of an attribute name.
+///
+/// Attribute names can contain identifiers, integers, string literals, or be empty
+/// (for leading/trailing hyphens or colons).
 #[derive(Debug, Clone)]
 pub enum AttributeNameFragment {
+    /// An identifier fragment (e.g., `hx`, `post`, `data`).
     Ident(Ident),
+    /// An integer literal fragment (e.g., `2` in `h2`).
     LitInt(LitInt),
+    /// A string literal fragment.
     LitStr(LitStr),
+    /// An empty fragment (for leading/trailing separators).
     Empty,
 }
 
@@ -1212,8 +1304,12 @@ impl Display for AttributeNameFragment {
     }
 }
 
+/// A literal value in the template.
+///
+/// Represents string, integer, or float literals that appear directly in the template.
 #[derive(Debug, Clone)]
 pub struct ContainerLit {
+    /// The underlying Rust literal.
     pub lit: syn::Lit,
 }
 
@@ -1274,25 +1370,47 @@ impl Display for ContainerLit {
     }
 }
 
+/// A numeric literal with optional CSS units.
+///
+/// Supports plain numbers and numbers with percentage or viewport units
+/// (e.g., `100`, `3.14`, `50%`, `100vw`, `80vh`, `90dvw`, `75dvh`).
 #[derive(Debug, Clone)]
 pub struct NumericLit {
+    /// The string representation of the numeric value with units.
     pub value: String,
+    /// The type of numeric literal (integer, float, with or without units).
     pub number_type: NumericType,
 }
 
+/// The type of a numeric literal.
+///
+/// Distinguishes between integers and reals, and tracks CSS units
+/// (percentages, viewport width/height, dynamic viewport width/height).
 #[derive(Debug, Clone)]
 pub enum NumericType {
+    /// Integer literal (e.g., `42`).
     Integer,
+    /// Real/float literal (e.g., `3.14`).
     Real,
+    /// Integer percentage (e.g., `100%`).
     IntegerPercent,
+    /// Real percentage (e.g., `33.3%`).
     RealPercent,
+    /// Integer viewport width (e.g., `50vw`).
     IntegerVw,
+    /// Real viewport width (e.g., `33.3vw`).
     RealVw,
+    /// Integer viewport height (e.g., `100vh`).
     IntegerVh,
+    /// Real viewport height (e.g., `80.5vh`).
     RealVh,
+    /// Integer dynamic viewport width (e.g., `50dvw`).
     IntegerDvw,
+    /// Real dynamic viewport width (e.g., `33.3dvw`).
     RealDvw,
+    /// Integer dynamic viewport height (e.g., `100dvh`).
     IntegerDvh,
+    /// Real dynamic viewport height (e.g., `80.5dvh`).
     RealDvh,
 }
 
@@ -1452,9 +1570,15 @@ impl DiagnosticParse for NumericLit {
     }
 }
 
+/// Punctuation separating fragments in an attribute name.
+///
+/// Supports hyphens (`-`) for kebab-case names like `hx-post` and
+/// colons (`:`) for namespaced attributes like `aria:label`.
 #[derive(Debug, Clone)]
 pub enum AttributeNamePunct {
+    /// A colon separator (`:`) for namespaced attributes.
     Colon(Colon),
+    /// A hyphen separator (`-`) for kebab-case names.
     Hyphen(Minus),
 }
 
@@ -1490,9 +1614,15 @@ impl Display for AttributeNamePunct {
     }
 }
 
+/// A conditional expression for toggling attributes or classes.
+///
+/// Represented as `[condition]`, where `condition` is a Rust expression
+/// that determines whether the attribute/class should be present.
 #[derive(Debug, Clone)]
 pub struct Toggler {
+    /// The bracket tokens.
     pub bracket_token: Bracket,
+    /// The boolean condition expression.
     pub cond: Expr,
 }
 
@@ -1514,9 +1644,15 @@ impl ToTokens for Toggler {
     }
 }
 
+/// A control flow construct in the template.
+///
+/// Represents `@if`, `@for`, `@while`, `@match`, and `@let` constructs
+/// that enable conditional rendering, loops, and pattern matching.
 #[derive(Debug, Clone)]
 pub struct ControlFlow<E> {
+    /// The `@` token prefix.
     pub at_token: At,
+    /// The specific control flow kind.
     pub kind: ControlFlowKind<E>,
 }
 
@@ -1565,30 +1701,56 @@ impl<E: ToTokens> ToTokens for ControlFlow<E> {
     }
 }
 
+/// The specific kind of control flow construct.
+///
+/// Supports `@let` bindings, `@if` conditionals, `@for` loops, `@while` loops,
+/// and `@match` expressions.
 #[derive(Debug, Clone)]
 pub enum ControlFlowKind<E> {
+    /// A `@let` binding (e.g., `@let x = 42;`).
     Let(Box<Local>),
+    /// An `@if` conditional (e.g., `@if condition { ... } @else { ... }`).
     If(Box<IfExpr<E>>),
+    /// A `@for` loop (e.g., `@for item in items { ... }`).
     For(Box<ForExpr<E>>),
+    /// A `@while` loop (e.g., `@while condition { ... }`).
     While(Box<WhileExpr<E>>),
+    /// A `@match` expression (e.g., `@match value { pattern => { ... } }`).
     Match(Box<MatchExpr<E>>),
 }
 
+/// An `@if` conditional expression.
+///
+/// Supports regular conditionals (`@if expr { ... }`) and pattern matching
+/// (`@if let pattern = expr { ... }`), optionally followed by `@else`.
 #[derive(Debug, Clone)]
 pub struct IfExpr<E> {
+    /// The `if` keyword token.
     pub if_token: If,
+    /// The condition (expression or pattern match).
     pub cond: IfCondition,
+    /// The block to execute when the condition is true.
     pub then_branch: Block<E>,
+    /// Optional `@else` branch.
     pub else_branch: Option<(At, Else, Box<IfOrBlock<E>>)>,
 }
 
+/// The condition in an `@if` expression.
+///
+/// Can be either a regular boolean expression or a `let` pattern match.
 #[derive(Debug, Clone)]
 pub enum IfCondition {
+    /// A regular boolean expression.
     Expr(Box<Expr>),
+    /// A pattern match (`if let pattern = expr`).
     Let {
+        /// The `let` keyword token.
         let_token: Box<Let>,
+        /// The pattern to match against.
         pat: Box<Pat>,
+        /// The equals token.
         eq_token: Box<syn::token::Eq>,
+        /// The expression to match.
         expr: Box<Expr>,
     },
 }
@@ -1670,9 +1832,14 @@ impl<E: ToTokens> ToTokens for IfExpr<E> {
     }
 }
 
+/// The body of an `@else` branch.
+///
+/// Can be either another `@if` (for `@else if` chains) or a block.
 #[derive(Debug, Clone)]
 pub enum IfOrBlock<E> {
+    /// Another `@if` expression (for `@else if` chains).
     If(IfExpr<E>),
+    /// A block (for final `@else { ... }`).
     Block(Block<E>),
 }
 
@@ -1702,12 +1869,21 @@ impl<E: ToTokens> ToTokens for IfOrBlock<E> {
     }
 }
 
+/// A `@for` loop expression.
+///
+/// Iterates over an iterable expression, binding each element to a pattern
+/// and rendering the loop body for each element.
 #[derive(Debug, Clone)]
 pub struct ForExpr<E> {
+    /// The `for` keyword token.
     pub for_token: For,
+    /// The pattern to bind each element to.
     pub pat: Pat,
+    /// The `in` keyword token.
     pub in_token: In,
+    /// The expression to iterate over.
     pub expr: Expr,
+    /// The loop body to render for each element.
     pub body: Block<E>,
 }
 
@@ -1736,10 +1912,16 @@ impl<E: ToTokens> ToTokens for ForExpr<E> {
     }
 }
 
+/// A `@while` loop expression.
+///
+/// Repeatedly renders the loop body while the condition evaluates to true.
 #[derive(Debug, Clone)]
 pub struct WhileExpr<E> {
+    /// The `while` keyword token.
     pub while_token: While,
+    /// The loop condition expression.
     pub cond: Expr,
+    /// The loop body to render while the condition is true.
     pub body: Block<E>,
 }
 
@@ -1764,11 +1946,19 @@ impl<E: ToTokens> ToTokens for WhileExpr<E> {
     }
 }
 
+/// A `@match` expression.
+///
+/// Pattern matches against an expression and renders the corresponding arm's body
+/// for the first matching pattern.
 #[derive(Debug, Clone)]
 pub struct MatchExpr<E> {
+    /// The `match` keyword token.
     pub match_token: Match,
+    /// The expression to match against.
     pub expr: Expr,
+    /// The braces surrounding the match arms.
     pub brace_token: Brace,
+    /// The match arms.
     pub arms: Vec<MatchArm<E>>,
 }
 
@@ -1809,12 +1999,20 @@ impl<E: ToTokens> ToTokens for MatchExpr<E> {
     }
 }
 
+/// A single arm in a `@match` expression.
+///
+/// Consists of a pattern, optional guard, and a body to render if the pattern matches.
 #[derive(Debug, Clone)]
 pub struct MatchArm<E> {
+    /// The pattern to match against.
     pub pat: Pat,
+    /// Optional guard condition (`if guard_expr`).
     pub guard: Option<(If, Expr)>,
+    /// The fat arrow token (`=>`).
     pub fat_arrow_token: FatArrow,
+    /// The markup to render if this arm matches.
     pub body: Markup<E>,
+    /// Optional trailing comma.
     pub comma_token: Option<Comma>,
 }
 
@@ -1858,7 +2056,16 @@ impl<E: ToTokens> ToTokens for MatchArm<E> {
     }
 }
 
+/// Trait for parsing AST nodes with diagnostic support.
+///
+/// Similar to `syn::parse::Parse`, but accumulates non-fatal diagnostics
+/// (warnings and errors) during parsing instead of immediately failing.
 pub trait DiagnosticParse: Sized {
+    /// Parses `Self` from the input stream, accumulating diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing fails fatally and cannot continue.
     fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>)
     -> syn::Result<Self>;
 }

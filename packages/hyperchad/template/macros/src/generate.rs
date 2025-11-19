@@ -1,3 +1,9 @@
+//! Code generation for the `HyperChad` template macro.
+//!
+//! This module transforms the parsed AST from [`crate::ast`] into Rust code that
+//! generates `Vec<Container>` structures at runtime. It handles element creation,
+//! attribute assignment, control flow translation, and HTML structure validation.
+
 #![allow(clippy::option_if_let_else)]
 
 use std::collections::HashMap;
@@ -156,6 +162,21 @@ fn validate_child_element(
     Ok(())
 }
 
+/// Generates Rust code from parsed template markup.
+///
+/// Transforms the AST representation of a template into Rust code that
+/// produces `Vec<Container>` at runtime. This includes validating HTML
+/// structure rules (e.g., `<summary>` must be first child of `<details>`).
+///
+/// # Errors
+///
+/// * Returns an error if the template contains invalid HTML structure
+/// * Returns an error if code generation fails for unsupported constructs
+///
+/// # Examples
+///
+/// This function is called internally by the `container!` macro and is not
+/// typically used directly.
 pub fn generate(markups: Markups<Element>, output_ident: Ident) -> Result<TokenStream, String> {
     let mut build = Builder::new(output_ident.clone());
     let generator = Generator::new(output_ident);
