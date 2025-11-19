@@ -209,6 +209,8 @@ impl ToValueType<Player> for &switchy_database::Row {
 }
 
 /// Converts a `Player` into a database ID value.
+///
+/// Returns the player's ID as a signed 64-bit integer suitable for database operations.
 impl AsId for Player {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
