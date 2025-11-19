@@ -1,3 +1,28 @@
+//! Query extractor example demonstrating `Query<T>` usage with serde deserialization.
+//!
+//! This example shows how to:
+//! - Extract query parameters using the `Query<T>` extractor
+//! - Deserialize query strings into strongly-typed structs with serde
+//! - Handle both required and optional query parameters
+//! - Combine query extraction with other extractors like `RequestData`
+//! - Test query extraction with both Actix Web and Simulator backends
+//!
+//! # Features
+//!
+//! * `actix` - Run examples with the Actix Web backend
+//! * `simulator` - Run examples with the Simulator test backend
+//! * `serde` - Enable serde support for query deserialization
+//!
+//! # Examples
+//!
+//! ```bash
+//! # Run with Actix Web backend
+//! cargo run --features actix
+//!
+//! # Run with Simulator backend
+//! cargo run --features simulator
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -7,27 +32,47 @@ use moosicbox_web_server::{Error, HttpResponse, Query, RequestData};
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use serde::Deserialize;
 
-// Simple query parameters
+/// Simple query parameters with required fields.
+///
+/// Demonstrates basic query parameter extraction with required fields.
+/// All fields must be present in the query string for successful deserialization.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)] // Fields are demonstrated in Debug output
 struct SimpleQuery {
+    /// The name parameter (required).
     name: String,
+    /// The age parameter (required).
     age: u32,
 }
 
-// Query parameters with optional fields
+/// Query parameters with optional fields.
+///
+/// Demonstrates query parameter extraction with a mix of required and optional fields.
+/// Optional fields will be `None` if not present in the query string.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)] // Fields are demonstrated in Debug output
 struct OptionalQuery {
+    /// The search query parameter (required).
     search: String,
+    /// The maximum number of results to return (optional).
     limit: Option<u32>,
+    /// The offset for pagination (optional).
     offset: Option<u32>,
+    /// The sort order for results (optional).
     sort: Option<String>,
 }
 
-// Handler demonstrating simple query extraction
+/// Handler demonstrating simple query extraction.
+///
+/// Extracts required query parameters into a strongly-typed struct.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Query parameters are missing or malformed
+/// * Deserialization fails
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn simple_query_handler(query: Query<SimpleQuery>) -> Result<HttpResponse, Error> {
@@ -38,7 +83,15 @@ async fn simple_query_handler(query: Query<SimpleQuery>) -> Result<HttpResponse,
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler demonstrating optional query parameters
+/// Handler demonstrating optional query parameters.
+///
+/// Extracts query parameters with optional fields into a strongly-typed struct.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Required query parameters are missing or malformed
+/// * Deserialization fails
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn optional_query_handler(query: Query<OptionalQuery>) -> Result<HttpResponse, Error> {
@@ -49,7 +102,16 @@ async fn optional_query_handler(query: Query<OptionalQuery>) -> Result<HttpRespo
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler combining query extraction with other extractors
+/// Handler combining query extraction with other extractors.
+///
+/// Demonstrates combining the `Query<T>` extractor with `RequestData` to access
+/// both query parameters and request metadata.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Query parameters are missing or malformed
+/// * Deserialization fails
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn combined_handler(
@@ -63,7 +125,14 @@ async fn combined_handler(
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler demonstrating error handling (simplified)
+/// Handler demonstrating error handling for query extraction.
+///
+/// Shows how to provide helpful error messages when query parameters are missing
+/// or malformed.
+///
+/// # Errors
+///
+/// This handler always returns `Ok` but demonstrates error handling patterns.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
@@ -74,6 +143,9 @@ async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Runs the query extractor examples using the Actix Web backend.
+///
+/// Creates routes for all example handlers and displays their configuration.
 #[cfg(feature = "actix")]
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend Query Extractor Examples...");
@@ -118,6 +190,16 @@ fn run_actix_examples() {
     println!("   Backend: Actix Web");
 }
 
+/// Runs the query extractor examples using the Simulator backend.
+///
+/// Creates routes for all example handlers, displays their configuration,
+/// and runs test simulations to demonstrate query parameter extraction.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Query parameter extraction fails during testing
+/// * Request simulation fails
 #[cfg(feature = "simulator")]
 #[cfg(not(feature = "actix"))]
 fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
@@ -203,6 +285,14 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Main entry point for the query extractor examples.
+///
+/// Runs the appropriate backend based on enabled features and displays
+/// information about query parameter extraction capabilities.
+///
+/// # Errors
+///
+/// Returns an error if the simulator examples fail.
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Query Extractor Examples - Query<T> Usage");
