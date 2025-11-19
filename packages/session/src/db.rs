@@ -1,3 +1,15 @@
+//! Database operations for session management.
+//!
+//! This module contains internal database query implementations for session, playlist,
+//! connection, and player operations. All functions in this module are private to the
+//! crate and are exposed through the public API in the parent module.
+//!
+//! The database layer handles:
+//! * Session CRUD operations
+//! * Playlist and track management
+//! * Connection and player registration
+//! * Audio zone associations
+
 use std::sync::Arc;
 
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
