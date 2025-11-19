@@ -1,3 +1,9 @@
+//! Server initialization and configuration for the `MoosicBox` load balancer.
+//!
+//! This module provides the main server entry point and configuration parsing for the
+//! Pingora-based HTTP/HTTPS load balancer. It handles cluster configuration, health checks,
+//! and TLS setup.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -10,6 +16,20 @@ use pingora_core::services::{background::GenBackgroundService, listening::Servic
 use pingora_load_balancing::{LoadBalancer, health_check::TcpHealthCheck, selection::RoundRobin};
 use pingora_proxy::{HttpProxy, http_proxy_service};
 
+/// Starts the load balancer server and runs it indefinitely.
+///
+/// This function initializes logging, configures the Pingora server with cluster mappings from
+/// the `CLUSTERS` environment variable, sets up HTTP/HTTPS listeners, and starts health checks
+/// for all upstream servers.
+///
+/// # Panics
+///
+/// Panics if:
+/// * Logging initialization fails
+/// * The `CLUSTERS` environment variable is not set or is malformed
+/// * Server creation fails
+/// * Invalid upstream IP addresses are provided in cluster configuration
+/// * TLS certificate or key files cannot be read (when TLS paths are explicitly configured)
 pub fn serve() {
     moosicbox_logging::init(Some("moosicbox_lb.log"), None).expect("Failed to initialize FreeLog");
 
@@ -40,6 +60,20 @@ pub fn serve() {
     pingora_server.run_forever();
 }
 
+/// Parses cluster configuration from the `CLUSTERS` environment variable.
+///
+/// The `CLUSTERS` variable should contain semicolon-separated entries in the format:
+/// `hostname1,hostname2:ip1:port1,ip2:port2;hostname3:ip3:port3`
+///
+/// Each cluster entry maps one or more hostnames to a list of upstream server addresses.
+/// Health checks are automatically configured for all upstreams with a 10-second interval.
+///
+/// # Panics
+///
+/// Panics if:
+/// * The `CLUSTERS` environment variable is not set
+/// * Any cluster entry is malformed (missing the `:` separator)
+/// * Any upstream IP address is invalid or cannot be parsed
 fn parse_clusters() -> BTreeMap<String, GenBackgroundService<LoadBalancer<RoundRobin>>> {
     switchy_env::var("CLUSTERS")
         .expect("Must pass CLUSTERS environment variable")
@@ -66,6 +100,16 @@ fn parse_clusters() -> BTreeMap<String, GenBackgroundService<LoadBalancer<RoundR
         .collect::<BTreeMap<_, _>>()
 }
 
+/// Configures TLS/HTTPS support for the load balancer service.
+///
+/// Checks for valid TLS certificate and key files at the paths specified by
+/// `SSL_CRT_PATH` and `SSL_KEY_PATH` environment variables. If both files exist,
+/// adds an HTTPS listener with HTTP/2 support enabled. Otherwise, logs warnings
+/// or debug messages depending on whether the paths were explicitly configured.
+///
+/// # Panics
+///
+/// Panics if TLS settings cannot be created from valid certificate and key files.
 fn setup_tls(lb: &mut Service<HttpProxy<Router>>) {
     let crt_path: &str = &SSL_CRT_PATH;
     let key_path: &str = &SSL_KEY_PATH;
