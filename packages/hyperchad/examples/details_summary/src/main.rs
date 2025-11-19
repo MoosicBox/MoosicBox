@@ -114,6 +114,7 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
 /// * Details without summary elements
 ///
 /// Returns a [`Containers`] instance containing the complete page structure ready for rendering.
+#[must_use]
 #[allow(clippy::too_many_lines, clippy::large_stack_frames)]
 fn create_main_page() -> Containers {
     container! {
@@ -550,6 +551,7 @@ fn create_main_page() -> Containers {
 /// The router handles incoming HTTP requests and returns the appropriate [`View`] response.
 ///
 /// Returns a configured [`Router`] instance ready to handle requests.
+#[must_use]
 fn create_router() -> Router {
     Router::new().with_route("/", |_req: RouteRequest| async move {
         View::builder().with_primary(create_main_page()).build()
