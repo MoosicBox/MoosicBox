@@ -702,11 +702,12 @@ impl ToTokens for NoElement {
 
 /// An element with optional name, attributes, and body.
 ///
-/// Represents elements like `div.container { ... }`, `button hx-post="/submit" { "Click" }`,
-/// or anonymous containers like `.wrapper #main { ... }`.
+/// Represents elements like `div.container { ... }` or `button hx-post="/submit" { "Click" }`.
+/// Anonymous containers (e.g., `.wrapper #main { ... }`) are supported and default to `div` elements.
 #[derive(Debug, Clone)]
 pub struct ContainerElement {
-    /// The element's tag name (e.g., `div`, `button`), or `None` for anonymous containers.
+    /// The element's tag name (e.g., `div`, `button`), or `None` for anonymous containers
+    /// (which default to `div` during code generation).
     pub name: Option<ElementName>,
     /// The element's attributes (classes, IDs, and named attributes).
     pub attrs: Vec<ContainerAttribute>,
