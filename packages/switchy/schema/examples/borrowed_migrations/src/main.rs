@@ -152,6 +152,7 @@ impl<'a> ConfigBasedMigration<'a> {
 
 #[async_trait]
 impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
+    /// Returns the unique identifier for this migration
     fn id(&self) -> &str {
         &self.id
     }
