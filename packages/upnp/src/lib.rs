@@ -755,6 +755,7 @@ pub async fn seek(
 /// # Errors
 ///
 /// * If the action failed to execute
+#[must_use]
 pub async fn get_volume(
     service: &Service,
     url: &Uri,
@@ -777,6 +778,7 @@ pub async fn get_volume(
 /// # Errors
 ///
 /// * If the action failed to execute
+#[must_use]
 pub async fn set_volume(
     service: &Service,
     url: &Uri,
@@ -872,6 +874,7 @@ pub async fn get_media_info(
 /// # Errors
 ///
 /// * If the subscription failed to execute
+#[must_use]
 pub async fn subscribe_events(
     service: &Service,
     url: &Uri,
@@ -892,6 +895,7 @@ pub async fn subscribe_events(
 /// # Errors
 ///
 /// * If the action failed to execute
+#[must_use]
 pub async fn play(
     service: &Service,
     url: &Uri,
@@ -914,6 +918,7 @@ pub async fn play(
 /// # Errors
 ///
 /// * If the action failed to execute
+#[must_use]
 pub async fn pause(
     service: &Service,
     url: &Uri,
@@ -935,6 +940,7 @@ pub async fn pause(
 /// # Errors
 ///
 /// * If the action failed to execute
+#[must_use]
 pub async fn stop(
     service: &Service,
     url: &Uri,
