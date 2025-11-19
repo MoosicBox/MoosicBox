@@ -20,6 +20,12 @@ use crate::{AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSou
 
 impl moosicbox_json_utils::MissingValue<ApiSource> for &switchy_database::Row {}
 impl ToValueType<ApiSource> for DatabaseValue {
+    /// Converts a database value to an `ApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If the string doesn't match any registered API source
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
         ApiSource::try_from(
             self.as_str()
@@ -42,6 +48,11 @@ impl AsModel<TrackSize> for &switchy_database::Row {
 }
 
 impl ToValueType<TrackSize> for &switchy_database::Row {
+    /// Converts a database row to a `TrackSize`.
+    ///
+    /// # Errors
+    ///
+    /// * If any required field is missing or cannot be converted
     fn to_value_type(self) -> Result<TrackSize, ParseError> {
         Ok(TrackSize {
             id: self.to_value("id")?,
@@ -53,6 +64,11 @@ impl ToValueType<TrackSize> for &switchy_database::Row {
 }
 
 impl AsModelResult<TrackSize, ParseError> for &switchy_database::Row {
+    /// Converts a database row to a `TrackSize`.
+    ///
+    /// # Errors
+    ///
+    /// * If any required field is missing or cannot be converted
     fn as_model(&self) -> Result<TrackSize, ParseError> {
         Ok(TrackSize {
             id: self.to_value("id")?,
@@ -72,6 +88,13 @@ impl AsId for TrackSize {
 
 impl moosicbox_json_utils::MissingValue<AlbumVersionQuality> for &switchy_database::Row {}
 impl ToValueType<AlbumVersionQuality> for &switchy_database::Row {
+    /// Converts a database row to an `AlbumVersionQuality`.
+    ///
+    /// # Errors
+    ///
+    /// * If any required field is missing or cannot be converted
+    /// * If the format string is invalid
+    /// * If the source string is invalid
     fn to_value_type(self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
             format: self
@@ -92,6 +115,13 @@ impl ToValueType<AlbumVersionQuality> for &switchy_database::Row {
 }
 
 impl AsModelResult<AlbumVersionQuality, ParseError> for &switchy_database::Row {
+    /// Converts a database row to an `AlbumVersionQuality`.
+    ///
+    /// # Errors
+    ///
+    /// * If any required field is missing or cannot be converted
+    /// * If the format string is invalid
+    /// * If the source string is invalid
     fn as_model(&self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
             format: self
@@ -164,6 +194,12 @@ pub async fn get_all_album_version_qualities(
 impl moosicbox_json_utils::MissingValue<ApiSources> for &switchy_database::Row {}
 impl moosicbox_json_utils::MissingValue<ApiSources> for switchy_database::DatabaseValue {}
 impl ToValueType<ApiSources> for switchy_database::DatabaseValue {
+    /// Converts a database value to `ApiSources`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If JSON deserialization fails
     fn to_value_type(self) -> Result<ApiSources, ParseError> {
         serde_json::from_str(self.as_str().ok_or_else(|| {
             ParseError::MissingValue("ApiSources: value is not a string".to_string())
@@ -186,6 +222,12 @@ impl From<ApiSource> for DatabaseValue {
 
 impl moosicbox_json_utils::MissingValue<TrackApiSource> for &switchy_database::Row {}
 impl ToValueType<TrackApiSource> for &switchy_database::Row {
+    /// Converts a database row to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the "origin" field is missing
+    /// * If the value cannot be converted to `TrackApiSource`
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         self.get("origin")
             .ok_or_else(|| ParseError::MissingValue("origin".into()))?
@@ -193,6 +235,12 @@ impl ToValueType<TrackApiSource> for &switchy_database::Row {
     }
 }
 impl ToValueType<TrackApiSource> for DatabaseValue {
+    /// Converts a database value to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If the string doesn't match the expected format
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         TrackApiSource::from_str(
             self.as_str()

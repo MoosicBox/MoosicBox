@@ -224,6 +224,11 @@ impl Serialize for Id {
 }
 
 impl<'de> Deserialize<'de> for Id {
+    /// Deserializes an `Id` from either a string or number.
+    ///
+    /// # Panics
+    ///
+    /// * If the value is neither a string nor a number
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -241,6 +246,11 @@ impl<'de> Deserialize<'de> for Id {
 }
 
 impl ToValueType<Id> for &serde_json::Value {
+    /// Converts a JSON value to an `Id`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is neither a string nor a number
     fn to_value_type(self) -> Result<Id, ParseError> {
         if self.is_number() {
             return Ok(Id::Number(
@@ -261,6 +271,11 @@ impl ToValueType<Id> for &serde_json::Value {
 
 #[cfg(feature = "tantivy")]
 impl ToValueType<Id> for &tantivy::schema::OwnedValue {
+    /// Converts a Tantivy value to an `Id`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is neither a string nor a number
     fn to_value_type(self) -> Result<Id, ParseError> {
         use tantivy::schema::Value;
         Ok(if let Some(id) = self.as_u64() {
@@ -302,6 +317,11 @@ pub enum TryFromIdError {
 impl TryFrom<Id> for String {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` to a `String`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a string variant
     fn try_from(value: Id) -> Result<Self, Self::Error> {
         Ok(if let Id::String(string) = value {
             string
@@ -314,6 +334,11 @@ impl TryFrom<Id> for String {
 impl TryFrom<&Id> for String {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` reference to a `String`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a string variant
     fn try_from(value: &Id) -> Result<Self, Self::Error> {
         Ok(if let Id::String(string) = value {
             string.clone()
@@ -326,6 +351,11 @@ impl TryFrom<&Id> for String {
 impl<'a> TryFrom<&'a Id> for &'a str {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` reference to a string slice.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a string variant
     fn try_from(value: &'a Id) -> Result<Self, Self::Error> {
         Ok(if let Id::String(string) = value {
             string
@@ -350,6 +380,11 @@ impl From<u64> for Id {
 impl TryFrom<Id> for u64 {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` to a `u64`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a number variant
     fn try_from(value: Id) -> Result<Self, Self::Error> {
         Ok(if let Id::Number(number) = value {
             number
@@ -362,6 +397,11 @@ impl TryFrom<Id> for u64 {
 impl TryFrom<&Id> for u64 {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` reference to a `u64`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a number variant
     fn try_from(value: &Id) -> Result<Self, Self::Error> {
         Ok(if let Id::Number(number) = value {
             *number
@@ -394,6 +434,11 @@ impl From<&i32> for Id {
 impl TryFrom<Id> for i32 {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` to an `i32`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a number variant
     fn try_from(value: Id) -> Result<Self, Self::Error> {
         #[allow(clippy::cast_possible_truncation)]
         Ok(if let Id::Number(number) = value {
@@ -407,6 +452,11 @@ impl TryFrom<Id> for i32 {
 impl TryFrom<&Id> for i32 {
     type Error = TryFromIdError;
 
+    /// Attempts to convert an `Id` reference to an `i32`.
+    ///
+    /// # Errors
+    ///
+    /// * If the ID is not a number variant
     fn try_from(value: &Id) -> Result<Self, Self::Error> {
         #[allow(clippy::cast_possible_truncation)]
         Ok(if let Id::Number(number) = value {
