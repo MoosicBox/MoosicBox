@@ -144,6 +144,7 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     ///
     /// Allows adding custom headers like `Cache-Control`, `ETag`, or
     /// `Content-Security-Policy` based on the rendered content.
+    #[must_use]
     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>>;
 
     /// Generates the response content and headers from processed data.
