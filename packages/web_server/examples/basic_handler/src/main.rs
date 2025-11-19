@@ -26,8 +26,16 @@ use moosicbox_web_server::{
     Error, FromRequest, HttpRequest, HttpResponse, Method, RequestData, Route,
 };
 
-// Simple handler that demonstrates the new Route::with_handler() method
-// Using RequestData instead of HttpRequest to avoid Send bounds issues
+/// Demonstrates the `Route::with_handler()` method with clean async function syntax.
+///
+/// This handler showcases how to use `RequestData` to access HTTP request information
+/// in a Send-safe manner, avoiding the verbose `Box::pin(async move {...})` boilerplate.
+/// It extracts and displays various request properties including method, path, query string,
+/// headers, and remote address.
+///
+/// # Errors
+///
+/// Returns an error if request data extraction fails or response construction fails.
 async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     let mut response = String::new();
 
@@ -85,6 +93,15 @@ async fn demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Demonstrates the handler system with the Actix Web backend.
+///
+/// Creates a route using `Route::with_handler1()` with the Actix backend enabled,
+/// showing how the new handler system eliminates the need for `Box::pin` boilerplate
+/// while maintaining compatibility with Actix Web.
+///
+/// # Errors
+///
+/// Returns an error if route creation or backend initialization fails.
 #[cfg(feature = "actix")]
 fn run_actix_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Running Actix Backend Example...");
@@ -101,6 +118,18 @@ fn run_actix_example() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Demonstrates the handler system with the Simulator backend.
+///
+/// Creates a route using `Route::with_handler1()` with the Simulator backend,
+/// then demonstrates request data extraction by creating a test request with
+/// various headers, query parameters, and cookies. Shows how `RequestData`
+/// provides Send-safe access to request information.
+///
+/// # Errors
+///
+/// * Request data extraction fails
+/// * Route creation fails
+/// * Backend initialization fails
 #[cfg(any(feature = "simulator", not(feature = "actix")))]
 fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
@@ -152,6 +181,16 @@ fn run_simulator_example() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Entry point demonstrating the `Route::with_handler()` method.
+///
+/// Runs backend-specific examples based on enabled features, demonstrating
+/// how the new handler system works identically across different backends
+/// (Actix Web and Simulator).
+///
+/// # Errors
+///
+/// * Backend example execution fails
+/// * No backend features are enabled
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Basic Handler Example - Route::with_handler() Method");
     println!("=====================================================\n");
