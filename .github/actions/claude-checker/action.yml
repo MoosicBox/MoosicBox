@@ -1077,18 +1077,23 @@ runs:
           shell: bash
           env:
               GH_TOKEN: ${{ inputs.github_token }}
+              INPUT_PR_TITLE: ${{ inputs.pr_title }}
+              INPUT_PR_BODY: ${{ inputs.pr_body }}
+              INPUT_BRANCH_NAME: ${{ inputs.branch_name }}
+              INPUT_RUN_ID: ${{ github.run_id }}
+              INPUT_REPOSITORY: ${{ github.repository }}
           run: |
               # Simple variable substitution (basic support for ${variable})
-              PR_TITLE="${{ inputs.pr_title }}"
-              PR_TITLE="${PR_TITLE//\$\{branch_name\}/${{ inputs.branch_name }}}"
-              PR_TITLE="${PR_TITLE//\$\{run_id\}/${{ github.run_id }}}"
-              PR_TITLE="${PR_TITLE//\$\{repository\}/${{ github.repository }}}"
+              PR_TITLE="$INPUT_PR_TITLE"
+              PR_TITLE="${PR_TITLE//\$\{branch_name\}/$INPUT_BRANCH_NAME}"
+              PR_TITLE="${PR_TITLE//\$\{run_id\}/$INPUT_RUN_ID}"
+              PR_TITLE="${PR_TITLE//\$\{repository\}/$INPUT_REPOSITORY}"
 
-              PR_BODY="${{ inputs.pr_body }}"
-              PR_BODY="${PR_BODY//\$\{branch_name\}/${{ inputs.branch_name }}}"
-              PR_BODY="${PR_BODY//\$\{run_id\}/${{ github.run_id }}}"
-              PR_BODY="${PR_BODY//\$\{repository\}/${{ github.repository }}}"
-              PR_BODY="${PR_BODY//\$\{run_url\}/https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}}"
+              PR_BODY="$INPUT_PR_BODY"
+              PR_BODY="${PR_BODY//\$\{branch_name\}/$INPUT_BRANCH_NAME}"
+              PR_BODY="${PR_BODY//\$\{run_id\}/$INPUT_RUN_ID}"
+              PR_BODY="${PR_BODY//\$\{repository\}/$INPUT_REPOSITORY}"
+              PR_BODY="${PR_BODY//\$\{run_url\}/https://github.com/$INPUT_REPOSITORY/actions/runs/$INPUT_RUN_ID}"
 
               EXISTING_PR="${{ steps.check_existing_pr.outputs.existing_pr }}"
 
