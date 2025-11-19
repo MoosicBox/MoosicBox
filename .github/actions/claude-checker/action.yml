@@ -1063,13 +1063,10 @@ runs:
                 echo "pr_action=updated" >> $GITHUB_OUTPUT
                 echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
 
-                # Use heredoc to prevent command injection from backticks in PR body
+                # Use printf to safely pass PR body without bash interpretation
                 gh pr edit $EXISTING_PR \
                   --title "$PR_TITLE" \
-                  --body "$(cat <<'EOF'
-              $PR_BODY
-              EOF
-              )" 2>/dev/null || true
+                  --body "$(printf '%s' "$PR_BODY")" 2>/dev/null || true
 
                 PR_URL=$(gh pr view $EXISTING_PR --json url --jq '.url')
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
@@ -1078,15 +1075,12 @@ runs:
               else
                 echo "pr_action=created" >> $GITHUB_OUTPUT
 
-                # Use heredoc to prevent command injection from backticks in PR body
+                # Use printf to safely pass PR body without bash interpretation
                 PR_URL=$(gh pr create \
                   --base ${{ inputs.pr_base_branch }} \
                   --head ${{ inputs.branch_name }} \
                   --title "$PR_TITLE" \
-                  --body "$(cat <<'EOF'
-              $PR_BODY
-              EOF
-              )" \
+                  --body "$(printf '%s' "$PR_BODY")" \
                   --label "${{ inputs.pr_labels }}")
 
                 PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
