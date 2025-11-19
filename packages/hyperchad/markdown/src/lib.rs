@@ -152,6 +152,16 @@ pub struct MarkdownOptions {
 }
 
 impl Default for MarkdownOptions {
+    /// Creates default markdown options with all GitHub Flavored Markdown features enabled.
+    ///
+    /// Default values:
+    /// * `enable_tables`: `true`
+    /// * `enable_strikethrough`: `true`
+    /// * `enable_tasklists`: `true`
+    /// * `enable_footnotes`: `true`
+    /// * `enable_smart_punctuation`: `true`
+    /// * `emoji_enabled`: `true` if the `emoji` feature is enabled, otherwise `false`
+    /// * `xss_protection`: `true` if the `xss-protection` feature is enabled, otherwise `false`
     fn default() -> Self {
         Self {
             enable_tables: true,
