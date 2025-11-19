@@ -42,6 +42,14 @@ pub enum ParseIntError {
     InvalidDigit,
 }
 
+/// Parses a single byte as a decimal digit and multiplies it by the given power of 10.
+///
+/// This is a helper function for parsing numeric strings digit by digit. It converts an ASCII
+/// byte to its numeric value and scales it by the appropriate power of 10 based on its position.
+///
+/// # Errors
+///
+/// * Returns [`ParseIntError::InvalidDigit`] if the byte is not a valid ASCII decimal digit (0-9)
 const fn parse_byte(b: u8, pow10: u128) -> Result<u128, ParseIntError> {
     let r = b.wrapping_sub(48);
 
@@ -52,6 +60,13 @@ const fn parse_byte(b: u8, pow10: u128) -> Result<u128, ParseIntError> {
     }
 }
 
+/// Lookup table of powers of 10 from 10^0 to 10^19 for efficient integer parsing.
+///
+/// This constant array is used by the parsing functions to convert string digits to their
+/// numeric values by multiplying each digit by the appropriate power of 10 based on its
+/// position in the string.
+///
+/// The array is computed at compile time in reverse order: `[1, 10, 100, ..., 10^19]`.
 pub(crate) const POW10: [u128; 20] = {
     let mut array = [0; 20];
     let mut current: u128 = 1;
