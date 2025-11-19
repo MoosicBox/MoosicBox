@@ -70,6 +70,9 @@ pub struct LibraryArtist {
 }
 
 impl From<LibraryArtist> for Artist {
+    /// Converts a library artist to a generic artist.
+    ///
+    /// Sets the API source to library and preserves all metadata.
     fn from(value: LibraryArtist) -> Self {
         Self {
             id: value.id.into(),
@@ -127,6 +130,9 @@ pub enum LibraryAlbumType {
 }
 
 impl From<AlbumType> for LibraryAlbumType {
+    /// Converts a generic album type to a library album type.
+    ///
+    /// Maps both `AlbumType::Other` and `AlbumType::Download` to `LibraryAlbumType::Other`.
     fn from(value: AlbumType) -> Self {
         match value {
             AlbumType::Lp => Self::Lp,
@@ -139,6 +145,10 @@ impl From<AlbumType> for LibraryAlbumType {
 }
 
 impl From<LibraryAlbumType> for AlbumType {
+    /// Converts a library album type to a generic album type.
+    ///
+    /// Maps all library types to their corresponding generic types, with `LibraryAlbumType::Other`
+    /// becoming `AlbumType::Other`.
     fn from(value: LibraryAlbumType) -> Self {
         match value {
             LibraryAlbumType::Lp => Self::Lp,
@@ -151,6 +161,12 @@ impl From<LibraryAlbumType> for AlbumType {
 }
 
 impl ToValueType<LibraryAlbumType> for &serde_json::Value {
+    /// Parses a `LibraryAlbumType` from a JSON value.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If the string cannot be parsed as a valid `LibraryAlbumType`
     fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
         LibraryAlbumType::from_str(
             self.as_str()
@@ -258,6 +274,38 @@ impl TryFrom<Album> for LibraryAlbum {
 }
 
 /// Sorts album versions by source, bit depth (descending), and sample rate (descending).
+///
+/// Performs a multi-level sort with priority:
+/// 1. Source (ascending)
+/// 2. Bit depth (descending - higher quality first)
+/// 3. Sample rate (descending - higher quality first)
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_library_models::sort_album_versions;
+/// use moosicbox_music_models::{AlbumVersionQuality, TrackSource};
+///
+/// let mut versions = vec![
+///     AlbumVersionQuality {
+///         format: None,
+///         bit_depth: Some(16),
+///         sample_rate: Some(44100),
+///         channels: None,
+///         source: TrackSource::Local,
+///     },
+///     AlbumVersionQuality {
+///         format: None,
+///         bit_depth: Some(24),
+///         sample_rate: Some(96000),
+///         channels: None,
+///         source: TrackSource::Local,
+///     },
+/// ];
+///
+/// sort_album_versions(&mut versions);
+/// assert_eq!(versions[0].bit_depth, Some(24));
+/// ```
 pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| {
         b.sample_rate
@@ -348,6 +396,9 @@ impl LibraryTrack {
 }
 
 impl From<LibraryTrack> for Track {
+    /// Converts a library track to a generic track.
+    ///
+    /// Sets the API source to library and preserves all metadata including audio quality information.
     fn from(value: LibraryTrack) -> Self {
         Self {
             id: value.id.into(),
