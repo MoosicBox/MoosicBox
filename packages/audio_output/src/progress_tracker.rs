@@ -119,7 +119,7 @@ impl ProgressTracker {
 
     /// Get the current playback position in seconds.
     ///
-    /// Returns None if audio spec hasn't been set yet.
+    /// Returns `None` if audio spec hasn't been set yet.
     #[must_use]
     pub fn get_position(&self) -> Option<f64> {
         let consumed = self.consumed_samples.load(Ordering::SeqCst);

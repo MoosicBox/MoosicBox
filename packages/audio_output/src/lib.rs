@@ -311,6 +311,7 @@ impl AudioOutputFactory {
     /// # Errors
     ///
     /// * If fails to instantiate the `AudioOutput`
+    #[must_use]
     pub fn try_into_output(&self) -> Result<AudioOutput, AudioOutputError> {
         self.try_into()
     }
@@ -511,6 +512,7 @@ static AUDIO_OUTPUT_SCANNER: LazyLock<Arc<Mutex<AudioOutputScanner>>> =
 /// # Errors
 ///
 /// * If the `scan` fails
+#[must_use]
 pub async fn scan_outputs() -> Result<(), AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.scan().await
 }
@@ -538,6 +540,7 @@ pub async fn default_output_factory() -> Option<AudioOutputFactory> {
 /// # Errors
 ///
 /// * If there is no default output
+#[must_use]
 pub async fn default_output() -> Result<AudioOutput, AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.default_output()
 }
@@ -668,6 +671,7 @@ impl AudioOutputScanner {
     /// # Errors
     ///
     /// * If there is no default output
+    #[must_use]
     pub fn default_output(&self) -> Result<AudioOutput, AudioOutputScannerError> {
         self.default_output_factory()
             .map(TryInto::try_into)
