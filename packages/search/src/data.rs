@@ -17,6 +17,7 @@ use crate::{
 /// Trait for converting music models into search index data values.
 pub trait AsDataValues {
     /// Converts the implementing type into a vector of field-value pairs for indexing.
+    #[must_use]
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
 }
 
@@ -159,6 +160,7 @@ impl AsDataValues for Track {
 /// Trait for converting music models into delete terms for removing from the search index.
 pub trait AsDeleteTerm {
     /// Converts the implementing type into a field-value pair for deletion.
+    #[must_use]
     fn as_delete_term<'a>(&self) -> (&'a str, DataValue);
 }
 

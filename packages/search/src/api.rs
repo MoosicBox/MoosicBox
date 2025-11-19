@@ -23,6 +23,7 @@ use crate::{global_search, search_global_search_index};
 ///
 /// This function registers the `/global-search` and `/raw-global-search` endpoints
 /// with the provided scope for use in an Actix-web application.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
