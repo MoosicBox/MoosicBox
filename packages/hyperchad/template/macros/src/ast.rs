@@ -1034,8 +1034,21 @@ impl Display for ContainerNameOrMarkup {
 
 /// The type of value for a named attribute.
 ///
-/// Supports normal values (`attr="value"`), optional values (`attr=[condition]`),
-/// and empty/boolean attributes (`disabled`, `checked[is_checked]`).
+/// There are three distinct syntaxes:
+///
+/// 1. **Normal attributes** (with `=` and a value): `attr="value"`
+/// 2. **Optional attributes** (with `=` and brackets): `attr=[condition]`
+///    - The `=` is required. The value is conditionally rendered based on the condition.
+/// 3. **Empty/boolean attributes** (no `=`, optional brackets):
+///    - `disabled` - attribute always present (no condition)
+///    - `checked[is_checked]` - attribute conditionally present/absent (note: no `=` sign!)
+///
+/// The key distinction between Optional and Empty:
+/// - `disabled=[condition]` (Optional): Attribute has a value that is conditionally rendered
+/// - `disabled[condition]` (Empty): Entire attribute is conditionally present or absent
+///
+/// For boolean HTML attributes like `disabled`, `checked`, `autofocus`, use the Empty syntax
+/// because these attributes don't have values—they're either present or absent.
 #[derive(Debug, Clone)]
 pub enum AttributeType {
     /// Normal attribute with a value (e.g., `type="text"`).
@@ -1046,13 +1059,23 @@ pub enum AttributeType {
         value: Markup<NoElement>,
     },
     /// Optional attribute with a condition (e.g., `disabled=[is_disabled]`).
+    ///
+    /// Note: The equals sign is **required** for Optional attributes.
+    /// The value is conditionally rendered based on the toggler condition.
     Optional {
         /// The equals token.
         eq_token: Eq,
         /// The condition that controls whether the attribute is present.
         toggler: Toggler,
     },
-    /// Empty/boolean attribute, optionally conditional (e.g., `disabled`, `checked[condition]`).
+    /// Empty/boolean attribute, optionally conditional.
+    ///
+    /// Examples:
+    /// - `disabled` - attribute always present (unconditional)
+    /// - `checked[is_checked]` - attribute conditionally present (no `=` sign!)
+    ///
+    /// Note: There is **no equals sign** for Empty attributes, even when conditional.
+    /// For boolean HTML attributes, the entire attribute is either present or absent.
     Empty(Option<Toggler>),
 }
 
