@@ -364,6 +364,11 @@ inputs:
         required: false
         default: "true"
 
+    run-matrix-summary-auto-expand:
+        description: "Auto-expand summary details (always, failures, never)"
+        required: false
+        default: "failures"
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -595,6 +600,7 @@ runs:
               INPUT_RUN_MATRIX_LABEL: ${{ inputs.run-matrix-label }}
               INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK: ${{ inputs.run-matrix-skip-doctest-check }}
               INPUT_RUN_MATRIX_GENERATE_SUMMARY: ${{ inputs.run-matrix-generate-summary }}
+              INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND: ${{ inputs.run-matrix-summary-auto-expand }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}

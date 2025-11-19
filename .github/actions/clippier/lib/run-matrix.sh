@@ -56,8 +56,44 @@ generate_run_matrix_summary() {
     local title="Test Results: $package_name"
     [[ -n "$label" ]] && title="$label: $package_name"
 
-    echo "## 🧪 $title" >> $GITHUB_STEP_SUMMARY
+    # Determine if should be open based on auto-expand setting
+    local auto_expand="${INPUT_RUN_MATRIX_SUMMARY_AUTO_EXPAND:-failures}"
+    local details_tag="<details>"
+
+    case "$auto_expand" in
+        "always")
+            details_tag="<details open>"
+            ;;
+        "failures")
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+        "never")
+            details_tag="<details>"
+            ;;
+        *)
+            # Default to "failures" behavior
+            if [[ "$total_failed" -gt 0 ]]; then
+                details_tag="<details open>"
+            fi
+            ;;
+    esac
+
+    # Create summary line with stats
+    local status_emoji="✅"
+    local status_text="$total_passed/$total_runs passed"
+    if [[ "$total_failed" -gt 0 ]]; then
+        status_emoji="❌"
+        status_text="$total_failed/$total_runs failed"
+    fi
+
+    # Open details section
+    echo "$details_tag" >> $GITHUB_STEP_SUMMARY
+    echo "<summary><b>🧪 $title</b> - $status_emoji $status_text</summary>" >> $GITHUB_STEP_SUMMARY
     echo "" >> $GITHUB_STEP_SUMMARY
+
+    # Working directory
     echo "**Working Directory:** \`$working_dir\`" >> $GITHUB_STEP_SUMMARY
     echo "" >> $GITHUB_STEP_SUMMARY
 
@@ -130,6 +166,11 @@ generate_run_matrix_summary() {
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "All $total_runs test runs passed successfully." >> $GITHUB_STEP_SUMMARY
     fi
+
+    # Close details section
+    echo "" >> $GITHUB_STEP_SUMMARY
+    echo "</details>" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
 }
 
 # Main run-matrix command function
