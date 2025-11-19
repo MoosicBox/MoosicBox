@@ -65,6 +65,7 @@ impl AacEncoder {
     /// # Panics
     ///
     /// * If fails to get the aac encoder
+    #[must_use]
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
             resampler: None,

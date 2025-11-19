@@ -88,6 +88,7 @@ impl OpusEncoder<'_> {
     /// # Panics
     ///
     /// * If fails to get the opus encoder
+    #[must_use]
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         let mut x = Self::new();
         x.writer.replace(Box::new(writer));

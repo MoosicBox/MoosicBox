@@ -487,6 +487,14 @@ pub enum AudioOutputError {
     SupportedStreamConfigs(#[from] ::cpal::SupportedStreamConfigsError),
 }
 
+/// Converts an audio buffer to interleaved samples of the specified type.
+///
+/// This helper function takes an audio buffer with samples organized by channel
+/// and converts them into an interleaved format where samples from different
+/// channels alternate (e.g., L, R, L, R for stereo).
+///
+/// # Type Parameters
+/// * `S` - The target sample type (must implement `FromSample<f32>`)
 #[allow(unused)]
 fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: &AudioBuffer<f32>) -> Vec<S> {
     let n_channels = decoded.spec().channels.count();
