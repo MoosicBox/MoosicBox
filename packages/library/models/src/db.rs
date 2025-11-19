@@ -39,12 +39,18 @@ use switchy_database::{
 use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_album_versions};
 
 impl AsId for LibraryTrack {
+    /// # Panics
+    ///
+    /// * If the track ID cannot be converted to `i64`
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Int64(self.id.try_into().unwrap())
     }
 }
 
 impl AsModel<LibraryArtist> for &switchy_database::Row {
+    /// # Panics
+    ///
+    /// * If the row cannot be converted to a `LibraryArtist`
     fn as_model(&self) -> LibraryArtist {
         AsModelResult::as_model(self).unwrap()
     }
@@ -83,6 +89,9 @@ impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
 }
 
 impl AsId for LibraryArtist {
+    /// # Panics
+    ///
+    /// * If the artist ID cannot be converted to `i64`
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Int64(self.id.try_into().unwrap())
     }
@@ -107,6 +116,9 @@ impl ToValueType<LibraryAlbumType> for DatabaseValue {
 }
 
 impl AsModel<LibraryAlbum> for &switchy_database::Row {
+    /// # Panics
+    ///
+    /// * If the row cannot be converted to a `LibraryAlbum`
     fn as_model(&self) -> LibraryAlbum {
         AsModelResult::as_model(self).unwrap()
     }
@@ -297,18 +309,27 @@ impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
 }
 
 impl AsId for LibraryAlbum {
+    /// # Panics
+    ///
+    /// * If the album ID cannot be converted to `i64`
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Int64(self.id.try_into().unwrap())
     }
 }
 
 impl AsModel<LibraryTrack> for &switchy_database::Row {
+    /// # Panics
+    ///
+    /// * If the row cannot be converted to a `LibraryTrack`
     fn as_model(&self) -> LibraryTrack {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
 impl ToValueType<LibraryTrack> for &switchy_database::Row {
+    /// # Panics
+    ///
+    /// * If the `source` field contains an invalid `TrackApiSource` value
     fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         let id = self.to_value("id")?;
@@ -354,6 +375,9 @@ impl ToValueType<LibraryTrack> for &switchy_database::Row {
 }
 
 impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
+    /// # Panics
+    ///
+    /// * If the `source` field contains an invalid `TrackApiSource` value
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         let id = self.to_value("id")?;
