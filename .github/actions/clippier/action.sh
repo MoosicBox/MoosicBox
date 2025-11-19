@@ -1,5 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
+
+# Determine action script directory before changing directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Change to repository root (clippier needs to run from repo root for git operations)
 cd "${GITHUB_WORKSPACE}"
@@ -857,8 +860,6 @@ generate_validation_summary() {
 # =============================================================================
 # Source Library Functions
 # =============================================================================
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source template evaluation system
 source "${SCRIPT_DIR}/lib/template.sh"
