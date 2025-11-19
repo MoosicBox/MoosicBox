@@ -25,6 +25,11 @@ pub trait ToNested<Type> {
 }
 
 impl ToNested<Value> for &Value {
+    /// Navigates to a nested value using a path of keys.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if any key in the path is missing
     fn to_nested<'a>(&'a self, path: &[&str]) -> Result<&'a Value, ParseError> {
         get_nested_value(self, path)
     }
@@ -55,6 +60,11 @@ pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a V
 }
 
 impl<'a> ToValueType<&'a str> for &'a Value {
+    /// Converts a JSON string value to a string slice.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.as_str()
             .ok_or_else(|| ParseError::ConvertType("&str".into()))
@@ -62,6 +72,11 @@ impl<'a> ToValueType<&'a str> for &'a Value {
 }
 
 impl<'a> ToValueType<&'a Value> for &'a Value {
+    /// Returns the JSON value as-is.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_value_type(self) -> Result<&'a Value, ParseError> {
         Ok(self)
     }
@@ -71,6 +86,11 @@ impl<'a, T> ToValueType<Option<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
 {
+    /// Converts a JSON value to an optional type.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
     }
@@ -84,6 +104,12 @@ impl<'a, T> ToValueType<Vec<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
 {
+    /// Converts a JSON array to a vector of values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an array
+    /// * Returns [`ParseError`] if any array element fails to convert to type `T`
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.as_array()
             .ok_or_else(|| ParseError::ConvertType("Vec<T>".into()))?
@@ -92,6 +118,10 @@ where
             .collect::<Result<Vec<_>, _>>()
     }
 }
+
+// Numeric and string type conversions for JSON `Value` references.
+// Each implementation converts the JSON value to the target Rust type.
+// All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
@@ -215,6 +245,12 @@ pub trait ToValue {
 }
 
 impl ToValue for Value {
+    /// Extracts a value from a JSON object by key.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the key is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         &'a Self: ToValueType<T>,
@@ -224,6 +260,12 @@ impl ToValue for Value {
 }
 
 impl ToValue for &Value {
+    /// Extracts a value from a JSON object by key.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the key is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         &'a Value: ToValueType<T>,
@@ -245,6 +287,12 @@ pub trait ToNestedValue {
 }
 
 impl ToNestedValue for Value {
+    /// Navigates to a nested JSON value and converts it to type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if any key in the path is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_nested_value<'a, T>(&'a self, path: &[&str]) -> Result<T, ParseError>
     where
         &'a Self: ToValueType<T>,
@@ -254,6 +302,12 @@ impl ToNestedValue for Value {
 }
 
 impl ToNestedValue for &Value {
+    /// Navigates to a nested JSON value and converts it to type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if any key in the path is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_nested_value<'a, T>(&'a self, path: &[&str]) -> Result<T, ParseError>
     where
         &'a Value: ToValueType<T>,

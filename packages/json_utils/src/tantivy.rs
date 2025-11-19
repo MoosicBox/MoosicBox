@@ -14,6 +14,11 @@ use tantivy::schema::{NamedFieldDocument, OwnedValue, Value as _};
 use crate::{ParseError, ToValueType};
 
 impl<'a> ToValueType<&'a str> for &'a OwnedValue {
+    /// Converts a tantivy string value to a string slice.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         self.as_str()
             .ok_or_else(|| ParseError::ConvertType("&str".into()))
@@ -21,6 +26,11 @@ impl<'a> ToValueType<&'a str> for &'a OwnedValue {
 }
 
 impl<'a> ToValueType<&'a OwnedValue> for &'a OwnedValue {
+    /// Returns the tantivy value as-is.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_value_type(self) -> Result<&'a OwnedValue, ParseError> {
         Ok(self)
     }
@@ -30,6 +40,11 @@ impl<'a, T> ToValueType<Option<T>> for &'a OwnedValue
 where
     &'a OwnedValue: ToValueType<T>,
 {
+    /// Converts a tantivy value to an optional type.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.to_value_type().map(|inner| Some(inner))
     }
@@ -38,6 +53,10 @@ where
         Ok(None)
     }
 }
+
+// Numeric and string type conversions for tantivy `OwnedValue` references.
+// Each implementation converts the tantivy value to the target Rust type.
+// All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &OwnedValue {
     fn to_value_type(self) -> Result<String, ParseError> {
@@ -118,6 +137,12 @@ pub trait ToValue<Type> {
 }
 
 impl ToValue<Vec<OwnedValue>> for NamedFieldDocument {
+    /// Extracts values from a tantivy document field by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the field is missing
+    /// * Returns [`ParseError`] if the values fail to convert to type `T`
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         Vec<OwnedValue>: 'a,
@@ -128,6 +153,12 @@ impl ToValue<Vec<OwnedValue>> for NamedFieldDocument {
 }
 
 impl ToValue<Vec<OwnedValue>> for &NamedFieldDocument {
+    /// Extracts values from a tantivy document field by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the field is missing
+    /// * Returns [`ParseError`] if the values fail to convert to type `T`
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         Vec<OwnedValue>: 'a,
@@ -176,6 +207,11 @@ where
 }
 
 impl<'a> ToValueType<&'a Vec<OwnedValue>> for &'a Vec<OwnedValue> {
+    /// Returns the vector of tantivy values as-is.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_value_type(self) -> Result<&'a Vec<OwnedValue>, ParseError> {
         Ok(self)
     }
@@ -185,6 +221,11 @@ impl<'a, T> ToValueType<Vec<T>> for &'a Vec<OwnedValue>
 where
     &'a OwnedValue: ToValueType<T>,
 {
+    /// Converts a vector of tantivy values to a vector of type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if any value fails to convert to type `T`
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.iter()
             .map(ToValueType::to_value_type)
@@ -196,6 +237,12 @@ impl<'a, T> ToValueType<T> for &'a Vec<OwnedValue>
 where
     &'a OwnedValue: ToValueType<T>,
 {
+    /// Converts the first tantivy value in the vector to type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the vector is empty
+    /// * Returns [`ParseError`] if the value fails to convert to type `T`
     fn to_value_type(self) -> Result<T, ParseError> {
         self.first()
             .map(ToValueType::to_value_type)

@@ -14,6 +14,11 @@ use rusqlite::{Row, types::Value};
 use crate::{MissingValue, ParseError, ToValueType};
 
 impl<'a> ToValueType<&'a str> for &'a Value {
+    /// Converts a `SQLite` string value to a string slice.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         match &self {
             Value::Text(x) => Ok(x),
@@ -23,6 +28,11 @@ impl<'a> ToValueType<&'a str> for &'a Value {
 }
 
 impl<'a> ToValueType<&'a Value> for &'a Value {
+    /// Returns the `SQLite` value as-is.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_value_type(self) -> Result<&'a Value, ParseError> {
         Ok(self)
     }
@@ -32,6 +42,11 @@ impl<'a, T> ToValueType<Option<T>> for &'a Value
 where
     &'a Value: ToValueType<T>,
 {
+    /// Converts a `SQLite` value to an optional type, returning `None` for null values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the non-null value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         match self {
             Value::Null => Ok(None),
@@ -43,6 +58,10 @@ where
         Ok(None)
     }
 }
+
+// Numeric and string type conversions for rusqlite `Value` references.
+// Each implementation converts the `SQLite` value to the target Rust type.
+// All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
@@ -174,10 +193,18 @@ impl<'a, Type> MissingValue<Option<Type>> for &'a Row<'a>
 where
     &'a Row<'a>: MissingValue<Type>,
 {
+    /// Returns `None` when an optional value is missing from the row.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn missing_value(&self, _error: ParseError) -> Result<Option<Type>, ParseError> {
         Ok(None)
     }
 }
+
+// Implement `MissingValue` for common types, using the default behavior of returning the error.
+// These implementations allow the type system to work with rusqlite row conversions.
 
 impl MissingValue<i8> for &Row<'_> {}
 impl MissingValue<i16> for &Row<'_> {}
@@ -221,6 +248,11 @@ pub trait ToValue<Type> {
 }
 
 impl ToValue<Self> for Value {
+    /// Converts the `SQLite` value directly to type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the value fails to convert to type `T`
     fn to_value<T>(self, _index: &str) -> Result<T, ParseError>
     where
         Self: ToValueType<T>,
@@ -231,6 +263,12 @@ impl ToValue<Self> for Value {
 }
 
 impl ToValue<Value> for &Row<'_> {
+    /// Extracts a value from a rusqlite row column by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the column is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         Value: ToValueType<T>,
@@ -241,6 +279,12 @@ impl ToValue<Value> for &Row<'_> {
 }
 
 impl ToValue<Value> for Row<'_> {
+    /// Extracts a value from a rusqlite row column by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the column is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         Value: ToValueType<T>,
@@ -250,7 +294,13 @@ impl ToValue<Value> for Row<'_> {
     }
 }
 
+/// Internal trait for getting raw `SQLite` values from rows.
 trait Get {
+    /// Gets a `SQLite` value by column name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`rusqlite::Error`] if the column doesn't exist or has the wrong type
     fn get(&self, index: &str) -> Result<Value, rusqlite::Error>;
 }
 
@@ -266,6 +316,12 @@ impl Get for Row<'_> {
     }
 }
 
+/// Helper function to extract and convert a `SQLite` value from a row.
+///
+/// # Errors
+///
+/// * Returns [`ParseError::Parse`] if the column is missing
+/// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
 fn get_value_type<T, X>(row: &X, index: &str) -> Result<T, ParseError>
 where
     Value: ToValueType<T>,
@@ -290,10 +346,18 @@ where
     }
 }
 
+// Owned `Value` type conversions follow the same pattern as reference conversions.
+// These implementations consume the value and convert it to the target type.
+
 impl<T> ToValueType<Option<T>> for Value
 where
     Self: ToValueType<T>,
 {
+    /// Converts an owned `SQLite` value to an optional type, returning `None` for null values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the non-null value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         match self {
             Self::Null => Ok(None),

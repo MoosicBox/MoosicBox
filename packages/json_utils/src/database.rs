@@ -27,6 +27,11 @@ pub enum DatabaseFetchError {
 }
 
 impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
+    /// Converts a database string value to a string slice.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<&'a str, ParseError> {
         match &self {
             DatabaseValue::String(x) => Ok(x),
@@ -36,6 +41,11 @@ impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
 }
 
 impl<'a> ToValueType<&'a DatabaseValue> for &'a DatabaseValue {
+    /// Returns the database value as-is.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn to_value_type(self) -> Result<&'a DatabaseValue, ParseError> {
         Ok(self)
     }
@@ -45,6 +55,11 @@ impl<'a, T> ToValueType<Option<T>> for &'a DatabaseValue
 where
     &'a DatabaseValue: ToValueType<T>,
 {
+    /// Converts a database value to an optional type, returning `None` for null values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the non-null value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         match self {
             DatabaseValue::Null
@@ -68,6 +83,11 @@ where
 }
 
 impl ToValueType<String> for &DatabaseValue {
+    /// Converts a database value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value cannot be converted to a string
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
             DatabaseValue::String(x) => Ok(x.clone()),
@@ -80,6 +100,13 @@ impl ToValueType<String> for &DatabaseValue {
 }
 
 impl ToValueType<bool> for &DatabaseValue {
+    /// Converts a database value to a boolean.
+    ///
+    /// Supports both boolean values and integers (where 1 = true, 0 = false).
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value cannot be converted to a bool
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             DatabaseValue::Bool(value) => Ok(*value),
@@ -88,6 +115,10 @@ impl ToValueType<bool> for &DatabaseValue {
         }
     }
 }
+
+// Numeric type conversions for DatabaseValue references.
+// Each implementation converts the database numeric value to the target Rust numeric type.
+// All return `ParseError::ConvertType` if the value is not a compatible numeric type.
 
 impl ToValueType<f32> for &DatabaseValue {
     fn to_value_type(self) -> Result<f32, ParseError> {
@@ -236,6 +267,11 @@ impl<'a, T> ToValueType<Vec<T>> for Vec<&'a Row>
 where
     &'a Row: ToValueType<T>,
 {
+    /// Converts a vector of database row references to a vector of values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if any row fails to convert to type `T`
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.iter()
             .map(|row| row.to_value_type())
@@ -247,6 +283,11 @@ impl<T> ToValueType<Vec<T>> for Vec<Row>
 where
     for<'a> &'a Row: ToValueType<T>,
 {
+    /// Converts a vector of database rows to a vector of values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if any row fails to convert to type `T`
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.iter()
             .map(ToValueType::to_value_type)
@@ -258,6 +299,11 @@ impl<'a, T> ToValueType<Option<T>> for Option<&'a Row>
 where
     &'a Row: ToValueType<T>,
 {
+    /// Converts an optional database row reference to an optional value.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the row is present but fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.map(ToValueType::to_value_type).transpose()
     }
@@ -267,6 +313,11 @@ impl<T> ToValueType<Option<T>> for Option<Row>
 where
     Row: ToValueType<T>,
 {
+    /// Converts an optional database row to an optional value.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the row is present but fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         self.map(ToValueType::to_value_type).transpose()
     }
@@ -276,10 +327,18 @@ impl<'a, Type> MissingValue<Option<Type>> for &'a Row
 where
     &'a Row: MissingValue<Type>,
 {
+    /// Returns `None` when an optional value is missing from the row.
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error.
     fn missing_value(&self, _error: ParseError) -> Result<Option<Type>, ParseError> {
         Ok(None)
     }
 }
+
+// Implement `MissingValue` for common types, using the default behavior of returning the error.
+// These implementations allow the type system to work with database row conversions.
 
 impl MissingValue<i8> for &Row {}
 impl MissingValue<i16> for &Row {}
@@ -325,6 +384,11 @@ pub trait ToValue<Type> {
 }
 
 impl ToValue<Self> for DatabaseValue {
+    /// Converts the database value directly to type `T`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the value fails to convert to type `T`
     fn to_value<T>(self, _index: &str) -> Result<T, ParseError>
     where
         Self: ToValueType<T>,
@@ -335,6 +399,12 @@ impl ToValue<Self> for DatabaseValue {
 }
 
 impl ToValue<DatabaseValue> for &Row {
+    /// Extracts a value from a database row column by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the column is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
@@ -345,6 +415,12 @@ impl ToValue<DatabaseValue> for &Row {
 }
 
 impl ToValue<DatabaseValue> for Row {
+    /// Extracts a value from a database row column by name.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::Parse`] if the column is missing
+    /// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
     fn to_value<T>(self, index: &str) -> Result<T, ParseError>
     where
         DatabaseValue: ToValueType<T>,
@@ -354,7 +430,9 @@ impl ToValue<DatabaseValue> for Row {
     }
 }
 
+/// Internal trait for getting raw database values from rows.
 trait Get {
+    /// Gets a database value by column name.
     fn get(&self, index: &str) -> Option<DatabaseValue>;
 }
 
@@ -370,6 +448,12 @@ impl Get for Row {
     }
 }
 
+/// Helper function to extract and convert a database value from a row.
+///
+/// # Errors
+///
+/// * Returns [`ParseError::Parse`] if the column is missing
+/// * Returns [`ParseError::ConvertType`] if the value fails to convert to type `T`
 fn get_value_type<T, X>(row: &X, index: &str) -> Result<T, ParseError>
 where
     DatabaseValue: ToValueType<T>,
@@ -392,10 +476,18 @@ where
     )
 }
 
+// Owned `DatabaseValue` type conversions follow the same pattern as reference conversions.
+// These implementations consume the value and convert it to the target type.
+
 impl<T> ToValueType<Option<T>> for DatabaseValue
 where
     Self: ToValueType<T>,
 {
+    /// Converts an owned database value to an optional type, returning `None` for null values.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError`] if the non-null value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
         match self {
             Self::Null
@@ -576,6 +668,13 @@ impl ToValueType<usize> for DatabaseValue {
 }
 
 impl ToValueType<NaiveDateTime> for DatabaseValue {
+    /// Converts a database value to a naive datetime.
+    ///
+    /// Supports both native datetime values and string representations.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a datetime or valid datetime string
     fn to_value_type(self) -> Result<NaiveDateTime, ParseError> {
         match self {
             Self::DateTime(value) => Ok(value),
@@ -595,12 +694,24 @@ impl ToValueType<NaiveDateTime> for DatabaseValue {
 }
 
 impl ToValueType<chrono::DateTime<chrono::Utc>> for DatabaseValue {
+    /// Converts an owned database value to a UTC datetime.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a datetime or valid datetime string
     fn to_value_type(self) -> Result<chrono::DateTime<chrono::Utc>, ParseError> {
         (&self).to_value_type()
     }
 }
 
 impl ToValueType<chrono::DateTime<chrono::Utc>> for &DatabaseValue {
+    /// Converts a database value reference to a UTC datetime.
+    ///
+    /// Supports RFC3339, ISO 8601, and other common datetime formats.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a datetime or valid datetime string
     fn to_value_type(self) -> Result<chrono::DateTime<chrono::Utc>, ParseError> {
         match self {
             DatabaseValue::DateTime(naive_dt) => Ok(naive_dt.and_utc()),
