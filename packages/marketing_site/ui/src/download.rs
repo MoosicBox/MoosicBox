@@ -83,6 +83,10 @@ pub struct FileAsset<'a> {
     pub size: u64,
 }
 
+/// Formats a string into a valid CSS class name.
+///
+/// Converts whitespace to hyphens, replaces non-word characters (except hyphens) with
+/// underscores, and converts the result to lowercase.
 fn format_class_name(value: &str) -> String {
     static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^\w-]").unwrap());
     REGEX
@@ -90,6 +94,10 @@ fn format_class_name(value: &str) -> String {
         .to_lowercase()
 }
 
+/// Maps an operating system identifier to its display name.
+///
+/// Returns a human-readable header string for known operating systems,
+/// or the input identifier unchanged for unknown systems.
 fn get_os_header(asset: &str) -> &str {
     match asset {
         "windows" => "Windows",
@@ -100,10 +108,18 @@ fn get_os_header(asset: &str) -> &str {
     }
 }
 
+/// Formats a file size in bytes to a human-readable string.
+///
+/// Converts the byte count to an appropriate unit (B, KB, MB, GB, etc.)
+/// using the `bytesize` crate.
 fn format_size(size: u64) -> String {
     bytesize::ByteSize::b(size).to_string()
 }
 
+/// Formats a date-time to a human-readable string.
+///
+/// Returns a formatted string in the pattern "Month DD, YYYY HH:MM:SS"
+/// (e.g., "January 08, 2025 03:09:08").
 fn format_date(date: &NaiveDateTime) -> String {
     // January 08, 2025 03:09:08
     date.format("%B %d, %Y %H:%M:%S").to_string()
