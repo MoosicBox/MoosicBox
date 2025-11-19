@@ -1,3 +1,8 @@
+//! WebSocket connection handler implementation.
+//!
+//! This module provides the main WebSocket message handling loop including heartbeat monitoring,
+//! message processing, and graceful connection cleanup.
+
 use std::time::Duration;
 
 use actix_ws::Message;
@@ -9,14 +14,26 @@ use tokio::{pin, sync::mpsc, time::interval};
 
 use crate::ws::{ConnId, server::WsServerHandle};
 
-/// How often heartbeat pings are sent
+/// How often heartbeat pings are sent to WebSocket clients.
+///
+/// The server sends a ping every 5 seconds to verify the connection is still alive.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
-/// How long before lack of client response causes a timeout
+/// How long to wait for a client response before timing out the connection.
+///
+/// If no pong or message is received within 10 seconds, the connection is considered dead.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Echo text & binary messages received from the client, respond to ping messages, and monitor
-/// connection health to detect network issues and free up resources.
+/// Handles a WebSocket connection for a single client.
+///
+/// This function manages the full lifecycle of a WebSocket connection including:
+/// * Registering the connection with the WebSocket server
+/// * Processing incoming messages (text, binary, ping/pong)
+/// * Sending outgoing messages from the server
+/// * Monitoring connection health via heartbeat mechanism
+/// * Gracefully closing the connection on timeout or client disconnect
+///
+/// The function runs until the client disconnects or times out, then performs cleanup.
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::future_not_send)]
 pub async fn handle_ws(
@@ -126,6 +143,10 @@ pub async fn handle_ws(
     let _ = session.close(close_reason).await;
 }
 
+/// Processes a text message received from a WebSocket client.
+///
+/// This function trims the message, optionally prefixes it with the client's name if set,
+/// and forwards it to the WebSocket server for processing and potential broadcast.
 async fn process_text_msg(
     ws_server: &WsServerHandle,
     text: &str,

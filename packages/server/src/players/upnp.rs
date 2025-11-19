@@ -1,3 +1,8 @@
+//! `UPnP`/DLNA player initialization and management.
+//!
+//! This module handles discovery and initialization of `UPnP` media renderers on the local network,
+//! registers them with the server, and manages playback updates from WebSocket clients.
+
 use std::sync::LazyLock;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -80,6 +85,14 @@ pub async fn init(
     Ok(())
 }
 
+/// Scans the network for `UPnP` media renderers and loads them as players.
+///
+/// This function performs `UPnP` device discovery and creates a player instance for each discovered
+/// media renderer device. Players are stored in the [`UPNP_PLAYERS`] static collection.
+///
+/// # Errors
+///
+/// * [`switchy_upnp::UpnpDeviceScannerError`] - If `UPnP` device discovery fails
 pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerError> {
     static SERVICE_ID: &str = "urn:upnp-org:serviceId:AVTransport";
 
@@ -136,6 +149,11 @@ pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerEr
     Ok(())
 }
 
+/// Handles playback update requests from WebSocket clients for `UPnP` players.
+///
+/// This function processes session update messages (play, pause, seek, volume, etc.) and applies
+/// them to the appropriate `UPnP` media renderer. It creates new players as needed based on the
+/// audio zone configuration.
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn handle_upnp_playback_update(
@@ -256,6 +274,16 @@ fn handle_upnp_playback_update(
     })
 }
 
+/// Registers a `UPnP` player with the server.
+///
+/// This function creates a player registration for the specified `UPnP` media renderer and registers
+/// it with the WebSocket server. It also sets up the playback update handler so the player can
+/// receive control commands from clients.
+///
+/// # Errors
+///
+/// * [`moosicbox_ws::WebsocketSendError`] - If player registration with the WebSocket server fails
+/// * [`moosicbox_ws::WebsocketSendError`] - If the WebSocket server handle is not available
 #[allow(unused)]
 pub async fn register_upnp_player(
     ws: crate::ws::server::WsServerHandle,

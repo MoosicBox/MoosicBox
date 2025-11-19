@@ -1,8 +1,17 @@
+//! Session and player event handling and WebSocket broadcasting.
+//!
+//! This module initializes event listeners for player registration/deregistration and session
+//! updates, broadcasting changes to connected WebSocket clients.
+
 use moosicbox_session::events::BoxErrorSend;
 use switchy_database::profiles::PROFILES;
 
 use crate::{CONFIG_DB, WS_SERVER_HANDLE};
 
+/// Initializes session and player event listeners.
+///
+/// Sets up an event handler that broadcasts session and player updates to all connected WebSocket
+/// clients whenever players are registered, deregistered, or their state changes.
 pub async fn init() {
     moosicbox_session::events::on_players_updated_event({
         move || async move {

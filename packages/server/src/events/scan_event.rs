@@ -1,3 +1,8 @@
+//! Library scan progress event handling and WebSocket broadcasting.
+//!
+//! This module initializes event listeners for music library scan progress and broadcasts scan
+//! events to connected WebSocket clients. Events are throttled to avoid excessive updates.
+
 use moosicbox_async_service::Arc;
 use moosicbox_scan::event::{
     ApiProgressEvent, ProgressEvent, ProgressListenerRefFut, add_progress_listener,
@@ -5,6 +10,11 @@ use moosicbox_scan::event::{
 
 use crate::WS_SERVER_HANDLE;
 
+/// Initializes library scan progress event listeners.
+///
+/// Sets up throttled event handlers that broadcast scan progress (item count updates, items scanned,
+/// scan completion) to connected WebSocket clients. Events are throttled to a maximum of one update
+/// per 200ms to prevent excessive message traffic.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init() {
     let scan_throttle = Arc::new(std::sync::Mutex::new(throttle::Throttle::new(
