@@ -1,5 +1,14 @@
+//! Logging utilities for simulation output.
+//!
+//! This module provides logging functionality that adapts to whether the TUI
+//! (terminal user interface) is enabled or not.
+
 use crate::USE_TUI;
 
+/// Logs a message either to the log system or stdout.
+///
+/// When the TUI is enabled, messages are sent to the log system.
+/// When the TUI is disabled, messages are printed directly to stdout.
 pub fn log_message(msg: impl Into<String>) {
     let msg = msg.into();
 
@@ -11,6 +20,16 @@ pub fn log_message(msg: impl Into<String>) {
 }
 
 #[cfg(feature = "pretty_env_logger")]
+/// Initializes the pretty environment logger with custom formatting.
+///
+/// This configures the logger to include thread IDs, targets, levels, and
+/// optional host/client names in log output. When the TUI is enabled, logs
+/// are written to `.log/simulation.log` instead of stdout.
+///
+/// # Errors
+///
+/// * Returns an error if the log directory cannot be created
+/// * Returns an error if the log file cannot be created
 #[allow(clippy::unnecessary_wraps)]
 pub fn init_pretty_env_logger() -> std::io::Result<()> {
     use std::sync::atomic::{AtomicUsize, Ordering};
