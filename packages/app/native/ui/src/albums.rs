@@ -801,6 +801,7 @@ pub fn album_page_url(
 /// Renders a collection of album cards.
 ///
 /// Displays albums with details and media controls enabled.
+#[must_use]
 pub fn show_albums<'a>(
     host: &str,
     albums: impl Iterator<Item = &'a ApiAlbum>,
