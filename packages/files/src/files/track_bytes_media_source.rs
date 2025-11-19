@@ -1,3 +1,8 @@
+//! Media source adapter for wrapping `TrackBytes` as Symphonia `MediaSource`.
+//!
+//! Provides a bridge between track byte streams and the Symphonia audio decoder by implementing
+//! the required traits (`Read`, `Seek`, `MediaSource`) for stream-based decoding.
+
 use std::{
     io::{Read, Seek},
     sync::Arc,
@@ -28,6 +33,7 @@ pub struct TrackBytesMediaSource {
 
 impl TrackBytesMediaSource {
     /// Creates a new media source from track bytes.
+    #[must_use]
     pub fn new(track_bytes: TrackBytes) -> Self {
         let (sender, receiver) = flume::unbounded();
         Self {
