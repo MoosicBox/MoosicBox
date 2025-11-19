@@ -45,6 +45,11 @@ use rust_embed::{Embed, EmbeddedFile};
 #[prefix = "/public/"]
 pub struct Asset;
 
+/// Converts a `Cow<[u8]>` into an `Arc<Bytes>`.
+///
+/// This internal helper handles both owned and borrowed byte slices, converting them
+/// into a reference-counted byte buffer for efficient sharing.
+#[must_use]
 fn cow_to_arc_bytes(cow: Cow<'_, [u8]>) -> Arc<Bytes> {
     Arc::new(match cow {
         Cow::Owned(vec) => Bytes::from(vec),
