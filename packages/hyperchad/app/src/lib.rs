@@ -74,6 +74,7 @@ pub enum BuilderError {
     MissingRuntime,
 }
 
+/// Command-line arguments for the hyperchad application.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -81,17 +82,24 @@ struct Args {
     cmd: Commands,
 }
 
+/// Available subcommands for the hyperchad application.
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
 enum Commands {
+    /// Prints all dynamic routes registered in the router.
     DynamicRoutes,
+    /// Generates static output for all routes.
     Gen {
+        /// Optional output directory path.
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Cleans the generated output directory.
     Clean {
+        /// Optional output directory path.
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Starts serving the application.
     Serve,
 }
 
@@ -122,6 +130,9 @@ pub trait Cleaner {
 }
 
 #[cfg(feature = "logic")]
+/// Type alias for action handler functions that process application actions.
+///
+/// The handler receives an action name and optional value, returning whether the action was handled.
 type ActionHandler = Box<
     dyn Fn(
             (&str, Option<&hyperchad_actions::logic::Value>),
@@ -129,6 +140,10 @@ type ActionHandler = Box<
         + Send
         + Sync,
 >;
+
+/// Type alias for resize listener functions that handle window resize events.
+///
+/// The listener receives the new width and height in pixels.
 type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send + Sync>;
 
 /// Builder for constructing an [`App`] instance.
@@ -396,6 +411,9 @@ impl AppBuilder {
         self
     }
 
+    /// Sets up a listener for application actions and spawns a handler task.
+    ///
+    /// Returns a sender that can be used to trigger actions.
     #[cfg(feature = "logic")]
     #[allow(unused)]
     fn listen_actions(
@@ -424,6 +442,9 @@ impl AppBuilder {
         action_tx
     }
 
+    /// Sets up a listener for window resize events and spawns a handler task.
+    ///
+    /// Returns a sender that can be used to notify listeners of resize events.
     #[allow(unused)]
     fn listen_resize(
         &self,
@@ -450,6 +471,8 @@ impl AppBuilder {
         resize_tx
     }
 
+    /// Returns the runtime handle, either from the builder or the current runtime.
+    #[must_use]
     fn runtime_handle(&self) -> switchy::unsync::runtime::Handle {
         self.runtime_handle
             .clone()
