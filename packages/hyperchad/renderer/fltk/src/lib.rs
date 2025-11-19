@@ -167,9 +167,13 @@ pub enum AppEvent {
 /// to optimize memory usage and performance.
 #[derive(Debug, Clone)]
 pub struct RegisteredImage {
+    /// Source of the image (bytes or URL).
     source: ImageSource,
+    /// Optional width constraint for the image in pixels.
     width: Option<f32>,
+    /// Optional height constraint for the image in pixels.
     height: Option<f32>,
+    /// FLTK frame widget that will display the image.
     frame: Frame,
 }
 
