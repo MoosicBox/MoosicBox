@@ -60,6 +60,10 @@ pub async fn convert_to_api_music_api(
     })
 }
 
+/// Determines the API authentication method from an `Auth` enum variant.
+///
+/// Maps the internal authentication representation to the API's public `AuthMethod` enum.
+/// Returns `None` if the authentication type is not supported by the enabled features.
 fn auth_method(value: &Auth) -> Option<AuthMethod> {
     match value {
         #[cfg(feature = "auth-username-password")]

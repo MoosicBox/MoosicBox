@@ -27,6 +27,7 @@ use crate::models::{ApiMusicApi, AuthValues, convert_to_api_music_api};
 ///
 /// Registers all music API-related endpoints including listing APIs,
 /// authentication, scanning, and search functionality.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(
