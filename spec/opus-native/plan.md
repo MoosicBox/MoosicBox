@@ -164,11 +164,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
                 nlsf_interpolated_q15[k] = (n0 + rounded) as i16;
                 ```
 
-        **Test Updates:**
-        3. **Bit-Exact Test Requirement (integration_tests.rs:97-109)** ✅ **UPDATED**
-            - **Old:** `assert!(snr > 40.0)` - accepted 40dB SNR (±1 sample tolerance)
-            - **New:** `assert!(snr.is_infinite())` - requires bit-exact match
-            - **Impact:** All 18 test vectors now MUST be bit-perfect to pass
+        **Test Updates:** 3. **Bit-Exact Test Requirement (integration_tests.rs:97-109)** ✅ **UPDATED** - **Old:** `assert!(snr > 40.0)` - accepted 40dB SNR (±1 sample tolerance) - **New:** `assert!(snr.is_infinite())` - requires bit-exact match - **Impact:** All 18 test vectors now MUST be bit-perfect to pass
 
         **Verification Results:**
 
@@ -11874,6 +11870,7 @@ For each band:
           Added 4 tests: test_energy_q8_to_linear_zero (Q8=0→1.0), test_energy_q8_to_linear_positive (Q8=256→2.0), test_energy_q8_to_linear_negative (Q8=-256→0.5), test_energy_q8_to_linear_large_positive (Q8=512→4.0)
 
 - [x] **Task 4.6.2.2:** Implement `denormalize_bands()`
+
     ```rust
     /// Denormalize bands by multiplying shapes by sqrt(energy)
     ///
@@ -13551,6 +13548,7 @@ let (_intensity, _dual_stereo) =
     - Matches libopus `rate.c` implementation
 
 - ✅ **Lines 1090-1096:** Return statement
+
     ```rust
     Ok(Allocation {
         shape_bits,
