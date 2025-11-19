@@ -2,7 +2,7 @@
 //!
 //! This module provides functions for determining database file paths for both the server
 //! configuration database and per-profile library databases. It handles path creation and
-//! validation for SQLite database files.
+//! validation for `SQLite` database files.
 
 use moosicbox_config::{AppType, get_app_config_dir_path, get_profile_dir_path};
 
