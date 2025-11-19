@@ -234,11 +234,8 @@ impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
 
         // Create migrations for each table in the configuration
         for table_name in self.config.tables.keys() {
-            let migration = ConfigBasedMigration::new(
-                format!("create_{table_name}"),
-                self.config,
-                table_name,
-            );
+            let migration =
+                ConfigBasedMigration::new(format!("create_{table_name}"), self.config, table_name);
             migrations.push(Arc::new(migration));
         }
 
@@ -276,11 +273,7 @@ fn create_table_migration<'a>(
 
     create_stmt = create_stmt.primary_key(primary_key);
 
-    CodeMigration::new(
-        format!("create_{table_name}"),
-        Box::new(create_stmt),
-        None,
-    )
+    CodeMigration::new(format!("create_{table_name}"), Box::new(create_stmt), None)
 }
 
 /// Function that creates multiple related migrations
@@ -449,7 +442,10 @@ mod tests {
         let migrations = create_blog_schema_migrations();
         assert_eq!(migrations.len(), 3);
 
-        let ids: Vec<&str> = migrations.iter().map(switchy_schema::discovery::code::CodeMigration::id).collect();
+        let ids: Vec<&str> = migrations
+            .iter()
+            .map(switchy_schema::discovery::code::CodeMigration::id)
+            .collect();
         assert!(ids.contains(&"create_authors"));
         assert!(ids.contains(&"create_categories"));
         assert!(ids.contains(&"create_articles"));
