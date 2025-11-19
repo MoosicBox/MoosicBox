@@ -167,6 +167,7 @@ struct VecMigrationSource<'a> {
 }
 
 impl<'a> VecMigrationSource<'a> {
+    #[must_use]
     fn new(migrations: Vec<Arc<dyn Migration<'a> + 'a>>) -> Self {
         Self { migrations }
     }

@@ -59,6 +59,7 @@ struct VecMigrationSource<'a> {
 
 #[cfg(feature = "snapshots")]
 impl<'a> VecMigrationSource<'a> {
+    #[must_use]
     fn new(migrations: Vec<Arc<dyn Migration<'a> + 'a>>) -> Self {
         Self { migrations }
     }
