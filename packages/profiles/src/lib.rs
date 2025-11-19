@@ -129,6 +129,11 @@ pub mod api {
 
     use crate::PROFILES;
 
+    /// Extracts profile name from query parameters.
+    ///
+    /// # Errors
+    ///
+    /// * Missing `moosicboxProfile` query parameter
     fn from_query(req: &HttpRequest) -> Result<String, actix_web::Error> {
         let query_string = req.query_string();
         let query: Vec<_> = QString::from(query_string).into();
@@ -144,6 +149,12 @@ pub mod api {
         Ok(profile.to_owned())
     }
 
+    /// Extracts profile name from HTTP headers.
+    ///
+    /// # Errors
+    ///
+    /// * Missing `moosicbox-profile` header
+    /// * Invalid UTF-8 in `moosicbox-profile` header value
     fn from_header(req: &HttpRequest) -> Result<&str, actix_web::Error> {
         let Some(profile_header_value) = req.headers().get("moosicbox-profile") else {
             return Err(ErrorBadRequest("Missing moosicbox-profile header"));
@@ -179,7 +190,8 @@ pub mod api {
         ///
         /// # Errors
         ///
-        /// Will error if request is missing profile header and query param
+        /// * Missing both `moosicbox-profile` header and `moosicboxProfile` query parameter
+        /// * Invalid UTF-8 in `moosicbox-profile` header value
         pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
             from_query(req)
                 .or_else(|_| from_header(req).map(std::borrow::ToOwned::to_owned))
@@ -228,8 +240,9 @@ pub mod api {
         ///
         /// # Errors
         ///
-        /// Will error if request is missing profile header and query param or if the
-        /// profile doesn't exist
+        /// * Missing both `moosicbox-profile` header and `moosicboxProfile` query parameter
+        /// * Invalid UTF-8 in `moosicbox-profile` header value
+        /// * Profile name not found in the global registry
         pub fn from_request_inner(req: &HttpRequest) -> Result<Self, actix_web::Error> {
             let profile = match ProfileNameUnverified::from_request_inner(req) {
                 Ok(profile) => {
