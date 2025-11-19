@@ -24,6 +24,14 @@ struct CustomMigration {
 }
 
 impl CustomMigration {
+    /// Creates a new custom migration.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - Unique identifier for the migration
+    /// * `up_sql` - SQL to execute when applying the migration
+    /// * `down_sql` - Optional SQL to execute when rolling back the migration
+    #[must_use]
     fn new(
         id: impl Into<String>,
         up_sql: impl Into<String>,
@@ -43,6 +51,11 @@ impl Migration<'static> for CustomMigration {
         &self.id
     }
 
+    /// Applies the migration.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the SQL execution fails
     async fn up(&self, db: &dyn Database) -> Result<()> {
         if !self.up_sql.trim().is_empty() {
             db.exec_raw(&self.up_sql).await?;
@@ -50,6 +63,11 @@ impl Migration<'static> for CustomMigration {
         Ok(())
     }
 
+    /// Rolls back the migration.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the SQL execution fails
     async fn down(&self, db: &dyn Database) -> Result<()> {
         if let Some(down_sql) = &self.down_sql
             && !down_sql.trim().is_empty()
@@ -70,6 +88,8 @@ struct CustomMigrationSource {
 }
 
 impl CustomMigrationSource {
+    /// Creates a new migration source with example migrations.
+    #[must_use]
     fn new() -> Self {
         Self {
             migrations: vec![
@@ -95,6 +115,11 @@ impl CustomMigrationSource {
 
 #[async_trait]
 impl MigrationSource<'static> for CustomMigrationSource {
+    /// Returns the list of available migrations.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation never returns an error, but the trait requires Result return type
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
         let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = self
             .migrations
@@ -111,6 +136,11 @@ impl MigrationSource<'static> for CustomMigrationSource {
     }
 }
 
+/// Demonstrates static lifetime migrations with various discovery methods.
+///
+/// # Errors
+///
+/// * Returns an error if migration discovery or execution fails
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Static Migrations Example");
