@@ -121,6 +121,7 @@ pub trait WebsocketSender: Send + Sync {
     async fn ping(&self) -> Result<(), WebsocketSendError>;
 }
 
+/// Debug implementation for trait objects implementing `WebsocketSender`.
 impl core::fmt::Debug for dyn WebsocketSender {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{WebsocketSender}}")
@@ -144,6 +145,10 @@ pub struct WsHandle {
 
 impl WsHandle {
     /// Closes the websocket connection.
+    ///
+    /// This method signals the websocket client to gracefully shut down by canceling
+    /// the internal cancellation token. The connection will close after any pending
+    /// operations complete.
     pub fn close(&self) {
         self.cancellation_token.cancel();
     }
