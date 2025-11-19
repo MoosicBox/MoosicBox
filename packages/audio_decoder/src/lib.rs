@@ -429,6 +429,15 @@ pub async fn decode_media_source_async(
         .await?
 }
 
+/// Decodes audio from a media source stream (internal implementation).
+///
+/// This function sets up format and metadata options, probes the media source,
+/// and delegates to the core [`decode`] function.
+///
+/// # Errors
+///
+/// * Returns [`DecodeError::Symphonia`] if format probing fails
+/// * Returns [`DecodeError::AudioDecode`] if audio decoding fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_arguments)]
 fn decode_media_source(
@@ -588,6 +597,15 @@ pub fn decode(
     result
 }
 
+/// Plays a single track from the format reader (internal implementation).
+///
+/// This function reads packets, decodes them, and sends the decoded audio to the output handler.
+/// It handles seeking, packet filtering, and decode errors.
+///
+/// # Errors
+///
+/// * Returns [`DecodeError::Symphonia`] if reading packets fails
+/// * Returns [`DecodeError::AudioDecode`] if audio output handling fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(
     clippy::similar_names,
@@ -791,12 +809,19 @@ fn play_track(
     Ok(do_verification(finalization_result))
 }
 
+/// Finds the first track with a supported codec.
+///
+/// Returns the first track that doesn't have a null codec type.
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
     tracks
         .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }
 
+/// Converts expected end-of-stream errors into success.
+///
+/// This function treats "end of stream" `UnexpectedEof` errors as successful completion,
+/// while preserving other errors.
 fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), DecodeError> {
     match result {
         Err(DecodeError::Symphonia(Error::IoError(err)))
@@ -827,6 +852,9 @@ fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), Dec
     }
 }
 
+/// Processes decoder finalization result and returns verification status.
+///
+/// Returns 0 if verification passed or wasn't performed, 1 if verification failed.
 fn do_verification(finalization: FinalizeResult) -> i32 {
     finalization.verify_ok.map_or_else(|| {
         log::debug!("verification: no verification performed (verify_ok is None)");
