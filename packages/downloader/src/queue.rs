@@ -258,6 +258,7 @@ impl DownloadQueue {
     }
 
     /// Returns the currently processing download task, if any.
+    #[must_use]
     pub async fn current_task(&self) -> Option<DownloadTask> {
         self.state.read().await.current_task().cloned()
     }

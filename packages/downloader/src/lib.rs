@@ -184,6 +184,11 @@ pub struct DownloadRequest {
     pub source: DownloadApiSource,
 }
 
+/// Gets a music API instance for the given download source.
+///
+/// # Errors
+///
+/// * If the API source is not found in the available music APIs
 #[allow(clippy::unnecessary_wraps)]
 fn music_api_from_source(
     #[allow(unused)] music_apis: &MusicApis,
@@ -246,6 +251,10 @@ pub async fn download(
     Ok(())
 }
 
+/// Gets or initializes the global download queue with database and downloader.
+///
+/// If the global queue doesn't have a database or downloader configured, this function
+/// will initialize them with the provided parameters.
 async fn get_default_download_queue(
     db: LibraryDatabase,
     music_apis: MusicApis,
@@ -667,6 +676,9 @@ pub async fn create_download_tasks(
     Ok(results)
 }
 
+/// Generates a filename for a track based on its number and title.
+///
+/// Returns a sanitized filename in the format `{track_number}_{track_title}.flac`.
 fn get_filename_for_track(track: &Track) -> String {
     let extension = "flac";
 
@@ -758,6 +770,22 @@ pub async fn download_track_id(
     Ok(track)
 }
 
+/// Downloads a track with automatic retry on timeout.
+///
+/// This is a wrapper around `download_track_inner` that handles timeout errors by
+/// retrying the download from the last known position.
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If the track is not found
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn download_track(
@@ -855,6 +883,22 @@ pub enum DownloadTrackInnerError {
     Timeout(Option<u64>),
 }
 
+/// Internal implementation of track download.
+///
+/// Performs the actual download operation with timeout monitoring and resume capability.
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If the track is not found
+/// * If the download times out (returns `Timeout` variant with resume position)
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,

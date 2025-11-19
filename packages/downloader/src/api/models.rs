@@ -530,6 +530,10 @@ impl ToValueType<ApiDownloadTask> for &serde_json::Value {
     }
 }
 
+/// Calculates download progress for a task by reading the current file size.
+///
+/// Updates the `bytes` and `progress` fields based on the actual file size on disk
+/// compared to the total expected size.
 fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
     task.bytes = std::fs::File::open(&task.file_path)
         .ok()
