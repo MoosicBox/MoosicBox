@@ -1,5 +1,37 @@
+//! Turso Database transaction examples.
+//!
+//! This example demonstrates how to use transactions with the Turso Database backend,
+//! including commits, rollbacks, and savepoints. It shows three key scenarios:
+//!
+//! 1. Successful transaction with commit
+//! 2. Failed transaction with rollback
+//! 3. Complex transaction with nested operations
+//!
+//! The example uses an in-memory database with a simple accounts table to illustrate
+//! transaction concepts.
+
 use switchy_database::{Database, DatabaseValue, turso::TursoDatabase};
 
+/// Entry point for the Turso transactions example.
+///
+/// Demonstrates three transaction scenarios:
+/// * Successful transaction - transferring funds between accounts with commit
+/// * Failed transaction - attempting an overdraw and rolling back
+/// * Nested transaction - creating new accounts with multiple operations
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Database creation fails
+/// * Table creation fails
+/// * Any database operation (INSERT, UPDATE, SELECT) fails
+/// * Transaction operations (begin, commit, rollback) fail
+///
+/// # Panics
+///
+/// Panics if:
+/// * Database value retrieval returns `None` when a value is expected
+/// * Type conversion of database values fails (e.g., value is not a string or i64)
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Turso Database - Transaction Example");
