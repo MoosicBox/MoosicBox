@@ -58,16 +58,20 @@ use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 
 /// Core tunnel sender implementation and connection management.
 ///
-/// This module provides the main [`TunnelSender`](sender::TunnelSender) type for establishing
-/// and maintaining tunnel connections, along with the [`TunnelSenderHandle`](sender::TunnelSenderHandle)
+/// This module provides the main [`TunnelSender`] type for establishing
+/// and maintaining tunnel connections, along with the [`TunnelSenderHandle`]
 /// for controlling active connections.
+///
+/// [`TunnelSender`]: sender::TunnelSender
+/// [`TunnelSenderHandle`]: sender::TunnelSenderHandle
 pub mod sender;
 
 /// WebSocket message routing through tunnel connections.
 ///
-/// This module provides [`TunnelWebsocketSender`](websocket_sender::TunnelWebsocketSender)
-/// for routing WebSocket messages through both local and tunnel connections with connection
-/// filtering support.
+/// This module provides [`TunnelWebsocketSender`] for routing WebSocket messages
+/// through both local and tunnel connections with connection filtering support.
+///
+/// [`TunnelWebsocketSender`]: websocket_sender::TunnelWebsocketSender
 pub mod websocket_sender;
 
 /// Error type for sending bytes through the tunnel.
@@ -157,7 +161,10 @@ struct GetTrackInfoQuery {
     source: Option<ApiSource>,
 }
 
-/// Message type received from the tunnel websocket.
+/// Message types received from the tunnel WebSocket connection.
+///
+/// Represents the various types of messages that can be received over
+/// the tunnel WebSocket, including text/binary data and control frames.
 pub enum TunnelMessage {
     /// Text message with UTF-8 string content.
     Text(String),

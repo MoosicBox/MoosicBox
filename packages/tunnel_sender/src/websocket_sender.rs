@@ -1,3 +1,8 @@
+//! WebSocket sender implementation for routing messages through tunnel connections.
+//!
+//! This module provides [`TunnelWebsocketSender`] which manages message propagation
+//! across both local and tunnel WebSocket connections with connection filtering support.
+
 #![allow(clippy::module_name_repetitions)]
 
 use async_trait::async_trait;
@@ -38,6 +43,10 @@ where
 {
     /// Sends a message through the tunnel with connection filtering options.
     ///
+    /// # Errors
+    ///
+    /// * If the tunnel sender channel is full or disconnected
+    ///
     /// # Panics
     ///
     /// * If `data` is not valid JSON
@@ -72,6 +81,10 @@ where
 {
     /// Sends a message to a specific connection, routing through tunnel if needed.
     ///
+    /// # Errors
+    ///
+    /// * If the underlying root sender fails to send the message
+    ///
     /// # Panics
     ///
     /// * If `connection_id` cannot be parsed as a `u64`
@@ -93,6 +106,10 @@ where
     }
 
     /// Sends a message to all connections, including both local and tunnel connections.
+    ///
+    /// # Errors
+    ///
+    /// * If the underlying root sender fails to send the message
     async fn send_all(&self, data: &str) -> Result<(), WebsocketSendError> {
         if self.send_tunnel(data, true, None, None).is_err() {
             log::error!("Failed to send tunnel message");
@@ -104,6 +121,10 @@ where
     }
 
     /// Sends a message to all connections except the specified one.
+    ///
+    /// # Errors
+    ///
+    /// * If the underlying root sender fails to send the message
     ///
     /// # Panics
     ///
@@ -131,6 +152,10 @@ where
     }
 
     /// Sends a ping control message to the underlying connection.
+    ///
+    /// # Errors
+    ///
+    /// * If the underlying root sender fails to send the ping
     async fn ping(&self) -> Result<(), WebsocketSendError> {
         self.root_sender.ping().await
     }

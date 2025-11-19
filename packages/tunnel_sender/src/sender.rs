@@ -1,3 +1,10 @@
+//! Core tunnel sender implementation for managing WebSocket connections.
+//!
+//! This module provides the main [`TunnelSender`] type for establishing and maintaining
+//! tunnel connections, along with [`TunnelSenderHandle`] for controlling active connections.
+//! It handles HTTP request proxying, WebSocket message routing, and bidirectional
+//! communication through tunnel connections.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
@@ -286,6 +293,9 @@ impl TunnelSender {
     }
 
     /// Sets a custom cancellation token for the tunnel sender.
+    ///
+    /// Replaces the default cancellation token with the provided one, allowing
+    /// external control over the tunnel lifecycle.
     #[must_use]
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
@@ -320,6 +330,10 @@ impl TunnelSender {
     }
 
     /// Starts the tunnel connection and returns a receiver for incoming messages.
+    ///
+    /// Initiates the WebSocket connection to the tunnel server and returns a channel
+    /// receiver for processing incoming tunnel messages.
+    #[must_use]
     pub fn start(&self) -> Receiver<TunnelMessage> {
         self.start_tunnel(Self::message_handler)
     }
