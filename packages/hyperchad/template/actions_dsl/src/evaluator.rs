@@ -52,6 +52,11 @@ impl Context {
     /// Checks if a variable is defined in any scope
     ///
     /// Searches through all scopes from most recent to oldest.
+    ///
+    /// # Must use
+    ///
+    /// The result indicates whether code generation should treat the name as a variable
+    /// reference or a direct identifier
     #[must_use]
     pub fn is_variable_defined(&self, name: impl AsRef<str>) -> bool {
         let name = name.as_ref();
@@ -66,7 +71,8 @@ impl Context {
     ///
     /// # Must use
     ///
-    /// The returned token stream should be used in code generation
+    /// The returned token stream represents the enum variant and must be included in
+    /// the generated code to properly construct the variant
     #[must_use]
     fn resolve_enum_variant(enum_type: &str, variant: &str) -> TokenStream {
         let enum_ident = format_ident!("{}", enum_type);
@@ -88,7 +94,15 @@ macro_rules! push_scope {
     };
 }
 
-/// Generate code for a statement
+/// Generates code for a statement that pushes actions to an output vector
+///
+/// This is used for runtime code generation where actions are accumulated dynamically.
+///
+/// # Errors
+///
+/// * Returns error if expression code generation fails
+/// * Returns error if block code generation fails
+/// * Returns error if match arm code generation fails
 #[allow(clippy::too_many_lines)]
 fn generate_statement_push(
     context: &mut Context,
@@ -429,7 +443,13 @@ pub fn generate_statement_code(
     }
 }
 
-/// Generate code for a block
+/// Generates code for a block that pushes actions to an output vector
+///
+/// This is used for runtime code generation where actions are accumulated in a vector.
+///
+/// # Errors
+///
+/// * Returns error if statement code generation fails
 fn generate_block_push(
     context: &mut Context,
     block: &Block,
@@ -451,7 +471,11 @@ fn generate_block_push(
     })
 }
 
-/// Generate code for a block
+/// Generates code for a block expression
+///
+/// # Errors
+///
+/// * Returns error if statement code generation fails
 fn generate_block_code(context: &mut Context, block: &Block) -> Result<TokenStream, String> {
     let mut statements = Vec::new();
 
@@ -467,7 +491,11 @@ fn generate_block_code(context: &mut Context, block: &Block) -> Result<TokenStre
     }})
 }
 
-/// Generate code for a match arm
+/// Generates code for a match arm that pushes the result to an output vector
+///
+/// # Errors
+///
+/// * Returns error if pattern or body code generation fails
 fn generate_match_arm_push(
     context: &mut Context,
     arm: &MatchArm,
@@ -484,7 +512,11 @@ fn generate_match_arm_push(
     })
 }
 
-/// Generate code for a match arm
+/// Generates code for a match arm expression
+///
+/// # Errors
+///
+/// * Returns error if pattern or body code generation fails
 fn generate_match_arm_code(context: &mut Context, arm: &MatchArm) -> Result<TokenStream, String> {
     let pattern_code = generate_pattern_code(&arm.pattern);
     let body_code = generate_expression_code(context, &arm.body)?;
@@ -496,7 +528,9 @@ fn generate_match_arm_code(context: &mut Context, arm: &MatchArm) -> Result<Toke
     })
 }
 
-/// Generate code for a pattern
+/// Generates Rust code for a pattern
+///
+/// Converts DSL patterns into token streams for use in match expressions.
 fn generate_pattern_code(pattern: &Pattern) -> TokenStream {
     match pattern {
         Pattern::Literal(lit) => {
@@ -821,6 +855,15 @@ pub fn generate_expression_code(
     }
 }
 
+/// Generates action code for element ID-based selectors
+///
+/// Creates optimized `HyperChad` actions targeting elements by ID.
+///
+/// # Errors
+///
+/// * Returns error if method name is unknown
+/// * Returns error if argument count is incorrect for the method
+/// * Returns error if expression code generation fails
 fn generate_action_for_id(
     context: &mut Context,
     id: &TokenStream,
@@ -926,6 +969,15 @@ fn generate_action_for_id(
     })
 }
 
+/// Generates action code for element class-based selectors
+///
+/// Creates optimized `HyperChad` actions targeting elements by CSS class.
+///
+/// # Errors
+///
+/// * Returns error if method name is unknown
+/// * Returns error if argument count is incorrect for the method
+/// * Returns error if expression code generation fails
 fn generate_action_for_class(
     context: &mut Context,
     class: &str,
@@ -1031,6 +1083,14 @@ fn generate_action_for_class(
     })
 }
 
+/// Converts a target expression into a `HyperChad` Target token stream
+///
+/// Determines whether the target is a variable reference or literal and generates
+/// appropriate Target construction code.
+///
+/// # Errors
+///
+/// * Returns error if expression code generation fails
 fn target_to_expr(
     context: &mut Context,
     target: &Expression,
@@ -1082,7 +1142,21 @@ fn target_to_expr(
     })
 }
 
-/// Generate code for function calls, mapping DSL functions to hyperchad actions
+/// Generates code for function calls, mapping DSL functions to `HyperChad` actions
+///
+/// This is the primary function call handler, supporting:
+/// * Element manipulation functions (show, hide, display, etc.)
+/// * Event handling (`on_event`)
+/// * Action invocation (invoke, throttle, `delay_off`)
+/// * Utility functions (clamp, log, navigate)
+/// * Enum variant construction
+///
+/// # Errors
+///
+/// * Returns error if function name is unknown
+/// * Returns error if argument count is incorrect
+/// * Returns error if expression code generation fails
+/// * Returns error if struct path parsing fails
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn generate_function_call_code(
     context: &mut Context,
@@ -2030,7 +2104,9 @@ fn generate_function_call_code(
     }
 }
 
-/// Generate code for a literal
+/// Generates Rust code for a literal value
+///
+/// Converts DSL literals into `HyperChad` literal token streams.
 fn generate_literal_code(lit: &Literal) -> TokenStream {
     match lit {
         Literal::String(s) => quote! { hyperchad_actions::dsl::Literal::String(#s.to_string()) },
@@ -2041,7 +2117,9 @@ fn generate_literal_code(lit: &Literal) -> TokenStream {
     }
 }
 
-/// Generate code for binary operators
+/// Generates Rust operator tokens for binary operations
+///
+/// Maps DSL binary operators to their Rust token equivalents.
 fn generate_binary_op_code(op: &BinaryOp) -> TokenStream {
     match op {
         BinaryOp::Add => quote! { + },
@@ -2063,7 +2141,9 @@ fn generate_binary_op_code(op: &BinaryOp) -> TokenStream {
     }
 }
 
-/// Generate code for unary operators
+/// Generates Rust operator tokens for unary operations
+///
+/// Maps DSL unary operators to their Rust token equivalents.
 fn generate_unary_op_code(op: &UnaryOp) -> TokenStream {
     match op {
         UnaryOp::Not => quote! { ! },
@@ -2073,6 +2153,14 @@ fn generate_unary_op_code(op: &UnaryOp) -> TokenStream {
     }
 }
 
+/// Generates code for an expression, preferring direct literals when possible
+///
+/// For literal values, generates the literal directly. For other expressions,
+/// generates full expression code.
+///
+/// # Errors
+///
+/// * Returns error if expression code generation fails
 fn literal_or_stmt(context: &mut Context, expr: &Expression) -> Result<TokenStream, String> {
     Ok(match expr {
         Expression::Literal(Literal::Integer(x)) => {
@@ -2091,7 +2179,15 @@ fn literal_or_stmt(context: &mut Context, expr: &Expression) -> Result<TokenStre
     })
 }
 
-/// Generate code for method calls
+/// Generates code for method calls on various types
+///
+/// Handles method calls on element references, logic values, and arithmetic operations.
+///
+/// # Errors
+///
+/// * Returns error if method name is unknown
+/// * Returns error if argument count is incorrect for the method
+/// * Returns error if expression code generation fails
 #[allow(clippy::too_many_lines)]
 fn generate_method_call_code(
     context: &mut Context,
@@ -2364,7 +2460,14 @@ fn generate_method_call_code(
     }
 }
 
-/// Transform a closure used in `on_event` by replacing parameters with `get_event_value()` calls
+/// Transforms a closure for use in event handlers
+///
+/// Replaces closure parameters with `get_event_value()` calls to access event data.
+///
+/// # Errors
+///
+/// * Returns error if closure has more than one parameter
+/// * Returns error if body transformation fails
 fn transform_closure_for_event(
     context: &mut Context,
     params: &[String],
@@ -2380,7 +2483,14 @@ fn transform_closure_for_event(
     generate_expression_code(context, &transformed_body)
 }
 
-/// Replace a parameter in an expression with `get_event_value()` calls
+/// Replaces parameter references in an expression with `get_event_value()` calls
+///
+/// Recursively transforms the expression tree, replacing all uses of the parameter
+/// with runtime event value access.
+///
+/// # Errors
+///
+/// * Returns error if nested expression transformation fails
 fn replace_param_with_get_event_value(
     context: &mut Context,
     expr: &Expression,
@@ -2475,7 +2585,11 @@ fn replace_param_with_get_event_value(
     }
 }
 
-/// Replace a parameter in a statement with `get_event_value()` calls
+/// Replaces parameter references in a statement with `get_event_value()` calls
+///
+/// # Errors
+///
+/// * Returns error if expression or block transformation fails
 fn replace_param_in_statement(
     context: &mut Context,
     stmt: &Statement,
@@ -2522,7 +2636,11 @@ fn replace_param_in_statement(
     }
 }
 
-/// Replace a parameter in a block with `get_event_value()` calls
+/// Replaces parameter references in a block with `get_event_value()` calls
+///
+/// # Errors
+///
+/// * Returns error if statement transformation fails
 fn replace_param_in_block(
     context: &mut Context,
     block: &Block,
