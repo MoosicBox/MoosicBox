@@ -545,6 +545,11 @@ pub mod html {
 
                 use std::path::Path;
 
+                /// Recursively copies a directory and all its contents to a destination.
+                ///
+                /// # Errors
+                ///
+                /// * If any file or directory I/O operation fails
                 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
                     std::fs::create_dir_all(dst)?;
                     let mut entries: Vec<_> =
