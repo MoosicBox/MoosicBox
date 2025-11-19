@@ -102,6 +102,7 @@ pub enum ArtistOrder {
 }
 
 impl std::fmt::Display for ArtistOrder {
+    /// Formats the artist order as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -119,6 +120,7 @@ pub enum ArtistOrderDirection {
 }
 
 impl std::fmt::Display for ArtistOrderDirection {
+    /// Formats the artist order direction as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -134,6 +136,7 @@ pub enum AlbumOrder {
 }
 
 impl std::fmt::Display for AlbumOrder {
+    /// Formats the album order as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -151,6 +154,7 @@ pub enum AlbumOrderDirection {
 }
 
 impl std::fmt::Display for AlbumOrderDirection {
+    /// Formats the album order direction as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -166,6 +170,7 @@ pub enum TrackOrder {
 }
 
 impl std::fmt::Display for TrackOrder {
+    /// Formats the track order as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -183,6 +188,7 @@ pub enum TrackOrderDirection {
 }
 
 impl std::fmt::Display for TrackOrderDirection {
+    /// Formats the track order direction as its string representation.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
@@ -330,6 +336,7 @@ pub enum ImageCoverSize {
 }
 
 impl std::fmt::Display for ImageCoverSize {
+    /// Formats the image cover size as its pixel dimension value.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let num: u16 = (*self).into();
         f.write_str(&num.to_string())
@@ -337,6 +344,9 @@ impl std::fmt::Display for ImageCoverSize {
 }
 
 impl From<ImageCoverSize> for u16 {
+    /// Converts an image cover size to its pixel dimension value.
+    ///
+    /// Returns the maximum dimension in pixels for each size tier.
     fn from(value: ImageCoverSize) -> Self {
         match value {
             ImageCoverSize::Max => 1280,
@@ -349,6 +359,14 @@ impl From<ImageCoverSize> for u16 {
 }
 
 impl From<u16> for ImageCoverSize {
+    /// Converts a pixel dimension to the appropriate image cover size tier.
+    ///
+    /// Selects the size tier based on the pixel value:
+    /// * 0-80px: Thumbnail
+    /// * 81-160px: Small
+    /// * 161-320px: Medium
+    /// * 321-640px: Large
+    /// * 641+px: Max
     fn from(value: u16) -> Self {
         match value {
             0..=80 => Self::Thumbnail,
@@ -377,20 +395,25 @@ pub trait FromId {
 }
 
 impl FromId for String {
+    /// Returns a clone of the string ID.
     fn as_string(&self) -> String {
         self.clone()
     }
 
+    /// Converts a string slice to a `String` ID.
     fn into_id(str: &str) -> Self {
         str.to_string()
     }
 }
 
 impl FromId for u64 {
+    /// Converts the `u64` ID to its string representation.
     fn as_string(&self) -> String {
         self.to_string()
     }
 
+    /// Parses a string slice into a `u64` ID.
+    ///
     /// # Panics
     ///
     /// Panics if the string cannot be parsed as a valid `u64` integer.
