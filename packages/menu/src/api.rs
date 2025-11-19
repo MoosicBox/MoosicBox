@@ -102,7 +102,6 @@ pub struct Api;
 /// # Errors
 ///
 /// * `ErrorBadRequest` if the ID cannot be parsed as an integer for library sources
-#[must_use]
 fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Error> {
     Ok(if source.is_library() {
         id.parse::<i32>()

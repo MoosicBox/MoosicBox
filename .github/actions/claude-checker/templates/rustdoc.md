@@ -35,16 +35,16 @@ Check that ALL public APIs in ${target_path} have:
 4. **Error docs** - Error conditions documented with `# Errors`
 5. **Example docs** - Complex functions have `# Examples`
 6. **Panic docs** - Functions that panic have `# Panics`
-7. **Must-use** - Constructors and getters (including those returning Option/Result) have `#[must_use]`. Note: While Result/Option types are marked must_use, functions returning them are NOT automatically must_use - you must explicitly add the attribute. Clippy will suggest it via `must_use_candidate` lint.
+7. **Must-use** - Constructors and getters that return non-Result/non-Option types should have `#[must_use]`. IMPORTANT: Do NOT add `#[must_use]` to functions returning Result or Option types, as these types are already marked `#[must_use]` and adding the attribute to the function is redundant and will trigger clippy warnings. Only add `#[must_use]` to functions that return other types where ignoring the return value would be a mistake.
 
 ## Rustdoc Style (from AGENTS.md)
 
 - Use asterisks (\*) for bullet points in error docs
 - Document all error conditions
 - Include examples for complex functions
-- Add `#[must_use]` to constructors and getters (including those returning Option/Result types)
-- For functions returning Result/Option: While these types are `#[must_use]`, the function itself is NOT automatically must_use. You must explicitly add `#[must_use]` to the function. Clippy's `must_use_candidate` lint will suggest where to add it.
-- **CRITICAL: NEVER remove existing `#[must_use]` directives** - these have been intentionally added and must be preserved
+- Add `#[must_use]` to constructors and getters that return types OTHER THAN Result or Option
+- **CRITICAL**: Do NOT add `#[must_use]` to functions returning Result or Option - these types are already marked `#[must_use]` and adding it to the function is redundant and will cause clippy warnings
+- Clippy's `must_use_candidate` lint will suggest where to add `#[must_use]` - but only follow this suggestion for non-Result/non-Option return types
 
 ## Verification (MANDATORY)
 
