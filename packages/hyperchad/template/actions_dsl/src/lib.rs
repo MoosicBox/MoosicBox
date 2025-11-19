@@ -56,6 +56,8 @@ use syn::parse::Parser;
 ///
 /// This macro allows you to write Rust-like syntax for defining actions:
 ///
+/// # Examples
+///
 /// ```ignore
 /// actions_dsl! {
 ///     if get_visibility("modal") == Visibility::Hidden {
@@ -106,6 +108,14 @@ pub fn actions_dsl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
+/// Expands the actions DSL input into Rust code
+///
+/// This function attempts to parse the input token stream as DSL syntax. If parsing fails,
+/// it falls back to treating the input as raw Rust code.
+///
+/// # Errors
+///
+/// Returns an error string if code generation fails
 fn expand_actions_dsl(input: &TokenStream) -> Result<TokenStream, String> {
     // Try to parse the DSL first
     let dsl = match Parser::parse2(parser::parse_dsl, input.clone()) {
@@ -120,7 +130,16 @@ fn expand_actions_dsl(input: &TokenStream) -> Result<TokenStream, String> {
     generate_pure_compile_time_dsl(&dsl)
 }
 
-// Generate completely compile-time optimized DSL with ZERO runtime logic
+/// Generates completely compile-time optimized DSL with zero runtime logic
+///
+/// This function optimizes the generated code based on the number of statements:
+/// * 0 statements: generates `NoOp`
+/// * 1 statement: generates the single action directly
+/// * Multiple statements: generates a `vec![]` with all actions
+///
+/// # Errors
+///
+/// Returns an error string if code generation for any statement fails
 fn generate_pure_compile_time_dsl(dsl: &Dsl) -> Result<TokenStream, String> {
     // Count action-producing statements at compile time
     let action_count = dsl.statements.len();
@@ -153,7 +172,15 @@ fn generate_pure_compile_time_dsl(dsl: &Dsl) -> Result<TokenStream, String> {
     Ok(result)
 }
 
-// Generate single action effect - called only when we know there's exactly one action
+/// Generates a single action effect from exactly one statement
+///
+/// # Errors
+///
+/// Returns an error string if code generation fails for the statement
+///
+/// # Panics
+///
+/// Panics if called with an empty statement list
 fn generate_single_action_effect(statements: &[Statement]) -> Result<TokenStream, String> {
     let mut context = evaluator::Context::default();
 
@@ -163,7 +190,11 @@ fn generate_single_action_effect(statements: &[Statement]) -> Result<TokenStream
     unreachable!("generate_single_action_effect called when no action exists")
 }
 
-// Generate multiple action effects - called only when we know there are multiple actions
+/// Generates multiple action effects from a list of statements
+///
+/// # Errors
+///
+/// Returns an error string if code generation fails for any statement
 fn generate_multiple_action_effects(statements: &[Statement]) -> Result<Vec<TokenStream>, String> {
     let mut context = evaluator::Context::default();
 
@@ -173,7 +204,11 @@ fn generate_multiple_action_effects(statements: &[Statement]) -> Result<Vec<Toke
         .collect::<Result<Vec<_>, _>>()
 }
 
-// Generate action effect from a single statement
+/// Generates an action effect from a single statement
+///
+/// # Errors
+///
+/// Returns an error string if code generation fails for the statement
 fn generate_action_effect_from_statement(
     context: &mut evaluator::Context,
     stmt: &Statement,

@@ -13,7 +13,16 @@ use hyperchad_actions::dsl::{
     BinaryOp, Block, Dsl, Expression, Literal, MatchArm, Pattern, Statement, UnaryOp,
 };
 
-/// Parse the entire DSL input
+/// Parses the entire DSL input into a `Dsl` structure
+///
+/// This is the main entry point for parsing DSL syntax. It processes all statements
+/// in the input stream sequentially.
+///
+/// # Errors
+///
+/// * Returns parse error if the input contains invalid syntax
+/// * Returns error on unexpected end of input
+/// * Returns error if a statement cannot be parsed
 pub fn parse_dsl(input: ParseStream) -> Result<Dsl> {
     let mut statements = Vec::new();
 
@@ -25,7 +34,15 @@ pub fn parse_dsl(input: ParseStream) -> Result<Dsl> {
     Ok(Dsl::new(statements))
 }
 
-/// Parse a single statement
+/// Parses a single statement from the input stream
+///
+/// Attempts to parse the statement as DSL syntax first, falling back to raw Rust
+/// code if DSL parsing fails.
+///
+/// # Errors
+///
+/// * Returns error if input is unexpectedly empty
+/// * Returns error if both DSL and raw Rust parsing fail
 fn parse_statement(input: ParseStream) -> Result<Statement> {
     // Check if input is empty first
     if input.is_empty() {
@@ -36,7 +53,14 @@ fn parse_statement(input: ParseStream) -> Result<Statement> {
     try_parse_statement_normal(input).map_or_else(|_| try_parse_statement_as_raw_rust(input), Ok)
 }
 
-/// Try to parse a statement using normal DSL parsing
+/// Attempts to parse a statement using normal DSL parsing rules
+///
+/// Handles let bindings, if statements, match expressions, for loops, while loops,
+/// blocks, and expression statements.
+///
+/// # Errors
+///
+/// Returns error if the statement doesn't match any known DSL pattern
 fn try_parse_statement_normal(input: ParseStream) -> Result<Statement> {
     let lookahead = input.lookahead1();
 
@@ -63,7 +87,15 @@ fn try_parse_statement_normal(input: ParseStream) -> Result<Statement> {
     }
 }
 
-/// Try to parse a statement as raw Rust code
+/// Attempts to parse a statement as raw Rust code
+///
+/// This fallback parser collects tokens until it hits a semicolon or end of input,
+/// then wraps them as raw Rust code.
+///
+/// # Errors
+///
+/// * Returns error if the statement is empty
+/// * Returns error if token parsing fails
 fn try_parse_statement_as_raw_rust(input: ParseStream) -> Result<Statement> {
     // Collect tokens until we hit a semicolon or end of input
     let mut tokens = Vec::new();
@@ -819,7 +851,15 @@ fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
 }
 
 /// Fallback parsing function that wraps complex expressions as raw Rust code
-/// but tries to preserve DSL function calls
+///
+/// This function checks if the input starts with a known DSL function or keyword.
+/// If so, it attempts to parse with argument-level fallback. Otherwise, it wraps
+/// the entire input as raw Rust code.
+///
+/// # Must use
+///
+/// The returned `Dsl` structure should be used for code generation
+#[must_use]
 pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
     // Check if the input starts with a known DSL function or control flow construct
     let input_str = input.to_string();
