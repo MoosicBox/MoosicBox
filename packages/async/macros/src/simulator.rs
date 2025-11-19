@@ -1,3 +1,9 @@
+//! Simulator-specific macro implementations.
+//!
+//! This module provides the internal implementations for `select!`, `join!`, and `try_join!`
+//! macros when the simulator feature is enabled. These implementations provide 100% compatibility
+//! with their tokio counterparts while integrating with the simulator runtime.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
@@ -60,19 +66,27 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// Represents the parsed input to a select! macro with crate path
+/// Represents the parsed input to a `select!` macro with crate path.
+///
+/// This struct captures both the crate path for generating qualified paths
+/// and the parsed select branches.
 struct SelectWithPathInput {
     crate_path: syn::Path,
     select_input: SelectInput,
 }
 
-/// Represents the parsed input to a select! macro
+/// Represents the parsed input to a `select!` macro.
+///
+/// Contains the biased flag and all branches to be selected over.
 struct SelectInput {
     biased: bool,
     branches: Vec<SelectBranch>,
 }
 
-/// Represents a single branch in a select! macro
+/// Represents a single branch in a `select!` macro.
+///
+/// Each branch consists of a pattern, future expression, handler code,
+/// and an optional guard condition.
 struct SelectBranch {
     pattern: Pat,
     future: Expr,
@@ -199,7 +213,10 @@ pub fn try_join_internal(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// Represents the parsed input to a `join!/try_join`! macro with crate path
+/// Represents the parsed input to a `join!/try_join!` macro with crate path.
+///
+/// Contains the crate path for generating qualified paths and the list
+/// of futures to join.
 struct JoinWithPathInput {
     crate_path: syn::Path,
     futures: Vec<Expr>,

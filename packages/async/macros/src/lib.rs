@@ -52,7 +52,11 @@ use syn::{Expr, ImplItem, Item, ItemMod, parse_macro_input};
 #[cfg(feature = "simulator")]
 mod simulator;
 
-/// Represents the parsed input to a test macro with crate path
+/// Represents the parsed input to a test macro with crate path.
+///
+/// This struct captures the complete configuration for a simulator test,
+/// including the runtime path and optional flags for real-time, real-fs,
+/// and simulator disabling.
 #[cfg(feature = "simulator")]
 struct TestWithPathInput {
     crate_path: syn::Path,
@@ -108,7 +112,10 @@ impl syn::parse::Parse for TestWithPathInput {
     }
 }
 
-/// Represents the parsed arguments for test attributes
+/// Represents the parsed arguments for test attributes.
+///
+/// These arguments control the runtime behavior of simulator tests,
+/// allowing tests to opt into real resources or disable simulation.
 #[cfg(feature = "simulator")]
 struct TestArgs {
     real_time: bool,
@@ -154,8 +161,12 @@ impl syn::parse::Parse for TestArgs {
     }
 }
 
-/// Helper function to convert `TestArgs` to the internal token format
+/// Helper function to convert `TestArgs` to the internal token format.
+///
+/// Constructs the token stream that will be passed to `test_internal`,
+/// combining the crate path, test arguments, and function tokens.
 #[cfg(feature = "simulator")]
+#[must_use]
 fn build_test_tokens(
     crate_path: &str,
     args: &TestArgs,
@@ -258,6 +269,10 @@ pub fn try_join_internal(input: TokenStream) -> TokenStream {
     simulator::try_join_internal(input)
 }
 
+/// AST visitor that injects yield points after every `.await` expression.
+///
+/// This visitor walks through the syntax tree and transforms async await
+/// expressions to include `yield_now()` calls for deterministic testing.
 struct YieldInjector;
 
 impl VisitMut for YieldInjector {
@@ -275,6 +290,10 @@ impl VisitMut for YieldInjector {
     }
 }
 
+/// Recursively injects yield points into an AST item.
+///
+/// This function handles different item types (functions, impl blocks, modules)
+/// and applies the yield injector to async functions within them.
 fn inject_item(item: &mut Item, injector: &mut YieldInjector) {
     match item {
         Item::Fn(func) if func.sig.asyncness.is_some() => {
