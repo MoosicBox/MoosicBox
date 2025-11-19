@@ -1,7 +1,17 @@
+//! Download progress event handling and WebSocket broadcasting.
+//!
+//! This module initializes event listeners for download progress and broadcasts download events
+//! to connected WebSocket clients. Events are throttled to avoid overwhelming clients with updates.
+
 use moosicbox_async_service::Arc;
 
 use crate::WS_SERVER_HANDLE;
 
+/// Initializes download progress event listeners.
+///
+/// Sets up throttled event handlers that broadcast download progress (bytes read, completion, etc.)
+/// to connected WebSocket clients. Events are throttled to a maximum of one update per 200ms to
+/// prevent excessive message traffic.
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init() {
     let bytes_throttle = Arc::new(std::sync::Mutex::new(throttle::Throttle::new(

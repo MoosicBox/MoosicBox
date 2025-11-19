@@ -1,8 +1,17 @@
+//! Audio zone event handling and WebSocket broadcasting.
+//!
+//! This module initializes event listeners for audio zone updates and broadcasts zone configuration
+//! changes to connected WebSocket clients across all profiles.
+
 use moosicbox_audio_zone::events::BoxErrorSend;
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 
 use crate::WS_SERVER_HANDLE;
 
+/// Initializes audio zone event listeners.
+///
+/// Sets up an event handler that broadcasts audio zone updates to all connected WebSocket clients
+/// whenever audio zone configurations change (players added/removed, volume changes, etc.).
 pub async fn init(config_db: &ConfigDatabase) {
     let config_db = config_db.to_owned();
     moosicbox_audio_zone::events::on_audio_zones_updated_event({

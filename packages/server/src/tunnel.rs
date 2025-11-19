@@ -1,3 +1,9 @@
+//! Tunnel connection setup for remote `MoosicBox` server access.
+//!
+//! This module handles establishing WebSocket tunnel connections to a remote tunnel server,
+//! enabling clients to access this server instance without requiring port forwarding or direct
+//! network access. It processes HTTP and WebSocket requests forwarded through the tunnel.
+
 use std::env;
 
 use moosicbox_auth::get_client_id_and_access_token;

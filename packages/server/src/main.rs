@@ -1,3 +1,9 @@
+//! `MoosicBox` server binary entry point.
+//!
+//! This is the main executable that starts the `MoosicBox` server with all features enabled
+//! based on compile-time feature flags. It configures logging, telemetry, and runtime settings
+//! before launching the server.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]

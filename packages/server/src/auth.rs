@@ -1,3 +1,9 @@
+//! Static token authentication middleware.
+//!
+//! This module provides Actix-web middleware for authenticating requests using a static bearer
+//! token. It's enabled with the `static-token-auth` feature and validates tokens from either
+//! the Authorization header or query parameters.
+
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
     error::ErrorUnauthorized,

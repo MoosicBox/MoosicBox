@@ -1,3 +1,8 @@
+//! Local audio player initialization and management.
+//!
+//! This module handles initialization of local audio players for available audio output devices,
+//! registers them with the server, and manages playback updates from WebSocket clients.
+
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -74,6 +79,11 @@ pub async fn init(
     Ok(())
 }
 
+/// Handles playback update requests from WebSocket clients for local players.
+///
+/// This function processes session update messages (play, pause, seek, volume, etc.) and applies
+/// them to the appropriate local audio player. It creates new players as needed based on the
+/// audio zone configuration.
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn handle_server_playback_update(
@@ -207,6 +217,16 @@ fn handle_server_playback_update(
     })
 }
 
+/// Registers a local audio player with the server.
+///
+/// This function creates a player connection for the specified audio output device and registers
+/// it with the WebSocket server. It also sets up the playback update handler so the player can
+/// receive control commands from clients.
+///
+/// # Errors
+///
+/// * [`moosicbox_ws::WebsocketSendError`] - If player registration with the WebSocket server fails
+/// * [`moosicbox_ws::WebsocketSendError`] - If the WebSocket server handle is not available
 pub async fn register_server_player(
     config_db: &ConfigDatabase,
     ws: crate::ws::server::WsServerHandle,
