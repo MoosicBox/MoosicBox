@@ -79,4 +79,3 @@ impl FromRequest for TunnelInfo {
         ok(tunnel_info)
     }
 }
-// pub service_port: u16,
