@@ -106,6 +106,14 @@ pub fn set_root_dir(path: PathBuf) {
     *ROOT_DIR.lock().unwrap() = Some(path);
 }
 
+/// Returns the root directory for `MoosicBox` configuration.
+///
+/// Defaults to `~/.local/moosicbox` unless overridden with [`set_root_dir`].
+/// This is an internal helper function that caches the root directory path.
+///
+/// # Panics
+///
+/// * If the `ROOT_DIR` mutex is poisoned (which can only occur if another thread panicked while holding the lock)
 #[must_use]
 fn get_root_dir() -> Option<PathBuf> {
     let mut root_dir = ROOT_DIR.lock().unwrap();

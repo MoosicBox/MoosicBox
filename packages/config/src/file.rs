@@ -205,7 +205,12 @@ pub struct PlayerConfig {
     pub buffer_size: Option<u32>,
 }
 
-/// Get the path to a config file, preferring .json5 but also checking .json
+/// Get the path to a config file, preferring `.json5` but also checking `.json`.
+///
+/// This function checks for a config file with the given filename in the provided directory,
+/// preferring `.json5` format over `.json` format if both exist.
+///
+/// Returns `None` if neither file exists.
 fn get_config_file_path(dir: &Path, filename: &str) -> Option<PathBuf> {
     let json5_path = dir.join(format!("{filename}.json5"));
     if switchy_fs::exists(&json5_path) {
@@ -220,7 +225,16 @@ fn get_config_file_path(dir: &Path, filename: &str) -> Option<PathBuf> {
     None
 }
 
-/// Load a config file from disk, parsing it with json5
+/// Load a config file from disk, parsing it with `json5`.
+///
+/// This function reads the file at the given path and parses it as JSON5 format,
+/// deserializing it into the specified type.
+///
+/// # Errors
+///
+/// * If the file cannot be read
+/// * If the file content is not valid JSON5
+/// * If the JSON5 content cannot be deserialized into type `T`
 fn load_config_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, ConfigError> {
     let content = switchy_fs::sync::read_to_string(path)?;
     let config = json5::from_str(&content)?;
