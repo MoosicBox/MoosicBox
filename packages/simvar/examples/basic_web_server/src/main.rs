@@ -48,6 +48,12 @@ use switchy_http_models::Method;
 /// * A web server host that serves HTTP requests
 /// * Multiple client actors that make requests to the server
 /// * Metrics collection and reporting
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The simulation fails to initialize or run
+/// * An unrecoverable error occurs during the simulation
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bootstrap = BasicWebServerBootstrap::new();
     let results = run_simulation(bootstrap)?;
@@ -78,6 +84,12 @@ struct BasicWebServerBootstrap {
 }
 
 impl BasicWebServerBootstrap {
+    /// Creates a new `BasicWebServerBootstrap` with default configuration values.
+    ///
+    /// Default values:
+    /// * `server_port`: 8080
+    /// * `client_count`: 3
+    /// * `request_interval`: 500ms
     #[must_use]
     const fn new() -> Self {
         Self {
@@ -89,6 +101,9 @@ impl BasicWebServerBootstrap {
 }
 
 impl SimBootstrap for BasicWebServerBootstrap {
+    /// Returns the simulation properties as key-value pairs for reporting.
+    ///
+    /// Includes server port, client count, and request interval in milliseconds.
     fn props(&self) -> Vec<(String, String)> {
         vec![
             ("server_port".to_string(), self.server_port.to_string()),
@@ -100,6 +115,10 @@ impl SimBootstrap for BasicWebServerBootstrap {
         ]
     }
 
+    /// Configures the simulation settings.
+    ///
+    /// Sets the simulation duration to 10 seconds and enables random ordering
+    /// of concurrent events.
     fn build_sim(&self, mut config: SimConfig) -> SimConfig {
         // Run simulation for 10 seconds
         config.duration = Duration::from_secs(10);
@@ -107,6 +126,10 @@ impl SimBootstrap for BasicWebServerBootstrap {
         config
     }
 
+    /// Initializes and starts the simulation actors.
+    ///
+    /// Creates one web server host and multiple client actors based on the
+    /// configured `client_count`.
     fn on_start(&self, sim: &mut impl Sim) {
         log::info!("Starting basic web server simulation");
 
@@ -128,10 +151,16 @@ impl SimBootstrap for BasicWebServerBootstrap {
         }
     }
 
+    /// Called at each simulation step.
+    ///
+    /// Currently unused - reserved for future per-step logic.
     fn on_step(&self, _sim: &mut impl Sim) {
         // Optional: Add per-step logic here
     }
 
+    /// Called when the simulation ends.
+    ///
+    /// Logs the completion of the simulation.
     fn on_end(&self, _sim: &mut impl Sim) {
         log::info!("Basic web server simulation completed");
     }
@@ -143,6 +172,12 @@ impl SimBootstrap for BasicWebServerBootstrap {
 /// * `GET /api/v1/health` - Returns health status
 /// * `GET /api/v1/status` - Returns server status with uptime
 /// * `POST /api/v1/echo` - Echoes the request with timestamp
+///
+/// # Errors
+///
+/// Currently always returns `Ok(())`. Future implementations may return errors if:
+/// * The web server fails to bind to the specified port
+/// * The server encounters a fatal runtime error
 ///
 /// # Panics
 ///
@@ -219,6 +254,13 @@ async fn start_web_server(port: u16) -> HostResult {
 /// * Echo request (`POST /api/v1/echo`)
 ///
 /// The client continues making requests until the simulation is cancelled.
+///
+/// # Errors
+///
+/// Currently always returns `Ok(())`. HTTP request failures are logged as warnings
+/// but do not cause the client to fail. Future implementations may return errors if:
+/// * The client encounters an unrecoverable error
+/// * Required resources become unavailable
 ///
 /// # Panics
 ///
