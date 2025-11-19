@@ -1,19 +1,44 @@
+//! Time formatting utilities.
+//!
+//! This module provides the [`TimeFormat`] trait for converting time durations
+//! in milliseconds into human-readable formatted strings.
+
+/// Formats time durations in milliseconds into human-readable strings.
+///
+/// This trait is implemented for various unsigned integer types and provides
+/// a consistent way to format time values for display.
 pub trait TimeFormat {
+    /// Converts the time value into a formatted human-readable string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use simvar_harness::formatting::TimeFormat;
+    /// let formatted = 5000u64.into_formatted();
+    /// assert_eq!(formatted, "5s, 0ms");
+    /// ```
+    #[must_use]
     fn into_formatted(self) -> String;
 }
 
+/// Implements time formatting for `u32` values.
 impl TimeFormat for u32 {
     fn into_formatted(self) -> String {
         u128::from(self).into_formatted()
     }
 }
 
+/// Implements time formatting for `u64` values.
 impl TimeFormat for u64 {
     fn into_formatted(self) -> String {
         u128::from(self).into_formatted()
     }
 }
 
+/// Implements time formatting for `u128` values.
+///
+/// Formats the time value in milliseconds into a human-readable string with
+/// appropriate units (years, days, hours, minutes, seconds, milliseconds).
 impl TimeFormat for u128 {
     fn into_formatted(self) -> String {
         #[must_use]

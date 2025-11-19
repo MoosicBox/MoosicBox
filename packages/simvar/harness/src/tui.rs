@@ -1,3 +1,9 @@
+//! Terminal user interface (TUI) implementation.
+//!
+//! This module provides a terminal-based UI for monitoring simulation progress
+//! when the `tui` feature is enabled. It displays real-time information about
+//! running simulations including progress bars, step counts, and status.
+
 use std::{
     sync::{Arc, RwLock, atomic::AtomicBool},
     thread::JoinHandle,
@@ -15,6 +21,7 @@ use ratatui::{
 
 use crate::{RUNS, SimConfig, end_sim};
 
+/// Information about a running simulation displayed in the TUI.
 #[derive(Debug, Clone, Copy)]
 struct SimulationInfo {
     thread_id: u64,
@@ -25,6 +32,10 @@ struct SimulationInfo {
     failed: bool,
 }
 
+/// Shared state for the TUI display.
+///
+/// This struct manages the state of all running simulations and the terminal
+/// itself. It is thread-safe and can be cloned to share across threads.
 #[derive(Debug, Clone)]
 pub struct DisplayState {
     running: Arc<AtomicBool>,
@@ -34,6 +45,8 @@ pub struct DisplayState {
 }
 
 impl DisplayState {
+    /// Creates a new `DisplayState` with default values.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             terminal: Arc::new(RwLock::new(None)),
@@ -43,11 +56,13 @@ impl DisplayState {
         }
     }
 
+    /// Increments the completed run counter.
     pub fn run_completed(&self) {
         let mut runs_completed = self.runs_completed.write().unwrap();
         *runs_completed += 1;
     }
 
+    /// Updates the current step count for a simulation.
     pub fn update_sim_step(&self, thread_id: u64, step: u64) {
         if let Some(existing) = self
             .simulations
@@ -60,6 +75,10 @@ impl DisplayState {
         }
     }
 
+    /// Updates or creates simulation state for a specific thread.
+    ///
+    /// If a simulation with the given `thread_id` exists, updates its state.
+    /// Otherwise, creates a new simulation entry and inserts it in sorted order.
     pub fn update_sim_state(
         &self,
         thread_id: u64,
@@ -101,6 +120,12 @@ impl DisplayState {
         }
     }
 
+    /// Draws the current state to the terminal.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the terminal has not been initialized
+    /// * Returns an error if terminal drawing fails
     fn draw(&self) -> std::io::Result<()> {
         let mut binding = self.terminal.write().unwrap();
 
@@ -121,16 +146,25 @@ impl DisplayState {
         Ok(())
     }
 
+    /// Returns the number of completed simulation runs.
+    #[must_use]
     fn runs_completed(&self) -> u64 {
         *self.runs_completed.read().unwrap()
     }
 
+    /// Signals the TUI to exit gracefully.
     pub fn exit(&self) {
         log::debug!("exiting the tui");
         self.running
             .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Initializes the terminal for TUI display.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if terminal initialization fails
+    /// * Returns an error if terminal setup fails
     fn init_terminal(&self) -> std::io::Result<()> {
         let terminal = ratatui::try_init()?;
         log::debug!("PANIC HOOK OVERRODE");
@@ -138,6 +172,13 @@ impl DisplayState {
         Ok(())
     }
 
+    /// Sets the terminal instance and prepares it for display.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if terminal clearing fails
+    /// * Returns an error if terminal flushing fails
+    /// * Returns an error if cursor positioning fails
     fn set_terminal(&self, mut terminal: DefaultTerminal) -> std::io::Result<()> {
         log::debug!("set_terminal");
         terminal.clear()?;
@@ -148,6 +189,11 @@ impl DisplayState {
         Ok(())
     }
 
+    /// Restores the terminal to its original state.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if cursor restoration fails
     fn restore(&self) -> std::io::Result<()> {
         log::debug!("restore");
         if let Some(terminal) = &mut *self.terminal.write().unwrap() {
@@ -159,6 +205,11 @@ impl DisplayState {
     }
 }
 
+/// Spawns the TUI in a separate thread.
+///
+/// Starts the TUI event loop and rendering loop in a new thread. Blocks until
+/// the TUI is initialized before returning the join handle.
+#[must_use]
 pub fn spawn(state: DisplayState) -> JoinHandle<std::io::Result<()>> {
     let (tx, rx) = oneshot::channel();
 
@@ -169,6 +220,17 @@ pub fn spawn(state: DisplayState) -> JoinHandle<std::io::Result<()>> {
     handle
 }
 
+/// Starts the TUI and runs the event and render loops.
+///
+/// Initializes the terminal, spawns the event loop, and runs the render loop
+/// until the simulation completes or the user exits.
+///
+/// # Errors
+///
+/// * Returns an error if terminal initialization fails
+/// * Returns an error if the event loop fails
+/// * Returns an error if terminal restoration fails
+/// * Returns an error if the render loop fails
 pub fn start(start_tx: Sender<()>, state: &DisplayState) -> std::io::Result<()> {
     state.init_terminal()?;
     start_tx.send(()).unwrap();
@@ -181,6 +243,9 @@ pub fn start(start_tx: Sender<()>, state: &DisplayState) -> std::io::Result<()> 
     result
 }
 
+/// Spawns the event handling loop in a separate thread.
+///
+/// Monitors keyboard input and handles Ctrl-C or 'q' to exit the simulation.
 fn spawn_event_loop(state: &DisplayState) -> JoinHandle<std::io::Result<()>> {
     let state = state.clone();
 
@@ -212,6 +277,13 @@ fn spawn_event_loop(state: &DisplayState) -> JoinHandle<std::io::Result<()>> {
     })
 }
 
+/// Runs the TUI render loop.
+///
+/// Continuously redraws the display until the simulation completes or is cancelled.
+///
+/// # Errors
+///
+/// * Returns an error if drawing fails
 fn run(state: &DisplayState) -> std::io::Result<()> {
     while state.running.load(std::sync::atomic::Ordering::SeqCst) {
         state.draw()?;
@@ -222,6 +294,9 @@ fn run(state: &DisplayState) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Renders the TUI frame with simulation progress information.
+///
+/// Displays a grid of progress bars showing the status of all running simulations.
 #[allow(clippy::similar_names, clippy::too_many_lines)]
 fn render(state: &DisplayState, frame: &mut Frame) {
     let area = frame.area();

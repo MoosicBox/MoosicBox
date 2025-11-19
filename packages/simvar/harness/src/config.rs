@@ -97,7 +97,7 @@ impl SimConfig {
 
         let min_message_latency = rng().gen_range_dist(0..=1000, 1.0);
 
-        config
+        let config = config
             .fail_rate(0.0)
             .repair_rate(1.0)
             .tcp_capacity(64)
@@ -116,62 +116,71 @@ impl SimConfig {
         }
 
         #[cfg(feature = "time")]
-        config.tick_duration(Duration::from_millis(
+        let config = config.tick_duration(Duration::from_millis(
             switchy::time::simulator::step_multiplier(),
         ));
 
-        config
+        *config
     }
 
     /// Sets the failure rate and returns a mutable reference to self.
+    #[must_use]
     pub const fn fail_rate(&mut self, fail_rate: f64) -> &mut Self {
         self.fail_rate = fail_rate;
         self
     }
 
     /// Sets the repair rate and returns a mutable reference to self.
+    #[must_use]
     pub const fn repair_rate(&mut self, repair_rate: f64) -> &mut Self {
         self.repair_rate = repair_rate;
         self
     }
 
     /// Sets the TCP capacity and returns a mutable reference to self.
+    #[must_use]
     pub const fn tcp_capacity(&mut self, tcp_capacity: u64) -> &mut Self {
         self.tcp_capacity = tcp_capacity;
         self
     }
 
     /// Sets the UDP capacity and returns a mutable reference to self.
+    #[must_use]
     pub const fn udp_capacity(&mut self, udp_capacity: u64) -> &mut Self {
         self.udp_capacity = udp_capacity;
         self
     }
 
     /// Sets whether to enable random actor execution order and returns a mutable reference to self.
+    #[must_use]
     pub const fn enable_random_order(&mut self, enable_random_order: bool) -> &mut Self {
         self.enable_random_order = enable_random_order;
         self
     }
 
     /// Sets the minimum message latency and returns a mutable reference to self.
+    #[must_use]
     pub const fn min_message_latency(&mut self, min_message_latency: Duration) -> &mut Self {
         self.min_message_latency = min_message_latency;
         self
     }
 
     /// Sets the maximum message latency and returns a mutable reference to self.
+    #[must_use]
     pub const fn max_message_latency(&mut self, max_message_latency: Duration) -> &mut Self {
         self.max_message_latency = max_message_latency;
         self
     }
 
     /// Sets the simulation duration and returns a mutable reference to self.
+    #[must_use]
     pub const fn duration(&mut self, duration: Duration) -> &mut Self {
         self.duration = duration;
         self
     }
 
     /// Sets the tick duration and returns a mutable reference to self.
+    #[must_use]
     pub const fn tick_duration(&mut self, tick_duration: Duration) -> &mut Self {
         self.tick_duration = tick_duration;
         self
@@ -330,6 +339,7 @@ impl std::fmt::Display for SimResult {
 /// Formats simulation properties as a human-readable string.
 ///
 /// Used for logging and displaying simulation configuration details.
+#[must_use]
 pub fn run_info(props: &SimProperties) -> String {
     use std::fmt::Write as _;
 
