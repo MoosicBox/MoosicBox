@@ -285,6 +285,11 @@ impl std::fmt::Display for ParseSelectorError {
 impl TryFrom<String> for Selector {
     type Error = ParseSelectorError;
 
+    /// Attempts to parse a selector from a string.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `ParseSelectorError` if the string is not a valid selector format
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }
@@ -293,6 +298,11 @@ impl TryFrom<String> for Selector {
 impl TryFrom<&String> for Selector {
     type Error = ParseSelectorError;
 
+    /// Attempts to parse a selector from a string reference.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `ParseSelectorError` if the string is not a valid selector format
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }
@@ -301,6 +311,17 @@ impl TryFrom<&String> for Selector {
 impl TryFrom<&str> for Selector {
     type Error = ParseSelectorError;
 
+    /// Attempts to parse a selector from a string slice.
+    ///
+    /// Supports the following formats:
+    /// * `"self"` - Self target
+    /// * `"#id"` - ID selector
+    /// * `".class"` - Class selector
+    /// * `"> .class"` - Child class selector
+    ///
+    /// # Errors
+    ///
+    /// * Returns `ParseSelectorError` if the string does not match any valid selector format
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
             "self" => Self::SelfTarget,
