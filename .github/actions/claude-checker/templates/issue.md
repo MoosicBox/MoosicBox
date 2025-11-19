@@ -63,7 +63,6 @@ CRITICAL: Your default behavior is to EXPLAIN and ANALYZE, NOT to implement code
 
     **Default: EXPLAIN ONLY (no code changes)**
     For most messages, just provide analysis, recommendations, or explanations:
-
     - ❌ "what do you think about this issue?" → EXPLAIN your thoughts
     - ❌ "how would you solve this?" → EXPLAIN the approach, don't implement
     - ❌ "can you help with this?" → ASK for clarification on what kind of help
@@ -73,7 +72,6 @@ CRITICAL: Your default behavior is to EXPLAIN and ANALYZE, NOT to implement code
     - ❌ Any message with "?" → Assume they want explanation unless explicitly requesting implementation
 
     **ONLY implement code if the user EXPLICITLY requests it with clear action verbs:**
-
     - ✅ "fix this issue"
     - ✅ "implement a solution"
     - ✅ "create a PR for this"
@@ -89,7 +87,6 @@ CRITICAL: Your default behavior is to EXPLAIN and ANALYZE, NOT to implement code
     Before creating ANY commit, you MUST run the following verification checklist from AGENTS.md:
 
     MANDATORY CHECKS (ALWAYS REQUIRED):
-
     1. Run `cargo fmt` (format all code - NOT --check)
     2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
     3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
