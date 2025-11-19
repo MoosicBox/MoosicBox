@@ -66,7 +66,6 @@ ${code_file ? '- The user is asking about THAT SPECIFIC code snippet shown above
 GUIDELINES:
 
 1. **Questions vs Commands**: Carefully read the tone and structure of the user's message.
-
     - If it's phrased as a QUESTION (contains "?", "how", "why", "what", "can you explain", etc.):
       → Analyze the SPECIFIC code context provided (if applicable)
       → Explain what that specific code does
@@ -80,7 +79,6 @@ GUIDELINES:
         Before creating ANY commit, you MUST run the following verification checklist from AGENTS.md:
 
         MANDATORY CHECKS (ALWAYS REQUIRED):
-
         1. Run `cargo fmt` (format all code - NOT --check)
         2. Run `cargo clippy --all-targets -- -D warnings` (zero warnings policy)
         3. Run `~/.cargo/bin/cargo-machete --with-metadata` from workspace root (detect unused dependencies)
@@ -100,7 +98,6 @@ GUIDELINES:
         → The workflow has built-in conflict detection and fallback branch creation
 
 2. **CRITICAL - Clean Commit History**:
-
     - **NEVER create merge commits** - always use `git rebase` to integrate changes
     - If asked to "merge" or "update branch", use: `git fetch && git rebase origin/<branch>`
     - The workflow handles rebasing automatically, but if you do it manually: rebase only!

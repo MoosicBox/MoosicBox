@@ -168,21 +168,18 @@ Requirements:
     ```
 
     **What to Look For:**
-
     - **Revert commits**: Messages containing "revert", "revert back to", "prefer X format", "changed back to"
     - **PR discussion references**: Look for "Triggered-by:" URLs in commit messages
     - **Explicit reasoning**: Commit messages explaining "prefer X because Y" or "more concise", "better for readability"
     - **Multiple attempts**: If the same change appears 2+ times in history, this is a STRONG SIGNAL
 
     **Blocking Rules (NON-NEGOTIABLE):**
-
     - ❌ **If you find a revert commit for the exact change you want to make**: STOP. DO NOT make that change.
     - ❌ **If the same change was reverted 2+ times**: HARD STOP. The maintainers have decided against it.
     - ❌ **If a commit contains "Triggered-by:" with a GitHub PR/discussion URL**: You MUST read that discussion to understand the reasoning before proceeding.
     - ❌ **If unclear after reading history**: Leave it alone. Document the uncertainty in your output for human review.
 
     **Decision Process:**
-
     1. Run `git log -L` for the specific line(s) you want to change
     2. Read ALL commit messages in the history (no arbitrary limits - check FULL history)
     3. If you see a revert or "Triggered-by:" reference:
@@ -221,7 +218,6 @@ Requirements:
     ```
 
 2. **Check Claims Against Code**
-
     - Read the code at `${package_path}/src/` to verify README claims
     - Compare API examples with actual function signatures
     - Check `${package_path}/Cargo.toml` for dependency accuracy

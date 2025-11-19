@@ -76,6 +76,7 @@ struct AnalysisContext {
 ///
 /// Expands comma-separated values in package, skip-packages, skip-features, tool, and
 /// output-format arguments into individual items.
+#[must_use]
 fn parse_args() -> Args {
     let mut args = Args::parse();
 
@@ -915,6 +916,7 @@ fn build_and_measure_binary(
 }
 
 /// Checks if a cargo tool is installed and available.
+#[must_use]
 fn tool_available(tool: &str) -> bool {
     Command::new("cargo")
         .arg(tool)
