@@ -41,6 +41,49 @@ strip_ansi_codes() {
     sed 's/\x1b\[[0-9;]*m//g' | sed 's/�\[[0-9;]*m//g'
 }
 
+# Generate debug reproduction command for a specific shell
+#
+# Creates a shell-specific command that can be run locally to reproduce
+# the test execution. Each shell has a hardcoded template for navigating
+# to the working directory and executing the command.
+#
+# Supported shells:
+#   - bash: (cd <dir>; <command>)
+#   - fish: pushd <dir>; <command>; popd
+#   - zsh: (cd <dir> && <command>)
+#
+# Arguments:
+#   $1 - shell_name: Name of the shell (bash, fish, zsh)
+#   $2 - working_dir: Working directory path
+#   $3 - command: Command to execute
+#
+# Returns:
+#   Shell-specific reproduction command on stdout
+#
+# Example:
+#   get_debug_command "bash" "packages/player" "cargo test"
+#   # Output: (cd packages/player; cargo test)
+get_debug_command() {
+    local shell_name="$1"
+    local working_dir="$2"
+    local command="$3"
+
+    case "$shell_name" in
+        "bash")
+            echo "(cd $working_dir; $command)"
+            ;;
+        "fish")
+            echo "pushd $working_dir; $command; popd"
+            ;;
+        "zsh")
+            echo "(cd $working_dir && $command)"
+            ;;
+        *)
+            echo "# Unsupported shell: $shell_name"
+            ;;
+    esac
+}
+
 # Generate GitHub Actions summary for run-matrix results
 #
 # Creates a comprehensive markdown summary including:
@@ -156,6 +199,34 @@ generate_run_matrix_summary() {
             echo "$cmd" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Debug reproduction commands (collapsible)
+            local debug_shells="${INPUT_RUN_MATRIX_DEBUG_SHELLS:-bash}"
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><b>🔄 Reproduce Locally</b></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Parse comma-separated shell list and generate commands for each
+            IFS=',' read -ra SHELLS <<< "$debug_shells"
+            for shell in "${SHELLS[@]}"; do
+                # Trim whitespace
+                shell=$(echo "$shell" | xargs)
+
+                # Capitalize shell name for display
+                local shell_display="${shell^}"
+
+                # Generate debug command for this shell
+                local debug_cmd=$(get_debug_command "$shell" "$working_dir" "$cmd")
+
+                echo "**$shell_display:**" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`$shell" >> $GITHUB_STEP_SUMMARY
+                echo "$debug_cmd" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+            done
+
             echo "</details>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
