@@ -186,20 +186,22 @@ jobs:
 
 ### Optional (`check` command)
 
-| Input                        | Description                                                              | Default                           |
-| ---------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
-| `template_vars`              | YAML/JSON object of variables                                            | `{}`                              |
-| `verification_profile`       | Built-in profile: `auto`, `rust`, `typescript`, `python`, `go`, `custom` | `auto`                            |
-| `verification_config_file`   | Path to verification config YAML                                         | `.github/claude-verification.yml` |
-| `verification_config_inline` | Inline verification config (YAML)                                        |                                   |
-| `branch_name`                | Branch to commit to (overrides template default)                         |                                   |
-| `commit_message`             | Commit message (supports template variables)                             |                                   |
-| `auto_commit`                | Automatically commit changes                                             | `true`                            |
-| `model`                      | Claude model                                                             |                                   |
-| `max_tokens`                 | Max tokens                                                               |                                   |
-| `max_turns`                  | Max turns                                                                |                                   |
-| `claude_args`                | Additional Claude Code arguments                                         |                                   |
-| `working_directory`          | Working directory                                                        | `.`                               |
+| Input                              | Description                                                              | Default                           |
+| ---------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
+| `template_vars`                    | YAML/JSON object of variables                                            | `{}`                              |
+| `verification_profile`             | Built-in profile: `auto`, `rust`, `typescript`, `python`, `go`, `custom` | `auto`                            |
+| `verification_config_file`         | Path to verification config YAML                                         | `.github/claude-verification.yml` |
+| `verification_config_inline`       | Inline verification config (YAML)                                        |                                   |
+| `branch_name`                      | Branch to commit to (overrides template default)                         |                                   |
+| `commit_message`                   | Commit message (supports template variables)                             |                                   |
+| `auto_commit`                      | Automatically commit changes                                             | `true`                            |
+| `enable_execution_details_summary` | Post execution details to workflow summary                               | `false`                           |
+| `summary_title`                    | Title for workflow summary section                                       | `💭 Claude Execution Details`     |
+| `model`                            | Claude model                                                             |                                   |
+| `max_tokens`                       | Max tokens                                                               |                                   |
+| `max_turns`                        | Max turns                                                                |                                   |
+| `claude_args`                      | Additional Claude Code arguments                                         |                                   |
+| `working_directory`                | Working directory                                                        | `.`                               |
 
 ## Outputs
 
@@ -222,6 +224,7 @@ jobs:
 | `fallback_branch`        | Fallback branch (if created)                                   |
 | `compare_url`            | Compare URL for fallback                                       |
 | `commit_created`         | `true` if commit was created                                   |
+| `summary_posted`         | `true` if execution details were posted to workflow summary    |
 
 ### `create-branch` Command Outputs
 
@@ -478,6 +481,87 @@ jobs:
             ## Audio Package Specifics
             - Document all supported codecs
             - Include performance benchmarks
+```
+
+## Execution Details
+
+The claude-checker action can provide detailed execution information showing how Claude worked on the task. This includes tool usage, thinking process, token counts, and costs.
+
+### Workflow Summary
+
+Post the "💭 How I worked on this" details directly to the GitHub Actions workflow summary page (visible on the workflow run page).
+
+**Example:**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'readme'
+      enable_execution_details_summary: 'true'
+      summary_title: '💭 README Update Details'
+```
+
+**Use Cases:**
+
+- Quick visibility without downloading artifacts
+- Permanent record in workflow run page
+- Easier to review in PR checks tab
+- Great for CI/CD transparency
+
+**Combines With:**
+
+- Can be used together with `enable_execution_details_artifact` for downloadable records
+- Can be used with `enable_execution_details` for inline comment visibility
+- All three options (summary, artifact, comment) work independently or together
+
+### Artifacts
+
+Upload execution details as a downloadable artifact:
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'readme'
+      enable_execution_details_artifact: 'true'
+      artifact_name_prefix: 'readme'
+      artifact_package_name: 'my-package'
+      artifact_retention_days: '30'
+```
+
+### Comment Appending
+
+Append execution details to GitHub issue/PR comments:
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'readme'
+      enable_execution_details: 'true'
+      acknowledgment_comment_id: ${{ steps.comment.outputs.comment_id }}
+```
+
+### All Three Together
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'readme'
+      # Summary for quick access
+      enable_execution_details_summary: 'true'
+      summary_title: '💭 How Claude Updated README'
+      # Artifact for long-term storage
+      enable_execution_details_artifact: 'true'
+      artifact_retention_days: '90'
+      # Comment for PR visibility
+      enable_execution_details: 'true'
 ```
 
 ## Development
