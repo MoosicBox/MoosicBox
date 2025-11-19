@@ -1,3 +1,33 @@
+//! `WebSocket` connection management for `MoosicBox` application state.
+//!
+//! This module provides functionality for establishing and managing `WebSocket`
+//! connections to `MoosicBox` servers, including message handling, connection
+//! lifecycle management, and playback state synchronization.
+//!
+//! # Features
+//!
+//! * `WebSocket` connection initialization and teardown
+//! * Message queuing and buffering for unreliable connections
+//! * Playback state synchronization across clients
+//! * Session and audio zone updates via `WebSocket` events
+//!
+//! # Example
+//!
+//! ```no_run
+//! # use moosicbox_app_state::AppState;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let state = AppState::new();
+//!
+//! // Start WebSocket connection
+//! state.start_ws_connection().await?;
+//!
+//! // Connection handles messages automatically
+//! // Close when done
+//! state.close_ws_connection().await?;
+//! # Ok(())
+//! # }
+//! ```
+
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_app_ws::{
