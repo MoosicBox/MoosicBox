@@ -118,6 +118,19 @@ impl Instant {
     }
 }
 
+/// Converts a `SystemTime` to an `Instant` for the simulator.
+///
+/// This function calculates the equivalent `Instant` for a given `SystemTime` by computing
+/// the delta between the target time and the current system time, then applying that delta
+/// to the current instant.
+///
+/// # Errors
+///
+/// * Returns `SystemTimeError` if the time calculations overflow or underflow
+///
+/// # Panics
+///
+/// * If the instant calculation results in a value that cannot be represented
 fn system_time_to_instant(
     target: SystemTime,
 ) -> Result<std::time::Instant, std::time::SystemTimeError> {

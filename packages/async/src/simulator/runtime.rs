@@ -29,7 +29,11 @@ thread_local! {
     static LOCAL_FUTURES: LocalFutureMap = RefCell::new(BTreeMap::new());
 }
 
-// A Send future that references a non-Send future stored in thread-local storage
+/// A Send-safe proxy for non-Send futures stored in thread-local storage.
+///
+/// This allows spawning non-Send futures on the simulator runtime by storing the actual
+/// future in thread-local storage and providing a Send wrapper that can be moved between
+/// threads safely. The actual future execution always happens on the original thread.
 struct LocalFutureProxy {
     id: u64,
     completed: bool,
@@ -518,6 +522,10 @@ impl<T: Send + Unpin> Future for JoinHandle<T> {
     }
 }
 
+/// Task spawner for the simulator runtime.
+///
+/// This handles spawning new tasks onto the runtime's task queue. It manages
+/// both regular async tasks and blocking tasks.
 #[derive(Debug, Clone)]
 pub(crate) struct Spawner {
     queue: Queue,
@@ -677,11 +685,21 @@ pub fn wait() -> Result<(), Error> {
     RUNTIME.with(|runtime| runtime.clone().wait())
 }
 
+/// A task running on the simulator runtime.
+///
+/// Tasks are the unit of execution in the simulator. Each task wraps a future and
+/// tracks its execution state. Tasks can be either blocking or non-blocking, which
+/// determines how the runtime schedules their execution.
 struct Task {
+    /// Unique identifier for this task
     id: u64,
+    /// Runtime this task belongs to
     runtime: Runtime,
+    /// The future being executed
     future: Mutex<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
+    /// Whether this task has completed
     finished: AtomicBool,
+    /// Whether this is a blocking task
     block: bool,
 }
 

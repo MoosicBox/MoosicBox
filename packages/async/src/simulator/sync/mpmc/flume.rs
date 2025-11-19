@@ -14,21 +14,32 @@ use switchy_time::instant_now;
 // Re-export flume error types for compatibility
 pub use flume::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
-/// Shared reference counting between senders and receivers
+/// Shared reference counting between senders and receivers.
+///
+/// This tracks how many senders and receivers exist for a channel, allowing
+/// proper disconnection detection when all senders or receivers are dropped.
 struct SharedCounts {
     sender_count: AtomicUsize,
     receiver_count: AtomicUsize,
 }
 
-/// Internal channel state
+/// Internal channel state.
+///
+/// This contains the actual message queue and waker lists for coordinating
+/// between senders and receivers in an async context.
 struct ChannelInner<T> {
+    /// Queue of pending messages
     queue: VecDeque<T>,
+    /// Maximum capacity (None for unbounded)
     capacity: Option<usize>,
+    /// Wakers waiting for data to arrive
     receiver_wakers: Vec<Waker>,
+    /// Wakers waiting for space to become available
     sender_wakers: Vec<Waker>,
 }
 
 impl<T> ChannelInner<T> {
+    /// Creates a new channel inner state with the specified capacity.
     const fn new(capacity: Option<usize>) -> Self {
         Self {
             queue: VecDeque::new(),
@@ -38,14 +49,17 @@ impl<T> ChannelInner<T> {
         }
     }
 
+    /// Checks if the channel is at capacity.
     fn is_full(&self) -> bool {
         self.capacity.is_some_and(|cap| self.queue.len() >= cap)
     }
 
+    /// Checks if the channel has no messages.
     fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }
 
+    /// Returns the number of messages in the channel.
     fn len(&self) -> usize {
         self.queue.len()
     }
@@ -528,7 +542,15 @@ pub fn bounded_channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     bounded(capacity)
 }
 
-/// Improved cooperative yielding with backoff strategy
+/// Cooperative yielding with backoff strategy to prevent busy-waiting.
+///
+/// This function implements an escalating backoff strategy:
+/// - First 10 iterations: just yield the thread
+/// - 11-100 iterations: yield to simulator runtime and thread
+/// - 101-1000 iterations: sleep briefly (nanoseconds)
+/// - 1000+ iterations: sleep longer (microseconds) and log warnings
+///
+/// This prevents busy-waiting while allowing quick responses when data is available.
 fn cooperative_yield_with_backoff(iteration: usize) {
     match iteration {
         0..=10 => {
