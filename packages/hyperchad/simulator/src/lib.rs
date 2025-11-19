@@ -92,10 +92,6 @@ pub enum RendererType {
 
 impl std::fmt::Display for RendererType {
     /// Formats the renderer type as a lowercase string.
-    ///
-    /// # Errors
-    ///
-    /// Returns a formatting error if the output buffer cannot be written to.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Html => write!(f, "html"),
