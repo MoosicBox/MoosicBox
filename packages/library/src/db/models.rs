@@ -1,3 +1,8 @@
+//! Database model types for library configuration and authentication.
+//!
+//! This module defines the data structures used to represent library configuration
+//! and authentication credentials stored in the database.
+
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
