@@ -781,7 +781,7 @@ pub async fn album(
     Ok(db::get_album(db, ApiSource::library_ref(), album_id).await?)
 }
 
-/// Sorts album versions by audio quality metrics.
+/// Sorts album versions by audio quality metrics in descending order of sample rate, bit depth, and source.
 pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
     versions.sort_by(|a, b| {
         b.sample_rate
