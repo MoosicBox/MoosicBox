@@ -39,6 +39,7 @@
 
 use std::{
     cell::RefCell,
+    future::Future,
     sync::{LazyLock, RwLock, atomic::AtomicU64},
 };
 
@@ -152,6 +153,7 @@ pub fn cancel_global_simulation() {
 ///
 /// * If the `GLOBAL_SIMULATOR_CANCELLATION_TOKEN` `RwLock` fails to read from
 /// * If the `SIMULATOR_CANCELLATION_TOKEN` `RwLock` fails to read from
+#[must_use]
 pub async fn run_until_simulation_cancelled<F>(fut: F) -> Option<F::Output>
 where
     F: Future,
