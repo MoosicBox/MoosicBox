@@ -23,6 +23,7 @@
 # - clippier.feature-flags: Full cargo feature flag string
 # - clippier.iteration: Current iteration number
 # - clippier.total-iterations: Total number of iterations
+# - runner.debug: Boolean indicating if debug logging is enabled
 #
 # Arguments:
 #   $1 - matrix_json: Package matrix JSON object
@@ -48,6 +49,11 @@ init_template_context() {
     # Build feature flags
     local feature_flags="--features=\"$all_features\""
 
+    # Detect runner context from environment
+    # GitHub Actions sets RUNNER_DEBUG=1 when debug logging is enabled
+    local runner_debug="false"
+    [[ "${RUNNER_DEBUG:-}" == "1" ]] && runner_debug="true"
+
     # Create a combined context JSON with all available data
     local context=$(jq -n \
         --argjson matrix "$matrix_json" \
@@ -56,6 +62,7 @@ init_template_context() {
         --arg feature_flags "$feature_flags" \
         --argjson iteration "$iteration" \
         --argjson total_iterations "$total_iterations" \
+        --arg runner_debug "$runner_debug" \
         '{
             matrix: {
                 package: $matrix
@@ -66,6 +73,9 @@ init_template_context() {
                 "feature-flags": $feature_flags,
                 iteration: $iteration,
                 "total-iterations": $total_iterations
+            },
+            runner: {
+                debug: ($runner_debug == "true")
             }
         }')
 
@@ -77,15 +87,17 @@ init_template_context() {
 # Arguments:
 #   $1 - var_path: Variable path in dot notation (e.g., "matrix.package.name")
 #   $2 - context_json: Context JSON object
+#   $3 - suppress_warning: Optional, set to "true" to suppress warnings (default: false)
 #
 # Returns:
 #   Variable value on stdout, empty string if not found
 #
 # Note:
-#   Prints warning to stderr if variable is undefined or null
+#   Prints warning to stderr if variable is undefined or null (unless suppressed)
 resolve_variable() {
     local var_path="$1"
     local context_json="$2"
+    local suppress_warning="${3:-false}"
 
     # Convert dot notation to jq path, handling hyphens in property names
     # Replace segments containing hyphens with quoted versions
@@ -99,7 +111,7 @@ resolve_variable() {
     local value=$(echo "$context_json" | jq -r "$jq_path // \"\"" 2>/dev/null)
 
     if [[ "$value" == "null" || -z "$value" ]]; then
-        echo "Warning: Template variable {{$var_path}} is undefined or null" >&2
+        [[ "$suppress_warning" != "true" ]] && echo "Warning: Template variable {{$var_path}} is undefined or null" >&2
         echo ""
     else
         echo "$value"
@@ -161,14 +173,19 @@ evaluate_conditionals() {
         local condition="${BASH_REMATCH[1]}"
 
         # Find the content and {{endif}}
+        # Extract text after the {{if ...}} pattern
         local temp="${result#*$start_pattern}"
 
-        if [[ "$temp" =~ (.*)\{\{endif\}\}(.*) ]]; then
-            local content="${BASH_REMATCH[1]}"
+        # Find the FIRST {{endif}} (not greedy)
+        local endif_pos="${temp%%\{\{endif\}\}*}"
+
+        if [[ "$endif_pos" != "$temp" ]]; then
+            # Found {{endif}}
+            local content="$endif_pos"
             local full_match="${start_pattern}${content}{{endif}}"
 
-            # Resolve the condition variable
-            local cond_value=$(resolve_variable "$condition" "$context_json")
+            # Resolve the condition variable (suppress warnings for conditionals)
+            local cond_value=$(resolve_variable "$condition" "$context_json" "true")
 
             # Evaluate truthiness
             if [[ -n "$cond_value" && "$cond_value" != "false" && "$cond_value" != "0" ]]; then
@@ -188,8 +205,11 @@ evaluate_conditionals() {
 # Evaluate template with context
 #
 # Main template evaluation function that:
-# 1. Replaces all {{variable}} references with their values
-# 2. Evaluates {{if}}...{{endif}} conditional blocks
+# 1. Evaluates {{if}}...{{endif}} conditional blocks first
+# 2. Replaces all {{variable}} references with their values
+#
+# Note: Conditionals are evaluated first to avoid resolving variables
+#       that appear inside false conditional blocks.
 #
 # Arguments:
 #   $1 - template: Template string
@@ -203,16 +223,17 @@ evaluate_template() {
 
     local result="$template"
 
-    # First pass: Replace all variable references
+    # First pass: Handle conditional blocks
+    # This must come first so we don't resolve variables in false conditional blocks
+    result=$(evaluate_conditionals "$result" "$context_json")
+
+    # Second pass: Replace all variable references
     while IFS= read -r var_ref; do
         [[ -z "$var_ref" ]] && continue
 
         local value=$(resolve_variable "$var_ref" "$context_json")
         result="${result//\{\{$var_ref\}\}/$value}"
-    done < <(extract_variables "$template")
-
-    # Second pass: Handle conditional blocks
-    result=$(evaluate_conditionals "$result" "$context_json")
+    done < <(extract_variables "$result")
 
     echo "$result"
 }

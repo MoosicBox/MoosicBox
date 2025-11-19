@@ -177,7 +177,7 @@ inputs:
     matrix-properties:
         description: "Comma-separated list of properties to include in matrix"
         required: false
-        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules"
+        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules,cargo"
 
     os-suffix:
         description: 'Suffix to add to OS field (e.g., "-latest")'
