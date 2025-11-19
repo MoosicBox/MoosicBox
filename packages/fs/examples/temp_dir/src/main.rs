@@ -1,3 +1,11 @@
+//! Example demonstrating temporary directory functionality.
+//!
+//! This example shows how to use `switchy_fs` temporary directory features including:
+//! * Creating basic temporary directories that auto-cleanup on drop
+//! * Using custom prefixes for temp directory names
+//! * Keeping temp directories (preventing automatic cleanup)
+//! * Manually closing temp directories for immediate cleanup
+
 use switchy_fs::{TempDir, tempdir};
 
 fn main() -> std::io::Result<()> {
