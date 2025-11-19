@@ -27,6 +27,18 @@ pub enum ParseIntegersError {
 
 /// Parses a comma-separated string of integers into a vector of `u64` values.
 ///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_parsing_utils::integer_range::parse_integer_sequences;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let result = parse_integer_sequences("1,2,3,10")?;
+/// assert_eq!(result, vec![1, 2, 3, 10]);
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// * `ParseIntegersError::ParseId` - If any segment cannot be parsed as a valid `u64` integer
@@ -43,6 +55,23 @@ pub fn parse_integer_sequences(
 }
 
 /// Parses a string containing comma-separated integers and hyphen-separated ranges into a vector of `u64` values.
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_parsing_utils::integer_range::parse_integer_ranges;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // Parse a mix of individual integers and ranges
+/// let result = parse_integer_ranges("1,2-5,10")?;
+/// assert_eq!(result, vec![1, 2, 3, 4, 5, 10]);
+///
+/// // Parse just individual integers (no ranges)
+/// let result = parse_integer_ranges("1,5,10")?;
+/// assert_eq!(result, vec![1, 5, 10]);
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Errors
 ///
