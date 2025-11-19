@@ -34,13 +34,13 @@ impl From<::opus::Error> for EncoderError {
 /// format begins with a 4-byte big-endian sample count, followed by a series of
 /// encoded packets, each prefixed with a 2-byte big-endian length.
 ///
-/// # Panics
-///
-/// * If the samples len fails to convert to u32 type
-///
 /// # Errors
 ///
 /// * If the encoder fails to encode the samples
+///
+/// # Panics
+///
+/// * If the samples len fails to convert to u32 type
 pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> {
     use audiopus::{
         Application, Bitrate, Channels, Error as OpusError, ErrorCode as OpusErrorCode, SampleRate,
