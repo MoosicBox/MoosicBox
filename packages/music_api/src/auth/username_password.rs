@@ -91,6 +91,7 @@ impl std::fmt::Debug for UsernamePasswordAuth {
 }
 
 impl From<UsernamePasswordAuth> for Auth {
+    /// Converts `UsernamePasswordAuth` into `Auth::UsernamePassword`.
     fn from(value: UsernamePasswordAuth) -> Self {
         Self::UsernamePassword(value)
     }

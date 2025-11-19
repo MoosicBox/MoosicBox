@@ -79,24 +79,28 @@ impl MusicApis {
 }
 
 impl From<&MusicApis> for Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    /// Converts a reference to `MusicApis` into an `Arc` of the inner map.
     fn from(value: &MusicApis) -> Self {
         value.0.clone()
     }
 }
 
 impl From<MusicApis> for Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    /// Converts `MusicApis` into an `Arc` of the inner map.
     fn from(value: MusicApis) -> Self {
         value.0
     }
 }
 
 impl From<Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
+    /// Converts an `Arc` of the inner map into `MusicApis`.
     fn from(value: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>) -> Self {
         Self(value)
     }
 }
 
 impl SourceToMusicApi for MusicApis {
+    /// Gets the music API for the given source from the collection.
     fn get(&self, source: &ApiSource) -> Option<Arc<Box<dyn MusicApi>>> {
         self.0.get(source).cloned()
     }
@@ -131,6 +135,7 @@ impl<'a> IntoIterator for &'a MusicApis {
     type Item = &'a dyn MusicApi;
     type IntoIter = MusicApisIter<'a>;
 
+    /// Creates an iterator over the music APIs.
     fn into_iter(self) -> Self::IntoIter {
         MusicApisIter {
             inner: self.0.iter(),
@@ -193,24 +198,28 @@ impl TrackOrId {
 }
 
 impl From<Id> for TrackOrId {
+    /// Converts an `Id` into `TrackOrId::Id`.
     fn from(value: Id) -> Self {
         Self::Id(value)
     }
 }
 
 impl From<&Id> for TrackOrId {
+    /// Converts a reference to an `Id` into `TrackOrId::Id`.
     fn from(value: &Id) -> Self {
         Self::Id(value.to_owned())
     }
 }
 
 impl From<Track> for TrackOrId {
+    /// Converts a `Track` into `TrackOrId::Track`.
     fn from(value: Track) -> Self {
         Self::Track(Box::new(value))
     }
 }
 
 impl From<&Track> for TrackOrId {
+    /// Converts a reference to a `Track` into `TrackOrId::Track`.
     fn from(value: &Track) -> Self {
         Self::Track(Box::new(value.to_owned()))
     }
