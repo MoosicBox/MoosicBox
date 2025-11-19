@@ -2,7 +2,7 @@
 //!
 //! This module provides a multi-room WebSocket server that manages client connections, message
 //! routing, and player action dispatching. It supports multiple profiles and integrates with
-//! the MoosicBox player system.
+//! the `MoosicBox` player system.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
