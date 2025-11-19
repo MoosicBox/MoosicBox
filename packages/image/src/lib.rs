@@ -56,6 +56,7 @@ pub mod libvips;
 /// Image encoding format.
 #[derive(Debug, Copy, Clone, Display, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[must_use]
 pub enum Encoding {
     /// JPEG encoding format.
     Jpeg,
