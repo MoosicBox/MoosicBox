@@ -53,7 +53,6 @@ pub enum InitError {
 /// * `InitError::Logs` - Failed to initialize the logging system
 /// * `InitError::BuildLogsConfig` - Failed to build the logs configuration
 /// * `InitError::BuildFileWriterConfig` - Failed to build the file writer configuration
-#[must_use = "the returned FreeLogLayer must be kept alive for logging to work"]
 pub fn init(
     filename: Option<&str>,
     layers: Option<Vec<DynLayer>>,
