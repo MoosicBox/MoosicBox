@@ -750,7 +750,6 @@ pub enum YtArtistOrderDirection {
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -870,7 +869,6 @@ pub async fn favorite_artists(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -932,7 +930,6 @@ pub async fn add_favorite_artist(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1041,7 +1038,6 @@ impl From<AlbumSort> for YtAlbumOrderDirection {
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -1164,7 +1160,6 @@ pub async fn favorite_albums(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1217,7 +1212,6 @@ pub async fn all_favorite_albums(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1279,7 +1273,6 @@ pub async fn add_favorite_album(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1367,7 +1360,6 @@ pub enum YtTrackOrderDirection {
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1487,7 +1479,6 @@ pub async fn favorite_tracks(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1549,7 +1540,6 @@ pub async fn add_favorite_track(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1653,7 +1643,6 @@ impl ToValueType<YtAlbumType> for &Value {
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -1769,7 +1758,6 @@ pub async fn artist_albums(
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::Unauthorized` - If the access token is invalid
 /// * `Error::Database` - If a database error occurred (with `db` feature)
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1866,7 +1854,6 @@ pub async fn album_tracks(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1913,7 +1900,6 @@ pub async fn album(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1962,7 +1948,6 @@ pub async fn artist(
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 pub async fn track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -2010,7 +1995,6 @@ pub async fn track(
 /// * `Error::Parse` - If the response JSON failed to parse
 /// * `Error::EmptyResponse` - If the API returned an empty response
 /// * `Error::Serde` - If JSON serialization failed
-#[must_use]
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     query: &str,
@@ -2078,7 +2062,6 @@ impl From<TrackAudioQuality> for YtAudioQuality {
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
@@ -2154,7 +2137,6 @@ pub struct YtTrackPlaybackInfo {
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Database` - If a database error occurred (with `db` feature)
 /// * `Error::Unauthorized` - If the access token is invalid
-#[must_use]
 pub async fn track_playback_info(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
