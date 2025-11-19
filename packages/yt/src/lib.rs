@@ -276,7 +276,6 @@ macro_rules! yt_api_endpoint {
 /// * `Error::Http` - If the HTTP request failed
 /// * `Error::Parse` - If the JSON response failed to parse
 /// * `Error::Serde` - If JSON serialization failed
-#[must_use]
 pub async fn device_authorization(client_id: String, open: bool) -> Result<Value, Error> {
     let url = yt_api_endpoint!(DeviceAuthorization);
 
@@ -395,7 +394,6 @@ async fn request_inner(
 /// # Panics
 ///
 /// * If failed to serialize user `Value` to string
-#[must_use]
 pub async fn device_authorization_token(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: String,
