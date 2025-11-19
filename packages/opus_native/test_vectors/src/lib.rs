@@ -70,7 +70,6 @@ impl TestVector {
     /// * Path does not exist or is not a directory
     /// * Required files (packet.bin, expected.pcm, meta.json) are missing
     /// * JSON metadata is malformed or missing required fields
-    #[must_use]
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let path = path.as_ref();
         let name = path
@@ -114,7 +113,6 @@ impl TestVector {
     /// # Errors
     ///
     /// Returns error if directory cannot be read or accessed
-    #[must_use]
     pub fn load_all(dir: impl AsRef<Path>) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let mut vectors = Vec::new();

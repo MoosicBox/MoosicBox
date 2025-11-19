@@ -119,7 +119,6 @@ impl CpalAudioOutput {
     /// # Errors
     ///
     /// * If the relevant `CpalAudioOutputImpl` fails to initialize
-    #[must_use]
     pub fn new(device: cpal::Device, format: SampleFormat) -> Result<Self, AudioOutputError> {
         Ok(Self {
             write: match format {
@@ -204,7 +203,6 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
     #[allow(clippy::too_many_lines)]
-    #[must_use]
     pub fn new(device: &cpal::Device) -> Result<Self, AudioOutputError> {
         let config = device
             .default_output_config()
