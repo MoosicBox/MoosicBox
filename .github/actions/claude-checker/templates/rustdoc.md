@@ -44,6 +44,7 @@ Check that ALL public APIs in ${target_path} have:
 - Include examples for complex functions
 - Add `#[must_use]` to constructors and getters that return direct types (Self, String, Vec, etc.)
 - DO NOT add `#[must_use]` to functions returning Result or Option - these types already have the attribute
+- **CRITICAL: NEVER remove existing `#[must_use]` directives** - these have been intentionally added and must be preserved
 
 ## Verification (MANDATORY)
 
