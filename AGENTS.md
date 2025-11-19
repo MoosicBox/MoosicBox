@@ -21,10 +21,7 @@
     #![allow(clippy::multiple_crate_versions)]
     ```
 - **Rustdoc Error docs**: Use asterisks (\*) for bullet points, document all error conditions
-- **Must use**: Add `#[must_use]` to constructors and getters where appropriate:
-    - **ALWAYS add** `#[must_use]` to functions returning `Option<T>` - ignoring an Option return value is typically a mistake
-    - **NEVER add** `#[must_use]` to functions returning `Result<T, E>` - Result is already marked `#[must_use]` and adding it to the function is redundant and will trigger clippy warnings (e.g., "this function has a `#[must_use]` attribute with no message, but returns a type already marked as `#[must_use]`")
-    - Add `#[must_use]` to constructors and getters returning other types where ignoring the return value would be a mistake
+- **Must use**: Add `#[must_use]` to constructors and getters that return types OTHER THAN Result or Option. **CRITICAL**: Do NOT add `#[must_use]` to functions returning Result or Option types - these types are already marked `#[must_use]` and adding the attribute to the function is redundant and will trigger clippy warnings (e.g., "this function has a `#[must_use]` attribute with no message, but returns a type already marked as `#[must_use]`"). Only add `#[must_use]` to functions that return other types where ignoring the return value would be a mistake.
 
 ### Package Organization
 
