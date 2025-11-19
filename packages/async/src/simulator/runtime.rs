@@ -321,6 +321,10 @@ impl Runtime {
         this
     }
 
+    /// Returns a handle to this runtime.
+    ///
+    /// The handle can be used to spawn tasks onto the runtime from other threads.
+    ///
     /// # Panics
     ///
     /// * If `handle` is empty

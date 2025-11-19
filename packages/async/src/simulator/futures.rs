@@ -292,6 +292,7 @@ impl<F> Timeout<F> {
     }
 
     /// Consumes the `Timeout` and returns the inner future.
+    #[must_use]
     pub fn into_inner(self) -> F {
         self.future
     }
