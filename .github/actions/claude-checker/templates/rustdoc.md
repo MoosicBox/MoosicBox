@@ -35,16 +35,21 @@ Check that ALL public APIs in ${target_path} have:
 4. **Error docs** - Error conditions documented with `# Errors`
 5. **Example docs** - Complex functions have `# Examples`
 6. **Panic docs** - Functions that panic have `# Panics`
-7. **Must-use** - Constructors and getters that return non-Result/non-Option types should have `#[must_use]`. IMPORTANT: Do NOT add `#[must_use]` to functions returning Result or Option types, as these types are already marked `#[must_use]` and adding the attribute to the function is redundant and will trigger clippy warnings. Only add `#[must_use]` to functions that return other types where ignoring the return value would be a mistake.
+7. **Must-use** - Constructors and getters should have `#[must_use]` where appropriate:
+    - **ALWAYS add** `#[must_use]` to functions returning `Option<T>` - ignoring an Option return value is typically a mistake
+    - **NEVER add** `#[must_use]` to functions returning `Result<T, E>` - Result is already marked `#[must_use]` and adding it to the function is redundant and will trigger clippy warnings
+    - **Consider adding** `#[must_use]` to constructors and getters returning other types where ignoring the return value would be a mistake
 
 ## Rustdoc Style (from AGENTS.md)
 
 - Use asterisks (\*) for bullet points in error docs
 - Document all error conditions
 - Include examples for complex functions
-- Add `#[must_use]` to constructors and getters that return types OTHER THAN Result or Option
-- **CRITICAL**: Do NOT add `#[must_use]` to functions returning Result or Option - these types are already marked `#[must_use]` and adding it to the function is redundant and will cause clippy warnings
-- Clippy's `must_use_candidate` lint will suggest where to add `#[must_use]` - but only follow this suggestion for non-Result/non-Option return types
+- **CRITICAL - Must-use guidelines**:
+    - **ALWAYS add** `#[must_use]` to functions returning `Option<T>`
+    - **NEVER add** `#[must_use]` to functions returning `Result<T, E>` - this will trigger clippy warnings like "this function has a `#[must_use]` attribute with no message, but returns a type already marked as `#[must_use]`"
+    - Add `#[must_use]` to constructors and getters returning other types where appropriate
+- Clippy's `must_use_candidate` lint will suggest where to add `#[must_use]` - follow this for Option-returning functions and non-Result constructors/getters
 
 ## Verification (MANDATORY)
 
