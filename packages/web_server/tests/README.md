@@ -208,7 +208,6 @@ mod benchmarks {
 The handler system supports two modes:
 
 1. **Actix Mode** (`feature = "actix"`):
-
     - Uses synchronous extraction (`from_request_sync`)
     - Avoids Send bounds issues with Actix's request handling
     - Production-focused with performance optimizations

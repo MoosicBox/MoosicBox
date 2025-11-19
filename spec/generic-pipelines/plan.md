@@ -1443,17 +1443,14 @@ packages/gpipe/              # Umbrella crate
 ### High-Risk Areas
 
 1. **Action Translation Completeness**
-
     - Risk: Many GitHub Actions may not be translatable
     - Mitigation: Focus on most common actions first, provide fallback strategies
 
 2. **GitHub Actions Compatibility**
-
     - Risk: Subtle differences in behavior between local and GitHub execution
     - Mitigation: Comprehensive test suite with real-world workflows
 
 3. **Performance at Scale**
-
     - Risk: Local execution may be slower than expected for large workflows
     - Mitigation: Benchmarking and optimization during development
 

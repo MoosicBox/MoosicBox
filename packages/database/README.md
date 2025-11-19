@@ -496,7 +496,6 @@ The `Savepoint` trait provides:
 Two SQLite implementations are available:
 
 1. **rusqlite** (`sqlite-rusqlite` feature):
-
     - Uses `?` placeholders
     - Blocking operations wrapped in async
     - Connection pooling for concurrent transactions
@@ -511,7 +510,6 @@ Two SQLite implementations are available:
 Two PostgreSQL implementations are available:
 
 1. **Raw** (`postgres-raw` feature):
-
     - Uses tokio-postgres and deadpool-postgres
     - Uses `$1, $2` placeholders
     - Custom connection pool management
