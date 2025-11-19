@@ -85,7 +85,6 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
 ## Package Components
 
 - **`src/lib.rs`**: Test vector loader and SNR calculation utilities
-
     - `TestVector::load()` - Load a single test vector from a directory
     - `TestVector::load_all()` - Load all test vectors from a directory
     - `calculate_snr()` - Calculate signal-to-noise ratio between reference and decoded PCM
@@ -93,7 +92,6 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
     - `vectors_available()` - Check if test vectors have been generated
 
 - **`build.rs`**: Automatic test vector generation at build time
-
     - Uses `moosicbox_opus_native_libopus` encoder to create raw Opus packets
     - Uses `moosicbox_opus_native_libopus` decoder to create reference PCM output
     - Generates SILK vectors for NB/MB/WB/SWB bandwidths

@@ -1,3 +1,13 @@
+//! Table of Contents (TOC) byte parsing and Opus configuration types.
+//!
+//! This module implements the TOC byte parsing logic from RFC 6716 Section 3.1.
+//! The TOC byte is the first byte of every Opus packet and encodes the configuration
+//! index, stereo flag, and frame count code.
+//!
+//! The module also provides types for representing Opus modes (SILK/CELT/Hybrid),
+//! bandwidths (NB/MB/WB/SWB/FB), and frame sizes, along with a lookup table of
+//! all 32 standard Opus configurations defined in RFC 6716 Table 2.
+
 use crate::Channels;
 
 /// Table of Contents (TOC) byte parsed from Opus packet header

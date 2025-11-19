@@ -1,3 +1,8 @@
+//! Error types for Opus decoder operations.
+//!
+//! This module defines the error types returned by the Opus decoder implementation.
+//! All errors are defined using the `thiserror` crate for ergonomic error handling.
+
 use thiserror::Error;
 
 /// Result type alias for Opus operations
