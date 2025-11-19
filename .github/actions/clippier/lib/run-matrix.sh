@@ -19,6 +19,28 @@
 #
 # =============================================================================
 
+# Strip ANSI color codes from text
+#
+# Removes terminal color escape sequences that appear as garbage in markdown.
+# ANSI codes look like: ESC[XXm where XX are color/style codes.
+# Also handles cases where ESC byte was replaced with � (Unicode replacement char).
+#
+# Arguments:
+#   stdin: Text with ANSI codes
+#
+# Returns:
+#   Clean text without ANSI codes on stdout
+#
+# Example:
+#   echo -e "\e[1m\e[92mGreen Bold\e[0m" | strip_ansi_codes
+#   # Output: Green Bold
+strip_ansi_codes() {
+    # Remove ANSI escape sequences in two passes:
+    # 1. Standard ESC[<codes>m sequences (ESC = \x1b)
+    # 2. Malformed sequences where ESC became � (Unicode replacement char U+FFFD)
+    sed 's/\x1b\[[0-9;]*m//g' | sed 's/�\[[0-9;]*m//g'
+}
+
 # Generate GitHub Actions summary for run-matrix results
 #
 # Creates a comprehensive markdown summary including:
@@ -145,9 +167,9 @@ generate_run_matrix_summary() {
             if [[ -f "$output_file" ]]; then
                 local max_lines="${INPUT_RUN_MATRIX_MAX_OUTPUT_LINES:-200}"
                 if [[ "$max_lines" -gt 0 ]]; then
-                    tail -"$max_lines" "$output_file" >> $GITHUB_STEP_SUMMARY
+                    tail -"$max_lines" "$output_file" | strip_ansi_codes >> $GITHUB_STEP_SUMMARY
                 else
-                    cat "$output_file" >> $GITHUB_STEP_SUMMARY
+                    cat "$output_file" | strip_ansi_codes >> $GITHUB_STEP_SUMMARY
                 fi
                 rm -f "$output_file"
             else
