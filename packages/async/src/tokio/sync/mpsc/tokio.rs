@@ -6,12 +6,19 @@ use std::task::{Context, Poll};
 
 use crate::tokio::sync::mpmc;
 
-/// Receiver wrapper that adds `poll_recv` method
+/// Receiving end of an MPSC channel.
+///
+/// This wraps an MPMC receiver to provide MPSC semantics with both blocking and async
+/// receive operations. Only one receiver exists per channel, consuming values in FIFO order.
 pub struct Receiver<T> {
     inner: mpmc::Receiver<T>,
 }
 
-/// Sender wrapper
+/// Sending end of an MPSC channel.
+///
+/// This wraps an MPMC sender to provide MPSC semantics with both blocking and async
+/// send operations. Multiple senders can send to the same channel, and the channel
+/// remains open as long as at least one sender exists.
 pub struct Sender<T> {
     inner: mpmc::Sender<T>,
 }

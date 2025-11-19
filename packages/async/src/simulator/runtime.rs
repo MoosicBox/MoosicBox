@@ -475,6 +475,7 @@ impl<T: Send + Unpin> JoinHandle<T> {
     /// Checks if the task has completed.
     ///
     /// Returns `true` if the task has finished executing, `false` otherwise.
+    #[must_use]
     pub fn is_finished(&mut self) -> bool {
         if self.finished {
             return true;
