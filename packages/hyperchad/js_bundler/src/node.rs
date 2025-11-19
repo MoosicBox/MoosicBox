@@ -13,8 +13,12 @@ use std::{
 
 use switchy_env::var;
 
+/// Available npm package manager commands.
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
+/// List of enabled npm package managers based on feature flags.
+///
+/// This is computed at runtime based on which package manager features are enabled.
 static ENABLED_NPM_COMMANDS: LazyLock<Vec<String>> = LazyLock::new(|| {
     NPM_COMMANDS
         .iter()
@@ -42,6 +46,16 @@ pub fn run_npm_command(arguments: &[&str], dir: &Path) {
     run_command(ENABLED_NPM_COMMANDS.clone().into_iter(), arguments, dir);
 }
 
+/// Runs a command using the first available binary from the provided list.
+///
+/// Tries each binary in sequence until one successfully executes. Handles special
+/// path resolution for pnpm via the `PNPM_HOME` environment variable and adjusts
+/// binary names for Windows compatibility.
+///
+/// # Panics
+///
+/// * Panics if no binary in the list is found or executes successfully.
+/// * Panics if the command executes but returns a non-zero exit status (except 127 which indicates binary not found).
 pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&str], dir: &Path) {
     for ref binary in binaries
         .map(|x| PathBuf::from_str(&x).unwrap())
@@ -96,6 +110,11 @@ pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&
     panic!("Failed to execute script for any of the binaries");
 }
 
+/// Adjusts binary filename for Windows compatibility.
+///
+/// On Windows, checks if a `.CMD` version of the binary exists in the same directory
+/// and returns that path if found. Otherwise returns the original path.
+#[must_use]
 fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
     if cfg!(windows) {
         let parent = binary.parent();

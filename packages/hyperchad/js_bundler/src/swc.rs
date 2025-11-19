@@ -107,6 +107,16 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
     print_bundles(out, cm, bundles, minify);
 }
 
+/// Writes bundled modules to the output file.
+///
+/// Emits each bundle as JavaScript code to the specified output path, creating
+/// parent directories as needed.
+///
+/// # Panics
+///
+/// * Panics if emitting the module to code fails.
+/// * Panics if creating parent directories fails.
+/// * Panics if writing the output file fails.
 fn print_bundles(out: &Path, cm: Lrc<SourceMap>, bundles: Vec<Bundle>, minify: bool) {
     for bundled in bundles {
         let code = {
@@ -139,9 +149,20 @@ fn print_bundles(out: &Path, cm: Lrc<SourceMap>, bundles: Vec<Bundle>, minify: b
     }
 }
 
+/// Hook implementation for the SWC bundler.
+///
+/// Provides custom behavior for handling import.meta properties during bundling.
 struct Hook;
 
 impl swc_bundler::Hook for Hook {
+    /// Returns import.meta properties for a module.
+    ///
+    /// Provides the `url` property with the module's file name and the `main` property
+    /// indicating whether the module is an entry point.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if property generation fails (currently always succeeds).
     fn get_import_meta_props(
         &self,
         span: Span,
