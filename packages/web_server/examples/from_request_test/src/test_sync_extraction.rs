@@ -1,6 +1,20 @@
+//! Test binary for synchronous `FromRequest` trait extraction.
+//!
+//! This binary validates the synchronous extraction logic of the `FromRequest` trait
+//! implementation for various types including `RequestData`, `String`, `u32`, and `bool`.
+//! It uses the simulator stub to create test HTTP requests and verifies that extraction
+//! works correctly for both valid and invalid inputs.
+
 use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 
-// Helper function to create a test HttpRequest with known data
+/// Creates a test `HttpRequest` with predefined headers and query parameters.
+///
+/// This helper constructs an `HttpRequest::Stub` using the simulator with:
+/// * Method: GET
+/// * Path: `/test/path`
+/// * Query: `name=john&age=30&active=true`
+/// * Headers: user-agent, content-type, authorization
+/// * Remote address: `127.0.0.1:8080`
 fn create_test_request() -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
@@ -14,6 +28,11 @@ fn create_test_request() -> HttpRequest {
     HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
 }
 
+/// Creates a test `HttpRequest` with a custom query string.
+///
+/// # Arguments
+///
+/// * `query` - The query string to include in the request
 fn create_test_request_with_query(query: &str) -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
@@ -22,6 +41,16 @@ fn create_test_request_with_query(query: &str) -> HttpRequest {
     HttpRequest::Stub(Stub::Simulator(SimulationStub::new(sim_req)))
 }
 
+/// Tests synchronous extraction of `RequestData` from an `HttpRequest`.
+///
+/// Validates that all fields (method, path, query, headers, etc.) are correctly
+/// extracted from a simulated HTTP request.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * `RequestData` extraction fails
+/// * Any extracted field doesn't match expected values
 fn test_request_data_sync_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing RequestData sync extraction...");
 
@@ -58,6 +87,15 @@ fn test_request_data_sync_extraction() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+/// Tests synchronous extraction of `String` from query string.
+///
+/// Validates that string values can be correctly extracted from the request query.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * String extraction fails
+/// * Extracted value doesn't match expected content
 fn test_string_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing String extraction...");
 
@@ -79,6 +117,16 @@ fn test_string_extraction() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Tests synchronous extraction of `u32` from query string.
+///
+/// Validates both successful parsing of valid integers and proper error handling
+/// for invalid input.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Valid `u32` values fail to parse
+/// * Invalid input doesn't produce expected error
 fn test_u32_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing u32 extraction...");
 
@@ -115,6 +163,16 @@ fn test_u32_extraction() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Tests synchronous extraction of `bool` from query string.
+///
+/// Validates that various boolean representations (true/false, 1/0, yes/no, on/off)
+/// are correctly parsed into boolean values.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Boolean extraction fails
+/// * Any test case produces unexpected value
 fn test_bool_extraction() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing bool extraction...");
 
@@ -149,6 +207,14 @@ fn test_bool_extraction() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Main entry point for synchronous `FromRequest` extraction tests.
+///
+/// Runs a comprehensive test suite validating synchronous extraction of various types
+/// from HTTP requests.
+///
+/// # Errors
+///
+/// Returns an error if any test fails.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Testing synchronous extraction with FromRequest trait...");
