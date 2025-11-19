@@ -1,3 +1,10 @@
+//! Route handlers for the native application.
+//!
+//! This module implements all HTTP-like route handlers for the native desktop application.
+//! Routes handle navigation, settings management, music browsing, search, downloads, and
+//! music API integration. Most routes communicate with a backend server via HTTP requests
+//! and render UI updates using the global renderer.
+
 use std::{collections::BTreeMap, num::ParseIntError, str::FromStr, sync::LazyLock};
 
 use hyperchad::{
@@ -62,6 +69,11 @@ pub enum RouteError {
     TryFromStringTrackApiSource(#[from] TryFromStringTrackApiSourceError),
 }
 
+/// Parses a comma-separated string of track API sources.
+///
+/// # Errors
+///
+/// * [`RouteError::RouteFailed`] if any source string is invalid
 fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
     value
         .split(',')
