@@ -213,7 +213,11 @@ run_matrix_command() {
     echo "$script_template" | sed 's/^/  /' # Indent for display
 
     # Generate feature combinations based on strategy
-    mapfile -t FEATURE_COMBINATIONS < <(generate_feature_combinations "$features" "$strategy")
+    # Use while-read loop for bash 3.2 compatibility (macOS)
+    FEATURE_COMBINATIONS=()
+    while IFS= read -r combo; do
+        FEATURE_COMBINATIONS+=("$combo")
+    done < <(generate_feature_combinations "$features" "$strategy")
 
     if [[ $? -ne 0 ]]; then
         echo "❌ Failed to generate feature combinations"
