@@ -1,3 +1,9 @@
+//! Track audio streaming, metadata, and visualization.
+//!
+//! Provides core functionality for streaming track audio with format conversion, retrieving track
+//! metadata, generating audio visualizations, and managing track byte sources. Supports both local
+//! files and remote URLs with optional transcoding between audio formats.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{

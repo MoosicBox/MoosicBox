@@ -1,3 +1,9 @@
+//! Track byte stream pooling and caching service.
+//!
+//! Provides a service for caching and sharing track audio byte streams across multiple concurrent
+//! consumers. Prevents redundant downloads/reads by maintaining a pool of active track streams and
+//! allowing multiple clients to tap into the same source stream.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
