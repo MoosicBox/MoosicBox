@@ -349,6 +349,17 @@ runs:
               fetch-depth: ${{ inputs.checkout-fetch-depth }}
               submodules: ${{ fromJson(inputs.package-json).gitSubmodules || false }}
 
+        - name: Free disk space
+          if: |
+              inputs.command == 'setup' &&
+              runner.os == 'Linux' && (
+                  contains(fromJson(inputs.package-json).toolchains || '[]', 'free_disk_space') ||
+                  contains(fromJson(inputs.package-json).ciToolchains || '[]', 'free_disk_space')
+              )
+          uses: jlumbroso/free-disk-space@main
+          with:
+              tool-cache: true
+
         - name: Setup Rust toolchain
           if: inputs.command == 'setup'
           uses: dtolnay/rust-toolchain@stable
