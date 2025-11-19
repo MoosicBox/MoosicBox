@@ -105,6 +105,7 @@ jobs:
                   force-full-matrix-condition: "true"
                   os-suffix: "-latest"
                   os: "ubuntu"
+                  transform-scripts: .clippier/transforms/rustdoc-filter.lua
 
     update-rustdocs:
         name: Update ${{ matrix.package.name }}
@@ -138,18 +139,7 @@ jobs:
                   skip-checkout: "true"
                   rust-components: "rustfmt, clippy"
 
-            - name: Check if package has source to document
-              id: check_lib
-              run: |
-                  if [ -f "${{ matrix.package.path }}/src/lib.rs" ] || [ -f "${{ matrix.package.path }}/src/main.rs" ]; then
-                    echo "exists=true" >> $GITHUB_OUTPUT
-                  else
-                    echo "exists=false" >> $GITHUB_OUTPUT
-                    echo "No lib.rs or main.rs found for ${{ matrix.package.name }}, skipping"
-                  fi
-
             - name: Update rustdoc with Claude
-              if: steps.check_lib.outputs.exists == 'true'
               id: claude
               uses: ./.github/actions/claude-checker
               with:
@@ -183,7 +173,7 @@ jobs:
                   claude_args: --allowedTools Edit,Read,Write,Bash
 
             - name: Upload Claude output for review
-              if: always() && steps.check_lib.outputs.exists == 'true'
+              if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: claude-output-${{ matrix.package.name }}
