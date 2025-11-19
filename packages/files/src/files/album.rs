@@ -1,3 +1,8 @@
+//! Album cover image fetching and caching.
+//!
+//! Provides functionality for retrieving album cover artwork from local files or remote URLs,
+//! with database integration for tracking cover locations and automatic fallback between sources.
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::path::{Path, PathBuf};

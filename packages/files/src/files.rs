@@ -17,6 +17,9 @@ mod track_bytes_media_source;
 /// Track byte stream pooling and caching service.
 pub mod track_pool;
 
+/// Extracts the filename from a file path string.
+///
+/// Returns just the filename component (without directory path) if the path is valid.
 pub(crate) fn filename_from_path_str(path: &str) -> Option<String> {
     std::path::PathBuf::from_str(path).ok().and_then(|p| {
         p.file_name()
