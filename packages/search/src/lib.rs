@@ -130,6 +130,22 @@ pub enum CreateIndexError {
     IO(#[from] std::io::Error),
 }
 
+/// Creates or opens the global search index at the specified path.
+///
+/// This function initializes a Tantivy search index with a comprehensive schema for
+/// music metadata including artists, albums, and tracks. The schema includes fields
+/// for titles, IDs, dates, artwork, and version metadata.
+///
+/// # Panics
+///
+/// * If the index directory cannot be created at the specified path
+///
+/// # Errors
+///
+/// * `CreateIndexError::OpenDirectory` if the directory cannot be opened
+/// * `CreateIndexError::OpenRead` if index files cannot be read
+/// * `CreateIndexError::Tantivy` if index creation fails
+/// * `CreateIndexError::IO` if I/O operations fail
 fn create_global_search_index(
     path: &Path,
     recreate_if_exists: bool,
@@ -263,6 +279,19 @@ pub enum RecreateIndexError {
     Join(#[from] JoinError),
 }
 
+/// Recreates the global search index synchronously by deleting and reinitializing it.
+///
+/// This function completely rebuilds the index from scratch, replacing the existing
+/// index and reader in the global state. All existing data in the index is lost.
+///
+/// # Panics
+///
+/// * If any `RwLock`s are poisoned
+///
+/// # Errors
+///
+/// * `RecreateIndexError::CreateIndex` if index creation fails
+/// * `RecreateIndexError::GetIndexReader` if reader creation fails
 fn recreate_global_search_index_sync(path: &Path) -> Result<(), RecreateIndexError> {
     let index = create_global_search_index(path, true)?;
     let reader = get_index_reader(&index)?;
@@ -286,6 +315,14 @@ pub enum GetIndexReaderError {
     Tantivy(#[from] tantivy::error::TantivyError),
 }
 
+/// Creates an index reader with automatic reload-on-commit policy.
+///
+/// The reader will automatically reload the index when commits are detected,
+/// ensuring searches always see the latest committed data.
+///
+/// # Errors
+///
+/// * `GetIndexReaderError::Tantivy` if reader creation fails
 fn get_index_reader(index: &Index) -> Result<IndexReader, GetIndexReaderError> {
     Ok(index
         .reader_builder()
@@ -707,6 +744,10 @@ pub enum SearchIndexError {
 static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9 ]").expect("Invalid Regex"));
 
+/// Sanitizes a search query by removing non-alphanumeric characters.
+///
+/// This function removes all characters except letters, numbers, and spaces from
+/// the query string, then normalizes whitespace by collapsing multiple spaces into one.
 fn sanitize_query(query: &str) -> String {
     NON_ALPHA_NUMERIC_REGEX
         .replace_all(query, " ")
@@ -716,6 +757,15 @@ fn sanitize_query(query: &str) -> String {
         .join(" ")
 }
 
+/// Constructs a multi-strategy search query for the specified fields.
+///
+/// Creates a `DisjunctionMaxQuery` that combines three search strategies:
+/// * Exact match - highest boost, scales with query length
+/// * Prefix match - medium boost, allows fuzzy matching with edit distance 1
+/// * Fuzzy match - lowest boost, allows transposition errors
+///
+/// Each strategy is boosted differently to prioritize exact matches while still
+/// finding relevant results with typos or partial matches.
 fn construct_query_for_fields(
     search: &str,
     fields: &[(Field, f32)],
@@ -772,6 +822,17 @@ fn construct_query_for_fields(
     DisjunctionMaxQuery::new(parts)
 }
 
+/// Constructs a comprehensive search query for the global search index.
+///
+/// Creates a complex `DisjunctionMaxQuery` that searches across artists, albums, and tracks
+/// with different boosting strategies:
+/// * Artist-specific searches receive the highest boost (10.0)
+/// * Album-specific searches receive high boost (7.5)
+/// * Track-specific searches receive medium boost (5.0)
+/// * Generic field searches receive lower boost
+///
+/// The query uses field matching and document type filtering to provide relevant
+/// results with appropriate ranking.
 #[allow(clippy::too_many_lines)]
 fn construct_global_search_query(
     search: &str,
