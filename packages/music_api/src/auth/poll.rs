@@ -17,6 +17,7 @@ pub struct PollAuth {
 }
 
 impl From<PollAuth> for Auth {
+    /// Converts `PollAuth` into `Auth::Poll`.
     fn from(value: PollAuth) -> Self {
         Self::Poll(value)
     }

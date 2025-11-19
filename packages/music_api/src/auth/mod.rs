@@ -7,6 +7,7 @@
 //! The [`ApiAuth`] type manages authentication state and credentials validation.
 
 use std::{
+    future::Future,
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::{Arc, atomic::AtomicBool},
@@ -39,6 +40,7 @@ impl<T> From<Option<T>> for Auth
 where
     T: Into<Self>,
 {
+    /// Converts an `Option<T>` into `Auth`, using `Auth::None` if the option is `None`.
     fn from(value: Option<T>) -> Self {
         value.map_or(Self::None, Into::into)
     }
@@ -373,12 +375,14 @@ impl AuthExt for ApiAuth {
 impl Deref for ApiAuth {
     type Target = Auth;
 
+    /// Returns a reference to the inner `Auth`.
     fn deref(&self) -> &Self::Target {
         &self.auth
     }
 }
 
 impl DerefMut for ApiAuth {
+    /// Returns a mutable reference to the inner `Auth`.
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.auth
     }
