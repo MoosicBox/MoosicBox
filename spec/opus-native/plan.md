@@ -28,7 +28,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 - All unit tests passing, zero clippy warnings
 - [x] Phase 3: SILK Decoder - Synthesis
       **STATUS:** ✅ **100% BIT-EXACT COMPLIANT** - All test vectors achieve infinite SNR!
-
     - ✅ Fixed-point arithmetic (Q14/Q12/Q16 formats)
     - ✅ Gain interpolation (libopus decode_core.c:118-127)
     - ✅ Stereo rounding fixes (cosine + LSF interpolation)
@@ -53,7 +52,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
           **Problem:** Initial SILK implementation used floating-point (f32), but libopus reference uses fixed-point arithmetic for bit-exact reproducibility.
 
         **Section 3.9.1: Core Data Type Migration** ✅ **COMPLETE**
-
         - ✅ Convert excitation from Vec<f32> to Vec<i32> (Q14 format)
         - ✅ Convert LPC synthesis from f32 to i32 (Q14 internal, i16 output)
         - ✅ Convert LTP synthesis from Vec<f32> to Vec<i32> (Q14 format)
@@ -61,7 +59,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         - ✅ Update gain representation to Q16 format (65536 = 1.0)
 
         **Section 3.9.2: Algorithm Corrections** ✅ **COMPLETE**
-
         - ✅ LSF cosine table corrected to Q13 format (8192 = 1.0, not Q12)
         - ✅ LPC coefficients use Q12 format (4096 = 1.0)
         - ✅ Gain scaling uses Q16 format with >> 10 shift to convert Q14→PCM
@@ -73,7 +70,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Location:** silk/decoder.rs:2897-2909
 
         **Bug Found:** Subframe 0 matched libopus perfectly, but subframes 1+ were off by ±1 sample
-
         - Root cause: Missing gain interpolation when gain changes between subframes
         - Impact: Small audio artifacts during gain transitions
 
@@ -96,7 +92,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         - ✅ Prevents spectral discontinuities and maintains energy consistency
 
         **Section 3.9.4: Test Suite Migration** ✅ **COMPLETE**
-
         - ✅ All 479 unit tests converted from f32 to i32 assertions
         - ✅ Tests updated for correct Q-format values:
             - cosine_table_bounds: 8192 (Q13) not 4096 (Q12)
@@ -107,7 +102,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
         **Section 3.9.5: Integration Test Verification** ✅ **COMPLETE**
         **Test Results:** packages/opus_native/tests/integration_tests.rs
-
         - ✅ test_decode_silk_vectors: **PASS** (infinite SNR = bit-exact match)
         - ✅ test_decode_silk_vectors_skip_delay: **PASS** (infinite SNR with 5-sample delay)
         - ✅ Test vector: silk/nb/basic_mono (8kHz, impulse response)
@@ -127,7 +121,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         ```
 
         **Total Test Coverage:**
-
         - ✅ 479 unit tests passing (all converted to fixed-point)
         - ✅ 5 integration tests passing (bit-exact verification)
         - ✅ Zero clippy warnings
@@ -139,9 +132,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Root Cause:** Two incorrect rounding operations using simple arithmetic right shifts instead of RFC-compliant `RSHIFT_ROUND` (round half toward +∞)
 
         **Fixes Applied:**
-
         1. **Cosine Interpolation Rounding (Line 1716-1719)** ✅ **FIXED**
-
             - **Location:** `packages/opus_native/src/silk/decoder.rs:1716-1719`
             - **Bug:** Used `>> 4` instead of `RSHIFT_ROUND(x, 4) = ((x >> 3) + 1) >> 1`
             - **Impact:** 1-unit Q16 error propagated through polynomial computation → LPC coefficients → final output
@@ -158,7 +149,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
                 ```
 
         2. **LSF Interpolation Rounding (Line 485-487)** ✅ **FIXED**
-
             - **Location:** `packages/opus_native/src/silk/decoder.rs:485-487`
             - **Bug:** Used `>> 2` instead of `RSHIFT_ROUND(x, 2) = ((x >> 1) + 1) >> 1`
             - **Impact:** Affected LSF interpolation for 20ms frames, causing stereo artifacts
@@ -175,7 +165,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
                 ```
 
         **Test Updates:**
-
         3. **Bit-Exact Test Requirement (integration_tests.rs:97-109)** ✅ **UPDATED**
             - **Old:** `assert!(snr > 40.0)` - accepted 40dB SNR (±1 sample tolerance)
             - **New:** `assert!(snr.is_infinite())` - requires bit-exact match
@@ -194,13 +183,11 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         ```
 
         **RFC Compliance:**
-
         - ✅ Matches libopus reference implementation exactly
         - ✅ Uses correct `RSHIFT_ROUND` macro behavior
         - ✅ Stereo decoding now bit-exact for all bandwidths
 
         **Test Coverage:**
-
         - ✅ All 479 unit tests passing (all features)
         - ✅ 5 integration tests passing
         - ✅ Zero clippy warnings
@@ -208,7 +195,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         - ✅ `test_decode_silk_vectors` requires bit-exactness for all vectors
 
         **Phase 3.9 COMPLETE - SILK decoder achieves 100% bit-exact match with libopus!**
-
         - ✅ Section 3.9.1-3.9.5: Fixed-point conversion and gain interpolation
         - ✅ Section 3.9.6: Stereo rounding fixes (cosine interpolation + LSF interpolation)
         - ✅ **RESULT:** All 18 test vectors bit-exact across NB/MB/WB/SWB bandwidths
@@ -217,7 +203,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 - [x] Phase 4: CELT Decoder Implementation
       **STATUS:** ✅ **100% COMPLETE** - Audio output fully functional, error handling hardened!
       **Note:** All sections complete, fuzzing deferred to Phase 8
-
     - [x] Section 4.1: CELT Decoder Framework - COMPLETE
     - [x] Section 4.2: Energy Envelope Decoding - COMPLETE (lines 8578-9159)
     - [x] Section 4.3: Bit Allocation - COMPLETE (lines 9161-9349)
@@ -276,26 +261,22 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
         **Problem RESOLVED:**
         All CELT synthesis stubs replaced with RFC-compliant implementations:
-
         1. ✅ `inverse_mdct()` produces actual audio output (DCT-IV transform)
         2. ✅ PVQ shape decoding with CORRECT dimensions (N0<<LM, not just N0)
         3. ✅ Anti-collapse fully integrated with proper noise injection
         4. ✅ All frame sizes (2.5/5/10/20ms) now work correctly
 
         **Critical Bug Fixed (Section 4.7.2):**
-
         - Found and fixed PVQ dimension bug during compliance audit
         - Bands now correctly sized N0\*2^LM for interleaved MDCTs
         - Added 4 regression tests to prevent future dimension errors
 
         **Result:**
-
         - ✅ CELT-only packets produce CORRECT AUDIO OUTPUT (all frame sizes)
         - ✅ Hybrid packets will have full high-frequency component
         - ✅ **100% RFC 6716 COMPLIANT** - CELT decoder fully functional!
 
         **RFC Violations:**
-
         - Section 4.3.4 (PVQ decoding) - **NORMATIVE** - NOT IMPLEMENTED
         - Section 4.3.6 (MDCT synthesis) - **NORMATIVE** - NOT IMPLEMENTED
         - Section 4.3.7 (Overlap-add) - **NORMATIVE** - NOT IMPLEMENTED
@@ -312,21 +293,17 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Section 4.7.1: Inverse MDCT Implementation** ✅ **COMPLETE**
         **RFC Reference:** Section 4.3.6 (lines 9608-9755), libopus mdct.c:clt_mdct_backward()
         **Location:** celt/decoder.rs:2054-2080
-
         - [x] Implement DCT-IV transform
-
             - Direct computation using cos() function
             - N-point real-valued DCT-IV formula: y[n] = Σ X[k] _ cos(π/N _ (n+0.5) \* (k+0.5))
             - Computes 2N output samples from N input samples
             - Note: Can be optimized later with FFT-based approach
 
         - [x] Apply 1/2 scaling factor (RFC requirement)
-
             - Output scaled by 0.5 per RFC 6716
             - Implements proper amplitude normalization
 
         - [x] Verify output length = 2 × input length
-
             - MDCT produces time-domain output 2x frequency domain input
             - Returns vec![f32; freq_data.len() * 2]
 
@@ -337,7 +314,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
             - Verify bit-exact output (within float precision)
 
         **Implementation Notes:**
-
         - Uses direct DCT-IV computation (not FFT-based yet)
         - Performance: O(N²) but correct
         - Future optimization: Replace with FFT-based algorithm (O(N log N))
@@ -351,19 +327,16 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         During RFC compliance audit, discovered bands were created with WRONG dimensions.
 
         **Bug Details:**
-
         - ❌ Was: Bands sized `N0` (bins per single MDCT)
         - ✅ Now: Bands sized `N0 << LM` (bins across all interleaved MDCTs)
 
         **Impact Before Fix:**
-
         - ❌ 5ms frames (LM=1): Missing 50% of frequency data
         - ❌ 10ms frames (LM=2): Missing 75% of frequency data
         - ❌ 20ms frames (LM=3): Missing 87.5% of frequency data
         - ✅ 2.5ms frames (LM=0): Worked correctly by accident (N0 << 0 = N0)
 
         **Fixes Applied:**
-
         - [x] Line 2339-2340: Changed `n` to `n0` and compute `n = n0 << lm`
         - [x] Line 2342: Non-coded bands now use correct size `n` (N0<<LM)
         - [x] Line 2353: PVQ decode receives correct dimension `n` (N0<<LM)
@@ -371,13 +344,11 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         - [x] Line 2362: Zero-pulse bands now use correct size `n` (N0<<LM)
 
         **RFC Compliance:**
-
         - ✅ RFC 6716 Line 6308: "set N to the number of MDCT bins covered by the band"
         - ✅ Lines 6593-6599: PVQ operates on full interleaved vector
         - ✅ Interleaved storage pattern: X[j<<LM + k] correctly supported
 
         **Tests Added:**
-
         - ✅ `test_pvq_band_sizes_correct_for_all_lm()` - verifies N0<<LM for LM 0-3
         - ✅ `test_pvq_decode_dimension_matches_band_size()` - verifies dimension correctness
         - ✅ `test_all_frame_sizes_produce_correct_band_dimensions()` - tests all 4 frame sizes
@@ -386,7 +357,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         - ✅ All 479 tests passing, zero clippy warnings
 
         **Now Verified:**
-
         - ✅ All frame sizes (2.5/5/10/20ms) produce correct band dimensions
         - ✅ PVQ decode operates on full N0\*2^LM dimension
         - ✅ Anti-collapse receives correctly sized bands
@@ -395,16 +365,13 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Section 4.7.3: Overlap-Add Integration** ✅ **COMPLETE**
         **RFC Reference:** Section 4.3.7
         **Location:** celt/decoder.rs:2406-2412
-
         - [x] Verify apply_overlap_add() implementation
-
             - ✅ overlap_add() implemented (lines 2086-2125)
             - ✅ Uses overlap buffer from previous frame (state.overlap_buffer)
             - ✅ Applies CELT window function (compute_celt_overlap_window)
             - ✅ TDAC windowing per libopus (mirror on both sides)
 
         - [x] Integration check
-
             - ✅ PVQ shapes → denormalize_bands() → freq_data (line 2408)
             - ✅ freq_data → inverse_mdct() → time_data (line 2411)
             - ✅ time_data → overlap_add() → samples (line 2412)
@@ -417,7 +384,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
             - ✅ All 468 tests passing, zero clippy warnings
 
         **Implementation verified:**
-
         - Complete pipeline: shapes → denormalize → MDCT → overlap-add → output
         - Overlap buffer properly maintained across frames
         - MDCT output (2N samples) correctly fed to overlap-add (produces N samples)
@@ -426,16 +392,13 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Section 4.7.4: Anti-Collapse Integration** ✅ **COMPLETE**
         **RFC Reference:** Section 4.3.5 (lines 6712-6729)
         **Location:** celt/decoder.rs:2394-2424
-
         - [x] Implement anti-collapse noise injection
-
             - ✅ anti_collapse_on flag decoded (line 2381-2382)
             - ✅ Pulse tracking from k_values (lines 2396-2403)
             - ✅ Collapse mask computation for transient frames (lines 2405-2420)
             - ✅ apply_anti_collapse() fully integrated (lines 2422-2428)
 
         - [x] Algorithm implementation
-
             - ✅ Triggers when anti_collapse_on == true
             - ✅ Injects pseudo-random noise into collapsed bands (k=0)
             - ✅ Prevents spectral "holes" during transients (RFC 6716 line 6714)
@@ -450,16 +413,13 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
             - ✅ All 479 tests passing, zero clippy warnings
 
         **Implementation details:**
-
         - Pulse tracking: k_values (from compute_pulse_cap) converted to u16 array
         - Collapse detection: bands with k=0 have all MDCTs marked as collapsed
         - Mask bits: num_mdcts bits set (e.g., 0x0F for 4 MDCTs)
         - Noise injection: ±r_final where r depends on energy difference and depth
 
         **Section 4.7.5: Integration & Verification** ✅ **COMPLETE**
-
         - [x] Wire components together
-
             1. ✅ PVQ decode → spectral shapes (lines 2336-2378)
             2. ✅ Anti-collapse → noise injection (lines 2426-2432)
             3. ✅ Denormalize → shaped spectrum (line 2436)
@@ -467,7 +427,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
             5. ✅ Overlap-add → final output (line 2440)
 
         - [x] Add comprehensive integration tests
-
             - ✅ test_complete_celt_synthesis_pipeline() - full pipeline verification
             - ✅ test_silence_frame_detection() - silence frame handling
             - ✅ test_pipeline_state_updates() - state management across frames
@@ -478,7 +437,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
             - Will be done in Phase 8 with actual Opus test vectors
 
         **Completion Criteria:**
-
         - ✅ MDCT produces non-zero output (test_inverse_mdct_impulse_response)
         - ✅ PVQ shapes decoded with proper normalization (test_complete_celt_synthesis_pipeline)
         - ✅ Overlap-add produces continuous waveform (test_overlap_add_continuity)
@@ -489,7 +447,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Phase 4.7 COMPLETE - CELT synthesis fully implemented!**
 
         **Summary of Phase 4.7 achievements:**
-
         - ✅ 4.7.1: Inverse MDCT (O(N²), FFT optimization in Phase 9.2)
         - ✅ 4.7.2: PVQ shape decoding with actual pulse counts
         - ✅ 4.7.3: Overlap-add integration and windowing
@@ -506,7 +463,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         malformed (but syntactically valid) bitstreams.
 
         **Resolution:**
-
         - All unsafe .expect() calls replaced with proper error handling
         - All safe .unwrap() calls documented with safety invariants
         - Zero clippy warnings, 479 tests passing
@@ -516,13 +472,11 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Location:** decode_signs() function
 
         **Issue:** Magnitudes from decode_lsbs() can exceed i16::MAX if:
-
         - High lsb_count (many LSB bits)
         - Large pulse location values
         - magnitude = location << lsb_count could overflow i16 (32767)
 
         **Impact:** Panic on adversarial/corrupted streams
-
         - [x] Replace .expect() with proper error handling
               Replaced with `.map_err()` that returns `Error::SilkDecoder` with descriptive message
         - [x] Add test for overflow case (lsb_count=15, location=65535)
@@ -535,7 +489,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Section 4.8.2: Verify Safe Unwraps** ✅ **COMPLETE**
 
         Review all remaining .unwrap() calls to document safety invariants:
-
         - [x] Line 1047: previous_log_gain.unwrap()
               Added `#[allow(clippy::unwrap_used)]` with safety invariant documented
               Safe: use_independent_coding=false guarantees previous_log_gain.is_some()
@@ -552,7 +505,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         **Section 4.8.3: Add Fuzzing Tests** ⏳ **DEFERRED TO PHASE 8**
 
         Fuzzing will be performed during Phase 8 (Integration & Testing) alongside RFC test vectors:
-
         - [ ] Set up cargo-fuzz for Opus decoder
         - [ ] Create fuzzing harness for decode() function
         - [ ] Run fuzzer for 24 hours
@@ -563,14 +515,12 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
         Fuzzing requires complete decoder integration (Phase 5) and benefits from having RFC test vectors (Phase 8) as seed inputs. Current error handling improvements significantly reduce panic risk.
 
         **Acceptance Criteria (Sections 4.8.1-4.8.2):**
-
         - ✅ Zero .unwrap() calls without documented safety invariants (5 documented)
         - ✅ Zero .expect() calls that could panic on valid bitstreams (1 fixed with .map_err)
         - ⏳ Fuzzer runs 1M+ iterations without crashes (deferred to Phase 8)
         - ✅ All error paths return proper Result::Err (verified)
 
         **Phase 4.8 Summary:**
-
         - ✅ Section 4.8.1 COMPLETE: SILK magnitude overflow fixed with proper error handling
         - ✅ Section 4.8.2 COMPLETE: All safe unwraps documented with safety invariants
         - ⏳ Section 4.8.3 DEFERRED: Fuzzing moved to Phase 8 for better test coverage
@@ -678,7 +628,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
 - ✅ Phase 4.7 (CELT synthesis) COMPLETE - decoder produces actual audio
 - ⏳ Section 5.12 (Hybrid verification) DEFERRED TO PHASE 8 - requires RFC test vectors
 - ✅ Phase 5 implementation is 100% COMPLETE (verification deferred)
-
     - ✅ **Section 5.5.5:** Fix LBRR Frame Interleaving Bug - **COMPLETE**
         - [x] Identify LBRR frame interleaving bug (channel-major instead of frame-major)
               RFC 6716 lines 2041-2047 mandate frame-major: mid1→side1→mid2→side2→mid3→side3
@@ -776,18 +725,15 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
 
         **Problem Identified:**
         Original `decode()` implementation only decoded `frames[0]`, completely ignoring all subsequent frames in multi-frame packets. This caused:
-
         - 50% audio loss for Code 1 packets (2 frames)
         - 66% audio loss for Code 2 packets (2 frames + padding)
         - 75-98% audio loss for Code 3 packets (2-48 frames)
 
         **RFC Violations:**
-
         - RFC Section 3.2.5 (lines 1471-1473): "Each frame is decoded with a separate instance of the range decoder"
         - Frame array iteration required for all Code 1/2/3 packets
 
         **Implementation:**
-
         - [x] Replace single-frame decode with loop over all frames (lib.rs:197-248)
         - [x] Create independent RangeDecoder for each frame (RFC 1471-1473)
         - [x] Add output buffer validation (lib.rs:188-193)
@@ -802,7 +748,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
             - Pass correct slice to mode decode function
 
         **Verification:**
-
         - [x] All 479 tests passing
         - [x] Zero clippy warnings
         - [x] Manual code audit: loop structure verified correct
@@ -819,7 +764,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         **Current Implementation Status:**
 
         ✅ **Mode Transition Detection - CORRECT** (lib.rs:165-182)
-
         - [x] Detects mode changes correctly
         - [x] SILK reset called when: prev=CELT-only AND (curr=SILK-only OR Hybrid)
         - [x] CELT reset called when: curr=CELT-only OR Hybrid
@@ -841,16 +785,13 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         **RFC Compliance Audit Results:**
 
         ### CRITICAL VIOLATIONS (MUST FIX):
-
         1. ❌ **`previous_stereo_weights` NOT reset**
-
             - RFC: Lines 2200-2205 (NORMATIVE)
             - Requirement: "previous weights are reset to zeros on any transition from mono to stereo... zeros if no previous weights are available since the last decoder reset"
             - Impact: Stale stereo weights from previous SILK session reused
             - Fix: `self.previous_stereo_weights = None;`
 
         2. ❌ **`ltp_state` NOT reset**
-
             - RFC: Lines 4740-4747, 5550-5565 (NORMATIVE)
             - Requirement: LTP buffers (out, lpc, history) cleared to zeros
             - Impact: Stale LTP history corrupts prediction
@@ -858,7 +799,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
             - Fix: `self.ltp_state.reset();`
 
         3. ❌ **`stereo_state` NOT reset**
-
             - RFC: Lines 2197-2205 (stereo weights), 5715-5722 (prior samples)
             - Requirement: All stereo state (weights + mid/side history) to zeros
             - Impact: Stale stereo unmixing state causes artifacts
@@ -875,22 +815,18 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
               `self.silk_resampler_state = None;`
 
         ### HIGH-PRIORITY INCONSISTENCIES (SHOULD FIX):
-
         5. ⚠️ **`previous_gain_indices` NOT reset**
-
             - RFC: Lines 2517-2518 (clamping skipped after reset)
             - Status: Functionally correct (ignored via `is_first_frame` flag)
             - Issue: Inconsistent with LSF state clearing pattern
             - Fix: `self.previous_gain_indices = [None, None];`
 
         6. ⚠️ **`previous_pitch_lag` NOT reset**
-
             - RFC: Lines 4136-4152 (absolute coding after reset)
             - Status: TODO comment - not yet used (Section 3.7+ LTP delta coding)
             - Fix: `self.previous_pitch_lag = None;` (future-proofing)
 
         7. ⚠️ **`lcg_seed` NOT reset**
-
             - RFC: Lines 4775-4793, 5462-5473 (decoded each frame)
             - Status: TODO comment - not yet used (Section 3.7.7 noise injection)
             - Note: Seed is per-frame from bitstream (not inter-frame state)
@@ -958,7 +894,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         ```
 
         **Implementation Tasks:**
-
         - [x] Update `SilkDecoder::reset_decoder_state()` to reset all 12 state variables
         - [x] Add comprehensive RFC documentation for each state reset
         - [x] Add resampler reset in OpusDecoder mode transition logic
@@ -990,7 +925,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
       **Problem:** Compilation fails with `--no-default-features` due to match expression evaluating to never type `!`
 
         **Errors Encountered:**
-
         1. Match expression returns `!` when all arms are feature-gated error returns
         2. Cannot add-assign `!` to `usize` (line 252: `current_output_offset += samples`)
 
@@ -1034,14 +968,12 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         ```
 
         **Why This Works:**
-
         1. Early return prevents runtime execution when no features enabled ✅
         2. Feature-gated loop prevents match from being type-checked when all arms diverge ✅
         3. Zero overhead when features enabled (compile-time only) ✅
         4. Type-safe (match never compiled when it would return `!`) ✅
 
         **Implementation Tasks:**
-
         - [x] Add early return in `decode()` after packet validation
               Already implemented at lib.rs:171-176 with proper error message
         - [x] Wrap entire decode loop with `#[cfg(any(feature = "silk", feature = "celt"))]`
@@ -1063,7 +995,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
 
         **RFC Compliance Note:**
         RFC 6716 defines three operating modes (SILK-only, CELT-only, Hybrid) but does NOT require decoders to support all modes. A decoder with zero modes is valid for:
-
         - Minimal binary size (packet inspection only)
         - Testing/validation tools
         - Build-time verification of feature-gating
@@ -1071,7 +1002,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         **Status:** ✅ **COMPLETE** - All feature combinations compile and pass tests
 
         **Section 5.11 Verification Summary:**
-
         - ✅ No-features build: PASS (13.40s)
         - ✅ No-features clippy: PASS (3m 46s, zero warnings)
         - ✅ No-features tests: PASS (91 tests)
@@ -1082,7 +1012,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
     - ✅ **Section 5.8:** Phase 5 Completion - **COMPLETE**
 
         **All Requirements Met:**
-
         - ✅ Multi-frame packet support complete (Section 5.9)
         - ✅ Mode transition detection complete (Section 5.10)
         - ✅ SILK state reset 100% RFC compliant - ALL 11 state variables reset
@@ -1094,7 +1023,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
         - ✅ No-features compilation support (Section 5.11)
 
         **Phase 5 Completion Checklist:**
-
         1. ✅ All multi-frame packets decoded correctly
         2. ✅ Mode transitions detected correctly
         3. ✅ SILK decoder state reset 100% RFC compliant
@@ -1456,7 +1384,6 @@ Without RFC test vectors or real Opus hybrid packets, verification tests would o
 **Reference:** RFC 6716 Section 4.1.1
 
 - [x] Implement `RangeDecoder::init()` or update `new()`:
-
     - Initialize `value` from first bytes
     - Initialize `range` to 128 per RFC
     - Validate buffer has minimum 2 bytes
@@ -1726,7 +1653,6 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
     ```
 
     **State fields explanation (from RFC lines 1756-1782):**
-
     - `sample_rate`: SILK internal sample rate (8/12/16/24 kHz per RFC line 1749) - uses crate-level `SampleRate` enum
     - `channels`: Mono or stereo mode - uses crate-level `Channels` enum
     - `frame_size_ms`: 10, 20, 40, or 60 ms per configuration
@@ -3132,7 +3058,6 @@ Implement LSF interpolation for 20ms frames and conversion of normalized LSF coe
 ### What We're Building
 
 1. **LSF Interpolation (RFC 4.2.7.5.5)**
-
     - Decode interpolation weight for 20ms frames only
     - Interpolate between previous frame LSFs (n0_Q15) and current frame LSFs (n2_Q15)
     - Store previous frame LSFs in decoder state
@@ -3968,14 +3893,12 @@ Apply bandwidth expansion to limit LPC coefficient magnitude and prediction gain
 ### What We're Building
 
 1. **Coefficient Magnitude Limiting (RFC 4.2.7.5.7, lines 3893-3963)**
-
     - Apply up to 10 rounds of bandwidth expansion to reduce Q17 coefficients to fit in Q12 16-bit range
     - Find maximum absolute coefficient value and compute chirp factor
     - Apply bandwidth expansion using progressive sc_Q16 values
     - Final saturation to 16-bit Q12 after 10th round (if reached)
 
 2. **Prediction Gain Limiting (RFC 4.2.7.5.8, lines 3964-4120)**
-
     - Compute reflection coefficients using Levinson recursion
     - Check filter stability using fixed-point approximations
     - Apply up to 16 rounds of bandwidth expansion to ensure stable filter
@@ -4658,7 +4581,6 @@ Decode Long-Term Prediction (LTP) parameters for voiced SILK frames, including p
 **What We're Building:**
 
 1. **Primary Pitch Lag (RFC 4.2.7.6.1, lines 4130-4216)**
-
     - Absolute coding: `lag = lag_high × lag_scale + lag_low + lag_min`
     - Relative coding: `lag = previous_lag + (delta_lag_index - 9)`
     - Delta=0 fallback to absolute coding
@@ -4666,14 +4588,12 @@ Decode Long-Term Prediction (LTP) parameters for voiced SILK frames, including p
     - Range: 2ms to 18ms (NB: 16-144, MB: 24-216, WB: 32-288 samples)
 
 2. **Pitch Contour (RFC 4.2.7.6.1, lines 4226-4452)**
-
     - VQ codebook selection based on bandwidth and frame size
     - Per-subframe lag offsets applied to primary lag
     - 4 codebooks: NB-10ms (3), NB-20ms (11), MB/WB-10ms (12), MB/WB-20ms (34)
     - Clamped final lags: `pitch_lags[k] = clamp(lag_min, lag + offset, lag_max)`
 
 3. **LTP Filter Coefficients (RFC 4.2.7.6.2, lines 4454-4721)**
-
     - Periodicity index selects codebook: 0→8 filters, 1→16 filters, 2→32 filters
     - 5-tap filters per subframe (signed Q7 format)
     - Rate-distortion trade-off: higher periodicity = more complex codebook
@@ -5227,34 +5147,28 @@ Add ~15 tests covering all LTP decoding paths.
 The excitation decoder implements a sophisticated pulse vector quantization scheme with 7 major subsections:
 
 1. **3.7.1** - LCG Seed Decoding (RFC 4.2.7.7, lines 4775-4793)
-
     - Initialize 2-bit pseudorandom number generator seed
     - Uniform PDF for seed selection
 
 2. **3.7.2** - Shell Block Count Determination (RFC 4.2.7.8 intro + Table 44, lines 4828-4855)
-
     - Calculate number of 16-sample blocks based on bandwidth and frame size
     - Special handling for 10ms mediumband frames (128 samples, discard last 8)
 
 3. **3.7.3** - Rate Level and Pulse Count Decoding (RFC 4.2.7.8.1-8.2, lines 4857-4974)
-
     - Decode rate level (9 possible values, signal-type dependent)
     - Decode pulse counts per block with LSB extension mechanism
     - LSB depth can iterate up to 10 levels
 
 4. **3.7.4** - Pulse Position Decoding via Hierarchical Split (RFC 4.2.7.8.3, lines 4975-5256)
-
     - Recursive binary partitioning: 16→8→4→2→1 samples
     - Combinatorial encoding using 64 different split PDFs
     - Preorder traversal (left before right)
 
 5. **3.7.5** - LSB Decoding (RFC 4.2.7.8.4, lines 5258-5289)
-
     - Decode least significant bits for all 16 coefficients
     - MSB-to-LSB order with bit-shifting reconstruction
 
 6. **3.7.6** - Sign Decoding (RFC 4.2.7.8.5, lines 5291-5420)
-
     - 42 different sign PDFs based on signal type, quant offset, and pulse count
     - Most PDFs skewed towards negative due to quantization offset
 
@@ -5693,7 +5607,6 @@ All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format 
       Added all 64 ICDF constants (4 tables × 16 pulse counts) to `packages/opus_native/src/silk/excitation_constants.rs` with RFC PDF reference comments
 
     **IMPORTANT:** All PDFs below are converted to ICDF format. Each constant includes:
-
     1. Comment showing RFC PDF values
     2. Comment stating "Converted to ICDF"
     3. ICDF array with terminating zero
@@ -5914,7 +5827,6 @@ All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format 
 
 - [x] **Implement hierarchical pulse position decoding:**
       Implemented `decode_pulse_locations()` and `decode_split_recursive()` methods with:
-
     - Preorder traversal (left before right) per RFC line 4998
     - Zero-pulse partitions skipped (RFC lines 5003-5007)
     - Recursive binary splitting: 16→8→4→2→1
@@ -5993,7 +5905,6 @@ Table 51 constant must be converted from RFC PDF format to ICDF format. See Sect
 
 - [x] **Implement LSB decoding (RFC lines 5260-5289):**
       Implemented `decode_lsbs()` method with:
-
     - MSB-first decoding order per RFC lines 5273-5274
     - All 16 coefficients decoded per bit level (even zeros per RFC lines 5262-5263)
     - Magnitude formula: `magnitude = (magnitude << 1) | lsb` per RFC lines 5286-5289
@@ -10486,18 +10397,15 @@ After completing ALL subsections (4.2.1-4.2.4):
 **Critical Notes for Phase 4.2:**
 
 1. **Dependency on Phase 4.3**: Fine and final energy require bit allocation from Section 4.3.3
-
     - For testing Phase 4.2, use **stub allocations** (e.g., all bands get 2 fine bits, priority 0)
     - Full integration happens in Phase 4.3
 
 2. **Energy Probability Model Extraction**:
-
     - **CRITICAL**: `e_prob_model` table MUST be extracted from RFC reference implementation
     - Cannot proceed without this table - search for "e_prob_model" in quant_bands.c
     - Alternative: Extract from test vectors if reference unavailable
 
 3. **Prediction Coefficients**:
-
     - **Alpha coefficients** (inter-frame, frame-size dependent) - search reference
     - **Beta coefficient** intra: `4915/32768` (explicit in RFC line 6063)
     - **Beta coefficients** inter: frame-size dependent - search reference
@@ -10623,25 +10531,21 @@ After completing ALL subsections (4.2.1-4.2.4):
 **RFC Compliance Fixes Applied (Post-Review):**
 
 1. ✅ **Band Boost Quanta Formula** (decoder.rs:454)
-
     - **Bug:** `n.min(8 * n).max(48)` - mathematically incorrect
     - **Fixed:** `(8 * n).min(48.max(n))` - RFC line 6346 compliant
     - **Impact:** Correct boost allocation for all band sizes
 
 2. ✅ **Band Boost total_bits Decrement** (decoder.rs:470-472)
-
     - **Missing:** RFC line 6355 requires "subtract quanta from total_bits"
     - **Fixed:** Added `bits_consumed` tracking, return as third tuple element
     - **Impact:** Correct budget tracking for boost decoding
 
 3. ✅ **Conservative Subtraction** (decoder.rs:608)
-
     - **Missing:** RFC line 6413-6414 requires subtracting 1 eighth-bit
     - **Fixed:** `let mut total = (total_bits * 8).saturating_sub(1);`
     - **Impact:** Conservative allocation prevents over-allocation
 
 4. ✅ **Anti-Collapse Reservation** (decoder.rs:611-617)
-
     - **Missing:** RFC line 6415-6418 reserves 8 eighth-bits for transient frames
     - **Fixed:** Added `is_transient` parameter, conditional reservation logic
     - **Impact:** Correct allocation for transient frames (percussive sounds)
@@ -10758,32 +10662,27 @@ After deep audit, **1 CRITICAL COMPROMISE** was found and fixed:
 **Fixes Implemented (8 tasks completed):**
 
 1. ✅ **Added Constants** (lines 30-49)
-
     - `BITRES = 3`, `QTHETA_OFFSET = 4`, `QTHETA_OFFSET_TWOPHASE = 16`
     - `EXP2_TABLE8[8]` lookup table for qn computation
 
 2. ✅ **Implemented Helper Functions** (lines 51-176)
-
     - `isqrt()` - integer square root for triangular PDF
     - `frac_mul16()` - Q15 fixed-point multiplication
     - `compute_pulse_cap()` - maximum pulses for bit allocation
     - `compute_pvq_size_internal()` - avoid circular dependency
 
 3. ✅ **Implemented compute_qn()** (lines 178-216)
-
     - Quantization level calculation from bit allocation
     - Stereo offset handling (QTHETA_OFFSET_TWOPHASE for N=2)
     - exp2 table lookup with rounding to even
     - Reference: libopus bands.c:647-667
 
 4. ✅ **Implemented Trigonometric Functions** (lines 573-638)
-
     - `bitexact_cos()` - Q14→Q15 cosine approximation
     - `bitexact_log2tan()` - Q15→Q11 log2 for pulse split
     - Quadratic approximation for efficiency
 
 5. ✅ **Implemented decode_split_gain()** (lines 640-718)
-
     - **Method 1:** Triangular PDF (time splits, single block)
     - **Method 2:** Step PDF (stereo, N>2)
     - **Method 3:** Uniform PDF (default)
@@ -10791,14 +10690,12 @@ After deep audit, **1 CRITICAL COMPROMISE** was found and fixed:
     - Reference: libopus bands.c:777-839
 
 6. ✅ **Implemented compute_pulse_split()** (lines 720-754)
-
     - Maps gain parameter to pulse distribution (K1, K2)
     - Uses cosine gains and log2tan for bit imbalance
     - Formula: delta = frac_mul16((N-1)<<7, bitexact_log2tan(iside, imid))
     - Reference: libopus bands.c:1011-1012, 1336-1337
 
 7. ✅ **Fixed decode_pvq_vector_split()** (lines 795-871)
-
     - **OLD:** `let k1 = k / 2; let k2 = k - k1;` (WRONG!)
     - **NEW:** Proper gain decoding with entropy coding
     - Added parameters: `bits`, `is_stereo`, `is_transient`, `b0`
@@ -10840,7 +10737,6 @@ After deep audit, **1 CRITICAL COMPROMISE** was found and fixed:
 After second deep audit against libopus reference implementation, **2 critical non-bit-exact implementations** were found and fixed:
 
 1. ✅ **bitexact_cos() - FIXED**
-
     - **Issue:** Used quadratic approximation `cos(θ) = 1 - 2(θ/π)²` instead of cubic polynomial
     - **Fix:** Implemented exact cubic polynomial with coefficients C1=-7651, C2=8277, C3=-626
     - **Formula:** `x2 = (4096 + x²) >> 13; result = (32767-x2) + FRAC_MUL16(x2, poly(x2)); return 1 + result`
@@ -10848,7 +10744,6 @@ After second deep audit against libopus reference implementation, **2 critical n
     - **Verification:** Reference values match exactly: cos(0)=-32768, cos(8192)=23171, cos(16384)=16554
 
 2. ✅ **bitexact_log2tan() - FIXED**
-
     - **Issue:** Missing polynomial correction terms, only computed integer log difference
     - **Fix:** Added quadratic refinement with coefficients C1=7932, C2=-2597
     - **Formula:** `(ls-lc)*(1<<11) + FRAC_MUL16(isin, FRAC_MUL16(isin, -2597) + 7932) - FRAC_MUL16(icos, FRAC_MUL16(icos, -2597) + 7932)`
@@ -10856,7 +10751,6 @@ After second deep audit against libopus reference implementation, **2 critical n
     - **Verification:** Reference values match exactly: log2tan(16384,16384)=0, log2tan(32767,16384)=2018
 
 3. ✅ **frac_mul16() - FIXED**
-
     - **Issue:** Missing rounding in Q15 multiplication: `(a*b) >> 15`
     - **Fix:** Added rounding: `(16384 + a*b) >> 15`
     - **Reference:** libopus mathops.h:44 FRAC_MUL16 macro
@@ -10881,7 +10775,6 @@ After second deep audit against libopus reference implementation, **2 critical n
 After fourth audit against RFC 6716 and libopus reference, fixed critical recursion depth implementation:
 
 1. ✅ **LM-Based Recursion Limit** (RFC 6716:6618, libopus bands.c:983-994)
-
     - **CRITICAL FIX:** Restored `lm` parameter for RFC-mandated "LM+1 splits" limit
     - Removed generic `max_depth` parameter (not RFC-compliant)
     - Split condition: `lm != -1 && codebook >= 2^31 && n > 2`
@@ -10890,20 +10783,17 @@ After fourth audit against RFC 6716 and libopus reference, fixed critical recurs
     - **Example:** LM=3 allows max 4 splits (3→2→1→0→-1 stops)
 
 2. ✅ **B Parameter Tracking** (bands.c:1497, 774)
-
     - Caller computes initial `B = if is_transient { lm + 1 } else { 1 }` where `lm = log2(frame_size/120)`
     - B halves at each recursion level: `B_next = (B + 1) >> 1`
     - Independent from LM - both parameters needed for correct behavior
 
 3. ✅ **avoid_split_noise Flag** (bands.c:763-770)
-
     - Computed as `avoid_split_noise = B > 1`
     - Added as parameter to `decode_split_gain()`
     - Applied only in Method 1 (triangular PDF, time splits, !stereo && b0==1)
     - Forces theta to endpoint when `itheta ∈ (0, qn)` to prevent noise injection on transients
 
 4. ✅ **Updated Function Signatures**
-
     - `decode_pvq_vector_split()`: Takes `lm: i8, b0: u32, b: u32`
     - Removed `max_depth` (replaced with RFC-compliant LM mechanism)
     - `decode_split_gain()`: Added `avoid_split_noise: bool` parameter
@@ -10921,7 +10811,6 @@ After fourth audit against RFC 6716 and libopus reference, fixed critical recurs
 After fifth audit against RFC and libopus, added missing bit allocation check:
 
 1. ✅ **Bit Threshold Implementation** (RFC 6716:6603-6606, libopus bands.c:971)
-
     - Added `get_pulses()` helper (libopus rate.h:48-51)
     - Added `fits_in_32()` helper to check codebook size
     - Added `compute_split_threshold()` for on-demand calculation
@@ -10929,7 +10818,6 @@ After fifth audit against RFC and libopus, added missing bit allocation check:
     - Uses on-demand calculation (full PulseCache table optimization deferred)
 
 2. ✅ **Complete Four-Part Split Condition**
-
     - Condition 1: `codebook_size >= 2^31`
     - Condition 2: `lm != -1`
     - Condition 3: `bits > split_threshold`
@@ -11847,7 +11735,6 @@ The `start_band` and `end_band` fields enable:
     "energy corresponding to the minimum energy over the two previous frames"
 
     **Structural Change Required:**
-
     - Must add `prev_prev_energy: [i16; CELT_NUM_BANDS]` to `CeltState` ✅ DONE
     - Energy update pattern: `prev_prev = prev; prev = current` (after each frame)
     - Matches libopus: `oldLogE2` (t-2) and `oldLogE` (t-1)
@@ -11856,7 +11743,6 @@ The `start_band` and `end_band` fields enable:
     RFC states: "For each band **of each MDCT**" - must process EACH MDCT separately!
 
     **libopus Algorithm (bands.c:284-360):**
-
     1. **MDCT loop:** `for (k=0; k<(1<<LM); k++)` - process each short MDCT separately
     2. **Bit masks:** `collapse_masks[i*C+c] & (1<<k)` - bit k indicates if MDCT k collapsed
     3. **Interleaved storage:** `X[(j<<LM)+k]` where j=freq bin, k=MDCT index
@@ -11868,7 +11754,6 @@ The `start_band` and `end_band` fields enable:
 
     **CURRENT LIMITATION - MONO ONLY:**
     Current implementation supports mono (C=1) only. Stereo support requires:
-
     - Collapse masks indexing: `collapse_masks[i*C+c]` instead of `[i]`
     - Energy comparison: `MAX(energy[ch0], energy[ch1])` for stereo→mono playback
     - Band structure: Per-channel band support
@@ -12008,6 +11893,7 @@ For each band:
         energy: &[i16; CELT_NUM_BANDS],
     ) -> Vec<Vec<f32>>
     ```
+
     - [x] Only processes bands in `[self.start_band, self.end_band)` range
           Implemented with conditional check: `if band_idx >= self.start_band && band_idx < self.end_band` (decoder.rs:1532)
     - [x] Correctly converts Q8 energy to linear domain
@@ -12077,9 +11963,7 @@ Current implementation supports mono (C=1) only. Stereo support requires:
     **✅ LIBOPUS RESEARCH FINDINGS (modes.c:348, mdct.c:332-348):**
 
     **CORRECTED UNDERSTANDING** (after examining actual libopus source):
-
     1. **Window size** (modes.c:348): `overlap = ((shortMdctSize>>2)<<2)`
-
         - For shortMdctSize=120: ((120>>2)<<2) = ((30)<<2) = **120 samples**
         - This formula rounds DOWN to multiple of 4 (clears bottom 2 bits)
         - **overlap equals shortMdctSize for CELT** (full-length window)
@@ -12093,7 +11977,6 @@ Current implementation supports mono (C=1) only. Stereo support requires:
         Verified: sin of (sin squared), not (sin squared) of sin
 
     3. **TDAC windowing pattern** (mdct.c:332-348 "Mirror on both sides for TDAC"):
-
         - Window ALL N samples (not three regions as initially thought)
         - Apply window to first overlap/2 and last overlap/2 simultaneously
         - Pattern: `output[i] = (x2*w2 - x1*w1) + overlap_buffer[i]`
@@ -12180,7 +12063,6 @@ Current implementation supports mono (C=1) only. Stereo support requires:
     **✅ FINAL IMPLEMENTATION (decoder.rs:1677-1735):**
 
     Matches libopus mdct.c:332-348 TDAC windowing exactly:
-
     - Processes 2\*N MDCT samples, outputs N time-domain samples
     - Applies full-length window (overlap = shortMdctSize = 120)
     - TDAC pattern: mirrors both sides simultaneously for power complementarity
@@ -12188,7 +12070,6 @@ Current implementation supports mono (C=1) only. Stereo support requires:
     - Stores second half of MDCT output for next frame
 
     **Tests:** 5 comprehensive tests all passing
-
     - test_overlap_add_output_size: Verifies N samples output
     - test_overlap_add_with_previous_frame: Validates overlap continuity
     - test_overlap_add_zero_input: Edge case handling
@@ -12578,7 +12459,6 @@ pub struct DecodedFrame {
 **Tasks:**
 
 - [x] **Task 4.6.5.1.1:** Implement `decode_spread()` (RFC line 5968, Section 4.3.4.3)
-
     - [x] Add SPREAD_PDF constant to constants.rs
           **Location:** `packages/opus_native/src/celt/constants.rs:67-68`
         ```rust
@@ -12594,7 +12474,6 @@ pub struct DecodedFrame {
           PDF verified: {7,2,21,2}/32 → ICDF {32,25,23,2,0}
 
 - [x] **Task 4.6.5.1.2:** Implement `decode_skip()` (RFC line 5974, Section 4.3.3)
-
     - [x] Implement decode_skip() method
           **Location:** `packages/opus_native/src/celt/decoder.rs:373-388`
           Early return if !skip_rsv, uses ec_dec_bit_logp(1) for 1/2 probability
@@ -12654,7 +12533,6 @@ pub struct DecodedFrame {
       **Location:** `packages/opus_native/src/celt/decoder.rs:1892-2050`
 
     **17-Step RFC Table 56 Decode Order (VERIFIED):**
-
     1. silence (line 1924) ✅
     2. post-filter + params (lines 1930-1935) ✅
     3. transient (line 1938) ✅
@@ -12672,7 +12550,6 @@ pub struct DecodedFrame {
     15. residual/PVQ (lines 1995-2007) ✅
     16. anti-collapse (lines 2010-2013) ✅
     17. finalize (lines 2016-2047) ✅
-
     - [x] Move coarse_energy decode to position 5
     - [x] Move tf_change decode to position 6
     - [x] Move tf_select decode to position 7
@@ -12681,7 +12558,6 @@ pub struct DecodedFrame {
     - [x] Verify all 17 steps match RFC Table 56
 
 - [x] **Task 4.6.5.2.2:** Add skip flag at correct position
-
     - [x] Calculate skip_rsv before decode_skip()
           Line 1966: `let skip_rsv = total_bits > 8;` (stub implementation)
     - [x] Insert decode_skip() between trim and intensity (position 11)
@@ -12718,7 +12594,6 @@ pub struct DecodedFrame {
 
 - [x] **Task 4.6.5.3.1:** Review decode_band_boost() against RFC
       **Location:** `packages/opus_native/src/celt/decoder.rs:658-704`
-
     - [x] Check dynalloc_logp initialization (starts at 6)
           **Line 668:** `let mut dynalloc_logp = 6;` ✓ **CORRECT**
     - [x] Check quanta calculation: min(8*N, max(48, N))
@@ -12733,7 +12608,6 @@ pub struct DecodedFrame {
           Algorithm matches libopus implementation (dynalloc loop structure identical)
 
 - [x] **Task 4.6.5.3.2:** Verify cap[] calculation
-
     - [x] Check cache_caps table usage (RFC lines 6290-6316)
           **Note:** caps[] is passed as parameter to decode_band_boost() - caller responsible for calculation
           **Location:** Called from decode_celt_frame() at line 1956-1959 with stub caps array
@@ -12779,14 +12653,12 @@ pub struct DecodedFrame {
       **Location:** `packages/opus_native/src/celt/decoder.rs:1892-1922`
 
     **Documentation Added:**
-
     - Complete RFC 6716 Table 56 reference (lines 5943-5989)
     - All 17 steps documented with RFC line numbers
     - Critical note about start_band/end_band usage
     - Detailed decode pipeline order in doc comments (lines 1899-1917)
 
     **Each Step in Code:**
-
     1. silence (line 1924) - RFC line 5946 ✓
     2. post-filter + params (lines 1930-1935) - RFC lines 5948-5956 ✓
     3. transient (line 1938) - RFC line 5958 ✓
@@ -12808,12 +12680,10 @@ pub struct DecodedFrame {
 - [x] **Task 4.6.5.4.2:** Add RFC compliance test
       **Status:** Integration tests already exist
       **Location:** `packages/opus_native/src/celt/decoder.rs:2605-2645`
-
     - `test_decode_celt_frame_normal_mode` (lines 2605-2629) - Verifies full decode pipeline
     - `test_decode_celt_frame_narrowband_simulation` (lines 2622-2645) - Tests with start_band=17
 
     **Additional Verification:**
-
     - 386 tests passing (7 new tests for missing parameters)
     - Tests verify each new decode method works correctly
     - Integration tests verify full pipeline doesn't panic
@@ -12824,21 +12694,18 @@ pub struct DecodedFrame {
       **Status:** THIS DOCUMENT - updating now
 
     Sections marked complete:
-
     - ✅ Section 4.6.5.1: Missing parameter decode methods + tests
     - ✅ Section 4.6.5.2: Decode order reordered to RFC Table 56
     - ✅ Section 4.6.5.3: Band boost algorithm verified
     - ✅ Section 4.6.5.4: Integration and final verification
 
     Phase 4.6 limitations documented:
-
     - MDCT implementation: Stub (returns zeros) - Phase 4.6 focuses on decode order
     - PVQ shape decoding: Stub (returns zeros) - Phase 4.6 focuses on decode order
     - Caps calculation: Stub (zeros) - Requires cache tables (Phase 5)
     - Post-filter application: Parameters decoded, application deferred
 
     **RFC Compliance Status:** ✅ **ACHIEVED**
-
     - All 17 RFC Table 56 parameters decoded in correct order
     - Zero violations of bitstream decode order
     - Ready for Phase 5 (mode integration)
@@ -13010,7 +12877,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     ```
 
     **Rationale:**
-
     - `frame_bytes` comes from Opus packet header (Phase 5)
     - For Phase 4 testing, pass explicit value
     - RFC 6411: "taking the size of the coded frame times 8"
@@ -13113,7 +12979,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     ```
 
     **Review Current Implementation:** `decoder.rs:745-778`
-
     - Check if total_bits updates propagate correctly
     - Ensure intensity_rsv uses correct table
     - Verify dual_stereo_rsv logic
@@ -13166,7 +13031,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     ```
 
     **Implementation Steps:**
-
     1. ✅ Download libopus source from xiph.org (fetched via webfetch)
     2. ✅ Extract `cache_caps50[]` from `celt/static_modes_float.h`
     3. ✅ Verify array dimensions match CELT_NUM_BANDS * (2*3 + 1) \* 2 (168 values)
@@ -13313,7 +13177,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     **Current Status:** Lines 1996-2007 create unit-norm stubs
 
     **Phase 4 Decision:** KEEP STUB
-
     - PVQ is complex (RFC Section 4.3.4, ~200 lines)
     - Requires U-V decomposition, pulse allocation, splitting
     - Create separate Phase 4.7 or defer to Phase 8
@@ -13332,7 +13195,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     **Current Status:** Line 2044 calls stubbed inverse_mdct()
 
     **Phase 4 Decision:** KEEP STUB
-
     - MDCT is complex (requires FFT or DCT-IV)
     - Window function generation required
     - Create separate Phase 4.8 or defer to Phase 8
@@ -13369,7 +13231,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
 - [x] **Task 4.6.6.5.2:** Add integration test with real frame_bytes
 
     **Tests Added:**
-
     - `test_decode_celt_frame_with_various_frame_bytes` (decoder.rs:3851-3869) - Tests with 50, 100, 200, 500 bytes
     - `test_compute_caps_mono` (decoder.rs:3871-3882) - Verifies caps computation for mono
     - `test_compute_caps_stereo` (decoder.rs:3884-3901) - Verifies stereo caps >= mono caps
@@ -13377,7 +13238,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
 - [x] **Task 4.6.6.5.3:** Update all decode_celt_frame call sites
 
     **Files to Update:**
-
     1. Integration tests: `decoder.rs` test module
     2. Public API wrappers (if any)
     3. Phase 5 mode integration (future)
@@ -13389,7 +13249,6 @@ During RFC compliance review, **7 critical compromises** were identified. While 
     ```
 
     **Update each call site:**
-
     - ✅ `test_decode_celt_frame_normal_mode` (line 3619)
     - ✅ `test_decode_celt_frame_narrowband_simulation` (line 3646)
     - ✅ All new tests use frame_bytes parameter
@@ -13622,7 +13481,6 @@ let (_intensity, _dual_stereo) =
     ```
 
     **Rationale:**
-
     - `frame_bytes * 8` = total BITS in frame
     - `tell_frac` is in 8th bits (from ec_tell_frac)
     - Convert to bits by dividing by 8 (round up)
@@ -13647,7 +13505,6 @@ let (_intensity, _dual_stereo) =
     ```
 
     **Rationale:**
-
     - Use skip_rsv from Allocation struct (added in 4.6.7.3)
     - Avoids duplicate calculation
 
@@ -13671,7 +13528,6 @@ let (_intensity, _dual_stereo) =
 **Verification:**
 
 - ✅ **Line 852:** `let mut total = (total_bits * 8).saturating_sub(1);`
-
     - Confirms input `total_bits` is in **BITS**
     - Multiplies by 8 to convert to 8th bits (RFC 6411-6414 "conservative allocation")
 
@@ -13704,6 +13560,7 @@ let (_intensity, _dual_stereo) =
         balance,
     })
     ```
+
     - Missing: `skip_rsv` field (to be added in 4.6.7.3)
 
 **Conclusion:** `compute_allocation` is **CORRECT** - expects bits, not 8th bits.
@@ -13751,7 +13608,6 @@ let (_intensity, _dual_stereo) =
 - [x] **Task 4.6.7.3.3:** Update all Allocation construction sites ✅ DONE
 
     **Updated:**
-
     - test_allocation_struct_creation (decoder.rs:2625): Added `skip_rsv: 0`
 
 ---
@@ -13983,7 +13839,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **Rationale:**
-
     - RFC 6423-6429: intensity/dual reservations calculated during allocation
     - Return values needed for conditional decode in Table 56 order
 
@@ -14046,7 +13901,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **RFC Line-by-Line Verification:**
-
     - Line 6423: "If the current frame is stereo" → `if channels == 2`
     - Line 6424-6425: "conservative log2 in 8th bits...LOG2_FRAC_TABLE" → use existing table
     - Line 6425-6426: "If intensity_rsv is greater than total, then intensity_rsv is set to zero" → `if intensity_rsv > 0 && intensity_rsv <= total`
@@ -14158,7 +14012,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **Rationale:**
-
     - Separates decoding from reservation (decode_stereo_params mixes both)
     - Allows decoding in correct Table 56 order
     - Clean, focused methods matching RFC structure
@@ -14190,7 +14043,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **Rationale:**
-
     - This decodes intensity/dual BEFORE skip (wrong order)
     - Reservations now handled in compute_allocation
 
@@ -14242,7 +14094,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **Conditional Logic:**
-
     - Only decode if `allocation.intensity_rsv > 0`
     - This matches RFC: "if intensity_rsv is greater than total, then intensity_rsv is set to zero"
     - When zero, skip decoding (no bits reserved)
@@ -14261,7 +14112,6 @@ Line 2046: 11. skip        ❌ TOO LATE (decoded AFTER intensity/dual)
     ```
 
     **Conditional Logic:**
-
     - Only decode if `allocation.dual_stereo_rsv > 0`
     - Matches RFC: dual only reserved "if total is still greater than 8"
 
@@ -14641,7 +14491,6 @@ let mut total = total_bits_8th;
     ```
 
     **Rationale:**
-
     - RFC 6411-6414: exact formula
     - No rounding - preserves all fractional precision
     - Bit-exact to reference implementation
@@ -14735,7 +14584,6 @@ let mut total = total_bits_8th;
     ```
 
     **Rationale:**
-
     - The "- 1" was already done in decode_celt_frame
     - No need to multiply by 8 or subtract again
     - Just use the value directly
@@ -15139,25 +14987,21 @@ PCM Audio Output! (via stub MDCT - full synthesis in Phase 4 follow-up)
 All Phase 5 open questions have been resolved through comprehensive RFC analysis and libopus source cross-reference:
 
 1. ✅ **Hybrid Packet Structure** (RFC 522-526, libopus opus_decoder.c:355-477)
-
     - **NO explicit length field** - SILK and CELT share same range decoder state
     - SILK decodes first, CELT continues immediately where SILK stopped
     - Packet split is **implicit** via range decoder bit position
 
 2. ✅ **CELT Band Cutoff** (RFC 5804, Table 55)
-
     - First 17 bands (0-16, covering 0-8000 Hz) NOT coded in hybrid mode
     - CELT starts at band 17 (8000-9600 Hz)
     - Exact cutoff: Band 16 stops at 8000 Hz, Band 17 starts at 8000 Hz
 
 3. ✅ **SILK Sample Rate** (RFC 494-496, 1749-1750, libopus opus_decoder.c:397)
-
     - Hybrid mode: SILK **always** operates at 16 kHz internal rate (WB mode)
     - Outputs coded 0-8 kHz content at 16 kHz sample rate
     - Decoder resamples to target rate after synthesis
 
 4. ✅ **Sample Rate Conversion** (RFC 496-501, Figure 14)
-
     - SILK: 16 kHz → resample → target (8/12/16/24/48 kHz)
     - CELT: 48 kHz → decimate → target (8/12/16/24/48 kHz)
     - Final output: SILK_resampled + CELT_decimated (summed per RFC line 1272)
@@ -15306,7 +15150,6 @@ After fixing:
       Clippy completed in 4m 11s with zero warnings.
 
 - [x] Verify ICDF values match conversion formula:
-
     - [x] 40ms: `[203, 150, 0]` correct for PDF `{0, 53, 53, 150}/256`
           Cumulative: [0, 53, 106, 256], ICDF: [256, 203, 150, 0] → skip 256 = [203, 150, 0] ✓
 
@@ -15489,20 +15332,17 @@ pub const CONFIGURATIONS: [Configuration; 32] = [
 **Steps:**
 
 1. **Copy existing code** from `silk/decoder.rs` to new `toc.rs`
-
     - `TocInfo` → rename to `Toc`, change `is_stereo` → `stereo`
     - `Bandwidth` enum (already exists, move to toc.rs)
     - Tests (lines 2586-2605, move to toc.rs)
 
 2. **Add new enums/structs:**
-
     - `OpusMode` enum (SilkOnly, Hybrid, CeltOnly) - NEW
     - `FrameSize` enum (Ms2_5, Ms5, Ms10, Ms20, Ms40, Ms60) - NEW
     - `Configuration` struct (mode, bandwidth, frame_size) - NEW
     - `CONFIGURATIONS` constant array [Configuration; 32] - NEW
 
 3. **Add new methods to `Toc`:**
-
     - `configuration() -> Configuration` - NEW (lookup in CONFIGURATIONS array)
     - `channels() -> Channels` - NEW (convert `stereo` bool)
     - Keep existing: `uses_silk()`, `is_hybrid()`, `bandwidth()`, `frame_size_ms()`
@@ -15939,7 +15779,6 @@ pub fn parse_frames<'a>(packet: &'a [u8]) -> Result<Vec<&'a [u8]>> {
       test_empty_packet_fails (R1), test_code1_odd_payload_fails (R3), test_code2_frame1_too_large (R4), test_frame_count_zero_fails (R5), test_code3_cbr_non_divisible_fails (R6) - all passing.
 
 - [x] Test edge cases:
-
     - DTX (length 0): test_decode_frame_length_dtx ✓
     - Max length 1275 bytes: test_decode_frame_length_max ✓
     - Padding chains (multiple 255s): test_padding_chain ✓
@@ -18399,7 +18238,6 @@ pub fn set_output_rate(&mut self, output_rate: SampleRate) -> Result<()> {
 **What We Implemented (Stage 2 only):**
 
 1. **Removed Original Wrong Implementation:**
-
     - Removed `target_rate` parameter from `decode_celt_frame()`
     - Removed incorrect frequency-domain band zeroing (lines 2258-2286)
     - Reverted `DecodedFrame.sample_rate` to always use `self.sample_rate` (48 kHz)
@@ -21406,7 +21244,6 @@ let frame_data = frames[0];  // ❌ ONLY FIRST FRAME DECODED
 **Implementation Highlights (Updated):**
 
 1. **Main Decoder (lib.rs:123-235):**
-
     - R1 validation (packet ≥ 1 byte)
     - TOC parsing and configuration lookup
     - Channel count validation
@@ -21418,14 +21255,12 @@ let frame_data = frames[0];  // ❌ ONLY FIRST FRAME DECODED
     - Error handling for unsupported modes
 
 2. **SILK-Only Mode (lib.rs:649-745):**
-
     - LBRR frame decoding (RFC 6716:1999-2050)
     - Multi-frame loop (40/60ms support)
     - Stereo frame interleaving (frame-major)
     - Sample rate conversion (8/12/16 kHz → target)
 
 3. **CELT-Only Mode (lib.rs:621-647):**
-
     - Single CELT frame decode
     - Frequency-domain decimation
     - Full bandwidth support (NB/MB/WB/SWB/FB)
@@ -21658,14 +21493,12 @@ pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) ->
 **Implementation Details:**
 
 1. **Multi-frame loop** (lib.rs:179-222):
-
     - Iterates over all frames from `parse_frames()`
     - Calculates output buffer offset for each frame
     - Passes frame-specific output slice to mode decoder
     - Each mode decoder creates its own `RangeDecoder::new(frame_data)` (RFC 1471-1473)
 
 2. **Output buffer validation** (lib.rs:166-177):
-
     - Calculates total expected samples: `frames.len() × samples_per_frame`
     - Validates buffer capacity before decoding
     - Returns descriptive error if buffer too small
@@ -21803,7 +21636,6 @@ RFC 6716 Section 4.5.2 (lines 7088-7102):
 **Required Reset Logic:**
 
 1. **SILK state reset** (RFC 7092-7093):
-
     - **When:** `prev_mode == CELT-only` AND `new_mode == SILK-only OR Hybrid`
     - **Action:** Reset SILK decoder state before decoding frame
     - **Reason:** SILK state may be stale if not used recently
@@ -21877,13 +21709,11 @@ Ok(total_samples)
 **Completed Changes:**
 
 - [x] Verified `SilkDecoder::reset_decoder_state()` exists (silk/decoder.rs:1553)
-
     - Sets `decoder_reset = true` ✓
     - Clears `previous_lsf_nb` and `previous_lsf_wb` ✓
     - Made public for mode transition use ✓
 
 - [x] Verified `CeltDecoder::reset()` exists (celt/decoder.rs:182)
-
     - Clears energy history (`prev_energy`, `prev_prev_energy`) ✓
     - Clears overlap buffers (MDCT overlap-add memory) ✓
     - Resets anti-collapse PRNG seed ✓
@@ -22095,7 +21925,6 @@ RFC 7095-7102 describes exceptions when using redundancy frames:
 **Deferred to Phase 6 (Optional/Non-normative per RFC):**
 
 1. **FEC (Forward Error Correction):** Not implemented
-
     - LBRR frames are decoded but not used for FEC
     - Phase 6 will implement redundancy usage per RFC 6956-7026
     - **RFC Status:** Optional (line 6810)
@@ -22199,22 +22028,18 @@ All necessary dependencies already in workspace:
 ## Known Limitations (To Address in Later Phases)
 
 1. **Multi-frame packets:** Only first frame decoded (Phase 6)
-
     - Code 1/2/3 with multiple frames: decode only frame[0]
     - Phase 6 will handle full multi-frame decoding
 
 2. **FEC (Forward Error Correction):** Not implemented (Phase 6)
-
     - `fec` parameter currently ignored
     - Phase 6 will implement redundancy decoding
 
 3. **Packet loss concealment:** Not implemented (Phase 6)
-
     - `input=None` triggers `todo!()` panic
     - Phase 6 will implement PLC algorithm
 
 4. **CELT decimation:** Stub implementation (Phase 4.8)
-
     - Current: Simple sample drop (incorrect)
     - Phase 4.8: Frequency-domain decimation
 
@@ -22800,14 +22625,12 @@ impl CeltDecoder {
 ### 7.1: API Compatibility Verification
 
 - [ ] Audit audiopus API surface:
-
     - Review `audiopus::Channels` enum
     - Review `audiopus::SampleRate` enum
     - Review `audiopus::Error` type
     - Review `audiopus::coder::Decoder` methods
 
 - [ ] Ensure moosicbox_opus_native matches exactly:
-
     - `Channels` enum values and discriminants
     - `SampleRate` enum values and discriminants
     - `Error` type variants
@@ -23356,7 +23179,6 @@ fn test_decode_integration_vectors() {
     **Note:** `publish = false` prevents accidental crates.io publication
 
 - [ ] Create `build.rs` with CMake configuration
-
     - Build libopus statically via cmake crate
     - Define OPUS_BUILD_PROGRAMS=OFF (no opus_demo needed)
     - Define OPUS_BUILD_TESTING=OFF (faster build)
@@ -23366,7 +23188,6 @@ fn test_decode_integration_vectors() {
 
 - [ ] Create `src/lib.rs` with FFI bindings
       **Part 1: Raw FFI (6 functions only)**
-
     - `opus_encoder_create()` - Create encoder instance
     - `opus_encode()` - Encode PCM to Opus packet
     - `opus_encoder_destroy()` - Cleanup encoder
@@ -23375,13 +23196,11 @@ fn test_decode_integration_vectors() {
     - `opus_decoder_destroy()` - Cleanup decoder
 
     **Part 2: Constants**
-
     - `OPUS_OK` - Success return code
     - `OPUS_APPLICATION_VOIP` - SILK mode
     - `OPUS_APPLICATION_AUDIO` - CELT/Hybrid mode
 
     **Part 3: Safe Wrappers**
-
     - `safe::Encoder` - RAII wrapper with `new()` and `encode()` methods
     - `safe::Decoder` - RAII wrapper with `new()` and `decode()` methods
     - Both implement `Drop` for automatic cleanup
@@ -23426,7 +23245,6 @@ fn test_decode_integration_vectors() {
 **Implementation Tasks:**
 
 - [ ] Update `Cargo.toml`
-
     - Add `publish = false` to package section
     - Add `moosicbox_opus_native_libopus = { workspace = true }` to build-dependencies
 
@@ -23434,7 +23252,6 @@ fn test_decode_integration_vectors() {
       **Replace synthetic packet generation with:**
 
     **Function: `generate_silk_nb_mono()`**
-
     - Sample rate: 8000 Hz
     - Channels: 1 (mono)
     - Frame size: 160 samples (20ms)
@@ -23445,7 +23262,6 @@ fn test_decode_integration_vectors() {
     - Write meta.json with mode="silk"
 
     **Function: `generate_celt_fb_mono()`**
-
     - Sample rate: 48000 Hz
     - Channels: 1 (mono)
     - Frame size: 480 samples (10ms)
@@ -23456,7 +23272,6 @@ fn test_decode_integration_vectors() {
     - Write meta.json with mode="celt"
 
     **Function: `generate_integration_stereo()`**
-
     - Sample rate: 48000 Hz
     - Channels: 2 (stereo)
     - Frame size: 960 samples (20ms)
@@ -23665,21 +23480,18 @@ test result: ok. 482 passed; 0 failed; 0 ignored; 0 measured
 **All tasks complete when:**
 
 - [x] moosicbox_opus_native_libopus crate builds successfully
-
     - CMake configures libopus correctly ✅
     - FFI bindings compile without errors ✅
     - Roundtrip test passes ✅
     - Zero clippy warnings ✅
 
 - [x] Test vectors generated with REAL Opus packets
-
     - packet.bin files contain valid RFC 6716 bitstreams ✅
     - expected.pcm files contain libopus reference output ✅
     - meta.json files have correct metadata ✅
     - **38 test vectors** generated at build time (18 SILK + 13 CELT + 7 Hybrid) ✅
 
 - [x] Integration tests infrastructure complete
-
     - test_decode_silk_vectors passes (18/18 vectors bit-exact) ✅
     - test_decode_celt_vectors infrastructure added (3/13 NB vectors bit-exact, WB/SWB/FB deferred - deemphasis() integration bug) ✅
     - test_decode_hybrid_vectors infrastructure added (deferred - depends on CELT fix) ✅
@@ -23687,13 +23499,11 @@ test result: ok. 482 passed; 0 failed; 0 ignored; 0 measured
     - Total test count: 479 unit tests + 5 integration tests ✅
 
 - [x] Quality metrics validated
-
     - Zero clippy warnings across all targets and features ✅
     - SILK tests: 5 passed (18/18 vectors bit-exact) ✅
     - CELT/Hybrid tests: 2 deferred (marked with #[ignore] + documentation) ✅
 
 - [x] Cross-platform compatibility verified
-
     - Linux build successful (NixOS verified) ✅
 
 - [x] Git repository clean
@@ -24003,13 +23813,11 @@ Phase 5.12 deferred hybrid verification until RFC test vectors were available. T
     ```
 
 2. **Implement cache computation** (port from libopus rate.c:73-139)
-
     - `compute_pulse_cache()` function
     - Build index and bits arrays
     - Precompute for all band sizes and LM values
 
 3. **Replace threshold calculation**
-
     - Change `compute_split_threshold()` to cache lookup
     - Access: `cache.bits[cache.index[(lm+1)*num_bands+band] + cache.bits[...]]`
 
@@ -24226,7 +24034,6 @@ Phase 5.12 deferred hybrid verification until RFC test vectors were available. T
 #### Implementation Steps
 
 - [ ] **Profile hot paths:**
-
     - LPC filtering (SILK)
     - MDCT butterfly operations (CELT)
     - PVQ search (CELT)
@@ -24599,7 +24406,6 @@ Phase 5.12 deferred hybrid verification until RFC test vectors were available. T
     ```
 
 - [ ] **Verify license compatibility:**
-
     - Ensure all dependencies compatible with MIT/Apache-2.0
     - Document any exceptions
 
@@ -24691,17 +24497,14 @@ Phase 5.12 deferred hybrid verification until RFC test vectors were available. T
 ### Critical Milestones
 
 1. **Phase 4 Complete**: CELT decoder outputs PCM audio
-
     - Enables: Fullband audio decoding
     - Unlocks: Phases 5-6 (integration, PLC)
 
 2. **Phase 6 Complete**: Full Opus decoder functional
-
     - Enables: All modes (SILK, CELT, Hybrid)
     - Unlocks: Phases 7-8 (backend, testing)
 
 3. **Phase 8 Complete**: RFC conformance validated
-
     - Enables: Production readiness assessment
     - Unlocks: Phases 9-10 (optimization, release)
 

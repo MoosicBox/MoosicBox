@@ -413,18 +413,15 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 #### Deferred to Future Phases
 
 1. **Dependency Resolution (4.3)** → Removed entirely
-
     - Not critical for initial functionality
     - Users can handle ordering themselves with naming conventions
 
 2. **Dynamic Table Names** → Moved to Phase 12
-
     - Limited by switchy_database requiring `&'static str`
     - Default table name works for 99% of use cases
     - Documented limitation with error messages
 
 3. **Transaction Support** → Moved to Phase 10.2.1
-
     - Requires switchy_database enhancement
     - Current implementation is still safe (fails fast on errors)
 
@@ -560,6 +557,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         #[cfg(feature = "sqlite")]
         pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, switchy_database_connection::InitSqliteSqlxDatabaseError>
         ```
+
         - ✓ Uses `switchy_database_connection::init_sqlite_sqlx(None)` for in-memory SQLite
         - ✓ Proper error handling with specific error type
         - ✓ Comprehensive documentation with error section
@@ -571,7 +569,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### 7.3 Core Test Utilities ✅ **COMPLETED**
 
 - [x] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ✅ **CRITICAL**
-
     - [x] **VecMigrationSource helper** - Internal utility for test functions:
 
         ```rust
@@ -619,6 +616,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
             F: FnOnce(&dyn Database) -> Fut,
             Fut: Future<Output = Result<(), DatabaseError>>
         ```
+
         - [x] Execute setup closure to populate initial state
         - [x] Create `VecMigrationSource` from provided migrations
         - [x] Create `MigrationRunner` internally from switchy_schema
@@ -631,7 +629,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### 7.4 Mutation Provider and Advanced Testing ✅ **COMPLETED**
 
 - [x] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ✅ **IMPORTANT**
-
     - [x] Define `MutationProvider` trait:
         ```rust
         pub trait MutationProvider {
@@ -655,6 +652,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         ) -> Result<(), TestError>
         where M: MutationProvider
         ```
+
         - **Note**: Uses `Arc` for consistency with Phase 7.2.5 migration and `TestError` for consistency with Phase 7.3 test utilities
         - [x] Support mutations via:
             - [x] Raw SQL strings
@@ -699,27 +697,23 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 **Three Full-Featured Migration Test Examples:**
 
 1. **`basic_migration_test`** (`packages/switchy/schema/examples/basic_migration_test/`)
-
     - Demonstrates `verify_migrations_full_cycle` for simple up/down testing
     - Shows basic table creation with schema query builder
     - Includes proper workspace metadata and README documentation
 
 2. **`state_migration_test`** (`packages/switchy/schema/examples/state_migration_test/`)
-
     - Demonstrates `verify_migrations_with_state` for data preservation testing
     - Shows adding columns with default values to existing tables
     - Validates data integrity through migration cycles
     - Includes test module with `FilterableQuery` trait usage
 
 3. **`mutation_migration_test`** (`packages/switchy/schema/examples/mutation_migration_test/`)
-
     - Demonstrates `verify_migrations_with_mutations` for comprehensive testing
     - Implements custom `MutationProvider` for dynamic test scenarios
     - Tests migrations against various database states
     - Includes test module with `MutationProvider` trait usage
 
 4. **`borrowed_migrations`** (`packages/switchy/schema/examples/borrowed_migrations/`)
-
     - Demonstrates lifetime management patterns for migrations
     - Shows how to work with borrowed data in migration contexts
     - Illustrates proper lifetime annotations for complex scenarios
@@ -840,6 +834,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         ```rust
         async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
         ```
+
         - ✓ Changed from `Box<dyn Migration>` to `Arc<dyn Migration>`
     - [x] Update all MigrationSource implementations:
         - ✓ `EmbeddedMigrationSource` - uses `Arc::new()` instead of `Box::new()`
@@ -887,7 +882,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 **Goal:** Remove the artificial limitation preventing custom migration table names
 
 - [x] Update VersionTracker Methods ✅ **CRITICAL**
-
     - [x] Update `packages/switchy/schema/src/version.rs`:
         - [x] Remove limitation check from `ensure_table_exists()` - use `&self.table_name`
         - [x] Remove limitation check from `is_migration_applied()` - use `&self.table_name`
@@ -898,7 +892,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         - [x] Remove TODO comments about switchy_database limitations
 
 - [x] Add Convenience Method to MigrationRunner ✅ **CRITICAL**
-
     - [x] Update `packages/switchy/schema/src/runner.rs`:
         - [x] Add `with_table_name(impl Into<String>)` method for easy configuration
         - [x] Update documentation to show custom table name usage
@@ -957,7 +950,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 **Important Design Note**: The implementation intentionally runs both PostgreSQL and SQLite migrations when both features are enabled. This is not a bug - it's designed for development/testing scenarios. In production, only one database feature is ever enabled, so only one set of migrations runs. This behavior must be preserved for compatibility.
 
 - [x] Implement Unified Migration Functions ✅ **CRITICAL**
-
     - [x] Rewrite `packages/schema/src/lib.rs` with unified functions:
         - [x] Add `switchy_schema` dependency with `embedded` feature to Cargo.toml
         - [x] Add `switchy_env` dependency for environment variable support
@@ -985,7 +977,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 **Motivation:** The `scan` package tests need to run migrations up to a specific point, insert test data, then run remaining migrations. This pattern tests data migration scenarios and should be supported by our test utilities rather than requiring direct access to migration constants.
 
 - [x] Add MigrationTestBuilder to switchy_schema_test_utils ✅ **COMPLETE**
-
     - [x] Create `packages/switchy/schema/test_utils/src/builder.rs`
     - [x] Implement `MigrationTestBuilder` struct with:
         - [x] Support for multiple breakpoints in migration sequence
@@ -1009,7 +1000,6 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         - [x] Full rollback at end unless `skip_rollback()` called
 
 - [x] Export Migration Collections from moosicbox_schema ✅ **COMPLETE**
-
     - [x] Add function `get_sqlite_library_migrations() -> Vec<Arc<dyn Migration>>`
     - [x] Add function `get_sqlite_config_migrations() -> Vec<Arc<dyn Migration>>`
     - [x] Add function `get_postgres_library_migrations() -> Vec<Arc<dyn Migration>>`
@@ -1085,7 +1075,6 @@ assert_eq!(artist[0].get("api_sources").unwrap().as_str().unwrap(), "[{\"id\":\"
 **Key Implementation Decisions:**
 
 1. **Breakpoint Grouping**: Multiple breakpoints on the same migration are grouped and executed in sequence:
-
     - All `with_data_before` actions for a migration run first
     - Then the migration runs
     - Then all `with_data_after` actions run
@@ -1094,13 +1083,11 @@ assert_eq!(artist[0].get("api_sources").unwrap().as_str().unwrap(), "[{\"id\":\"
 2. **Migration Tracking**: Manual migration table updates are performed when running migrations directly to maintain consistency with `MigrationRunner`
 
 3. **Error Handling**:
-
     - Clear error messages for non-existent migration IDs
     - Proper error propagation from breakpoint actions
     - All errors wrapped in `TestError` enum
 
 4. **Test Coverage**: Comprehensive test suite verifying:
-
     - `test_with_data_before_breakpoint` - Data inserted before migration gets NULL for new columns
     - `test_with_data_after_breakpoint` - Data inserted after migration can use new columns
     - `test_multiple_breakpoints_in_sequence` - Multiple breakpoints including same migration
@@ -1152,7 +1139,6 @@ assert_eq!(artist[0].get("api_sources").unwrap().as_str().unwrap(), "[{\"id\":\"
 **Status:** ✅ **COMPLETED**
 
 - [x] **Update MigrationTestBuilder Default Behavior**
-
     - [x] Change `skip_rollback` field to `with_rollback` (defaults to false)
     - [x] Rename `skip_rollback()` method to `with_rollback()`
     - [x] Update constructor to set `with_rollback: false` by default
@@ -1229,7 +1215,6 @@ assert_eq!(artist[0].get("api_sources").unwrap().as_str().unwrap(), "[{\"id\":\"
 **Discovery:** All scan tests had already been updated to use `MigrationTestBuilder` during earlier work.
 
 - [x] **All 6 test locations successfully updated** ✅ **COMPLETE**
-
     - [x] Line 934: `test_update_api_sources` macro test (uses `with_data_before`)
     - [x] Line 1196: `can_scan_single_artist_with_single_album_with_single_track`
     - [x] Line 1338: `can_scan_multiple_artists_with_multiple_albums_with_multiple_tracks`
@@ -1328,7 +1313,6 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
 **Current Status:** ✅ **COMPLETE** - All functionality verified and new features demonstrated
 
 - [x] Verify Existing Tests ✅ **COMPLETE**
-
     - [x] All existing tests pass without modification:
         - ✅ All 7 `scan/src/output.rs` tests using new MigrationTestBuilder (passing)
         - ✅ All `moosicbox_schema` tests continue to work (6 tests passing)
@@ -1341,7 +1325,6 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
         - ✅ Same error handling patterns
 
 - [x] Test New Features ✅ **COMPLETE**
-
     - [x] Add test demonstrating rollback functionality (new capability!)
     - [x] Add test for `.with_rollback()` functionality in real scenarios
     - [x] Add test with multiple `with_data_before` and `with_data_after` calls
@@ -1358,13 +1341,11 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
 **New Integration Tests Added:**
 
 1. **Rollback Demonstration** (`demonstrate_rollback_functionality`)
-
     - Creates a table migration with rollback capability
     - Verifies table is created and then properly removed after rollback
     - Demonstrates the `.with_rollback()` functionality in action
 
 2. **Complex Breakpoint Patterns** (`demonstrate_complex_breakpoint_patterns`)
-
     - Tests multiple `with_data_before` and `with_data_after` calls in single test
     - Demonstrates data insertion at different migration points
     - Verifies data state changes correctly (NULL vs populated columns)
@@ -1401,7 +1382,6 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
 **Status:** ✅ **COMPLETED** - All documentation updated and code already clean
 
 - [x] Code Cleanup ✅ **MINOR**
-
     - [x] Remove old migration constant exports from moosicbox_schema - ✅ None existed (already clean from Phase 8.2)
     - [x] Remove `sqlite` and `postgres` modules from public API - ✅ None existed (already clean from Phase 8.2)
     - [x] Clean up unused imports - ✅ Verified clean (no warnings)
@@ -1463,19 +1443,15 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
 ### Risk Mitigation
 
 1. **Risk**: Different migration ordering
-
     - **Mitigation**: Both use BTreeMap with alphabetical sorting
 
 2. **Risk**: Table name incompatibility
-
     - **Mitigation**: ~~Phase 8.1 enables custom table names~~ ✅ RESOLVED - Custom table names fully working
 
 3. **Risk**: Test failures
-
     - **Mitigation**: Compatibility layer maintains exact same API
 
 4. **Risk**: Missing environment variable support
-
     - **Mitigation**: Explicitly handle in wrapper implementation
 
 5. **Risk**: Accidentally "fixing" the dual-migration behavior
@@ -1696,7 +1672,6 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
     - [x] Add manual rollback requirement - no auto-rollback on drop
     - [x] Add comprehensive documentation with usage patterns and error handling
 - [x] Add transaction methods to Database trait:
-
     - [x] Add `async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>`
 
 - [x] **Transaction usage patterns and ergonomics:**
@@ -1810,7 +1785,6 @@ This architecture was chosen over the complex "hybrid connection management" app
 ✅ **Completed Changes:**
 
 - [x] **RusqliteDatabase struct updated**:
-
     - [x] Removed: `transaction_lock: Arc<tokio::sync::Semaphore>` field
     - [x] Removed: `transaction_active: Arc<AtomicBool>` field
     - [x] Added: `connections: Vec<Arc<Mutex<Connection>>>` field (pool of connections)
@@ -1818,25 +1792,21 @@ This architecture was chosen over the complex "hybrid connection management" app
     - [x] Removed: `db_url: String` field (not needed after cleanup)
 
 - [x] **RusqliteDatabase constructor updated**:
-
     - [x] Changed signature to `new(connections: Vec<Arc<Mutex<Connection>>>)`
     - [x] Removed transaction_lock initialization
     - [x] Added next_connection initialization with AtomicUsize::new(0)
 
 - [x] **Database connection initialization**:
-
     - [x] Uses `file:memdb_{test_id}_{timestamp}:?mode=memory&cache=shared&uri=true`
     - [x] Creates 5 connections in pool for both in-memory and file-based databases
     - [x] All connections share same in-memory database through SQLite's shared cache
 
 - [x] **Connection management**:
-
     - [x] Added `get_connection()` method with round-robin selection
     - [x] All database operations use `self.get_connection()` instead of single connection
     - [x] Transactions get dedicated connection from pool
 
 - [x] **Transaction implementation**:
-
     - [x] `begin_transaction()` gets dedicated connection from pool
     - [x] `RusqliteTransaction` holds dedicated connection for isolation
     - [x] Removed all semaphore-related fields and logic
@@ -1896,20 +1866,17 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Core Transaction Implementation:**
 
 - [x] **Core Transaction Implementation**:
-
     - [x] Created `SqliteSqlxTransaction` struct wrapping sqlx's native transaction
     - [x] Stores `transaction: sqlx::Transaction<'_, Sqlite>` (uses sqlx's lifetime management)
     - [x] Stores `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
     - [x] **No semaphore needed** - Pool provides isolation naturally
 
 - [x] **Database Trait Implementation**:
-
     - [x] Implemented Database trait for `SqliteSqlxTransaction`
     - [x] Uses sqlx transaction's connection for all operations
     - [x] All methods delegate to sqlx's query execution
 
 - [x] **DatabaseTransaction Trait Implementation**:
-
     - [x] Implemented `commit()` using sqlx transaction commit
     - [x] Implemented `rollback()` using sqlx transaction rollback
     - [x] Proper state validation and cleanup
@@ -1949,39 +1916,33 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Completed Implementation:**
 
 - [x] **Added deadpool-postgres dependency:**
-
     - [x] Added to root `Cargo.toml`: `deadpool-postgres = "0.14.1"`
     - [x] Added to `packages/database/Cargo.toml` with `workspace = true`
     - [x] Added to `packages/database_connection/Cargo.toml` for pool initialization
 
 - [x] **Refactored PostgresDatabase to use connection pool:**
-
     - [x] Changed field from `client: Client, handle: JoinHandle` to `pool: Pool`
     - [x] Added `get_client()` helper method for pool access
     - [x] Updated constructor to accept `Pool` instead of individual components
     - [x] All database operations use `self.get_client().await?` to acquire connections
 
 - [x] **Created PostgresTransaction struct:**
-
     - [x] Stores `client: deadpool_postgres::Object` (pooled connection)
     - [x] Stores `committed: Arc<Mutex<bool>>` and `rolled_back: Arc<Mutex<bool>>` for state tracking
     - [x] Uses raw SQL: `BEGIN` to start, `COMMIT` to commit, `ROLLBACK` to rollback
     - [x] No complex lifetime management needed
 
 - [x] **Implemented Database trait for PostgresTransaction:**
-
     - [x] All operations use `&self.client` directly
     - [x] Proper error handling for transaction state
     - [x] `begin_transaction()` returns error (no nested transactions)
 
 - [x] **Implemented DatabaseTransaction trait:**
-
     - [x] `commit()`: Executes `COMMIT` SQL, sets committed flag
     - [x] `rollback()`: Executes `ROLLBACK` SQL, sets rolled_back flag
     - [x] State validation prevents double commit/rollback
 
 - [x] **Updated database initialization:**
-
     - [x] All three init functions create `deadpool_postgres::Pool`
     - [x] Default pool configuration with appropriate sizing
     - [x] Pool passed to `PostgresDatabase::new(pool)`
@@ -2023,24 +1984,20 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Implementation Steps:**
 
 - [x] **Pre-check for `exec_create_table` duplication**:
-
     - [x] Check if `PostgresSqlxDatabase` has `exec_create_table` method
     - [x] If yes, extract to `postgres_sqlx_exec_create_table()` helper function FIRST
     - [x] Follow pattern: helper takes `&mut PostgresConnection`, both Database and Transaction use it
 
 - [x] Create `PostgresSqlxTransaction` struct:
-
     - [x] Store `transaction: Arc<Mutex<Option<Transaction<'static, Postgres>>>>` (sqlx native transaction)
     - [x] No additional fields needed - sqlx handles everything
 
 - [x] Implement Database trait for `PostgresSqlxTransaction`:
-
     - [x] All methods delegate to existing helper functions
     - [x] ⚠️ **If `exec_create_table` exists**: Use the extracted helper function
     - [x] Follow exact pattern from `SqliteSqlxTransaction` implementation
 
 - [x] Implement DatabaseTransaction trait:
-
     - [x] `commit()`: Use native sqlx transaction commit
     - [x] `rollback()`: Use native sqlx transaction rollback
 
@@ -2061,7 +2018,6 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Implementation Steps:**
 
 - [x] **Refactor MySQL helper functions from pool to connection**:
-
     - [x] Change all 12 helper functions from `&MySqlPool` to `&mut MySqlConnection`:
         - [x] `select()` (line 902)
         - [x] `find_row()` (line 970)
@@ -2079,26 +2035,22 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
     - [x] Pass `connection.acquire().await?` to helpers instead of `&*self.connection.lock().await`
 
 - [x] **Extract `exec_create_table` duplication**:
-
     - [x] ✅ Confirmed: `MysqlSqlxDatabase` has `exec_create_table` method (lines 400-527, ~125 lines)
     - [x] Extract to `mysql_sqlx_exec_create_table()` helper function
     - [x] Helper takes `&mut MySqlConnection`, both Database and Transaction use it
 
 - [x] Create `MysqlSqlxTransaction` struct:
-
     - [x] Store `transaction: Arc<Mutex<Option<Transaction<'static, MySql>>>>` (sqlx native transaction)
     - [x] Import `sqlx::Transaction` type
     - [x] No additional fields needed - sqlx handles everything
 
 - [x] Implement Database trait for `MysqlSqlxTransaction`:
-
     - [x] All methods delegate to refactored helper functions
     - [x] Pass `&mut *tx` to helpers (same as PostgreSQL pattern)
     - [x] Use extracted `mysql_sqlx_exec_create_table()` for `exec_create_table`
     - [x] Follow exact pattern from `PostgresSqlxTransaction` implementation
 
 - [x] Implement DatabaseTransaction trait:
-
     - [x] `commit()`: Use native sqlx transaction commit
     - [x] `rollback()`: Use native sqlx transaction rollback
     - [x] Use `DatabaseError::AlreadyInTransaction` for nested transaction attempts
@@ -2119,28 +2071,24 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Implementation Steps:**
 
 - [x] **Pre-check for `exec_create_table` duplication**:
-
     - [x] Check if `SimulationDatabase` has `exec_create_table` method
     - [x] If yes, extract to `simulator_exec_create_table()` helper function FIRST
     - [x] Follow pattern: helper takes simulator state, both Database and Transaction use it
     - **Result**: No duplication exists - `SimulationDatabase` delegates to `RusqliteDatabase`
 
 - [x] Create `SimulatorTransaction` struct:
-
     - [x] ~~Store snapshot of current state when transaction begins~~
     - [x] ~~Store list of operations performed within transaction~~
     - [x] ~~Store `committed: AtomicBool` and `rolled_back: AtomicBool`~~
     - **Result**: Not needed - uses `RusqliteTransaction` via delegation
 
 - [x] Implement Database trait for `SimulatorTransaction`:
-
     - [x] ~~Operations work on snapshot copy~~
     - [x] ~~⚠️ **If `exec_create_table` exists**: Use the extracted helper function~~
     - [x] ~~Follow consistent pattern with other backends~~
     - **Result**: Not needed - delegation handles everything automatically
 
 - [x] Implement DatabaseTransaction trait:
-
     - [x] ~~`commit()`: Apply all operations to main database~~
     - [x] ~~`rollback()`: Discard snapshot and operations~~
     - **Result**: Automatically provided through `RusqliteTransaction`
@@ -2194,7 +2142,6 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 **Implementation Status: COMPLETE**
 
 - [x] **Backend-specific functionality tests**:
-
     - [x] Test commit flow for all testable backends (rusqlite, sqlx sqlite, simulator)
     - [x] Test rollback flow for all testable backends
     - [x] Test state tracking after commit/rollback operations
@@ -2202,7 +2149,6 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
     - **Note:** Non-SQLite backends (PostgreSQL/MySQL) excluded from integration tests (require real database servers)
 
 - [x] **Transaction Isolation Tests**:
-
     - [x] Verify uncommitted changes not visible outside transaction
     - [x] Verify concurrent transactions handle conflicts properly
     - [x] Test transaction rollback preserves pre-transaction state
@@ -2211,7 +2157,6 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
     - **Note:** Schema operations tested where applicable (SQLite DDL)
 
 - [x] **Simulator Integration Tests Added**:
-
     - [x] Added `#[cfg(feature = "simulator")]` module with full test coverage
     - [x] Added additional state verification tests specific to delegation behavior
     - [x] Confirmed simulator transaction delegation works through all test scenarios
@@ -2761,54 +2706,46 @@ DropIndexStatement successfully implemented with:
 **Prerequisites:** SQLite 3.35.0+ required for native DROP COLUMN support (released 2021-03-12)
 
 - [x] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`:
-
     - [x] Add fields: `table_name: &'a str`, `operations: Vec<AlterOperation>`
     - [x] Define `AlterOperation` enum with AddColumn, DropColumn, RenameColumn, ModifyColumn variants
     - [x] Add builder methods: `add_column()`, `drop_column()`, `rename_column()`, `modify_column()`
     - [x] Implement `execute()` method calling `db.exec_alter_table()`
 
 - [x] Add to `packages/database/src/lib.rs` Database trait:
-
     - [x] Add `fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a>`
     - [x] Add `async fn exec_alter_table(&self, statement: &AlterTableStatement<'_>) -> Result<(), DatabaseError>`
 
 - [x] Implement SQLite constraint detection helper functions:
-
     - [x] Add `column_requires_table_recreation()` in rusqlite backend to check PRIMARY KEY, UNIQUE, CHECK, GENERATED
     - [x] Add async `column_requires_table_recreation()` in sqlx sqlite backend with same checks
     - [x] Query sqlite_master and pragma tables to detect constraint types
     - [x] Parse CREATE TABLE SQL to find CHECK constraints and GENERATED columns
 
 - [x] Implement SQLite table recreation workaround:
-
     - [x] Add `rusqlite_exec_table_recreation_workaround()` with full 8-step recreation process
     - [x] Add `sqlite_sqlx_exec_table_recreation_workaround()` async version
     - [x] Save and recreate indexes, triggers, views using sqlite_master queries
     - [x] Handle foreign key preservation with PRAGMA foreign_keys ON/OFF
 
 - [x] Implement SQLite column-based workaround:
-
     - [x] Add `rusqlite_exec_modify_column_workaround()` with 6-step column swap
     - [x] Add `sqlite_sqlx_exec_modify_column_workaround()` async version
     - [x] Use temporary column with timestamp suffix to avoid naming conflicts
     - [x] Wrap all operations in transaction for atomicity
 
 - [x] Implement exec_alter_table for SQLite backends with decision tree:
-
     - [x] Check if MODIFY COLUMN requires table recreation using detection helpers
     - [x] Route to table recreation for PRIMARY KEY, UNIQUE, CHECK, GENERATED columns
     - [x] Route to column-based workaround for simple columns
     - [x] Use native ALTER TABLE for ADD, DROP, RENAME operations
 
 - [x] Implement exec_alter_table for PostgreSQL backends:
-
     - [x] Use native ALTER TABLE for all operations
     - [x] Support ALTER COLUMN TYPE with USING clause for conversions
     - [x] Support ALTER COLUMN SET/DROP NOT NULL for nullable changes
     - [x] Use descriptive error messages instead of InvalidRequest
 
 - [x] Implement exec_alter_table for MySQL backend:
-
     - [x] Use native ALTER TABLE for ADD, DROP, RENAME operations
     - [x] Use MODIFY COLUMN for type/nullable/default changes
     - [x] Use descriptive error messages for unsupported default values
@@ -2865,25 +2802,21 @@ COMMIT;
 **Implementation Notes:**
 
 1. **Column Order Change Warning:**
-
     - Document that MODIFY COLUMN may change column order (moves to end)
     - This is acceptable as column order dependency is an anti-pattern
     - Add clear documentation: "Column order may change. Do not rely on SELECT \* or positional parameters."
 
 2. **Transaction Safety:**
-
     - All operations wrapped in transactions for atomicity
     - Automatic rollback on any error
     - No partial schema changes possible
 
 3. **Performance Considerations:**
-
     - Column-based: 2 UPDATE operations (slower but simpler)
     - Table recreation: 1 INSERT...SELECT (faster but complex)
     - Choose based on constraints, not performance
 
 4. **Error Handling:**
-
     - Check for column existence before operations
     - Validate type conversions are possible
     - Clear error messages for unsupported operations
@@ -2899,35 +2832,30 @@ COMMIT;
     - Verify column order changes are handled
 
 - [x] Add Executable trait implementation:
-
     - [x] Implement Executable for AlterTableStatement in executable.rs
     - [x] Call db.exec_alter_table() in execute method
     - [x] Follow existing pattern from other schema statements
     - [x] Maintain async trait consistency
 
 - [x] Add comprehensive unit tests in schema.rs:
-
     - [x] Test default AlterTableStatement builder
     - [x] Test add_column with various data types and defaults
     - [x] Test drop_column, rename_column, modify_column operations
     - [x] Test multiple operations in single statement
 
 - [x] Add integration tests for constraint detection:
-
     - [x] Test PRIMARY KEY column triggers table recreation
     - [x] Test UNIQUE constraint column triggers table recreation
     - [x] Test CHECK constraint column triggers table recreation
     - [x] Test normal column uses column-based workaround
 
 - [x] Add integration tests for schema preservation:
-
     - [x] Test indexes are preserved during table recreation
     - [x] Test triggers are preserved during table recreation
     - [x] Test views remain valid after column modifications
     - [x] Test foreign keys are maintained correctly
 
 - [x] Add integration tests for all backends:
-
     - [x] Test ALTER TABLE ADD COLUMN across all databases
     - [x] Test ALTER TABLE DROP COLUMN across all databases
     - [x] Test ALTER TABLE RENAME COLUMN across all databases
@@ -3311,6 +3239,7 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
             failure_reason TEXT NULL
         )
         ```
+
         - [x] Implementation notes:
             - [x] The existing run_on column definition remains unchanged
                 - ✓ `run_on` column at lines 145-151 with `default: Some(DatabaseValue::Now)`
@@ -3591,7 +3520,6 @@ During implementation, we removed the originally specified unit tests for the fo
 **Design Decision**: Extend MigrationInfo to include detailed status information using the MigrationStatus enum from Phase 11.2.3, avoiding the need to expose VersionTracker methods.
 
 - [x] Update `MigrationInfo` struct in `packages/switchy/schema/src/migration.rs`: ✅ **COMPLETED**
-
     - [x] Add status fields for applied migrations:
         ```rust
         pub struct MigrationInfo {
@@ -3608,7 +3536,6 @@ During implementation, we removed the originally specified unit tests for the fo
     - [x] Update imports to include `MigrationStatus` and `chrono::NaiveDateTime`
 
 - [x] Enhance `MigrationRunner::list_migrations()` in `packages/switchy/schema/src/runner.rs`: ✅ **COMPLETED**
-
     - [x] For each applied migration, query `version_tracker.get_migration_status()`
     - [x] Populate the new status fields in MigrationInfo:
         - [x] Parse `status` string to `MigrationStatus` enum using `FromStr`
@@ -3630,11 +3557,9 @@ During implementation, we removed the originally specified unit tests for the fo
 ##### 11.2.4.2 Update CLI Commands
 
 - [x] Update existing `status` command: ✅ **COMPLETED**
-
     - [x] Add `--show-failed` flag (bool, default false)
     - [x] When flag is NOT set: maintain existing behavior (show Applied/Pending only)
     - [x] When `--show-failed` flag IS set:
-
         - [x] Display enhanced status column: "✓ Completed", "✗ Failed", "⚠ In Progress", "- Pending"
         - [x] Use `colored` crate: red for Failed, yellow for In Progress, green for Completed
         - [x] For failed migrations: show failure_reason on next line indented
@@ -3642,7 +3567,6 @@ During implementation, we removed the originally specified unit tests for the fo
         - [x] Show timestamps (run_on, finished_on) for applied migrations when available
 
     - [x] Add `retry` subcommand to Commands enum: ✅ **COMPLETED**
-
         - [x] Required positional argument: `migration_id: String`
         - [x] Standard database connection arguments (database_url, migrations_dir, migration_table)
         - [x] Implementation: **NOTE: Validation done in runner method, not CLI**
@@ -3653,7 +3577,6 @@ During implementation, we removed the originally specified unit tests for the fo
             - [x] Display success: "✓ Successfully retried migration '{id}'" or failure with error details
 
     - [x] Add `mark-completed` subcommand to Commands enum: ✅ **COMPLETED**
-
         - [x] Required positional argument: `migration_id: String`
         - [x] ~~Required `--force` flag (error without it)~~ **IMPROVED**: `--force` flag is optional
         - [x] Standard database connection arguments
@@ -3677,19 +3600,16 @@ During implementation, we removed the originally specified unit tests for the fo
 ##### 11.2.4.3 Error Handling and User Experience ✅ **COMPLETED**
 
 - [x] Terminal color support: ✅ **COMPLETED**
-
     - [x] Use `colored` crate with `.red()`, `.yellow()`, `.green()` methods
     - [x] Respect `NO_COLOR` environment variable (colored crate handles this automatically)
     - [x] Graceful fallback to plain text on unsupported terminals
 
 - [x] Interactive confirmation for dangerous operations: ✅ **COMPLETED**
-
     - [x] ~~Use `dialoguer::Input::new()` for "Type 'yes' to confirm" prompts~~ **IMPROVED**: Use `dialoguer::Confirm` for Y/n prompts
     - [x] Allow Ctrl+C to abort at any time
     - [x] Clear error messages when user cancels operation
 
 - [x] Migration ID validation: ⚠️ **PARTIALLY COMPLETED**
-
     - [x] ~~For `retry` and `mark-completed` commands: verify migration exists in source before checking status~~ **CHANGED**: Validation in runner methods
     - [x] ~~Clear error message: "Migration '{id}' not found. Available migrations: [list]"~~ **DEFERRED**: Basic error messages provided
     - [x] ~~Suggest similar migration IDs using fuzzy matching if available~~ **DEFERRED**: Not implemented
@@ -3704,7 +3624,6 @@ During implementation, we removed the originally specified unit tests for the fo
 During implementation, additional infrastructure was added to improve error handling:
 
 - [x] Created `ValidationError` enum in `packages/switchy/schema/src/lib.rs`: ✅ **COMPLETED**
-
     - [x] Structured error types: `NotTracked`, `WrongState`, `NotInSource`, `AlreadyInState`, `InvalidStatus`
     - [x] Clear, actionable error messages with context
     - [x] Designed for future CLI integration with specific error handling
@@ -3744,13 +3663,11 @@ During implementation, additional infrastructure was added to improve error hand
 **Deviations from Spec (All Improvements):**
 
 1. **mark-completed --force flag**: Made optional with interactive confirmation as default
-
     - **Better UX**: Interactive Y/n prompt is safer and more intuitive than requiring --force flag
     - **Standard CLI pattern**: Aligns with common tools (e.g., `rm` interactive vs force)
     - **Safety improvement**: Reduces accidental dangerous operations
 
 2. **Validation location**: Kept in runner methods rather than duplicating in CLI
-
     - **Single source of truth**: Maintains validation logic in one place
     - **Reduces code duplication**: Avoids CLI/runner validation sync issues
     - **Still provides clear error messages**: Users get actionable feedback
@@ -3823,7 +3740,6 @@ Phase 11.2.4 is complete and all recovery functionality is ready for production 
 #### 11.2.5 Document Recovery Best Practices ✅ **COMPLETED**
 
 - [x] Create `RECOVERY.md` in `packages/switchy/schema/` ✅ **MINOR**
-
     - ✓ Created at packages/switchy/schema/RECOVERY.md (2025-09-08)
     - [x] Document common failure scenarios:
         - [x] Network interruption during migration
@@ -3855,7 +3771,6 @@ Phase 11.2.4 is complete and all recovery functionality is ready for production 
         - [x] Keep migrations idempotent when feasible
             - ✓ Idempotent SQL examples provided
     - [x] CLI usage examples for recovery:
-
         - ✓ All examples verified against actual implementation
         - ✓ Environment variable configuration added
         - ✓ Cross-database examples included
@@ -4305,7 +4220,6 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **Core Types:**
 
 - [x] Create `packages/switchy/schema/src/digest.rs`:
-
     - ✓ Created at packages/switchy/schema/src/digest.rs
     - ✓ Digest trait defined exactly as specified
 
@@ -4321,7 +4235,6 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **ChecksumDatabase Implementation:**
 
 - [x] Create `packages/switchy/schema/src/checksum_database.rs`:
-
     - ✓ Created at packages/switchy/schema/src/checksum_database.rs
     - ✓ ChecksumDatabase struct with `Arc<Mutex<Sha256>>` at lines 15-17
     - ✓ `new()` method at lines 26-31
@@ -4369,7 +4282,6 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **Complete Database Implementation:**
 
 - [x] Implement ALL Database trait methods (verified against trait definition):
-
     - ✓ All 19 Database trait methods implemented at lines 54-156
     - ✓ All methods digest their inputs and return appropriate empty responses
     - ✓ DatabaseTransaction trait implemented at lines 158-183
@@ -4648,7 +4560,6 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **Digest for Query/DDL Types with Deterministic Ordering:**
 
 - [x] Implement `Digest` for all query and DDL types using BTreeMap/BTreeSet for consistent ordering:
-
     - ✓ SelectQuery Digest at lines 724-792 with BTreeMap at lines 745, 765
     - ✓ UpdateStatement Digest at lines 794-829 with BTreeMap at line 806
     - ✓ InsertStatement Digest at lines 831-856 with BTreeMap at line 844
@@ -4826,7 +4737,6 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **Migration Trait Changes:**
 
 - [x] Update `Migration` trait with dual async checksum methods:
-
     - ✓ Added async up_checksum() method to Migration trait in packages/switchy/schema/src/migration.rs:199-202
     - ✓ Added async down_checksum() method to Migration trait in packages/switchy/schema/src/migration.rs:209-212
     - ✓ Both default implementations return 32 zero bytes: `Ok(bytes::Bytes::from(vec![0u8; 32]))`
@@ -5075,7 +4985,6 @@ All three migration types now calculate real SHA256 checksums:
 **Test Coverage Summary:**
 
 - 11 unit tests in checksum_database.rs covering:
-
     - Basic operations (test_same_operations_produce_identical_checksums, test_different_operations_produce_different_checksums)
     - Transaction patterns (test_transaction_patterns_produce_different_checksums, test_same_operations_with_without_transactions_differ)
     - Nested transactions (test_nested_transactions_produce_different_checksums)
@@ -5608,14 +5517,12 @@ This entire phase assumes fresh installations only. Existing databases with migr
 **Migration Path for Fresh Installations**:
 
 1. **Phase 1** (11.3.1-11.3.2): Infrastructure ready, zero checksums stored
-
     - Async ChecksumDatabase and Digest traits available
     - Database schema includes NOT NULL checksum column
     - All migrations store 32 zero bytes initially via async checksum()
     - System fully functional with placeholder checksums
 
 2. **Phase 2** (11.3.3): Real checksums calculated for all migrations
-
     - FileMigration: hashes file content asynchronously
     - EmbeddedMigration: hashes SQL string asynchronously
     - CodeMigration: digests structured operations via async ChecksumDatabase
@@ -5977,7 +5884,6 @@ snapshot-migrations/
 Create the minimal working snapshot test infrastructure that compiles and runs.
 
 - [x] **Create Basic Structure**
-
     - [x] Add to existing `packages/switchy/schema/test_utils/src/snapshots.rs` with feature gate:
 
         ```rust
@@ -6023,7 +5929,6 @@ Create the minimal working snapshot test infrastructure that compiles and runs.
         ✓ Module properly exported with feature gate
 
 - [x] **Add Minimal Test**
-
     - [x] Create `packages/switchy/schema/tests/snapshot_basic.rs`:
 
         ```rust
@@ -6548,7 +6453,6 @@ Execute actual migrations using MigrationRunner and capture results. Fail fast o
 
 - [x] **Add Migration Loading with Error Handling**
       ✅ Implemented at `packages/switchy/schema/test_utils/src/snapshots.rs:260-274`
-
     - ✅ Added imports: DirectoryMigrationSource, Migration, MigrationSource, MigrationRunner
     - ✅ Created VecMigrationSource helper for migration execution
     - ✅ Implemented load_migrations() method with proper error handling
@@ -6571,7 +6475,6 @@ Execute actual migrations using MigrationRunner and capture results. Fail fast o
 
 - [x] **Execute Migrations with Direct MigrationRunner**
       ✅ Updated run() method at `packages/switchy/schema/test_utils/src/snapshots.rs:276-307`
-
     - ✅ Loads migrations using load_migrations() with fail-fast error handling
     - ✅ Creates VecMigrationSource from loaded migrations (local implementation)
     - ✅ Executes migrations with MigrationRunner::new() and runner.run()
@@ -6630,7 +6533,6 @@ Add redaction support for deterministic snapshots using insta's built-in filters
 
 - [x] **Add Redaction Configuration**
       ✅ Implemented at `packages/switchy/schema/test_utils/src/snapshots.rs:128-138`
-
     - ✅ Added three bool fields: redact_timestamps, redact_auto_ids, redact_paths
     - ✅ Updated constructor with default values (all true) at lines 150-152
     - ✅ Added builder methods at lines 181-203: redact_timestamps(), redact_auto_ids(), redact_paths()
@@ -6665,7 +6567,6 @@ Add redaction support for deterministic snapshots using insta's built-in filters
 
 - [x] **Use insta's Built-in Redactions with Precise JSON Patterns**
       ✅ Implemented at `packages/switchy/schema/test_utils/src/snapshots.rs:345-372`
-
     - ✅ Added insta::Settings import for filter support
     - ✅ Replaced direct assert_json_snapshot! with Settings.bind() approach
     - ✅ Implemented timestamp redaction patterns (space and T separators, date-only)
@@ -7092,38 +6993,32 @@ MigrationSnapshotTest::new("comprehensive_snapshot_all_features")      // ✅ Un
 ##### Implementation Tasks
 
 - [x] Add database reuse capability to MigrationSnapshotTest ✅ **COMPLETED**
-
     - ✓ `with_database()` method at `packages/switchy/schema/test_utils/src/snapshots.rs:58-67`
     - ✓ `db` field at `packages/switchy/schema/test_utils/src/snapshots.rs:37`
     - ✓ Database-only snapshots supported with optional migrations_dir
     - ✓ Database creation conditional logic at `packages/switchy/schema/test_utils/src/snapshots.rs:141-147`
 
 - [x] Add custom migration table name support ✅ **COMPLETED**
-
     - ✓ `with_migrations_table()` method at `packages/switchy/schema/test_utils/src/snapshots.rs:69-73`
     - ✓ `migrations_table_name` field at `packages/switchy/schema/test_utils/src/snapshots.rs:39`
     - ✓ Support for multiple migration tracking systems in single database
 
 - [x] Split migration loading from sequence querying ✅ **COMPLETED**
-
     - ✓ `load_migrations()` method at `packages/switchy/schema/test_utils/src/snapshots.rs:109-120`
     - ✓ `get_migration_sequence()` method at `packages/switchy/schema/test_utils/src/snapshots.rs:123-132`
     - ✓ Separate concerns: file system discovery vs database state tracking
 
 - [x] Update run() method to handle provided databases ✅ **COMPLETED**
-
     - ✓ Database creation conditional at `packages/switchy/schema/test_utils/src/snapshots.rs:141-147`
     - ✓ Migration sequence capture from database at `packages/switchy/schema/test_utils/src/snapshots.rs:150-152`
     - ✓ Combined sequence handling at `packages/switchy/schema/test_utils/src/snapshots.rs:192-193`
 
 - [x] Fix get_applied_migrations() graceful handling ✅ **COMPLETED**
-
     - ✓ Table existence check at `packages/switchy/schema/src/version.rs:359-363`
     - ✓ Empty list return for missing table at `packages/switchy/schema/src/version.rs:365`
     - ✓ Handles missing migrations table without errors
 
 - [x] Enhanced get_applied_migrations() with filtering ✅ **COMPLETED**
-
     - ✓ Optional `MigrationStatus` parameter at `packages/switchy/schema/src/version.rs:342-346`
     - ✓ Filtering logic at `packages/switchy/schema/src/version.rs:381-389`
     - ✓ Support for querying specific migration states
@@ -8546,7 +8441,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
 **Test Scenarios (9 comprehensive tests):**
 
 - [x] **Test 1: Nested Savepoints (3 levels deep)**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:109-202
     - Create transaction → SP1 (insert A) → SP2 (insert B) → SP3 (insert C)
     - Release SP3, verify all data present
@@ -8555,7 +8449,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Verify final state contains A and B only
 
 - [x] **Test 2: Rollback to Middle Savepoint**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:204-317
     - Create transaction with initial data
     - SP1 (insert A) → SP2 (insert B) → SP3 (insert C)
@@ -8564,7 +8457,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Commit and verify: initial + A + D (no B, no C)
 
 - [x] **Test 3: Release Savepoints Out of Order**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:319-392
     - Create SP1 → SP2 → SP3 nested savepoints
     - Attempt to release SP2 before SP3
@@ -8572,7 +8464,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Test error handling or automatic release chains
 
 - [x] **Test 4: Savepoint with Data Operations (Full CRUD)**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:394-499
     - SP1: INSERT records
     - UPDATE existing records within SP1
@@ -8582,7 +8473,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Test all CRUD operations within savepoint boundaries
 
 - [x] **Test 5: Commit with Unreleased Savepoints**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:501-574
     - Create multiple nested savepoints
     - Perform data operations in each
@@ -8591,7 +8481,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Verify data persists correctly
 
 - [x] **Test 6: Savepoint Name Validation**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:576-652
     - Test valid names: alphanumeric, underscores, mixed case
     - Test edge cases: empty string, special characters, SQL keywords
@@ -8600,7 +8489,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Verify consistent error messages
 
 - [x] **Test 7: Sequential Savepoints in Different Transactions**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:654-757
     - Start two separate database transactions sequentially
     - Create savepoints with identical names in each transaction
@@ -8609,7 +8497,6 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
     - Commit both transactions and verify independent results
 
 - [x] **Test 8: Savepoint After Failed Operation**
-
     - ✅ packages/database/tests/common/savepoint_tests.rs:759-906
     - ⚠️ PostgreSQL excluded due to transaction semantics
     - Start transaction and attempt invalid operation (constraint violation)
@@ -8843,7 +8730,6 @@ CREATE TABLE savepoint_test (
       ✅ Error handling patterns documented for each database type
       ✅ Code examples show proper usage for each backend
 - [x] Migration safety example using savepoints
-
     - Add to packages/database/src/lib.rs after line 828 in Savepoint trait docs
     - Example should show:
         ````rust
@@ -8885,7 +8771,6 @@ CREATE TABLE savepoint_test (
         ````
 
 - [x] Database-specific quirks documented (if any found)
-
     - Add section to packages/database/src/lib.rs after Savepoint trait (around line 830)
     - Document known differences:
         ````rust
@@ -8918,7 +8803,6 @@ CREATE TABLE savepoint_test (
         ````
 
 - [x] API documentation includes all error conditions
-
     - Verify existing documentation is complete
     - Check that all error variants are documented:
         1. InvalidSavepointName - ✓ Already documented
@@ -8928,7 +8812,6 @@ CREATE TABLE savepoint_test (
     - Mark as complete after verification
 
 - [x] Example shows nested savepoint usage
-
     - Verify existing example at lines 774-793
     - Example already shows savepoint usage within transaction
     - Could enhance with truly nested savepoints:
@@ -8942,24 +8825,20 @@ CREATE TABLE savepoint_test (
         ```
 
 - [x] Example demonstrates error recovery with savepoints
-
     - Existing example at lines 786-789 already shows this
     - Mark as complete after verification
 
 - [x] Run `cargo doc -p switchy_database --all-features --no-deps` - docs build
-
     - Execute: nix develop --command cargo doc -p switchy_database --all-features --no-deps
     - Verify no documentation warnings
     - Check generated HTML docs include savepoint documentation
 
 - [x] Doc tests in lib.rs pass
-
     - Examples are correctly marked with `rust,ignore` (database connections needed)
     - This is appropriate for database code that requires external resources
     - Mark as complete
 
 - [x] README updated if significant new feature
-
     - Add new section to packages/database/README.md after line 221 (after Transactions section)
     - Content outline:
 
@@ -9005,7 +8884,6 @@ CREATE TABLE savepoint_test (
         | MySQL      | ✅ Full (InnoDB)  | Requires InnoDB storage engine      |
 
         #### Common Use Cases
-
         - **Batch Processing**: Process large datasets with per-batch recovery
         - **Migration Testing**: Test schema changes with rollback capability
         - **Complex Business Logic**: Multi-step operations with conditional rollback
@@ -9016,18 +8894,15 @@ CREATE TABLE savepoint_test (
         ```
 
 - ~~[ ] CHANGELOG entry added for savepoint support~~ ❌ **N/A - Project doesn't use CHANGELOG**
-
     - ✓ Verified project doesn't maintain CHANGELOG.md
     - ✓ No existing release notes system found
     - ✓ Marked as not applicable
 
 - ~~[ ] Breaking changes noted if any~~ ❌ **N/A - Not required**
-
     - ✓ Breaking changes already documented where needed
     - ✓ Marked as not applicable per guidance
 
 - [x] Run `cargo fmt --all` - format entire repository
-
     - Execute: nix develop --command cargo fmt --all
     - Verify no formatting changes needed
     - If changes made, review diff before committing
@@ -9047,7 +8922,6 @@ CREATE TABLE savepoint_test (
 **Reason for Removal:** Transaction isolation levels have fundamentally different support across databases:
 
 1. **SQLite Limitations**: SQLite doesn't support ANSI SQL isolation levels. It only has:
-
     - `DEFERRED` (default) - Similar to READ UNCOMMITTED but not exactly
     - `IMMEDIATE` - Acquires write lock immediately
     - `EXCLUSIVE` - Locks database for exclusive access
@@ -9095,13 +8969,11 @@ CREATE TABLE savepoint_test (
 **Reason for Removal:** Transaction timeout implementations are incompatible across backends:
 
 1. **Different Timeout Types**:
-
     - **PostgreSQL**: `statement_timeout` (per statement), `idle_in_transaction_session_timeout` (idle time)
     - **MySQL**: `innodb_lock_wait_timeout` (waiting for locks), connection-level timeouts
     - **SQLite**: `busy_timeout` (waiting to acquire locks, not transaction duration)
 
 2. **Semantic Differences**:
-
     - SQLite's timeout is about lock acquisition, not transaction duration
     - PostgreSQL can timeout individual statements within a transaction
     - MySQL timeouts are primarily about lock waits, not total transaction time
@@ -9441,7 +9313,6 @@ impl RusqliteDatabase {
 ### 15.1 Shared Dependency Infrastructure (Prerequisites for 15.2, 15.3, and 15.4)
 
 - [x] Create reusable dependency discovery utilities ✅ **COMPLETED** (2025-01-15)
-
     - [x] Location: `packages/database/src/schema/dependencies.rs` (new module)
           ✓ File created: `/hdd/GitHub/switchy/packages/database/src/schema/dependencies.rs`
     - [x] Module structure:
@@ -9579,7 +9450,6 @@ impl RusqliteDatabase {
           ✓ All database operations designed for transaction context
           ✓ Table names stored as `String` (owned) in the graph
           ✓ Module behind `schema` feature flag with `#[cfg(feature = "schema")]`
-
         - **Error Handling**: All functions return `Result<T, DatabaseError>` for consistency with the database crate
         - **Module Path**: These types will be accessible as `switchy_database::schema::dependencies::*`
         - **Transaction Context**: All database operations must occur within a transaction for consistency
@@ -9727,18 +9597,15 @@ impl RusqliteDatabase {
 The CASCADE implementation uses a layered trait hierarchy:
 
 1. **Database Trait**:
-
     - Has `query_raw` for backend-specific SQL execution
     - When `cascade` feature enabled: Has CASCADE methods with default implementations
 
 2. **DatabaseTransaction Trait** (extends Database):
-
     - Inherits `query_raw` from Database trait
     - Inherits CASCADE methods from Database trait
     - Most CASCADE operations happen here for atomicity
 
 3. **Implementation Strategy**:
-
     - Phase 15.1.2: Functions in dependencies module use `&dyn DatabaseTransaction`
     - Phase 15.1.3: Optimization functions use `tx.query_raw()` for backend-specific SQL
     - Phase 15.1.4: Backend transaction types can override CASCADE methods for optimization
@@ -9844,12 +9711,10 @@ pub async fn get_all_dependents_recursive(
 This phase provides an INTERMEDIATE optimization using existing Database methods:
 
 1. **Current approach (worst)**: Builds complete dependency graph upfront
-
     - Calls `list_tables()` then `get_table_info()` on ALL tables
     - O(n \* m) where n = all tables, m = avg foreign keys per table
 
 2. **Phase 15.1.2 (this phase - better)**: Targeted discovery with existing methods
-
     - Still uses `list_tables()` but calls `get_table_info()` selectively
     - Early termination in `has_any_dependents()`
     - Only traverses relevant dependency chains
@@ -10405,31 +10270,26 @@ query_raw() method successfully implemented with:
 The CASCADE implementation uses a three-layer approach:
 
 1. **Phase 15.1.2**: Core targeted dependency discovery using existing Database methods
-
     - Provides immediate improvement over global graph building
     - Works with all existing Database implementations
     - Returns DropPlan to handle cycles appropriately
 
 2. **Phase 15.1.3**: Adds query_raw method to Database trait
-
     - NOT feature-gated (core Database functionality)
     - Required method (no default implementation)
     - Provides foundation for Phase 15.1.4 optimizations
 
 3. **Phase 15.1.4**: Backend-specific implementations with CASCADE feature gate
-
     - Overrides methods in each backend for maximum performance
     - Feature-gated behind `cascade = ["schema"]`
     - Integrates with DropTableStatement for clean API
 
 4. **Phase 15.1.5**: Add parameterized query functions
-
     - Adds exec_raw_params and query_raw_params to Database trait
     - Enables safe parameter binding for SQL injection prevention
     - Available on both Database and DatabaseTransaction traits
 
 5. **Phase 15.1.6**: Migrate to parameterized queries
-
     - Updates all dynamic SQL to use parameterized functions
     - Eliminates SQL injection vulnerabilities in CASCADE operations
     - Maintains backward compatibility with static queries
@@ -11466,37 +11326,31 @@ using their respective existing conversion types (PgDatabaseValue, MySqlDatabase
 **✅ Complete Backend Implementation (7/7):**
 
 1. **SQLite (rusqlite)** - Uses existing `bind_values()` function with `raw_execute/raw_query`
-
     - Parameter format: `?` placeholders (e.g., "SELECT \* FROM users WHERE id = ?")
     - Leverages existing RusqliteDatabaseValue conversion and bind_values helper
     - Location: `packages/database/src/rusqlite/mod.rs:632-680` and `938-986`
 
 2. **SQLite (sqlx)** - Uses sqlx query builder with `$1,$2` placeholders
-
     - Parameter format: `$1, $2` placeholders (e.g., "SELECT \* FROM users WHERE id = $1")
     - Includes proper `u64→i64` conversion for SQLite's lack of native u64 support
     - Location: `packages/database/src/sqlx/sqlite.rs:656-748` and `965-3067`
 
 3. **PostgreSQL (native)** - Uses controlled string interpolation with `$1,$2` placeholders
-
     - Parameter format: `$1, $2` placeholders (e.g., "SELECT \* FROM users WHERE id = $1")
     - Temporary string interpolation approach (secure versions in Phase 15.1.6)
     - Location: `packages/database/src/postgres/postgres.rs:636-710` and `1037-1137`
 
 4. **PostgreSQL (sqlx)** - Uses sqlx query builder with `$1,$2` placeholders
-
     - Parameter format: `$1, $2` placeholders with proper type conversion
     - Includes `u64→i64` conversion for PostgreSQL compatibility using `i64::try_from()`
     - Location: `packages/database/src/sqlx/postgres.rs:655-736` and `1141-1230`
 
 5. **MySQL (sqlx)** - Uses sqlx query builder with `?` placeholders
-
     - Parameter format: `?` placeholders (e.g., "SELECT \* FROM users WHERE id = ?")
     - Native u64 support, no type conversion needed
     - Location: `packages/database/src/sqlx/mysql.rs:600-684` and `1097-1188`
 
 6. **Database Simulator** - Simple delegation to inner database implementation
-
     - Maintains simulator's pure delegation pattern
     - Location: `packages/database/src/simulator/mod.rs:360-376`
 
@@ -13595,7 +13449,6 @@ These tests were failing because the native CASCADE implementation (Phase 15.2.1
 #### 15.3.1 PostgreSQL Performance Optimization
 
 - [ ] **Replace manual RESTRICT with native RESTRICT for PostgreSQL only**
-
     - **Current**: Manual dependency check via `information_schema` query + DROP TABLE
     - **Optimized**: Single `DROP TABLE name RESTRICT` operation
     - **Performance gain**: Eliminates extra round trip and complex JOIN query
@@ -13750,7 +13603,6 @@ After optimization, the strategies will be:
 Given the significant differences in native support, we limit our abstraction to what can be consistently implemented across all backends.
 
 - [x] Add DropBehavior support to ALTER TABLE DROP COLUMN
-
     - [x] Extend existing AlterOperation::DropColumn to support DropBehavior:
 
         ```rust
@@ -14013,7 +13865,6 @@ Given the significant differences in native support, we limit our abstraction to
         ```
 
 - [ ] SKIP: DropIndexStatement CASCADE/RESTRICT
-
     - **Rationale:** Indexes have no dependents, just drop normally
     - No CASCADE/RESTRICT needed or useful
 
@@ -14320,7 +14171,6 @@ This ensures:
 ### 16.2 Add Table Introspection Methods to Database Trait
 
 - [x] Update `packages/database/src/lib.rs` Database trait ⚠️ **CRITICAL**
-
     - [x] Add method signatures:
 
         ```rust
@@ -14366,7 +14216,6 @@ This ensures:
 ### 16.3 Implement for SQLite (rusqlite) ✅ **COMPLETED** (2025-01-13)
 
 - [x] Implement in `packages/database/src/rusqlite/mod.rs` ⚠️ **CRITICAL**
-
     - [x] `table_exists()`:
         ```sql
         SELECT name FROM sqlite_master WHERE type='table' AND name=?
@@ -14376,6 +14225,7 @@ This ensures:
         ```sql
         PRAGMA table_info(table_name)
         ```
+
         - [x] Map SQLite types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
               Implemented in `sqlite_type_to_data_type()` helper (lines 2875-2886)
         - [x] Parse `notnull` flag for nullable
@@ -14401,7 +14251,6 @@ This ensures:
           All methods use helper functions with proper connection handling for both RusqliteDatabase (`&*connection.lock().await`) and RusqliteTransaction (`&*self.connection.lock().await`)
 
 - [x] **Comprehensive Tests Implemented:**
-
     - [x] `test_table_exists` - ✅ PASS - Verifies existing/non-existing tables and transaction support
     - [x] `test_column_exists` - ✅ PASS - Verifies existing/non-existing columns and transaction support
     - [x] `test_get_table_columns` - ✅ PASS - Verifies complete column metadata (types, nullable, PK, ordinal)
@@ -14419,7 +14268,6 @@ This ensures:
 **Prerequisites:** Phase 16.3 complete (rusqlite implementation as reference)
 
 - [x] Create helper functions in `packages/database/src/sqlx/sqlite.rs`:
-
     - [x] `sqlx_sqlite_table_exists(executor: &mut SqliteConnection, table_name: &str) -> Result<bool, DatabaseError>`
     - [x] `sqlx_sqlite_get_table_columns(executor: &mut SqliteConnection, table_name: &str) -> Result<Vec<ColumnInfo>, DatabaseError>`
     - [x] `sqlx_sqlite_column_exists(executor: &mut SqliteConnection, table_name: &str, column_name: &str) -> Result<bool, DatabaseError>` - Implemented via get_table_columns
@@ -14427,7 +14275,6 @@ This ensures:
           Added all 4 helper functions at lines 2748-2894 in packages/database/src/sqlx/sqlite.rs. Functions follow established patterns from Phase 16.3 implementation.
 
 - [x] **Specific Implementation Details:**
-
     - [x] **table_exists**: Use `sqlx::query_scalar()` with `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`
     - [x] **get_table_columns**: Use `sqlx::query()` with PRAGMA table_info, map Row to ColumnInfo
     - [x] **Type mapping**: Duplicated `sqlite_type_to_data_type()` and `parse_default_value()` helper functions from rusqlite implementation
@@ -14436,7 +14283,6 @@ This ensures:
           Implementation uses sqlx::query_scalar and sqlx::query macros as specified. All Database trait methods implemented at lines 549-579 and 2628-2673.
 
 - [x] **Required Tests** (add to existing test module):
-
     - [x] `test_sqlx_sqlite_table_exists` - Same scenarios as rusqlite
     - [x] `test_sqlx_sqlite_column_exists` - Test with/without table, with/without column
     - [x] `test_sqlx_sqlite_get_table_columns` - Verify all column properties
@@ -14470,7 +14316,6 @@ This ensures:
     ```
 
     ✓ **PROOF**: Created at `packages/database/src/postgres/introspection.rs` (277 lines total)
-
     - `postgres_table_exists()` at lines 14-29 - queries information_schema.tables
     - `postgres_get_table_columns()` at lines 31-86 - queries information_schema.columns with primary key detection
     - `postgres_column_exists()` at lines 88-103 - checks column existence
@@ -14480,7 +14325,6 @@ This ensures:
 
 - [x] **Create SQLx helpers** in new file `packages/database/src/sqlx/postgres_introspection.rs`:
       ✓ **PROOF**: Created at `packages/database/src/sqlx/postgres_introspection.rs` (282 lines total)
-
     - `postgres_sqlx_table_exists()` at lines 14-30 - sqlx version using information_schema
     - `postgres_sqlx_get_table_columns()` at lines 32-88 - sqlx queries with primary key detection
     - `postgres_sqlx_column_exists()` at lines 90-106 - sqlx column existence verification
@@ -14489,7 +14333,6 @@ This ensures:
     - Default value parsing function `parse_sqlx_default_value()` at lines 303-331
 
 - [x] **Core SQL Queries:**
-
     - [x] `table_exists()`:
         ```sql
         SELECT EXISTS (
@@ -14549,12 +14392,10 @@ This ensures:
     ```
 
     ✓ **PROOF**: Implemented in both backends:
-
     - tokio-postgres: `packages/database/src/postgres/introspection.rs:279-296`
     - sqlx: `packages/database/src/sqlx/postgres_introspection.rs:284-301`
 
 - [x] **Default Value Parsing:**
-
     - [x] Handle PostgreSQL default formats: `'value'::type`, `nextval('sequence')`, functions
     - [x] Parse to DatabaseValue or return None for complex expressions
           ✓ **PROOF**: Implemented in both backends:
@@ -14562,7 +14403,6 @@ This ensures:
     - sqlx: `parse_sqlx_default_value()` at `packages/database/src/sqlx/postgres_introspection.rs:303-331`
 
 - [x] **Implement in both backends:**
-
     - [x] `packages/database/src/postgres/postgres.rs` using tokio-postgres
           ✓ **PROOF**: All 4 introspection methods implemented:
         - PostgresDatabase: `table_exists()` at lines 454-458, `get_table_info()` at lines 461-468, `get_table_columns()` at lines 471-478, `column_exists()` at lines 481-487
@@ -14594,12 +14434,10 @@ This ensures:
     ```
 
     ✓ **PROOF**: Test infrastructure implemented in both backends:
-
     - tokio-postgres: `get_postgres_test_url()` at `packages/database/src/postgres/postgres.rs:2300-2302`
     - sqlx: `get_postgres_test_url()` at `packages/database/src/sqlx/postgres.rs:2355-2357`
 
 - [x] **Required Tests:**
-
     - [x] All tests use `let Some(url) = get_postgres_test_url() else { return; };` pattern
           ✓ **PROOF**: All 12 tests use graceful skipping pattern (6 per backend)
     - [x] `test_postgres_table_exists` - Test with schemas, case sensitivity
@@ -14744,7 +14582,6 @@ Phase 16.5 is **100% complete** with zero compromises, comprehensive test covera
 **Prerequisites:** ✅ Phase 16.3-16.5 complete (SQLite and PostgreSQL implementations as reference)
 
 - [x] **MySQL-Specific Considerations:**
-
     - [x] **Character encoding**: Handle utf8mb4 vs utf8 in column definitions
           ✓ Implemented using information_schema queries which handle encoding automatically
     - [x] **Storage engines**: InnoDB vs MyISAM affect foreign key support
@@ -14755,7 +14592,6 @@ Phase 16.5 is **100% complete** with zero compromises, comprehensive test covera
           ✓ Uses DATABASE() function which handles case sensitivity automatically
 
 - [x] **Core SQL Queries:**
-
     - [x] `table_exists()`:
         ```sql
         SELECT EXISTS (
@@ -14826,7 +14662,6 @@ Phase 16.5 is **100% complete** with zero compromises, comprehensive test covera
     ✓ Implemented in `packages/database/src/sqlx/mysql_introspection.rs:273-291` with comprehensive MySQL type support
 
 - [x] **Implementation Details:**
-
     - [x] Parse IS_NULLABLE for nullable flag
           ✓ Implemented in `packages/database/src/sqlx/mysql_introspection.rs:93-95`
     - [x] Parse COLUMN_DEFAULT for default values
@@ -14862,7 +14697,6 @@ Phase 16.5 is **100% complete** with zero compromises, comprehensive test covera
     ✓ Full test infrastructure implemented in `packages/database/src/sqlx/mysql.rs:905-1083` with graceful skipping pattern
 
 - [x] **Required Tests:**
-
     - [x] All tests use `let Some(url) = get_mysql_test_url() else { return; };` pattern
           ✓ All 6 tests use graceful skipping pattern: `packages/database/src/sqlx/mysql.rs:918, 946, 1004, 1026, 1064, 1066`
     - [x] `test_mysql_table_exists` - Case sensitivity based on OS
@@ -15005,7 +14839,6 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
       Confirmed - all methods use simple delegation pattern: `self.inner.method_name(args).await` with no additional logic or transformation required.
 
 - [x] **Required Tests:**
-
     - [x] `test_simulator_introspection_delegation` - Verify all methods delegate correctly
           Implemented at lines 420-477 in `packages/database/src/simulator/mod.rs` - tests all 4 methods with comprehensive validation of table/column existence, column metadata, and table info structure.
     - [x] `test_simulator_transaction_introspection` - Works in transaction context
@@ -15037,7 +14870,6 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
 - sqlx: `packages/database/src/sqlx/postgres_introspection.rs` - Same issue, doesn't even query `character_maximum_length`
 
 - [x] **Fix tokio-postgres implementation** (`packages/database/src/postgres/introspection.rs`):
-
     - [x] Update column query to include `character_maximum_length` in SELECT statement
           Added `character_maximum_length` to SELECT query at lines 31-39, updated column extraction to get char_max_length from row index 2
     - [x] Update `postgres_type_to_data_type()` function signature to accept `char_max_length: Option<i32>`
@@ -15195,16 +15027,13 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
     Each backend implementation has 8 individual test functions plus 1 comprehensive `run_all_tests()` function. Database creation patterns vary by backend: SQLite uses in-memory or shared memory, PostgreSQL/MySQL use environment variables for connection URLs, simulator uses unique file paths. Tests gracefully skip via `Option<Arc<DatabaseType>>` return when database unavailable.
 
 - [x] **Comprehensive Test Coverage:**
-
     - [x] **Table Existence:**
-
         - [x] Existing table returns true
         - [x] Non-existent table returns false
         - [x] Case sensitivity handling per backend
         - [x] Schema/database context awareness
 
     - [x] **Column Information:**
-
         - [x] All column properties (name, type, nullable, primary key, ordinal)
         - [x] Various data types (backend-specific handling, SQLite compatibility focused)
         - [x] Default values (CURRENT_TIMESTAMP, integer defaults)
@@ -15212,14 +15041,12 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
         - [x] Basic constraints (primary key, unique, not null)
 
     - [x] **Edge Cases:**
-
         - [x] Empty database (no tables exist)
         - [x] Non-existent tables and columns
         - [x] Special characters in names (quotes, apostrophes)
         - [x] Query errors handled gracefully without panics
 
     - [x] **Transaction Context:**
-
         - [x] All methods work within transactions
         - [x] Transaction isolation (can't see uncommitted schema changes)
         - [x] Rollback doesn't affect introspection
@@ -15232,16 +15059,13 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
 
 - [x] **Cross-Backend Compatibility Focus:**
       **Note:** Our integration tests prioritize cross-backend compatibility over backend-specific features. Backend-specific functionality is tested in individual module unit tests (e.g., `src/rusqlite/mod.rs`, `src/sqlx/sqlite.rs`).
-
     - [x] **SQLite Compatibility Design:**
-
         - [x] Uses TEXT type for all string columns (compatible across SQLite backends)
         - [x] Uses INTEGER for boolean-like fields (0/1 pattern)
         - [x] Avoids BLOB, TIMESTAMP, VARCHAR(n) types for compatibility
         - [x] Works with both rusqlite and sqlx-sqlite implementations
 
     - [x] **PostgreSQL Integration:**
-
         - [x] Uses environment variable (POSTGRES_TEST_URL) for connection
         - [x] Handles both tokio-postgres and sqlx-postgres backends
         - [x] Gracefully skips tests when database unavailable
@@ -15252,7 +15076,6 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
         - [x] Uses Arc<Mutex<MySqlPool>> connection pattern
 
 - [x] **Integration Tests** implemented in `packages/database/tests/integration_tests.rs`:
-
     - [x] Cross-backend consistency via shared IntrospectionTestSuite trait
     - [ ] Migration + introspection workflows (not implemented - would need separate phase)
     - [ ] Performance benchmarks (not implemented - would need separate tooling)
@@ -15267,26 +15090,22 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
 **Implementation Details:**
 
 - **File Structure:**
-
     - `packages/database/tests/common/mod.rs` - Module declaration
     - `packages/database/tests/common/introspection_tests.rs` - Trait definition and schema (lines 1-248)
     - `packages/database/tests/integration_tests.rs` - Backend implementations (lines 1189-1688)
 
 - **IntrospectionTestSuite Trait:**
-
     - Associated type `DatabaseType: Database + Send + Sync` (line 46)
     - `get_database()` returns `Option<Arc<DatabaseType>>` for graceful skipping (line 49)
     - `create_test_schema(&self, db: &Self::DatabaseType)` takes database parameter (line 52)
     - 8 test methods + `run_all_tests()` convenience method (lines 62-246)
 
 - **StandardTestSchema (lines 13-40):**
-
     - `users_table`: TEXT fields with INTEGER PRIMARY KEY and CURRENT_TIMESTAMP default
     - `posts_table`: TEXT NOT NULL, INTEGER DEFAULT 0 for boolean-like fields
     - `unsupported_table`: edge_cases with data_col TEXT (avoiding BLOB compatibility issues)
 
 - **Backend Implementations:**
-
     - RusqliteIntrospectionTests (lines 1199-1281): Shared memory SQLite with unique names
     - SqlxSqliteIntrospectionTests (lines 1289-1371): In-memory via Arc<Mutex<SqlitePool>>
     - PostgresIntrospectionTests (lines 1357-1439): deadpool_postgres with TLS support
@@ -15315,7 +15134,6 @@ Both test suites serve different purposes and should be maintained together.
 ### 16.10 Update Documentation ✅ **COMPLETED**
 
 - [x] **Core Documentation** in `packages/database/src/lib.rs`:
-
     - [x] Add module-level documentation for schema introspection
         - Comprehensive module documentation with architecture overview (lines 1-117)
         - Schema introspection section with usage examples (lines 11-67)
@@ -15332,7 +15150,6 @@ Both test suites serve different purposes and should be maintained together.
         - Multiple introspection usage patterns in schema.rs documentation
 
 - [x] **Backend-Specific Documentation:**
-
     - [x] Document SQLite PRAGMA usage and limitations
         - Complete SQLite module documentation in `packages/database/src/rusqlite/mod.rs` (lines 1-75)
         - PRAGMA commands usage, limitations, and case sensitivity documented
@@ -15619,21 +15436,17 @@ Each phase implementation satisfied these criteria and is marked as complete:
 All CREATE TABLE implementations use exhaustive match statements that WILL cause compilation errors:
 
 - [x] **SQLite rusqlite (`packages/database/src/rusqlite/mod.rs`)**
-
     - Line 931-966: CREATE TABLE column type generation
     - Added cases for all 17 new DataType variants
 
 - [x] **PostgreSQL raw (`packages/database/src/postgres/postgres.rs`)**
-
     - Line 938-1015: CREATE TABLE column type generation
     - Handle Serial/BigSerial auto-increment logic
 
 - [x] **PostgreSQL sqlx (`packages/database/src/sqlx/postgres.rs`)**
-
     - Line 1014-1084: CREATE TABLE column type generation
 
 - [x] **MySQL sqlx (`packages/database/src/sqlx/mysql.rs`)**
-
     - Line 965-1014: CREATE TABLE column type generation
 
 - [x] **SQLite sqlx (`packages/database/src/sqlx/sqlite.rs`)**
@@ -15644,24 +15457,20 @@ All CREATE TABLE implementations use exhaustive match statements that WILL cause
 ALTER TABLE implementations also use exhaustive matching:
 
 - [x] **SQLite rusqlite (`packages/database/src/rusqlite/mod.rs`)**
-
     - Line 1130-1157: ALTER TABLE ADD COLUMN type mapping
     - Line 1262-1289: MODIFY COLUMN workaround type mapping
     - Line 1502-1527: Table recreation type mapping
     - Line 1732-1758: CAST type conversion mapping
 
 - [x] **PostgreSQL raw (`packages/database/src/postgres/postgres.rs`)**
-
     - Line 1182-1219: ALTER TABLE ADD COLUMN type mapping
     - Line 1283-1320: ALTER TABLE MODIFY COLUMN type mapping
 
 - [x] **PostgreSQL sqlx (`packages/database/src/sqlx/postgres.rs`)**
-
     - Line 1262-1299: ALTER TABLE ADD COLUMN type mapping
     - Line 1370-1407: ALTER TABLE MODIFY COLUMN type mapping
 
 - [x] **MySQL sqlx (`packages/database/src/sqlx/mysql.rs`)**
-
     - Line 1205-1241: ALTER TABLE ADD COLUMN type mapping
     - Line 1312-1348: ALTER TABLE MODIFY COLUMN type mapping
 
@@ -15684,20 +15493,17 @@ ALTER TABLE implementations also use exhaustive matching:
 #### **Phase 16.12.6: Comprehensive Testing** 🟡 **IMPORTANT**
 
 - [x] **Test new DataType introspection across all backends**
-
     - All 68 unit tests passing + 91 integration tests passing
     - Updated `test_unsupported_data_types` tests to expect Custom(String) fallback
     - Verified introspection returns correct DataType variants
     - Tested Custom(String) fallback for truly unknown types
 
 - [x] **Test CREATE TABLE with new types**
-
     - All existing CREATE TABLE tests continue to pass
     - SQL generation works for all new DataType variants
     - Tables can be created and used with new types
 
 - [x] **Test ALTER TABLE with new types**
-
     - All existing ALTER TABLE tests continue to pass
     - ADD COLUMN, MODIFY COLUMN work with new types
     - Type conversion works correctly
@@ -15709,7 +15515,6 @@ ALTER TABLE implementations also use exhaustive matching:
 #### **Phase 16.12.7: Documentation Updates** 📚 **IMPORTANT**
 
 - [x] **Update type mapping tables in documentation**
-
     - Extended DataType enum with comprehensive documentation (17 new variants)
     - Added type mapping logic for all 5 backends showing database-specific mappings
     - Custom(String) fallback documented to replace UnsupportedDataType errors
@@ -15818,7 +15623,6 @@ ALTER TABLE implementations also use exhaustive matching:
 **Goal:** Create the foundational trait and module structure for automatic migration reversal
 
 - [x] Create `packages/database/src/schema/auto_reversible.rs` module
-
     - [x] Location: New file at `packages/database/src/schema/auto_reversible.rs`
           File created at `/hdd/GitHub/switchy/packages/database/src/schema/auto_reversible.rs` with complete trait definition and comprehensive documentation including safety guarantees and examples.
     - [x] Module registration in `packages/database/src/schema/mod.rs`:

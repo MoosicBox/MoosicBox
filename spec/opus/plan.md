@@ -1982,7 +1982,6 @@ cargo bench -p moosicbox_opus --no-run  # Just compile
 ## Key Improvements in This Plan
 
 1. **Dependencies Added Only When Used**:
-
     - `thiserror` in Phase 2 (for errors)
     - `bytes` and `log` in Phase 5 (for packet parsing)
     - `symphonia` in Phase 6 (for decoder trait)
@@ -1990,19 +1989,16 @@ cargo bench -p moosicbox_opus --no-run  # Just compile
     - Test dependencies in Phase 10 (for testing)
 
 2. **No Compilation Errors**:
-
     - Each phase builds on previous
     - Error types defined before use
     - All structs/functions are used when created
 
 3. **No Unused Warnings**:
-
     - Public API exports everything
     - Functions called within same module
     - Test code validates all functionality
 
 4. **No Circular Dependencies**:
-
     - Opus package is standalone
     - audio_decoder optionally depends on opus
     - No back-references

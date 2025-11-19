@@ -79,6 +79,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server test_with_content_type
     ```
+
     - **Expected**: Test passes showing Content-Type header is set
     - **Success**: Test passes with 0 failures
 
@@ -115,6 +116,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server test_header_chaining
     ```
+
     - **Expected**: Multiple chained calls preserve all headers
     - **Success**: Test passes confirming header preservation
 
@@ -142,6 +144,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server http_response
     ```
+
     - **Expected**: All existing HttpResponse tests pass
     - **Success**: All tests pass, no regressions
 
@@ -169,6 +172,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo machete
     ```
+
     - **Expected**: No unused dependencies found
     - **Success**: Clean output or no unused deps
 
@@ -223,6 +227,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server --features simulator test_custom_headers_are_preserved
     ```
+
     - **Expected**: Custom headers maintained in conversion
     - **Success**: test_custom_headers_are_preserved passes
 
@@ -241,6 +246,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test --no-run -p moosicbox_web_server --features simulator
     ```
+
     - **Expected**: All tests compile with simulator feature
     - **Success**: Finished compilation with no errors
 
@@ -268,6 +274,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo machete
     ```
+
     - **Expected**: No unused dependencies
     - **Success**: Clean output
 
@@ -322,6 +329,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server --features simulator test_state_multiple_types
     ```
+
     - **Expected**: Multiple state types work concurrently
     - **Success**: test_simulator_state_management_multiple_types passes
 
@@ -387,6 +395,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server --features simulator test_register_scope_with_deeply_nested_scopes
     ```
+
     - **Expected**: Deep nesting creates correct paths
     - **Success**: test_register_scope_with_deeply_nested_scopes passes
 
@@ -461,6 +470,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo test -p moosicbox_web_server --features simulator test_deterministic_execution
     ```
+
     - **Expected**: Requests process in deterministic order
     - **Success**: Order validation tests pass
 
@@ -470,6 +480,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     ```bash
     nix develop --command cargo build --example basic_simulation --features simulator
     ```
+
     - **Expected**: Example compiles successfully
     - **Success**: Basic simulation example builds
 

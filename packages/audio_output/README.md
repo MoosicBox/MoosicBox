@@ -315,19 +315,16 @@ The `AudioOutput` implements the `AudioDecode` trait, allowing it to receive dec
 ### Common Issues
 
 1. **No audio output**:
-
     - Run `scan_outputs().await` to ensure devices are detected
     - Check system audio settings and permissions
     - Verify CPAL feature is enabled
 
 2. **Audio crackling or stuttering**:
-
     - This is typically a system resource issue
     - The package uses a 30-second ring buffer with 10-second initial buffering to prevent this
     - Check CPU usage and system load
 
 3. **Device not found**:
-
     - Verify the device is connected and enabled in system settings
     - Run `output_factories().await` to list available devices
 

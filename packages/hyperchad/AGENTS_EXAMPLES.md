@@ -16,19 +16,16 @@ HyperChad is a **template-based UI framework** for building cross-platform appli
 ### High Priority (Great Candidates for New Examples)
 
 1. **Router + State Example** - Show navigation with persistent state across routes
-
     - Demonstrates: `hyperchad_router`, `hyperchad_state`, `hyperchad_template`
     - Use case: Multi-page app with shared state (e.g., shopping cart, user preferences)
     - Backend-agnostic: Should work with multiple renderers
 
 2. **State Persistence Example** - SQLite-backed state management
-
     - Demonstrates: `hyperchad_state` with `persistence-sqlite` feature
     - Use case: Form data persistence, user settings storage
     - Backend-agnostic: State logic is independent of renderer
 
 3. **Actions + Events Example** - Interactive form with validation
-
     - Demonstrates: `hyperchad_actions`, `hyperchad_router`, form handling
     - Use case: Contact form, login page, data entry
     - Backend-agnostic: Event handling works across renderers
@@ -41,7 +38,6 @@ HyperChad is a **template-based UI framework** for building cross-platform appli
 ### Medium Priority
 
 5. **Color Theming Example** - Dynamic theme switching
-
     - Demonstrates: `hyperchad_color`, state management for themes
     - Backend-agnostic: Color system works across all renderers
 

@@ -132,37 +132,31 @@ DST abstractions maintain identical APIs to the original libraries:
 #### ✅ Existing Packages (Implemented)
 
 1. **switchy_time** - Time operations and clock control
-
     - Production: `SystemTime`, `Instant`
     - Simulation: Controllable virtual clock
     - Features: Time travel, fast-forward, pause
 
 2. **switchy_random** - Random number generation
-
     - Production: `rand::thread_rng()`
     - Simulation: Seeded, reproducible RNG
     - Features: Predictable sequences, reset state
 
 3. **switchy_fs** - File system operations
-
     - Production: `std::fs` with optimizations
     - Simulation: In-memory virtual file system
     - Features: Controlled I/O errors, deterministic ordering
 
 4. **switchy_tcp** - TCP networking
-
     - Production: `tokio::net::TcpStream`
     - Simulation: In-memory message passing
     - Features: Network delays, packet loss simulation
 
 5. **switchy_http** - HTTP client operations
-
     - Production: `reqwest` or `hyper`
     - Simulation: Controllable mock responses
     - Features: Failure injection, response delays
 
 6. **switchy_async** - Async runtime control
-
     - Production: `tokio::runtime`
     - Simulation: Deterministic task scheduling
     - Features: Controlled execution order
@@ -175,19 +169,16 @@ DST abstractions maintain identical APIs to the original libraries:
 #### ❌ Required Packages (To Be Created)
 
 1. **switchy_uuid** - UUID generation
-
     - Production: `uuid::Uuid::new_v4()`
     - Simulation: Predictable UUID sequences
     - Priority: HIGH (affects many packages)
 
 2. **switchy_env** - Environment variable access
-
     - Production: `std::env::var()`
     - Simulation: Controlled environment state
     - Priority: HIGH (configuration dependent)
 
 3. **switchy_process** - Process execution
-
     - Production: `std::process::Command`
     - Simulation: Mock process responses
     - Priority: MEDIUM (fewer packages affected)

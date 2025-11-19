@@ -56,7 +56,6 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 ### 1.1 Package Creation
 
 - [x] Create package directory structure 🔴 **CRITICAL**
-
     - [x] Create `packages/p2p/` directory
           Directory created successfully
     - [x] Create `packages/p2p/src/` directory
@@ -203,7 +202,6 @@ Initial package has zero dependencies to start completely clean.
 - API correction: `rng.fill(&mut bytes)` instead of `rng.fill_bytes(&mut bytes)`
 
 - [x] Add switchy dependencies to Cargo.toml 🔴 **CRITICAL**
-
     - [x] Add to `[dependencies]` (FIRST dependencies added to package):
         ```toml
         switchy_async = { workspace = true, features = ["sync", "time"] }
@@ -217,7 +215,6 @@ Initial package has zero dependencies to start completely clean.
           Shows switchy_async v0.1.4, switchy_time v0.1.4, switchy_random v0.1.4
 
 - [x] Create `src/simulator.rs` with complete node identity system 🔴 **CRITICAL**
-
     - [x] Add `#[cfg(feature = "simulator")] pub mod simulator;` to `lib.rs` (FIRST line of real code)
           Added to lib.rs after clippy configuration
     - [x] Create COMPLETE `SimulatorNodeId` implementation (not a snippet):
@@ -419,7 +416,6 @@ This ensures each phase compiles independently without forward dependencies.
 - `SIMULATOR_MAX_MESSAGE_SIZE=1048576` ✅
 
 - [x] Implement COMPLETE network graph for realistic P2P simulation 🔴 **CRITICAL**
-
     - [x] Add environment helper functions first (at top of simulator.rs after imports):
 
         ```rust
@@ -698,7 +694,6 @@ This ensures each phase compiles independently without forward dependencies.
 - `inject_packet_loss(from: NodeId, to: NodeId, loss_rate: f64)`
 
 - [x] Implement COMPLETE connection with graph-based routing 🔴 **CRITICAL**
-
     - [x] Extend SimulatorP2P with connections field (SECOND update to existing struct):
 
         ```rust
@@ -933,7 +928,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 2.4 Mock DNS Discovery Service
 
 - [x] Implement discovery service for testing 🔴 **CRITICAL**
-
     - [x] Add discovery methods to `SimulatorP2P`:
 
         ```rust
@@ -1062,7 +1056,6 @@ This ensures each phase compiles independently without forward dependencies.
 - **P2PListener trait EXCLUDED** - simulator has no listener implementation yet (tracked for Phase 5/6)
 
 - [x] Create minimal P2P error types 🔴 **CRITICAL**
-
     - [x] Create `src/types.rs` and add to lib.rs: `pub mod types;`
     - [x] Add minimal P2PError enum with extension points for future phases:
 
@@ -1104,7 +1097,6 @@ This ensures each phase compiles independently without forward dependencies.
         ```
 
 - [x] Extract `P2PSystem` traits with async-trait abstractions 🔴 **CRITICAL**
-
     - [x] Create `src/traits.rs` and add to lib.rs: `pub mod traits;`
     - [x] Add COMPLETE trait definitions (with `async-trait` dependency):
 
@@ -1240,7 +1232,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 3.2 Implement Traits for Simulator Types
 
 - [ ] Implement all traits for simulator types 🔴 **CRITICAL**
-
     - [ ] Implement `P2PConnection` for `SimulatorConnection`:
 
         ```rust
@@ -1363,13 +1354,11 @@ This ensures each phase compiles independently without forward dependencies.
 ### 4.1 Extend P2PError with thiserror and additional variants
 
 - [ ] Add thiserror dependency to Cargo.toml 🔴 **CRITICAL**
-
     - [ ] Add to `[dependencies]`: `thiserror = { workspace = true }`
     - [ ] Verify thiserror dependency exists in workspace (should already be present)
     - [ ] **VERIFICATION**: Run `cargo tree -p switchy_p2p` shows thiserror in dependency tree
 
 - [ ] Extend existing `src/types.rs` with thiserror and additional variants 🔴 **CRITICAL**
-
     - [ ] NOTE: types module and basic P2PError created in Phase 3.1
     - [ ] Replace `#[derive(Debug, Clone)]` with `#[derive(Debug, Clone, Error)]`
     - [ ] Replace manual Display impl with thiserror `#[error("...")]` attributes
@@ -1429,7 +1418,6 @@ This ensures each phase compiles independently without forward dependencies.
         ```
 
 - [ ] **ENHANCEMENT**: Update error creation sites to use new specific variants 🔴 **CRITICAL**
-
     - [ ] NOTE: P2PResult<T> already exists and is used from Phase 3.1
     - [ ] Update error creation in `SimulatorConnection` to use more specific variants:
         - [ ] Replace generic `NetworkError` with specific types where appropriate
@@ -1469,7 +1457,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 4.2 Add Configuration and Helper Types
 
 - [ ] Add shared types for configuration and management 🔴 **CRITICAL**
-
     - [ ] Add configuration types to `types.rs`:
 
         ```rust
@@ -1567,7 +1554,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 5.1 HTTP-Like Routing System
 
 - [ ] Create routing abstraction 🔴 **CRITICAL**
-
     - [ ] Create `src/router.rs`:
 
         ```rust
@@ -1693,7 +1679,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 5.2 Service Registration Pattern
 
 - [ ] Create service trait and integration 🔴 **CRITICAL**
-
     - [ ] Define `P2PService` trait in `router.rs`:
         ```rust
         pub trait P2PService {
@@ -1880,7 +1865,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 7.2 Zero-Cost Iroh Provider Implementation
 
 - [ ] Create `src/iroh.rs` with zero-overhead wrappers 🔴 **CRITICAL**
-
     - [ ] Add `#[cfg(feature = "iroh")] pub mod iroh;` to `lib.rs`
     - [ ] Direct type aliases for zero cost:
 
@@ -1966,7 +1950,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 7.3 QUIC Stream-Based Connection Implementation
 
 - [ ] Implement connection using QUIC streams 🔴 **CRITICAL**
-
     - [ ] Create `IrohConnection` struct:
 
         ```rust
@@ -2162,7 +2145,6 @@ This ensures each phase compiles independently without forward dependencies.
     - [ ] Update `simulator` feature: `simulator = ["dep:proptest"]`
     - [ ] Add to root workspace `[workspace.dependencies]`: `proptest = "1.7.0"`
 - [ ] Create `src/test_utils.rs` with generic test framework 🔴 **CRITICAL**
-
     - [ ] Add generic test functions that work with any P2PSystem:
 
         ```rust
@@ -2290,7 +2272,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 8.2 Property-Based Integration Test Suite
 
 - [ ] Create comprehensive property test suite 🔴 **CRITICAL**
-
     - [ ] Create `tests/properties.rs`:
 
         ```rust
@@ -2585,7 +2566,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 12.1 Public API Consolidation
 
 - [ ] Create clean public API in `lib.rs` 🔴 **CRITICAL**
-
     - [ ] Export main types and traits:
 
         ```rust
@@ -2668,7 +2648,6 @@ This ensures each phase compiles independently without forward dependencies.
 ### 12.2 Usage Examples and Documentation
 
 - [ ] Create comprehensive examples 🔴 **CRITICAL**
-
     - [ ] Create `examples/basic_communication.rs`:
 
         ```rust
@@ -2841,19 +2820,15 @@ This ensures each phase compiles independently without forward dependencies.
 ## Risk Mitigation
 
 1. **Risk**: P2P connections may be less reliable than tunnel
-
     - **Mitigation**: Comprehensive testing and gradual rollout with monitoring
 
 2. **Risk**: NAT traversal may fail in some network configurations
-
     - **Mitigation**: Fallback mechanisms and thorough network testing
 
 3. **Risk**: Performance may not meet expectations
-
     - **Mitigation**: Benchmarking and optimization throughout development
 
 4. **Risk**: Migration from tunnel may disrupt existing functionality
-
     - **Mitigation**: Compatibility layer and gradual migration strategy
 
 5. **Risk**: Security vulnerabilities in P2P implementation

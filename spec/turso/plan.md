@@ -107,7 +107,6 @@ The implementation provides a modern, async-first **local database** option that
 ### 1.2 Create Error Type Structure
 
 - [x] Create Turso module structure 🔴 **CRITICAL**
-
     - [x] Create `packages/database/src/turso/` directory
     - [x] Create `packages/database/src/turso/mod.rs` with error types ONLY:
 
@@ -247,7 +246,6 @@ The implementation provides a modern, async-first **local database** option that
 ### 2.2 Implement TursoDatabase Struct
 
 - [x] Create TursoDatabase implementation 🔴 **CRITICAL**
-
     - [ ] Update `packages/database/src/turso/mod.rs`
     - [ ] Add imports:
         ```rust
@@ -313,7 +311,6 @@ The implementation provides a modern, async-first **local database** option that
 
 - [x] Implement `DatabaseValue` → `turso::Value` conversion 🔴 **CRITICAL**
       Implemented `database_value_to_turso_value()` helper function handling all DatabaseValue variants (lines 172-236)
-
     - Decimal stored as TEXT (preserves precision)
     - DateTime uses RFC3339 format via `format("%+")`
     - UUID stored as TEXT
@@ -431,7 +428,6 @@ The implementation provides a modern, async-first **local database** option that
 
 - [x] Implement row conversion helper 🔴 **CRITICAL**
       Implemented `from_turso_row()` function at lines 154-167
-
     - [ ] Create helper function:
 
         ```rust
@@ -475,7 +471,6 @@ The implementation provides a modern, async-first **local database** option that
 
 - [x] Implement Database trait methods 🔴 **CRITICAL**
       Implemented Database trait for TursoDatabase at lines 259-549:
-
     - query_raw() - lines 261-289 (uses prepared statements for column metadata)
     - query_raw_params() - lines 291-328 (includes query transformation for Now/NowPlus)
     - exec_raw() - lines 330-340
@@ -632,7 +627,6 @@ The implementation provides a modern, async-first **local database** option that
     ```
 
 - [x] Updated these locations:
-
     - [x] Line 268 (query_raw - prepare)
     - [x] Line 275 (query_raw - query)
     - [x] Line 282 (query_raw - next)
@@ -712,12 +706,10 @@ The implementation provides a modern, async-first **local database** option that
 ### 3.1 Create TursoTransaction Implementation
 
 - [x] Create transaction module 🔴 **CRITICAL**
-
     - [x] Create `packages/database/src/turso/transaction.rs`
     - [x] Add clippy configuration
     - [x] Implement TursoTransaction struct
           Created transaction.rs at line 1-357 with:
-
     * TursoTransaction struct storing Pin<Box<turso::Connection>>, AtomicBool committed, AtomicBool rolled_back
     * Uses raw SQL "BEGIN DEFERRED"/"COMMIT"/"ROLLBACK" for transaction control
     * Implements Debug trait manually (turso::Connection doesn't derive Debug)
@@ -743,11 +735,9 @@ The implementation provides a modern, async-first **local database** option that
         ```
 
 - [x] Implement DatabaseTransaction trait 🔴 **CRITICAL**
-
     - [x] Add `#[async_trait]` attribute
     - [x] Implement all required methods
           DatabaseTransaction trait implemented at lines 49-100 with:
-
     * commit() - checks state guards, executes "COMMIT" SQL, sets committed flag (lines 49-64)
     * rollback() - checks state guards, executes "ROLLBACK" SQL, sets rolled_back flag (lines 66-81)
     * State guards prevent double-commit (returns DatabaseError::TransactionCommitted)
@@ -808,11 +798,9 @@ The implementation provides a modern, async-first **local database** option that
 ### 3.2 Complete Database::begin_transaction Implementation
 
 - [x] Replace unimplemented! with real code 🔴 **CRITICAL**
-
     - [x] Update `packages/database/src/turso/mod.rs`
     - [x] Replace `begin_transaction()` stub
           Implemented at lines 369-381 in mod.rs:
-
     * Gets new connection from database.connect()
     * Creates TursoTransaction::new(conn) which executes "BEGIN DEFERRED"
     * Returns boxed transaction implementing DatabaseTransaction trait
@@ -849,10 +837,8 @@ The implementation provides a modern, async-first **local database** option that
 ### 3.3 Add Transaction Tests
 
 - [x] Create comprehensive transaction tests 🔴 **CRITICAL**
-
     - [x] Add to test module in `mod.rs`
           Implemented 5 comprehensive transaction tests at lines 1139-1295:
-
     * test_transaction_commit - Verifies commit persists data
     * test_transaction_rollback - Verifies rollback discards changes
     * test_transaction_query - Tests querying within transaction context
@@ -929,28 +915,23 @@ During post-implementation review, discovered missing transaction state guards c
 **Fix Applied:**
 
 - [x] Add state tracking fields to TursoTransaction struct (line 17-18)
-
     - `committed: AtomicBool` - tracks if transaction was committed
     - `rolled_back: AtomicBool` - tracks if transaction was rolled back
 
 - [x] Initialize flags in constructor (lines 42-44)
-
     - Both flags initialized to `false` with `AtomicBool::new(false)`
 
 - [x] Add state guards in commit() method (lines 50-56)
-
     - Check `committed` flag → return `DatabaseError::TransactionCommitted` if already committed
     - Check `rolled_back` flag → return `DatabaseError::TransactionRolledBack` if already rolled back
     - Set `committed` flag to `true` after successful commit (line 63)
 
 - [x] Add state guards in rollback() method (lines 67-73)
-
     - Check `committed` flag → return `DatabaseError::TransactionCommitted` if already committed
     - Check `rolled_back` flag → return `DatabaseError::TransactionRolledBack` if already rolled back
     - Set `rolled_back` flag to `true` after successful rollback (line 80)
 
 - [x] Update Debug implementation (lines 20-26)
-
     - Include `committed` and `rolled_back` state in debug output
 
 - [x] Add test for state guards (test_transaction_state_guards)
@@ -975,27 +956,23 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Implement table_exists() 🟡 **IMPORTANT**
       Implemented at mod.rs:527-532, transaction.rs:362-368
-
     - Uses query_raw_params with parameterized sqlite_master query
     - Returns true if table name found in results
 
 - [x] Implement list_tables() 🟡 **IMPORTANT**
       Implemented at mod.rs:537-549, transaction.rs:371-383
-
     - Uses query_raw with sqlite_master filter for non-system tables
     - Returns Vec<String> of table names
     - Uses into_iter() to avoid redundant clones
 
 - [x] Implement get_table_info() 🟡 **IMPORTANT**
       Implemented at mod.rs:555-569, transaction.rs:389-409
-
     - First checks table_exists(), returns None if not found
     - Calls get_table_columns() to populate TableInfo
     - Returns Some(TableInfo) with columns BTreeMap
 
 - [x] Implement get_table_columns() 🟡 **IMPORTANT**
       Implemented at mod.rs:575-630, transaction.rs:416-469
-
     - Uses query_raw with PRAGMA table_info(table)
     - Parses cid, name, type, notnull, dflt_value, pk columns
     - Uses u32::try_from for ordinal position with fallback
@@ -1004,7 +981,6 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Implement column_exists() 🟡 **IMPORTANT**
       Implemented at mod.rs:636-639, transaction.rs:471-474
-
     - Leverages get_table_columns()
     - Returns boolean if column name matches
 
@@ -1067,7 +1043,6 @@ During post-implementation review, discovered missing transaction state guards c
     - Uses `let` chain pattern to avoid nested if (clippy::collapsible-if)
 - [x] Update `get_table_columns()` in mod.rs 🔴 **CRITICAL**
       Modified at mod.rs:577-649
-
     - Fetches CREATE TABLE SQL before loop (lines 584-591)
     - Query: `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`
     - Uses `into_iter().find_map()` to avoid redundant clone (clippy::redundant-clone)
@@ -1076,7 +1051,6 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Update `get_table_columns()` in transaction.rs 🔴 **CRITICAL**
       Modified at transaction.rs:413-481
-
     - Applies same changes as mod.rs
     - Fetches CREATE TABLE SQL before loop (lines 418-425)
     - Calls `super::check_autoincrement_in_sql(create_sql.as_deref(), &name)`
@@ -1141,7 +1115,6 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Add get_table_indexes() helper function 🔴 **CRITICAL**
       Implemented at mod.rs:736-807
-
     - Signature: `async fn get_table_indexes(conn: &TursoConnection, table: &str) -> Result<BTreeMap<String, IndexInfo>, DatabaseError>`
     - Queries sqlite_master: `SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?`
     - Parses index SQL to detect UNIQUE keyword
@@ -1151,7 +1124,6 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Add get_table_foreign_keys() helper function 🔴 **CRITICAL**
       Implemented at mod.rs:809-845
-
     - Signature: `async fn get_table_foreign_keys(conn: &TursoConnection, table: &str) -> Result<BTreeMap<String, ForeignKeyInfo>, DatabaseError>`
     - Fetches CREATE TABLE SQL from sqlite_master
     - Parses "FOREIGN KEY" clauses in CREATE TABLE SQL
@@ -1163,14 +1135,12 @@ During post-implementation review, discovered missing transaction state guards c
 
 - [x] Update get_table_info() in mod.rs 🔴 **CRITICAL**
       Modified at mod.rs:567-571
-
     - Calls get_table_indexes(&conn, table).await
     - Calls get_table_foreign_keys(&conn, table).await
     - Replaced empty BTreeMaps with actual parsed results
 
 - [x] Update get_table_info() in transaction.rs 🔴 **CRITICAL**
       Modified at transaction.rs:402-590
-
     - Uses inline implementation (avoid helper function borrowing complexity)
     - Queries sqlite_master for indexes inline
     - Parses CREATE TABLE SQL for foreign keys inline
@@ -1239,19 +1209,16 @@ During post-implementation review, discovered missing transaction state guards c
 **Fixes Applied:**
 
 - [x] Add SET DEFAULT detection 🔴 **CRITICAL**
-
     - Added to both mod.rs (lines 861-889) and transaction.rs (lines 520-556)
     - Check for "ON UPDATE SET DEFAULT" and "ON DELETE SET DEFAULT"
     - Returns `Some("SET DEFAULT".to_string())`
 
 - [x] Add NO ACTION explicit detection 🔴 **CRITICAL**
-
     - Check for "ON UPDATE NO ACTION" and "ON DELETE NO ACTION"
     - Maps to `None` (matching rusqlite behavior at rusqlite/mod.rs:4079-4087)
     - Must be checked FIRST before other actions to avoid substring matches
 
 - [x] Improve check ordering 🟡 **IMPORTANT**
-
     - NO ACTION checked first (to map to None)
     - Then: CASCADE, SET NULL, SET DEFAULT, RESTRICT
     - Default to None if no action clause found
@@ -1327,13 +1294,11 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 **Fixes Applied:**
 
 - [x] Add regex to turso feature dependencies 🔴 **CRITICAL**
-
     - Cargo.toml line 161: `turso = ["_any_backend", "dep:regex", "dep:turso", "placeholder-question-mark"]`
     - Regex already used in rusqlite/sqlx features
     - No new workspace dependency needed
 
 - [x] Rewrite get_table_foreign_keys() with regex 🔴 **CRITICAL**
-
     - Uses `(?i)` case-insensitive flag
     - Pattern: `r"(?i)FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)\s*\(([^)]+)\)"`
     - Changed `\w+` to `[^\s(]+` to support Unicode table names
@@ -1343,13 +1308,11 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
     - Implemented at mod.rs:830-880
 
 - [x] Rewrite transaction.rs inline FK parsing with regex 🔴 **CRITICAL**
-
     - Same regex patterns as mod.rs
     - Consistent implementation between both files
     - Implemented at transaction.rs:491-540
 
 - [x] Add Unicode + case-insensitivity tests 🔴 **CRITICAL**
-
     - test_fk_unicode_table_names - Table/column names with French accents (café, entrée)
     - test_fk_cyrillic_identifiers - Table/column names with Cyrillic characters (родитель, ребёнок)
     - test_fk_emoji_and_mixed_scripts - CJK characters (部門, 従業員)
@@ -1397,7 +1360,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 **Critical Bugs Found:**
 
 1. **Per-FK Action Scope Bug** 🔴 **CRITICAL**
-
     - Lines 862-878 (mod.rs): `ON_UPDATE_PATTERN.captures(&sql)` searches entire CREATE TABLE
     - Problem: Multiple FKs all get the same action (whichever appears first in SQL)
     - Example failure:
@@ -1408,13 +1370,11 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
         Both FKs incorrectly get `ON DELETE CASCADE` because it appears first
 
 2. **Regex Recompilation Performance** 🟡 **PERFORMANCE**
-
     - Lines 830-843: Regex compiled inside `if let Some(sql)` block
     - Recompiled on every `get_table_foreign_keys()` call
     - Should use `std::sync::LazyLock` for one-time compilation
 
 3. **Quoted Table Name Pattern** 🔴 **FUNCTIONAL**
-
     - Line 831: Pattern `\w+` for table name only matches ASCII word chars
     - Fails with quoted names containing spaces: `"my table"`
     - Should use: `([^\s(,]+|\"[^\"]+\"|`[^`]+`)` to handle quotes
@@ -1427,25 +1387,21 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 **Fixes Applied:**
 
 - [x] Use `std::sync::LazyLock` for static regex compilation 🔴 **CRITICAL**
-
     - Added `use std::sync::LazyLock;` to imports
     - Defined 3 static patterns at module level (mod.rs lines 18-39, transaction.rs lines 17-38)
     - Compiled once per process, zero overhead
 
 - [x] Fix action capture scope 🔴 **CRITICAL**
-
     - Added 4th capture group to FK pattern: `([^,)]*)` for per-FK action text
     - Search for actions within `cap[4]` instead of entire `sql`
     - Each FK now gets its own actions correctly (mod.rs line 883, transaction.rs line 535)
 
 - [x] Fix table name pattern for quoted names 🔴 **CRITICAL**
-
     - Changed: `\w+` → `([^\s(,]+|"[^"]+"|`[^`]+`)`
     - Handles: unquoted, `"my table"`, `` `my table` ``
     - Pattern in mod.rs line 23, transaction.rs line 23
 
 - [x] Add function documentation 🟡 **IMPORTANT**
-
     - Documented composite FK limitation (mod.rs lines 827-849)
     - Documented `MATCH`/`DEFERRABLE` not captured
     - Explained these match `PRAGMA` behavior
@@ -1493,14 +1449,12 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 **Edge Cases Found:**
 
 1. **Escaped Quotes in Identifiers** 🔴 **CRITICAL**
-
     - SQLite uses `""` to escape double quotes: `"my ""quoted"" name"`
     - SQLite uses ` `` ` to escape backticks: `` `my ``tick`` name` ``
     - SQLite uses `''` to escape single quotes: `'my ''quoted'' name'`
     - Current pattern `"[^"]+"|`[^`]+`` stops at first internal quote
 
 2. **Single-Quoted Identifiers** 🟡 **COMPLETENESS**
-
     - SQLite allows single quotes for identifiers: `'table_name'`
     - Non-standard but valid SQLite syntax
     - Current pattern doesn't include single quotes
@@ -1520,13 +1474,11 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 **Fixes Applied:**
 
 - [x] Create `strip_identifier_quotes()` helper function 🔴 **CRITICAL**
-
     - Handles all 4 quote styles (mod.rs:920-948, transaction.rs:668-696)
     - Properly unescapes internal quotes (`""` → `"`, ` `` ` → `` ` ``, `''` → `'`)
     - Returns clean identifier name
 
 - [x] Update FK_PATTERN to match all 4 quote styles 🔴 **CRITICAL**
-
     - Pattern for double quotes with escaping: `"(?:[^"]|"")*"`
     - Pattern for backticks with escaping: `` `(?:[^`]|``)\*` ``
     - Pattern for single quotes with escaping: `'(?:[^']|'')*'`
@@ -1535,19 +1487,16 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
     - Applied to mod.rs:23 and transaction.rs:23
 
 - [x] Replace `.trim_matches()` with `strip_identifier_quotes()` 🔴 **CRITICAL**
-
     - Column name processing (mod.rs:877, transaction.rs:517)
     - Referenced table name processing (mod.rs:878, transaction.rs:518)
     - Referenced column name processing (mod.rs:879, transaction.rs:519)
 
 - [x] Research: Test if SQLite preserves comments 🟡 **RESEARCH**
-
     - Created test with `/* comment */` in FK definition
     - **Result**: SQLite automatically removes comments from `sqlite_master`
     - **No comment stripping needed** - SQLite handles this for us
 
 - [x] Update transaction.rs with identical changes 🔴 **CRITICAL**
-
     - Implementations kept in sync
 
 - [x] Add comprehensive edge case tests 🔴 **CRITICAL**
@@ -1633,7 +1582,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 ### 5.2 Implement init_turso_local Function ✅ **COMPLETE**
 
 - [x] Add initialization function 🟡 **IMPORTANT**
-
     - [x] Edit `packages/database_connection/src/lib.rs`
     - [x] Add error variant to `InitDbError`:
         ```rust
@@ -1690,7 +1638,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 ### 5.3 Integrate with init() Function ✅ **COMPLETE**
 
 - [x] Update main init() function 🟡 **IMPORTANT**
-
     - [x] Add turso branch to init() in `lib.rs`:
 
         ```rust
@@ -1773,7 +1720,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 ### 6.1 Integration Tests
 
 - [x] Create integration test suite 🟢 **MINOR**
-
     - [x] Create `packages/database/tests/turso_integration.rs`
     - [x] Test with real MoosicBox schemas (if available)
     - [x] Test compatibility with existing code
@@ -1809,7 +1755,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
 ### 6.2 Documentation
 
 - [x] Update crate documentation 🟢 **MINOR**
-
     - [x] Add module-level docs to `turso/mod.rs`:
         ````rust
         //! Turso Database backend implementation
@@ -1839,7 +1784,6 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
         ````
 
 - [x] Create usage examples 🟢 **MINOR**
-
     - [x] Create `packages/database/examples/turso_basic/` (full crate)
         - Created as workspace member at packages/database/examples/turso_basic
         - Demonstrates: basic CRUD, parameterized queries, schema introspection
@@ -3278,7 +3222,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.1 Create Pool Configuration Structure
 
 - [ ] Create `packages/database/src/turso/pool.rs` 🔴 **CRITICAL**
-
     - [ ] Add module declaration to `turso/mod.rs`: `mod pool;`
     - [ ] Add exports: `pub use pool::{TursoConnectionPool, TursoPoolConfig};`
     - [ ] Add clippy configuration
@@ -3339,7 +3282,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.2 Implement Pool Structure and Connection Tracking
 
 - [ ] Add core pool structures to `pool.rs` 🔴 **CRITICAL**
-
     - [ ] Implement `PooledConnection` structure:
 
         ```rust
@@ -3394,7 +3336,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.3 Implement Pool Constructor and Connection Creation
 
 - [ ] Implement pool constructor in `pool.rs` 🔴 **CRITICAL**
-
     - [ ] Constructor signature:
 
         ```rust
@@ -3460,7 +3401,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.4 Implement Connection Acquisition Logic
 
 - [ ] Implement `acquire()` method in `pool.rs` 🔴 **CRITICAL**
-
     - [ ] Full acquisition logic with timeout:
 
         ```rust
@@ -3546,7 +3486,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.5 Implement RAII Guards for Connection Management
 
 - [ ] Implement `PoolGuard` structure in `pool.rs` 🔴 **CRITICAL**
-
     - [ ] RAII guard that automatically returns connection:
 
         ```rust
@@ -3619,7 +3558,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.6 Implement Transaction-Specific Connection Handling
 
 - [ ] Implement `TransactionGuard` in `pool.rs` 🔴 **CRITICAL**
-
     - [ ] Add transaction-specific acquisition:
 
         ```rust
@@ -3688,7 +3626,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.1.7 Implement Connection Health Checks and Maintenance
 
 - [ ] Add health check methods to `pool.rs` 🟡 **IMPORTANT**
-
     - [ ] Implement validation:
 
         ```rust
@@ -3747,7 +3684,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.2.1 Update TursoDatabase Structure
 
 - [ ] Modify `packages/database/src/turso/mod.rs` 🔴 **CRITICAL**
-
     - [ ] Replace existing structure (around line 166):
 
         ```rust
@@ -3803,7 +3739,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.2.2 Update Database Trait query_raw Methods
 
 - [ ] Update `query_raw()` in `mod.rs` (around line 261) 🔴 **CRITICAL**
-
     - [ ] Replace connection acquisition:
 
         ```rust
@@ -3834,7 +3769,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.2.3 Update Database Trait exec_raw Methods
 
 - [ ] Update `exec_raw()` in `mod.rs` (around line 330) 🔴 **CRITICAL**
-
     - [ ] Replace connection acquisition with pool
 
 - [ ] Update `exec_raw_params()` in `mod.rs` (around line 342) 🔴 **CRITICAL**
@@ -3855,7 +3789,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.2.4 Update begin_transaction Implementation
 
 - [ ] Update `begin_transaction()` in `mod.rs` (around line 369) 🔴 **CRITICAL**
-
     - [ ] Replace with pool-based implementation:
 
         ```rust
@@ -3885,7 +3818,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.2.5 Update TursoTransaction to Use TransactionGuard
 
 - [ ] Update `packages/database/src/turso/transaction.rs` 🔴 **CRITICAL**
-
     - [ ] Update struct (around line 13):
 
         ```rust
@@ -3966,7 +3898,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.3.1 Add Unit Tests for Connection Pool
 
 - [ ] Create test module in `pool.rs` 🔴 **CRITICAL**
-
     - [ ] Test pool creation:
 
         ```rust
@@ -4004,7 +3935,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.3.2 Add Transaction Isolation Tests
 
 - [ ] Add tests to `mod.rs` test module 🔴 **CRITICAL**
-
     - [ ] Test transaction isolation with file-based database:
 
         ```rust
@@ -4081,7 +4011,6 @@ During final verification, discovered and fixed a compromise in `turso_upsert_an
 #### 13.4.2 Update Example Crates
 
 - [ ] Update `turso_basic` example 🟡 **IMPORTANT**
-
     - [ ] Show basic pool usage with defaults
 
 - [ ] Update `turso_transactions` example 🟡 **IMPORTANT**
@@ -4191,7 +4120,6 @@ All Phases 1-12 complete - zero compromises achieved:
     ```
 
 - [x] **100% feature parity** with rusqlite backend
-
     - All Database trait methods implemented ✅
     - All DatabaseTransaction trait methods implemented ✅
     - All schema operations (DDL) implemented ✅
@@ -4215,7 +4143,6 @@ All Phases 1-12 complete - zero compromises achieved:
     ```
 
 - [x] **Documentation complete**
-
     - No "not yet implemented" warnings in module docs ✅
     - All limitations clearly documented (Blob only) ✅
     - Examples for all major features ✅
@@ -4482,22 +4409,18 @@ fn from_turso_row(
 #### High-Risk Areas
 
 1. **SQL Generation Complexity** 🔴
-
     - **Risk:** Query builder AST to SQL conversion may have edge cases
     - **Mitigation:** Copy proven logic from rusqlite (lines 3245-3800), extensive testing with all expression types
 
 2. **Parameter Binding Order** 🔴
-
     - **Risk:** Complex queries with nested expressions may have parameter order mismatches
     - **Mitigation:** Use rusqlite's parameter extraction patterns (`bexprs_to_values`), test thoroughly with nested filters
 
 3. **Transaction Context** 🟡
-
     - **Risk:** Query builder in transactions must use transaction connection (`self.conn`), not new connection
     - **Mitigation:** Careful implementation review, transaction-specific tests, verify no `database.connect()` in transaction methods
 
 4. **UPSERT SQL Syntax** 🟡
-
     - **Risk:** SQLite UPSERT syntax (INSERT ... ON CONFLICT DO UPDATE) has nuances with unique constraints
     - **Mitigation:** Study rusqlite implementation (lines 3701-3799), test all conflict scenarios (single column, composite unique)
 
@@ -4508,18 +4431,15 @@ fn from_turso_row(
 ### Implementation Strategy
 
 1. **Phase 7.1 First**: Build SQL generation infrastructure before implementing trait methods
-
     - Implement all helper functions (build_where_clause, build_join_clauses, etc.)
     - Test helpers independently before integration
 
 2. **Copy Proven Patterns**: Rusqlite has battle-tested SQL building code
-
     - SQL generation logic can be copied nearly verbatim
     - Parameter extraction patterns are well-established
     - Focus on adapting to async turso API, not reinventing SQL generation
 
 3. **Test Incrementally**: Add tests for each method as you implement it
-
     - Don't wait until end to write tests
     - Write test first, then implement method (TDD approach)
     - Verify each method works before moving to next
@@ -4622,7 +4542,6 @@ let rows = stmt.query(params).await?;
 #### Core Query Types
 
 - **`SelectQuery`**: SELECT query structure
-
     - `table_name`: Table to query
     - `columns`: Columns to retrieve
     - `filters`: WHERE clause expressions
@@ -4632,12 +4551,10 @@ let rows = stmt.query(params).await?;
     - `distinct`: DISTINCT flag
 
 - **`InsertStatement`**: INSERT structure
-
     - `table_name`: Target table
     - `values`: Column-value pairs to insert
 
 - **`UpdateStatement`**: UPDATE structure
-
     - `table_name`: Target table
     - `values`: Column-value pairs to update
     - `filters`: WHERE clause
@@ -4645,7 +4562,6 @@ let rows = stmt.query(params).await?;
     - `unique`: Unique constraint columns
 
 - **`UpsertStatement`**: INSERT ... ON CONFLICT DO UPDATE structure
-
     - `table_name`: Target table
     - `values`: Column-value pairs
     - `unique`: Conflict detection columns

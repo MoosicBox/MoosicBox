@@ -843,7 +843,6 @@ Transform moosicbox_web_server into a drop-in replacement for actix-web across 5
 Every design decision, every trait definition, every implementation MUST account for:
 
 1. **Real Runtime Backend** (Actix-web initially, potentially others)
-
     - Production use with real async I/O
     - Real network operations
     - Non-deterministic execution
@@ -916,14 +915,12 @@ When migrating packages from actix-web:
 **NO step is considered complete until:**
 
 1. **Full Project Compilation** ✅
-
     - `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` succeeds without errors
     - `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds without errors
     - All examples compile: `TUNNEL_ACCESS_TOKEN=123 cargo build --examples`
     - All tests compile: `TUNNEL_ACCESS_TOKEN=123 cargo test --no-run`
 
 2. **Zero Warnings** ⚠️
-
     - `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` produces ZERO warnings
     - `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` (for env-dependent code)
     - No deprecated API usage warnings
@@ -1507,7 +1504,6 @@ This significantly reduces the actual implementation work needed.
 **Test Packages Created:**
 
 - **`from_request_test`** - Comprehensive validation of dual-mode FromRequest trait
-
     - `test_sync_extraction.rs` - Tests synchronous parameter extraction
     - `test_async_extraction.rs` - Tests asynchronous parameter extraction
     - Validates RequestData, String, u32, i32, bool extraction
@@ -1563,43 +1559,36 @@ pub trait FromRequest: Sized {
 **✅ Implementation Tasks Completed**:
 
 - [x] Create new `FromRequest` trait with sync and async methods
-
     - **File**: `packages/web_server/src/from_request.rs:52-75`
     - **Trait Definition**: Dual-mode trait with `from_request_sync()` and `from_request_async()`
     - **Key Innovation**: Sync method takes `&HttpRequest` to avoid Send bounds issues
 
 - [x] Add `IntoHandlerError` trait for unified error conversion
-
     - **File**: `packages/web_server/src/from_request.rs:7-17`
     - **Implementation**: Trait for converting extractor errors to handler errors
     - **Usage**: All extractor errors implement this for consistent error handling
 
 - [x] Implement `FromRequest` for `HttpRequest` (identity extraction)
-
     - **File**: `packages/web_server/src/from_request.rs:82-98`
     - **Note**: Returns error for sync (can't clone Actix HttpRequest)
     - **Async**: Works for async extraction by moving the request
 
 - [x] Implement `FromRequest` for `HttpRequestRef`
-
     - **Note**: Not implemented due to lifetime complexities
     - **Documentation**: Lines 100-101 explain why this isn't provided
     - **Alternative**: Users should extract `RequestData` or specific fields
 
 - [x] Implement `FromRequest` for basic types (String, u32, i32, bool, Method, HashMap)
-
     - **File**: `packages/web_server/src/from_request.rs:195-283`
     - **Types Implemented**: String (query string), Method, HashMap<String, String> (headers)
     - **Additional**: RequestInfo struct for common combinations
 
 - [x] Add comprehensive error handling with proper error messages
-
     - **File**: `packages/web_server/src/from_request.rs:7-17`
     - **Pattern**: `IntoHandlerError` trait for error conversion
     - **Usage**: All extractors return errors that implement this trait
 
 - [x] Create `RequestData` wrapper struct for commonly needed fields
-
     - **File**: `packages/web_server/src/from_request.rs:121-151`
     - **Fields**: method, path, query, headers, remote_addr, user_agent, content_type
     - **Purpose**: Send-safe extraction of common request data
@@ -1612,25 +1601,21 @@ pub trait FromRequest: Sized {
 **✅ Validation Tasks Completed**:
 
 - [x] Test sync extraction with Actix backend
-
     - **File**: `packages/web_server/examples/from_request_test/src/test_sync_extraction.rs`
     - **Tests**: Validates synchronous extraction patterns
     - **Coverage**: RequestData, String, Method extraction
 
 - [x] Test async extraction with Simulator backend
-
     - **File**: `packages/web_server/examples/from_request_test/src/test_async_extraction.rs`
     - **Tests**: Validates asynchronous extraction patterns
     - **Coverage**: Same types as sync, ensures consistency
 
 - [x] Verify identical extraction behavior across backends
-
     - **File**: `packages/web_server/examples/from_request_test/src/main.rs`
     - **Test**: Runs both sync and async tests to verify consistency
     - **Result**: Both paths produce identical results
 
 - [x] Test error handling consistency
-
     - **Implementation**: Error types implement `IntoHandlerError`
     - **Validation**: Consistent error conversion across all extractors
 
@@ -1707,43 +1692,36 @@ macro_rules! impl_handler {
 **✅ Implementation Tasks Completed**:
 
 - [x] Create unified `impl_handler!` macro (not separate backend macros)
-
     - **File**: `packages/web_server/src/handler.rs:140-195`
     - **Macro**: Single `impl_handler!` macro generates all implementations
     - **Location**: Lines 140-195 contain the macro definition
 
 - [x] Generate implementations for 0-16 parameters using single macro
-
     - **File**: `packages/web_server/src/handler.rs:197-214`
     - **Invocations**: Lines 197-214 invoke macro for 0-16 parameters
     - **Pattern**: `impl_handler!()`, `impl_handler!(T1)`, up to 16 parameters
 
 - [x] Add conditional compilation support for different backends
-
     - **File**: `packages/web_server/src/handler.rs:82-138`
     - **Actix Path**: Lines 82-109 for Actix-specific handling
     - **Simulator Path**: Lines 111-138 for Simulator-specific handling
 
 - [x] Implement proper Send bounds handling
-
     - **Solution**: Sync extraction for Actix avoids Send requirement
     - **Implementation**: `from_request_sync()` takes `&HttpRequest`
     - **Result**: No Send bounds errors with non-Send Actix types
 
 - [x] Add comprehensive error handling in macro variants
-
     - **File**: `packages/web_server/src/handler.rs:155-160`
     - **Error Propagation**: Each parameter extraction uses `?` operator
     - **Conversion**: Errors converted via `IntoHandlerError` trait
 
 - [x] Create unified `BoxedHandler` type for both backends
-
     - **File**: `packages/web_server/src/handler.rs:31`
     - **Type Alias**: `pub type BoxedHandler = Box<dyn Fn(HttpRequest) -> HandlerFuture + Send + Sync>`
     - **Usage**: All handlers convert to this type
 
 - [x] Support both sync and async extraction patterns
-
     - **Sync**: Used for Actix backend via `from_request_sync()`
     - **Async**: Used for Simulator via `from_request_async()`
     - **Macro**: Handles both patterns transparently
@@ -1756,30 +1734,25 @@ macro_rules! impl_handler {
 **✅ Validation Tasks Completed**:
 
 - [x] Test 0-parameter handlers with both backends
-
     - **File**: `packages/web_server/examples/handler_macro_test/src/test_actix.rs:15-25`
     - **Test**: `handler_0_params()` function
     - **Validation**: Works without any extractors
 
 - [x] Test 1-4 parameter handlers with both backends
-
     - **File**: `packages/web_server/examples/handler_macro_test/src/test_actix.rs:27-67`
     - **Tests**: `handler_1_param()` through `handler_4_params()`
     - **Coverage**: Various combinations of extractors
 
 - [x] Test 5+ parameter handlers with both backends
-
     - **File**: `packages/web_server/examples/handler_macro_test/src/test_simulator.rs`
     - **Note**: Similar tests for Simulator backend
     - **Validation**: Up to 16 parameters supported
 
 - [x] Verify no Send bounds errors with Actix
-
     - **Result**: Sync extraction avoids Send bounds issues
     - **Test**: Compilation succeeds with non-Send Actix types
 
 - [x] Verify async extraction works with Simulator
-
     - **File**: `packages/web_server/examples/handler_macro_test/src/test_simulator.rs`
     - **Tests**: All handler tests with Simulator backend
     - **Result**: Async extraction works correctly
@@ -1850,43 +1823,36 @@ pub struct RequestData {
 **✅ Implementation Tasks Completed**:
 
 - [x] Create `RequestData` struct with common request fields
-
     - **File**: `packages/web_server/src/from_request.rs:121-137`
     - **Fields**: method, path, query, headers, user_agent, content_type, remote_addr
     - **Derives**: Debug, Clone for usability
 
 - [x] Implement `FromRequest` for `RequestData` with sync extraction
-
     - **File**: `packages/web_server/src/from_request.rs:153-193`
     - **Method**: `from_request_sync()` extracts all fields synchronously
     - **Headers**: Converted to HashMap for Send compatibility
 
 - [x] Add convenience methods for accessing specific data
-
     - **File**: `packages/web_server/src/from_request.rs:139-151`
     - **Methods**: `header()`, `has_header()` for header access
     - **Purpose**: Ergonomic access to common operations
 
 - [x] Implement `Clone` and `Send` for `RequestData`
-
     - **File**: `packages/web_server/src/from_request.rs:121`
     - **Derives**: `#[derive(Debug, Clone)]`
     - **Send**: Automatically implemented (all fields are Send)
 
 - [x] Add builder pattern for test scenarios
-
     - **Note**: Not explicitly implemented
     - **Alternative**: Direct struct construction in tests
     - **Usage**: Tests create RequestData directly
 
 - [x] Create conversion utilities from raw HttpRequest
-
     - **File**: `packages/web_server/src/from_request.rs:153-193`
     - **Implementation**: `FromRequest` impl handles conversion
     - **Usage**: Automatic extraction in handlers
 
 - [x] Use BTreeMap for deterministic header ordering
-
     - **Note**: Actually uses HashMap for Send compatibility
     - **Trade-off**: Send bounds more important than deterministic ordering
     - **Future**: Could switch to BTreeMap if needed
@@ -1899,19 +1865,16 @@ pub struct RequestData {
 **✅ Validation Tasks Completed**:
 
 - [x] Test `RequestData` extraction with both backends
-
     - **File**: `packages/web_server/examples/from_request_test/src/test_sync_extraction.rs`
     - **Test**: `test_request_data_extraction()` validates all fields
     - **Coverage**: Method, path, query, headers extraction
 
 - [x] Verify all common use cases are covered
-
     - **Fields**: All major request data types included
     - **Usage**: Covers 90%+ of common handler needs
     - **Extensible**: Can add more fields as needed
 
 - [x] Test Send bounds work correctly
-
     - **Result**: RequestData is Send + Sync
     - **Test**: Can be passed across async boundaries
     - **Validation**: No compilation errors with Send bounds
@@ -1966,37 +1929,31 @@ pub struct RequestData {
 **✅ Implementation Tasks Completed**:
 
 - [x] Update `Route` struct to store new handler type
-
     - **File**: `packages/web_server/src/lib.rs:217-234`
     - **Method**: Added `with_handler()` method for new handler system
     - **Compatibility**: Kept existing `new()` method
 
 - [x] Ensure backward compatibility with existing handlers
-
     - **Solution**: Added numbered methods `with_handler1()`, `with_handler2()`
     - **Files**: Multiple files updated with TODO comments for future cleanup
     - **Count**: 9 usage locations marked for Step 9 cleanup
 
 - [x] Add conversion utilities for old-style handlers
-
     - **Implementation**: Old handlers still work with `Route::new()`
     - **New System**: New handlers use `Route::with_handler()`
     - **Migration Path**: Gradual migration possible
 
 - [x] Update route registration to use new handler system
-
     - **Method**: `Route::with_handler()` accepts new handler types
     - **Integration**: Works with existing Scope system
     - **Usage**: Handlers automatically converted to BoxedHandler
 
 - [x] Add feature flags to control which implementation is used
-
     - **Features**: `actix` and `simulator` features control backend
     - **Compilation**: Different code paths for each backend
     - **Runtime**: Zero overhead feature selection
 
 - [x] Maintain existing `Route::new()` method for compatibility
-
     - **File**: `packages/web_server/src/lib.rs` (existing method preserved)
     - **Purpose**: Backward compatibility with old handler style
     - **Usage**: Still works with `Box::pin(async move {...})` pattern
@@ -2009,17 +1966,14 @@ pub struct RequestData {
 **✅ Validation Tasks Completed**:
 
 - [x] **COMPILATION CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` succeeds
-
     - **Result**: Full compilation with all features
     - **Validation**: No compilation errors with new handler system
 
 - [x] **WARNING CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` shows ZERO warnings
-
     - **Result**: Zero clippy warnings maintained
     - **Files Fixed**: actix.rs, openapi.rs, handler.rs for clippy compliance
 
 - [x] Test backward compatibility with existing routes
-
     - **Test**: All existing examples still compile and run
     - **Method**: Old `Route::new()` method preserved
     - **Result**: No breaking changes to existing code
@@ -2070,37 +2024,30 @@ pub struct RequestData {
 **✅ Critical Success Criteria Met**:
 
 - [x] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
-
     - **Validation**: Full compilation with all features
     - **Result**: No compilation errors
 
 - [x] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
-
     - **Validation**: No clippy warnings
     - **Files Fixed**: actix.rs, openapi.rs, handler.rs
 
 - [x] All existing examples still compile and run
-
     - **Validation**: Backward compatibility maintained
     - **Examples**: All 6 web_server examples updated and tested
 
 - [x] **🔥 SEND BOUNDS RESOLVED**: Handlers work with Actix backend without Send errors
-
     - **Solution**: Sync extraction avoids Send requirement
     - **Test**: Non-Send Actix types work correctly
 
 - [x] **🔥 DUAL BACKEND SUPPORT**: Same handler code works with both Actix and Simulator
-
     - **Implementation**: Single handler works with both backends
     - **Test Packages**: handler_macro_test validates both
 
 - [x] Handler macro system generates working code for 0-16 parameters
-
     - **File**: `packages/web_server/src/handler.rs:197-214`
     - **Validation**: All parameter counts tested
 
 - [x] New test examples compile and run successfully with both backends
-
     - **Packages Created**: from_request_test, handler_macro_test
     - **Tests**: Comprehensive validation of all features
 
@@ -2111,25 +2058,21 @@ pub struct RequestData {
 **✅ Additional Achievements**:
 
 - [x] Created comprehensive test packages (`from_request_test`, `handler_macro_test`)
-
     - **from_request_test**: `packages/web_server/examples/from_request_test/`
     - **handler_macro_test**: `packages/web_server/examples/handler_macro_test/`
     - **Coverage**: Sync/async extraction, 0-16 parameter handlers
 
 - [x] Fixed all clippy warnings and compilation errors
-
     - **Files**: actix.rs, openapi.rs, handler.rs
     - **Result**: Zero warnings maintained throughout development
     - **Standard**: All code follows Rust best practices
 
 - [x] Updated all example READMEs with correct, tested commands
-
     - **Count**: All 6 web_server example READMEs updated
     - **Content**: Correct commands, prerequisites, troubleshooting
     - **Testing**: All commands verified to work
 
 - [x] Implemented dual-mode extraction solving the core architectural challenge
-
     - **Innovation**: Sync extraction for Actix, async for Simulator
     - **Result**: Single trait works with both backends
     - **Impact**: Eliminates Send bounds issues completely
@@ -2170,38 +2113,32 @@ impl<T: DeserializeOwned> FromRequest for Query<T> {
 **Implementation Tasks**:
 
 - [x] Create `Query<T>` struct wrapper with DeserializeOwned bound
-
     - **File**: `packages/web_server/src/extractors/query.rs:81`
     - **Implementation**: Created `pub struct Query<T>(pub T)` with public field access
     - **Methods**: `into_inner()` for extracting wrapped value, `Deref`/`DerefMut` traits
 
 - [x] Implement dual-mode `FromRequest` for `Query<T>`
-
     - **File**: `packages/web_server/src/extractors/query.rs:149-180`
     - **Sync Method**: `from_request_sync()` uses `req.query_string()` and `serde_querystring`
     - **Async Method**: `from_request_async()` delegates to sync implementation
     - **Feature**: Works with both Actix and Simulator backends
 
 - [x] Add `QueryError` enum for extraction errors (parse, decode, etc.)
-
     - **File**: `packages/web_server/src/extractors/query.rs:99+`
     - **Variants**: `ParseError`, `DeserializationError`, `InvalidFormat`, `MissingRequiredField`
     - **Features**: Field-specific error messages, detailed parsing context
 
 - [x] Handle URL decoding in query extraction
-
     - **File**: `packages/web_server/src/extractors/query.rs:287`
     - **Implementation**: Uses `serde_querystring` which handles URL decoding automatically
     - **Test**: `test_url_encoded_values()` validates decoding of `%20`, `%2B`, etc.
 
 - [x] Add support for arrays/multiple values (`?tags=a&tags=b`)
-
     - **File**: `packages/web_server/src/extractors/query.rs:52-58`
     - **Documentation**: Documented known limitation with `serde_querystring`
     - **Test**: `test_array_parameters()` - currently shows the limitation
 
 - [x] Add support for optional query parameters
-
     - **File**: `packages/web_server/src/extractors/query.rs:377-401`
     - **Test**: `test_optional_parameters()` validates `Option<T>` fields
     - **Example**: `limit: Option<u32>` works correctly when omitted
@@ -2214,30 +2151,25 @@ impl<T: DeserializeOwned> FromRequest for Query<T> {
 **Validation Tasks**:
 
 - [x] Test Query extractor with Actix backend (sync path)
-
     - **File**: `packages/web_server/src/extractors/query.rs:308-335`
     - **Test**: `test_simple_query_extraction()` with simulator feature
     - **Coverage**: Basic query parameter extraction
 
 - [x] Test Query extractor with Simulator backend (async path)
-
     - **File**: `packages/web_server/src/extractors/query.rs:481-503`
     - **Test**: `test_async_extraction()` validates async path
     - **Method**: Uses `std::future::Ready` for immediate resolution
 
 - [x] Verify identical parsing behavior across backends
-
     - **Implementation**: Both backends use same `from_request_sync()` method
     - **Guarantee**: Parsing logic is shared, ensuring identical behavior
 
 - [x] Verify identical error messages across backends
-
     - **File**: `packages/web_server/src/extractors/query.rs:430-479`
     - **Tests**: `test_missing_required_field()`, `test_invalid_number_format()`
     - **Validation**: Same error types and messages for both backends
 
 - [x] Test complex query structures (nested objects, arrays)
-
     - **File**: `packages/web_server/src/extractors/query.rs:403-428`
     - **Test**: `test_array_parameters()` for array support
     - **Note**: Arrays have known issues with current parser
@@ -2329,43 +2261,36 @@ impl<T: DeserializeOwned> FromRequest for Json<T> {
 **Implementation Tasks**:
 
 - [x] Create `Json<T>` struct wrapper with DeserializeOwned bound
-
     - **File**: `packages/web_server/src/extractors/json.rs:99-106`
     - **Implementation**: `pub struct Json<T>(pub T)` with public field
     - **Methods**: `into_inner()`, `Deref`, `DerefMut` traits for ergonomic access
 
 - [x] Add `JsonError` enum for extraction errors
-
     - **File**: `packages/web_server/src/extractors/json.rs:126-176`
     - **Variants**: `InvalidContentType`, `EmptyBody`, `ParseError`, `DeserializationError`, `BodyReadError`
     - **Features**: Line/column info (lines 149-150), field path extraction (lines 160-161)
 
 - [x] Implement body reading for Simulator (uses HttpRequest::body())
-
     - **File**: `packages/web_server/src/extractors/json.rs:303-331`
     - **Implementation**: `FromRequest::from_request_sync()` checks `req.body()`
     - **Body Access**: Line 318 - `let body = req.body().ok_or(JsonError::empty_body())?`
 
 - [x] Document Actix limitation (body must be pre-extracted)
-
     - **File**: `packages/web_server/src/extractors/json.rs:71-93`
     - **Documentation**: Comprehensive explanation of Actix stream-based body handling
     - **Example**: Shows pattern for pre-extracting body with `Bytes` parameter
 
 - [x] Add content-type validation logic
-
     - **File**: `packages/web_server/src/extractors/json.rs:283-299`
     - **Function**: `validate_content_type()` at line 283
     - **Accepted Types**: `application/json`, `application/json; charset=utf-8`, `text/json`
 
 - [x] Add body size limit enforcement
-
     - **Note**: Not explicitly implemented as separate check
     - **Current**: Relies on underlying framework limits
     - **Future Enhancement**: Could add explicit size check
 
 - [x] Add comprehensive error handling and error message formatting
-
     - **File**: `packages/web_server/src/extractors/json.rs:190-232`
     - **Methods**: `invalid_content_type()`, `empty_body()`, `parse_error()`, `deserialization_error()`
     - **Field Path**: `extract_field_path()` function at lines 237-253
@@ -2378,31 +2303,26 @@ impl<T: DeserializeOwned> FromRequest for Json<T> {
 **Validation Tasks**:
 
 - [x] Test Json extraction with Simulator backend
-
     - **File**: `packages/web_server/src/extractors/json.rs:341-375`
     - **Test**: `test_json_extraction_simple_object()`
     - **Coverage**: Basic JSON object parsing with all fields
 
 - [x] Test JsonBody extraction with Actix backend (pre-extracted body)
-
     - **Note**: Pattern documented but not separately tested
     - **Documentation**: Lines 87-93 show usage pattern
     - **Approach**: Use `Bytes` parameter in handler, then construct Json
 
 - [x] Verify error handling consistency
-
     - **File**: `packages/web_server/src/extractors/json.rs:476-543`
     - **Tests**: `test_json_extraction_invalid_json()`, `test_json_extraction_type_mismatch()`
     - **Coverage**: Parse errors, type mismatches, missing fields
 
 - [x] Test content-type validation consistency
-
     - **File**: `packages/web_server/src/extractors/json.rs:431-474`
     - **Tests**: `test_json_extraction_invalid_content_type()`, `test_json_extraction_missing_content_type()`
     - **Validation**: Proper error for wrong/missing content-type
 
 - [x] Test body size limit behavior
-
     - **Note**: Not explicitly tested
     - **Current**: Relies on framework defaults
     - **Future Enhancement**: Could add explicit test with large body
@@ -2906,44 +2826,37 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
 **Implementation Tasks**:
 
 - [x] Re-export Query extractor
-
     - **File**: `packages/web_server/src/extractors/mod.rs:119`
     - **Export**: `pub use query::{Query, QueryError};`
     - **Integration**: Available through `moosicbox_web_server::extractors::Query`
 
 - [x] Re-export Json extractor
-
     - **File**: `packages/web_server/src/extractors/mod.rs:122`
     - **Export**: `pub use json::{Json, JsonError};`
     - **Integration**: Available through `moosicbox_web_server::extractors::Json`
 
 - [x] Re-export remaining extractors (`Path`, `Header`, `State`)
-
     - **File**: `packages/web_server/src/extractors/mod.rs:125-130`
     - **Exports**: `Path`, `PathError`, `Header`, `HeaderError`, `State`, `StateContainer`, `StateError`
     - **Feature Gates**: Serde-based extractors properly gated behind `serde` feature
 
 - [x] Add convenience imports for common types
-
     - **File**: `packages/web_server/src/extractors/mod.rs:132-152`
     - **Prelude Module**: `extractors::prelude` for glob imports
     - **Usage**: `use moosicbox_web_server::extractors::prelude::*;`
 
 - [x] Add comprehensive extractor documentation with examples
-
     - **File**: `packages/web_server/src/extractors/mod.rs:1-101`
     - **Documentation**: Complete module docs with dual-mode explanation
     - **Examples**: All 5 extractors with combination usage patterns
     - **Error Handling**: Comprehensive error type documentation
 
 - [x] Add usage patterns documentation
-
     - **File**: `packages/web_server/src/extractors/mod.rs:40-95`
     - **Patterns**: Single extractor, multi-extractor, complex combinations
     - **Best Practices**: Type-based header extraction, state management
 
 - [x] Create extractor combination examples
-
     - **File**: `packages/web_server/src/extractors/mod.rs:84-95`
     - **Example**: 5-parameter handler combining all extractor types
     - **Demonstration**: Real-world usage patterns
@@ -2953,13 +2866,11 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
 **Integration Tasks**:
 
 - [x] Add `pub mod extractors;`
-
     - **File**: `packages/web_server/src/lib.rs:28`
     - **Line**: `pub mod extractors;`
     - **Purpose**: Makes extractors module publicly accessible
 
 - [x] Ensure consistent clippy warnings across all extractor modules
-
     - **Files**: `query.rs`, `json.rs`, `path.rs`, `header.rs`, `state.rs`
     - **Standard**: All modules now have:
         ````rust
@@ -2970,7 +2881,6 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
         ````
 
 - [x] Add feature flag documentation
-
     - **File**: `packages/web_server/src/extractors/mod.rs:97-101`
     - **Documentation**: Clear explanation of `serde` feature requirements
     - **Guidance**: Which extractors require which features
@@ -2978,23 +2888,19 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
 **Validation Tasks**:
 
 - [x] **COMPILATION CHECK**: Run `cargo build -p moosicbox_web_server --profile fast` - SUCCESS
-
     - **Result**: Clean compilation with zero errors
     - **Features**: Tested with default features
 
 - [x] **WARNING CHECK**: Run `cargo clippy -p moosicbox_web_server --all-targets --all-features` - ZERO warnings
-
     - **Result**: Clean clippy run with zero warnings
     - **Coverage**: All targets and features tested
 
 - [x] Test all re-exports work correctly
-
     - **Method**: Module compilation and import resolution
     - **Coverage**: All extractors accessible through `extractors::` namespace
     - **Prelude**: Glob imports work correctly
 
 - [x] Verify documentation builds correctly
-
     - **Status**: All documentation compiles and renders properly
     - **Examples**: Code examples are syntactically correct
     - **Links**: Internal documentation links resolve correctly
@@ -3004,47 +2910,38 @@ The MoosicBox determinism audit shows significant progress with 40% of categorie
 **Critical Success Criteria**:
 
 - [x] `cargo build -p moosicbox_web_server --profile fast` succeeds ✅
-
     - **Status**: Clean compilation with zero errors
     - **Validation**: All extractors compile correctly
 
 - [x] `cargo clippy -p moosicbox_web_server --all-targets --all-features` shows ZERO warnings ✅
-
     - **Status**: Clean clippy run with zero warnings
     - **Coverage**: All targets and features validated
 
 - [x] **🔥 DUAL-MODE EXTRACTORS**: Query, Path, Header extractors work with both backends ✅
-
     - **Implementation**: All extractors support sync (Actix) and async (Simulator) modes
     - **Architecture**: Shared logic ensures identical behavior across backends
 
 - [x] **🔥 EXTRACTOR SYNTAX**: `Query(params): Query<MyStruct>` compiles and works ✅
-
     - **Validation**: Tuple destructuring syntax works for all extractors
     - **Examples**: Comprehensive documentation with working examples
 
 - [x] **🔥 ERROR CONSISTENCY**: Identical error messages across backends ✅
-
     - **Implementation**: Shared error handling logic in `from_request_sync()`
     - **Testing**: Error consistency validated in test suites
 
 - [x] Json extractor works with Simulator, documented limitation for Actix ✅
-
     - **Status**: Full Simulator support, Actix limitation clearly documented
     - **Documentation**: Clear guidance on body pre-extraction requirements
 
 - [x] State extractor works with both backend-specific state systems ✅
-
     - **Implementation**: `StateContainer` for Simulator, `web::Data<T>` for Actix
     - **Features**: Thread-safe sharing with Arc<T> wrapper
 
 - [x] Comprehensive test coverage for all extractors ✅
-
     - **Coverage**: 33 tests across all extractor modules
     - **Scope**: Error handling, type conversion, edge cases
 
 - [x] Module organization and re-exports complete ✅
-
     - **Structure**: Clean module hierarchy with consistent patterns
     - **Exports**: All extractors available through `extractors::` namespace
     - **Prelude**: Convenient glob imports for common usage
@@ -3163,14 +3060,12 @@ mod simulator_tests {
 **Implementation Tasks**:
 
 - [x] Test all extractors with both Actix and Simulator backends
-
     - Created `packages/web_server/tests/extractor_integration.rs` (550+ lines)
     - Implemented 24 comprehensive tests covering all 5 extractor types
     - Tests validate both Actix and Simulator backend compatibility
     - Feature-gated simulator tests with `#[cfg(feature = "simulator")]`
 
 - [x] Test extractor combinations (multiple extractors in one handler)
-
     - `test_query_extractor_compilation()` - Basic query parameter extraction
     - `test_query_optional_params()` - Optional parameter handling
     - `test_query_multiple_extractors()` - Combined with other extractors
@@ -3178,7 +3073,6 @@ mod simulator_tests {
     - Validates serde deserialization and type safety
 
 - [x] Test extractor error handling and error propagation
-
     - `test_json_extractor_compilation()` - Basic JSON body extraction
     - `test_json_nested_structures()` - Complex nested objects and arrays
     - `test_json_with_validation()` - Custom validation logic
@@ -3186,7 +3080,6 @@ mod simulator_tests {
     - Tests both derive(Deserialize) and custom types
 
 - [x] Test edge cases (empty query strings, missing headers, etc.)
-
     - `test_path_extractor_compilation()` - Single and multiple path params
     - `test_path_tuple_extraction()` - Tuple-based path extraction
     - `test_path_struct_extraction()` - Struct-based path extraction
@@ -3194,7 +3087,6 @@ mod simulator_tests {
     - Validates type conversion (String, u32, uuid, etc.)
 
 - [x] Test performance of extraction vs manual parsing
-
     - `test_header_extractor_compilation()` - Standard header extraction
     - `test_header_custom_headers()` - X-Custom-Header patterns
     - `test_header_multiple_values()` - Multi-value header handling
@@ -3202,7 +3094,6 @@ mod simulator_tests {
     - Tests both required and optional header patterns
 
 - [x] Test memory usage of extracted data
-
     - `test_state_extractor_compilation()` - Arc<T> state extraction
     - `test_state_with_complex_types()` - Database pools, config objects
     - `test_state_thread_safety()` - Send + Sync requirements
@@ -3219,7 +3110,6 @@ mod simulator_tests {
 **Validation Tasks**:
 
 - [x] All extractor tests pass with both backends
-
     - Created `packages/web_server/tests/extractor_integration_README.md`
     - Documented compilation-focused testing approach
     - Explained feature-gating strategy for dual backends
@@ -3294,7 +3184,6 @@ mod simulator_tests {
 **✅ Implementation Tasks Completed**:
 
 - [x] **Basic Handler Example** - `packages/web_server/examples/basic_handler/src/main.rs` ✅ FIXED
-
     - Updated to use `RequestData` instead of `HttpRequest` (Send-safe)
     - Uses `Route::with_handler1()` for 1-parameter handler
     - Demonstrates dual backend support (Actix + Simulator)
@@ -3302,21 +3191,18 @@ mod simulator_tests {
     - Validates RequestData extraction with comprehensive field access
 
 - [x] **Handler Macros Example** - `packages/web_server/examples/handler_macros.rs` ✅ COMPLETED
-
     - Demonstrates 0-2 parameter handlers (current implementation limit)
     - Shows RequestData extraction patterns
     - Works with both Actix and Simulator backends
     - Validates handler compilation and route creation
 
 - [x] **Query Extractor Example** - `packages/web_server/examples/query_extractor_standalone/` ✅ COMPLETED
-
     - Demonstrates `Query<T>` extractor with serde deserialization
     - Shows required and optional query parameters
     - Includes error handling and URL decoding
     - Works with both backends, validates extraction patterns
 
 - [x] **JSON Extractor Example** - `packages/web_server/examples/json_extractor_standalone/` ✅ COMPLETED
-
     - Demonstrates `Json<T>` extractor with serde deserialization
     - Shows simple and complex JSON structures with optional fields
     - Includes JSON response generation (headers not yet supported)
@@ -3368,13 +3254,11 @@ mod simulator_tests {
 **Implementation Tasks**:
 
 - [ ] **Create unified `WebServer` trait** with implementations for both backends
-
     - Define common interface for server creation, configuration, and execution
     - Abstract over Actix's `HttpServer` and create equivalent for Simulator
     - Support unified `.bind()`, `.route()`, `.run()` methods
 
 - [ ] **Complete SimulatorWebServer implementation**
-
     - Implement actual request routing (currently missing)
     - Add handler execution pipeline
     - Create deterministic async executor integration
@@ -3382,7 +3266,6 @@ mod simulator_tests {
     - Add request/response recording for testing
 
 - [ ] **Create unified `TestClient` abstraction**
-
     - Abstract over testing without running full servers
     - Support `.get()`, `.post()`, `.send()` methods for both backends
     - Enable testing handlers without backend-specific code
@@ -3439,13 +3322,11 @@ mod simulator_tests {
 **Current Workarounds to Remove**:
 
 - [ ] **Remove all feature gates from examples**
-
     - Files: All examples in `packages/web_server/examples/`
     - Pattern: `#[cfg(feature = "actix")]` sections
     - Fix: Use unified API
 
 - [ ] **Replace manual extraction with TestClient**
-
     - Pattern: `RequestData::from_request_sync(&http_request)`
     - Fix: Use `client.get("/path").send().await`
 
@@ -4722,7 +4603,6 @@ let response = client.get("/users").send()?; // Real HTTP request
 - `cargo nextest run -p moosicbox_web_server` → PASSES (tokio runtime active)
 
 - [x] Update cfg attributes for mutual exclusion
-
     - [x] Add `#[cfg(all(feature = "actix", not(feature = "simulator")))]` to ActixTestClient code
     - [x] Add `#[cfg(all(feature = "actix", not(feature = "simulator")))]` to ActixWebServer code
     - [x] Update all ActixTestClient tests to use the corrected cfg pattern
@@ -4730,7 +4610,6 @@ let response = client.get("/users").send()?; // Real HTTP request
     - [x] Document that ActixTestClient is incompatible with simulator runtime
 
 - [x] Fix test organization
-
     - [x] Update test imports to use corrected cfg attributes
     - [x] Ensure parallel API tests properly switch between implementations
     - [x] Verify no test tries to use ActixTestClient when simulator is active
@@ -5674,13 +5553,11 @@ Decision: Native nesting selected as default for optimal performance while maint
 ### Limitations Discovered
 
 1. **HTTP Testing Limitation**:
-
     - Cannot easily test real HTTP requests with ActixTestServer due to thread-safety issues
     - Tests verify server creation and path logic, not actual HTTP behavior
     - Limitation affects both approaches equally
 
 2. **Path Concatenation Trust**:
-
     - Native nesting relies on Actix Web's internal path concatenation
     - Extensive normalization mitigates risk
     - Flattening approach available as fallback if issues arise
@@ -5702,14 +5579,12 @@ Decision: Native nesting selected as default for optimal performance while maint
 ### Files Modified
 
 1. **`packages/web_server/src/test_client/actix_impl.rs`**:
-
     - Added `flatten_scope_tree()` and `convert_scope_to_actix()` functions
     - Added path normalization functions
     - Added dual implementation methods
     - 200+ lines of implementation and documentation
 
 2. **`packages/web_server/tests/test_client_integration.rs`**:
-
     - Added 15+ comprehensive tests
     - Added edge case validation
     - Added performance benchmarking
@@ -8115,13 +7990,11 @@ The current `switchy_fs` simulator mode returns empty vectors for `read_dir_sort
 These can execute in any order or simultaneously:
 
 1. **Data Structure Determinism**
-
     - Collection replacements (HashMap → BTreeMap)
     - Sorting operations (fs::read_dir)
     - Lock ordering documentation
 
 2. **Package Creation**
-
     - switchy_uuid ✅ COMPLETED
     - switchy_env ✅ COMPLETED
 
@@ -8135,11 +8008,9 @@ These can execute in any order or simultaneously:
 These must execute in sequence:
 
 1. **Web Abstraction Chain**
-
     - Design abstractions → Implement traits → Apply to packages → Migrate to new server
 
 2. **UUID Chain**
-
     - Create switchy_uuid → Migrate auth tokens → Update session management
 
 3. **Environment Chain**
