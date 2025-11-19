@@ -168,6 +168,7 @@ struct TestResults {
     test_details: BTreeMap<String, TestDetail>,
 }
 
+/// Detailed information about a single test execution
 #[derive(Debug)]
 struct TestDetail {
     scenario: String,
@@ -262,6 +263,7 @@ struct User {
     created_at: u64,
 }
 
+/// Request payload for creating a new user
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateUserRequest {
     name: String,
