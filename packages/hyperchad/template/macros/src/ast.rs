@@ -1,6 +1,6 @@
 //! Abstract syntax tree (AST) types for the `HyperChad` template macro.
 //!
-//! This module defines the AST structures used to parse and represent HTML-like templates
+//! This module defines the AST structures used to parse and represent templates
 //! in the `container!` macro. The AST supports elements, attributes, control flow, literals,
 //! and dynamic expressions that are eventually transformed into `Vec<Container>` structures.
 
@@ -26,7 +26,7 @@ use syn::{
 /// A collection of markup nodes.
 ///
 /// Represents the top-level structure of a template, containing zero or more
-/// [`Markup`] nodes that will be rendered as HTML or other output formats.
+/// [`Markup`] nodes that will be rendered to various output formats.
 #[derive(Debug, Clone)]
 pub struct Markups<E> {
     /// The individual markup nodes in this collection.
@@ -80,7 +80,7 @@ pub enum Markup<E> {
         /// The items to concatenate (literals and expressions).
         items: Vec<Markup<NoElement>>,
     },
-    /// An HTML element.
+    /// An element.
     Element(E),
     /// Control flow constructs (`@if`, `@for`, `@while`, `@match`, `@let`).
     ControlFlow(Box<ControlFlow<E>>),
@@ -700,7 +700,7 @@ impl ToTokens for NoElement {
     }
 }
 
-/// An HTML element with optional name, attributes, and body.
+/// An element with optional name, attributes, and body.
 ///
 /// Represents elements like `div.container { ... }`, `button hx-post="/submit" { "Click" }`,
 /// or anonymous containers like `.wrapper #main { ... }`.
@@ -803,7 +803,7 @@ impl ToTokens for ContainerElement {
 /// Type alias for [`ContainerElement`] for compatibility.
 pub type Element = ContainerElement;
 
-/// The body of an HTML element.
+/// The body of an element.
 ///
 /// Elements can either be void (self-closing with `;`) or have a block body
 /// containing child markup nodes.
@@ -884,7 +884,7 @@ impl<E: ToTokens> ToTokens for Block<E> {
     }
 }
 
-/// An HTML element attribute.
+/// An element attribute.
 ///
 /// Represents CSS classes (`.class`), IDs (`#id`), or named attributes
 /// (`attr="value"`, `attr`, `attr=[condition]`).
@@ -1142,9 +1142,9 @@ impl ToTokens for AttributeType {
     }
 }
 
-/// An HTML element tag name.
+/// An element tag name.
 ///
-/// Represents the name of an HTML element (e.g., `div`, `button`, `input`).
+/// Represents the name of an element (e.g., `div`, `button`, `input`).
 #[derive(Debug, Clone)]
 pub struct ElementName {
     /// The element's tag name identifier.
