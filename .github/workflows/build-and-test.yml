@@ -295,28 +295,17 @@ jobs:
                   rust-components: "rustfmt, clippy, llvm-tools-preview"
 
             - name: Clippy ${{ matrix.package.name }}
-              shell: bash
+              uses: ./.github/actions/clippier
               env:
                   CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          # Trim whitespace
-                          command=$(echo "$command" | xargs)
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
-                              ${{ runner.debug && '-vv' }} \
-                              --all-targets \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                              return 1
-                          fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy {{if runner.debug}}-vv {{endif}}--all-targets --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+                  run-matrix-strategy: "sequential"
+                  run-matrix-continue-on-failure: "true"
+                  run-matrix-label: "Clippy"
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
@@ -326,54 +315,33 @@ jobs:
               run: rm -rf target
 
             - name: Run ${{ matrix.package.name }} tests
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          # Trim whitespace
-                          command=$(echo "$command" | xargs)
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report \
-                              ${{ runner.debug && '-vv' }} \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                              return 1
-                          fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+                  run-matrix-strategy: "sequential"
+                  run-matrix-continue-on-failure: "true"
+                  run-matrix-label: "Tests"
 
             - name: Run ${{ matrix.package.name }} doctests
-              shell: bash
-              run: |
-                  # Check if package has a lib target
-                  PACKAGE_PATH="${{ matrix.package.path }}"
-                  PACKAGE_PATH="${PACKAGE_PATH#./}"
-                  if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
-                      echo "Skipping doctests for ${{ matrix.package.name }} - no library target found"
-                      exit 0
-                  fi
-
-                  (cd ${{ matrix.package.path }}; \
-                      while read -r feature; do \
-                          command="${{ matrix.package.env }}${{ matrix.package.env && ' ' || '' }}cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --doc --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          # Trim whitespace
-                          command=$(echo "$command" | xargs)
-                          echo "RUNNING \`$command\`"
-                          if cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --doc \
-                              ${{ runner.debug && '-vv' }} \
-                              --no-default-features \
-                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
-                              echo "SUCCESS \`$command\`";
-                          else
-                              >&2 echo "FAILED \`$command\`";
-                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
-                              return 1
-                          fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      # Check if package has a lib target
+                      PACKAGE_PATH="{{matrix.package.path}}"
+                      PACKAGE_PATH="${PACKAGE_PATH#./}"
+                      if ! cargo metadata --format-version=1 --no-deps | jq -e ".packages[] | select(.manifest_path | contains(\"${PACKAGE_PATH}/Cargo.toml\")) | .targets[] | select(.kind[] | contains(\"lib\"))" > /dev/null 2>&1; then
+                          echo "Skipping doctests for {{matrix.package.name}} - no library target found"
+                          exit 0
+                      fi
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+                  run-matrix-strategy: "sequential"
+                  run-matrix-continue-on-failure: "true"
+                  run-matrix-label: "Doctests"
 
             - name: Create coverage report
               id: create_coverage_report
