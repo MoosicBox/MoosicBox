@@ -105,23 +105,34 @@ function loadTemplate() {
 
 /**
  * Parse user-provided template vars (YAML or JSON)
+ * Filters out null values to prevent them from appearing as literal "null" in templates
  */
 function parseUserVars(input) {
     if (!input || input === '{}') {
         return {};
     }
 
+    let vars;
     try {
         // Try JSON first
-        return JSON.parse(input);
+        vars = JSON.parse(input);
     } catch {
         // Try YAML
         try {
-            return yaml.load(input) || {};
+            vars = yaml.load(input) || {};
         } catch (error) {
             throw new Error(`Failed to parse template_vars: ${error.message}`);
         }
     }
+
+    // Filter out null values - they should be treated as not provided
+    const filtered = {};
+    for (const [key, value] of Object.entries(vars)) {
+        if (value !== null) {
+            filtered[key] = value;
+        }
+    }
+    return filtered;
 }
 
 /**
@@ -243,7 +254,9 @@ function renderTemplate(template, vars) {
             // Simple variable reference
             if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(expression.trim())) {
                 const value = vars[expression.trim()];
-                return value !== undefined ? String(value) : '';
+                return value !== undefined && value !== null
+                    ? String(value)
+                    : '';
             }
 
             // Expression evaluation (ternary, concatenation, etc.)

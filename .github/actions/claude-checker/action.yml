@@ -397,12 +397,16 @@ runs:
           run: |
               echo "📋 ========================================="
               echo "📊 Resolved Variables:"
-              printf '%s\n' '${{ steps.resolve_template.outputs.resolved_vars }}'
+              cat <<'EOF'
+              ${{ steps.resolve_template.outputs.resolved_vars }}
+              EOF
               echo ""
               echo "📋 ========================================="
               echo "📋 RESOLVED PROMPT (with all variables interpolated):"
               echo "📋 ========================================="
-              printf '%s\n' '${{ steps.resolve_template.outputs.rendered_prompt }}'
+              cat <<'EOF'
+              ${{ steps.resolve_template.outputs.rendered_prompt }}
+              EOF
               echo "📋 ========================================="
 
         - name: Setup branch (check command)
