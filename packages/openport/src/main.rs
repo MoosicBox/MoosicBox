@@ -3,6 +3,29 @@
 #![allow(clippy::multiple_crate_versions)]
 #![forbid(unsafe_code)]
 
+//! Command-line interface for finding available network ports
+//!
+//! This binary provides a simple CLI to find available ports on the system.
+//! It supports finding any available port (with the `rand` feature) or searching
+//! within a specific port range (exclusive or inclusive).
+//!
+//! # Usage
+//!
+//! Find any available port (requires `rand` feature):
+//! ```bash
+//! openport
+//! ```
+//!
+//! Find an available port in a range (exclusive):
+//! ```bash
+//! openport 15000 16000
+//! ```
+//!
+//! Find an available port in a range (inclusive):
+//! ```bash
+//! openport 15000 16000 --inclusive
+//! ```
+
 use clap::Parser;
 use std::process;
 
