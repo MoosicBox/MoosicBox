@@ -53,26 +53,51 @@ use moosicbox_web_server::{Error, HttpResponse, Json, RequestData};
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use serde::{Deserialize, Serialize};
 
-// Simple JSON payload
+/// Simple JSON payload representing a user with required fields.
+///
+/// This struct is used to demonstrate basic JSON extraction with the `Json<T>` extractor.
+/// All fields are required and deserialization will fail if any field is missing or has
+/// an invalid type.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize, Serialize)]
 struct User {
+    /// The user's full name.
     name: String,
+    /// The user's email address.
     email: String,
+    /// The user's age in years.
     age: u32,
 }
 
-// JSON payload with optional fields
+/// JSON payload for partial user updates with optional fields.
+///
+/// This struct demonstrates handling partial updates where any combination of fields
+/// can be present or absent in the JSON request. All fields are wrapped in `Option<T>`
+/// to allow for flexible updates without requiring all fields to be present.
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize, Serialize)]
 struct UpdateUser {
+    /// Optional updated user name.
     name: Option<String>,
+    /// Optional updated email address.
     email: Option<String>,
+    /// Optional updated age in years.
     age: Option<u32>,
+    /// Optional user biography or description.
     bio: Option<String>,
 }
 
-// Handler demonstrating simple JSON extraction
+/// Handler demonstrating simple JSON extraction with required fields.
+///
+/// This handler accepts a JSON payload that must contain all required fields
+/// (name, email, age) and demonstrates basic usage of the `Json<T>` extractor.
+///
+/// # Errors
+///
+/// * `Error::BadRequest` - If the request body is not valid JSON
+/// * `Error::BadRequest` - If required fields are missing from the JSON
+/// * `Error::BadRequest` - If field types don't match (e.g., age is not a number)
+/// * `Error::BadRequest` - If Content-Type is not application/json
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn simple_json_handler(json: Json<User>) -> Result<HttpResponse, Error> {
@@ -83,7 +108,17 @@ async fn simple_json_handler(json: Json<User>) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler demonstrating optional fields
+/// Handler demonstrating optional field handling for partial updates.
+///
+/// This handler accepts JSON payloads with any combination of optional fields,
+/// making it suitable for PATCH operations where only modified fields are sent.
+/// Any fields not present in the JSON will be `None` in the deserialized struct.
+///
+/// # Errors
+///
+/// * `Error::BadRequest` - If the request body is not valid JSON
+/// * `Error::BadRequest` - If field types don't match expected types
+/// * `Error::BadRequest` - If Content-Type is not application/json
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn optional_json_handler(json: Json<UpdateUser>) -> Result<HttpResponse, Error> {
@@ -110,7 +145,18 @@ async fn optional_json_handler(json: Json<UpdateUser>) -> Result<HttpResponse, E
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler combining JSON with other extractors
+/// Handler demonstrating combining JSON extraction with other extractors.
+///
+/// This handler shows how to use multiple extractors in a single handler function.
+/// It extracts both JSON payload data and request metadata, demonstrating that
+/// extractors can be composed to access different aspects of the HTTP request.
+///
+/// # Errors
+///
+/// * `Error::BadRequest` - If the request body is not valid JSON
+/// * `Error::BadRequest` - If required JSON fields are missing
+/// * `Error::BadRequest` - If field types don't match expected types
+/// * `Error::BadRequest` - If Content-Type is not application/json
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn combined_json_handler(json: Json<User>, data: RequestData) -> Result<HttpResponse, Error> {
@@ -121,7 +167,19 @@ async fn combined_json_handler(json: Json<User>, data: RequestData) -> Result<Ht
     Ok(HttpResponse::ok().with_body(response))
 }
 
-// Handler demonstrating JSON response
+/// Handler demonstrating JSON response generation.
+///
+/// This handler shows how to generate JSON responses using `serde_json::to_string`.
+/// It accepts a JSON payload, modifies it, and returns the modified data as JSON.
+/// This pattern is common in REST APIs for echo, transform, or enrichment endpoints.
+///
+/// # Errors
+///
+/// * `Error::BadRequest` - If the request body is not valid JSON
+/// * `Error::BadRequest` - If required JSON fields are missing
+/// * `Error::BadRequest` - If field types don't match expected types
+/// * `Error::BadRequest` - If Content-Type is not application/json
+/// * `Error::BadRequest` - If serializing the response to JSON fails
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn json_response_handler(json: Json<User>) -> Result<HttpResponse, Error> {
@@ -135,7 +193,16 @@ async fn json_response_handler(json: Json<User>) -> Result<HttpResponse, Error> 
     Ok(HttpResponse::ok().with_body(json_response))
 }
 
-// Handler demonstrating error handling (simplified)
+/// Handler demonstrating Content-Type validation and error handling.
+///
+/// This simplified handler only uses `RequestData` to demonstrate Content-Type
+/// checking without actually parsing JSON. It shows how to validate request
+/// headers and provide helpful error messages to API clients.
+///
+/// # Errors
+///
+/// This handler currently doesn't return errors, but a production version might return:
+/// * `Error::BadRequest` - If Content-Type header is missing or invalid
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unused_async)]
 async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
@@ -152,6 +219,11 @@ async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::ok().with_body(response))
 }
 
+/// Runs examples using the Actix Web backend.
+///
+/// Creates route definitions demonstrating various JSON extraction patterns
+/// and prints information about each route to the console. This function
+/// is only compiled when the `actix` feature is enabled.
 #[cfg(feature = "actix")]
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend JSON Extractor Examples...");
@@ -203,6 +275,18 @@ fn run_actix_examples() {
     println!("   Note: Actix requires body to be pre-extracted for JSON parsing");
 }
 
+/// Runs examples using the Simulator backend.
+///
+/// Creates test requests and demonstrates JSON extraction using the simulator
+/// backend. This function actually executes the extraction logic by creating
+/// simulated HTTP requests and processing them through the `FromRequest` trait.
+/// This function is only compiled when the `simulator` feature is enabled and
+/// `actix` is not.
+///
+/// # Errors
+///
+/// * Returns error if JSON extraction fails during any test case
+/// * Returns error if JSON deserialization fails for test payloads
 #[cfg(feature = "simulator")]
 #[cfg(not(feature = "actix"))]
 fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
@@ -318,6 +402,14 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Entry point for the JSON extractor examples.
+///
+/// Runs the appropriate backend examples based on which features are enabled.
+/// Prints usage information if no backend features are enabled.
+///
+/// # Errors
+///
+/// * Returns error if simulator backend tests fail (when `simulator` feature is enabled)
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 JSON Extractor Examples - Json<T> Usage");
