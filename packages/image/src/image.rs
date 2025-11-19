@@ -68,7 +68,6 @@ pub fn try_resize_local_file(
 
 /// Error type for image resize operations.
 #[derive(Debug, Error)]
-#[must_use]
 pub enum ResizeImageError {
     /// Image processing error from the `image` crate.
     ///
