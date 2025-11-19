@@ -28,6 +28,15 @@ pub enum Error {
     MissingUrlArgument,
 }
 
+/// Main entry point for the simple GET example.
+///
+/// Accepts a URL as a command-line argument, performs an HTTP GET request,
+/// and prints the response text to stdout.
+///
+/// # Errors
+///
+/// * `Error::MissingUrlArgument` - No URL argument was provided
+/// * `Error::Http` - HTTP request failed or response could not be read
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     pretty_env_logger::init();
