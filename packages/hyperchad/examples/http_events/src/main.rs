@@ -1,3 +1,32 @@
+//! HTTP Events Example for `HyperChad`
+//!
+//! This example demonstrates the HTTP request lifecycle event handlers available in `HyperChad`.
+//! It showcases six different HTTP event types that can be attached to elements:
+//!
+//! * `fx-http-before-request` - Fires before the HTTP request starts
+//! * `fx-http-after-request` - Fires after request completes (success or error)
+//! * `fx-http-success` - Fires on successful response (2xx status)
+//! * `fx-http-error` - Fires on HTTP error or network failure
+//! * `fx-http-abort` - Fires when request is aborted
+//! * `fx-http-timeout` - Fires when request exceeds timeout (30s default)
+//!
+//! The example includes three test buttons:
+//! * **Add Task** - Normal successful request with 500ms delay
+//! * **Test Error** - Triggers error handling with simulated failure
+//! * **Test Slow (3s)** - Demonstrates slow request handling
+//!
+//! Each button uses HTTP event handlers to show/hide loading spinners, success messages,
+//! and error messages, with all events logged to the browser console.
+//!
+//! # Running the Example
+//!
+//! ```bash
+//! cargo run -p hyperchad_http_events_example
+//! ```
+//!
+//! Then open <http://localhost:8080> in your browser and check the browser console
+//! to see event logs.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
