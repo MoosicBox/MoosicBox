@@ -42,14 +42,22 @@ pub enum RenderView {
     View(Container),
 }
 
+/// Internal application events for async operations.
 #[derive(Debug)]
 enum AppEvent {
-    LoadImage { source: String },
+    /// Event to trigger loading an image from a source URL or path.
+    LoadImage {
+        /// The source URL or path of the image to load.
+        source: String,
+    },
 }
 
+/// Represents the state of an image being loaded or cached.
 #[derive(Clone)]
 enum AppImage {
+    /// Image is currently being loaded.
     Loading,
+    /// Image has been loaded successfully with its byte data.
     Bytes(Arc<[u8]>),
 }
 
@@ -185,34 +193,52 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::ToRenderRu
     }
 }
 
+/// Internal application state for the egui renderer.
+///
+/// Manages rendering state, UI widgets, and communication channels.
 #[derive(Clone)]
 struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
+    /// The egui context used for rendering.
     ctx: Arc<RwLock<Option<egui::Context>>>,
+    /// The layout calculator for computing element dimensions.
     calculator: Arc<RwLock<C>>,
+    /// The current container being rendered.
     container: Arc<RwLock<Option<Container>>>,
+    /// Current viewport width.
     width: Arc<RwLock<Option<f32>>>,
+    /// Current viewport height.
     height: Arc<RwLock<Option<f32>>>,
+    /// Queue of views waiting to be rendered.
     render_queue: Arc<RwLock<Option<VecDeque<RenderView>>>>,
 
-    // App state
+    /// Application window title.
     title: Option<String>,
+    /// Application window description.
     description: Option<String>,
+    /// Application background color.
     background: Option<Color32>,
 
-    // Communication
+    /// Sender for navigation events.
     sender: Sender<String>,
+    /// Sender for custom action requests.
     request_action: Sender<(String, Option<Value>)>,
+    /// Sender for resize events.
     on_resize: Sender<(f32, f32)>,
+    /// Sender for internal application events.
     event: Sender<AppEvent>,
+    /// Receiver for internal application events.
     event_receiver: flume::Receiver<AppEvent>,
 
-    // UI state
+    /// State of checkbox elements by ID.
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
+    /// State of text input elements by ID.
     text_inputs: Arc<RwLock<HashMap<egui::Id, String>>>,
+    /// Cache of loaded images.
     images: Arc<RwLock<HashMap<String, AppImage>>>,
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
+    /// Creates a new `EguiApp` instance with the specified communication channels.
     fn new(
         sender: Sender<String>,
         request_action: Sender<(String, Option<Value>)>,
@@ -242,6 +268,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
     }
 
+    /// Checks if the frame has been resized and updates dimensions accordingly.
+    ///
+    /// Returns `true` if the frame size changed.
     fn check_frame_resize(&self, ctx: &egui::Context) -> bool {
         let (width, height) = ctx.input(move |i| {
             let content_rect = i.content_rect();
@@ -264,6 +293,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
     }
 
+    /// Updates the frame size and recalculates the container layout.
     fn update_frame_size(&self, width: f32, height: f32) {
         log::debug!("Frame size changed to: {width}x{height}");
 
@@ -277,6 +307,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         *self.height.write().unwrap() = Some(height);
     }
 
+    /// Renders a container and its children to the UI.
+    ///
+    /// Returns the UI response if the container was rendered, or `None` if hidden.
     fn render_container(&self, ui: &mut Ui, container: &Container) -> Option<Response> {
         if container.is_hidden() || container.visibility == Some(Visibility::Hidden) {
             return None;
@@ -354,6 +387,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         self.render_container_with_children(ui, container)
     }
 
+    /// Renders a container as a frame with its children inside.
+    ///
+    /// Applies background, padding, borders, and layout direction to the container.
     fn render_container_with_children(
         &self,
         ui: &mut Ui,
@@ -419,6 +455,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         Some(response.response)
     }
 
+    /// Renders an input element (text, password, checkbox, or hidden).
+    ///
+    /// Maintains input state and returns the UI response if rendered.
     #[allow(clippy::significant_drop_tightening)]
     fn render_input(&self, ui: &mut Ui, input: &Input, container: &Container) -> Option<Response> {
         let id = ui.next_auto_id();
@@ -464,6 +503,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
     }
 
+    /// Handles action triggers (click, hover, change) for a container.
     fn handle_actions(&self, _ui: &Ui, container: &Container, response: &Response) {
         // Use shared action handler system
         for action in &container.actions {
@@ -480,6 +520,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
     }
 
+    /// Processes an action using the action handler system.
+    ///
+    /// Creates action context, element finder, and style managers to execute the action.
     fn handle_action_with_handler(
         &self,
         action: &hyperchad_actions::Action,
@@ -539,6 +582,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         );
     }
 
+    /// Extracts text content from a container's first child if it's a raw text element.
     fn get_container_text(container: &Container) -> Option<String> {
         // Look for text in children or raw elements
         if let Some(child) = container.children.first()
@@ -549,6 +593,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         None
     }
 
+    /// Sets the font size for all text styles in the egui context.
     fn set_font_size(font_size: f32, ctx: &egui::Context) {
         ctx.style_mut(|style| {
             for font in style.text_styles.values_mut() {
@@ -557,6 +602,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         });
     }
 
+    /// Renders an image from cache or initiates loading if not cached.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if container dimensions are not set.
     fn render_image(
         images: &mut HashMap<String, AppImage>,
         ui: &mut Ui,
@@ -604,6 +654,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             .response
     }
 
+    /// Listens for internal application events and processes them asynchronously.
+    ///
+    /// Handles image loading requests and other application-level events.
     async fn listen(&self) {
         while let Ok(event) = self.event_receiver.recv_async().await {
             log::trace!("received event {event:?}");
@@ -849,11 +902,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
     }
 }
 
-/// `ActionContext` implementation for egui renderer
+/// `ActionContext` implementation for egui renderer.
+///
+/// Provides context for executing actions including navigation,
+/// custom action requests, and logging.
 #[derive(Clone)]
 struct EguiActionContext {
+    /// The egui rendering context.
     ctx: Arc<RwLock<Option<egui::Context>>>,
+    /// Channel for sending navigation requests.
     navigation_sender: Option<Sender<String>>,
+    /// Channel for sending custom action requests.
     action_sender: Option<Sender<(String, Option<Value>)>>,
 }
 
@@ -921,16 +980,24 @@ impl ActionContext for EguiActionContext {
     }
 }
 
-/// `ElementFinder` implementation for egui renderer
+/// `ElementFinder` implementation for egui renderer.
+///
+/// Provides methods to find elements within the container tree
+/// by ID, class, or other attributes.
 struct EguiElementFinder<'a> {
+    /// Root container to search within.
     container: &'a Container,
 }
 
 impl<'a> EguiElementFinder<'a> {
+    /// Creates a new element finder for the given container.
     const fn new(container: &'a Container) -> Self {
         Self { container }
     }
 
+    /// Recursively searches for an element matching the predicate.
+    ///
+    /// Returns the element ID if found.
     fn find_element_recursive(
         container: &Container,
         predicate: &dyn Fn(&Container) -> bool,
@@ -948,6 +1015,7 @@ impl<'a> EguiElementFinder<'a> {
         None
     }
 
+    /// Finds a container by its numeric ID.
     fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
         if container.id == id {
             return Some(container);

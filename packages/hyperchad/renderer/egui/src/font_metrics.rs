@@ -36,6 +36,9 @@ impl FontMetrics for EguiFontMetrics {
     }
 }
 
+/// Converts an egui `PlacedRow` to a `FontMetricsRow`.
+///
+/// Extracts width and height from the visual mesh bounds.
 fn from_row(value: &egui::epaint::text::PlacedRow) -> FontMetricsRow {
     FontMetricsRow {
         width: value.visuals.mesh_bounds.width(),
@@ -43,6 +46,9 @@ fn from_row(value: &egui::epaint::text::PlacedRow) -> FontMetricsRow {
     }
 }
 
+/// Converts an egui `Galley` to `FontMetricsBounds`.
+///
+/// Maps all rows in the galley to font metrics rows.
 fn from_galley(value: &egui::Galley) -> FontMetricsBounds {
     log::trace!("from_galley");
     FontMetricsBounds {
