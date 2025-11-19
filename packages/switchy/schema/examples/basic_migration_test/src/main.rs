@@ -4,6 +4,10 @@
 //! migrations from a fresh database state. This is the most common testing pattern
 //! for verifying that migrations work correctly both forward and backward.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -19,11 +23,11 @@ struct CreateUsersTable;
 
 #[async_trait]
 impl Migration<'static> for CreateUsersTable {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "001_create_users"
     }
 
-    /// Applies the migration forward, creating the users table with columns for id, name, email, and created_at.
+    /// Applies the migration forward, creating the users table with columns for id, name, email, and `created_at`.
     ///
     /// # Errors
     ///
@@ -94,7 +98,7 @@ struct AddUsersStatusColumn;
 
 #[async_trait]
 impl Migration<'static> for AddUsersStatusColumn {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "002_add_users_status"
     }
 
@@ -138,7 +142,7 @@ struct CreatePostsTable;
 
 #[async_trait]
 impl Migration<'static> for CreatePostsTable {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "003_create_posts"
     }
 
@@ -261,7 +265,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("   • Database returns to initial empty state");
         }
         Err(e) => {
-            println!("❌ Migration cycle failed: {}", e);
+            println!("❌ Migration cycle failed: {e}");
             return Err(e.into());
         }
     }
