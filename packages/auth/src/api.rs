@@ -39,6 +39,7 @@ use crate::{NonTunnelRequestAuthorized, create_magic_token, get_credentials_from
 ///
 /// This function registers the magic token endpoints for creating and retrieving
 /// authentication credentials.
+#[must_use]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

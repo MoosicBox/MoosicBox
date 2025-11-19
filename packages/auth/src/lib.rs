@@ -80,6 +80,16 @@ pub enum AuthError {
     Unauthorized,
 }
 
+/// Retrieves credentials from a magic token (public crate wrapper).
+///
+/// This is a thin wrapper around the database function for retrieving
+/// credentials from a magic token.
+///
+/// # Errors
+///
+/// * Database query fails
+/// * Token deletion fails
+/// * Credential data cannot be parsed
 #[cfg(feature = "api")]
 pub(crate) async fn get_credentials_from_magic_token(
     db: &ConfigDatabase,
@@ -94,6 +104,15 @@ pub(crate) async fn get_credentials_from_magic_token(
     }
 }
 
+/// Sends a magic token to the tunnel server for synchronization.
+///
+/// Registers the magic token with the tunnel server so it can be used
+/// across distributed authentication endpoints.
+///
+/// # Errors
+///
+/// * HTTP request to the tunnel server fails
+/// * Response parsing fails
 #[cfg(feature = "api")]
 async fn tunnel_magic_token(
     tunnel_host: &str,
@@ -116,6 +135,17 @@ async fn tunnel_magic_token(
         .is_some_and(|success| success.as_bool().unwrap_or(false)))
 }
 
+/// Creates a new magic token for temporary authentication.
+///
+/// Generates a UUID-based magic token and optionally synchronizes it with
+/// a tunnel server. The token is stored in the database with the current
+/// client credentials.
+///
+/// # Errors
+///
+/// * Database operations fail
+/// * Tunnel synchronization fails
+/// * Client credentials are not available
 #[cfg(feature = "api")]
 pub(crate) async fn create_magic_token(
     db: &ConfigDatabase,
@@ -133,6 +163,10 @@ pub(crate) async fn create_magic_token(
     Ok(magic_token)
 }
 
+/// Generates a new client ID.
+///
+/// Creates a UUID v4 string to uniquely identify a client.
+#[must_use]
 fn create_client_id() -> String {
     new_v4_string()
 }
@@ -167,6 +201,20 @@ pub async fn get_client_id_and_access_token(
     }
 }
 
+/// Registers a new client with the authentication host.
+///
+/// Sends a registration request to the host with the provided client ID
+/// and returns the access token if successful.
+///
+/// # Errors
+///
+/// * HTTP request to the host fails
+/// * Response parsing fails
+/// * Authorization token is not set in the environment
+///
+/// # Panics
+///
+/// Panics if the `TUNNEL_ACCESS_TOKEN` environment variable is not set.
 async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, AuthError> {
     let url = format!("{host}/auth/register-client?clientId={client_id}");
 
@@ -206,6 +254,11 @@ impl FromRequest for NonTunnelRequestAuthorized {
     }
 }
 
+/// Checks if a request is authorized (not from the `MoosicBox` tunnel).
+///
+/// Returns `true` if the request does not have a User-Agent header or if
+/// the User-Agent is not `"MOOSICBOX_TUNNEL"`.
+#[must_use]
 fn is_authorized(req: &HttpRequest) -> bool {
     if let Some(user_agent) = req.headers().get(http::header::USER_AGENT)
         && let Ok(user_agent) = user_agent.to_str()

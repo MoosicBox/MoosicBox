@@ -1,3 +1,9 @@
+//! Database operations for authentication token management.
+//!
+//! This module provides internal database functions for managing client access tokens
+//! and magic tokens. All functions interact with the `ConfigDatabase` to persist and
+//! retrieve authentication credentials.
+
 use moosicbox_json_utils::{ParseError, ToValueType, database::DatabaseFetchError};
 use switchy_database::{
     DatabaseValue, boxed,
@@ -5,6 +11,15 @@ use switchy_database::{
     query::{FilterableQuery, SortDirection, where_eq, where_gt},
 };
 
+/// Retrieves the most recent valid client access token from the database.
+///
+/// Returns the client ID and access token if a valid (non-expired) token exists.
+/// Tokens are sorted by update time, with the most recent returned first.
+///
+/// # Errors
+///
+/// * Database query fails
+/// * Token data cannot be parsed to the expected type
 pub async fn get_client_access_token(
     db: &ConfigDatabase,
 ) -> Result<Option<(String, String)>, DatabaseFetchError> {
@@ -30,6 +45,14 @@ pub async fn get_client_access_token(
         .transpose()?)
 }
 
+/// Creates or updates a client access token in the database.
+///
+/// Stores the client ID and access token pair, creating a new record or updating
+/// an existing one if a matching token and client ID already exist.
+///
+/// # Errors
+///
+/// * Database upsert operation fails
 pub async fn create_client_access_token(
     db: &ConfigDatabase,
     client_id: &str,
@@ -46,6 +69,13 @@ pub async fn create_client_access_token(
     Ok(())
 }
 
+/// Deletes a magic token from the database.
+///
+/// Removes the magic token record after it has been consumed or expired.
+///
+/// # Errors
+///
+/// * Database delete operation fails
 #[cfg(feature = "api")]
 pub async fn delete_magic_token(
     db: &ConfigDatabase,
@@ -59,6 +89,17 @@ pub async fn delete_magic_token(
     Ok(())
 }
 
+/// Retrieves and consumes credentials from a magic token.
+///
+/// Looks up the client ID and access token associated with a valid (non-expired)
+/// magic token. If found, the magic token is deleted from the database and the
+/// credentials are returned.
+///
+/// # Errors
+///
+/// * Database query fails
+/// * Token deletion fails
+/// * Credential data cannot be parsed to the expected type
 #[cfg(feature = "api")]
 pub async fn get_credentials_from_magic_token(
     db: &ConfigDatabase,
@@ -93,6 +134,14 @@ pub async fn get_credentials_from_magic_token(
     }
 }
 
+/// Saves a magic token to the database with associated credentials.
+///
+/// Creates or updates a magic token record with the provided client ID and access token.
+/// The token is set to expire in 24 hours from creation.
+///
+/// # Errors
+///
+/// * Database upsert operation fails
 #[cfg(feature = "api")]
 pub async fn save_magic_token(
     db: &ConfigDatabase,
