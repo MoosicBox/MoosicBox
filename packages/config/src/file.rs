@@ -211,6 +211,7 @@ pub struct PlayerConfig {
 /// preferring `.json5` format over `.json` format if both exist.
 ///
 /// Returns `None` if neither file exists.
+#[must_use]
 fn get_config_file_path(dir: &Path, filename: &str) -> Option<PathBuf> {
     let json5_path = dir.join(format!("{filename}.json5"));
     if switchy_fs::exists(&json5_path) {
