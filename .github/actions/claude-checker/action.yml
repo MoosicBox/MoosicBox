@@ -1097,11 +1097,11 @@ runs:
                 echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
 
                 # Pass PR body directly with proper quoting to prevent bash interpretation
-                gh pr edit $EXISTING_PR \
+                gh pr edit "$EXISTING_PR" \
                   --title "$PR_TITLE" \
                   --body "$PR_BODY" 2>/dev/null || true
 
-                PR_URL=$(gh pr view $EXISTING_PR --json url --jq '.url')
+                PR_URL=$(gh pr view "$EXISTING_PR" --json url --jq '.url')
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
                 echo "pr_created=true" >> $GITHUB_OUTPUT
                 echo "✅ Updated PR #$EXISTING_PR: $PR_URL"
@@ -1110,8 +1110,8 @@ runs:
 
                 # Pass PR body directly with proper quoting to prevent bash interpretation
                 PR_URL=$(gh pr create \
-                  --base ${{ inputs.pr_base_branch }} \
-                  --head ${{ inputs.branch_name }} \
+                  --base "${{ inputs.pr_base_branch }}" \
+                  --head "${{ inputs.branch_name }}" \
                   --title "$PR_TITLE" \
                   --body "$PR_BODY" \
                   --label "${{ inputs.pr_labels }}")
