@@ -1,3 +1,9 @@
+//! Core state store implementation with in-memory caching
+//!
+//! This module provides the [`StateStore`] type, which combines an in-memory cache
+//! with a pluggable persistence backend to provide fast access to frequently used
+//! state while ensuring durability through persistent storage.
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
