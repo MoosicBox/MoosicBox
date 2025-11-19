@@ -150,11 +150,8 @@ jobs:
                   claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   prompt_template: readme
 
-                  enable_execution_details: "true"
-                  enable_execution_details_artifact: "true"
-                  artifact_name_prefix: readme
-                  artifact_package_name: ${{ matrix.package.name }}
-                  artifact_retention_days: "30"
+                  enable_execution_details_summary: "true"
+                  summary_title: "💭 README Update: ${{ matrix.package.name }}"
                   execution_details_script: .github/scripts/format-execution-details.sh
 
                   template_vars: |
