@@ -26,18 +26,29 @@ async function main() {
         // Step 4: Merge variables (user > frontmatter > auto-detected)
         let resolvedVars = { ...autoDetectedVars };
 
-        // Apply frontmatter defaults (with interpolation support)
+        // Store original frontmatter template strings for second pass (before first render)
+        // This preserves the raw templates so we can re-render them after user vars are applied
+        const frontmatterTemplates = {};
+        for (const [key, value] of Object.entries(frontmatter)) {
+            if (typeof value === 'string' && value.includes('${')) {
+                frontmatterTemplates[key] = value;
+            }
+        }
+
+        // First pass: Apply frontmatter defaults (with interpolation support)
+        // This allows frontmatter values to reference each other and use helpers
         resolvedVars = applyFrontmatterDefaults(frontmatter, resolvedVars);
 
         // Apply user overrides
         resolvedVars = { ...resolvedVars, ...userVars };
 
-        // Re-render all string values to pick up user-provided variables
+        // Second pass: Re-render frontmatter template strings with complete variable set
         // This ensures variables like commit_message get properly interpolated
         // after user vars (package_name, package_path, etc.) are available
-        for (const [key, value] of Object.entries(resolvedVars)) {
-            if (typeof value === 'string' && value.includes('${')) {
-                resolvedVars[key] = renderTemplate(value, resolvedVars);
+        for (const [key, template] of Object.entries(frontmatterTemplates)) {
+            // Only re-render if this key wasn't overridden by user vars
+            if (!userVars.hasOwnProperty(key)) {
+                resolvedVars[key] = renderTemplate(template, resolvedVars);
             }
         }
 
