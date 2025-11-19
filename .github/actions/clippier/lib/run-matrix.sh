@@ -47,15 +47,20 @@ strip_ansi_codes() {
 # the test execution. Each shell has a hardcoded template for navigating
 # to the working directory and executing the command.
 #
-# Supported shells:
+# For single-line commands, uses compact syntax:
 #   - bash: (cd <dir>; <command>)
 #   - fish: pushd <dir>; <command>; popd
 #   - zsh: (cd <dir> && <command>)
 #
+# For multi-line commands, uses expanded subshell/block syntax:
+#   - bash: (cd <dir>\n<command>\n)
+#   - fish: begin\n    pushd <dir>\n    <indented-command>\n    popd\nend
+#   - zsh: (cd <dir> && {\n<command>\n})
+#
 # Arguments:
 #   $1 - shell_name: Name of the shell (bash, fish, zsh)
 #   $2 - working_dir: Working directory path
-#   $3 - command: Command to execute
+#   $3 - command: Command to execute (may contain newlines)
 #
 # Returns:
 #   Shell-specific reproduction command on stdout
@@ -63,25 +68,54 @@ strip_ansi_codes() {
 # Example:
 #   get_debug_command "bash" "packages/player" "cargo test"
 #   # Output: (cd packages/player; cargo test)
+#
+#   get_debug_command "bash" "packages/player" "if [ -f test ]; then\n  cargo test\nfi"
+#   # Output: (cd packages/player
+#   #         if [ -f test ]; then
+#   #           cargo test
+#   #         fi
+#   #         )
 get_debug_command() {
     local shell_name="$1"
     local working_dir="$2"
     local command="$3"
 
-    case "$shell_name" in
-        "bash")
-            echo "(cd $working_dir; $command)"
-            ;;
-        "fish")
-            echo "pushd $working_dir; $command; popd"
-            ;;
-        "zsh")
-            echo "(cd $working_dir && $command)"
-            ;;
-        *)
-            echo "# Unsupported shell: $shell_name"
-            ;;
-    esac
+    # Detect if command contains newlines (multi-line script)
+    if [[ "$command" == *$'\n'* ]]; then
+        # Multi-line format with preserved newlines
+        case "$shell_name" in
+            "bash")
+                printf "(cd %s\n%s\n)" "$working_dir" "$command"
+                ;;
+            "fish")
+                # Indent the command block for fish
+                local indented_cmd=$(echo "$command" | sed 's/^/    /')
+                printf "begin\n    pushd %s\n%s\n    popd\nend" "$working_dir" "$indented_cmd"
+                ;;
+            "zsh")
+                printf "(cd %s && {\n%s\n})" "$working_dir" "$command"
+                ;;
+            *)
+                echo "# Unsupported shell: $shell_name"
+                ;;
+        esac
+    else
+        # Simple single-line format
+        case "$shell_name" in
+            "bash")
+                echo "(cd $working_dir; $command)"
+                ;;
+            "fish")
+                echo "pushd $working_dir; $command; popd"
+                ;;
+            "zsh")
+                echo "(cd $working_dir && $command)"
+                ;;
+            *)
+                echo "# Unsupported shell: $shell_name"
+                ;;
+        esac
+    fi
 }
 
 # Generate GitHub Actions summary for run-matrix results
