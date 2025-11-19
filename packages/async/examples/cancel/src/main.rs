@@ -16,6 +16,18 @@ fn ctrl_c() {
     TOKEN.cancel();
 }
 
+/// Entry point for the cancellation example.
+///
+/// Sets up a Ctrl+C handler and runs an async runtime that can be gracefully
+/// shut down by pressing Ctrl+C.
+///
+/// # Errors
+///
+/// * Returns an error if the runtime fails to wait for shutdown
+///
+/// # Panics
+///
+/// * Panics if the Ctrl+C handler cannot be set (e.g., if another handler is already registered)
 fn main() -> Result<(), Error> {
     ctrlc::set_handler(ctrl_c).unwrap();
 
