@@ -122,7 +122,6 @@ impl CpalStreamDaemon {
     /// # Errors
     ///
     /// * If the stream creation fails
-    #[must_use]
     pub fn new<F>(
         stream_factory: F,
         volume_atomic: Arc<std::sync::RwLock<Arc<atomic_float::AtomicF64>>>,
