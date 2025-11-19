@@ -589,10 +589,21 @@ async fn propagate_state_to_plugin(update: ApiUpdateSession) {
     }
 }
 
+/// Constructs the album cover URL for a given album.
+///
+/// Generates a URL to fetch the album cover image at 300x300 resolution
+/// from the configured `MoosicBox` server.
+#[must_use]
 fn album_cover_url(album_id: &str, source: &ApiSource, url: &str, query: &str) -> String {
     format!("{url}/files/albums/{album_id}/300x300?source={source}{query}")
 }
 
+/// Converts an `ApiTrack` to a plugin `Track` structure.
+///
+/// This function transforms track metadata from the API format into the format
+/// expected by the Tauri player plugin, including generating album cover URLs
+/// when available.
+#[must_use]
 fn convert_track(track: ApiTrack, url: &str, query: &str) -> app_tauri_plugin_player::Track {
     let api_source = track.api_source;
 
@@ -1381,6 +1392,11 @@ mod native_app {
     }
 
     impl Renderer {
+        /// Creates a new native app renderer.
+        ///
+        /// This constructor wraps the `VanillaJsTagRenderer` and Tauri app handle
+        /// to create a renderer that emits updates to the Tauri frontend.
+        #[must_use]
         pub fn new(tag_renderer: VanillaJsTagRenderer, app_handle: tauri::AppHandle) -> Self {
             Self {
                 tag_renderer: Arc::new(Mutex::new(tag_renderer)),
