@@ -34,11 +34,14 @@
 pub mod futures_channel;
 
 /// A trait for sending messages of type `T` with error type `E`.
+///
+/// This trait provides a common interface for sending messages across different
+/// channel implementations, allowing for abstraction over various channel types.
 pub trait MoosicBoxSender<T, E> {
     /// Sends a message through the channel.
     ///
     /// # Errors
     ///
-    /// * If the send failed
+    /// * Returns an error if the channel is disconnected or cannot accept the message
     fn send(&self, msg: T) -> Result<(), E>;
 }

@@ -59,12 +59,29 @@ impl<T: Send> PrioritizedSender<T> {
     ///
     /// The function receives a reference to each message and returns a priority value.
     /// Higher priority values are sent before lower priority values.
+    ///
+    /// # Returns
+    ///
+    /// Returns `self` with the priority function configured, allowing for method chaining.
     #[must_use]
     pub fn with_priority(mut self, func: impl (Fn(&T) -> usize) + Send + Sync + 'static) -> Self {
         self.priority.replace(Arc::new(Box::new(func)));
         self
     }
 
+    /// Flushes the highest priority message from the buffer to the underlying channel.
+    ///
+    /// Removes and sends the highest priority message from the internal buffer.
+    /// If the buffer is empty, marks the sender as ready to send directly.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if the underlying channel is disconnected and cannot accept the message
+    ///
+    /// # Panics
+    ///
+    /// * If the internal priority buffer lock is poisoned (when another thread panicked while
+    ///   holding the lock)
     fn flush(&self) -> Result<(), TrySendError<T>> {
         let empty_buffer = { self.buffer.read().unwrap().is_empty() };
         if empty_buffer {
@@ -139,6 +156,10 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
 }
 
 impl<T: Send> Clone for PrioritizedSender<T> {
+    /// Creates a new sender that shares the same underlying channel and priority buffer.
+    ///
+    /// All clones share the same priority function, buffer, and ready state, allowing
+    /// multiple senders to coordinate message prioritization.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -165,6 +186,9 @@ impl<T: Send> PrioritizedSender<T> {
 impl<T: Send> Deref for PrioritizedSender<T> {
     type Target = UnboundedSender<T>;
 
+    /// Returns a reference to the underlying unbounded sender.
+    ///
+    /// This allows accessing methods on the underlying `UnboundedSender` directly.
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -182,12 +206,18 @@ pub struct PrioritizedReceiver<T: Send> {
 impl<T: Send> Deref for PrioritizedReceiver<T> {
     type Target = UnboundedReceiver<T>;
 
+    /// Returns a reference to the underlying unbounded receiver.
+    ///
+    /// This allows accessing methods on the underlying `UnboundedReceiver` directly.
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
 impl<T: Send> FusedStream for PrioritizedReceiver<T> {
+    /// Returns `true` if the stream has terminated and will never yield more items.
+    ///
+    /// This delegates to the underlying receiver's termination state.
     fn is_terminated(&self) -> bool {
         self.inner.is_terminated()
     }
@@ -196,6 +226,15 @@ impl<T: Send> FusedStream for PrioritizedReceiver<T> {
 impl<T: Send> Stream for PrioritizedReceiver<T> {
     type Item = T;
 
+    /// Polls for the next message from the channel.
+    ///
+    /// After successfully receiving a message, this automatically flushes the sender's
+    /// priority buffer to ensure the next highest-priority message is ready.
+    ///
+    /// # Panics
+    ///
+    /// * May panic or log an error if flushing the sender's buffer fails after receiving
+    ///   a message (behavior depends on `moosicbox_assert` configuration)
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
         let this = self.get_mut();
         let inner = &mut this.inner;
@@ -211,6 +250,9 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
         poll
     }
 
+    /// Returns the bounds on the remaining length of the stream.
+    ///
+    /// This delegates to the underlying receiver's size hint.
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.inner.size_hint()
     }
@@ -221,6 +263,26 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
 /// Returns a sender and receiver pair that can be used to send and receive
 /// messages with optional priority ordering. Use [`PrioritizedSender::with_priority`]
 /// to configure priority ordering on the sender.
+///
+/// # Examples
+///
+/// ```rust
+/// use moosicbox_channel_utils::futures_channel::unbounded;
+/// use moosicbox_channel_utils::MoosicBoxSender;
+///
+/// # async fn example() {
+/// let (tx, rx) = unbounded::<i32>();
+///
+/// // Without priority, messages are sent in FIFO order
+/// tx.send(1).unwrap();
+/// tx.send(2).unwrap();
+///
+/// // With priority, higher values are sent first
+/// let tx = tx.with_priority(|msg: &i32| *msg as usize);
+/// tx.send(10).unwrap();
+/// tx.send(5).unwrap();
+/// # }
+/// ```
 #[must_use]
 pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
     let (tx, rx) = futures_channel::mpsc::unbounded();
