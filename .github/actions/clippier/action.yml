@@ -4,7 +4,7 @@ author: "MoosicBox"
 
 inputs:
     command:
-        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup)"
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, run-matrix)"
         required: true
 
     workspace-path:
@@ -290,6 +290,80 @@ inputs:
         required: false
         default: "rustfmt, clippy"
 
+    # Inputs for run-matrix command
+    run-matrix-package-json:
+        description: "Package JSON from matrix (same format as package-json for setup)"
+        required: false
+
+    run-matrix-commands:
+        description: |
+            Command templates to run (one per line or comma-separated).
+            Use {{matrix.package.*}} for matrix properties and {{clippier.*}} for generated values.
+
+            Examples:
+            - cargo clippy --all-targets {{clippier.feature-flags}}
+            - cargo test --doc {{clippier.feature-flags}}
+            - {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo build {{clippier.feature-flags}}
+
+            Multiple commands can be specified:
+            commands: |
+                cargo clippy --all-targets {{clippier.feature-flags}}
+                cargo test {{clippier.feature-flags}}
+                cargo test --doc {{clippier.feature-flags}}
+        required: false
+        default: |
+            cargo{{if matrix.package.nightly}} +nightly{{endif}} clippy --all-targets --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+            cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+            cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc --no-default-features {{clippier.feature-flags}} {{matrix.package.cargo}}
+
+    run-matrix-strategy:
+        description: |
+            How to combine feature combinations:
+            - sequential: Run one feature at a time (default)
+            - parallel: Run all features in parallel (background jobs)
+            - combined: Combine all features into a single run
+            - chunked-N: Combine N features per run (e.g., chunked-3)
+        required: false
+        default: "sequential"
+
+    run-matrix-continue-on-failure:
+        description: "Continue running all feature combinations even when some fail"
+        required: false
+        default: "true"
+
+    run-matrix-max-output-lines:
+        description: "Maximum lines of output to capture per failure (0 = unlimited)"
+        required: false
+        default: "200"
+
+    run-matrix-fail-fast:
+        description: "Stop on first failure (overrides continue-on-failure)"
+        required: false
+        default: "false"
+
+    run-matrix-verbose:
+        description: "Show all commands and output as they run"
+        required: false
+        default: "false"
+
+    run-matrix-working-directory:
+        description: "Working directory for commands (defaults to matrix.package.path)"
+        required: false
+
+    run-matrix-label:
+        description: "Custom label for this test run (shown in summary)"
+        required: false
+
+    run-matrix-skip-doctest-check:
+        description: "Skip checking for lib target before running doctests"
+        required: false
+        default: "false"
+
+    run-matrix-generate-summary:
+        description: "Generate GitHub Actions step summary with results"
+        required: false
+        default: "true"
+
 outputs:
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
@@ -338,6 +412,27 @@ outputs:
     additional-checks:
         description: 'Results from additional-package-checks as JSON object keyed by output-key (e.g., {"tauri": {"affected": true, "reasoning": [...]}})'
         value: ${{ steps.run-action.outputs.additional-checks }}
+
+    # Outputs for run-matrix command
+    run-results:
+        description: "Detailed test results as JSON"
+        value: ${{ steps.run-action.outputs.run-results }}
+
+    run-success:
+        description: "Overall success status (true/false)"
+        value: ${{ steps.run-action.outputs.run-success }}
+
+    run-total:
+        description: "Total number of command runs"
+        value: ${{ steps.run-action.outputs.run-total }}
+
+    run-passed:
+        description: "Number of passed runs"
+        value: ${{ steps.run-action.outputs.run-passed }}
+
+    run-failed:
+        description: "Number of failed runs"
+        value: ${{ steps.run-action.outputs.run-failed }}
 
 runs:
     using: "composite"
@@ -489,6 +584,17 @@ runs:
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
+              INPUT_RUN_MATRIX_PACKAGE_JSON: ${{ inputs.run-matrix-package-json }}
+              INPUT_RUN_MATRIX_COMMANDS: ${{ inputs.run-matrix-commands }}
+              INPUT_RUN_MATRIX_STRATEGY: ${{ inputs.run-matrix-strategy }}
+              INPUT_RUN_MATRIX_CONTINUE_ON_FAILURE: ${{ inputs.run-matrix-continue-on-failure }}
+              INPUT_RUN_MATRIX_MAX_OUTPUT_LINES: ${{ inputs.run-matrix-max-output-lines }}
+              INPUT_RUN_MATRIX_FAIL_FAST: ${{ inputs.run-matrix-fail-fast }}
+              INPUT_RUN_MATRIX_VERBOSE: ${{ inputs.run-matrix-verbose }}
+              INPUT_RUN_MATRIX_WORKING_DIRECTORY: ${{ inputs.run-matrix-working-directory }}
+              INPUT_RUN_MATRIX_LABEL: ${{ inputs.run-matrix-label }}
+              INPUT_RUN_MATRIX_SKIP_DOCTEST_CHECK: ${{ inputs.run-matrix-skip-doctest-check }}
+              INPUT_RUN_MATRIX_GENERATE_SUMMARY: ${{ inputs.run-matrix-generate-summary }}
               GITHUB_EVENT_NAME: ${{ github.event_name }}
               GITHUB_EVENT_BEFORE: ${{ github.event.before }}
               GITHUB_EVENT_AFTER: ${{ github.event.after }}
