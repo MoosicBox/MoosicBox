@@ -1,3 +1,8 @@
+//! Arbitrary value generation for property-based testing.
+//!
+//! This module implements the [`Arbitrary`](quickcheck::Arbitrary) trait for transformer types,
+//! enabling property-based testing with quickcheck. Only available in test builds.
+
 use std::collections::BTreeMap;
 
 use moosicbox_arb::{
@@ -13,6 +18,7 @@ use crate::{
     Number, NumberType, OverrideCondition, OverrideItem, OverrideItemType, TextDecoration,
 };
 
+/// Generates a calculation of one of the specified types.
 fn one_of_calc(g: &mut Gen, types: &[CalculationType]) -> Calculation {
     match *g.choose(types).unwrap() {
         CalculationType::Number => Calculation::Number(Box::new(Number::arbitrary(g))),
@@ -57,6 +63,7 @@ impl Arbitrary for Calculation {
     }
 }
 
+/// Generates a number of one of the specified types.
 fn one_of_number(g: &mut Gen, types: &[NumberType]) -> Number {
     match *g.choose(types).unwrap() {
         NumberType::Real => Number::Real(JsonF32::arbitrary(g).0),
@@ -235,6 +242,7 @@ impl Arbitrary for OverrideCondition {
     }
 }
 
+/// Generates an override item of the specified type.
 fn override_item_of_type(g: &mut Gen, value: OverrideItemType) -> OverrideItem {
     match value {
         OverrideItemType::StrId => OverrideItem::StrId(XmlString::arbitrary(g).0),
@@ -325,16 +333,19 @@ impl Arbitrary for OverrideItem {
     }
 }
 
+/// Creates a new generator with half the size, capped at `max`.
 fn half_g_max(g: &Gen, max: usize) -> Gen {
     Gen::new(std::cmp::min(max, g.size() / 2))
 }
 
+/// Generates a `BTreeMap` with XML-safe string keys and values.
 fn xml_btreemap(g: &mut Gen) -> BTreeMap<String, String> {
     let map: BTreeMap<XmlAttrNameString, XmlString> = Arbitrary::arbitrary(g);
 
     map.into_iter().map(|(k, v)| (k.0, v.0)).collect()
 }
 
+/// Returns the default value from overrides if present, otherwise generates an arbitrary value.
 fn default_value_or_arbitrary<T: Arbitrary + Default>(
     g: &mut Gen,
     overrides: &[ConfigOverride],
@@ -343,6 +354,10 @@ fn default_value_or_arbitrary<T: Arbitrary + Default>(
     default_value(overrides, to_value).map_or_else(|| T::arbitrary(g), Option::unwrap_or_default)
 }
 
+/// Extracts the default value for a specific override type from the list of overrides.
+///
+/// Returns `None` if no matching override is found, `Some(None)` if found but no default,
+/// or `Some(Some(value))` if a default value exists.
 #[allow(clippy::option_option)]
 fn default_value<T: Arbitrary>(
     overrides: &[ConfigOverride],
@@ -357,6 +372,7 @@ fn default_value<T: Arbitrary>(
     })
 }
 
+/// Returns the default value from overrides if present, otherwise generates an optional arbitrary value.
 fn opt_default_value_or_arbitrary<T: Arbitrary + Clone>(
     g: &mut Gen,
     overrides: &[ConfigOverride],
