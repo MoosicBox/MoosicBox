@@ -121,6 +121,14 @@ use hyperchad::{
 use log::info;
 use serde_json::json;
 
+/// Creates the home page with hero section and feature cards.
+///
+/// Returns a `Container` with a complete HTML structure including:
+/// * Navigation header with links to all pages
+/// * Hero section with welcome message
+/// * Feature grid showcasing framework capabilities
+/// * Footer with attribution
+#[must_use]
 fn create_home_page() -> Container {
     container! {
         div class="page" {
@@ -173,6 +181,14 @@ fn create_home_page() -> Container {
     .into()
 }
 
+/// Creates the about page with framework information.
+///
+/// Returns a `Container` with a complete HTML structure including:
+/// * Navigation header with the About link highlighted
+/// * Main content section with framework description
+/// * List of key features
+/// * Footer with attribution
+#[must_use]
 fn create_about_page() -> Container {
     container! {
         div class="page" {
@@ -217,6 +233,14 @@ fn create_about_page() -> Container {
     .into()
 }
 
+/// Creates the contact page with a contact form.
+///
+/// Returns a `Container` with a complete HTML structure including:
+/// * Navigation header with the Contact link highlighted
+/// * Main content section with form description
+/// * Contact form with name, email, and message fields
+/// * Footer with attribution
+#[must_use]
 fn create_contact_page() -> Container {
     container! {
         div class="page" {
@@ -265,6 +289,17 @@ fn create_contact_page() -> Container {
     .into()
 }
 
+/// Creates and configures the application router with all routes.
+///
+/// Returns a `Router` instance configured with the following routes:
+/// * `GET /` - Home page with hero section and features
+/// * `GET /about` - About page with framework information
+/// * `GET /contact` - Contact page with form
+/// * `GET /api/status` - JSON API endpoint returning server status
+///
+/// Each route handler is an async function that returns either a `Container`
+/// for HTML pages or `Content::Raw` for API responses.
+#[must_use]
 fn create_router() -> Router {
     let router = Router::new();
 
@@ -302,6 +337,25 @@ fn create_router() -> Router {
     router
 }
 
+/// Application entry point that initializes and runs the web server.
+///
+/// This function:
+/// * Initializes the logging system via `env_logger`
+/// * Creates the router with all application routes
+/// * Configures the web server with title and description metadata
+/// * Starts the Actix web server on `http://localhost:8343`
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Failed to create the runner from the application
+/// * Failed to start or run the web server
+///
+/// # Panics
+///
+/// May panic if:
+/// * The async runtime cannot be initialized
+/// * Critical server initialization fails
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::init();
