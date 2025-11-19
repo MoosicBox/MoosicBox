@@ -132,7 +132,8 @@ extract_variables() {
     local template="$1"
 
     # Find all {{...}} patterns and extract the content, excluding if/endif
-    grep -oP '\{\{[^}]+\}\}' <<< "$template" | \
+    # Use grep -o (BSD compatible) instead of grep -oP
+    grep -o '{{[^}]*}}' <<< "$template" | \
         sed 's/{{//g; s/}}//g' | \
         grep -v '^\s*if\s' | \
         grep -v '^\s*endif\s*$' | \
@@ -351,8 +352,10 @@ generate_feature_combinations() {
     local strategy_info=$(parse_strategy "$strategy")
     [[ $? -ne 0 ]] && return 1
 
-    local mode=$(echo "$strategy_info" | grep -oP 'mode=\K\w+')
-    local chunk_size=$(echo "$strategy_info" | grep -oP 'chunk_size=\K\d+' || echo "0")
+    # Use sed instead of grep -P for BSD compatibility
+    local mode=$(echo "$strategy_info" | sed -n 's/.*mode=\([a-zA-Z_][a-zA-Z0-9_]*\).*/\1/p')
+    local chunk_size=$(echo "$strategy_info" | sed -n 's/.*chunk_size=\([0-9][0-9]*\).*/\1/p')
+    [[ -z "$chunk_size" ]] && chunk_size="0"
 
     case "$mode" in
         "sequential"|"parallel")
