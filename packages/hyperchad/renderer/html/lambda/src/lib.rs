@@ -236,6 +236,15 @@ impl<
     R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
 > ToRenderRunner for LambdaApp<T, R>
 {
+    /// Converts the Lambda application into a runtime-ready runner.
+    ///
+    /// Creates a `LambdaAppRunner` that wraps this application with the
+    /// provided async runtime handle, preparing it for execution in the
+    /// Lambda event loop.
+    ///
+    /// # Errors
+    ///
+    /// This implementation always returns `Ok` and does not produce errors.
     fn to_runner(
         self,
         handle: Handle,
