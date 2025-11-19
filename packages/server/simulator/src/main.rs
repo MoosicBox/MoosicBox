@@ -7,9 +7,17 @@ use std::{process::ExitCode, sync::LazyLock};
 use moosicbox_server_simulator::{client, handle_actions, host};
 use simvar::{Sim, SimBootstrap, run_simulation};
 
+/// Optional port number from environment variable for the `MoosicBox` server.
+///
+/// # Panics
+///
+/// * If `PORT` environment variable is set but cannot be parsed as a `u16`
 static PORT: LazyLock<Option<u16>> =
     LazyLock::new(|| switchy_env::var_parse_opt("PORT").expect("Invalid PORT env var"));
 
+/// Main simulator bootstrap for running the `MoosicBox` server simulation.
+///
+/// Implements `SimBootstrap` to coordinate the server and client components.
 pub struct Simulator;
 
 impl SimBootstrap for Simulator {
