@@ -1,3 +1,20 @@
+//! Basic usage example for Turso Database backend.
+//!
+//! This example demonstrates the fundamental operations available with the Turso database
+//! backend through the `switchy_database` interface:
+//!
+//! * Creating an in-memory database instance
+//! * Creating tables with raw SQL
+//! * Inserting data with parameterized queries
+//! * Querying data with and without parameters
+//! * Updating and deleting records
+//! * Checking table existence and introspecting columns
+//!
+//! Run this example with:
+//! ```bash
+//! cargo run --bin turso_basic
+//! ```
+
 use switchy_database::{Database, turso::TursoDatabase};
 
 #[tokio::main]
