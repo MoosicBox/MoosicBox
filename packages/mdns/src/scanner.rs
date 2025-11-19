@@ -60,6 +60,10 @@ pub struct Context {
 
 impl Context {
     /// Creates a new scanner context with the given channel sender.
+    ///
+    /// # Panics
+    ///
+    /// * During scanning, panics if a discovered service has an invalid DNS name format (missing '.')
     #[must_use]
     pub fn new(sender: kanal::AsyncSender<MoosicBox>) -> Self {
         Self {
