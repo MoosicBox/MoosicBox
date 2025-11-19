@@ -282,6 +282,11 @@ impl From<Album> for ApiAlbum {
 impl TryFrom<ApiAlbum> for Album {
     type Error = chrono::ParseError;
 
+    /// Attempts to convert an API album to an album.
+    ///
+    /// # Errors
+    ///
+    /// * If date parsing fails for `date_released` or `date_added` fields
     fn try_from(value: ApiAlbum) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.album_id.clone(),

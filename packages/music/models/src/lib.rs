@@ -87,6 +87,11 @@ pub enum ArtistSort {
 impl FromStr for ArtistSort {
     type Err = ();
 
+    /// Parses an artist sort string.
+    ///
+    /// # Errors
+    ///
+    /// * If the input string doesn't match a known sort variant
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
             "name-asc" | "name" => Ok(Self::NameAsc),
@@ -213,6 +218,11 @@ impl Default for ApiSource {
 impl TryFrom<&String> for ApiSource {
     type Error = FromStringApiSourceError;
 
+    /// Attempts to convert a string reference to an `ApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match any registered API source
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         value.clone().try_into()
     }
@@ -221,6 +231,11 @@ impl TryFrom<&String> for ApiSource {
 impl TryFrom<&str> for ApiSource {
     type Error = FromStringApiSourceError;
 
+    /// Attempts to convert a string slice to an `ApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match any registered API source
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         value.to_string().try_into()
     }
@@ -229,6 +244,11 @@ impl TryFrom<&str> for ApiSource {
 impl TryFrom<String> for ApiSource {
     type Error = FromStringApiSourceError;
 
+    /// Attempts to convert a string to an `ApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match any registered API source
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::from_str(&value)
     }
@@ -242,6 +262,15 @@ pub struct FromStringApiSourceError(String);
 impl FromStr for ApiSource {
     type Err = FromStringApiSourceError;
 
+    /// Parses an API source string.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match any registered API source
+    ///
+    /// # Panics
+    ///
+    /// * If the `API_SOURCES` `RwLock` is poisoned
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         API_SOURCES
             .read()
@@ -329,6 +358,12 @@ impl Serialize for TrackApiSource {
 }
 
 impl<'de> Deserialize<'de> for TrackApiSource {
+    /// Deserializes a `TrackApiSource` from a string value.
+    ///
+    /// # Panics
+    ///
+    /// * If the value is not a string
+    /// * If the string doesn't match the expected format
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -359,6 +394,11 @@ pub struct TryFromStringTrackApiSourceError(String);
 impl TryFrom<&String> for TrackApiSource {
     type Error = TryFromStringTrackApiSourceError;
 
+    /// Attempts to convert a string reference to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match the expected format
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }
@@ -367,6 +407,11 @@ impl TryFrom<&String> for TrackApiSource {
 impl TryFrom<String> for TrackApiSource {
     type Error = TryFromStringTrackApiSourceError;
 
+    /// Attempts to convert a string to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match the expected format
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }
@@ -375,6 +420,11 @@ impl TryFrom<String> for TrackApiSource {
 impl TryFrom<&str> for TrackApiSource {
     type Error = TryFromStringTrackApiSourceError;
 
+    /// Attempts to convert a string slice to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match the expected format ("LOCAL" or "API:source")
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(if let Some((case, value)) = value.split_once(':') {
             match case {
@@ -395,6 +445,11 @@ impl TryFrom<&str> for TrackApiSource {
 impl FromStr for TrackApiSource {
     type Err = TryFromStringTrackApiSourceError;
 
+    /// Parses a track API source string.
+    ///
+    /// # Errors
+    ///
+    /// * If the string doesn't match the expected format ("LOCAL" or "API:source")
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         value.try_into()
     }
@@ -440,6 +495,12 @@ impl From<AlbumSource> for TrackApiSource {
 }
 
 impl ToValueType<TrackApiSource> for &serde_json::Value {
+    /// Converts a JSON value to a `TrackApiSource`.
+    ///
+    /// # Errors
+    ///
+    /// * If the value is not a string
+    /// * If the string doesn't match the expected format
     fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
         TrackApiSource::from_str(
             self.as_str()
@@ -532,6 +593,11 @@ struct TrackInner {
 }
 
 impl<'de> Deserialize<'de> for Track {
+    /// Deserializes a `Track` from an internal representation.
+    ///
+    /// # Errors
+    ///
+    /// * If deserialization fails
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -762,6 +828,11 @@ pub struct Album {
 impl TryFrom<&Track> for Album {
     type Error = chrono::ParseError;
 
+    /// Attempts to convert a track reference to an album.
+    ///
+    /// # Errors
+    ///
+    /// * If date parsing fails
     fn try_from(value: &Track) -> Result<Self, Self::Error> {
         value.clone().try_into()
     }
@@ -770,6 +841,11 @@ impl TryFrom<&Track> for Album {
 impl TryFrom<Track> for Album {
     type Error = chrono::ParseError;
 
+    /// Attempts to convert a track to an album.
+    ///
+    /// # Errors
+    ///
+    /// * If date parsing fails for `date_released` or `date_added` fields
     fn try_from(value: Track) -> Result<Self, Self::Error> {
         Ok(Self {
             directory: value.directory(),
@@ -843,6 +919,11 @@ impl From<TrackApiSource> for AlbumSource {
 impl FromStr for AlbumSource {
     type Err = FromStringApiSourceError;
 
+    /// Parses an album source string.
+    ///
+    /// # Errors
+    ///
+    /// * If parsing fails for a non-local source
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
@@ -896,6 +977,11 @@ impl std::fmt::Display for AlbumSort {
 impl FromStr for AlbumSort {
     type Err = ();
 
+    /// Parses an album sort string.
+    ///
+    /// # Errors
+    ///
+    /// * If the input string doesn't match a known sort variant
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
             "artist-asc" | "artist" => Ok(Self::ArtistAsc),
