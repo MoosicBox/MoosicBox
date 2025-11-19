@@ -76,6 +76,9 @@ pub enum AppType {
     Local,
 }
 
+/// Converts an `AppType` to its string representation.
+///
+/// Used for constructing configuration directory paths.
 impl From<AppType> for &str {
     fn from(value: AppType) -> Self {
         match value {

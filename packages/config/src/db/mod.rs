@@ -35,6 +35,13 @@ pub enum GetOrInitServerIdentityError {
     Failed,
 }
 
+/// Retrieves the server identity from the database.
+///
+/// Returns `None` if no server identity has been initialized.
+///
+/// # Errors
+///
+/// * If a database query error occurs
 pub(crate) async fn get_server_identity(
     db: &ConfigDatabase,
 ) -> Result<Option<String>, DatabaseError> {
@@ -48,6 +55,15 @@ pub(crate) async fn get_server_identity(
         }))
 }
 
+/// Retrieves the server identity from the database, creating it if it doesn't exist.
+///
+/// This function ensures a unique server identity exists by creating one if needed.
+/// The identity is generated using a random nanoid.
+///
+/// # Errors
+///
+/// * If a database query or insert error occurs
+/// * If the inserted identity cannot be retrieved
 pub(crate) async fn get_or_init_server_identity(
     db: &ConfigDatabase,
 ) -> Result<String, GetOrInitServerIdentityError> {
@@ -66,6 +82,15 @@ pub(crate) async fn get_or_init_server_identity(
     }
 }
 
+/// Creates or retrieves a profile by name.
+///
+/// If a profile with the given name already exists, returns it. Otherwise, creates
+/// a new profile.
+///
+/// # Errors
+///
+/// * If a database query or insert error occurs
+/// * If the profile data cannot be parsed
 #[allow(unused)]
 pub(crate) async fn upsert_profile(
     db: &ConfigDatabase,
@@ -80,6 +105,15 @@ pub(crate) async fn upsert_profile(
         .to_value_type()?)
 }
 
+/// Deletes a profile by name.
+///
+/// Returns the list of deleted profiles. If no profile with the given name exists,
+/// returns an empty list.
+///
+/// # Errors
+///
+/// * If a database query or delete error occurs
+/// * If the profile data cannot be parsed
 pub(crate) async fn delete_profile(
     db: &ConfigDatabase,
     name: &str,
@@ -92,6 +126,12 @@ pub(crate) async fn delete_profile(
         .to_value_type()?)
 }
 
+/// Creates a new profile with the given name.
+///
+/// # Errors
+///
+/// * If a database query or insert error occurs
+/// * If the profile data cannot be parsed
 pub(crate) async fn create_profile(
     db: &ConfigDatabase,
     name: &str,
@@ -104,6 +144,12 @@ pub(crate) async fn create_profile(
         .to_value_type()?)
 }
 
+/// Retrieves all profiles from the database.
+///
+/// # Errors
+///
+/// * If a database query error occurs
+/// * If the profile data cannot be parsed
 pub(crate) async fn get_profiles(
     db: &ConfigDatabase,
 ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
