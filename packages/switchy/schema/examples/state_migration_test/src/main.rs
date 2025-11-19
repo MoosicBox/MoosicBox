@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! # State Migration Test Example
 //!
 //! This example demonstrates how to use `verify_migrations_with_state` to test
@@ -20,7 +24,7 @@ struct AddUsersBioColumn;
 
 #[async_trait]
 impl Migration<'static> for AddUsersBioColumn {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "002_add_users_bio"
     }
 
@@ -60,7 +64,7 @@ struct AddEmailIndex;
 
 #[async_trait]
 impl Migration<'static> for AddEmailIndex {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "003_add_email_index"
     }
 
@@ -211,7 +215,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("   • No data loss during forward or backward migrations");
         }
         Err(e) => {
-            println!("❌ State migration testing failed: {}", e);
+            println!("❌ State migration testing failed: {e}");
             return Err(e.into());
         }
     }
