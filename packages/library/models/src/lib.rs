@@ -284,7 +284,7 @@ impl TryFrom<Album> for LibraryAlbum {
 ///
 /// ```rust
 /// use moosicbox_library_models::sort_album_versions;
-/// use moosicbox_music_models::{AlbumVersionQuality, TrackSource};
+/// use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
 ///
 /// let mut versions = vec![
 ///     AlbumVersionQuality {
@@ -292,14 +292,14 @@ impl TryFrom<Album> for LibraryAlbum {
 ///         bit_depth: Some(16),
 ///         sample_rate: Some(44100),
 ///         channels: None,
-///         source: TrackSource::Local,
+///         source: TrackApiSource::Local,
 ///     },
 ///     AlbumVersionQuality {
 ///         format: None,
 ///         bit_depth: Some(24),
 ///         sample_rate: Some(96000),
 ///         channels: None,
-///         source: TrackSource::Local,
+///         source: TrackApiSource::Local,
 ///     },
 /// ];
 ///
