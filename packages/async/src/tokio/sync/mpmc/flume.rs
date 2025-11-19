@@ -3,12 +3,20 @@
 
 use std::task::{Context, Poll};
 
-/// Receiver wrapper that adds `poll_recv` method
+/// Receiving end of an MPMC channel.
+///
+/// This wraps a flume receiver to provide both blocking and async receive operations.
+/// Multiple receivers can consume from the same channel, and values are distributed
+/// among them.
 pub struct Receiver<T> {
     inner: flume::Receiver<T>,
 }
 
-/// Sender wrapper
+/// Sending end of an MPMC channel.
+///
+/// This wraps a flume sender to provide both blocking and async send operations.
+/// Multiple senders can send to the same channel, and the channel remains open
+/// as long as at least one sender or receiver exists.
 pub struct Sender<T> {
     inner: flume::Sender<T>,
 }

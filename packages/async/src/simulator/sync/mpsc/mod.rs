@@ -6,12 +6,19 @@ use std::task::{Context, Poll};
 
 use tokio::sync::mpsc;
 
-/// Receiver wrapper that adds `poll_recv` method
+/// Receiving end of an MPSC channel.
+///
+/// This wraps the underlying runtime's unbounded receiver and provides a consistent
+/// API for receiving values from multiple senders. Values are received in FIFO order.
 pub struct Receiver<T> {
     inner: mpsc::UnboundedReceiver<T>,
 }
 
-/// Sender wrapper
+/// Sending end of an MPSC channel.
+///
+/// This wraps the underlying runtime's unbounded sender and can be cloned to create
+/// multiple producers for a single consumer. The channel remains open as long as at
+/// least one sender exists.
 pub struct Sender<T> {
     inner: mpsc::UnboundedSender<T>,
 }

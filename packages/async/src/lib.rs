@@ -196,6 +196,10 @@ pub trait GenericRuntime {
 }
 
 /// Builder for configuring and creating async runtimes.
+///
+/// This builder allows you to customize runtime parameters before creating a runtime instance.
+/// Use [`Builder::new`] to create a builder with default settings, then call configuration
+/// methods like [`Builder::max_blocking_threads`] to customize the runtime behavior.
 pub struct Builder {
     /// Maximum number of blocking threads (only available with `rt-multi-thread` feature).
     #[cfg(feature = "rt-multi-thread")]
