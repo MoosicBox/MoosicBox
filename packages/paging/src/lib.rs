@@ -125,6 +125,11 @@ impl<T> utoipa::ToSchema for Page<T> {
 }
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Page<T> {
+    /// Deserializes a [`Page`] from a format supporting both total-based and cursor-based pagination.
+    ///
+    /// # Errors
+    ///
+    /// * If deserialization fails
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -160,6 +165,11 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Page<T> {
 }
 
 impl<T: Serialize> Serialize for Page<T> {
+    /// Serializes a [`Page`] in camelCase format with pagination metadata.
+    ///
+    /// # Errors
+    ///
+    /// * If serialization fails
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -453,7 +463,10 @@ pub struct PagingRequest {
     pub limit: u32,
 }
 
+/// A boxed future that resolves to a [`PagingResult`].
 type FuturePagingResponse<T, E> = Pin<Box<dyn Future<Output = PagingResult<T, E>> + Send>>;
+
+/// A boxed function that fetches a page given an offset and limit.
 type FetchPagingResponse<T, E> = Box<dyn FnMut(u32, u32) -> FuturePagingResponse<T, E> + Send>;
 
 /// A paginated response containing a page of items and a function to fetch additional pages.
@@ -465,6 +478,7 @@ pub struct PagingResponse<T, E> {
 }
 
 impl<T: std::fmt::Debug, E> std::fmt::Debug for PagingResponse<T, E> {
+    /// Formats the [`PagingResponse`] for debug output, showing only the page.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PagingResponse")
             .field("page", &self.page)
@@ -1101,6 +1115,7 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
 impl<T, E> Deref for PagingResponse<T, E> {
     type Target = Page<T>;
 
+    /// Returns a reference to the current page.
     fn deref(&self) -> &Self::Target {
         &self.page
     }
@@ -1109,6 +1124,7 @@ impl<T, E> Deref for PagingResponse<T, E> {
 impl<T> Deref for Page<T> {
     type Target = Vec<T>;
 
+    /// Returns a reference to the items in this page as a `Vec`.
     fn deref(&self) -> &Self::Target {
         match self {
             Self::WithTotal { items, .. } | Self::WithHasMore { items, .. } => items,
@@ -1117,12 +1133,14 @@ impl<T> Deref for Page<T> {
 }
 
 impl<T, E> From<PagingResponse<T, E>> for Page<T> {
+    /// Converts a [`PagingResponse`] into its underlying [`Page`].
     fn from(value: PagingResponse<T, E>) -> Self {
         value.page
     }
 }
 
 impl<T> From<Page<T>> for Vec<T> {
+    /// Converts a [`Page`] into a `Vec` of its items.
     fn from(value: Page<T>) -> Self {
         match value {
             Page::WithTotal { items, .. } | Page::WithHasMore { items, .. } => items,
