@@ -1,3 +1,10 @@
+//! Profile management for library music API instances.
+//!
+//! This module provides functionality for managing multiple library music API instances
+//! across different profiles, allowing applications to work with multiple library databases
+//! simultaneously. It includes a global registry ([`crate::profiles::PROFILES`]) for storing
+//! and retrieving profile-specific API instances.
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, LazyLock, RwLock},

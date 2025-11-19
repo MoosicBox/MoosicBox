@@ -63,7 +63,7 @@ use switchy_database::profiles::LibraryDatabase;
 ///
 /// This module provides functionality for managing multiple library music API instances
 /// across different profiles, allowing applications to work with multiple library databases
-/// simultaneously.
+/// simultaneously. See [`profiles::LibraryMusicApiProfiles`] for the profile manager.
 pub mod profiles;
 
 /// Music API implementation for local library access.
@@ -75,18 +75,21 @@ pub struct LibraryMusicApi {
 }
 
 impl From<&LibraryMusicApi> for LibraryDatabase {
+    /// Converts a reference to `LibraryMusicApi` into a cloned `LibraryDatabase`.
     fn from(value: &LibraryMusicApi) -> Self {
         value.db.clone()
     }
 }
 
 impl From<LibraryMusicApi> for LibraryDatabase {
+    /// Converts `LibraryMusicApi` into its underlying `LibraryDatabase`.
     fn from(value: LibraryMusicApi) -> Self {
         value.db
     }
 }
 
 impl From<LibraryDatabase> for LibraryMusicApi {
+    /// Creates a `LibraryMusicApi` from a `LibraryDatabase`.
     fn from(value: LibraryDatabase) -> Self {
         Self { db: value }
     }
