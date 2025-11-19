@@ -94,6 +94,15 @@ pub fn bind_services<
 /// `OpenAPI` documentation configuration for menu API endpoints.
 pub struct Api;
 
+/// Converts an album ID string to the appropriate ID type for the given source.
+///
+/// For library sources, parses the ID as an integer. For external API sources,
+/// uses the string ID as-is.
+///
+/// # Errors
+///
+/// * `ErrorBadRequest` if the ID cannot be parsed as an integer for library sources
+#[must_use]
 fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Error> {
     Ok(if source.is_library() {
         id.parse::<i32>()
