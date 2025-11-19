@@ -1,3 +1,9 @@
+//! GitHub releases integration for the download page.
+//!
+//! This module handles fetching and parsing GitHub releases for the `MoosicBox` project,
+//! organizing download assets by operating system, and rendering the download page with
+//! appropriate assets based on the client's detected OS.
+
 use std::{future::Future, sync::LazyLock};
 
 use chrono::NaiveDateTime;
@@ -193,6 +199,15 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
     Ok(moosicbox_marketing_site_ui::download::releases(&releases, &os).into())
 }
 
+/// Retries an async operation up to a maximum number of attempts.
+///
+/// Executes the provided async function repeatedly until it succeeds or the
+/// maximum number of retries is reached. Returns the first successful result
+/// or the last error encountered.
+///
+/// # Errors
+///
+/// * Returns the error from the last failed attempt if all retries are exhausted
 async fn with_retry<T: Sized, E, F: Future<Output = Result<T, E>> + Send, U: (Fn() -> F) + Send>(
     max_retries: u8,
     func: U,

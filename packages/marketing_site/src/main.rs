@@ -1,3 +1,18 @@
+//! Native desktop application entry point for the `MoosicBox` marketing site.
+//!
+//! This binary provides a native desktop application for the marketing site,
+//! supporting multiple rendering backends including FLTK and egui. It configures
+//! logging, async runtime, and window parameters from environment variables.
+//!
+//! # Environment Variables
+//!
+//! * `WINDOW_WIDTH` - Window width in pixels (default: 1000.0)
+//! * `WINDOW_HEIGHT` - Window height in pixels (default: 600.0)
+//! * `WINDOW_X` - Window X position in pixels (optional)
+//! * `WINDOW_Y` - Window Y position in pixels (optional)
+//! * `MAX_THREADS` - Maximum blocking threads for async runtime (default: 64)
+//! * `TOKIO_CONSOLE` - Enable tokio console subscriber when set to "1" or "true" (requires `console-subscriber` feature)
+
 // hide console window on Windows in release
 #![cfg_attr(
     all(not(debug_assertions), not(feature = "windows-console")),
