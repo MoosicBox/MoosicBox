@@ -3,8 +3,12 @@
 //! This example demonstrates advanced usage patterns with non-static lifetimes,
 //! showing how to create migrations that borrow data and use explicit lifetime management.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use async_trait::async_trait;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 use switchy_database::{
     Database,
     schema::{Column, DataType, create_table},
@@ -20,26 +24,38 @@ use switchy_schema::{
 struct DatabaseConfig {
     table_prefix: String,
     default_charset: String,
-    tables: HashMap<String, TableConfig>,
+    tables: BTreeMap<String, TableConfig>,
 }
 
+/// Table configuration defining structure for database tables
 #[derive(Debug)]
 struct TableConfig {
+    /// Name of the table
     name: String,
+    /// Column definitions for the table
     columns: Vec<ColumnConfig>,
+    /// Name of the primary key column
     primary_key: String,
 }
 
+/// Column configuration defining individual column properties
 #[derive(Debug)]
 struct ColumnConfig {
+    /// Name of the column
     name: String,
+    /// SQL data type for the column
     data_type: DataType,
+    /// Whether the column allows NULL values
     nullable: bool,
 }
 
 impl DatabaseConfig {
+    /// Creates a new database configuration with predefined tables
+    ///
+    /// Returns a configuration with users and posts tables already defined.
+    #[must_use]
     fn new() -> Self {
-        let mut tables = HashMap::new();
+        let mut tables = BTreeMap::new();
 
         tables.insert(
             "users".to_string(),
@@ -117,7 +133,15 @@ struct ConfigBasedMigration<'a> {
 }
 
 impl<'a> ConfigBasedMigration<'a> {
-    fn new(id: String, config: &'a DatabaseConfig, table_name: &'a str) -> Self {
+    /// Creates a new configuration-based migration
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the migration
+    /// * `config` - Reference to database configuration with lifetime 'a
+    /// * `table_name` - Name of the table to create from the configuration
+    #[must_use]
+    const fn new(id: String, config: &'a DatabaseConfig, table_name: &'a str) -> Self {
         Self {
             id,
             config,
@@ -132,6 +156,12 @@ impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
         &self.id
     }
 
+    /// Applies the migration by creating the table
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if table creation fails
+    /// * Returns error if database execution fails
     async fn up(&self, db: &dyn Database) -> Result<()> {
         if let Some(table_config) = self.config.tables.get(self.table_name) {
             let full_table_name = format!("{}{}", self.config.table_prefix, table_config.name);
@@ -155,10 +185,16 @@ impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
         Ok(())
     }
 
+    /// Reverts the migration by dropping the table
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if table drop fails
+    /// * Returns error if database execution fails
     async fn down(&self, db: &dyn Database) -> Result<()> {
         if let Some(table_config) = self.config.tables.get(self.table_name) {
             let full_table_name = format!("{}{}", self.config.table_prefix, table_config.name);
-            let drop_sql = format!("DROP TABLE IF EXISTS {}", full_table_name);
+            let drop_sql = format!("DROP TABLE IF EXISTS {full_table_name}");
             db.exec_raw(&drop_sql).await?;
         }
         Ok(())
@@ -175,20 +211,31 @@ struct ConfigBasedMigrationSource<'a> {
 }
 
 impl<'a> ConfigBasedMigrationSource<'a> {
-    fn new(config: &'a DatabaseConfig) -> Self {
+    /// Creates a new migration source from a database configuration
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Reference to database configuration with lifetime 'a
+    #[must_use]
+    const fn new(config: &'a DatabaseConfig) -> Self {
         Self { config }
     }
 }
 
 #[async_trait]
 impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
+    /// Generates migrations for all tables in the configuration
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if migration generation fails
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
         let mut migrations: Vec<Arc<dyn Migration<'a> + 'a>> = Vec::new();
 
         // Create migrations for each table in the configuration
         for table_name in self.config.tables.keys() {
             let migration = ConfigBasedMigration::new(
-                format!("create_{}", table_name),
+                format!("create_{table_name}"),
                 self.config,
                 table_name,
             );
@@ -203,6 +250,13 @@ impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
 }
 
 /// Function that creates a migration borrowing from external data
+///
+/// # Arguments
+///
+/// * `table_name` - Name of the table to create
+/// * `columns` - Slice of column definitions (name, data type)
+/// * `primary_key` - Name of the primary key column
+#[must_use]
 fn create_table_migration<'a>(
     table_name: &'a str,
     columns: &'a [(&'a str, DataType)],
@@ -212,7 +266,7 @@ fn create_table_migration<'a>(
 
     for (col_name, data_type) in columns {
         create_stmt = create_stmt.column(Column {
-            name: col_name.to_string(),
+            name: (*col_name).to_string(),
             nullable: false,
             auto_increment: *col_name == primary_key,
             data_type: data_type.clone(),
@@ -223,13 +277,16 @@ fn create_table_migration<'a>(
     create_stmt = create_stmt.primary_key(primary_key);
 
     CodeMigration::new(
-        format!("create_{}", table_name),
+        format!("create_{table_name}"),
         Box::new(create_stmt),
         None,
     )
 }
 
 /// Function that creates multiple related migrations
+///
+/// Creates a complete blog schema with authors, categories, and articles tables.
+#[must_use]
 fn create_blog_schema_migrations<'a>() -> Vec<CodeMigration<'a>> {
     vec![
         create_table_migration(
@@ -264,6 +321,11 @@ fn create_blog_schema_migrations<'a>() -> Vec<CodeMigration<'a>> {
     ]
 }
 
+/// Example demonstrating borrowed migrations with various patterns
+///
+/// # Errors
+///
+/// * Returns error if migration source fails to generate migrations
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Borrowed Migrations Example");
@@ -302,7 +364,7 @@ async fn main() -> Result<()> {
 
     let product_migration = create_table_migration(table_name, &columns, primary_key);
     println!("  - Generated migration: {}", product_migration.id());
-    println!("  - Borrows table name: '{}'", table_name);
+    println!("  - Borrows table name: '{table_name}'");
     println!("  - Borrows column definitions and primary key");
 
     // Example 3: Schema generation from borrowed data
@@ -350,7 +412,7 @@ mod tests {
     #[switchy_async::test]
     async fn test_config_based_migration() {
         let config = DatabaseConfig::new();
-        let migration = ConfigBasedMigration::new("test_migration".to_string(), &config, "users");
+        let migration = ConfigBasedMigration::new(String::from("test_migration"), &config, "users");
 
         assert_eq!(migration.id(), "test_migration");
         assert_eq!(
@@ -368,9 +430,9 @@ mod tests {
         assert_eq!(migrations.len(), 2); // users and posts tables
 
         // Check that migrations are sorted by ID
-        let ids: Vec<&str> = migrations.iter().map(|m| m.id()).collect();
+        let ids: Vec<&str> = migrations.iter().map(|m| m.as_ref().id()).collect();
         let mut sorted_ids = ids.clone();
-        sorted_ids.sort();
+        sorted_ids.sort_unstable();
         assert_eq!(ids, sorted_ids);
     }
 
@@ -387,7 +449,7 @@ mod tests {
         let migrations = create_blog_schema_migrations();
         assert_eq!(migrations.len(), 3);
 
-        let ids: Vec<&str> = migrations.iter().map(|m| m.id()).collect();
+        let ids: Vec<&str> = migrations.iter().map(switchy_schema::discovery::code::CodeMigration::id).collect();
         assert!(ids.contains(&"create_authors"));
         assert!(ids.contains(&"create_categories"));
         assert!(ids.contains(&"create_articles"));
