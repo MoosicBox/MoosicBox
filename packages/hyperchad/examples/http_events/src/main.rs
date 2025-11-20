@@ -58,6 +58,9 @@ static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> = La
     ]
 });
 
+/// Creates a button that demonstrates HTTP event handlers for a normal task creation request.
+///
+/// The button includes handlers for all 6 HTTP lifecycle events and sends a POST request to `/api/tasks`.
 fn create_add_task_button() -> Containers {
     container! {
         button
@@ -106,6 +109,9 @@ fn create_add_task_button() -> Containers {
     }
 }
 
+/// Creates a button that demonstrates HTTP error event handling.
+///
+/// This button sends a POST request to `/api/tasks/error`, which always returns an error response.
 fn create_error_button() -> Containers {
     container! {
         button
@@ -139,6 +145,9 @@ fn create_error_button() -> Containers {
     }
 }
 
+/// Creates a button that demonstrates handling of slow HTTP requests.
+///
+/// This button sends a POST request to `/api/tasks/slow`, which has a 3-second delay.
 fn create_slow_button() -> Containers {
     container! {
         button
@@ -173,6 +182,7 @@ fn create_slow_button() -> Containers {
     }
 }
 
+/// Creates a text input field for task name entry.
 fn task_input() -> Containers {
     container! {
         input
@@ -187,6 +197,9 @@ fn task_input() -> Containers {
     }
 }
 
+/// Creates the main page layout with all example components.
+///
+/// The page includes test buttons, status messages, event explanations, and developer info.
 #[allow(clippy::too_many_lines)]
 fn create_main_page() -> Container {
     container! {
@@ -360,6 +373,13 @@ fn create_main_page() -> Container {
     .into()
 }
 
+/// Creates the application router with all example endpoints.
+///
+/// Includes routes for:
+/// * `/` - Main page
+/// * `/api/tasks` - Normal task creation (500ms delay)
+/// * `/api/tasks/error` - Error testing endpoint (always fails)
+/// * `/api/tasks/slow` - Slow request testing (3s delay)
 fn create_router() -> Router {
     Router::new()
         // Main page
@@ -394,6 +414,14 @@ fn create_router() -> Router {
         })
 }
 
+/// Entry point for the HTTP Events example application.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The async runtime cannot be created
+/// * The web server fails to start or bind to port 8080
+/// * Application initialization fails
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::init();
