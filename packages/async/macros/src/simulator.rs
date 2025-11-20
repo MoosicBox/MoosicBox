@@ -245,3 +245,262 @@ impl Parse for JoinWithPathInput {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    /// Tests parsing of `SelectInput` with a single branch.
+    #[::core::prelude::v1::test]
+    fn select_input_single_branch() {
+        let input = quote! {
+            result = async_operation() => {
+                println!("Operation completed: {:?}", result);
+            }
+        };
+        let select: SelectInput = syn::parse2(input).expect("Failed to parse SelectInput");
+
+        assert!(!select.biased, "Should not be biased");
+        assert_eq!(select.branches.len(), 1, "Should have one branch");
+    }
+
+    /// Tests parsing of `SelectInput` with multiple branches.
+    #[::core::prelude::v1::test]
+    fn select_input_multiple_branches() {
+        let input = quote! {
+            result1 = future1() => { handle1(); },
+            result2 = future2() => { handle2(); },
+            result3 = future3() => { handle3(); }
+        };
+        let select: SelectInput = syn::parse2(input).expect("Failed to parse SelectInput");
+
+        assert!(!select.biased, "Should not be biased");
+        assert_eq!(select.branches.len(), 3, "Should have three branches");
+    }
+
+    /// Tests parsing of `SelectInput` with biased selection.
+    #[::core::prelude::v1::test]
+    fn select_input_biased() {
+        let input = quote! {
+            biased;
+            result1 = future1() => { handle1(); },
+            result2 = future2() => { handle2(); }
+        };
+        let select: SelectInput = syn::parse2(input).expect("Failed to parse biased SelectInput");
+
+        assert!(select.biased, "Should be biased");
+        assert_eq!(select.branches.len(), 2, "Should have two branches");
+    }
+
+    /// Tests parsing of `SelectBranch` with a guard condition.
+    #[::core::prelude::v1::test]
+    fn select_branch_with_guard() {
+        let input = quote! {
+            result = future(), if result.is_ok() => { handle(); }
+        };
+        let branch: SelectBranch = syn::parse2(input).expect("Failed to parse SelectBranch");
+
+        assert!(
+            branch.guard.is_some(),
+            "Branch should have a guard condition"
+        );
+    }
+
+    /// Tests parsing of `SelectBranch` without a guard condition.
+    #[::core::prelude::v1::test]
+    fn select_branch_without_guard() {
+        let input = quote! {
+            value = some_future() => { process(value); }
+        };
+        let branch: SelectBranch =
+            syn::parse2(input).expect("Failed to parse SelectBranch without guard");
+
+        assert!(branch.guard.is_none(), "Branch should not have a guard");
+    }
+
+    /// Tests parsing of `SelectBranch` with a block handler.
+    #[::core::prelude::v1::test]
+    fn select_branch_block_handler() {
+        let input = quote! {
+            x = compute() => {
+                println!("Got: {}", x);
+                process(x);
+            }
+        };
+        let branch: SelectBranch =
+            syn::parse2(input).expect("Failed to parse SelectBranch with block");
+
+        // The handler should contain the block tokens
+        let handler_str = branch.handler.to_string();
+        assert!(
+            handler_str.contains("println"),
+            "Handler should contain block code"
+        );
+    }
+
+    /// Tests parsing of `SelectBranch` with an expression handler.
+    #[::core::prelude::v1::test]
+    fn select_branch_expression_handler() {
+        let input = quote! {
+            result = operation() => result.unwrap()
+        };
+        let branch: SelectBranch =
+            syn::parse2(input).expect("Failed to parse SelectBranch with expression");
+
+        let handler_str = branch.handler.to_string();
+        assert!(
+            handler_str.contains("unwrap"),
+            "Handler should contain expression"
+        );
+    }
+
+    /// Tests parsing of `SelectWithPathInput` with a basic path and branches.
+    #[::core::prelude::v1::test]
+    fn select_with_path_input_basic() {
+        let input = quote! {
+            @path = crate;
+            value = future1() => { handle(); }
+        };
+        let parsed: SelectWithPathInput =
+            syn::parse2(input).expect("Failed to parse SelectWithPathInput");
+
+        assert_eq!(
+            parsed.crate_path.segments.last().unwrap().ident.to_string(),
+            "crate"
+        );
+        assert_eq!(parsed.select_input.branches.len(), 1);
+    }
+
+    /// Tests parsing of `SelectWithPathInput` with custom path and biased selection.
+    #[::core::prelude::v1::test]
+    fn select_with_path_input_biased() {
+        let input = quote! {
+            @path = switchy_async::futures;
+            biased;
+            a = fut_a() => {},
+            b = fut_b() => {}
+        };
+        let parsed: SelectWithPathInput =
+            syn::parse2(input).expect("Failed to parse SelectWithPathInput with biased");
+
+        assert!(parsed.select_input.biased);
+        assert_eq!(parsed.select_input.branches.len(), 2);
+    }
+
+    /// Tests parsing of `JoinWithPathInput` with a single future.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_single() {
+        let input = quote! {
+            @path = crate;
+            future1()
+        };
+        let parsed: JoinWithPathInput =
+            syn::parse2(input).expect("Failed to parse JoinWithPathInput with single future");
+
+        assert_eq!(parsed.futures.len(), 1, "Should have one future");
+    }
+
+    /// Tests parsing of `JoinWithPathInput` with multiple futures.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_multiple() {
+        let input = quote! {
+            @path = switchy_async;
+            async { 1 },
+            async { 2 },
+            async { 3 },
+            async { 4 }
+        };
+        let parsed: JoinWithPathInput =
+            syn::parse2(input).expect("Failed to parse JoinWithPathInput with multiple futures");
+
+        assert_eq!(parsed.futures.len(), 4, "Should have four futures");
+    }
+
+    /// Tests parsing of `JoinWithPathInput` with complex future expressions.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_complex_futures() {
+        let input = quote! {
+            @path = crate;
+            fetch_user(id),
+            fetch_posts(user_id),
+            calculate_stats()
+        };
+        let parsed: JoinWithPathInput =
+            syn::parse2(input).expect("Failed to parse JoinWithPathInput with complex futures");
+
+        assert_eq!(parsed.futures.len(), 3, "Should have three futures");
+    }
+
+    /// Tests parsing of `JoinWithPathInput` with trailing comma.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_trailing_comma() {
+        let input = quote! {
+            @path = my_crate::runtime;
+            future1(),
+            future2(),
+        };
+        let parsed: JoinWithPathInput =
+            syn::parse2(input).expect("Failed to parse JoinWithPathInput with trailing comma");
+
+        assert_eq!(parsed.futures.len(), 2, "Should have two futures");
+    }
+
+    /// Tests that `SelectWithPathInput` requires `@path` parameter.
+    #[::core::prelude::v1::test]
+    fn select_with_path_input_missing_path() {
+        let input = quote! {
+            result = future() => {}
+        };
+        let result = syn::parse2::<SelectWithPathInput>(input);
+
+        assert!(
+            result.is_err(),
+            "Parsing should fail without @path parameter"
+        );
+    }
+
+    /// Tests that `JoinWithPathInput` requires `@path` parameter.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_missing_path() {
+        let input = quote! {
+            future1(), future2()
+        };
+        let result = syn::parse2::<JoinWithPathInput>(input);
+
+        assert!(
+            result.is_err(),
+            "Parsing should fail without @path parameter"
+        );
+    }
+
+    /// Tests parsing of `SelectInput` with complex patterns.
+    #[::core::prelude::v1::test]
+    fn select_input_complex_patterns() {
+        let input = quote! {
+            Ok(value) = result_future() => { process(value); },
+            Some(data) = option_future() => { handle(data); },
+            _ = default_future() => { fallback(); }
+        };
+        let select: SelectInput =
+            syn::parse2(input).expect("Failed to parse SelectInput with complex patterns");
+
+        assert_eq!(select.branches.len(), 3, "Should have three branches");
+    }
+
+    /// Tests that empty `JoinWithPathInput` (no futures) is handled.
+    #[::core::prelude::v1::test]
+    fn join_with_path_input_empty() {
+        let input = quote! {
+            @path = crate;
+        };
+        let parsed: JoinWithPathInput =
+            syn::parse2(input).expect("Failed to parse empty JoinWithPathInput");
+
+        assert_eq!(
+            parsed.futures.len(),
+            0,
+            "Should have zero futures (though unusual)"
+        );
+    }
+}
