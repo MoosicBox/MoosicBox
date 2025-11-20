@@ -91,7 +91,10 @@ pub enum RendererType {
 }
 
 impl std::fmt::Display for RendererType {
-    /// Formats the renderer type as a lowercase string.
+    /// Formats the renderer type as a human-readable string identifier.
+    ///
+    /// Returns lowercase hyphenated strings suitable for use in CLI arguments,
+    /// configuration files, and log messages.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Html => write!(f, "html"),
@@ -351,6 +354,12 @@ struct HyperChadSimulationBootstrap {
 
 #[cfg(feature = "test-utils")]
 impl SimBootstrap for HyperChadSimulationBootstrap {
+    /// Initializes the simulation environment at startup.
+    ///
+    /// This method sets up the simulation by:
+    /// * Starting a simulated web server host to serve the application
+    /// * Creating client nodes for each enabled renderer type
+    /// * Preparing the test plan for execution
     fn on_start(&self, sim: &mut impl Sim) {
         log::info!("Starting HyperChad simulation bootstrap");
 
@@ -380,6 +389,10 @@ impl SimBootstrap for HyperChadSimulationBootstrap {
         }
     }
 
+    /// Called on each simulation step.
+    ///
+    /// Currently a no-op, but can be extended to perform per-step actions
+    /// such as updating simulation state or injecting events.
     fn on_step(&self, _sim: &mut impl Sim) {
         // Per-step actions can be added here if needed
     }
