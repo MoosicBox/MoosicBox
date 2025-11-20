@@ -166,3 +166,207 @@ where
         () = local_token.cancelled() => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test_log::test]
+    fn test_worker_thread_id_is_unique() {
+        let id1 = worker_thread_id();
+        let id2 = worker_thread_id();
+
+        // Same thread should return same ID
+        assert_eq!(id1, id2);
+
+        // Different threads should have different IDs
+        let handle = std::thread::spawn(worker_thread_id);
+        let id3 = handle.join().unwrap();
+
+        assert_ne!(id1, id3);
+    }
+
+    #[test_log::test]
+    fn test_worker_thread_id_is_monotonic() {
+        let mut ids: Vec<u64> = (0..5)
+            .map(|_| std::thread::spawn(worker_thread_id))
+            .map(|h| h.join().unwrap())
+            .collect();
+        ids.sort_unstable();
+
+        // All IDs should be unique
+        for window in ids.windows(2) {
+            assert_ne!(window[0], window[1]);
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_reset_simulator_cancellation_token() {
+        reset_global_simulator_cancellation_token();
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+
+        reset_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_cancel_simulation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+
+        // Clean up
+        reset_simulator_cancellation_token();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_reset_global_simulator_cancellation_token() {
+        cancel_global_simulation();
+        assert!(is_global_simulator_cancelled());
+
+        reset_global_simulator_cancellation_token();
+        assert!(!is_global_simulator_cancelled());
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_cancel_global_simulation() {
+        reset_global_simulator_cancellation_token();
+        assert!(!is_global_simulator_cancelled());
+
+        cancel_global_simulation();
+        assert!(is_global_simulator_cancelled());
+
+        // Clean up for other tests
+        reset_global_simulator_cancellation_token();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_global_cancellation_affects_is_simulator_cancelled() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+
+        cancel_global_simulation();
+        assert!(is_simulator_cancelled());
+        assert!(is_global_simulator_cancelled());
+
+        // Clean up for other tests
+        reset_global_simulator_cancellation_token();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_thread_local_cancellation_does_not_affect_global() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+        assert!(!is_global_simulator_cancelled());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_run_until_simulation_cancelled_completes() {
+        // Ensure clean state
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        let result = run_until_simulation_cancelled(async { 42 }).await;
+
+        assert_eq!(result, Some(42), "Future should complete when not cancelled");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_run_until_simulation_cancelled_with_local_cancellation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        // Cancel immediately before starting the future
+        cancel_simulation();
+
+        let result = run_until_simulation_cancelled(async {
+            switchy_async::time::sleep(std::time::Duration::from_secs(10)).await;
+            42
+        })
+        .await;
+
+        // Clean up
+        reset_simulator_cancellation_token();
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    #[serial]
+    async fn test_run_until_simulation_cancelled_with_global_cancellation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        // Cancel immediately before starting the future
+        cancel_global_simulation();
+
+        let result = run_until_simulation_cancelled(async {
+            switchy_async::time::sleep(std::time::Duration::from_secs(10)).await;
+            42
+        })
+        .await;
+
+        // Clean up for other tests
+        reset_global_simulator_cancellation_token();
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_thread_local_cancellation_isolation() {
+        reset_global_simulator_cancellation_token();
+
+        // Thread 1: cancel simulation
+        let handle1 = std::thread::spawn(|| {
+            reset_simulator_cancellation_token();
+            cancel_simulation();
+            is_simulator_cancelled()
+        });
+
+        // Thread 2: don't cancel, check isolation
+        let handle2 = std::thread::spawn(|| {
+            reset_simulator_cancellation_token();
+            is_simulator_cancelled()
+        });
+
+        let thread1_cancelled = handle1.join().unwrap();
+        let thread2_cancelled = handle2.join().unwrap();
+
+        assert!(thread1_cancelled);
+        assert!(!thread2_cancelled);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_multiple_resets_work_correctly() {
+        reset_global_simulator_cancellation_token();
+
+        // Test that multiple reset cycles work correctly
+        for _ in 0..3 {
+            reset_simulator_cancellation_token();
+            assert!(!is_simulator_cancelled());
+
+            cancel_simulation();
+            assert!(is_simulator_cancelled());
+        }
+
+        // Final cleanup
+        reset_simulator_cancellation_token();
+    }
+}
