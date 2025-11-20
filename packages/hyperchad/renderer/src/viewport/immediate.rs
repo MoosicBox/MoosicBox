@@ -188,3 +188,236 @@ impl ViewportListener {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_viewport_listener_initial_check_visible() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        let mut listener = ViewportListener::new(Some(viewport), 100.0, 100.0, 50.0, 50.0);
+
+        let ((visible, prev_visible), (dist, prev_dist)) = listener.check();
+
+        assert!(visible);
+        assert!(prev_visible.is_none()); // First check has no previous
+        assert!(dist < 0.001);
+        assert!(prev_dist.is_none());
+    }
+
+    #[test]
+    fn test_viewport_listener_initial_check_not_visible() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        // Widget outside viewport
+        let mut listener = ViewportListener::new(Some(viewport), 1000.0, 1000.0, 50.0, 50.0);
+
+        let ((visible, prev_visible), (_dist, prev_dist)) = listener.check();
+
+        assert!(!visible);
+        assert!(prev_visible.is_none());
+        assert!(prev_dist.is_none());
+    }
+
+    #[test]
+    fn test_viewport_listener_visibility_change() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        let mut listener = ViewportListener::new(Some(viewport), 100.0, 100.0, 50.0, 50.0);
+
+        // Initial check - visible
+        let ((visible, _), _) = listener.check();
+        assert!(visible);
+
+        // Update viewport to move away from widget
+        listener.viewport = Some(Viewport {
+            parent: None,
+            pos: Pos {
+                x: 1000.0,
+                y: 1000.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 1000.0,
+                y: 1000.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        });
+
+        // Second check - should now be not visible
+        let ((visible, prev_visible), _) = listener.check();
+        assert!(!visible);
+        assert_eq!(prev_visible, Some(true)); // Previous state was visible
+    }
+
+    #[test]
+    fn test_viewport_listener_no_viewport() {
+        // No viewport means always visible
+        let mut listener = ViewportListener::new(None, 100.0, 100.0, 50.0, 50.0);
+
+        let ((visible, _), (dist, _)) = listener.check();
+
+        assert!(visible);
+        assert!(dist < 0.001);
+    }
+
+    #[test]
+    fn test_viewport_listener_no_change() {
+        let viewport = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 600.0,
+            },
+        };
+
+        let mut listener = ViewportListener::new(Some(viewport), 100.0, 100.0, 50.0, 50.0);
+
+        // Initial check
+        listener.check();
+
+        // Second check with no viewport change - should have no previous values
+        let ((visible, prev_visible), (_, prev_dist)) = listener.check();
+
+        assert!(visible);
+        assert!(prev_visible.is_none()); // No change
+        assert!(prev_dist.is_none()); // No significant distance change
+    }
+
+    #[test]
+    fn test_viewport_with_parent_both_visible() {
+        let parent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+        };
+
+        let child = Viewport {
+            parent: Some(Box::new(parent)),
+            pos: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 600.0,
+                h: 400.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 600.0,
+                h: 400.0,
+            },
+        };
+
+        let mut listener = ViewportListener::new(Some(child), 200.0, 200.0, 50.0, 50.0);
+
+        let ((visible, _), _) = listener.check();
+
+        assert!(visible);
+    }
+
+    #[test]
+    fn test_viewport_with_parent_child_not_visible() {
+        let parent = Viewport {
+            parent: None,
+            pos: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+            viewport: Pos {
+                x: 0.0,
+                y: 0.0,
+                w: 1000.0,
+                h: 1000.0,
+            },
+        };
+
+        let child = Viewport {
+            parent: Some(Box::new(parent)),
+            pos: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 600.0,
+                h: 400.0,
+            },
+            viewport: Pos {
+                x: 100.0,
+                y: 100.0,
+                w: 600.0,
+                h: 400.0,
+            },
+        };
+
+        // Widget outside child viewport
+        let mut listener = ViewportListener::new(Some(child), 1000.0, 1000.0, 50.0, 50.0);
+
+        let ((visible, _), _) = listener.check();
+
+        assert!(!visible);
+    }
+}

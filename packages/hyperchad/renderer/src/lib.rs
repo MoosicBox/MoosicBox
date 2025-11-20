@@ -587,3 +587,220 @@ pub trait HtmlTagRenderer {
         inline_css: &[String],
     ) -> String;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replace_container_from_container_with_id() {
+        let container = Container {
+            str_id: Some("test-id".to_string()),
+            ..Default::default()
+        };
+
+        let replace = ReplaceContainer::from(container.clone());
+
+        assert_eq!(replace.selector, Selector::Id("test-id".to_string()));
+        assert_eq!(replace.container.str_id, container.str_id);
+    }
+
+    #[test]
+    fn test_replace_container_from_container_without_id() {
+        let container = Container {
+            str_id: None,
+            ..Default::default()
+        };
+
+        let replace = ReplaceContainer::from(container);
+
+        assert_eq!(replace.selector, Selector::SelfTarget);
+    }
+
+    #[test]
+    fn test_replace_container_from_vec_containers() {
+        let containers = vec![
+            Container {
+                str_id: Some("first".to_string()),
+                ..Default::default()
+            },
+            Container {
+                str_id: Some("second".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let replace = ReplaceContainer::from(containers);
+
+        assert_eq!(replace.selector, Selector::SelfTarget);
+        assert_eq!(replace.container.children.len(), 2);
+    }
+
+    #[test]
+    fn test_view_builder_with_primary() {
+        let container = Container::default();
+        let view = View::builder().with_primary(container).build();
+
+        assert!(view.primary.is_some());
+        assert!(view.fragments.is_empty());
+        assert!(view.delete_selectors.is_empty());
+    }
+
+    #[test]
+    fn test_view_builder_with_fragments() {
+        let fragment1 = Container {
+            str_id: Some("frag1".to_string()),
+            ..Default::default()
+        };
+        let fragment2 = Container {
+            str_id: Some("frag2".to_string()),
+            ..Default::default()
+        };
+
+        let view = View::builder()
+            .with_fragment(fragment1)
+            .with_fragment(fragment2)
+            .build();
+
+        assert!(view.primary.is_none());
+        assert_eq!(view.fragments.len(), 2);
+    }
+
+    #[test]
+    fn test_view_builder_with_delete_selectors() {
+        let view = View::builder()
+            .with_delete_selector(Selector::Id("remove-me".to_string()))
+            .with_delete_selector(Selector::Class("hidden".to_string()))
+            .build();
+
+        assert_eq!(view.delete_selectors.len(), 2);
+    }
+
+    #[test]
+    fn test_view_builder_mutable_methods() {
+        let mut builder = View::builder();
+        builder
+            .primary(Container::default())
+            .fragment(Container {
+                str_id: Some("test".to_string()),
+                ..Default::default()
+            })
+            .delete_selector(Selector::Id("del".to_string()));
+
+        let view = builder.build();
+
+        assert!(view.primary.is_some());
+        assert_eq!(view.fragments.len(), 1);
+        assert_eq!(view.delete_selectors.len(), 1);
+    }
+
+    #[test]
+    fn test_content_builder_creates_view_content() {
+        let container = Container::default();
+        let content = Content::builder().with_primary(container).build();
+
+        match content {
+            Content::View(view) => {
+                assert!(view.primary.is_some());
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test]
+    fn test_content_from_container() {
+        let container = Container::default();
+        let content: Content = container.into();
+
+        match content {
+            Content::View(view) => {
+                assert!(view.primary.is_some());
+                assert!(view.fragments.is_empty());
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test]
+    fn test_content_from_vec_containers() {
+        let containers = vec![Container::default(), Container::default()];
+        let content: Content = containers.into();
+
+        match content {
+            Content::View(view) => {
+                assert!(view.primary.is_some());
+                if let Some(primary) = &view.primary {
+                    assert_eq!(primary.children.len(), 2);
+                }
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test]
+    fn test_content_from_view() {
+        let view = View::builder().with_primary(Container::default()).build();
+        let content: Content = view.into();
+
+        match content {
+            Content::View(boxed_view) => {
+                assert!(boxed_view.primary.is_some());
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected View, got Json"),
+            Content::Raw { .. } => panic!("Expected View, got Raw"),
+        }
+    }
+
+    #[test]
+    fn test_content_try_from_str() {
+        let html = "<div>test</div>";
+        let content = Content::try_from(html);
+
+        assert!(content.is_ok());
+        match content.unwrap() {
+            Content::Raw { data, content_type } => {
+                assert_eq!(data.as_ref(), html.as_bytes());
+                assert_eq!(content_type, "text/html");
+            }
+            #[cfg(feature = "json")]
+            Content::Json(_) => panic!("Expected Raw, got Json"),
+            Content::View(_) => panic!("Expected Raw, got View"),
+        }
+    }
+
+    #[test]
+    fn test_content_try_from_string() {
+        let html = String::from("<div>test</div>");
+        let content = Content::try_from(html);
+
+        assert!(content.is_ok());
+    }
+
+    #[test]
+    fn test_view_from_container() {
+        let container = Container::default();
+        let view: View = container.into();
+
+        assert!(view.primary.is_some());
+        assert!(view.fragments.is_empty());
+        assert!(view.delete_selectors.is_empty());
+    }
+
+    #[test]
+    fn test_view_from_vec_containers() {
+        let containers = vec![Container::default(), Container::default()];
+        let view: View = containers.into();
+
+        assert!(view.primary.is_some());
+        if let Some(primary) = &view.primary {
+            assert_eq!(primary.children.len(), 2);
+        }
+    }
+}
