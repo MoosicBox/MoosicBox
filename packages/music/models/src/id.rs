@@ -694,8 +694,8 @@ mod test {
     use crate::{
         ApiSource,
         id::{
-            ApiId, Id, IdType, ParseIdsError, parse_id_ranges, parse_id_sequences,
-            parse_integer_ranges_to_ids, TryFromIdError,
+            ApiId, Id, IdType, ParseIdsError, TryFromIdError, parse_id_ranges, parse_id_sequences,
+            parse_integer_ranges_to_ids,
         },
     };
 

@@ -2687,4 +2687,27 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_format_title_without_version() {
+        let title = "My Album";
+        let result = format_title(title, None);
+        assert_eq!(result, "My Album");
+    }
+
+    #[test]
+    fn test_format_title_with_version() {
+        let title = "My Album";
+        let version = "Deluxe Edition";
+        let result = format_title(title, Some(version));
+        assert_eq!(result, "My Album - Deluxe Edition");
+    }
+
+    #[test]
+    fn test_format_title_with_empty_version() {
+        let title = "My Album";
+        let version = "";
+        let result = format_title(title, Some(version));
+        assert_eq!(result, "My Album - ");
+    }
 }
