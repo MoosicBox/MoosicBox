@@ -121,6 +121,11 @@ impl ToValueType<bool> for &DatabaseValue {
 // All return `ParseError::ConvertType` if the value is not a compatible numeric type.
 
 impl ToValueType<f32> for &DatabaseValue {
+    /// Converts a database value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             DatabaseValue::Real32(num) => Ok(*num),
@@ -132,6 +137,11 @@ impl ToValueType<f32> for &DatabaseValue {
 }
 
 impl ToValueType<f64> for &DatabaseValue {
+    /// Converts a database value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             DatabaseValue::Real64(num) => Ok(*num),
@@ -142,6 +152,11 @@ impl ToValueType<f64> for &DatabaseValue {
 }
 
 impl ToValueType<i8> for &DatabaseValue {
+    /// Converts a database value to an i8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -154,6 +169,11 @@ impl ToValueType<i8> for &DatabaseValue {
 }
 
 impl ToValueType<i16> for &DatabaseValue {
+    /// Converts a database value to an i16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -166,6 +186,11 @@ impl ToValueType<i16> for &DatabaseValue {
 }
 
 impl ToValueType<i32> for &DatabaseValue {
+    /// Converts a database value to an i32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -178,6 +203,11 @@ impl ToValueType<i32> for &DatabaseValue {
 }
 
 impl ToValueType<i64> for &DatabaseValue {
+    /// Converts a database value to an i64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             DatabaseValue::Int64(num) => Ok(*num),
@@ -189,6 +219,11 @@ impl ToValueType<i64> for &DatabaseValue {
 }
 
 impl ToValueType<isize> for &DatabaseValue {
+    /// Converts a database value to an isize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -205,6 +240,11 @@ impl ToValueType<isize> for &DatabaseValue {
 }
 
 impl ToValueType<u8> for &DatabaseValue {
+    /// Converts a database value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -217,6 +257,11 @@ impl ToValueType<u8> for &DatabaseValue {
 }
 
 impl ToValueType<u16> for &DatabaseValue {
+    /// Converts a database value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -229,6 +274,11 @@ impl ToValueType<u16> for &DatabaseValue {
 }
 
 impl ToValueType<u32> for &DatabaseValue {
+    /// Converts a database value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -241,6 +291,11 @@ impl ToValueType<u32> for &DatabaseValue {
 }
 
 impl ToValueType<u64> for &DatabaseValue {
+    /// Converts a database value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -252,6 +307,11 @@ impl ToValueType<u64> for &DatabaseValue {
 }
 
 impl ToValueType<usize> for &DatabaseValue {
+    /// Converts a database value to a usize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -509,6 +569,11 @@ where
 }
 
 impl ToValueType<String> for DatabaseValue {
+    /// Converts an owned database value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value cannot be converted to a string
     fn to_value_type(self) -> Result<String, ParseError> {
         match &self {
             Self::String(x) => Ok(x.clone()),
@@ -519,6 +584,13 @@ impl ToValueType<String> for DatabaseValue {
 }
 
 impl ToValueType<bool> for DatabaseValue {
+    /// Converts an owned database value to a boolean.
+    ///
+    /// Supports both boolean values and integers (where 1 = true, 0 = false).
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value cannot be converted to a bool
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
             Self::Bool(value) => Ok(value),
@@ -529,6 +601,11 @@ impl ToValueType<bool> for DatabaseValue {
 }
 
 impl ToValueType<f32> for DatabaseValue {
+    /// Converts an owned database value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<f32, ParseError> {
         match self {
             Self::Real32(num) => Ok(num),
@@ -540,6 +617,11 @@ impl ToValueType<f32> for DatabaseValue {
 }
 
 impl ToValueType<f64> for DatabaseValue {
+    /// Converts an owned database value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<f64, ParseError> {
         match self {
             Self::Real64(num) => Ok(num),
@@ -550,6 +632,11 @@ impl ToValueType<f64> for DatabaseValue {
 }
 
 impl ToValueType<i8> for DatabaseValue {
+    /// Converts an owned database value to an i8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i8, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -562,6 +649,11 @@ impl ToValueType<i8> for DatabaseValue {
 }
 
 impl ToValueType<i16> for DatabaseValue {
+    /// Converts an owned database value to an i16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i16, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -574,6 +666,11 @@ impl ToValueType<i16> for DatabaseValue {
 }
 
 impl ToValueType<i32> for DatabaseValue {
+    /// Converts an owned database value to an i32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i32, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -586,6 +683,11 @@ impl ToValueType<i32> for DatabaseValue {
 }
 
 impl ToValueType<i64> for DatabaseValue {
+    /// Converts an owned database value to an i64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<i64, ParseError> {
         match self {
             Self::Int64(num) => Ok(num),
@@ -597,6 +699,11 @@ impl ToValueType<i64> for DatabaseValue {
 }
 
 impl ToValueType<isize> for DatabaseValue {
+    /// Converts an owned database value to an isize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<isize, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation)]
@@ -609,6 +716,11 @@ impl ToValueType<isize> for DatabaseValue {
 }
 
 impl ToValueType<u8> for DatabaseValue {
+    /// Converts an owned database value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u8, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -621,6 +733,11 @@ impl ToValueType<u8> for DatabaseValue {
 }
 
 impl ToValueType<u16> for DatabaseValue {
+    /// Converts an owned database value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u16, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -633,6 +750,11 @@ impl ToValueType<u16> for DatabaseValue {
 }
 
 impl ToValueType<u32> for DatabaseValue {
+    /// Converts an owned database value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u32, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -645,6 +767,11 @@ impl ToValueType<u32> for DatabaseValue {
 }
 
 impl ToValueType<u64> for DatabaseValue {
+    /// Converts an owned database value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<u64, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -656,6 +783,11 @@ impl ToValueType<u64> for DatabaseValue {
 }
 
 impl ToValueType<usize> for DatabaseValue {
+    /// Converts an owned database value to a usize.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a numeric type
     fn to_value_type(self) -> Result<usize, ParseError> {
         match self {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
