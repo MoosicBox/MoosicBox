@@ -83,3 +83,84 @@ pub struct CanvasUpdate {
     /// Actions to perform on the canvas
     pub canvas_actions: Vec<CanvasAction>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canvas_action_is_draw_action_for_line() {
+        let action = CanvasAction::Line(Pos(0.0, 0.0), Pos(10.0, 10.0));
+        assert!(action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_action_is_draw_action_for_fill_rect() {
+        let action = CanvasAction::FillRect(Pos(0.0, 0.0), Pos(50.0, 50.0));
+        assert!(action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_action_is_not_draw_action_for_stroke_size() {
+        let action = CanvasAction::StrokeSize(2.0);
+        assert!(!action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_action_is_not_draw_action_for_stroke_color() {
+        let action = CanvasAction::StrokeColor(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: None,
+        });
+        assert!(!action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_action_is_not_draw_action_for_clear() {
+        let action = CanvasAction::Clear;
+        assert!(!action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_action_is_not_draw_action_for_clear_rect() {
+        let action = CanvasAction::ClearRect(Pos(0.0, 0.0), Pos(100.0, 100.0));
+        assert!(!action.is_draw_action());
+    }
+
+    #[test]
+    fn test_canvas_update_default() {
+        let update = CanvasUpdate::default();
+        assert_eq!(update.target, "");
+        assert!(update.canvas_actions.is_empty());
+    }
+
+    #[test]
+    fn test_canvas_update_with_multiple_actions() {
+        let update = CanvasUpdate {
+            target: "test-canvas".to_string(),
+            canvas_actions: vec![
+                CanvasAction::StrokeColor(Color {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                    a: None,
+                }),
+                CanvasAction::StrokeSize(3.0),
+                CanvasAction::Line(Pos(0.0, 0.0), Pos(100.0, 100.0)),
+                CanvasAction::Clear,
+            ],
+        };
+
+        assert_eq!(update.target, "test-canvas");
+        assert_eq!(update.canvas_actions.len(), 4);
+    }
+
+    #[test]
+    fn test_pos_coordinates() {
+        let pos = Pos(42.5, 73.2);
+        assert!((pos.0 - 42.5).abs() < f32::EPSILON);
+        assert!((pos.1 - 73.2).abs() < f32::EPSILON);
+    }
+}

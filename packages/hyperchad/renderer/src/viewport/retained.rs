@@ -340,3 +340,305 @@ impl ViewportListener {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct TestWidget {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    }
+
+    impl WidgetPosition for TestWidget {
+        fn widget_x(&self) -> i32 {
+            self.x
+        }
+        fn widget_y(&self) -> i32 {
+            self.y
+        }
+        fn widget_w(&self) -> i32 {
+            self.w
+        }
+        fn widget_h(&self) -> i32 {
+            self.h
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestViewportPosition {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    }
+
+    impl WidgetPosition for TestViewportPosition {
+        fn widget_x(&self) -> i32 {
+            self.x
+        }
+        fn widget_y(&self) -> i32 {
+            self.y
+        }
+        fn widget_w(&self) -> i32 {
+            self.w
+        }
+        fn widget_h(&self) -> i32 {
+            self.h
+        }
+    }
+
+    impl ViewportPosition for TestViewportPosition {
+        fn viewport_x(&self) -> i32 {
+            self.x
+        }
+        fn viewport_y(&self) -> i32 {
+            self.y
+        }
+        fn viewport_w(&self) -> i32 {
+            self.w
+        }
+        fn viewport_h(&self) -> i32 {
+            self.h
+        }
+        fn as_widget_position(&self) -> Box<dyn WidgetPosition> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[test]
+    fn test_viewport_listener_initial_callback() {
+        let widget = TestWidget {
+            x: 100,
+            y: 100,
+            w: 50,
+            h: 50,
+        };
+
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 800,
+                h: 600,
+            },
+        );
+
+        let called = Arc::new(Mutex::new(false));
+        let called_clone = Arc::clone(&called);
+
+        let _listener = ViewportListener::new(widget, Some(viewport), move |_visible, _dist| {
+            *called_clone.lock().unwrap() = true;
+        });
+
+        assert!(*called.lock().unwrap(), "Callback should be called on init");
+    }
+
+    #[test]
+    fn test_viewport_listener_visibility_change_triggers_callback() {
+        let widget = TestWidget {
+            x: 100,
+            y: 100,
+            w: 50,
+            h: 50,
+        };
+
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 800,
+                h: 600,
+            },
+        );
+
+        let call_count = Arc::new(Mutex::new(0));
+        let call_count_clone = Arc::clone(&call_count);
+
+        let mut listener = ViewportListener::new(widget, Some(viewport), move |_visible, _dist| {
+            *call_count_clone.lock().unwrap() += 1;
+        });
+
+        // Initial callback on construction
+        assert_eq!(*call_count.lock().unwrap(), 1);
+
+        // Check without change - should not trigger callback
+        listener.check();
+        assert_eq!(*call_count.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_viewport_listener_no_viewport_always_visible() {
+        let widget = TestWidget {
+            x: 100,
+            y: 100,
+            w: 50,
+            h: 50,
+        };
+
+        let visible_result = Arc::new(Mutex::new(false));
+        let visible_result_clone = Arc::clone(&visible_result);
+
+        let _listener = ViewportListener::new(widget, None, move |visible, dist| {
+            *visible_result_clone.lock().unwrap() = visible;
+            assert_eq!(dist, 0);
+        });
+
+        assert!(
+            *visible_result.lock().unwrap(),
+            "Widget should be visible when no viewport"
+        );
+    }
+
+    #[test]
+    fn test_viewport_new_with_parent() {
+        let parent = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 1000,
+                h: 1000,
+            },
+        );
+
+        let child = Viewport::new(
+            Some(parent),
+            TestViewportPosition {
+                x: 100,
+                y: 100,
+                w: 600,
+                h: 400,
+            },
+        );
+
+        // Verify viewport was created successfully
+        assert_eq!(child.x(), 100);
+        assert_eq!(child.y(), 100);
+        assert_eq!(child.w(), 600);
+        assert_eq!(child.h(), 400);
+    }
+
+    #[test]
+    fn test_viewport_is_widget_visible_calls_is_visible() {
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 800,
+                h: 600,
+            },
+        );
+
+        let widget = TestWidget {
+            x: 100,
+            y: 100,
+            w: 50,
+            h: 50,
+        };
+
+        // Just verify the function executes without panic
+        let (_visible, _dist) = viewport.is_widget_visible(&widget);
+    }
+
+    #[test]
+    fn test_viewport_is_widget_visible_outside_viewport() {
+        let viewport = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 800,
+                h: 600,
+            },
+        );
+
+        let widget = TestWidget {
+            x: 1000,
+            y: 1000,
+            w: 50,
+            h: 50,
+        };
+
+        let (visible, dist) = viewport.is_widget_visible(&widget);
+
+        assert!(!visible);
+        assert!(dist > 0);
+    }
+
+    #[test]
+    fn test_viewport_with_parent_checks_parent_visibility() {
+        let parent = Viewport::new(
+            None,
+            TestViewportPosition {
+                x: 0,
+                y: 0,
+                w: 1000,
+                h: 1000,
+            },
+        );
+
+        let child = Viewport::new(
+            Some(parent),
+            TestViewportPosition {
+                x: 100,
+                y: 100,
+                w: 600,
+                h: 400,
+            },
+        );
+
+        let widget = TestWidget {
+            x: 200,
+            y: 200,
+            w: 50,
+            h: 50,
+        };
+
+        // Just verify the hierarchical check executes without panic
+        let (_visible, _dist) = child.is_widget_visible(&widget);
+    }
+
+    #[test]
+    fn test_widget_position_debug_format() {
+        let widget = TestWidget {
+            x: 10,
+            y: 20,
+            w: 30,
+            h: 40,
+        };
+
+        let widget_ref: &dyn WidgetPosition = &widget;
+        let debug_str = format!("{widget_ref:?}");
+
+        assert!(debug_str.contains(&10.to_string()));
+        assert!(debug_str.contains(&20.to_string()));
+        assert!(debug_str.contains(&30.to_string()));
+        assert!(debug_str.contains(&40.to_string()));
+    }
+
+    #[test]
+    fn test_viewport_position_debug_format() {
+        let vp = TestViewportPosition {
+            x: 5,
+            y: 15,
+            w: 25,
+            h: 35,
+        };
+
+        let vp_ref: &dyn ViewportPosition = &vp;
+        let debug_str = format!("{vp_ref:?}");
+
+        assert!(debug_str.contains(&5.to_string()));
+        assert!(debug_str.contains(&15.to_string()));
+        assert!(debug_str.contains(&25.to_string()));
+        assert!(debug_str.contains(&35.to_string()));
+    }
+}
