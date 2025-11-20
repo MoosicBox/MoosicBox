@@ -217,3 +217,69 @@ fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), Dec
         _ => result,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use symphonia::core::codecs::CodecParameters;
+
+    #[test]
+    fn test_first_supported_track_empty() {
+        let tracks: Vec<Track> = vec![];
+        assert!(first_supported_track(&tracks).is_none());
+    }
+
+    #[test]
+    fn test_first_supported_track_all_null() {
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+        ];
+        assert!(first_supported_track(&tracks).is_none());
+    }
+
+    #[test]
+    fn test_first_supported_track_finds_supported() {
+        use symphonia::core::codecs::CODEC_TYPE_FLAC;
+
+        let tracks = vec![
+            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+            Track::new(2, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+        ];
+        let result = first_supported_track(&tracks);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, 1);
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_ok() {
+        let result = ignore_end_of_stream_error(Ok(()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_expected_eof() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "end of stream");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_unexpected_eof_different_message() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "unexpected");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ignore_end_of_stream_error_other_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
+        let result = ignore_end_of_stream_error(Err(decode_error));
+        assert!(result.is_err());
+    }
+}

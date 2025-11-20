@@ -8285,6 +8285,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_opus",
  "moosicbox_stream_utils",
+ "pretty_assertions",
  "profiling",
  "rangemap",
  "switchy_async",
