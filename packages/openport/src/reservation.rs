@@ -190,7 +190,6 @@ impl<R: PortRange> PortReservation<R> {
     /// assert!(reservation.is_reserved(port.unwrap()));
     /// # }
     /// ```
-    #[must_use]
     pub fn reserve_port(&self) -> Option<Port> {
         let mut reserved_ports = self.reserved_ports.lock().unwrap();
 
