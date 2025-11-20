@@ -101,4 +101,124 @@ mod tests {
             assert!(matches!(scheme, "postgresql" | "postgres"));
         }
     }
+
+    #[switchy_async::test]
+    async fn test_sqlite_memory_database() {
+        // Test sqlite://:memory: format
+        let result = connect("sqlite://:memory:").await;
+        assert!(
+            result.is_ok(),
+            "Should connect to in-memory SQLite database"
+        );
+
+        // Test sqlite: format (also in-memory)
+        let result2 = connect("sqlite:").await;
+        assert!(
+            result2.is_ok(),
+            "Should connect to in-memory SQLite database with 'sqlite:'"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_sqlite_url_parsing_variations() {
+        // Test different SQLite URL formats
+        let urls = vec!["sqlite://test.db", "sqlite:test.db", "sqlite://./test.db"];
+
+        for url in urls {
+            let result = connect(url).await;
+            // We're not checking success here since file creation might fail,
+            // but we should get a proper SQLite connection attempt, not a scheme error
+            match result {
+                Err(CliError::Config(msg)) if msg.contains("Unsupported database scheme") => {
+                    panic!("Should recognize SQLite scheme for URL: {url}");
+                }
+                Ok(_) | Err(_) => {
+                    // Success is fine, other errors (file system, permissions) are also acceptable
+                }
+            }
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_postgres_url_parsing_error() {
+        // Test with malformed PostgreSQL URL
+        let result = connect("postgresql://").await;
+
+        match result {
+            Err(CliError::Config(msg)) => {
+                assert!(
+                    msg.contains("Failed to parse PostgreSQL URL")
+                        || msg.contains("PostgreSQL connection error"),
+                    "Should fail with PostgreSQL parsing or connection error, got: {msg}"
+                );
+            }
+            _ => panic!("Expected Config error for malformed PostgreSQL URL"),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_missing_url_scheme() {
+        // Test URL without proper scheme separator
+        let result = connect("notascheme").await;
+
+        match result {
+            Err(CliError::Config(msg)) => {
+                assert!(
+                    msg.contains("Unsupported database scheme"),
+                    "Should fail with unsupported scheme error, got: {msg}"
+                );
+            }
+            _ => panic!("Expected Config error for URL without scheme"),
+        }
+    }
+
+    #[test]
+    fn test_scheme_extraction() {
+        // Test scheme extraction logic
+        let test_cases = vec![
+            ("sqlite://test.db", "sqlite"),
+            ("postgresql://localhost/db", "postgresql"),
+            ("postgres://localhost/db", "postgres"),
+            ("mysql://localhost/db", "mysql"),
+        ];
+
+        for (url, expected_scheme) in test_cases {
+            let scheme = url.split(':').next().unwrap();
+            assert_eq!(
+                scheme, expected_scheme,
+                "Scheme extraction failed for {url}"
+            );
+        }
+    }
+
+    #[switchy_async::test]
+    async fn test_sqlite_with_empty_path() {
+        // Test that sqlite:// (empty path after //) is treated as in-memory
+        let result = connect("sqlite://").await;
+        // This should not error with scheme issues - it should either succeed
+        // or fail with a SQLite-specific error
+        if let Err(CliError::Config(msg)) = result {
+            assert!(
+                !msg.contains("Unsupported database scheme"),
+                "Should not fail with scheme error for 'sqlite://', got: {msg}"
+            );
+        }
+        // Otherwise success or other errors are acceptable
+    }
+
+    #[switchy_async::test]
+    async fn test_case_sensitive_scheme_handling() {
+        // Test that uppercase schemes are not supported (current behavior)
+        let result = connect("SQLITE://test.db").await;
+
+        match result {
+            Err(CliError::Config(msg)) => {
+                assert!(
+                    msg.contains("Unsupported database scheme"),
+                    "Should reject uppercase scheme"
+                );
+            }
+            _ => panic!("Expected error for uppercase scheme"),
+        }
+    }
 }
