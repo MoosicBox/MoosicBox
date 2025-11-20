@@ -8132,7 +8132,9 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "tauri",
+ "test-log",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]

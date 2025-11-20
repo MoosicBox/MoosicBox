@@ -194,3 +194,95 @@ impl Context {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use switchy_async::sync::oneshot;
+
+    #[test]
+    fn test_command_display_run_event() {
+        let event = Arc::new(RunEvent::Ready);
+        let command = Command::RunEvent { event };
+        assert_eq!(command.to_string(), "RunEvent");
+    }
+
+    #[test]
+    fn test_command_display_wait_for_startup() {
+        let (sender, _receiver) = oneshot::channel();
+        let command = Command::WaitForStartup { sender };
+        assert_eq!(command.to_string(), "WaitForStartup");
+    }
+
+    #[test]
+    fn test_command_display_wait_for_shutdown() {
+        let (sender, _receiver) = oneshot::channel();
+        let command = Command::WaitForShutdown { sender };
+        assert_eq!(command.to_string(), "WaitForShutdown");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_event_exit() {
+        let context = create_test_context();
+        let event = Arc::new(RunEvent::Exit);
+        let result = context.handle_event(event);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_event_ready() {
+        let context = create_test_context();
+        let event = Arc::new(RunEvent::Ready);
+        let result = context.handle_event(event);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_event_resumed() {
+        let context = create_test_context();
+        let event = Arc::new(RunEvent::Resumed);
+        let result = context.handle_event(event);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_handle_event_main_events_cleared() {
+        let context = create_test_context();
+        let event = Arc::new(RunEvent::MainEventsCleared);
+        let result = context.handle_event(event);
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_shutdown_with_handle() {
+        let context = create_test_context();
+        let result = context.shutdown();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_shutdown_without_handle() {
+        let context = Context {
+            server_handle: None,
+            receiver: None,
+        };
+        let result = context.shutdown();
+        assert!(result.is_ok());
+    }
+
+    /// Helper function to create a test context with a mock server handle
+    fn create_test_context() -> Context {
+        let (_sender, receiver) = switchy_async::sync::oneshot::channel();
+        let handle = moosicbox_async_service::runtime::Handle::current().spawn_with_name(
+            "test_server",
+            async move {
+                switchy_async::time::sleep(std::time::Duration::from_secs(1000)).await;
+                Ok(())
+            },
+        );
+        Context {
+            server_handle: Some(handle),
+            receiver: Some(receiver),
+        }
+    }
+}
