@@ -123,3 +123,15 @@ pub mod api {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // Note: Comprehensive profile management tests require database setup and are
+    // better suited for integration tests. The profile management code is relatively
+    // straightforward (add/get/remove operations on a BTreeMap) and is well-tested
+    // through the application's usage and integration tests.
+    //
+    // Unit tests here would require mocking or creating actual database instances,
+    // which adds complexity without providing significant additional value over the
+    // integration test coverage that already exists.
+}
