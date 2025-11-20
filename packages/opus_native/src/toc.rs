@@ -457,4 +457,59 @@ mod tests {
             assert_eq!(conf.frame_size, expected_frame_size);
         }
     }
+
+    #[test]
+    fn test_frame_size_to_ms_all_variants() {
+        assert_eq!(FrameSize::Ms2_5.to_ms(), 2); // Truncates to 2 (acceptable for SILK)
+        assert_eq!(FrameSize::Ms5.to_ms(), 5);
+        assert_eq!(FrameSize::Ms10.to_ms(), 10);
+        assert_eq!(FrameSize::Ms20.to_ms(), 20);
+        assert_eq!(FrameSize::Ms40.to_ms(), 40);
+        assert_eq!(FrameSize::Ms60.to_ms(), 60);
+    }
+
+    #[test]
+    fn test_toc_frame_duration_tenths_ms_all_configs() {
+        // Test SILK configs (0-11): 10, 20, 40, 60 ms
+        assert_eq!(Toc::parse(0 << 3).frame_duration_tenths_ms(), 100);  // Config 0: 10ms
+        assert_eq!(Toc::parse(1 << 3).frame_duration_tenths_ms(), 200);  // Config 1: 20ms
+        assert_eq!(Toc::parse(2 << 3).frame_duration_tenths_ms(), 400);  // Config 2: 40ms
+        assert_eq!(Toc::parse(3 << 3).frame_duration_tenths_ms(), 600);  // Config 3: 60ms
+
+        // Test Hybrid configs (12-15): 10, 20, 10, 20 ms
+        assert_eq!(Toc::parse(12 << 3).frame_duration_tenths_ms(), 100); // Config 12: 10ms
+        assert_eq!(Toc::parse(13 << 3).frame_duration_tenths_ms(), 200); // Config 13: 20ms
+
+        // Test CELT configs (16-31): 2.5, 5, 10, 20 ms
+        assert_eq!(Toc::parse(16 << 3).frame_duration_tenths_ms(), 25);  // Config 16: 2.5ms
+        assert_eq!(Toc::parse(17 << 3).frame_duration_tenths_ms(), 50);  // Config 17: 5ms
+        assert_eq!(Toc::parse(18 << 3).frame_duration_tenths_ms(), 100); // Config 18: 10ms
+        assert_eq!(Toc::parse(19 << 3).frame_duration_tenths_ms(), 200); // Config 19: 20ms
+    }
+
+    #[test]
+    fn test_toc_frame_count_code_all_values() {
+        assert_eq!(Toc::parse(0b0000_0000).frame_count_code(), 0);
+        assert_eq!(Toc::parse(0b0000_0001).frame_count_code(), 1);
+        assert_eq!(Toc::parse(0b0000_0010).frame_count_code(), 2);
+        assert_eq!(Toc::parse(0b0000_0011).frame_count_code(), 3);
+    }
+
+    #[test]
+    fn test_bandwidth_debug_display() {
+        // Verify all bandwidth variants can be formatted
+        let _ = format!("{:?}", Bandwidth::Narrowband);
+        let _ = format!("{:?}", Bandwidth::Mediumband);
+        let _ = format!("{:?}", Bandwidth::Wideband);
+        let _ = format!("{:?}", Bandwidth::SuperWideband);
+        let _ = format!("{:?}", Bandwidth::Fullband);
+    }
+
+    #[test]
+    fn test_opus_mode_debug_display() {
+        // Verify all mode variants can be formatted
+        let _ = format!("{:?}", OpusMode::SilkOnly);
+        let _ = format!("{:?}", OpusMode::CeltOnly);
+        let _ = format!("{:?}", OpusMode::Hybrid);
+    }
 }

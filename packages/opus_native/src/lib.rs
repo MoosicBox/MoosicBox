@@ -1319,6 +1319,150 @@ mod lbrr_tests {
     }
 }
 
+#[cfg(test)]
+mod sample_rate_tests {
+    use super::*;
+
+    #[test]
+    fn test_from_hz_all_valid_rates() {
+        assert_eq!(SampleRate::from_hz(8000).unwrap(), SampleRate::Hz8000);
+        assert_eq!(SampleRate::from_hz(12000).unwrap(), SampleRate::Hz12000);
+        assert_eq!(SampleRate::from_hz(16000).unwrap(), SampleRate::Hz16000);
+        assert_eq!(SampleRate::from_hz(24000).unwrap(), SampleRate::Hz24000);
+        assert_eq!(SampleRate::from_hz(48000).unwrap(), SampleRate::Hz48000);
+    }
+
+    #[test]
+    fn test_from_hz_invalid_rates() {
+        assert!(SampleRate::from_hz(11025).is_err());
+        assert!(SampleRate::from_hz(22050).is_err());
+        assert!(SampleRate::from_hz(44100).is_err());
+        assert!(SampleRate::from_hz(96000).is_err());
+        assert!(SampleRate::from_hz(0).is_err());
+    }
+
+    #[test]
+    fn test_from_hz_error_message_includes_rate() {
+        let result = SampleRate::from_hz(44100);
+        assert!(result.is_err());
+        if let Err(Error::InvalidSampleRate(msg)) = result {
+            assert!(msg.contains("44100"));
+            assert!(msg.contains("Unsupported sample rate"));
+        }
+    }
+}
+
+#[cfg(test)]
+mod channels_tests {
+    use super::*;
+
+    #[test]
+    fn test_channels_mono_value() {
+        assert_eq!(Channels::Mono as usize, 1);
+    }
+
+    #[test]
+    fn test_channels_stereo_value() {
+        assert_eq!(Channels::Stereo as usize, 2);
+    }
+
+    #[test]
+    fn test_channels_equality() {
+        assert_eq!(Channels::Mono, Channels::Mono);
+        assert_eq!(Channels::Stereo, Channels::Stereo);
+        assert_ne!(Channels::Mono, Channels::Stereo);
+    }
+}
+
+#[cfg(test)]
+mod decoder_tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_samples_all_frame_sizes() {
+        // At 48kHz
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms2_5, 48000), 120);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms5, 48000), 240);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 48000), 480);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms20, 48000), 960);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms40, 48000), 1920);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms60, 48000), 2880);
+    }
+
+    #[test]
+    fn test_calculate_samples_different_rates() {
+        // Ms10 at different sample rates
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 8000), 80);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 12000), 120);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 16000), 160);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 24000), 240);
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 48000), 480);
+    }
+
+    #[test]
+    fn test_calculate_samples_ms20_at_16khz() {
+        // Common SILK configuration
+        assert_eq!(Decoder::calculate_samples(FrameSize::Ms20, 16000), 320);
+    }
+
+    #[cfg(feature = "silk")]
+    #[test]
+    fn test_calculate_silk_delay_samples() {
+        assert_eq!(Decoder::calculate_silk_delay_samples(8000), 5);
+        assert_eq!(Decoder::calculate_silk_delay_samples(12000), 10);
+        assert_eq!(Decoder::calculate_silk_delay_samples(16000), 13);
+    }
+
+    #[cfg(feature = "silk")]
+    #[test]
+    fn test_calculate_silk_delay_samples_unknown_rate() {
+        assert_eq!(Decoder::calculate_silk_delay_samples(48000), 0);
+        assert_eq!(Decoder::calculate_silk_delay_samples(0), 0);
+    }
+
+    #[test]
+    fn test_algorithmic_delay_samples_without_silk() {
+        let _decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        #[cfg(not(feature = "silk"))]
+        assert_eq!(_decoder.algorithmic_delay_samples(), 0);
+    }
+
+    #[test]
+    fn test_handle_packet_loss_zeros_output() {
+        let decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
+        let mut output = vec![42i16; 960];
+
+        let samples = decoder.handle_packet_loss(&mut output, false);
+
+        assert_eq!(samples, 480); // 960 samples / 2 channels
+        assert!(output.iter().all(|&s| s == 0));
+    }
+
+    #[test]
+    fn test_decode_empty_packet_error() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        let mut output = vec![0i16; 480];
+
+        let result = decoder.decode(Some(&[]), &mut output, false);
+
+        assert!(matches!(result, Err(Error::InvalidPacket(_))));
+        if let Err(Error::InvalidPacket(msg)) = result {
+            assert!(msg.contains("R1"));
+        }
+    }
+
+    #[test]
+    fn test_decode_packet_loss_returns_silence() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        let mut output = vec![42i16; 480];
+
+        let samples = decoder.decode(None, &mut output, false).unwrap();
+
+        assert_eq!(samples, 480);
+        assert!(output.iter().all(|&s| s == 0));
+    }
+}
+
 #[cfg(all(test, not(any(feature = "silk", feature = "celt"))))]
 mod no_features_tests {
     use super::*;
