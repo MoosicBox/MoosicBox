@@ -88,3 +88,140 @@ pub async fn send_players_updated_event() -> Result<(), Vec<Box<dyn std::error::
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_on_players_updated_event_registers_listener() {
+        // Note: Due to global state, count will include listeners from other tests
+        let initial_count = PLAYERS_UPDATED_EVENT_LISTENERS.read().await.len();
+
+        on_players_updated_event(|| async { Ok(()) }).await;
+
+        let new_count = PLAYERS_UPDATED_EVENT_LISTENERS.read().await.len();
+        // Verify at least one more listener was added
+        assert!(new_count > initial_count);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_trigger_players_updated_event_calls_all_listeners() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // Clear listeners to avoid interference from other tests
+        PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
+
+        let counter1 = Arc::new(AtomicUsize::new(0));
+        let counter2 = Arc::new(AtomicUsize::new(0));
+
+        let c1 = counter1.clone();
+        let c2 = counter2.clone();
+
+        on_players_updated_event(move || {
+            let c = c1.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .await;
+
+        on_players_updated_event(move || {
+            let c = c2.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .await;
+
+        // Trigger the event
+        let result = trigger_players_updated_event().await;
+        assert!(result.is_ok());
+
+        // Both listeners should have been called
+        assert_eq!(counter1.load(Ordering::SeqCst), 1);
+        assert_eq!(counter2.load(Ordering::SeqCst), 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_trigger_players_updated_event_collects_errors() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        // Clear listeners to start fresh
+        PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
+
+        let success_called = Arc::new(AtomicBool::new(false));
+        let error_called = Arc::new(AtomicBool::new(false));
+
+        let sc = success_called.clone();
+        let ec = error_called.clone();
+
+        // Register a successful listener
+        on_players_updated_event(move || {
+            let c = sc.clone();
+            async move {
+                c.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .await;
+
+        // Register a failing listener
+        on_players_updated_event(move || {
+            let c = ec.clone();
+            async move {
+                c.store(true, Ordering::SeqCst);
+                Err(Box::new(std::io::Error::other("test error")) as BoxErrorSend)
+            }
+        })
+        .await;
+
+        // Trigger should collect errors
+        let result = trigger_players_updated_event().await;
+        assert!(result.is_err());
+
+        // Both listeners should have been called despite one failing
+        assert!(success_called.load(Ordering::SeqCst));
+        assert!(error_called.load(Ordering::SeqCst));
+
+        // Should have collected the error
+        if let Err(errors) = result {
+            assert_eq!(errors.len(), 1);
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_send_players_updated_event_with_no_listeners() {
+        // Clear listeners and test empty case
+        PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
+
+        let result = send_players_updated_event().await;
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_multiple_errors_collected() {
+        // Clear existing listeners
+        PLAYERS_UPDATED_EVENT_LISTENERS.write().await.clear();
+
+        // Register multiple failing listeners
+        on_players_updated_event(|| async {
+            Err(Box::new(std::io::Error::other("error 1")) as BoxErrorSend)
+        })
+        .await;
+
+        on_players_updated_event(|| async {
+            Err(Box::new(std::io::Error::other("error 2")) as BoxErrorSend)
+        })
+        .await;
+
+        let result = trigger_players_updated_event().await;
+        assert!(result.is_err());
+
+        if let Err(errors) = result {
+            assert_eq!(errors.len(), 2);
+        }
+    }
+}
