@@ -426,3 +426,279 @@ impl AsId for DownloadTask {
         DatabaseValue::Int64(self.id as i64)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_api::models::TrackAudioQuality;
+    use moosicbox_music_models::ApiSource;
+    use pretty_assertions::assert_eq;
+    use std::sync::LazyLock;
+
+    static TEST_API_SOURCE: LazyLock<ApiSource> =
+        LazyLock::new(|| ApiSource::register("TestApi", "TestApi"));
+
+    fn create_test_track_item() -> DownloadItem {
+        DownloadItem::Track {
+            source: crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            track_id: 123.into(),
+            quality: TrackAudioQuality::FlacHighestRes,
+            artist_id: 456.into(),
+            artist: "Test Artist".to_string(),
+            album_id: 789.into(),
+            album: "Test Album".to_string(),
+            title: "Test Track".to_string(),
+            contains_cover: true,
+        }
+    }
+
+    fn create_test_album_cover_item() -> DownloadItem {
+        DownloadItem::AlbumCover {
+            source: crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            artist_id: 456.into(),
+            artist: "Test Artist".to_string(),
+            album_id: 789.into(),
+            title: "Test Album".to_string(),
+            contains_cover: true,
+        }
+    }
+
+    fn create_test_artist_cover_item() -> DownloadItem {
+        DownloadItem::ArtistCover {
+            source: crate::DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            artist_id: 456.into(),
+            album_id: 789.into(),
+            title: "Test Artist".to_string(),
+            contains_cover: false,
+        }
+    }
+
+    #[test_log::test]
+    fn test_download_item_source_track() {
+        let item = create_test_track_item();
+        let source = item.source();
+
+        assert_eq!(
+            source,
+            &crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_item_source_album_cover() {
+        let item = create_test_album_cover_item();
+        let source = item.source();
+
+        assert_eq!(
+            source,
+            &crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_item_source_artist_cover() {
+        let item = create_test_artist_cover_item();
+        let source = item.source();
+
+        assert_eq!(
+            source,
+            &crate::DownloadApiSource::Api(TEST_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_item_quality_track() {
+        let item = create_test_track_item();
+        let quality = item.quality();
+
+        assert_eq!(quality, Some(&TrackAudioQuality::FlacHighestRes));
+    }
+
+    #[test_log::test]
+    fn test_download_item_quality_album_cover() {
+        let item = create_test_album_cover_item();
+        let quality = item.quality();
+
+        assert_eq!(quality, None);
+    }
+
+    #[test_log::test]
+    fn test_download_item_quality_artist_cover() {
+        let item = create_test_artist_cover_item();
+        let quality = item.quality();
+
+        assert_eq!(quality, None);
+    }
+
+    #[test_log::test]
+    fn test_download_item_track_title() {
+        let item = create_test_track_item();
+        let track = item.track();
+
+        assert_eq!(track, Some(&"Test Track".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_download_item_track_non_track_returns_none() {
+        let item = create_test_album_cover_item();
+        let track = item.track();
+
+        assert_eq!(track, None);
+    }
+
+    #[test_log::test]
+    fn test_download_item_track_id() {
+        let item = create_test_track_item();
+        let track_id = item.track_id();
+
+        assert_eq!(track_id, Some(&Id::from(123)));
+    }
+
+    #[test_log::test]
+    fn test_download_item_track_id_non_track_returns_none() {
+        let item = create_test_album_cover_item();
+        let track_id = item.track_id();
+
+        assert_eq!(track_id, None);
+    }
+
+    #[test_log::test]
+    fn test_download_item_album_track() {
+        let item = create_test_track_item();
+        let album = item.album();
+
+        assert_eq!(album, Some(&"Test Album".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_download_item_album_album_cover() {
+        let item = create_test_album_cover_item();
+        let album = item.album();
+
+        assert_eq!(album, Some(&"Test Album".to_string()));
+    }
+
+    #[test_log::test]
+    fn test_download_item_album_artist_cover_returns_none() {
+        let item = create_test_artist_cover_item();
+        let album = item.album();
+
+        assert_eq!(album, None);
+    }
+
+    #[test_log::test]
+    fn test_download_item_album_id() {
+        let item = create_test_track_item();
+        let album_id = item.album_id();
+
+        assert_eq!(album_id, &Id::from(789));
+    }
+
+    #[test_log::test]
+    fn test_download_item_artist() {
+        let item = create_test_track_item();
+        let artist = item.artist();
+
+        assert_eq!(artist, &"Test Artist".to_string());
+    }
+
+    #[test_log::test]
+    fn test_download_item_artist_for_artist_cover() {
+        let item = create_test_artist_cover_item();
+        let artist = item.artist();
+
+        // For artist covers, the title field contains the artist name
+        assert_eq!(artist, &"Test Artist".to_string());
+    }
+
+    #[test_log::test]
+    fn test_download_item_artist_id() {
+        let item = create_test_track_item();
+        let artist_id = item.artist_id();
+
+        assert_eq!(artist_id, &Id::from(456));
+    }
+
+    #[test_log::test]
+    fn test_download_item_contains_cover_true() {
+        let item = create_test_track_item();
+        let contains_cover = item.contains_cover();
+
+        assert!(contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_download_item_contains_cover_false() {
+        let item = create_test_artist_cover_item();
+        let contains_cover = item.contains_cover();
+
+        assert!(!contains_cover);
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_as_ref() {
+        assert_eq!(DownloadTaskState::Pending.as_ref(), "PENDING");
+        assert_eq!(DownloadTaskState::Paused.as_ref(), "PAUSED");
+        assert_eq!(DownloadTaskState::Cancelled.as_ref(), "CANCELLED");
+        assert_eq!(DownloadTaskState::Started.as_ref(), "STARTED");
+        assert_eq!(DownloadTaskState::Finished.as_ref(), "FINISHED");
+        assert_eq!(DownloadTaskState::Error.as_ref(), "ERROR");
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_from_str() {
+        assert_eq!(
+            DownloadTaskState::from_str("PENDING").unwrap(),
+            DownloadTaskState::Pending
+        );
+        assert_eq!(
+            DownloadTaskState::from_str("PAUSED").unwrap(),
+            DownloadTaskState::Paused
+        );
+        assert_eq!(
+            DownloadTaskState::from_str("CANCELLED").unwrap(),
+            DownloadTaskState::Cancelled
+        );
+        assert_eq!(
+            DownloadTaskState::from_str("STARTED").unwrap(),
+            DownloadTaskState::Started
+        );
+        assert_eq!(
+            DownloadTaskState::from_str("FINISHED").unwrap(),
+            DownloadTaskState::Finished
+        );
+        assert_eq!(
+            DownloadTaskState::from_str("ERROR").unwrap(),
+            DownloadTaskState::Error
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_from_str_invalid() {
+        assert!(DownloadTaskState::from_str("INVALID").is_err());
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_default() {
+        let state = DownloadTaskState::default();
+        assert_eq!(state, DownloadTaskState::Pending);
+    }
+
+    #[test_log::test]
+    fn test_download_item_as_ref_track() {
+        let item = create_test_track_item();
+        assert_eq!(item.as_ref(), "TRACK");
+    }
+
+    #[test_log::test]
+    fn test_download_item_as_ref_album_cover() {
+        let item = create_test_album_cover_item();
+        assert_eq!(item.as_ref(), "ALBUM_COVER");
+    }
+
+    #[test_log::test]
+    fn test_download_item_as_ref_artist_cover() {
+        let item = create_test_artist_cover_item();
+        assert_eq!(item.as_ref(), "ARTIST_COVER");
+    }
+}

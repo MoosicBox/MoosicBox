@@ -549,3 +549,343 @@ fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
 
     task
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::models::{DownloadItem, DownloadLocation, DownloadTaskState};
+    use crate::queue::ProgressEvent;
+    use crate::{DownloadApiSource, db::models::DownloadTask};
+    use moosicbox_music_api::models::TrackAudioQuality;
+    use moosicbox_music_models::ApiSource;
+    use pretty_assertions::assert_eq;
+    use std::sync::LazyLock;
+
+    static TEST_API_SOURCE: LazyLock<ApiSource> =
+        LazyLock::new(|| ApiSource::register("TestApi", "TestApi"));
+
+    #[test_log::test]
+    fn test_api_download_task_state_display() {
+        assert_eq!(ApiDownloadTaskState::Pending.to_string(), "pending");
+        assert_eq!(ApiDownloadTaskState::Paused.to_string(), "paused");
+        assert_eq!(ApiDownloadTaskState::Cancelled.to_string(), "cancelled");
+        assert_eq!(ApiDownloadTaskState::Started.to_string(), "started");
+        assert_eq!(ApiDownloadTaskState::Finished.to_string(), "finished");
+        assert_eq!(ApiDownloadTaskState::Error.to_string(), "error");
+    }
+
+    #[test_log::test]
+    fn test_api_download_task_state_from_download_task_state() {
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Pending),
+            ApiDownloadTaskState::Pending
+        );
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Paused),
+            ApiDownloadTaskState::Paused
+        );
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Cancelled),
+            ApiDownloadTaskState::Cancelled
+        );
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Started),
+            ApiDownloadTaskState::Started
+        );
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Finished),
+            ApiDownloadTaskState::Finished
+        );
+        assert_eq!(
+            ApiDownloadTaskState::from(DownloadTaskState::Error),
+            ApiDownloadTaskState::Error
+        );
+    }
+
+    #[test_log::test]
+    fn test_download_task_state_from_api_download_task_state() {
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Pending),
+            DownloadTaskState::Pending
+        );
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Paused),
+            DownloadTaskState::Paused
+        );
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Cancelled),
+            DownloadTaskState::Cancelled
+        );
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Started),
+            DownloadTaskState::Started
+        );
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Finished),
+            DownloadTaskState::Finished
+        );
+        assert_eq!(
+            DownloadTaskState::from(ApiDownloadTaskState::Error),
+            DownloadTaskState::Error
+        );
+    }
+
+    #[test_log::test]
+    fn test_api_download_location_from_download_location() {
+        let location = DownloadLocation {
+            id: 123,
+            path: "/test/path".to_string(),
+            created: "2024-01-01".to_string(),
+            updated: "2024-01-02".to_string(),
+        };
+
+        let api_location: ApiDownloadLocation = location.into();
+
+        assert_eq!(api_location.id, 123);
+        assert_eq!(api_location.path, "/test/path");
+    }
+
+    #[test_log::test]
+    fn test_api_download_api_source_from_download_api_source() {
+        let source = DownloadApiSource::Api(TEST_API_SOURCE.clone());
+        let api_source: ApiDownloadApiSource = source.into();
+
+        assert_eq!(
+            api_source,
+            ApiDownloadApiSource::Api(TEST_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_api_download_api_source_from_download_api_source_moosicbox() {
+        let source = DownloadApiSource::MoosicBox("http://localhost".to_string());
+        let api_source: ApiDownloadApiSource = source.into();
+
+        assert_eq!(
+            api_source,
+            ApiDownloadApiSource::MoosicBox("http://localhost".to_string())
+        );
+    }
+
+    #[test_log::test]
+    fn test_api_download_item_from_download_item_track() {
+        let item = DownloadItem::Track {
+            source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            track_id: 123.into(),
+            quality: TrackAudioQuality::FlacHighestRes,
+            artist_id: 456.into(),
+            artist: "Test Artist".to_string(),
+            album_id: 789.into(),
+            album: "Test Album".to_string(),
+            title: "Test Track".to_string(),
+            contains_cover: true,
+        };
+
+        let api_item: ApiDownloadItem = item.into();
+
+        match api_item {
+            ApiDownloadItem::Track {
+                track_id,
+                quality,
+                title,
+                ..
+            } => {
+                assert_eq!(track_id, 123.into());
+                assert_eq!(quality, TrackAudioQuality::FlacHighestRes);
+                assert_eq!(title, "Test Track");
+            }
+            _ => panic!("Expected Track variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_stripped_api_download_item_from_download_item_track() {
+        let item = DownloadItem::Track {
+            source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            track_id: 123.into(),
+            quality: TrackAudioQuality::FlacHighestRes,
+            artist_id: 456.into(),
+            artist: "Test Artist".to_string(),
+            album_id: 789.into(),
+            album: "Test Album".to_string(),
+            title: "Test Track".to_string(),
+            contains_cover: true,
+        };
+
+        let stripped_item: StrippedApiDownloadItem = item.into();
+
+        match stripped_item {
+            StrippedApiDownloadItem::Track {
+                track_id,
+                quality,
+                source,
+            } => {
+                assert_eq!(track_id, 123.into());
+                assert_eq!(quality, TrackAudioQuality::FlacHighestRes);
+                assert_eq!(source, DownloadApiSource::Api(TEST_API_SOURCE.clone()));
+            }
+            _ => panic!("Expected Track variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_stripped_api_download_item_from_download_item_album_cover() {
+        let item = DownloadItem::AlbumCover {
+            source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+            artist_id: 456.into(),
+            artist: "Test Artist".to_string(),
+            album_id: 789.into(),
+            title: "Test Album".to_string(),
+            contains_cover: true,
+        };
+
+        let stripped_item: StrippedApiDownloadItem = item.into();
+
+        match stripped_item {
+            StrippedApiDownloadItem::AlbumCover { album_id } => {
+                assert_eq!(album_id, 789.into());
+            }
+            _ => panic!("Expected AlbumCover variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_progress_event_from_progress_event_size() {
+        let task = DownloadTask {
+            id: 42,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+                track_id: 1.into(),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 2.into(),
+                artist: "Artist".to_string(),
+                album_id: 3.into(),
+                album: "Album".to_string(),
+                title: "Title".to_string(),
+                contains_cover: false,
+            },
+            file_path: "/test".to_string(),
+            total_bytes: None,
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let event = ProgressEvent::Size {
+            task,
+            bytes: Some(1024),
+        };
+        let api_event: ApiProgressEvent = event.into();
+
+        match api_event {
+            ApiProgressEvent::Size { task_id, bytes } => {
+                assert_eq!(task_id, 42);
+                assert_eq!(bytes, Some(1024));
+            }
+            _ => panic!("Expected Size variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_progress_event_from_progress_event_speed() {
+        let task = DownloadTask {
+            id: 42,
+            state: DownloadTaskState::Started,
+            item: DownloadItem::Track {
+                source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+                track_id: 1.into(),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 2.into(),
+                artist: "Artist".to_string(),
+                album_id: 3.into(),
+                album: "Album".to_string(),
+                title: "Title".to_string(),
+                contains_cover: false,
+            },
+            file_path: "/test".to_string(),
+            total_bytes: None,
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let event = ProgressEvent::Speed {
+            task,
+            bytes_per_second: 1024.5,
+        };
+        let api_event: ApiProgressEvent = event.into();
+
+        match api_event {
+            ApiProgressEvent::Speed {
+                task_id,
+                bytes_per_second,
+            } => {
+                assert_eq!(task_id, 42);
+                assert!((bytes_per_second - 1024.5).abs() < f64::EPSILON);
+            }
+            _ => panic!("Expected Speed variant"),
+        }
+    }
+
+    #[test_log::test]
+    fn test_api_download_task_from_download_task() {
+        let task = DownloadTask {
+            id: 99,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+                track_id: 1.into(),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 2.into(),
+                artist: "Artist".to_string(),
+                album_id: 3.into(),
+                album: "Album".to_string(),
+                title: "Title".to_string(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            total_bytes: Some(2048),
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let api_task: ApiDownloadTask = task.into();
+
+        assert_eq!(api_task.id, 99);
+        assert_eq!(api_task.state, ApiDownloadTaskState::Pending);
+        assert_eq!(api_task.file_path, "/test/path");
+        assert_eq!(api_task.total_bytes, Some(2048));
+        assert!(api_task.progress.abs() < f64::EPSILON);
+        assert_eq!(api_task.bytes, 0);
+        assert_eq!(api_task.speed, None);
+    }
+
+    #[test_log::test]
+    fn test_stripped_api_download_task_from_download_task() {
+        let task = DownloadTask {
+            id: 99,
+            state: DownloadTaskState::Pending,
+            item: DownloadItem::Track {
+                source: DownloadApiSource::Api(TEST_API_SOURCE.clone()),
+                track_id: 1.into(),
+                quality: TrackAudioQuality::FlacHighestRes,
+                artist_id: 2.into(),
+                artist: "Artist".to_string(),
+                album_id: 3.into(),
+                album: "Album".to_string(),
+                title: "Title".to_string(),
+                contains_cover: false,
+            },
+            file_path: "/test/path".to_string(),
+            total_bytes: Some(2048),
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let stripped_task: StrippedApiDownloadTask = task.into();
+
+        assert_eq!(stripped_task.id, 99);
+        assert_eq!(stripped_task.state, ApiDownloadTaskState::Pending);
+        assert_eq!(stripped_task.file_path, "/test/path");
+        assert_eq!(stripped_task.total_bytes, Some(2048));
+    }
+}

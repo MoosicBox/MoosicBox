@@ -1544,6 +1544,8 @@ impl Downloader for MoosicboxDownloader {
 #[cfg(test)]
 mod test {
     use super::*;
+    use moosicbox_music_models::Track;
+    use pretty_assertions::assert_eq;
 
     static TIDAL_API_SOURCE: LazyLock<ApiSource> =
         LazyLock::new(|| ApiSource::register("Tidal", "Tidal"));
@@ -1562,5 +1564,112 @@ mod test {
             serde_json::to_string(&DownloadApiSource::Api(TIDAL_API_SOURCE.clone())).unwrap();
         log::debug!("serialized: {serialized}");
         serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
+    }
+
+    #[test_log::test]
+    fn test_download_api_source_from_api_source() {
+        let api_source = TIDAL_API_SOURCE.clone();
+        let download_source: DownloadApiSource = api_source.clone().into();
+
+        assert_eq!(download_source, DownloadApiSource::Api(api_source));
+    }
+
+    #[test_log::test]
+    fn test_api_source_from_download_api_source_moosicbox() {
+        let download_source = DownloadApiSource::MoosicBox("http://localhost".to_string());
+        let api_source: ApiSource = download_source.into();
+
+        assert_eq!(api_source, ApiSource::library());
+    }
+
+    #[test_log::test]
+    fn test_api_source_from_download_api_source_api() {
+        let original_api_source = TIDAL_API_SOURCE.clone();
+        let download_source = DownloadApiSource::Api(original_api_source.clone());
+        let api_source: ApiSource = download_source.into();
+
+        assert_eq!(api_source, original_api_source);
+    }
+
+    #[test_log::test]
+    fn test_try_from_track_api_source_api() {
+        let track_source = TrackApiSource::Api(TIDAL_API_SOURCE.clone());
+        let result: Result<DownloadApiSource, TryFromTrackApiSourceError> = track_source.try_into();
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            DownloadApiSource::Api(TIDAL_API_SOURCE.clone())
+        );
+    }
+
+    #[test_log::test]
+    fn test_try_from_track_api_source_local_fails() {
+        let track_source = TrackApiSource::Local;
+        let result: Result<DownloadApiSource, TryFromTrackApiSourceError> = track_source.try_into();
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            TryFromTrackApiSourceError::InvalidSource
+        ));
+    }
+
+    #[test_log::test]
+    fn test_get_filename_for_track_formats_correctly() {
+        let track = Track {
+            number: 1,
+            title: "Test Song".to_string(),
+            ..Default::default()
+        };
+
+        let filename = get_filename_for_track(&track);
+
+        // sanitize_filename replaces spaces with underscores
+        assert_eq!(filename, "1_Test_Song.flac");
+    }
+
+    #[test_log::test]
+    fn test_get_filename_for_track_sanitizes_special_characters() {
+        let track = Track {
+            number: 5,
+            title: "Test/Song: With* Special? Chars".to_string(),
+            ..Default::default()
+        };
+
+        let filename = get_filename_for_track(&track);
+
+        // Should sanitize special characters that are invalid in filenames
+        assert!(filename.starts_with("5_"));
+        assert!(
+            std::path::Path::new(&filename)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("flac"))
+        );
+        assert!(!filename.contains('/'));
+        assert!(!filename.contains(':'));
+    }
+
+    #[test_log::test]
+    fn test_get_filename_for_track_handles_double_digit_track_numbers() {
+        let track = Track {
+            number: 42,
+            title: "Answer".to_string(),
+            ..Default::default()
+        };
+
+        let filename = get_filename_for_track(&track);
+
+        assert_eq!(filename, "42_Answer.flac");
+    }
+
+    #[test_log::test]
+    fn test_get_default_download_path_returns_downloads_subdir() {
+        let result = get_default_download_path();
+
+        // Should succeed or fail consistently, but the path should end with "downloads"
+        if let Ok(path) = result {
+            assert!(path.ends_with("downloads"));
+        }
     }
 }
