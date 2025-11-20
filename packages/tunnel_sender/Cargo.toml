@@ -163,3 +163,6 @@ format-opus = [
     "moosicbox_player/format-opus",
     "moosicbox_ws/opus",
 ]
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
