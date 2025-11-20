@@ -1768,6 +1768,9 @@ name = "basic_handler_example"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
+ "switchy_async",
+ "test-log",
+ "tokio",
 ]
 
 [[package]]
