@@ -913,3 +913,571 @@ fn parse_dsl_with_argument_fallback(input: TokenStream) -> Result<Dsl> {
     // to be more specific about what failed
     Parser::parse2(parse_dsl, input)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn test_parse_pattern_literal_integer() {
+        let input = quote! { 42 };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Literal(Literal::Integer(n)) => assert_eq!(n, 42),
+            _ => panic!("Expected integer literal pattern"),
+        }
+    }
+
+    #[test]
+    fn test_parse_pattern_literal_string() {
+        let input = quote! { "test" };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Literal(Literal::String(s)) => assert_eq!(s, "test"),
+            _ => panic!("Expected string literal pattern"),
+        }
+    }
+
+    #[test]
+    fn test_parse_pattern_variable() {
+        let input = quote! { x };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Variable(name) => assert_eq!(name, "x"),
+            _ => panic!("Expected variable pattern"),
+        }
+    }
+
+    #[test]
+    fn test_parse_pattern_wildcard() {
+        let input = quote! { _ };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        assert!(matches!(result, Pattern::Wildcard));
+    }
+
+    #[test]
+    fn test_parse_pattern_enum_variant() {
+        let input = quote! { Option::Some };
+        let result = Parser::parse2(parse_pattern, input).unwrap();
+        match result {
+            Pattern::Variant {
+                enum_name,
+                variant,
+                fields,
+            } => {
+                assert_eq!(enum_name, "Option");
+                assert_eq!(variant, "Some");
+                assert!(fields.is_empty());
+            }
+            _ => panic!("Expected enum variant pattern"),
+        }
+    }
+
+    #[test]
+    fn test_parse_literal_bool_true() {
+        let lit = syn::parse_quote! { true };
+        let result = parse_literal(lit).unwrap();
+        assert!(matches!(result, Literal::Bool(true)));
+    }
+
+    #[test]
+    fn test_parse_literal_bool_false() {
+        let lit = syn::parse_quote! { false };
+        let result = parse_literal(lit).unwrap();
+        assert!(matches!(result, Literal::Bool(false)));
+    }
+
+    #[test]
+    fn test_parse_literal_float() {
+        let lit = syn::parse_quote! { 3.14 };
+        let result = parse_literal(lit).unwrap();
+        match result {
+            Literal::Float(f) => assert!((f - 3.14).abs() < f64::EPSILON),
+            _ => panic!("Expected float literal"),
+        }
+    }
+
+    #[test]
+    fn test_parse_closure_single_param() {
+        let input = quote! { |x| x };
+        let result = Parser::parse2(parse_closure, input).unwrap();
+        match result {
+            Expression::Closure { params, body: _ } => {
+                assert_eq!(params.len(), 1);
+                assert_eq!(params[0], "x");
+            }
+            _ => panic!("Expected closure expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_closure_multiple_params() {
+        let input = quote! { |x, y| x };
+        let result = Parser::parse2(parse_closure, input).unwrap();
+        match result {
+            Expression::Closure { params, body: _ } => {
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0], "x");
+                assert_eq!(params[1], "y");
+            }
+            _ => panic!("Expected closure expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_closure_no_params() {
+        let input = quote! { || 42 };
+        let result = Parser::parse2(parse_closure, input).unwrap();
+        match result {
+            Expression::Closure { params, body: _ } => {
+                assert!(params.is_empty());
+            }
+            _ => panic!("Expected closure expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_not() {
+        let input = quote! { !true };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Unary { op, expr: _ } => {
+                assert!(matches!(op, UnaryOp::Not));
+            }
+            _ => panic!("Expected unary not expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_minus() {
+        let input = quote! { -42 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Unary { op, expr: _ } => {
+                assert!(matches!(op, UnaryOp::Minus));
+            }
+            _ => panic!("Expected unary minus expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_reference() {
+        let input = quote! { &value };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Unary { op, expr: _ } => {
+                assert!(matches!(op, UnaryOp::Ref));
+            }
+            _ => panic!("Expected unary reference expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_add() {
+        let input = quote! { 1 + 2 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Add));
+            }
+            _ => panic!("Expected binary add expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_multiply() {
+        let input = quote! { 3 * 4 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Multiply));
+            }
+            _ => panic!("Expected binary multiply expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_equal() {
+        let input = quote! { x == y };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Equal));
+            }
+            _ => panic!("Expected binary equal expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_and() {
+        let input = quote! { true && false };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::And));
+            }
+            _ => panic!("Expected binary and expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_or() {
+        let input = quote! { true || false };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
+                assert!(matches!(op, BinaryOp::Or));
+            }
+            _ => panic!("Expected binary or expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grouping_preserves_expression() {
+        let input = quote! { (a + b) };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Grouping(inner) => match *inner {
+                Expression::Binary {
+                    left: _,
+                    op,
+                    right: _,
+                } => {
+                    assert!(matches!(op, BinaryOp::Add));
+                }
+                _ => panic!("Expected binary expression inside grouping"),
+            },
+            _ => panic!("Expected grouping expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_array() {
+        let input = quote! { [] };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Array(exprs) => {
+                assert!(exprs.is_empty());
+            }
+            _ => panic!("Expected array expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_array_with_elements() {
+        let input = quote! { [1, 2, 3] };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Array(exprs) => {
+                assert_eq!(exprs.len(), 3);
+            }
+            _ => panic!("Expected array expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_enum_variant_simple() {
+        let input = quote! { Key::Escape };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Variable(name) => {
+                assert_eq!(name, "Key::Escape");
+            }
+            _ => panic!("Expected enum variant as variable"),
+        }
+    }
+
+    #[test]
+    fn test_parse_struct_variant_with_fields() {
+        let input = quote! { Action::Update { id: 123, name: "test" } };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Call { function, args } => {
+                assert_eq!(function, "Action::Update");
+                assert_eq!(args.len(), 2);
+            }
+            _ => panic!("Expected struct variant as call"),
+        }
+    }
+
+    #[test]
+    fn test_parse_let_statement() {
+        let input = quote! { let x = 42; };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::Let { name, value: _ } => {
+                assert_eq!(name, "x");
+            }
+            _ => panic!("Expected let statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_statement_with_else() {
+        let input = quote! {
+            if true {
+                show("modal");
+            } else {
+                hide("modal");
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::If {
+                condition: _,
+                then_block,
+                else_block,
+            } => {
+                assert!(!then_block.statements.is_empty());
+                assert!(else_block.is_some());
+            }
+            _ => panic!("Expected if statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_statement_without_else() {
+        let input = quote! {
+            if true {
+                show("modal");
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::If {
+                condition: _,
+                then_block,
+                else_block,
+            } => {
+                assert!(!then_block.statements.is_empty());
+                assert!(else_block.is_none());
+            }
+            _ => panic!("Expected if statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_for_statement() {
+        let input = quote! {
+            for item in items {
+                log(item);
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::For {
+                pattern,
+                iter: _,
+                body,
+            } => {
+                assert_eq!(pattern, "item");
+                assert!(!body.statements.is_empty());
+            }
+            _ => panic!("Expected for statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_while_statement() {
+        let input = quote! {
+            while true {
+                log("test");
+            }
+        };
+        let result = Parser::parse2(parse_statement, input).unwrap();
+        match result {
+            Statement::While { condition: _, body } => {
+                assert!(!body.statements.is_empty());
+            }
+            _ => panic!("Expected while statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_dsl() {
+        let input = quote! {};
+        let result = parse_dsl.parse2(input).unwrap();
+        assert!(result.statements.is_empty());
+    }
+
+    #[test]
+    fn test_parse_multiple_statements() {
+        let input = quote! {
+            let x = 1;
+            let y = 2;
+            show("test");
+        };
+        let result = parse_dsl.parse2(input).unwrap();
+        assert_eq!(result.statements.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_nested_blocks() {
+        let input = quote! {
+            {
+                {
+                    show("test");
+                }
+            }
+        };
+        let result = parse_dsl.parse2(input).unwrap();
+        assert_eq!(result.statements.len(), 1);
+        match &result.statements[0] {
+            Statement::Block(block) => {
+                assert_eq!(block.statements.len(), 1);
+            }
+            _ => panic!("Expected block statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_operator_precedence_add_multiply() {
+        let input = quote! { 1 + 2 * 3 };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        // Should parse as 1 + (2 * 3) due to operator precedence
+        match result {
+            Expression::Binary {
+                left: _,
+                op: BinaryOp::Add,
+                right,
+            } => match *right {
+                Expression::Binary {
+                    left: _,
+                    op: BinaryOp::Multiply,
+                    right: _,
+                } => {} // Correct precedence
+                _ => panic!("Incorrect operator precedence"),
+            },
+            _ => panic!("Expected binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_less_than() {
+        let input = quote! { a < b };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary { left: _, op, right: _ } => {
+                assert!(matches!(op, BinaryOp::Less));
+            }
+            _ => panic!("Expected binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_greater_than() {
+        let input = quote! { a > b };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary { left: _, op, right: _ } => {
+                assert!(matches!(op, BinaryOp::Greater));
+            }
+            _ => panic!("Expected binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_not_equal() {
+        let input = quote! { a != b };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Binary { left: _, op, right: _ } => {
+                assert!(matches!(op, BinaryOp::NotEqual));
+            }
+            _ => panic!("Expected binary expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_method_call() {
+        let input = quote! { value.to_string() };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::MethodCall {
+                receiver: _,
+                method,
+                args,
+            } => {
+                assert_eq!(method, "to_string");
+                assert!(args.is_empty());
+            }
+            _ => panic!("Expected method call expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_method_call_with_args() {
+        let input = quote! { value.clamp(0, 100) };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::MethodCall {
+                receiver: _,
+                method,
+                args,
+            } => {
+                assert_eq!(method, "clamp");
+                assert_eq!(args.len(), 2);
+            }
+            _ => panic!("Expected method call expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_field_access() {
+        let input = quote! { obj.field };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::Field { object: _, field } => {
+                assert_eq!(field, "field");
+            }
+            _ => panic!("Expected field access expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_dsl_with_fallback_for_unknown_function() {
+        let input = quote! { unknown_function(1, 2, 3) };
+        let result = parse_dsl_with_fallback(&input);
+        assert_eq!(result.statements.len(), 1);
+        match &result.statements[0] {
+            Statement::Expression(Expression::RawRust(_)) => {} // Should fall back to raw Rust
+            _ => panic!("Expected fallback to raw Rust"),
+        }
+    }
+
+    #[test]
+    fn test_parse_element_function() {
+        let input = quote! { element(".selector") };
+        let result = Parser::parse2(parse_expression, input).unwrap();
+        match result {
+            Expression::ElementRef(selector) => match *selector {
+                Expression::Literal(Literal::String(s)) => {
+                    assert_eq!(s, ".selector");
+                }
+                _ => panic!("Expected string literal in element ref"),
+            },
+            _ => panic!("Expected element ref expression"),
+        }
+    }
+}
