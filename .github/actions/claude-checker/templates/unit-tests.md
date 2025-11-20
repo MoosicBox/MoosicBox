@@ -39,6 +39,7 @@ You must ONLY add tests that meet ALL of the following criteria:
 **DO NOT** add tests for:
 
 - **Simple getters/setters with no logic** - Functions that just return or set a field value without any transformation, validation, or business logic
+- **Builder pattern methods** - Do not test `with_*()` or `set_*()` builder methods that simply add values to collections or set fields. These are trivial setters. Example: testing that `with_listener(callback)` adds the callback to a Vec is redundant
 - **Trivial type conversions** - Standard trait implementations like `ToString`, `AsRef`, `Into`, `From`, `FromStr` that simply convert between types without complex logic
 - **Trivial constructors** - Constructors that just assign values to fields without validation or setup logic (e.g., `new()`, `default()`)
 - **Code already well-tested through integration tests** - Avoid redundant unit tests for behavior that is thoroughly covered by integration/end-to-end tests
