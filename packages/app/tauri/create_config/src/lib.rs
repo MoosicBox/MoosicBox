@@ -76,3 +76,120 @@ pub fn generate<P: AsRef<Path>>(bundled: bool, output: P) {
 
     file.write_all(config.to_json().as_bytes()).unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_config_to_json_bundled() {
+        let config = Config {
+            web: false,
+            app: true,
+            bundled: true,
+        };
+
+        let json = config.to_json();
+
+        assert_eq!(
+            json,
+            r#"export const config = {"web":false,"app":true,"bundled":true} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_config_to_json_not_bundled() {
+        let config = Config {
+            web: false,
+            app: true,
+            bundled: false,
+        };
+
+        let json = config.to_json();
+
+        assert_eq!(
+            json,
+            r#"export const config = {"web":false,"app":true,"bundled":false} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_config_to_json_all_enabled() {
+        let config = Config {
+            web: true,
+            app: true,
+            bundled: true,
+        };
+
+        let json = config.to_json();
+
+        assert_eq!(
+            json,
+            r#"export const config = {"web":true,"app":true,"bundled":true} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_config_to_json_all_disabled() {
+        let config = Config {
+            web: false,
+            app: false,
+            bundled: false,
+        };
+
+        let json = config.to_json();
+
+        assert_eq!(
+            json,
+            r#"export const config = {"web":false,"app":false,"bundled":false} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_generate_creates_file_with_bundled_true() {
+        let temp_dir = switchy_fs::TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("config.ts");
+
+        generate(true, &output_path);
+
+        let content = switchy_fs::sync::read_to_string(&output_path).unwrap();
+        assert_eq!(
+            content,
+            r#"export const config = {"web":false,"app":true,"bundled":true} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_generate_creates_file_with_bundled_false() {
+        let temp_dir = switchy_fs::TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("config.ts");
+
+        generate(false, &output_path);
+
+        let content = switchy_fs::sync::read_to_string(&output_path).unwrap();
+        assert_eq!(
+            content,
+            r#"export const config = {"web":false,"app":true,"bundled":false} as const;"#
+        );
+    }
+
+    #[test]
+    fn test_generate_overwrites_existing_file() {
+        let temp_dir = switchy_fs::TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("config.ts");
+
+        // Create initial file with bundled=true
+        generate(true, &output_path);
+        let initial_content = switchy_fs::sync::read_to_string(&output_path).unwrap();
+        assert!(initial_content.contains(r#""bundled":true"#));
+
+        // Overwrite with bundled=false
+        generate(false, &output_path);
+        let new_content = switchy_fs::sync::read_to_string(&output_path).unwrap();
+        assert_eq!(
+            new_content,
+            r#"export const config = {"web":false,"app":true,"bundled":false} as const;"#
+        );
+    }
+}
