@@ -4292,3 +4292,192 @@ fn kebab_to_pascal_case(s: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_kebab_to_pascal_case_special_cases() {
+        assert_eq!(kebab_to_pascal_case("space-between"), "SpaceBetween");
+        assert_eq!(kebab_to_pascal_case("space-evenly"), "SpaceEvenly");
+        assert_eq!(kebab_to_pascal_case("flex-start"), "FlexStart");
+        assert_eq!(kebab_to_pascal_case("flex-end"), "FlexEnd");
+        assert_eq!(kebab_to_pascal_case("line-through"), "LineThrough");
+    }
+
+    #[test]
+    fn test_kebab_to_pascal_case_general() {
+        assert_eq!(kebab_to_pascal_case("foo-bar"), "FooBar");
+        assert_eq!(kebab_to_pascal_case("hello-world"), "HelloWorld");
+        assert_eq!(kebab_to_pascal_case("one-two-three"), "OneTwoThree");
+    }
+
+    #[test]
+    fn test_kebab_to_pascal_case_single_word() {
+        assert_eq!(kebab_to_pascal_case("hello"), "Hello");
+        assert_eq!(kebab_to_pascal_case("world"), "World");
+    }
+
+    #[test]
+    fn test_kebab_to_pascal_case_empty_string() {
+        assert_eq!(kebab_to_pascal_case(""), "");
+    }
+
+    #[test]
+    fn test_kebab_to_pascal_case_uppercase_preservation() {
+        // The function lowercases everything except the first char
+        assert_eq!(kebab_to_pascal_case("HELLO-WORLD"), "HelloWorld");
+        assert_eq!(kebab_to_pascal_case("FoO-BaR"), "FooBar");
+    }
+
+    #[test]
+    fn test_kebab_to_pascal_case_multiple_hyphens() {
+        assert_eq!(kebab_to_pascal_case("a-b-c-d-e"), "ABCDE");
+    }
+
+    #[test]
+    fn test_validate_element_parent_summary_in_details() {
+        // summary is allowed in details parent
+        let result = validate_element_parent("summary", ParentContext::Details);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_element_parent_summary_in_generic() {
+        // summary is NOT allowed in generic parent
+        let result = validate_element_parent("summary", ParentContext::Generic);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<summary> element can only be used as a direct child of <details>"
+        );
+    }
+
+    #[test]
+    fn test_validate_element_parent_summary_at_root() {
+        // summary is NOT allowed at root
+        let result = validate_element_parent("summary", ParentContext::Root);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<summary> element can only be used as a direct child of <details>"
+        );
+    }
+
+    #[test]
+    fn test_validate_element_parent_regular_element() {
+        // Regular elements are allowed anywhere
+        assert!(validate_element_parent("div", ParentContext::Root).is_ok());
+        assert!(validate_element_parent("div", ParentContext::Generic).is_ok());
+        assert!(validate_element_parent("div", ParentContext::Details).is_ok());
+        assert!(validate_element_parent("span", ParentContext::Generic).is_ok());
+        assert!(validate_element_parent("button", ParentContext::Root).is_ok());
+    }
+
+    #[test]
+    fn test_validate_child_element_summary_as_first_child() {
+        let tracker = ChildPositionTracker::new();
+        // summary is valid as first child of details
+        let result = validate_child_element("summary", ParentContext::Details, &tracker);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_child_element_summary_not_first_child() {
+        let mut tracker = ChildPositionTracker::new();
+        tracker.increment("div"); // Add a child before summary
+        // summary must be first child
+        let result = validate_child_element("summary", ParentContext::Details, &tracker);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<summary> must be the first child of <details>"
+        );
+    }
+
+    #[test]
+    fn test_validate_child_element_multiple_summaries() {
+        let mut tracker = ChildPositionTracker::new();
+        // First summary is ok
+        validate_child_element("summary", ParentContext::Details, &tracker).unwrap();
+        tracker.increment("summary");
+
+        // Reset to first position but we've already seen a summary
+        let mut second_tracker = ChildPositionTracker::new();
+        second_tracker.seen_elements = tracker.seen_elements.clone();
+
+        // Second summary should fail count constraint
+        let result = validate_child_element("summary", ParentContext::Details, &second_tracker);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "<details> can contain at most one <summary> element"
+        );
+    }
+
+    #[test]
+    fn test_validate_child_element_regular_elements() {
+        let tracker = ChildPositionTracker::new();
+        // Regular elements have no special constraints
+        assert!(validate_child_element("div", ParentContext::Generic, &tracker).is_ok());
+        assert!(validate_child_element("span", ParentContext::Root, &tracker).is_ok());
+        assert!(validate_child_element("button", ParentContext::Details, &tracker).is_ok());
+    }
+
+    #[test]
+    fn test_child_position_tracker_increment() {
+        let mut tracker = ChildPositionTracker::new();
+        assert_eq!(tracker.index, 0);
+        assert_eq!(tracker.get_count("div"), 0);
+
+        tracker.increment("div");
+        assert_eq!(tracker.index, 1);
+        assert_eq!(tracker.get_count("div"), 1);
+
+        tracker.increment("div");
+        assert_eq!(tracker.index, 2);
+        assert_eq!(tracker.get_count("div"), 2);
+
+        tracker.increment("span");
+        assert_eq!(tracker.index, 3);
+        assert_eq!(tracker.get_count("span"), 1);
+        assert_eq!(tracker.get_count("div"), 2);
+    }
+
+    #[test]
+    fn test_child_position_tracker_get_count_nonexistent() {
+        let tracker = ChildPositionTracker::new();
+        assert_eq!(tracker.get_count("nonexistent"), 0);
+    }
+
+    #[test]
+    fn test_parent_context_child_context() {
+        assert_eq!(
+            ParentContext::child_context("details"),
+            ParentContext::Details
+        );
+        assert_eq!(ParentContext::child_context("div"), ParentContext::Generic);
+        assert_eq!(ParentContext::child_context("span"), ParentContext::Generic);
+        assert_eq!(
+            ParentContext::child_context("button"),
+            ParentContext::Generic
+        );
+    }
+
+    #[test]
+    fn test_count_constraint_at_most() {
+        let constraint = CountConstraint::AtMost(1);
+        assert!(constraint.validate(0));
+        assert!(constraint.validate(1));
+        assert!(!constraint.validate(2));
+        assert!(!constraint.validate(3));
+
+        let constraint_three = CountConstraint::AtMost(3);
+        assert!(constraint_three.validate(0));
+        assert!(constraint_three.validate(1));
+        assert!(constraint_three.validate(2));
+        assert!(constraint_three.validate(3));
+        assert!(!constraint_three.validate(4));
+    }
+}
