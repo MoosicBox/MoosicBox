@@ -321,7 +321,7 @@ jobs:
                   command: run-matrix
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
                   run-matrix-commands: |
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} llvm-cov test --no-report {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
                   run-matrix-strategy: "sequential"
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Tests"
@@ -340,7 +340,7 @@ jobs:
                           echo "Skipping doctests for {{matrix.package.name}} - no library target found"
                           exit 0
                       fi
-                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
+                      {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo{{if matrix.package.nightly}} +nightly{{endif}} test --doc {{if runner.debug}}-vv {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}} --no-fail-fast
                   run-matrix-strategy: "sequential"
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Doctests"
