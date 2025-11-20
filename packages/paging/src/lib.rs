@@ -1892,9 +1892,10 @@ mod tests {
             total: 2,
         };
 
-        let response: PagingResponse<From, String> = PagingResponse::new(page, |_offset, _limit| {
-            Box::pin(async { Ok(PagingResponse::empty()) })
-        });
+        let response: PagingResponse<From, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async { Ok(PagingResponse::empty()) })
+            });
 
         let converted: PagingResponse<To, String> = response.ok_into();
         assert_eq!(converted.items(), &[To(10), To(20)]);
