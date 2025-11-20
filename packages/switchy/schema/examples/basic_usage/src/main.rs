@@ -1,3 +1,8 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+#![allow(clippy::unnecessary_literal_bound)]
+
 //! Basic usage example for `switchy_schema` demonstrating type-safe database migrations.
 //!
 //! This example showcases the core features of `switchy_schema`:
@@ -20,7 +25,7 @@
 //! cargo run --package basic_usage
 //! ```
 //!
-//! The example uses an in-memory SQLite database, so no external setup is required.
+//! The example uses an in-memory `SQLite` database, so no external setup is required.
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -42,6 +47,13 @@ impl Migration<'static> for CreateUsersTable {
         Some("Create users table with id, name, and email columns")
     }
 
+    /// Creates the users table with id, name, and email columns.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL syntax errors in table creation
+    /// * Constraint violations if table already exists
     async fn up(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Create users table using type-safe schema builder
         db.create_table("users")
@@ -73,6 +85,12 @@ impl Migration<'static> for CreateUsersTable {
         Ok(())
     }
 
+    /// Drops the users table for migration rollback.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL execution errors when dropping the table
     async fn down(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Drop users table for rollback
         db.drop_table("users").if_exists(true).execute(db).await?;
@@ -94,6 +112,13 @@ impl Migration<'static> for AddEmailIndex {
         Some("Add index on email column for faster lookups")
     }
 
+    /// Creates an index on the `email` column for improved query performance.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL syntax errors in index creation
+    /// * Index creation failures (e.g., if column doesn't exist)
     async fn up(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Create index using type-safe schema builder
         db.create_index("idx_users_email")
@@ -106,6 +131,12 @@ impl Migration<'static> for AddEmailIndex {
         Ok(())
     }
 
+    /// Drops the `email` index for migration rollback.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL execution errors when dropping the index
     async fn down(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Drop index for rollback
         db.drop_index("idx_users_email", "users")
@@ -117,7 +148,7 @@ impl Migration<'static> for AddEmailIndex {
     }
 }
 
-/// Migration to add created_at column using schema builder
+/// Migration to add `created_at` column using schema builder
 struct AddCreatedAtColumn;
 
 #[async_trait]
@@ -130,6 +161,13 @@ impl Migration<'static> for AddCreatedAtColumn {
         Some("Add created_at timestamp column to track when users are created")
     }
 
+    /// Adds a `created_at` timestamp column with a default value of `NOW()`.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL syntax errors in ALTER TABLE statement
+    /// * Column addition failures (e.g., if table doesn't exist)
     async fn up(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Add column using type-safe schema builder
         db.alter_table("users")
@@ -145,6 +183,12 @@ impl Migration<'static> for AddCreatedAtColumn {
         Ok(())
     }
 
+    /// Drops the `created_at` column for migration rollback.
+    ///
+    /// # Errors
+    ///
+    /// * Database connection errors
+    /// * SQL execution errors when dropping the column
     async fn down(&self, db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
         // Drop column for rollback
         db.alter_table("users")
@@ -161,6 +205,11 @@ struct BasicUsageMigrations;
 
 #[async_trait]
 impl MigrationSource<'static> for BasicUsageMigrations {
+    /// Returns the ordered list of migrations for this example.
+    ///
+    /// # Errors
+    ///
+    /// * Currently never returns errors, but trait requires Result for extensibility
     async fn migrations(
         &self,
     ) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>, switchy_schema::MigrationError> {
@@ -172,6 +221,21 @@ impl MigrationSource<'static> for BasicUsageMigrations {
     }
 }
 
+/// Runs the basic usage example demonstrating `switchy_schema` features.
+///
+/// This example creates an in-memory `SQLite` database, runs migrations to create
+/// a users table with indexes, inserts test data, and displays migration status.
+///
+/// # Errors
+///
+/// * Database initialization failures
+/// * Migration execution errors
+/// * SQL query execution errors
+/// * Data retrieval failures
+///
+/// # Panics
+///
+/// * When retrieving database values if the expected column types don't match
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging to see migration progress
@@ -221,7 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .execute(db)
         .await?;
 
-    println!("📝 Inserted user with ID: {:?}", user_id);
+    println!("📝 Inserted user with ID: {user_id:?}");
 
     // Query users to verify structure
     let users = db.select("users").execute(db).await?;
