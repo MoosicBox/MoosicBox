@@ -43,7 +43,7 @@ pub struct QobuzImage {
 }
 
 /// Image size variants for Qobuz artwork, with pixel dimensions indicated in comments.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QobuzImageSize {
     /// Mega size (4800x4800 pixels).
     Mega,
@@ -901,5 +901,212 @@ impl AsModelResult<QobuzSearchResults, ParseError> for Value {
             artists: self.to_value("artists")?,
             tracks: self.to_value("tracks")?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_magic_qobuz_album_release_type_determinizer_single_track() {
+        let result = magic_qobuz_album_release_type_determinizer(180, 1);
+        assert_eq!(result, QobuzAlbumReleaseType::Single);
+    }
+
+    #[test]
+    fn test_magic_qobuz_album_release_type_determinizer_short_ep() {
+        let result = magic_qobuz_album_release_type_determinizer(300, 3);
+        assert_eq!(result, QobuzAlbumReleaseType::EpSingle);
+    }
+
+    #[test]
+    fn test_magic_qobuz_album_release_type_determinizer_long_ep_becomes_album() {
+        // 21 minutes (longer than 20 minutes threshold)
+        let result = magic_qobuz_album_release_type_determinizer(1260, 6);
+        assert_eq!(result, QobuzAlbumReleaseType::Album);
+    }
+
+    #[test]
+    fn test_magic_qobuz_album_release_type_determinizer_many_tracks() {
+        let result = magic_qobuz_album_release_type_determinizer(2400, 12);
+        assert_eq!(result, QobuzAlbumReleaseType::Album);
+    }
+
+    #[test]
+    fn test_magic_qobuz_album_release_type_determinizer_boundary_cases() {
+        // Exactly at EP/Single boundary with short duration
+        let result = magic_qobuz_album_release_type_determinizer(100, 2);
+        assert_eq!(result, QobuzAlbumReleaseType::EpSingle);
+
+        // Exactly at EP/Album boundary with 7 tracks
+        let result = magic_qobuz_album_release_type_determinizer(1000, 7);
+        assert_eq!(result, QobuzAlbumReleaseType::Album);
+    }
+
+    #[test]
+    fn test_qobuz_image_size_from_u16() {
+        assert_eq!(QobuzImageSize::from(50), QobuzImageSize::Thumbnail);
+        assert_eq!(QobuzImageSize::from(100), QobuzImageSize::Thumbnail);
+        assert_eq!(QobuzImageSize::from(150), QobuzImageSize::Small);
+        assert_eq!(QobuzImageSize::from(300), QobuzImageSize::Small);
+        assert_eq!(QobuzImageSize::from(400), QobuzImageSize::Medium);
+        assert_eq!(QobuzImageSize::from(600), QobuzImageSize::Medium);
+        assert_eq!(QobuzImageSize::from(800), QobuzImageSize::Large);
+        assert_eq!(QobuzImageSize::from(1200), QobuzImageSize::Large);
+        assert_eq!(QobuzImageSize::from(1500), QobuzImageSize::ExtraLarge);
+        assert_eq!(QobuzImageSize::from(2400), QobuzImageSize::ExtraLarge);
+        assert_eq!(QobuzImageSize::from(3000), QobuzImageSize::Mega);
+        assert_eq!(QobuzImageSize::from(5000), QobuzImageSize::Mega);
+    }
+
+    #[test]
+    fn test_qobuz_image_size_to_u16() {
+        assert_eq!(u16::from(QobuzImageSize::Thumbnail), 100);
+        assert_eq!(u16::from(QobuzImageSize::Small), 300);
+        assert_eq!(u16::from(QobuzImageSize::Medium), 600);
+        assert_eq!(u16::from(QobuzImageSize::Large), 1200);
+        assert_eq!(u16::from(QobuzImageSize::ExtraLarge), 2400);
+        assert_eq!(u16::from(QobuzImageSize::Mega), 4800);
+    }
+
+    #[test]
+    fn test_qobuz_image_size_from_image_cover_size() {
+        assert_eq!(
+            QobuzImageSize::from(ImageCoverSize::Thumbnail),
+            QobuzImageSize::Thumbnail
+        );
+        assert_eq!(
+            QobuzImageSize::from(ImageCoverSize::Small),
+            QobuzImageSize::Small
+        );
+        assert_eq!(
+            QobuzImageSize::from(ImageCoverSize::Medium),
+            QobuzImageSize::Medium
+        );
+        assert_eq!(
+            QobuzImageSize::from(ImageCoverSize::Large),
+            QobuzImageSize::Large
+        );
+        assert_eq!(
+            QobuzImageSize::from(ImageCoverSize::Max),
+            QobuzImageSize::Mega
+        );
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_all_available() {
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: Some("small.jpg".to_string()),
+            medium: Some("medium.jpg".to_string()),
+            large: Some("large.jpg".to_string()),
+            extralarge: Some("xl.jpg".to_string()),
+            mega: Some("mega.jpg".to_string()),
+        };
+
+        assert_eq!(image.cover_url(), Some("mega.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_for_size_with_fallback() {
+        let image = QobuzImage {
+            thumbnail: None,
+            small: Some("small.jpg".to_string()),
+            medium: None,
+            large: Some("large.jpg".to_string()),
+            extralarge: None,
+            mega: None,
+        };
+
+        // Request mega, should fall back to large
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Mega),
+            Some("large.jpg".to_string())
+        );
+
+        // Request medium, should fall back to large (higher quality preferred)
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Medium),
+            Some("large.jpg".to_string())
+        );
+
+        // Request thumbnail, should fall back to small
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Thumbnail),
+            Some("small.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_for_size_prefers_higher_quality() {
+        let image = QobuzImage {
+            thumbnail: Some("thumb.jpg".to_string()),
+            small: Some("small.jpg".to_string()),
+            medium: None,
+            large: None,
+            extralarge: None,
+            mega: None,
+        };
+
+        // Request medium when only smaller sizes available
+        // Should prefer small over thumbnail
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Medium),
+            Some("small.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_for_size_no_images() {
+        let image = QobuzImage::default();
+
+        assert_eq!(image.cover_url_for_size(QobuzImageSize::Mega), None);
+        assert_eq!(image.cover_url_for_size(QobuzImageSize::Thumbnail), None);
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_for_size_exact_match() {
+        let image = QobuzImage {
+            thumbnail: None,
+            small: None,
+            medium: Some("medium.jpg".to_string()),
+            large: None,
+            extralarge: None,
+            mega: None,
+        };
+
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Medium),
+            Some("medium.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_qobuz_image_cover_url_for_size_thumbnail_fallback_chain() {
+        let image = QobuzImage {
+            thumbnail: None,
+            small: None,
+            medium: None,
+            large: None,
+            extralarge: None,
+            mega: Some("mega.jpg".to_string()),
+        };
+
+        // Thumbnail should eventually fall back to mega as last resort
+        assert_eq!(
+            image.cover_url_for_size(QobuzImageSize::Thumbnail),
+            Some("mega.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_qobuz_image_display() {
+        assert_eq!(format!("{}", QobuzImageSize::Thumbnail), "100");
+        assert_eq!(format!("{}", QobuzImageSize::Small), "300");
+        assert_eq!(format!("{}", QobuzImageSize::Medium), "600");
+        assert_eq!(format!("{}", QobuzImageSize::Large), "1200");
+        assert_eq!(format!("{}", QobuzImageSize::ExtraLarge), "2400");
+        assert_eq!(format!("{}", QobuzImageSize::Mega), "4800");
     }
 }
