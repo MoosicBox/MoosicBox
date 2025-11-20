@@ -136,3 +136,270 @@ impl AsRef<Self> for ScanSettings {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_connection_default() {
+        let conn = Connection::default();
+        assert_eq!(conn.name, "");
+        assert_eq!(conn.api_url, "");
+    }
+
+    #[test]
+    fn test_connection_as_ref() {
+        let conn = Connection {
+            name: "Test Server".to_string(),
+            api_url: "https://api.example.com".to_string(),
+        };
+        let conn_ref: &Connection = conn.as_ref();
+        assert_eq!(conn_ref.name, "Test Server");
+        assert_eq!(conn_ref.api_url, "https://api.example.com");
+    }
+
+    #[test]
+    fn test_connection_serialization_roundtrip() {
+        let conn = Connection {
+            name: "My Server".to_string(),
+            api_url: "https://test.local:8080/api".to_string(),
+        };
+
+        let json = serde_json::to_string(&conn).expect("Failed to serialize");
+        let deserialized: Connection = serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(conn, deserialized);
+    }
+
+    #[test]
+    fn test_music_api_settings_as_ref() {
+        let settings = MusicApiSettings {
+            id: "tidal".to_string(),
+            name: "Tidal".to_string(),
+            logged_in: true,
+            supports_scan: true,
+            scan_enabled: true,
+            run_scan_endpoint: Some("/music-api/scan?apiSource=Tidal".to_string()),
+            #[cfg(feature = "music-api-api")]
+            auth_method: Some(AuthMethod::UsernamePassword),
+        };
+
+        let settings_ref: &MusicApiSettings = settings.as_ref();
+        assert_eq!(settings_ref.id, "tidal");
+        assert_eq!(settings_ref.name, "Tidal");
+    }
+
+    #[test]
+    fn test_music_api_settings_serialization_roundtrip() {
+        let settings = MusicApiSettings {
+            id: "spotify".to_string(),
+            name: "Spotify".to_string(),
+            logged_in: false,
+            supports_scan: false,
+            scan_enabled: false,
+            run_scan_endpoint: None,
+            #[cfg(feature = "music-api-api")]
+            auth_method: None,
+        };
+
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: MusicApiSettings =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(settings, deserialized);
+    }
+
+    #[cfg(feature = "music-api-api")]
+    #[test]
+    fn test_api_music_api_to_settings_with_scan_support() {
+        use moosicbox_music_api_api::models::ApiMusicApi;
+
+        let api = ApiMusicApi {
+            id: "qobuz".to_string(),
+            name: "Qobuz".to_string(),
+            logged_in: true,
+            supports_scan: true,
+            scan_enabled: true,
+            auth_method: Some(AuthMethod::UsernamePassword),
+        };
+
+        let settings: MusicApiSettings = api.into();
+
+        assert_eq!(settings.id, "qobuz");
+        assert_eq!(settings.name, "Qobuz");
+        assert!(settings.logged_in);
+        assert!(settings.supports_scan);
+        assert!(settings.scan_enabled);
+        assert_eq!(
+            settings.run_scan_endpoint,
+            Some("/music-api/scan?apiSource=Qobuz".to_string())
+        );
+        assert_eq!(settings.auth_method, Some(AuthMethod::UsernamePassword));
+    }
+
+    #[cfg(feature = "music-api-api")]
+    #[test]
+    fn test_api_music_api_to_settings_without_scan_support() {
+        use moosicbox_music_api_api::models::ApiMusicApi;
+
+        let api = ApiMusicApi {
+            id: "local".to_string(),
+            name: "Local Library".to_string(),
+            logged_in: false,
+            supports_scan: false,
+            scan_enabled: false,
+            auth_method: None,
+        };
+
+        let settings: MusicApiSettings = api.into();
+
+        assert_eq!(settings.id, "local");
+        assert_eq!(settings.name, "Local Library");
+        assert!(!settings.logged_in);
+        assert!(!settings.supports_scan);
+        assert!(!settings.scan_enabled);
+        // When supports_scan is false, run_scan_endpoint should be None
+        assert_eq!(settings.run_scan_endpoint, None);
+        assert_eq!(settings.auth_method, None);
+    }
+
+    #[cfg(feature = "music-api-api")]
+    #[test]
+    fn test_api_music_api_to_settings_scan_disabled_but_supported() {
+        use moosicbox_music_api_api::models::ApiMusicApi;
+
+        let api = ApiMusicApi {
+            id: "tidal".to_string(),
+            name: "Tidal".to_string(),
+            logged_in: true,
+            supports_scan: true,
+            scan_enabled: false,
+            auth_method: Some(AuthMethod::Poll),
+        };
+
+        let settings: MusicApiSettings = api.into();
+
+        assert_eq!(settings.id, "tidal");
+        assert!(settings.supports_scan);
+        assert!(!settings.scan_enabled);
+        // Even when scan_enabled is false, if supports_scan is true,
+        // the endpoint should still be generated
+        assert_eq!(
+            settings.run_scan_endpoint,
+            Some("/music-api/scan?apiSource=Tidal".to_string())
+        );
+        assert_eq!(settings.auth_method, Some(AuthMethod::Poll));
+    }
+
+    #[cfg(feature = "music-api-api")]
+    #[test]
+    fn test_api_music_api_to_settings_special_characters_in_name() {
+        use moosicbox_music_api_api::models::ApiMusicApi;
+
+        let api = ApiMusicApi {
+            id: "test-api".to_string(),
+            name: "Test API & Service".to_string(),
+            logged_in: true,
+            supports_scan: true,
+            scan_enabled: true,
+            auth_method: Some(AuthMethod::UsernamePassword),
+        };
+
+        let settings: MusicApiSettings = api.into();
+
+        // The endpoint URL should include the exact name (with special chars)
+        assert_eq!(
+            settings.run_scan_endpoint,
+            Some("/music-api/scan?apiSource=Test API & Service".to_string())
+        );
+    }
+
+    #[test]
+    fn test_download_settings_as_ref() {
+        let settings = DownloadSettings {
+            download_locations: vec![(1, "/music/downloads".to_string())],
+            default_download_location: Some("/music/default".to_string()),
+        };
+
+        let settings_ref: &DownloadSettings = settings.as_ref();
+        assert_eq!(settings_ref.download_locations.len(), 1);
+        assert_eq!(
+            settings_ref.default_download_location,
+            Some("/music/default".to_string())
+        );
+    }
+
+    #[test]
+    fn test_download_settings_serialization_roundtrip() {
+        let settings = DownloadSettings {
+            download_locations: vec![
+                (1, "/path/one".to_string()),
+                (2, "/path/two".to_string()),
+                (3, "/path/three".to_string()),
+            ],
+            default_download_location: Some("/path/default".to_string()),
+        };
+
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: DownloadSettings =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(settings, deserialized);
+    }
+
+    #[test]
+    fn test_download_settings_empty_locations() {
+        let settings = DownloadSettings {
+            download_locations: vec![],
+            default_download_location: None,
+        };
+
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: DownloadSettings =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(settings, deserialized);
+        assert!(deserialized.download_locations.is_empty());
+        assert_eq!(deserialized.default_download_location, None);
+    }
+
+    #[test]
+    fn test_scan_settings_as_ref() {
+        let settings = ScanSettings {
+            scan_paths: vec!["/music".to_string(), "/media".to_string()],
+        };
+
+        let settings_ref: &ScanSettings = settings.as_ref();
+        assert_eq!(settings_ref.scan_paths.len(), 2);
+    }
+
+    #[test]
+    fn test_scan_settings_serialization_roundtrip() {
+        let settings = ScanSettings {
+            scan_paths: vec![
+                "/home/user/Music".to_string(),
+                "/mnt/external/audio".to_string(),
+                "/var/media/library".to_string(),
+            ],
+        };
+
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: ScanSettings =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(settings, deserialized);
+    }
+
+    #[test]
+    fn test_scan_settings_empty_paths() {
+        let settings = ScanSettings { scan_paths: vec![] };
+
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: ScanSettings =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(settings, deserialized);
+        assert!(deserialized.scan_paths.is_empty());
+    }
+}

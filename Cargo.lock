@@ -8078,6 +8078,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_music_api_api",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
