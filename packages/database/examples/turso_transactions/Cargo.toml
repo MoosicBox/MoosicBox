@@ -11,6 +11,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [dependencies]
 switchy_database = { workspace = true, features = ["turso"] }
 tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }

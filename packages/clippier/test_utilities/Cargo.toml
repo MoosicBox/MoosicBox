@@ -12,6 +12,7 @@ version     = "0.1.4"
 
 [package.metadata]
 examples = false
+tests    = false
 
 [dependencies]
 clippier   = { workspace = true, features = ["test-utils"] }

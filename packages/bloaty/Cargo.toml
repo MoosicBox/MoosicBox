@@ -12,6 +12,7 @@ version     = "0.0.3"
 
 [package.metadata]
 examples = false
+tests    = false
 
 [package.metadata.workspaces]
 independent = true

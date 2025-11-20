@@ -9,6 +9,10 @@ publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 
+
+[package.metadata]
+tests = false
+
 [[bin]]
 name = "basic_web_server"
 path = "src/main.rs"

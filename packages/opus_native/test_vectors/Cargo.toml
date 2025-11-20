@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [package.metadata]
 examples = false
+tests    = false
 
 [package.metadata.cargo-machete]
 ignored = ["moosicbox_opus_native_libopus"]

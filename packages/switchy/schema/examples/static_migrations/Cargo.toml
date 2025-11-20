@@ -11,6 +11,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [dependencies]
 async-trait = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }

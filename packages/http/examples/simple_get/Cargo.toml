@@ -8,6 +8,9 @@ publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [dependencies]
 switchy_http = { workspace = true, features = ["reqwest"] }
 

@@ -8,6 +8,9 @@ publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [[bin]]
 name = "http_events_example"
 path = "src/main.rs"

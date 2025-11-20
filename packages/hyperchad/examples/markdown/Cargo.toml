@@ -8,6 +8,9 @@ publish     = false
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [[bin]]
 name = "markdown_example"
 path = "src/main.rs"

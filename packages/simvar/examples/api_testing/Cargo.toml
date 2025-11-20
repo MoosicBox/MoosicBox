@@ -11,6 +11,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata]
+tests = false
+
 [dependencies]
 moosicbox_web_server = { workspace = true, features = [
     "actix",

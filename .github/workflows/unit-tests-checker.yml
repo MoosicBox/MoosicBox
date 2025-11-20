@@ -105,7 +105,9 @@ jobs:
                   force-full-matrix-condition: "true"
                   os-suffix: "-latest"
                   os: "ubuntu"
-                  transform-scripts: .clippier/transforms/test-coverage-filter.lua
+                  skip-if: |
+                      package.publish=false
+                      package.metadata.tests=false
 
     add-unit-tests:
         name: Add tests to ${{ matrix.package.name }}
