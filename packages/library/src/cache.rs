@@ -110,3 +110,90 @@ where
 
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use thiserror::Error;
+
+    #[derive(Debug, Error, PartialEq)]
+    enum TestError {
+        #[error("Test error: {0}")]
+        TestError(String),
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn get_or_set_to_cache_computes_value_on_first_call() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_key",
+                expiration: Duration::from_secs(60),
+            },
+            || async {
+                Ok::<CacheItemType, TestError>(CacheItemType::Artist(Arc::new(
+                    crate::models::LibraryArtist {
+                        id: 123,
+                        title: "Test Artist".to_string(),
+                        cover: None,
+                        ..Default::default()
+                    },
+                )))
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let artist = result.unwrap().into_artist().unwrap();
+        assert_eq!(artist.id, 123);
+        assert_eq!(artist.title, "Test Artist");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn get_or_set_to_cache_handles_errors() {
+        clear_cache();
+
+        let result = get_or_set_to_cache(
+            CacheRequest {
+                key: "test_error",
+                expiration: Duration::from_secs(60),
+            },
+            || async { Err::<CacheItemType, TestError>(TestError::TestError("Test error".to_string())) },
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), TestError::TestError("Test error".to_string()));
+    }
+
+    #[test]
+    fn clear_cache_removes_all_entries() {
+        // Add some entries via direct write to test clearing
+        CACHE_MAP.write().unwrap().insert(
+            "test_clear_1".to_string(),
+            CacheItem {
+                expiration: current_time_nanos() + 1_000_000_000,
+                data: CacheItemType::Artist(Arc::new(crate::models::LibraryArtist {
+                    id: 1,
+                    title: "Test".to_string(),
+                    cover: None,
+                    ..Default::default()
+                })),
+            },
+        );
+
+        assert_eq!(CACHE_MAP.read().unwrap().len(), 1);
+
+        clear_cache();
+
+        assert_eq!(CACHE_MAP.read().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn current_time_nanos_returns_positive_value() {
+        let time = current_time_nanos();
+        assert!(time > 0);
+    }
+}

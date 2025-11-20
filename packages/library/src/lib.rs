@@ -1679,4 +1679,536 @@ mod test {
         .collect::<Vec<_>>();
         assert_eq!(result, vec![bob, test]);
     }
+
+    #[test]
+    fn sort_albums_by_artist_asc() {
+        let zebra = LibraryAlbum {
+            id: 1,
+            title: String::new(),
+            artist: "Zebra".to_string(),
+            ..Default::default()
+        };
+        let alpha = LibraryAlbum {
+            id: 2,
+            title: String::new(),
+            artist: "Alpha".to_string(),
+            ..Default::default()
+        };
+        let beta = LibraryAlbum {
+            id: 3,
+            title: String::new(),
+            artist: "Beta".to_string(),
+            ..Default::default()
+        };
+
+        let albums = vec![&zebra, &alpha, &beta];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ArtistAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&alpha, &beta, &zebra]);
+    }
+
+    #[test]
+    fn sort_albums_by_artist_desc() {
+        let zebra = LibraryAlbum {
+            id: 1,
+            title: String::new(),
+            artist: "Zebra".to_string(),
+            ..Default::default()
+        };
+        let alpha = LibraryAlbum {
+            id: 2,
+            title: String::new(),
+            artist: "Alpha".to_string(),
+            ..Default::default()
+        };
+        let beta = LibraryAlbum {
+            id: 3,
+            title: String::new(),
+            artist: "Beta".to_string(),
+            ..Default::default()
+        };
+
+        let albums = vec![&alpha, &beta, &zebra];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ArtistDesc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&zebra, &beta, &alpha]);
+    }
+
+    #[test]
+    fn sort_albums_by_name_asc() {
+        let zoo = LibraryAlbum {
+            id: 1,
+            title: "Zoo".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let apple = LibraryAlbum {
+            id: 2,
+            title: "Apple".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let banana = LibraryAlbum {
+            id: 3,
+            title: "Banana".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+
+        let albums = vec![&zoo, &apple, &banana];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::NameAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&apple, &banana, &zoo]);
+    }
+
+    #[test]
+    fn sort_albums_by_name_desc() {
+        let zoo = LibraryAlbum {
+            id: 1,
+            title: "Zoo".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let apple = LibraryAlbum {
+            id: 2,
+            title: "Apple".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let banana = LibraryAlbum {
+            id: 3,
+            title: "Banana".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+
+        let albums = vec![&apple, &banana, &zoo];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::NameDesc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&zoo, &banana, &apple]);
+    }
+
+    #[test]
+    fn sort_albums_by_release_date_asc_with_none_values() {
+        let no_date = LibraryAlbum {
+            id: 1,
+            title: "No Date".to_string(),
+            artist: String::new(),
+            date_released: None,
+            ..Default::default()
+        };
+        let old = LibraryAlbum {
+            id: 2,
+            title: "Old".to_string(),
+            artist: String::new(),
+            date_released: Some("2020-01-01".to_string()),
+            ..Default::default()
+        };
+        let new = LibraryAlbum {
+            id: 3,
+            title: "New".to_string(),
+            artist: String::new(),
+            date_released: Some("2024-01-01".to_string()),
+            ..Default::default()
+        };
+
+        let albums = vec![&no_date, &new, &old];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ReleaseDateAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // None values should be sorted to the end (Greater)
+        assert_eq!(result, vec![&old, &new, &no_date]);
+    }
+
+    #[test]
+    fn sort_albums_by_release_date_desc_with_none_values() {
+        let no_date = LibraryAlbum {
+            id: 1,
+            title: "No Date".to_string(),
+            artist: String::new(),
+            date_released: None,
+            ..Default::default()
+        };
+        let old = LibraryAlbum {
+            id: 2,
+            title: "Old".to_string(),
+            artist: String::new(),
+            date_released: Some("2020-01-01".to_string()),
+            ..Default::default()
+        };
+        let new = LibraryAlbum {
+            id: 3,
+            title: "New".to_string(),
+            artist: String::new(),
+            date_released: Some("2024-01-01".to_string()),
+            ..Default::default()
+        };
+
+        let albums = vec![&old, &new, &no_date];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ReleaseDateDesc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // None values should be sorted to the end (Greater)
+        assert_eq!(result, vec![&new, &old, &no_date]);
+    }
+
+    #[test]
+    fn sort_albums_by_date_added_asc() {
+        let old = LibraryAlbum {
+            id: 1,
+            title: "Old".to_string(),
+            artist: String::new(),
+            date_added: Some("2020-01-01T00:00:00Z".to_string()),
+            ..Default::default()
+        };
+        let new = LibraryAlbum {
+            id: 2,
+            title: "New".to_string(),
+            artist: String::new(),
+            date_added: Some("2024-01-01T00:00:00Z".to_string()),
+            ..Default::default()
+        };
+
+        let albums = vec![&new, &old];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::DateAddedAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&old, &new]);
+    }
+
+    #[test]
+    fn sort_albums_by_date_added_desc() {
+        let old = LibraryAlbum {
+            id: 1,
+            title: "Old".to_string(),
+            artist: String::new(),
+            date_added: Some("2020-01-01T00:00:00Z".to_string()),
+            ..Default::default()
+        };
+        let new = LibraryAlbum {
+            id: 2,
+            title: "New".to_string(),
+            artist: String::new(),
+            date_added: Some("2024-01-01T00:00:00Z".to_string()),
+            ..Default::default()
+        };
+
+        let albums = vec![&old, &new];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::DateAddedDesc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        assert_eq!(result, vec![&new, &old]);
+    }
+
+    #[test]
+    fn sort_albums_case_insensitive_artist() {
+        let upper = LibraryAlbum {
+            id: 1,
+            title: String::new(),
+            artist: "ZEBRA".to_string(),
+            ..Default::default()
+        };
+        let lower = LibraryAlbum {
+            id: 2,
+            title: String::new(),
+            artist: "alpha".to_string(),
+            ..Default::default()
+        };
+        let mixed = LibraryAlbum {
+            id: 3,
+            title: String::new(),
+            artist: "Beta".to_string(),
+            ..Default::default()
+        };
+
+        let albums = vec![&upper, &lower, &mixed];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::ArtistAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // Should be case-insensitive: alpha, Beta, ZEBRA
+        assert_eq!(result, vec![&lower, &mixed, &upper]);
+    }
+
+    #[test]
+    fn sort_albums_case_insensitive_name() {
+        let upper = LibraryAlbum {
+            id: 1,
+            title: "ZOO".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let lower = LibraryAlbum {
+            id: 2,
+            title: "apple".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+        let mixed = LibraryAlbum {
+            id: 3,
+            title: "Banana".to_string(),
+            artist: String::new(),
+            ..Default::default()
+        };
+
+        let albums = vec![&upper, &lower, &mixed];
+        let request = AlbumsRequest {
+            sort: Some(AlbumSort::NameAsc),
+            ..Default::default()
+        };
+        let result = sort_albums(albums, &request);
+
+        // Should be case-insensitive: apple, Banana, ZOO
+        assert_eq!(result, vec![&lower, &mixed, &upper]);
+    }
+
+    #[test]
+    fn sort_album_versions_by_sample_rate() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let mut versions = vec![
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(192000),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(96000),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // Should be sorted by sample rate descending (highest first)
+        assert_eq!(versions[0].sample_rate, Some(192000));
+        assert_eq!(versions[1].sample_rate, Some(96000));
+        assert_eq!(versions[2].sample_rate, Some(44100));
+    }
+
+    #[test]
+    fn sort_album_versions_by_bit_depth() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let mut versions = vec![
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(32),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // Should be sorted by bit depth descending (highest first) when sample rate is equal
+        assert_eq!(versions[0].bit_depth, Some(32));
+        assert_eq!(versions[1].bit_depth, Some(24));
+        assert_eq!(versions[2].bit_depth, Some(16));
+    }
+
+    #[test]
+    fn sort_album_versions_by_source() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let tidal_source = TrackApiSource::Api(ApiSource::register("Tidal", "Tidal"));
+        let qobuz_source = TrackApiSource::Api(ApiSource::register("Qobuz", "Qobuz"));
+
+        let mut versions = vec![
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: tidal_source,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: Some(16),
+                channels: None,
+                source: qobuz_source,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // Should be sorted by source when sample rate and bit depth are equal
+        // Local < Api sources, and Api sources are sorted by their names
+        assert_eq!(versions[0].source, TrackApiSource::Local);
+    }
+
+    #[test]
+    fn sort_album_versions_with_none_values() {
+        use moosicbox_menu_models::AlbumVersion;
+        use moosicbox_music_models::TrackApiSource;
+
+        let mut versions = vec![
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: None,
+                bit_depth: None,
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(96000),
+                bit_depth: Some(24),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersion {
+                tracks: vec![],
+                format: None,
+                sample_rate: Some(44100),
+                bit_depth: None,
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // None values should be treated as 0 and sorted to the end
+        assert_eq!(versions[0].sample_rate, Some(96000));
+        assert_eq!(versions[1].sample_rate, Some(44100));
+        assert_eq!(versions[2].sample_rate, None);
+    }
+
+    #[test]
+    fn from_artist_order_to_library_artist_order() {
+        use moosicbox_music_api_models::ArtistOrder;
+
+        let result = LibraryArtistOrder::from(ArtistOrder::DateAdded);
+        assert_eq!(result, LibraryArtistOrder::Date);
+    }
+
+    #[test]
+    fn from_artist_order_direction_to_library_artist_order_direction() {
+        use moosicbox_music_api_models::ArtistOrderDirection;
+
+        let asc = LibraryArtistOrderDirection::from(ArtistOrderDirection::Ascending);
+        assert_eq!(asc, LibraryArtistOrderDirection::Asc);
+
+        let desc = LibraryArtistOrderDirection::from(ArtistOrderDirection::Descending);
+        assert_eq!(desc, LibraryArtistOrderDirection::Desc);
+    }
+
+    #[test]
+    fn from_album_order_to_library_album_order() {
+        use moosicbox_music_api_models::AlbumOrder;
+
+        let result = LibraryAlbumOrder::from(AlbumOrder::DateAdded);
+        assert_eq!(result, LibraryAlbumOrder::Date);
+    }
+
+    #[test]
+    fn from_album_order_direction_to_library_album_order_direction() {
+        use moosicbox_music_api_models::AlbumOrderDirection;
+
+        let asc = LibraryAlbumOrderDirection::from(AlbumOrderDirection::Ascending);
+        assert_eq!(asc, LibraryAlbumOrderDirection::Asc);
+
+        let desc = LibraryAlbumOrderDirection::from(AlbumOrderDirection::Descending);
+        assert_eq!(desc, LibraryAlbumOrderDirection::Desc);
+    }
+
+    #[test]
+    fn from_track_order_to_library_track_order() {
+        use moosicbox_music_api_models::TrackOrder;
+
+        let result = LibraryTrackOrder::from(TrackOrder::DateAdded);
+        assert_eq!(result, LibraryTrackOrder::Date);
+    }
+
+    #[test]
+    fn from_track_order_direction_to_library_track_order_direction() {
+        use moosicbox_music_api_models::TrackOrderDirection;
+
+        let asc = LibraryTrackOrderDirection::from(TrackOrderDirection::Ascending);
+        assert_eq!(asc, LibraryTrackOrderDirection::Asc);
+
+        let desc = LibraryTrackOrderDirection::from(TrackOrderDirection::Descending);
+        assert_eq!(desc, LibraryTrackOrderDirection::Desc);
+    }
+
 }
