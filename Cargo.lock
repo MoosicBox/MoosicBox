@@ -5848,6 +5848,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_env_utils",
+ "pretty_assertions",
  "serde_json",
  "switchy",
  "switchy_env",

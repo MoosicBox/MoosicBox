@@ -882,3 +882,434 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(renderer.to_runner(handle)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperchad_renderer::Color;
+    use hyperchad_router::Router;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_app_builder_new() {
+        let builder = AppBuilder::new();
+        assert!(builder.router.is_none());
+        assert!(builder.initial_route.is_none());
+        assert!(builder.x.is_none());
+        assert!(builder.y.is_none());
+        assert!(builder.background.is_none());
+        assert!(builder.title.is_none());
+        assert!(builder.description.is_none());
+        assert!(builder.viewport.is_none());
+        assert!(builder.width.is_none());
+        assert!(builder.height.is_none());
+        assert!(builder.runtime_handle.is_none());
+    }
+
+    #[test]
+    fn test_app_builder_default() {
+        let builder = AppBuilder::default();
+        assert!(builder.router.is_none());
+    }
+
+    #[test]
+    fn test_app_builder_with_router() {
+        let router = Router::new();
+        let builder = AppBuilder::new().with_router(router);
+        assert!(builder.router.is_some());
+    }
+
+    #[test]
+    fn test_app_builder_router_method() {
+        let router = Router::new();
+        let mut builder = AppBuilder::new();
+        builder.router(router);
+        assert!(builder.router.is_some());
+    }
+
+    #[test]
+    fn test_app_builder_with_initial_route() {
+        let builder = AppBuilder::new().with_initial_route("/home");
+        assert!(builder.initial_route.is_some());
+    }
+
+    #[test]
+    fn test_app_builder_initial_route_method() {
+        let mut builder = AppBuilder::new();
+        builder.initial_route("/home");
+        assert!(builder.initial_route.is_some());
+    }
+
+    #[test]
+    fn test_app_builder_with_width() {
+        let builder = AppBuilder::new().with_width(1024.0);
+        assert_eq!(builder.width, Some(1024.0));
+    }
+
+    #[test]
+    fn test_app_builder_width_method() {
+        let mut builder = AppBuilder::new();
+        builder.width(1024.0);
+        assert_eq!(builder.width, Some(1024.0));
+    }
+
+    #[test]
+    fn test_app_builder_with_height() {
+        let builder = AppBuilder::new().with_height(768.0);
+        assert_eq!(builder.height, Some(768.0));
+    }
+
+    #[test]
+    fn test_app_builder_height_method() {
+        let mut builder = AppBuilder::new();
+        builder.height(768.0);
+        assert_eq!(builder.height, Some(768.0));
+    }
+
+    #[test]
+    fn test_app_builder_with_size() {
+        let builder = AppBuilder::new().with_size(1920.0, 1080.0);
+        assert_eq!(builder.width, Some(1920.0));
+        assert_eq!(builder.height, Some(1080.0));
+    }
+
+    #[test]
+    fn test_app_builder_size_method() {
+        let mut builder = AppBuilder::new();
+        builder.size(1920.0, 1080.0);
+        assert_eq!(builder.width, Some(1920.0));
+        assert_eq!(builder.height, Some(1080.0));
+    }
+
+    #[test]
+    fn test_app_builder_with_x() {
+        let builder = AppBuilder::new().with_x(100);
+        assert_eq!(builder.x, Some(100));
+    }
+
+    #[test]
+    fn test_app_builder_x_method() {
+        let mut builder = AppBuilder::new();
+        builder.x(100);
+        assert_eq!(builder.x, Some(100));
+    }
+
+    #[test]
+    fn test_app_builder_with_y() {
+        let builder = AppBuilder::new().with_y(200);
+        assert_eq!(builder.y, Some(200));
+    }
+
+    #[test]
+    fn test_app_builder_y_method() {
+        let mut builder = AppBuilder::new();
+        builder.y(200);
+        assert_eq!(builder.y, Some(200));
+    }
+
+    #[test]
+    fn test_app_builder_with_position() {
+        let builder = AppBuilder::new().with_position(300, 400);
+        assert_eq!(builder.x, Some(300));
+        assert_eq!(builder.y, Some(400));
+    }
+
+    #[test]
+    fn test_app_builder_position_method() {
+        let mut builder = AppBuilder::new();
+        builder.position(300, 400);
+        assert_eq!(builder.x, Some(300));
+        assert_eq!(builder.y, Some(400));
+    }
+
+    #[test]
+    fn test_app_builder_with_viewport() {
+        let viewport = "width=device-width, initial-scale=1.0".to_string();
+        let builder = AppBuilder::new().with_viewport(viewport.clone());
+        assert_eq!(builder.viewport, Some(viewport));
+    }
+
+    #[test]
+    fn test_app_builder_with_background() {
+        let color = Color::from_hex("#ffffff");
+        let builder = AppBuilder::new().with_background(color);
+        assert_eq!(builder.background, Some(color));
+    }
+
+    #[test]
+    fn test_app_builder_with_title() {
+        let title = "Test App".to_string();
+        let builder = AppBuilder::new().with_title(title.clone());
+        assert_eq!(builder.title, Some(title));
+    }
+
+    #[test]
+    fn test_app_builder_with_description() {
+        let description = "A test application".to_string();
+        let builder = AppBuilder::new().with_description(description.clone());
+        assert_eq!(builder.description, Some(description));
+    }
+
+    #[test]
+    fn test_app_builder_chaining() {
+        let router = Router::new();
+        let builder = AppBuilder::new()
+            .with_router(router)
+            .with_size(1024.0, 768.0)
+            .with_position(100, 200)
+            .with_title("Test".to_string())
+            .with_description("Test app".to_string());
+
+        assert!(builder.router.is_some());
+        assert_eq!(builder.width, Some(1024.0));
+        assert_eq!(builder.height, Some(768.0));
+        assert_eq!(builder.x, Some(100));
+        assert_eq!(builder.y, Some(200));
+        assert_eq!(builder.title, Some("Test".to_string()));
+        assert_eq!(builder.description, Some("Test app".to_string()));
+    }
+
+    #[test]
+    fn test_app_builder_build_missing_router() {
+        use crate::renderer::stub::StubRenderer;
+
+        let builder = AppBuilder::new();
+        let result = builder.build(StubRenderer);
+
+        assert!(result.is_err());
+        match result {
+            Err(BuilderError::MissingRouter) => (),
+            _ => panic!("Expected BuilderError::MissingRouter"),
+        }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_app_builder_build_success() {
+        use crate::renderer::stub::StubRenderer;
+
+        let router = Router::new();
+        let builder = AppBuilder::new()
+            .with_router(router)
+            .with_size(800.0, 600.0)
+            .with_position(50, 100);
+
+        let result = builder.build(StubRenderer);
+        assert!(result.is_ok());
+
+        let app = result.unwrap();
+        assert_eq!(app.width, 800.0);
+        assert_eq!(app.height, 600.0);
+        assert_eq!(app.x, Some(50));
+        assert_eq!(app.y, Some(100));
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_app_builder_build_default_dimensions() {
+        use crate::renderer::stub::StubRenderer;
+
+        let router = Router::new();
+        let builder = AppBuilder::new().with_router(router);
+
+        let result = builder.build(StubRenderer);
+        assert!(result.is_ok());
+
+        let app = result.unwrap();
+        assert_eq!(app.width, 800.0);
+        assert_eq!(app.height, 600.0);
+    }
+
+    #[test]
+    fn test_commands_equality() {
+        assert_eq!(Commands::DynamicRoutes, Commands::DynamicRoutes);
+        assert_eq!(
+            Commands::Gen {
+                output: Some("output".to_string())
+            },
+            Commands::Gen {
+                output: Some("output".to_string())
+            }
+        );
+        assert_eq!(
+            Commands::Clean {
+                output: Some("output".to_string())
+            },
+            Commands::Clean {
+                output: Some("output".to_string())
+            }
+        );
+        assert_eq!(Commands::Serve, Commands::Serve);
+    }
+
+    #[test]
+    fn test_commands_inequality() {
+        assert_ne!(Commands::DynamicRoutes, Commands::Serve);
+        assert_ne!(
+            Commands::Gen {
+                output: Some("output1".to_string())
+            },
+            Commands::Gen {
+                output: Some("output2".to_string())
+            }
+        );
+        assert_ne!(
+            Commands::Clean {
+                output: Some("output1".to_string())
+            },
+            Commands::Clean { output: None }
+        );
+    }
+
+    #[test]
+    fn test_commands_clone() {
+        let cmd = Commands::Gen {
+            output: Some("test".to_string()),
+        };
+        let cloned = cmd.clone();
+        assert_eq!(cmd, cloned);
+    }
+
+    #[test]
+    fn test_builder_error_display() {
+        let error = BuilderError::MissingRouter;
+        assert_eq!(error.to_string(), "Missing Router");
+
+        let error = BuilderError::MissingRuntime;
+        assert_eq!(error.to_string(), "Missing Runtime");
+    }
+
+    #[test]
+    fn test_error_from_builder_error() {
+        let builder_error = BuilderError::MissingRouter;
+        let error: Error = builder_error.into();
+
+        match error {
+            Error::Builder(BuilderError::MissingRouter) => (),
+            _ => panic!("Expected Error::Builder(MissingRouter)"),
+        }
+    }
+
+    #[test]
+    fn test_error_from_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
+        let error: Error = io_error.into();
+
+        match error {
+            Error::IO(_) => (),
+            _ => panic!("Expected Error::IO"),
+        }
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_css_url() {
+        let url = "https://example.com/style.css".to_string();
+        let builder = AppBuilder::new().with_css_url(url.clone());
+        assert_eq!(builder.css_urls, vec![url]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_css_url_method() {
+        let url = "https://example.com/style.css".to_string();
+        let mut builder = AppBuilder::new();
+        builder.css_url(url.clone());
+        assert_eq!(builder.css_urls, vec![url]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_css_urls() {
+        let urls = vec![
+            "https://example.com/style1.css".to_string(),
+            "https://example.com/style2.css".to_string(),
+        ];
+        let builder = AppBuilder::new().with_css_urls(urls.clone());
+        assert_eq!(builder.css_urls, urls);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_css_path() {
+        let path = "/assets/style.css".to_string();
+        let builder = AppBuilder::new().with_css_path(path.clone());
+        assert_eq!(builder.css_paths, vec![path]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_css_path_method() {
+        let path = "/assets/style.css".to_string();
+        let mut builder = AppBuilder::new();
+        builder.css_path(path.clone());
+        assert_eq!(builder.css_paths, vec![path]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_css_paths() {
+        let paths = vec![
+            "/assets/style1.css".to_string(),
+            "/assets/style2.css".to_string(),
+        ];
+        let builder = AppBuilder::new().with_css_paths(paths.clone());
+        assert_eq!(builder.css_paths, paths);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_inline_css() {
+        let css = "body { margin: 0; }".to_string();
+        let builder = AppBuilder::new().with_inline_css(css.clone());
+        assert_eq!(builder.inline_css, vec![css]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_inline_css_method() {
+        let css = "body { margin: 0; }".to_string();
+        let mut builder = AppBuilder::new();
+        builder.inline_css(css.clone());
+        assert_eq!(builder.inline_css, vec![css]);
+    }
+
+    #[cfg(feature = "html")]
+    #[test]
+    fn test_app_builder_with_inline_css_blocks() {
+        let blocks = vec![
+            "body { margin: 0; }".to_string(),
+            "h1 { color: red; }".to_string(),
+        ];
+        let builder = AppBuilder::new().with_inline_css_blocks(blocks.clone());
+        assert_eq!(builder.inline_css, blocks);
+    }
+
+    #[test]
+    fn test_app_builder_debug_format() {
+        let router = Router::new();
+        let builder = AppBuilder::new()
+            .with_router(router)
+            .with_size(800.0, 600.0)
+            .with_title("Test".to_string());
+
+        let debug_str = format!("{builder:?}");
+        assert!(debug_str.contains("AppBuilder"));
+        assert!(debug_str.contains("router"));
+        assert!(debug_str.contains("width"));
+        assert!(debug_str.contains("height"));
+        assert!(debug_str.contains("title"));
+    }
+
+    #[test]
+    fn test_app_builder_clone() {
+        let router = Router::new();
+        let builder = AppBuilder::new()
+            .with_router(router)
+            .with_size(1024.0, 768.0);
+
+        let cloned = builder.clone();
+        assert_eq!(builder.width, cloned.width);
+        assert_eq!(builder.height, cloned.height);
+    }
+}
