@@ -35,3 +35,6 @@ fail-on-warnings = [
 
 api     = ["switchy_database/api"]
 openapi = ["dep:utoipa"]
+
+[dev-dependencies]
+serde_json = { workspace = true }
