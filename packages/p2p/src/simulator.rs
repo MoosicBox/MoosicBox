@@ -696,6 +696,8 @@ impl SimulatorP2P {
 mod tests {
     use super::*;
 
+    // === SimulatorNodeId Tests ===
+
     #[test]
     fn test_node_id_deterministic() {
         let id1 = test_node_id("alice");
@@ -715,5 +717,542 @@ mod tests {
         let id = test_node_id("test");
         let short = id.fmt_short();
         assert_eq!(short.len(), 10); // 5 bytes = 10 hex chars
+    }
+
+    #[test]
+    fn test_node_id_from_bytes() {
+        let bytes = [42u8; 32];
+        let id = SimulatorNodeId::from_bytes(bytes);
+        assert_eq!(id.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_node_id_display() {
+        let bytes = [
+            0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89, 0x0A, 0xBC, 0xDE, 0xF0, 0x12, 0x34,
+            0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+            0x99, 0xAA, 0xBB, 0xCC,
+        ];
+        let id = SimulatorNodeId::from_bytes(bytes);
+        let display = format!("{id}");
+        assert_eq!(display.len(), 64); // 32 bytes = 64 hex chars
+        assert!(display.starts_with("abcdef"));
+    }
+
+    #[test]
+    fn test_node_id_generate_creates_unique_ids() {
+        let id1 = SimulatorNodeId::generate();
+        let id2 = SimulatorNodeId::generate();
+        // Random IDs should be different (extremely high probability)
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_node_id_ordering() {
+        let id1 = SimulatorNodeId::from_bytes([1u8; 32]);
+        let id2 = SimulatorNodeId::from_bytes([2u8; 32]);
+        assert!(id1 < id2);
+        assert!(id2 > id1);
+    }
+
+    // === NetworkGraph Tests ===
+
+    #[test]
+    fn test_network_graph_new() {
+        let graph = NetworkGraph::new();
+        assert!(graph.nodes.is_empty());
+        assert!(graph.links.is_empty());
+    }
+
+    #[test]
+    fn test_network_graph_add_node() {
+        let mut graph = NetworkGraph::new();
+        let node_id = test_node_id("alice");
+
+        graph.add_node(node_id.clone());
+
+        assert!(graph.nodes.contains_key(&node_id));
+        let node = graph.get_node(&node_id).unwrap();
+        assert_eq!(node.id, node_id);
+        assert!(node.is_online);
+        assert!(node.registered_names.is_empty());
+        assert!(node.message_queues.is_empty());
+    }
+
+    #[test]
+    fn test_network_graph_add_node_idempotent() {
+        let mut graph = NetworkGraph::new();
+        let node_id = test_node_id("alice");
+
+        graph.add_node(node_id.clone());
+        graph.add_node(node_id); // Add again
+
+        // Should still only have one node
+        assert_eq!(graph.nodes.len(), 1);
+    }
+
+    #[test]
+    fn test_network_graph_connect_nodes() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+
+        let link = LinkInfo {
+            latency: Duration::from_millis(10),
+            packet_loss: 0.01,
+            bandwidth_limit: Some(1_000_000),
+            is_active: true,
+        };
+
+        graph.connect_nodes(alice.clone(), bob.clone(), link);
+
+        // Should create bidirectional links
+        assert!(graph.links.contains_key(&(alice.clone(), bob.clone())));
+        assert!(graph.links.contains_key(&(bob.clone(), alice.clone())));
+
+        let forward_link = &graph.links[&(alice, bob)];
+        assert_eq!(forward_link.latency, Duration::from_millis(10));
+        assert!((forward_link.packet_loss - 0.01).abs() < f64::EPSILON);
+        assert!(forward_link.is_active);
+    }
+
+    #[test]
+    fn test_network_graph_find_path_same_node() {
+        let graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+
+        let path = graph.find_path(alice.clone(), alice.clone());
+
+        assert_eq!(path, Some(vec![alice]));
+    }
+
+    #[test]
+    fn test_network_graph_find_path_direct() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+        graph.connect_nodes(
+            alice.clone(),
+            bob.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(10),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: true,
+            },
+        );
+
+        let path = graph.find_path(alice.clone(), bob.clone());
+
+        assert_eq!(path, Some(vec![alice, bob]));
+    }
+
+    #[test]
+    fn test_network_graph_find_path_multi_hop() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+        let charlie = test_node_id("charlie");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+        graph.add_node(charlie.clone());
+
+        let link = LinkInfo {
+            latency: Duration::from_millis(10),
+            packet_loss: 0.0,
+            bandwidth_limit: None,
+            is_active: true,
+        };
+
+        // Create path: alice -> bob -> charlie
+        graph.connect_nodes(alice.clone(), bob.clone(), link.clone());
+        graph.connect_nodes(bob.clone(), charlie.clone(), link);
+
+        let path = graph.find_path(alice.clone(), charlie.clone());
+
+        assert_eq!(path, Some(vec![alice, bob, charlie]));
+    }
+
+    #[test]
+    fn test_network_graph_find_path_no_route() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+
+        // Add nodes but don't connect them
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+
+        let path = graph.find_path(alice, bob);
+
+        assert_eq!(path, None);
+    }
+
+    #[test]
+    fn test_network_graph_find_path_inactive_link() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+
+        // Create inactive link
+        graph.connect_nodes(
+            alice.clone(),
+            bob.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(10),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: false,
+            },
+        );
+
+        let path = graph.find_path(alice, bob);
+
+        // Should not find path through inactive link
+        assert_eq!(path, None);
+    }
+
+    #[test]
+    fn test_network_graph_add_partition() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+        let charlie = test_node_id("charlie");
+        let dave = test_node_id("dave");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+        graph.add_node(charlie.clone());
+        graph.add_node(dave.clone());
+
+        let link = LinkInfo {
+            latency: Duration::from_millis(10),
+            packet_loss: 0.0,
+            bandwidth_limit: None,
+            is_active: true,
+        };
+
+        // Connect all nodes
+        graph.connect_nodes(alice.clone(), charlie.clone(), link.clone());
+        graph.connect_nodes(alice.clone(), dave.clone(), link.clone());
+        graph.connect_nodes(bob.clone(), charlie.clone(), link.clone());
+        graph.connect_nodes(bob.clone(), dave.clone(), link);
+
+        // Partition: {alice, bob} vs {charlie, dave}
+        let group_a = vec![alice.clone(), bob.clone()];
+        let group_b = vec![charlie.clone(), dave.clone()];
+        graph.add_partition(&group_a, &group_b);
+
+        // Verify no links between groups
+        assert!(!graph.links.contains_key(&(alice.clone(), charlie.clone())));
+        assert!(!graph.links.contains_key(&(alice.clone(), dave.clone())));
+        assert!(!graph.links.contains_key(&(bob.clone(), charlie.clone())));
+        assert!(!graph.links.contains_key(&(bob, dave)));
+
+        // Verify no path exists
+        assert_eq!(graph.find_path(alice, charlie), None);
+    }
+
+    #[test]
+    fn test_network_graph_heal_partition() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+
+        // Create partition (no links)
+        let group_a = vec![alice.clone()];
+        let group_b = vec![bob.clone()];
+
+        // Heal partition
+        graph.heal_partition(&group_a, &group_b);
+
+        // Should now have bidirectional links
+        assert!(graph.links.contains_key(&(alice.clone(), bob.clone())));
+        assert!(graph.links.contains_key(&(bob.clone(), alice.clone())));
+
+        // Should have path
+        assert!(graph.find_path(alice, bob).is_some());
+    }
+
+    #[test]
+    fn test_network_graph_get_node_mut() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+
+        graph.add_node(alice.clone());
+
+        let node = graph.get_node_mut(&alice).unwrap();
+        node.registered_names
+            .insert("test".to_string(), "value".to_string());
+
+        let node = graph.get_node(&alice).unwrap();
+        assert!(node.registered_names.contains_key("test"));
+    }
+
+    #[test]
+    fn test_network_graph_get_node_nonexistent() {
+        let graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+
+        assert!(graph.get_node(&alice).is_none());
+        assert!(graph.get_node(&alice).is_none());
+    }
+
+    // === SimulatorP2P Tests ===
+
+    #[test]
+    fn test_simulator_p2p_new() {
+        let sim = SimulatorP2P::new();
+        let id = sim.local_node_id();
+        assert_eq!(id.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_simulator_p2p_with_seed() {
+        let sim1 = SimulatorP2P::with_seed("alice");
+        let sim2 = SimulatorP2P::with_seed("alice");
+        assert_eq!(sim1.local_node_id(), sim2.local_node_id());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_p2p_connect_creates_queues() {
+        let alice = SimulatorP2P::with_seed("alice");
+        let bob_id = test_node_id("bob");
+
+        // Setup network graph with link
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice.local_node_id().clone());
+            graph.add_node(bob_id.clone());
+            graph.connect_nodes(
+                alice.local_node_id().clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(10),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        let conn = alice.connect(bob_id.clone()).await.unwrap();
+
+        assert!(conn.is_connected());
+        assert_eq!(conn.remote_node_id(), &bob_id);
+
+        // Verify queues were created
+        let alice_node = alice
+            .network_graph
+            .read()
+            .await
+            .get_node(alice.local_node_id())
+            .unwrap()
+            .clone();
+        assert!(alice_node.message_queues.contains_key(&bob_id));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_p2p_connect_no_route() {
+        let alice = SimulatorP2P::with_seed("alice");
+        let bob_id = test_node_id("bob");
+
+        // Add bob to graph but don't create link
+        {
+            let mut graph = alice.network_graph.write().await;
+            graph.add_node(alice.local_node_id().clone());
+            graph.add_node(bob_id.clone());
+        }
+
+        let result = alice.connect(bob_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "No route to destination");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_p2p_register_peer() {
+        let sim = SimulatorP2P::with_seed("alice");
+        let bob_id = test_node_id("bob");
+
+        let result = sim.register_peer("bob", bob_id.clone()).await;
+
+        assert!(result.is_ok());
+
+        // Verify registration by checking the graph
+        let node = sim
+            .network_graph
+            .read()
+            .await
+            .get_node(&bob_id)
+            .unwrap()
+            .clone();
+        assert!(node.registered_names.contains_key("bob"));
+    }
+
+    // === SimulatorConnection Tests ===
+    // Note: Tests involving send/recv with latency simulation are omitted
+    // as they require proper time mocking which isn't fully implemented yet
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_connection_recv_empty_queue() {
+        let (alice, _alice_id, bob_id) = SimulatorP2P::test_setup();
+
+        let mut conn = alice.connect(bob_id).await.unwrap();
+
+        let result = conn.recv().await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "No message available");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_connection_send_after_close() {
+        let (alice, _alice_id, bob_id) = SimulatorP2P::test_setup();
+
+        let mut conn = alice.connect(bob_id).await.unwrap();
+
+        conn.close().unwrap();
+
+        let result = conn.send(b"test").await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Connection closed");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_connection_message_too_large() {
+        let (alice, _alice_id, bob_id) = SimulatorP2P::test_setup();
+
+        let mut conn = alice.connect(bob_id).await.unwrap();
+
+        // Create message larger than max size
+        let max_size = max_message_size();
+        let large_data = vec![0u8; max_size + 1];
+
+        let result = conn.send(&large_data).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Message too large"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_connection_close_idempotent() {
+        let (alice, _alice_id, bob_id) = SimulatorP2P::test_setup();
+
+        let mut conn = alice.connect(bob_id).await.unwrap();
+
+        assert!(conn.is_connected());
+
+        conn.close().unwrap();
+        assert!(!conn.is_connected());
+
+        // Close again - should succeed
+        conn.close().unwrap();
+        assert!(!conn.is_connected());
+    }
+
+
+    #[test]
+    fn test_simulator_connection_calculate_path_latency() {
+        let mut graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let bob = test_node_id("bob");
+        let charlie = test_node_id("charlie");
+
+        graph.add_node(alice.clone());
+        graph.add_node(bob.clone());
+        graph.add_node(charlie.clone());
+
+        graph.connect_nodes(
+            alice.clone(),
+            bob.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(10),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: true,
+            },
+        );
+        graph.connect_nodes(
+            bob.clone(),
+            charlie.clone(),
+            LinkInfo {
+                latency: Duration::from_millis(20),
+                packet_loss: 0.0,
+                bandwidth_limit: None,
+                is_active: true,
+            },
+        );
+
+        let path = vec![alice, bob, charlie];
+        let latency = SimulatorConnection::calculate_path_latency(&graph, &path);
+
+        assert_eq!(latency, Duration::from_millis(30));
+    }
+
+    #[test]
+    fn test_simulator_connection_calculate_path_latency_empty_path() {
+        let graph = NetworkGraph::new();
+        let path = vec![];
+
+        let latency = SimulatorConnection::calculate_path_latency(&graph, &path);
+
+        assert_eq!(latency, Duration::from_millis(0));
+    }
+
+    #[test]
+    fn test_simulator_connection_calculate_path_latency_single_node() {
+        let graph = NetworkGraph::new();
+        let alice = test_node_id("alice");
+        let path = vec![alice];
+
+        let latency = SimulatorConnection::calculate_path_latency(&graph, &path);
+
+        assert_eq!(latency, Duration::from_millis(0));
+    }
+
+    // === P2PNodeId Trait Implementation Tests ===
+
+    #[test]
+    fn test_p2p_node_id_trait_from_bytes() {
+        use crate::traits::P2PNodeId;
+
+        let bytes = [123u8; 32];
+        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+
+        assert_eq!(id.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_p2p_node_id_trait_as_bytes() {
+        use crate::traits::P2PNodeId;
+
+        let bytes = [42u8; 32];
+        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+
+        assert_eq!(id.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_p2p_node_id_trait_fmt_short() {
+        use crate::traits::P2PNodeId;
+
+        let bytes = [0xAB; 32];
+        let id = <SimulatorNodeId as P2PNodeId>::from_bytes(&bytes).unwrap();
+
+        let short = id.fmt_short();
+        assert_eq!(short.len(), 10);
+        assert_eq!(short, "ababababab");
     }
 }

@@ -15180,6 +15180,7 @@ dependencies = [
  "async-trait",
  "switchy_async",
  "switchy_random",
+ "test-log",
  "thiserror 2.0.17",
 ]
 
