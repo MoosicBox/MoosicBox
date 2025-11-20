@@ -1257,6 +1257,10 @@ pub mod calc {
     }
 
     /// Divide two Number values
+    ///
+    /// # Panics
+    ///
+    /// Does not panic. Division by zero returns `Number::Real(0.0)`.
     #[must_use]
     pub fn divide_numbers(left: &Number, right: &Number) -> Number {
         #[allow(clippy::cast_precision_loss)]
@@ -1340,7 +1344,10 @@ pub mod calc {
 pub mod unit_functions {
     use hyperchad_transformer::Number;
 
-    // Helper function to convert Number to f32 for fallback cases
+    /// Helper function to convert Number to f32 for fallback cases.
+    ///
+    /// Uses calc with dummy viewport values to extract the numeric value.
+    /// For non-percentage/viewport units, this returns the raw value.
     fn number_to_f32(num: &Number) -> f32 {
         // Use calc with dummy values to get the numeric value
         // For non-percentage/viewport units, this will return the raw value
