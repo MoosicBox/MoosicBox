@@ -1513,3 +1513,95 @@ pub async fn settings_scan_scan_path_route(req: RouteRequest) -> Result<Content,
 
     Ok(Content::try_view("Success!")?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_track_sources_empty_string() {
+        let result = parse_track_sources("");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Vec::<TrackApiSource>::new());
+    }
+
+    #[test]
+    fn test_parse_track_sources_single_valid_source() {
+        let result = parse_track_sources("LIBRARY");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0], TrackApiSource::Library);
+    }
+
+    #[test]
+    fn test_parse_track_sources_multiple_valid_sources() {
+        let result = parse_track_sources("LIBRARY,TIDAL,QOBUZ");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 3);
+        assert_eq!(sources[0], TrackApiSource::Library);
+        assert_eq!(sources[1], TrackApiSource::Tidal);
+        assert_eq!(sources[2], TrackApiSource::Qobuz);
+    }
+
+    #[test]
+    fn test_parse_track_sources_with_empty_segments() {
+        // Test that empty segments between commas are filtered out
+        let result = parse_track_sources("LIBRARY,,TIDAL");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0], TrackApiSource::Library);
+        assert_eq!(sources[1], TrackApiSource::Tidal);
+    }
+
+    #[test]
+    fn test_parse_track_sources_trailing_comma() {
+        let result = parse_track_sources("LIBRARY,TIDAL,");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0], TrackApiSource::Library);
+        assert_eq!(sources[1], TrackApiSource::Tidal);
+    }
+
+    #[test]
+    fn test_parse_track_sources_invalid_source() {
+        let result = parse_track_sources("LIBRARY,INVALID_SOURCE");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), RouteError::RouteFailed(_)));
+    }
+
+    #[test]
+    fn test_parse_track_sources_case_sensitive() {
+        // Test that lowercase source names are invalid
+        let result = parse_track_sources("library");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_track_sources_yt_source() {
+        let result = parse_track_sources("YT");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0], TrackApiSource::Yt);
+    }
+
+    #[test]
+    fn test_parse_track_sources_all_supported_sources() {
+        // Test parsing all supported sources together
+        let result = parse_track_sources("LIBRARY,TIDAL,QOBUZ,YT");
+        assert!(result.is_ok());
+        let sources = result.unwrap();
+        assert_eq!(sources.len(), 4);
+    }
+
+    #[test]
+    fn test_parse_track_sources_whitespace_not_trimmed() {
+        // Test that whitespace is not trimmed (should fail)
+        let result = parse_track_sources(" LIBRARY ");
+        assert!(result.is_err());
+    }
+}
