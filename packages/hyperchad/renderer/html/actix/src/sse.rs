@@ -247,3 +247,143 @@ pub async fn handle_sse<
             .streaming(stream),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_data_new() {
+        let data = EventData::new("test data");
+        assert_eq!(data.data, "test data");
+        assert_eq!(data.event, None);
+        assert_eq!(data.id, None);
+    }
+
+    #[test]
+    fn test_event_data_with_id() {
+        let data = EventData::new("test data").id("event-123");
+        assert_eq!(data.data, "test data");
+        assert_eq!(data.id, Some("event-123".to_string()));
+        assert_eq!(data.event, None);
+    }
+
+    #[test]
+    fn test_event_data_with_event() {
+        let data = EventData::new("test data").event("custom-event");
+        assert_eq!(data.data, "test data");
+        assert_eq!(data.event, Some("custom-event".to_string()));
+        assert_eq!(data.id, None);
+    }
+
+    #[test]
+    fn test_event_data_with_id_and_event() {
+        let data = EventData::new("test data").id("event-456").event("update");
+        assert_eq!(data.data, "test data");
+        assert_eq!(data.id, Some("event-456".to_string()));
+        assert_eq!(data.event, Some("update".to_string()));
+    }
+
+    #[test]
+    fn test_event_into_bytes_simple_data() {
+        let event = Event::Data(EventData::new("hello"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"data: hello\n\n");
+    }
+
+    #[test]
+    fn test_event_into_bytes_with_id() {
+        let event = Event::Data(EventData::new("test message").id("123"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"id: 123\ndata: test message\n\n");
+    }
+
+    #[test]
+    fn test_event_into_bytes_with_event_type() {
+        let event = Event::Data(EventData::new("payload").event("custom"));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"event: custom\ndata: payload\n\n");
+    }
+
+    #[test]
+    fn test_event_into_bytes_with_all_fields() {
+        let event = Event::Data(
+            EventData::new("complete message")
+                .id("999")
+                .event("notification"),
+        );
+        let bytes = event.into_bytes();
+        assert_eq!(
+            bytes.as_ref(),
+            b"id: 999\nevent: notification\ndata: complete message\n\n"
+        );
+    }
+
+    #[test]
+    fn test_event_into_bytes_multiline_data() {
+        let event = Event::Data(EventData::new("line1\nline2\nline3"));
+        let bytes = event.into_bytes();
+        assert_eq!(
+            bytes.as_ref(),
+            b"data: line1\ndata: line2\ndata: line3\n\n"
+        );
+    }
+
+    #[test]
+    fn test_event_into_bytes_multiline_with_id_and_event() {
+        let event = Event::Data(
+            EventData::new("first line\nsecond line")
+                .id("multi-123")
+                .event("multiline"),
+        );
+        let bytes = event.into_bytes();
+        assert_eq!(
+            bytes.as_ref(),
+            b"id: multi-123\nevent: multiline\ndata: first line\ndata: second line\n\n"
+        );
+    }
+
+    #[test]
+    fn test_event_into_bytes_empty_data() {
+        let event = Event::Data(EventData::new(""));
+        let bytes = event.into_bytes();
+        assert_eq!(bytes.as_ref(), b"data: \n\n");
+    }
+
+    #[test]
+    fn test_line_split_with_prefix_single_line() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "single line");
+        assert_eq!(buf.as_ref(), b"data: single line\n");
+    }
+
+    #[test]
+    fn test_line_split_with_prefix_multiple_lines() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "line1\nline2\nline3");
+        assert_eq!(buf.as_ref(), b"data: line1\ndata: line2\ndata: line3\n");
+    }
+
+    #[test]
+    fn test_line_split_with_prefix_empty_string() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "");
+        assert_eq!(buf.as_ref(), b"data: \n");
+    }
+
+    #[test]
+    fn test_line_split_with_prefix_trailing_newline() {
+        let mut buf = BytesMut::new();
+        Event::line_split_with_prefix(&mut buf, "data: ", "line1\nline2\n");
+        assert_eq!(buf.as_ref(), b"data: line1\ndata: line2\ndata: \n");
+    }
+
+    #[test]
+    fn test_event_data_from_conversion() {
+        let data = EventData::new("test");
+        let event: Event = data.into();
+
+        let Event::Data(event_data) = event;
+        assert_eq!(event_data.data, "test");
+    }
+}
