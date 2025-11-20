@@ -1,0 +1,269 @@
+name: Unit Test Coverage Checker
+
+on:
+    schedule:
+        - cron: "0 10 * * 4"
+    workflow_dispatch:
+        inputs:
+            existing_branch:
+                description: "Use existing branch (leave empty to create new)"
+                required: false
+                type: string
+                default: ""
+
+            packages:
+                description: "Comma-separated packages (leave empty for all)"
+                required: false
+                type: string
+                default: ""
+
+            prompt_override:
+                description: "Additional guidance for test selection"
+                required: false
+                type: string
+                default: ""
+
+            model:
+                description: "Claude model to use (leave empty for latest default)"
+                required: false
+                type: choice
+                options:
+                    - ""
+                    - "claude-sonnet-4-5-20250929"
+                    - "claude-opus-4-1-20250805"
+                    - "claude-opus-4-20250514"
+                    - "claude-sonnet-4-20250514"
+                    - "claude-3-7-sonnet-20250219"
+                    - "claude-3-5-haiku-20241022"
+                    - "claude-3-haiku-20240307"
+                default: ""
+
+            max_tokens:
+                description: "Maximum tokens per request (leave empty for default)"
+                required: false
+                type: string
+                default: ""
+
+            max_turns:
+                description: "Maximum conversation turns (leave empty for default)"
+                required: false
+                type: string
+                default: ""
+
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    create-branch:
+        name: Create or use existing branch
+        runs-on: ubuntu-latest
+        outputs:
+            branch-name: ${{ steps.branch.outputs.branch_name }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Create branch
+              id: branch
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-branch
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_prefix: test-coverage-updates
+                  branch_name: ${{ inputs.existing_branch }}
+                  existing_branch: ${{ inputs.existing_branch != '' && 'true' || 'false' }}
+
+    determine-packages:
+        name: Determine packages to update
+        runs-on: ubuntu-latest
+        needs: [create-branch]
+        outputs:
+            matrix: ${{ steps.analyze.outputs.matrix }}
+            has-packages: ${{ steps.analyze.outputs.has-changes }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Generate package matrix
+              id: analyze
+              uses: ./.github/actions/clippier
+              with:
+                  command: packages
+                  packages: ${{ github.event.inputs.packages }}
+                  skip-on-no-changes: "false"
+                  force-full-matrix-condition: "true"
+                  os-suffix: "-latest"
+                  os: "ubuntu"
+                  transform-scripts: .clippier/transforms/test-coverage-filter.lua
+
+    add-unit-tests:
+        name: Add tests to ${{ matrix.package.name }}
+        runs-on: ubuntu-latest
+        needs: [create-branch, determine-packages]
+        if: needs.determine-packages.outputs.has-packages == 'true'
+        strategy:
+            fail-fast: false
+            max-parallel: 20
+            matrix:
+                package: ${{ fromJson(needs.determine-packages.outputs.matrix) }}
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.create-branch.outputs.branch-name }}
+                  fetch-depth: 0
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
+              with:
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: "true"
+                  rust-components: "rustfmt, clippy"
+
+            - name: Add unit tests with Claude
+              id: claude
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: check
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  prompt_template: unit-tests
+
+                  enable_execution_details_summary: "true"
+                  summary_title: "💭 Test Coverage Update: ${{ matrix.package.name }}"
+                  execution_details_script: .github/scripts/format-execution-details.sh
+
+                  template_vars: |
+                      package_name: ${{ matrix.package.name }}
+                      package_path: ${{ matrix.package.path }}
+                      custom_guidelines: ${{ inputs.prompt_override }}
+
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  auto_commit: true
+                  enable_resilient_push: true
+                  push_max_retries: 5
+                  extract_commit_message: true
+
+                  model: ${{ inputs.model }}
+                  max_tokens: ${{ inputs.max_tokens }}
+                  max_turns: ${{ inputs.max_turns }}
+                  claude_args: --allowedTools Edit,Read,Write,Bash
+
+            - name: Upload Claude output for review
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: claude-output-${{ matrix.package.name }}
+                  path: output.txt
+                  if-no-files-found: ignore
+                  retention-days: 7
+
+    create-pr:
+        name: Create Pull Request
+        runs-on: ubuntu-latest
+        needs: [create-branch, add-unit-tests]
+        if: always() && needs.create-branch.result == 'success'
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ needs.create-branch.outputs.branch-name }}
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Check for changes
+              id: check_changes
+              run: |
+                  # Look for test file changes (tests/ directory or test modules in .rs files)
+                  CHANGES=$(git diff origin/master --name-only | grep -E "(^tests/|_test\.rs$|\.rs$)" || true)
+                  if [ -n "$CHANGES" ]; then
+                    echo "has_changes=true" >> $GITHUB_OUTPUT
+                    echo "Found test-related changes in:"
+                    echo "$CHANGES"
+                  else
+                    echo "has_changes=false" >> $GITHUB_OUTPUT
+                    echo "No test-related changes detected"
+                  fi
+
+            - name: Create Pull Request
+              if: steps.check_changes.outputs.has_changes == 'true'
+              uses: ./.github/actions/claude-checker
+              with:
+                  command: create-pr
+                  github_token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  branch_name: ${{ needs.create-branch.outputs.branch-name }}
+                  pr_base_branch: master
+                  pr_title: "🧪 Automated Unit Test Coverage Updates"
+                  pr_body: |
+                      ## 🤖 Automated Unit Test Coverage Review
+
+                      This PR contains automated additions of unit tests to increase test coverage for packages with gaps.
+
+                      ### 📋 What was reviewed:
+                      ${{ inputs.packages != '' && format('- Specific packages: {0}', inputs.packages) || '- ✅ All packages with library sources' }}
+
+                      ${{ inputs.prompt_override != '' && format('### 🎯 Additional Guidance Applied:\n```\n{0}\n```\n', inputs.prompt_override) || '' }}
+
+                      ${{ inputs.model != '' && format('### 🤖 Model Used:\n`{0}`\n', inputs.model) || '' }}
+
+                      ### 🔍 Review focus:
+                      - Added tests for untested business logic and edge cases
+                      - Added error handling and validation tests
+                      - Added concurrency and race condition tests
+                      - Ensured simulator compatibility for switchy packages
+                      - Only added meaningful, non-duplicative tests
+
+                      ### ⚙️ Process:
+                      - Used parallel job execution (one per package)
+                      - Each package analyzed independently by Claude
+                      - Tests follow MoosicBox conventions (switchy_async::test, test_log)
+                      - All changes verified with `cargo test` and `cargo clippy`
+                      - Simulator compatibility tested with `cargo test -p <pkg> -p simvar`
+                      - All changes consolidated on branch: `${branch_name}`
+
+                      ### 📝 Review Guidelines:
+                      1. **Verify Test Value**: Check that tests actually test meaningful behavior
+                      2. **No Duplication**: Ensure tests don't duplicate existing coverage
+                      3. **Test Quality**: Verify tests follow MoosicBox conventions
+                      4. **Simulator Support**: Confirm simulator compatibility where applicable
+                      5. **Dependency Management**: Check that any new test dependencies follow workspace patterns
+
+                      ### ⚠️ Important Notes:
+                      - This is an automated review - human oversight is essential
+                      - Claude only adds tests that meet strict selection criteria
+                      - All tests passed verification: `cargo test`, `cargo clippy`, simulator tests
+                      - Please review test quality and value before merging
+                      - Verify no unnecessary dependencies were added
+
+                      ---
+
+                      **Generated by**: [Claude Checker Action](https://github.com/MoosicBox/MoosicBox/tree/master/.github/actions/claude-checker)
+                      **Branch**: `${branch_name}`
+                      **Run**: ${run_url}
+                  pr_labels: "automated,tests,test-coverage"
+                  pr_skip_if_no_changes: true
+
+            - name: No changes summary
+              if: steps.check_changes.outputs.has_changes == 'false'
+              run: |
+                  echo "✅ No test coverage updates needed - existing coverage appears adequate"
