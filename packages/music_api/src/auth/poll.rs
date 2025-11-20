@@ -105,3 +105,73 @@ impl PollAuth {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use pretty_assertions::assert_eq;
+
+    use super::PollAuth;
+
+    #[test]
+    fn poll_auth_new_has_default_timeout() {
+        let auth = PollAuth::new();
+        assert_eq!(auth.timeout, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn poll_auth_with_timeout_sets_timeout() {
+        let auth = PollAuth::new().with_timeout(Duration::from_secs(120));
+        assert_eq!(auth.timeout, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn poll_auth_with_timeout_secs_sets_timeout() {
+        let auth = PollAuth::new().with_timeout_secs(90);
+        assert_eq!(auth.timeout, Duration::from_secs(90));
+    }
+
+    #[test]
+    fn poll_auth_with_timeout_millis_sets_timeout() {
+        let auth = PollAuth::new().with_timeout_millis(5000);
+        assert_eq!(auth.timeout, Duration::from_millis(5000));
+    }
+
+    #[test]
+    fn poll_auth_timeout_mutable_sets_timeout() {
+        let mut auth = PollAuth::new();
+        let _ = auth.timeout(Duration::from_secs(30));
+        assert_eq!(auth.timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn poll_auth_timeout_secs_mutable_sets_timeout() {
+        let mut auth = PollAuth::new();
+        let _ = auth.timeout_secs(45);
+        assert_eq!(auth.timeout, Duration::from_secs(45));
+    }
+
+    #[test]
+    fn poll_auth_timeout_millis_mutable_sets_timeout() {
+        let mut auth = PollAuth::new();
+        let _ = auth.timeout_millis(3000);
+        assert_eq!(auth.timeout, Duration::from_millis(3000));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn poll_auth_poll_returns_false() {
+        let auth = PollAuth::new();
+        let result = auth.poll().await.unwrap();
+        assert!(!result);
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn poll_auth_login_times_out_when_poll_never_succeeds() {
+        let auth = PollAuth::new().with_timeout_millis(100);
+
+        let result = auth.login().await.unwrap();
+
+        assert!(!result);
+    }
+}
