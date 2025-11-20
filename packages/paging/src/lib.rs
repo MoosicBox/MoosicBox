@@ -1150,3 +1150,925 @@ impl<T> From<Page<T>> for Vec<T> {
 
 /// A result type for paging operations.
 pub type PagingResult<T, E> = Result<PagingResponse<T, E>, E>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    // ===== Page Tests =====
+
+    #[test]
+    fn test_page_empty() {
+        let page: Page<i32> = Page::empty();
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.limit(), 0);
+        assert_eq!(page.total(), Some(0));
+        assert_eq!(page.items(), &[] as &[i32]);
+        assert!(!page.has_more());
+    }
+
+    #[test]
+    fn test_page_with_total_has_more_true() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 10,
+        };
+        assert!(page.has_more());
+        assert_eq!(page.total(), Some(10));
+        assert_eq!(page.remaining(), Some(7));
+    }
+
+    #[test]
+    fn test_page_with_total_has_more_false() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 7,
+            limit: 3,
+            total: 10,
+        };
+        assert!(!page.has_more());
+        assert_eq!(page.total(), Some(10));
+        assert_eq!(page.remaining(), Some(0));
+    }
+
+    #[test]
+    fn test_page_with_has_more_true() {
+        let page = Page::WithHasMore {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            has_more: true,
+        };
+        assert!(page.has_more());
+        assert_eq!(page.total(), None);
+        assert_eq!(page.remaining(), None);
+    }
+
+    #[test]
+    fn test_page_with_has_more_false() {
+        let page = Page::WithHasMore {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            has_more: false,
+        };
+        assert!(!page.has_more());
+        assert_eq!(page.total(), None);
+        assert_eq!(page.remaining(), None);
+    }
+
+    #[test]
+    fn test_page_items_and_into_items() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 10,
+        };
+        assert_eq!(page.items(), &[1, 2, 3]);
+
+        let items = page.into_items();
+        assert_eq!(items, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_page_map_with_total() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 5,
+            limit: 3,
+            total: 20,
+        };
+
+        let mapped = page.map(|x| x * 2);
+
+        assert_eq!(mapped.items(), &[2, 4, 6]);
+        assert_eq!(mapped.offset(), 5);
+        assert_eq!(mapped.limit(), 3);
+        assert_eq!(mapped.total(), Some(20));
+    }
+
+    #[test]
+    fn test_page_map_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec!["a", "b"],
+            offset: 2,
+            limit: 2,
+            has_more: true,
+        };
+
+        let mapped = page.map(|s| s.to_uppercase());
+
+        assert_eq!(mapped.items(), &["A", "B"]);
+        assert_eq!(mapped.offset(), 2);
+        assert_eq!(mapped.limit(), 2);
+        assert!(mapped.has_more());
+    }
+
+    #[test]
+    fn test_page_into_conversion() {
+        #[derive(Debug, PartialEq)]
+        struct From(i32);
+        #[derive(Debug, PartialEq)]
+        struct To(i32);
+
+        impl std::convert::From<From> for To {
+            fn from(f: From) -> Self {
+                To(f.0 * 10)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![From(1), From(2)],
+            offset: 0,
+            limit: 2,
+            total: 5,
+        };
+
+        let converted: Page<To> = page.into();
+        assert_eq!(converted.items(), &[To(10), To(20)]);
+        assert_eq!(converted.total(), Some(5));
+    }
+
+    #[test]
+    fn test_page_try_into_success() {
+        #[derive(Debug, Clone)]
+        struct Value(i32);
+
+        impl TryInto<i32> for Value {
+            type Error = String;
+
+            fn try_into(self) -> Result<i32, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(self.0)
+                } else {
+                    Err("negative".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![Value(1), Value(2)],
+            offset: 0,
+            limit: 2,
+            total: 5,
+        };
+
+        let result: Result<Page<i32>, String> = page.try_into();
+        assert!(result.is_ok());
+        let converted = result.unwrap();
+        assert_eq!(converted.items(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_page_try_into_failure() {
+        #[derive(Debug, Clone)]
+        struct Value(i32);
+
+        impl TryInto<i32> for Value {
+            type Error = String;
+
+            fn try_into(self) -> Result<i32, Self::Error> {
+                if self.0 >= 0 {
+                    Ok(self.0)
+                } else {
+                    Err("negative".to_string())
+                }
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![Value(1), Value(-1)],
+            offset: 0,
+            limit: 2,
+            total: 5,
+        };
+
+        let result: Result<Page<i32>, String> = page.try_into();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "negative");
+    }
+
+    #[test]
+    fn test_page_transpose_success() {
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Ok(2), Ok(3)],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let result: Result<Page<i32>, String> = page.transpose();
+        assert!(result.is_ok());
+        let transposed = result.unwrap();
+        assert_eq!(transposed.items(), &[1, 2, 3]);
+        assert_eq!(transposed.total(), Some(5));
+    }
+
+    #[test]
+    fn test_page_transpose_failure() {
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Err("error"), Ok(3)],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let result: Result<Page<i32>, &str> = page.transpose();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "error");
+    }
+
+    #[test]
+    fn test_page_transpose_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec![Ok(1), Ok(2)],
+            offset: 2,
+            limit: 2,
+            has_more: true,
+        };
+
+        let result: Result<Page<i32>, String> = page.transpose();
+        assert!(result.is_ok());
+        let transposed = result.unwrap();
+        assert_eq!(transposed.items(), &[1, 2]);
+        assert!(transposed.has_more());
+        assert_eq!(transposed.total(), None);
+    }
+
+    #[test]
+    fn test_page_serialization_with_total() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 10,
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["items"], serde_json::json!([1, 2, 3]));
+        assert_eq!(parsed["offset"], 0);
+        assert_eq!(parsed["limit"], 3);
+        assert_eq!(parsed["total"], 10);
+        assert_eq!(parsed["hasMore"], true);
+    }
+
+    #[test]
+    fn test_page_serialization_with_has_more() {
+        let page = Page::WithHasMore {
+            items: vec!["a", "b"],
+            offset: 5,
+            limit: 2,
+            has_more: false,
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["items"], serde_json::json!(["a", "b"]));
+        assert_eq!(parsed["offset"], 5);
+        assert_eq!(parsed["limit"], 2);
+        assert_eq!(parsed["hasMore"], false);
+        assert!(parsed["total"].is_null());
+    }
+
+    #[test]
+    fn test_page_deserialization_with_total() {
+        let json = r#"{"items":[1,2,3],"offset":0,"limit":3,"total":10,"hasMore":true}"#;
+
+        let page: Page<i32> = serde_json::from_str(json).unwrap();
+
+        assert_eq!(page.items(), &[1, 2, 3]);
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.limit(), 3);
+        assert_eq!(page.total(), Some(10));
+        assert!(page.has_more());
+    }
+
+    #[test]
+    fn test_page_deserialization_without_total() {
+        let json = r#"{"items":["x","y"],"offset":2,"limit":2,"hasMore":false}"#;
+
+        let page: Page<String> = serde_json::from_str(json).unwrap();
+
+        assert_eq!(page.items(), &["x", "y"]);
+        assert_eq!(page.offset(), 2);
+        assert_eq!(page.limit(), 2);
+        assert_eq!(page.total(), None);
+        assert!(!page.has_more());
+    }
+
+    #[test]
+    fn test_page_deref() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        // Deref should give us access to Vec methods
+        let vec_ref: &Vec<i32> = &*page;
+        assert_eq!(vec_ref.len(), 3);
+        assert_eq!(vec_ref[0], 1);
+    }
+
+    #[test]
+    fn test_page_into_vec() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let vec: Vec<i32> = Vec::from(page);
+        assert_eq!(vec, vec![1, 2, 3]);
+    }
+
+    // ===== PagingResponse Tests =====
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_empty() {
+        let response: PagingResponse<i32, String> = PagingResponse::empty();
+
+        assert_eq!(response.offset(), 0);
+        assert_eq!(response.limit(), 0);
+        assert_eq!(response.total(), Some(0));
+        assert_eq!(response.items(), &[] as &[i32]);
+        assert!(!response.has_more());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_basic_properties() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 10,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Ok(PagingResponse::empty()) })
+        });
+
+        assert_eq!(response.offset(), 0);
+        assert_eq!(response.limit(), 3);
+        assert_eq!(response.total(), Some(10));
+        assert_eq!(response.items(), &[1, 2, 3]);
+        assert!(response.has_more());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_into_items() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Ok(PagingResponse::empty()) })
+        });
+
+        let items = response.into_items();
+        assert_eq!(items, vec![1, 2, 3]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_pages_sequential() {
+        let page1 = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response = PagingResponse::new(page1, |offset, limit| {
+            Box::pin(async move {
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |off, _lim| {
+                            Box::pin(async move {
+                                if off == 4 {
+                                    Ok(PagingResponse::new(
+                                        Page::WithTotal {
+                                            items: vec![5, 6],
+                                            offset: 4,
+                                            limit: 2,
+                                            total: 6,
+                                        },
+                                        |_, _| {
+                                            Box::pin(async {
+                                                Ok(PagingResponse::<i32, String>::empty())
+                                            })
+                                        },
+                                    ))
+                                } else {
+                                    Ok(PagingResponse::empty())
+                                }
+                            })
+                        },
+                    )),
+                    4 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![5, 6],
+                            offset: 4,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let pages = response.rest_of_pages().await.unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].items(), &[3, 4]);
+        assert_eq!(pages[1].items(), &[5, 6]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_with_rest_of_pages() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![3, 4],
+                        offset: 2,
+                        limit: 2,
+                        total: 4,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        let pages = response.with_rest_of_pages().await.unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].items(), &[1, 2]); // Includes initial page
+        assert_eq!(pages[1].items(), &[3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_items() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![3, 4],
+                        offset: 2,
+                        limit: 2,
+                        total: 4,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        let items = response.rest_of_items().await.unwrap();
+        assert_eq!(items, vec![3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_with_rest_of_items() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![3, 4],
+                        offset: 2,
+                        limit: 2,
+                        total: 4,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        let items = response.with_rest_of_items().await.unwrap();
+        assert_eq!(items, vec![1, 2, 3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_pages_in_batches() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    4 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![5, 6],
+                            offset: 4,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let pages = response.rest_of_pages_in_batches().await.unwrap();
+        assert_eq!(pages.len(), 2);
+        // Order may vary in concurrent execution, but all items should be present
+        let all_items: Vec<i32> = pages.into_iter().flat_map(|p| p.into_items()).collect();
+        assert_eq!(all_items.len(), 4);
+        assert!(all_items.contains(&3));
+        assert!(all_items.contains(&4));
+        assert!(all_items.contains(&5));
+        assert!(all_items.contains(&6));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_with_rest_of_items_in_batches() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                match offset {
+                    2 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    4 => Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![5, 6],
+                            offset: 4,
+                            limit: 2,
+                            total: 6,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    )),
+                    _ => Ok(PagingResponse::empty()),
+                }
+            })
+        });
+
+        let items = response.with_rest_of_items_in_batches().await.unwrap();
+        assert_eq!(items.len(), 6);
+        assert_eq!(&items[0..2], &[1, 2]); // Initial page is first
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_map() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async {
+                Ok(PagingResponse::new(
+                    Page::WithTotal {
+                        items: vec![4, 5, 6],
+                        offset: 3,
+                        limit: 3,
+                        total: 6,
+                    },
+                    |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                ))
+            })
+        });
+
+        let mapped = response.map(|x| x * 2);
+        assert_eq!(mapped.items(), &[2, 4, 6]);
+
+        // Test that mapping applies to fetched pages too
+        let all_items = mapped.with_rest_of_items().await.unwrap();
+        assert_eq!(all_items, vec![2, 4, 6, 8, 10, 12]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_map_err() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Err("original error".to_string()) })
+        });
+
+        let mapped = response.map_err(|e| format!("wrapped: {e}"));
+
+        let result = mapped.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "wrapped: original error");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_transpose_success() {
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Ok(2)],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<Result<i32, String>, String> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async {
+                    Ok(PagingResponse::new(
+                        Page::WithTotal {
+                            items: vec![Ok(3), Ok(4)],
+                            offset: 2,
+                            limit: 2,
+                            total: 4,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                })
+            });
+
+        let transposed = response.transpose().unwrap();
+        assert_eq!(transposed.items(), &[1, 2]);
+
+        let all = transposed.with_rest_of_items().await.unwrap();
+        assert_eq!(all, vec![1, 2, 3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_transpose_failure() {
+        let page = Page::WithTotal {
+            items: vec![Ok(1), Err("error")],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<Result<i32, &str>, &str> =
+            PagingResponse::new(page, |_offset, _limit| {
+                Box::pin(async { Ok(PagingResponse::empty()) })
+            });
+
+        let result = response.transpose();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "error");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_ok_into() {
+        #[derive(Debug, PartialEq)]
+        struct From(i32);
+        #[derive(Debug, PartialEq)]
+        struct To(i32);
+
+        impl std::convert::From<From> for To {
+            fn from(f: From) -> Self {
+                To(f.0 * 10)
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![From(1), From(2)],
+            offset: 0,
+            limit: 2,
+            total: 2,
+        };
+
+        let response: PagingResponse<From, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Ok(PagingResponse::empty()) })
+        });
+
+        let converted: PagingResponse<To, String> = response.ok_into();
+        assert_eq!(converted.items(), &[To(10), To(20)]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_err_into() {
+        #[derive(Debug, PartialEq)]
+        struct ErrorA(String);
+        #[derive(Debug, PartialEq)]
+        struct ErrorB(String);
+
+        impl std::convert::From<ErrorA> for ErrorB {
+            fn from(e: ErrorA) -> Self {
+                ErrorB(format!("converted: {}", e.0))
+            }
+        }
+
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 4,
+        };
+
+        let response: PagingResponse<i32, ErrorA> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Err(ErrorA("test error".to_string())) })
+        });
+
+        let converted: PagingResponse<i32, ErrorB> = response.err_into();
+
+        let result = converted.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ErrorB("converted: test error".to_string())
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_deref() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Ok(PagingResponse::empty()) })
+        });
+
+        // Deref should give us access to Page
+        let page_ref: &Page<i32> = &*response;
+        assert_eq!(page_ref.items(), &[1, 2, 3]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_into_page() {
+        let page = Page::WithTotal {
+            items: vec![1, 2, 3],
+            offset: 0,
+            limit: 3,
+            total: 5,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |_offset, _limit| {
+            Box::pin(async { Ok(PagingResponse::empty()) })
+        });
+
+        let converted_page: Page<i32> = response.into();
+        assert_eq!(converted_page.items(), &[1, 2, 3]);
+        assert_eq!(converted_page.total(), Some(5));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_rest_of_pages_with_has_more() {
+        // Test that cursor-based pagination (WithHasMore) uses sequential fetch
+        let page = Page::WithHasMore {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            has_more: true,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 2 {
+                    Ok(PagingResponse::new(
+                        Page::WithHasMore {
+                            items: vec![3, 4],
+                            offset: 2,
+                            limit: 2,
+                            has_more: false,
+                        },
+                        |_, _| Box::pin(async { Ok(PagingResponse::empty()) }),
+                    ))
+                } else {
+                    Ok(PagingResponse::empty())
+                }
+            })
+        });
+
+        let pages = response.rest_of_pages().await.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].items(), &[3, 4]);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_paging_response_error_propagation() {
+        let page = Page::WithTotal {
+            items: vec![1, 2],
+            offset: 0,
+            limit: 2,
+            total: 6,
+        };
+
+        let response: PagingResponse<i32, String> = PagingResponse::new(page, |offset, _limit| {
+            Box::pin(async move {
+                if offset == 2 {
+                    Err("fetch failed".to_string())
+                } else {
+                    Ok(PagingResponse::empty())
+                }
+            })
+        });
+
+        let result = response.rest_of_items().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "fetch failed");
+    }
+
+    // ===== PagingRequest Tests =====
+
+    #[test]
+    fn test_paging_request_serialization() {
+        let request = PagingRequest {
+            offset: 10,
+            limit: 20,
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["offset"], 10);
+        assert_eq!(parsed["limit"], 20);
+    }
+
+    #[test]
+    fn test_paging_request_deserialization() {
+        let json = r#"{"offset":5,"limit":15}"#;
+
+        let request: PagingRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.offset, 5);
+        assert_eq!(request.limit, 15);
+    }
+
+    #[test]
+    fn test_paging_request_equality() {
+        let req1 = PagingRequest {
+            offset: 10,
+            limit: 20,
+        };
+        let req2 = PagingRequest {
+            offset: 10,
+            limit: 20,
+        };
+        let req3 = PagingRequest {
+            offset: 10,
+            limit: 30,
+        };
+
+        assert_eq!(req1, req2);
+        assert_ne!(req1, req3);
+    }
+}

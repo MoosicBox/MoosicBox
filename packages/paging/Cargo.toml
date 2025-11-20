@@ -22,6 +22,12 @@ log     = { workspace = true }
 serde   = { workspace = true, features = ["derive"] }
 tokio   = { workspace = true, features = ["macros", "sync"] }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serde_json         = { workspace = true }
+switchy_async      = { workspace = true, features = ["macros", "sync", "time", "tokio"] }
+test-log           = { workspace = true }
+
 [features]
 default = ["openapi"]
 
