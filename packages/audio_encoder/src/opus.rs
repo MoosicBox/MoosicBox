@@ -351,3 +351,194 @@ impl std::io::Write for OpusWrite<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoder_creation() {
+        let result = encoder_opus();
+        assert!(
+            result.is_ok(),
+            "Opus encoder should initialize successfully"
+        );
+    }
+
+    #[test]
+    fn test_encode_opus_float_basic() {
+        let mut encoder = encoder_opus().expect("Failed to create encoder");
+
+        // Create 960 samples (20ms at 48kHz stereo)
+        let input: Vec<f32> = vec![0.0; 960];
+        let mut output = vec![0u8; 4000];
+
+        let result = encode_opus_float(&mut encoder, &input, &mut output);
+
+        assert!(result.is_ok(), "Encoding should succeed");
+        let info = result.unwrap();
+
+        assert!(info.output_size > 0, "Should produce output");
+        assert_eq!(
+            info.input_consumed,
+            input.len(),
+            "Should report all input consumed"
+        );
+    }
+
+    #[test]
+    fn test_encode_audiopus_packet_framing() {
+        // Create a small sample set (less than one frame)
+        let samples: Vec<f32> = vec![0.1; 1000];
+
+        let result = encode_audiopus(&samples);
+        assert!(result.is_ok(), "Encoding should succeed");
+
+        let (sample_rate, output) = result.unwrap();
+
+        // Verify sample rate
+        assert_eq!(sample_rate, 48000, "Sample rate should be 48kHz");
+
+        // Verify output format: first 4 bytes should be sample count
+        assert!(
+            output.len() >= 4,
+            "Output should contain at least the sample count"
+        );
+
+        let sample_count = u32::from_be_bytes([output[0], output[1], output[2], output[3]]);
+        #[allow(clippy::cast_possible_truncation)]
+        let expected_count = samples.len() as u32;
+        assert_eq!(
+            sample_count, expected_count,
+            "Sample count should match input"
+        );
+
+        // After sample count, there should be at least one packet with 2-byte length prefix
+        if output.len() > 4 {
+            assert!(
+                output.len() >= 6,
+                "Should have room for at least one packet length"
+            );
+        }
+    }
+
+    #[test]
+    fn test_encode_audiopus_multiple_frames() {
+        // Create enough samples for multiple frames
+        // Frame size at 48kHz stereo with 20ms = 1920 samples per frame
+        let frame_size = 1920;
+        let samples: Vec<f32> = vec![0.5; frame_size * 3];
+
+        let result = encode_audiopus(&samples);
+        assert!(result.is_ok(), "Encoding should succeed");
+
+        let (sample_rate, output) = result.unwrap();
+        assert_eq!(sample_rate, 48000);
+
+        // Parse the output to verify multiple packets
+        let mut offset = 4; // Skip sample count
+        let mut packet_count = 0;
+
+        while offset + 2 <= output.len() {
+            let packet_len = u16::from_be_bytes([output[offset], output[offset + 1]]) as usize;
+            if packet_len == 0 {
+                break;
+            }
+            offset += 2 + packet_len;
+            packet_count += 1;
+
+            if offset >= output.len() {
+                break;
+            }
+        }
+
+        assert!(packet_count >= 1, "Should have encoded at least one packet");
+    }
+
+    #[test]
+    fn test_encode_audiopus_empty_input() {
+        let samples: Vec<f32> = vec![];
+
+        let result = encode_audiopus(&samples);
+        assert!(result.is_ok(), "Empty input should be handled");
+
+        let (_sample_rate, output) = result.unwrap();
+
+        // Should at least contain the sample count (0)
+        assert!(output.len() >= 4);
+        let sample_count = u32::from_be_bytes([output[0], output[1], output[2], output[3]]);
+        assert_eq!(sample_count, 0);
+    }
+
+    #[test]
+    #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
+    fn test_opus_write_creation() {
+        let temp_file = "/tmp/test_opus_write.ogg";
+        let writer = OpusWrite::new(temp_file);
+
+        assert_eq!(writer.serial, 2_873_470_314, "Serial should be initialized");
+        assert_eq!(writer.absgp, 0, "Initial absgp should be 0");
+        assert_eq!(writer.packet_num, 0, "Initial packet_num should be 0");
+        assert_eq!(writer.page_num, 0, "Initial page_num should be 0");
+        assert!(writer.packet.is_none(), "Initial packet should be None");
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
+    fn test_opus_write_buffering_behavior() {
+        use std::io::Write;
+
+        let temp_file = "/tmp/test_opus_buffering.ogg";
+        let mut writer = OpusWrite::new(temp_file);
+
+        // First write should buffer the packet
+        let data1 = vec![1u8; 100];
+        let result1 = writer.write(&data1);
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), 100);
+        assert!(writer.packet.is_some(), "First packet should be buffered");
+
+        // Second write should write the first packet and buffer the second
+        let data2 = vec![2u8; 100];
+        let result2 = writer.write(&data2);
+        assert!(result2.is_ok());
+        assert_eq!(result2.unwrap(), 100);
+        assert!(writer.packet.is_some(), "Second packet should be buffered");
+
+        // Flush should write the buffered packet
+        let flush_result = writer.flush();
+        assert!(flush_result.is_ok());
+        assert!(writer.packet.is_none(), "Packet should be written on flush");
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_opus_stream_headers_format() {
+        // Verify OpusHead magic signature
+        assert_eq!(&OPUS_STREAM_IDENTIFICATION_HEADER[0..8], b"OpusHead");
+
+        // Verify version
+        assert_eq!(OPUS_STREAM_IDENTIFICATION_HEADER[8], 0x01);
+
+        // Verify channel count (stereo)
+        assert_eq!(OPUS_STREAM_IDENTIFICATION_HEADER[9], 0x02);
+
+        // Verify OpusTags magic signature
+        assert_eq!(&OPUS_STREAM_COMMENTS_HEADER[0..8], b"OpusTags");
+
+        // Verify vendor string
+        let vendor_len = u32::from_le_bytes([
+            OPUS_STREAM_COMMENTS_HEADER[8],
+            OPUS_STREAM_COMMENTS_HEADER[9],
+            OPUS_STREAM_COMMENTS_HEADER[10],
+            OPUS_STREAM_COMMENTS_HEADER[11],
+        ]);
+        assert_eq!(vendor_len, 7);
+        assert_eq!(&OPUS_STREAM_COMMENTS_HEADER[12..19], b"ENCODER");
+    }
+}

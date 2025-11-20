@@ -122,3 +122,66 @@ pub fn encode_mp3(
         },
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoder_creation() {
+        let result = encoder_mp3();
+        assert!(result.is_ok(), "MP3 encoder should initialize successfully");
+    }
+
+    #[test]
+    fn test_encode_mp3_basic() {
+        let mut encoder = encoder_mp3().expect("Failed to create encoder");
+
+        // Create a buffer of PCM samples
+        let input: Vec<i16> = vec![0; 2048];
+
+        let result = encode_mp3(&mut encoder, &input);
+
+        assert!(result.is_ok(), "Encoding should succeed");
+        let (output, info) = result.unwrap();
+
+        assert!(!output.is_empty(), "Should produce output");
+        assert_eq!(info.input_consumed, input.len(), "Should consume all input");
+    }
+
+    #[test]
+    fn test_encode_mp3_non_zero_samples() {
+        let mut encoder = encoder_mp3().expect("Failed to create encoder");
+
+        // Create non-zero samples to ensure actual encoding happens
+        let mut input: Vec<i16> = vec![0; 2048];
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        for (i, sample) in input.iter_mut().enumerate() {
+            *sample = (i as i16 % 1000) - 500;
+        }
+
+        let result = encode_mp3(&mut encoder, &input);
+
+        assert!(result.is_ok(), "Encoding should succeed");
+        let (output, info) = result.unwrap();
+
+        assert!(!output.is_empty(), "Should produce output");
+        // Note: info.output_size may be 0 if all data is still buffered
+        assert_eq!(info.input_consumed, input.len(), "Should consume all input");
+    }
+
+    #[test]
+    fn test_encode_mp3_multiple_calls() {
+        let mut encoder = encoder_mp3().expect("Failed to create encoder");
+
+        // First encode
+        let input1: Vec<i16> = vec![100; 2048];
+        let result1 = encode_mp3(&mut encoder, &input1);
+        assert!(result1.is_ok());
+
+        // Second encode
+        let input2: Vec<i16> = vec![200; 2048];
+        let result2 = encode_mp3(&mut encoder, &input2);
+        assert!(result2.is_ok(), "Multiple encodes should work");
+    }
+}
