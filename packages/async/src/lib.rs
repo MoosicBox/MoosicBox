@@ -298,3 +298,114 @@ impl_async!(simulator);
 impl_async!(tokio);
 
 // Note: test macro is defined above via macro_rules!
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{Arc, Mutex},
+        thread,
+    };
+
+    use super::{thread_id, Builder, Error};
+
+    #[cfg(feature = "_any_backend")]
+    use super::task;
+
+    #[test]
+    fn thread_id_is_unique_across_threads() {
+        let ids = Arc::new(Mutex::new(Vec::new()));
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let ids_clone = Arc::clone(&ids);
+            handles.push(thread::spawn(move || {
+                let id = thread_id();
+                ids_clone.lock().unwrap().push(id);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let (sorted_len, ids_len) = {
+            let ids = ids.lock().unwrap();
+            let mut sorted = ids.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            (sorted.len(), ids.len())
+        };
+
+        // All thread IDs should be unique
+        assert_eq!(sorted_len, ids_len);
+    }
+
+    #[test]
+    fn thread_id_is_consistent_within_thread() {
+        let id1 = thread_id();
+        let id2 = thread_id();
+        let id3 = thread_id();
+
+        // Same thread should always return same ID
+        assert_eq!(id1, id2);
+        assert_eq!(id2, id3);
+    }
+
+    #[test]
+    fn thread_id_is_monotonically_increasing() {
+        let main_id = thread_id();
+
+        let spawned_id = thread::spawn(thread_id).join().unwrap();
+
+        // Spawned thread should have a higher ID (allocated after main thread)
+        assert!(spawned_id > main_id);
+    }
+
+    #[cfg(feature = "_any_backend")]
+    #[test]
+    fn error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
+        let err: Error = io_err.into();
+        assert!(matches!(err, Error::IO(_)));
+    }
+
+    #[cfg(feature = "_any_backend")]
+    #[test]
+    fn error_from_join_error() {
+        let join_err = task::JoinError::new();
+        let err: Error = join_err.into();
+        assert!(matches!(err, Error::Join(_)));
+    }
+
+    #[cfg(feature = "_any_backend")]
+    #[test]
+    fn builder_default_is_same_as_new() {
+        let builder1 = Builder::default();
+        let builder2 = Builder::new();
+
+        #[cfg(feature = "rt-multi-thread")]
+        assert_eq!(builder1.max_blocking_threads, builder2.max_blocking_threads);
+
+        // Both should be able to build successfully
+        let _runtime1 = builder1.build().unwrap();
+        let _runtime2 = builder2.build().unwrap();
+    }
+
+    #[cfg(all(feature = "_any_backend", feature = "rt-multi-thread"))]
+    #[test]
+    fn builder_max_blocking_threads_configuration() {
+        let mut builder = Builder::new();
+
+        // Test setting with u16
+        builder.max_blocking_threads(4);
+        assert_eq!(builder.max_blocking_threads, Some(4));
+
+        // Test setting with Option<u16>
+        builder.max_blocking_threads(Some(8));
+        assert_eq!(builder.max_blocking_threads, Some(8));
+
+        // Test setting with None
+        builder.max_blocking_threads(None);
+        assert_eq!(builder.max_blocking_threads, None);
+    }
+}

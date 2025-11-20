@@ -342,3 +342,127 @@ where
         self.future.is_terminated() || self.sleep.is_terminated()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::ready;
+
+    #[test]
+    fn sleep_future_implements_fused_future() {
+        let sleep = Sleep::new(Duration::from_millis(10));
+        assert!(!sleep.is_terminated());
+    }
+
+    #[test]
+    fn interval_reset_restarts_timing() {
+        let mut interval = Interval::new(Duration::from_millis(100));
+
+        // First tick should be created with current time
+        let _tick1 = interval.tick();
+
+        // Reset the interval
+        interval.reset();
+
+        // After reset, state should be back to initial
+        assert!(!interval.polled);
+        assert!(!interval.completed);
+    }
+
+    #[test]
+    fn interval_poll_tick_returns_ready_after_duration() {
+        use std::task::{Context, Poll};
+
+        let mut interval = Interval::new(Duration::from_millis(1));
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // First poll should return Pending
+        assert!(matches!(interval.poll_tick(&mut cx), Poll::Pending));
+
+        // Mark as polled to test the ready path
+        interval.polled = true;
+        // Advance time in test by updating now
+        interval.now = switchy_time::now() - Duration::from_millis(2);
+
+        let result = interval.poll_tick(&mut cx);
+        assert!(matches!(result, Poll::Ready(_)));
+    }
+
+    #[test]
+    fn instant_future_implements_fused_future() {
+        let instant = Instant::new(instant_now() + Duration::from_millis(10));
+        assert!(!instant.is_terminated());
+    }
+
+    #[test]
+    fn timeout_into_inner_returns_original_future() {
+        let original_future = ready(42);
+        let timeout = Timeout::new(Duration::from_millis(100), original_future);
+
+        let inner = timeout.into_inner();
+        // The future should still be the same
+        let result = futures::executor::block_on(inner);
+        assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn elapsed_error_displays_correctly() {
+        let err = Elapsed;
+        assert_eq!(err.to_string(), "deadline has elapsed");
+    }
+
+    #[test]
+    fn elapsed_error_is_clonable() {
+        let err1 = Elapsed;
+        let err2 = err1.clone();
+        assert_eq!(err1, err2);
+    }
+
+    #[test]
+    fn sleep_creates_with_current_time() {
+        let sleep = Sleep::new(Duration::from_millis(100));
+        let now = switchy_time::now();
+
+        // Sleep's now should be very close to current time (within a small window)
+        let diff = sleep
+            .now
+            .duration_since(now)
+            .unwrap_or_else(|_| now.duration_since(sleep.now).unwrap());
+        assert!(diff < Duration::from_millis(10));
+    }
+
+    #[test]
+    fn interval_creates_with_current_time() {
+        let interval = Interval::new(Duration::from_millis(100));
+        let now = switchy_time::now();
+
+        // Interval's now should be very close to current time
+        let diff = interval
+            .now
+            .duration_since(now)
+            .unwrap_or_else(|_| now.duration_since(interval.now).unwrap());
+        assert!(diff < Duration::from_millis(10));
+    }
+
+    #[test]
+    fn system_time_to_instant_handles_future_time() {
+        let future_time = now() + Duration::from_secs(10);
+        let result = system_time_to_instant(future_time);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn system_time_to_instant_handles_past_time() {
+        let past_time = now() - Duration::from_secs(10);
+        let result = system_time_to_instant(past_time);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn system_time_to_instant_handles_current_time() {
+        let current_time = now();
+        let result = system_time_to_instant(current_time);
+        assert!(result.is_ok());
+    }
+}
