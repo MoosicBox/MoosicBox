@@ -433,4 +433,159 @@ mod tests {
             assert!(reservation.is_reserved(port));
         }
     }
+
+    #[test]
+    fn test_concurrent_reservations() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let reservation = Arc::new(PortReservation::new(15000..15100));
+        let mut handles = vec![];
+
+        // Spawn 10 threads that each try to reserve 5 ports
+        for _ in 0..10 {
+            let reservation_clone = Arc::clone(&reservation);
+            let handle = thread::spawn(move || reservation_clone.reserve_ports(5));
+            handles.push(handle);
+        }
+
+        // Collect all reserved ports
+        let mut all_ports = Vec::new();
+        for handle in handles {
+            let ports = handle.join().unwrap();
+            all_ports.extend(ports);
+        }
+
+        // Verify no duplicates (each port should be reserved only once)
+        let mut unique_ports = all_ports.clone();
+        unique_ports.sort_unstable();
+        unique_ports.dedup();
+        assert_eq!(
+            unique_ports.len(),
+            all_ports.len(),
+            "Concurrent reservations should not result in duplicate ports"
+        );
+
+        // Verify all ports are marked as reserved
+        for port in &all_ports {
+            assert!(
+                reservation.is_reserved(*port),
+                "Port {port} should be marked as reserved"
+            );
+        }
+    }
+
+    #[test]
+    fn test_concurrent_reserve_and_release() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let reservation = Arc::new(PortReservation::new(15000..15100));
+        let mut handles = vec![];
+
+        // Spawn threads that reserve and release ports concurrently
+        for i in 0..5 {
+            let reservation_clone = Arc::clone(&reservation);
+            let handle = thread::spawn(move || {
+                let ports = reservation_clone.reserve_ports(3);
+
+                // Even-numbered threads release their ports
+                if i % 2 == 0 {
+                    reservation_clone.release_ports(ports.iter().copied());
+                    vec![]
+                } else {
+                    ports
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Collect ports that were not released
+        let mut remaining_ports = Vec::new();
+        for handle in handles {
+            let ports = handle.join().unwrap();
+            remaining_ports.extend(ports);
+        }
+
+        // Verify that the remaining ports are still reserved
+        for port in &remaining_ports {
+            assert!(
+                reservation.is_reserved(*port),
+                "Port {port} should still be reserved"
+            );
+        }
+
+        // Verify no duplicates among remaining ports
+        let mut unique_ports = remaining_ports.clone();
+        unique_ports.sort_unstable();
+        unique_ports.dedup();
+        assert_eq!(
+            unique_ports.len(),
+            remaining_ports.len(),
+            "No duplicate ports should remain"
+        );
+    }
+
+    #[test]
+    fn test_is_reserved_non_reserved_port() {
+        let reservation = PortReservation::new(15000..15100);
+
+        // Check a port that was never reserved
+        assert!(!reservation.is_reserved(15050));
+    }
+
+    #[test]
+    fn test_release_non_reserved_port() {
+        let reservation = PortReservation::new(15000..15100);
+
+        // Releasing a port that was never reserved should not panic
+        reservation.release_port(15050);
+        assert!(!reservation.is_reserved(15050));
+    }
+
+    #[test]
+    fn test_reserve_port_returns_none_when_all_occupied() {
+        // Create a reservation with a very limited range
+        let reservation = PortReservation::new(15000..15002);
+
+        // Reserve all available ports
+        let port1 = reservation.reserve_port();
+        let port2 = reservation.reserve_port();
+
+        // At least one should succeed if ports are available
+        assert!(port1.is_some() || port2.is_some());
+
+        // If we got two ports, try to reserve a third - should fail eventually
+        if port1.is_some() && port2.is_some() {
+            // Try a few more times - system ports might not all be available
+            let mut found_none = false;
+            for _ in 0..10 {
+                if reservation.reserve_port().is_none() {
+                    found_none = true;
+                    break;
+                }
+            }
+            // With a very small range, we should eventually run out
+            assert!(
+                found_none,
+                "Should run out of ports in a small range after multiple reservations"
+            );
+        }
+    }
+
+    #[test]
+    fn test_double_release() {
+        let reservation = PortReservation::new(15000..15100);
+        let port = reservation.reserve_port().unwrap();
+
+        assert!(reservation.is_reserved(port));
+
+        // Release once
+        reservation.release_port(port);
+        assert!(!reservation.is_reserved(port));
+
+        // Release again - should not panic
+        reservation.release_port(port);
+        assert!(!reservation.is_reserved(port));
+    }
 }

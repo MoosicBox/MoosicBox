@@ -238,7 +238,8 @@ pub fn pick_unused_port(range: impl PortRange) -> Option<Port> {
 
 #[cfg(test)]
 mod tests {
-    use super::pick_unused_port;
+    use super::{PortRange, is_free, is_free_tcp, is_free_udp, pick_unused_port};
+    use std::net::{TcpListener, UdpSocket};
 
     #[cfg(feature = "rand")]
     use super::pick_random_unused_port;
@@ -267,5 +268,137 @@ mod tests {
         if let Some(p) = pick_unused_port(20000..=21000) {
             assert!((20000..=21000).contains(&p));
         }
+    }
+
+    #[test]
+    fn test_is_free_tcp() {
+        // Try multiple times to find a port and bind to it
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free initially
+                if is_free_tcp(port) {
+                    // Bind to the port
+                    if let Ok(_listener) = TcpListener::bind(("127.0.0.1", port)) {
+                        // Port should now be occupied
+                        assert!(!is_free_tcp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test]
+    fn test_is_free_udp() {
+        // Try multiple times to find a port and bind to it
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free initially
+                if is_free_udp(port) {
+                    // Bind to the port
+                    if let Ok(_socket) = UdpSocket::bind(("127.0.0.1", port)) {
+                        // Port should now be occupied
+                        assert!(!is_free_udp(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test]
+    fn test_is_free() {
+        // Try multiple times to find a port and bind to it
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free on both TCP and UDP initially
+                if is_free(port) {
+                    // Bind to the port with TCP
+                    if let Ok(_listener) = TcpListener::bind(("127.0.0.1", port)) {
+                        // Port should now be occupied
+                        assert!(!is_free(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test]
+    fn test_is_free_udp_binding() {
+        // Try multiple times to find a port and bind to it
+        for _ in 0..10 {
+            if let Some(port) = pick_unused_port(15000..16000) {
+                // Port should be free on both TCP and UDP initially
+                if is_free(port) {
+                    // Bind to the port with UDP
+                    if let Ok(_socket) = UdpSocket::bind(("127.0.0.1", port)) {
+                        // Port should now be occupied
+                        assert!(!is_free(port));
+                        return; // Test passed
+                    }
+                }
+            }
+        }
+        panic!("Could not find a port to test with after 10 attempts");
+    }
+
+    #[test]
+    fn test_port_range_trait_exclusive() {
+        let range = 15000..15010;
+
+        // Test iter method
+        let ports: Vec<u16> = range.iter().collect();
+        assert_eq!(ports.len(), 10);
+        assert_eq!(ports[0], 15000);
+        assert_eq!(ports[9], 15009);
+
+        // Test into_iter method
+        let range2 = 15000..15010;
+        let ports2: Vec<u16> = PortRange::into_iter(range2).collect();
+        assert_eq!(ports2.len(), 10);
+        assert_eq!(ports2[0], 15000);
+        assert_eq!(ports2[9], 15009);
+    }
+
+    #[test]
+    fn test_port_range_trait_inclusive() {
+        let range = 15000..=15010;
+
+        // Test iter method
+        let ports: Vec<u16> = range.iter().collect();
+        assert_eq!(ports.len(), 11);
+        assert_eq!(ports[0], 15000);
+        assert_eq!(ports[10], 15010);
+
+        // Test into_iter method
+        let range2 = 15000..=15010;
+        let ports2: Vec<u16> = PortRange::into_iter(range2).collect();
+        assert_eq!(ports2.len(), 11);
+        assert_eq!(ports2[0], 15000);
+        assert_eq!(ports2[10], 15010);
+    }
+
+    #[test]
+    fn test_port_range_empty() {
+        // Test with empty exclusive range
+        let range = 15000..15000;
+        assert_eq!(range.iter().count(), 0);
+
+        // Test with empty range doesn't find any ports
+        let result = pick_unused_port(15000..15000);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_port_range_single_port() {
+        // Test with inclusive range containing a single port
+        let range = 15000..=15000;
+        let ports: Vec<u16> = range.iter().collect();
+        assert_eq!(ports.len(), 1);
+        assert_eq!(ports[0], 15000);
     }
 }
