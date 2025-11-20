@@ -138,3 +138,60 @@ pub enum Bandwidth {
     /// Full audio spectrum, suitable for high-quality music encoding.
     Fullband,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toc_byte_boundary_values() {
+        // Test minimum values (config=0, mono, code=0)
+        let toc = TocByte::parse(0b0000_0000).unwrap();
+        assert_eq!(toc.config(), 0);
+        assert!(!toc.is_stereo());
+        assert_eq!(toc.frame_code(), 0);
+
+        // Test maximum values (config=31, stereo, code=3)
+        let toc = TocByte::parse(0b1111_1111).unwrap();
+        assert_eq!(toc.config(), 31);
+        assert!(toc.is_stereo());
+        assert_eq!(toc.frame_code(), 3);
+    }
+
+    #[test]
+    fn test_toc_byte_stereo_bit_isolation() {
+        // Verify stereo bit is correctly isolated from other bits
+        // Config=15, mono, code=0: 0b01111000
+        let toc = TocByte::parse(0b0111_1000).unwrap();
+        assert_eq!(toc.config(), 15);
+        assert!(!toc.is_stereo());
+        assert_eq!(toc.frame_code(), 0);
+
+        // Config=15, stereo, code=0: 0b01111100
+        let toc = TocByte::parse(0b0111_1100).unwrap();
+        assert_eq!(toc.config(), 15);
+        assert!(toc.is_stereo());
+        assert_eq!(toc.frame_code(), 0);
+    }
+
+    #[test]
+    fn test_toc_byte_config_extraction() {
+        // Test that config extraction works correctly for various values
+        for config in 0..=31 {
+            let byte = config << 3;
+            let toc = TocByte::parse(byte).unwrap();
+            assert_eq!(toc.config(), config);
+        }
+    }
+
+    #[test]
+    fn test_toc_byte_frame_code_extraction() {
+        // Test all frame codes with same config and stereo setting
+        for code in 0..=3 {
+            let byte = (10 << 3) | code; // config=10, mono
+            let toc = TocByte::parse(byte).unwrap();
+            assert_eq!(toc.frame_code(), code);
+            assert_eq!(toc.config(), 10);
+        }
+    }
+}
