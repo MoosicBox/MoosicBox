@@ -1378,7 +1378,11 @@ mod tests {
         let input = quote! { a < b };
         let result = Parser::parse2(parse_expression, input).unwrap();
         match result {
-            Expression::Binary { left: _, op, right: _ } => {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
                 assert!(matches!(op, BinaryOp::Less));
             }
             _ => panic!("Expected binary expression"),
@@ -1390,7 +1394,11 @@ mod tests {
         let input = quote! { a > b };
         let result = Parser::parse2(parse_expression, input).unwrap();
         match result {
-            Expression::Binary { left: _, op, right: _ } => {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
                 assert!(matches!(op, BinaryOp::Greater));
             }
             _ => panic!("Expected binary expression"),
@@ -1402,7 +1410,11 @@ mod tests {
         let input = quote! { a != b };
         let result = Parser::parse2(parse_expression, input).unwrap();
         match result {
-            Expression::Binary { left: _, op, right: _ } => {
+            Expression::Binary {
+                left: _,
+                op,
+                right: _,
+            } => {
                 assert!(matches!(op, BinaryOp::NotEqual));
             }
             _ => panic!("Expected binary expression"),
