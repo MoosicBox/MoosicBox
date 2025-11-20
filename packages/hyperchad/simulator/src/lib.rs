@@ -411,4 +411,247 @@ mod tests {
         assert_eq!(RendererType::Egui.to_string(), "egui");
         assert_eq!(RendererType::Fltk.to_string(), "fltk");
     }
+
+    #[test]
+    fn test_app_config_default() {
+        let config = AppConfig::default();
+        assert_eq!(config.name, "test-app");
+        assert_eq!(config.routes.len(), 1);
+        assert_eq!(config.routes[0], "/");
+        assert!(config.static_assets.is_empty());
+        assert!(config.environment.is_empty());
+    }
+
+    #[test]
+    fn test_simulation_data_default() {
+        let data = SimulationData::default();
+        assert!(data.users.is_empty());
+        assert!(data.api_responses.is_empty());
+        assert!(data.database_state.is_empty());
+    }
+
+    #[test]
+    fn test_simulator_default() {
+        let simulator = HyperChadSimulator::default();
+        assert_eq!(simulator.app_config.name, "test-app");
+        assert!(simulator.enabled_renderers.is_empty());
+        assert!(simulator.mock_data.users.is_empty());
+        assert!(simulator.web_server.is_none());
+    }
+
+    #[test]
+    fn test_with_app_config() {
+        let config = AppConfig {
+            name: "my-app".to_string(),
+            routes: vec!["/".to_string(), "/about".to_string()],
+            static_assets: BTreeMap::new(),
+            environment: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new().with_app_config(config);
+
+        assert_eq!(simulator.app_config.name, "my-app");
+        assert_eq!(simulator.app_config.routes.len(), 2);
+    }
+
+    #[test]
+    fn test_with_mock_data() {
+        let mut api_responses = BTreeMap::new();
+        api_responses.insert("/api/test".to_string(), serde_json::json!({"status": "ok"}));
+
+        let data = SimulationData {
+            users: vec![serde_json::json!({"id": 1, "name": "test"})],
+            api_responses,
+            database_state: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new().with_mock_data(data);
+
+        assert_eq!(simulator.mock_data.users.len(), 1);
+        assert_eq!(simulator.mock_data.api_responses.len(), 1);
+    }
+
+    #[test]
+    fn test_renderer_deduplication() {
+        let simulator = HyperChadSimulator::new()
+            .with_renderer(RendererType::Html)
+            .with_renderer(RendererType::Html)
+            .with_renderer(RendererType::VanillaJs)
+            .with_renderer(RendererType::Html);
+
+        assert_eq!(simulator.enabled_renderers.len(), 2);
+        assert!(simulator.enabled_renderers.contains(&RendererType::Html));
+        assert!(
+            simulator
+                .enabled_renderers
+                .contains(&RendererType::VanillaJs)
+        );
+    }
+
+    #[test]
+    fn test_with_renderers_batch() {
+        let renderers = vec![
+            RendererType::Html,
+            RendererType::VanillaJs,
+            RendererType::Egui,
+        ];
+
+        let simulator = HyperChadSimulator::new().with_renderers(renderers);
+
+        assert_eq!(simulator.enabled_renderers.len(), 3);
+        assert!(simulator.enabled_renderers.contains(&RendererType::Html));
+        assert!(
+            simulator
+                .enabled_renderers
+                .contains(&RendererType::VanillaJs)
+        );
+        assert!(simulator.enabled_renderers.contains(&RendererType::Egui));
+    }
+
+    #[test]
+    fn test_with_renderers_deduplication() {
+        let renderers = vec![
+            RendererType::Html,
+            RendererType::Html,
+            RendererType::VanillaJs,
+        ];
+
+        let simulator = HyperChadSimulator::new().with_renderers(renderers);
+
+        assert_eq!(simulator.enabled_renderers.len(), 2);
+    }
+
+    #[test]
+    fn test_simulator_clone() {
+        let mut environment = BTreeMap::new();
+        environment.insert("ENV".to_string(), "test".to_string());
+
+        let config = AppConfig {
+            name: "clone-test".to_string(),
+            routes: vec!["/".to_string(), "/test".to_string()],
+            static_assets: BTreeMap::new(),
+            environment,
+        };
+
+        let mut api_responses = BTreeMap::new();
+        api_responses.insert(
+            "/api/data".to_string(),
+            serde_json::json!({"data": "value"}),
+        );
+
+        let data = SimulationData {
+            users: vec![serde_json::json!({"id": 42})],
+            api_responses,
+            database_state: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new()
+            .with_app_config(config)
+            .with_renderer(RendererType::Html)
+            .with_renderer(RendererType::VanillaJs)
+            .with_mock_data(data);
+
+        let cloned = simulator.clone();
+
+        // Verify all fields are cloned correctly
+        assert_eq!(cloned.app_config.name, simulator.app_config.name);
+        assert_eq!(cloned.app_config.routes, simulator.app_config.routes);
+        assert_eq!(
+            cloned.app_config.environment,
+            simulator.app_config.environment
+        );
+        assert_eq!(cloned.enabled_renderers, simulator.enabled_renderers);
+        assert_eq!(
+            cloned.mock_data.users.len(),
+            simulator.mock_data.users.len()
+        );
+        assert_eq!(
+            cloned.mock_data.api_responses.len(),
+            simulator.mock_data.api_responses.len()
+        );
+    }
+
+    #[test]
+    fn test_renderer_type_equality() {
+        assert_eq!(RendererType::Html, RendererType::Html);
+        assert_eq!(RendererType::VanillaJs, RendererType::VanillaJs);
+        assert_eq!(RendererType::Egui, RendererType::Egui);
+        assert_eq!(RendererType::Fltk, RendererType::Fltk);
+
+        assert_ne!(RendererType::Html, RendererType::VanillaJs);
+        assert_ne!(RendererType::Egui, RendererType::Fltk);
+    }
+
+    #[test]
+    fn test_simulator_error_display() {
+        let error = SimulatorError::SimulationFailed("test failure".to_string());
+        assert_eq!(error.to_string(), "Simulation failed: test failure");
+
+        let error = SimulatorError::UnsupportedRenderer(RendererType::Html);
+        assert_eq!(error.to_string(), "Renderer not supported: Html");
+
+        let error = SimulatorError::TestPlanFailed("plan error".to_string());
+        assert_eq!(error.to_string(), "Test plan execution failed: plan error");
+    }
+
+    #[test]
+    fn test_renderer_type_serialization() {
+        let html = RendererType::Html;
+        let serialized = serde_json::to_string(&html).unwrap();
+        let deserialized: RendererType = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(html, deserialized);
+
+        let vanilla_js = RendererType::VanillaJs;
+        let serialized = serde_json::to_string(&vanilla_js).unwrap();
+        let deserialized: RendererType = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(vanilla_js, deserialized);
+    }
+
+    #[test]
+    fn test_app_config_with_static_assets() {
+        let mut static_assets = BTreeMap::new();
+        static_assets.insert("/style.css".to_string(), "body { margin: 0; }".to_string());
+        static_assets.insert("/script.js".to_string(), "console.log('test');".to_string());
+
+        let config = AppConfig {
+            name: "asset-test".to_string(),
+            routes: vec!["/".to_string()],
+            static_assets,
+            environment: BTreeMap::new(),
+        };
+
+        let simulator = HyperChadSimulator::new().with_app_config(config);
+
+        assert_eq!(simulator.app_config.static_assets.len(), 2);
+        assert!(
+            simulator
+                .app_config
+                .static_assets
+                .contains_key("/style.css")
+        );
+        assert!(
+            simulator
+                .app_config
+                .static_assets
+                .contains_key("/script.js")
+        );
+    }
+
+    #[test]
+    fn test_simulation_data_with_database_state() {
+        let mut database_state = BTreeMap::new();
+        database_state.insert("users:1".to_string(), serde_json::json!({"name": "Alice"}));
+        database_state.insert("users:2".to_string(), serde_json::json!({"name": "Bob"}));
+
+        let data = SimulationData {
+            users: Vec::new(),
+            api_responses: BTreeMap::new(),
+            database_state,
+        };
+
+        let simulator = HyperChadSimulator::new().with_mock_data(data);
+
+        assert_eq!(simulator.mock_data.database_state.len(), 2);
+        assert!(simulator.mock_data.database_state.contains_key("users:1"));
+    }
 }
