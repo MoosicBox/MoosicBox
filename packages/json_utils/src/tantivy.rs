@@ -289,3 +289,188 @@ where
             .ok_or_else(|| ParseError::ConvertType("&str".into()))?
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_value_type_str() {
+        let value = OwnedValue::Str("test".to_string());
+        let result: Result<&str, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), "test");
+    }
+
+    #[test]
+    fn test_to_value_type_string() {
+        let value = OwnedValue::Str("test".to_string());
+        let result: Result<String, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), "test");
+    }
+
+    #[test]
+    fn test_to_value_type_bool() {
+        let value = OwnedValue::Bool(true);
+        let result: Result<bool, ParseError> = (&value).to_value_type();
+        assert!(result.unwrap());
+
+        let value = OwnedValue::Bool(false);
+        let result: Result<bool, ParseError> = (&value).to_value_type();
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_to_value_type_u64() {
+        let value = OwnedValue::U64(123);
+        let result: Result<u64, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), 123);
+    }
+
+    #[test]
+    fn test_to_value_type_f64() {
+        let value = OwnedValue::F64(2.5);
+        let result: Result<f64, ParseError> = (&value).to_value_type();
+        assert!((result.unwrap() - 2.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_to_value_type_f32() {
+        let value = OwnedValue::F64(2.5);
+        let result: Result<f32, ParseError> = (&value).to_value_type();
+        assert!((result.unwrap() - 2.5_f32).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_to_value_type_u8() {
+        let value = OwnedValue::U64(42);
+        let result: Result<u8, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_to_value_type_u16() {
+        let value = OwnedValue::U64(1234);
+        let result: Result<u16, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), 1234);
+    }
+
+    #[test]
+    fn test_to_value_type_u32() {
+        let value = OwnedValue::U64(12345);
+        let result: Result<u32, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_to_value_type_option() {
+        let value = OwnedValue::Str("test".to_string());
+        let result: Result<Option<String>, ParseError> = (&value).to_value_type();
+        assert_eq!(result.unwrap(), Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_to_value_type_owned_value_identity() {
+        let value = OwnedValue::U64(123);
+        let result: Result<&OwnedValue, ParseError> = (&value).to_value_type();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_vec_owned_value_to_vec() {
+        let values = vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)];
+        let result: Result<Vec<u64>, ParseError> = (&values).to_value_type();
+        assert_eq!(result.unwrap(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_vec_owned_value_to_first_value() {
+        let values = vec![OwnedValue::U64(42)];
+        let result: Result<u64, ParseError> = (&values).to_value_type();
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_vec_owned_value_empty_error() {
+        let values: Vec<OwnedValue> = vec![];
+        let result: Result<u64, ParseError> = (&values).to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test]
+    fn test_vec_owned_value_identity() {
+        let values = vec![OwnedValue::U64(1), OwnedValue::U64(2)];
+        let result: Result<&Vec<OwnedValue>, ParseError> = (&values).to_value_type();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_get_value_type_from_document() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "test_field".to_string(),
+            vec![OwnedValue::Str("test_value".to_string())],
+        );
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<String, ParseError> = get_value_type(&doc, "test_field");
+        assert_eq!(result.unwrap(), "test_value");
+    }
+
+    #[test]
+    fn test_get_value_type_missing_field() {
+        use std::collections::BTreeMap;
+
+        let fields = BTreeMap::new();
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<String, ParseError> = get_value_type(&doc, "missing_field");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
+    }
+
+    #[test]
+    fn test_get_doc_value_types() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "numbers".to_string(),
+            vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)],
+        );
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<Vec<u64>, ParseError> = get_doc_value_types(&doc, "numbers");
+        assert_eq!(result.unwrap(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_to_value_trait_on_document() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "test".to_string(),
+            vec![OwnedValue::Str("value".to_string())],
+        );
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<String, ParseError> = doc.to_value("test");
+        assert_eq!(result.unwrap(), "value");
+    }
+
+    #[test]
+    fn test_to_value_trait_on_document_ref() {
+        use std::collections::BTreeMap;
+
+        let mut fields = BTreeMap::new();
+        fields.insert("num".to_string(), vec![OwnedValue::U64(42)]);
+        let doc = NamedFieldDocument(fields);
+
+        let result: Result<u64, ParseError> = doc.to_value("num");
+        assert_eq!(result.unwrap(), 42);
+    }
+}
