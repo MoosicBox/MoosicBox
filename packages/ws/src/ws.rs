@@ -754,3 +754,214 @@ async fn get_connection_id(
         )
         .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_json_utils::database::DatabaseFetchError;
+    use pretty_assertions::assert_eq;
+    use std::num::ParseIntError;
+
+    #[test]
+    fn test_websocket_context_default() {
+        let context = WebsocketContext::default();
+        assert_eq!(context.connection_id, "");
+        assert_eq!(context.profile, None);
+        assert_eq!(context.player_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_websocket_context_clone() {
+        let context = WebsocketContext {
+            connection_id: "test-123".to_string(),
+            profile: Some("profile1".to_string()),
+            player_actions: vec![],
+        };
+        let cloned = context.clone();
+        assert_eq!(context.connection_id, cloned.connection_id);
+        assert_eq!(context.profile, cloned.profile);
+    }
+
+    #[test]
+    fn test_response_serialization() {
+        let response = Response {
+            status_code: 200,
+            body: "OK".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""statusCode":200"#));
+        assert!(json.contains(r#""body":"OK"#));
+    }
+
+    #[test]
+    fn test_response_deserialization() {
+        let json = r#"{"statusCode":404,"body":"Not Found"}"#;
+        let response: Response = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status_code, 404);
+        assert_eq!(response.body, "Not Found");
+    }
+
+    #[test]
+    fn test_websocket_connection_data_serialization() {
+        let data = WebsocketConnectionData { playing: true };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains(r#""playing":true"#));
+    }
+
+    #[test]
+    fn test_websocket_connection_data_deserialization() {
+        let json = r#"{"playing":false}"#;
+        let data: WebsocketConnectionData = serde_json::from_str(json).unwrap();
+        assert!(!data.playing);
+    }
+
+    #[test]
+    fn test_connect_returns_success() {
+        struct MockSender;
+        #[async_trait]
+        impl WebsocketSender for MockSender {
+            async fn send(&self, _: &str, _: &str) -> Result<(), WebsocketSendError> {
+                Ok(())
+            }
+            async fn send_all(&self, _: &str) -> Result<(), WebsocketSendError> {
+                Ok(())
+            }
+            async fn send_all_except(&self, _: &str, _: &str) -> Result<(), WebsocketSendError> {
+                Ok(())
+            }
+            async fn ping(&self) -> Result<(), WebsocketSendError> {
+                Ok(())
+            }
+        }
+
+        let sender = MockSender;
+        let context = WebsocketContext {
+            connection_id: "test-connection".to_string(),
+            profile: None,
+            player_actions: vec![],
+        };
+
+        let response = connect(&sender, &context);
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.body, "Connected");
+    }
+
+    #[test]
+    fn test_websocket_send_error_from_database_fetch() {
+        let db_error = DatabaseFetchError::InvalidRequest;
+        let ws_error: WebsocketSendError = db_error.into();
+        assert!(matches!(ws_error, WebsocketSendError::DatabaseFetch(_)));
+    }
+
+    #[test]
+    fn test_websocket_send_error_from_parse_int() {
+        let parse_error: ParseIntError = "not_a_number".parse::<i32>().unwrap_err();
+        let ws_error: WebsocketSendError = parse_error.into();
+        assert!(matches!(ws_error, WebsocketSendError::ParseInt(_)));
+    }
+
+    #[test]
+    fn test_websocket_send_error_from_serde() {
+        let json = r#"{"invalid": json"#;
+        let result: Result<serde_json::Value, _> = serde_json::from_str(json);
+        let serde_error = result.unwrap_err();
+        let ws_error: WebsocketSendError = serde_error.into();
+        assert!(matches!(ws_error, WebsocketSendError::Serde(_)));
+    }
+
+    #[test]
+    fn test_websocket_send_error_unknown() {
+        let error = WebsocketSendError::Unknown("test error".to_string());
+        let error_string = error.to_string();
+        assert!(error_string.contains("test error"));
+    }
+
+    #[test]
+    fn test_websocket_disconnect_error_from_database_fetch() {
+        let db_error = DatabaseFetchError::InvalidRequest;
+        let disconnect_error: WebsocketDisconnectError = db_error.into();
+        assert!(matches!(
+            disconnect_error,
+            WebsocketDisconnectError::DatabaseFetch(_)
+        ));
+    }
+
+    #[test]
+    fn test_websocket_disconnect_error_from_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let disconnect_error: WebsocketDisconnectError = send_error.into();
+        assert!(matches!(
+            disconnect_error,
+            WebsocketDisconnectError::WebsocketSend(_)
+        ));
+    }
+
+    #[test]
+    fn test_websocket_message_error_from_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let message_error: WebsocketMessageError = send_error.into();
+        assert!(matches!(
+            message_error,
+            WebsocketMessageError::WebsocketSend(_)
+        ));
+    }
+
+    #[test]
+    fn test_websocket_message_error_from_database_fetch() {
+        let db_error = DatabaseFetchError::InvalidRequest;
+        let message_error: WebsocketMessageError = db_error.into();
+        assert!(matches!(
+            message_error,
+            WebsocketMessageError::DatabaseFetch(_)
+        ));
+    }
+
+    #[test]
+    fn test_update_session_error_from_database_fetch() {
+        let db_error = DatabaseFetchError::InvalidRequest;
+        let update_error: UpdateSessionError = db_error.into();
+        assert!(matches!(update_error, UpdateSessionError::DatabaseFetch(_)));
+    }
+
+    #[test]
+    fn test_update_session_error_from_send_error() {
+        let send_error = WebsocketSendError::Unknown("test".to_string());
+        let update_error: UpdateSessionError = send_error.into();
+        assert!(matches!(update_error, UpdateSessionError::WebsocketSend(_)));
+    }
+
+    #[test]
+    fn test_websocket_message_error_display() {
+        let error = WebsocketMessageError::MissingMessageType;
+        assert_eq!(error.to_string(), "Missing message type");
+
+        let error = WebsocketMessageError::InvalidMessageType;
+        assert_eq!(error.to_string(), "Invalid message type");
+
+        let error = WebsocketMessageError::MissingPayload;
+        assert_eq!(error.to_string(), "Missing payload");
+
+        let error = WebsocketMessageError::MissingProfile;
+        assert_eq!(error.to_string(), "Missing profile");
+
+        let error = WebsocketMessageError::InvalidPayload("test".to_string(), "reason".to_string());
+        assert_eq!(error.to_string(), "Invalid payload: 'test' (reason)");
+
+        let error = WebsocketMessageError::Unknown {
+            message: "custom error".to_string(),
+        };
+        assert_eq!(error.to_string(), "Unknown \"custom error\"");
+    }
+
+    #[test]
+    fn test_update_session_error_display() {
+        let error = UpdateSessionError::NoSessionFound;
+        assert_eq!(error.to_string(), "No session found");
+    }
+
+    #[test]
+    fn test_websocket_connect_error_display() {
+        let error = WebsocketConnectError::Unknown;
+        assert_eq!(error.to_string(), "Unknown");
+    }
+}
