@@ -166,3 +166,244 @@ path!(
         )
         .build()
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use utoipa::openapi::{path::*, HttpMethod, PathItem, Paths};
+
+    #[test]
+    fn test_init_returns_valid_openapi_spec() {
+        let openapi = init();
+
+        // Verify the OpenAPI spec has paths
+        assert!(
+            !openapi.paths.paths.is_empty(),
+            "OpenAPI spec should have paths"
+        );
+    }
+
+    #[test]
+    fn test_init_includes_example_path() {
+        let openapi = init();
+
+        // Verify the example path is present
+        assert!(
+            openapi.paths.paths.contains_key("/example"),
+            "OpenAPI spec should contain /example path"
+        );
+    }
+
+    #[test]
+    fn test_init_example_path_has_get_operation() {
+        let openapi = init();
+
+        // Get the example path
+        let example_path = openapi.paths.paths.get("/example").unwrap();
+
+        // Verify it has a GET operation
+        assert!(
+            example_path.get.is_some(),
+            "/example path should have GET operation"
+        );
+    }
+
+    #[test]
+    fn test_nest_api_preserves_base_paths() {
+        // Create a base API with one path
+        let base_api = utoipa::openapi::OpenApi::builder()
+            .paths(
+                Paths::builder()
+                    .path(
+                        "/base",
+                        PathItem::builder()
+                            .operation(
+                                HttpMethod::Get,
+                                Operation::builder().description(Some("base")),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+
+        // Create a nested API with one path
+        let nested_api = utoipa::openapi::OpenApi::builder()
+            .paths(
+                Paths::builder()
+                    .path(
+                        "/nested",
+                        PathItem::builder()
+                            .operation(
+                                HttpMethod::Get,
+                                Operation::builder().description(Some("nested")),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+
+        // Nest the API
+        let result = nest_api(base_api, "/api", nested_api);
+
+        // Verify both paths exist
+        assert!(
+            result.paths.paths.contains_key("/base"),
+            "Base path should be preserved"
+        );
+        assert!(
+            result.paths.paths.contains_key("/api/nested"),
+            "Nested path should be added with prefix"
+        );
+    }
+
+    #[test]
+    fn test_nest_api_updates_operation_ids() {
+        // Create a nested API with operations that have OPTIONS method
+        let nested_api = utoipa::openapi::OpenApi::builder()
+            .paths(
+                Paths::builder()
+                    .path(
+                        "/test",
+                        PathItem::builder()
+                            .operation(
+                                HttpMethod::Options,
+                                Operation::builder()
+                                    .operation_id(Some("original_id"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+
+        // Create an empty base API
+        let base_api = utoipa::openapi::OpenApi::builder()
+            .paths(Paths::builder().build())
+            .build();
+
+        // Nest the API
+        let result = nest_api(base_api, "/api", nested_api);
+
+        // Verify operation ID was updated to the original path (before nesting)
+        let test_path = result.paths.paths.get("/api/test").unwrap();
+        if let Some(options) = &test_path.options {
+            assert_eq!(
+                options.operation_id.as_deref(),
+                Some("/test"),
+                "Operation ID should be set to the original path key"
+            );
+        } else {
+            panic!("Options operation should exist");
+        }
+    }
+
+    #[test]
+    fn test_nest_api_with_empty_prefix() {
+        // Create a nested API
+        let nested_api = utoipa::openapi::OpenApi::builder()
+            .paths(
+                Paths::builder()
+                    .path(
+                        "/path",
+                        PathItem::builder()
+                            .operation(
+                                HttpMethod::Get,
+                                Operation::builder().description(Some("test")),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+
+        // Create an empty base API
+        let base_api = utoipa::openapi::OpenApi::builder()
+            .paths(Paths::builder().build())
+            .build();
+
+        // Nest with empty prefix
+        let result = nest_api(base_api, "", nested_api);
+
+        // Verify path exists without prefix
+        assert!(
+            result.paths.paths.contains_key("/path"),
+            "Path should exist without prefix when prefix is empty"
+        );
+    }
+
+    #[test]
+    fn test_api_static_has_example_tag() {
+        let api = &*API;
+
+        // Verify tags are present
+        assert!(api.tags.is_some(), "API should have tags");
+
+        let tags = api.tags.as_ref().unwrap();
+        assert_eq!(tags.len(), 1, "API should have exactly one tag");
+        assert_eq!(tags[0].name, "Example", "Tag name should be 'Example'");
+    }
+
+    #[test]
+    fn test_api_static_has_example_path() {
+        let api = &*API;
+
+        // Verify the /example path exists
+        assert!(
+            api.paths.paths.contains_key("/example"),
+            "API should have /example path"
+        );
+    }
+
+    #[test]
+    fn test_api_static_example_path_has_get_method() {
+        let api = &*API;
+
+        let example_path = api.paths.paths.get("/example").unwrap();
+
+        // Verify it has a GET operation
+        assert!(
+            example_path.get.is_some(),
+            "/example path should have GET operation"
+        );
+    }
+
+    #[test]
+    fn test_api_static_has_components() {
+        let api = &*API;
+
+        // Verify components are present
+        assert!(
+            api.components.is_some(),
+            "API should have components section"
+        );
+    }
+
+    #[test]
+    fn test_get_example_path_static_initialization() {
+        // Verify the static is initialized (should not panic)
+        let _path = &*GET_EXAMPLE_PATH;
+
+        // Verify it has a GET operation
+        assert!(
+            _path.get.is_some(),
+            "GET_EXAMPLE_PATH should have GET operation"
+        );
+    }
+
+    /// Helper function to nest API specifications.
+    ///
+    /// This is a test-accessible version of the nest_api function from main.
+    fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
+        nested.paths.paths.iter_mut().for_each(|(path, item)| {
+            item.options.iter_mut().for_each(|operation| {
+                operation.operation_id = Some(path.to_owned());
+            });
+        });
+
+        api.nest(path, nested)
+    }
+}

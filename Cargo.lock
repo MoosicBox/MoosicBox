@@ -18010,6 +18010,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_logging",
  "moosicbox_web_server",
+ "pretty_assertions",
  "tokio",
 ]
 

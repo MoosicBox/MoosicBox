@@ -22,6 +22,9 @@ moosicbox_web_server = { workspace = true, features = [
 log   = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
 [features]
 default = []
 
