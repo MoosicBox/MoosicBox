@@ -28,6 +28,9 @@ thiserror = { workspace = true }
 gh-emoji       = { workspace = true, optional = true }
 pulldown-cmark = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["emoji", "xss-protection"]
 

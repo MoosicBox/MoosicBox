@@ -18,6 +18,9 @@ moosicbox_assert = { workspace = true }
 
 switchy_http_models = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 

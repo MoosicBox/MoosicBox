@@ -45,6 +45,9 @@ ratatui = { workspace = true, optional = true }
 # Logging
 pretty_env_logger = { workspace = true, optional = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["pretty_env_logger", "tui"]
 

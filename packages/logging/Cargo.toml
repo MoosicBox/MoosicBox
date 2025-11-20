@@ -21,6 +21,9 @@ free_log_client = { workspace = true }
 log             = { workspace = true }
 thiserror       = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["api", "free_log", "macros"]
 

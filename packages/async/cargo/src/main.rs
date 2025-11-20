@@ -167,7 +167,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::parse_quote;
 
     #[test_log::test]
     fn test_checker_detects_async_fn_without_attribute() {

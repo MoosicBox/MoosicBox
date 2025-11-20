@@ -20,6 +20,9 @@ group = "switchy"
 log  = { workspace = true }
 rand = { version = "=0.8.5", features = ["small_rng"] }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["rand", "simulator"]
 

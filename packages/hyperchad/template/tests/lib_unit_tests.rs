@@ -24,7 +24,10 @@ fn render_container_str() {
     text.render_to(&mut containers).unwrap();
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(ContainerVecExt::to_string(&containers), "Hello, World!");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Hello, World!"
+    );
 }
 
 #[test_log::test]
@@ -44,7 +47,10 @@ fn render_container_string() {
     text.render_to(&mut containers).unwrap();
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(ContainerVecExt::to_string(&containers), "Test String");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Test String"
+    );
 }
 
 #[test_log::test]
@@ -61,22 +67,34 @@ fn render_container_string_empty() {
 fn render_container_bool() {
     let mut containers_true = Vec::new();
     true.render_to(&mut containers_true).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_true), "true");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_true, false, false).unwrap(),
+        "true"
+    );
 
     let mut containers_false = Vec::new();
     false.render_to(&mut containers_false).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_false), "false");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_false, false, false).unwrap(),
+        "false"
+    );
 }
 
 #[test_log::test]
 fn render_container_char() {
     let mut containers = Vec::new();
     'A'.render_to(&mut containers).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers), "A");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "A"
+    );
 
     let mut containers_unicode = Vec::new();
     '🦀'.render_to(&mut containers_unicode).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_unicode), "🦀");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_unicode, false, false).unwrap(),
+        "🦀"
+    );
 }
 
 #[test_log::test]
@@ -84,26 +102,38 @@ fn render_container_integers() {
     // Test various integer types
     let mut containers_i8 = Vec::new();
     42_i8.render_to(&mut containers_i8).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_i8), "42");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_i8, false, false).unwrap(),
+        "42"
+    );
 
     let mut containers_i16 = Vec::new();
     (-1234_i16).render_to(&mut containers_i16).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_i16), "-1234");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_i16, false, false).unwrap(),
+        "-1234"
+    );
 
     let mut containers_i32 = Vec::new();
     1_000_000_i32.render_to(&mut containers_i32).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_i32), "1000000");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_i32, false, false).unwrap(),
+        "1000000"
+    );
 
     let mut containers_u8 = Vec::new();
     255_u8.render_to(&mut containers_u8).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_u8), "255");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_u8, false, false).unwrap(),
+        "255"
+    );
 
     let mut containers_u64 = Vec::new();
     18_446_744_073_709_551_615_u64
         .render_to(&mut containers_u64)
         .unwrap();
     assert_eq!(
-        ContainerVecExt::to_string(&containers_u64),
+        ContainerVecExt::display_to_string(&containers_u64, false, false).unwrap(),
         "18446744073709551615"
     );
 }
@@ -112,16 +142,25 @@ fn render_container_integers() {
 fn render_container_floats() {
     let mut containers_f32 = Vec::new();
     3.15_f32.render_to(&mut containers_f32).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_f32), "3.15");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_f32, false, false).unwrap(),
+        "3.15"
+    );
 
     let mut containers_f64 = Vec::new();
     2.7_f64.render_to(&mut containers_f64).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_f64), "2.7");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_f64, false, false).unwrap(),
+        "2.7"
+    );
 
     // Test zero
     let mut containers_zero = Vec::new();
     0.0_f32.render_to(&mut containers_zero).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_zero), "0.0");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_zero, false, false).unwrap(),
+        "0.0"
+    );
 }
 
 #[test_log::test]
@@ -131,7 +170,10 @@ fn render_container_option_some() {
     value.render_to(&mut containers).unwrap();
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(ContainerVecExt::to_string(&containers), "Present");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Present"
+    );
 }
 
 #[test_log::test]
@@ -150,13 +192,19 @@ fn render_container_reference_types() {
     let text = String::from("Referenced");
     let mut containers = Vec::new();
     text.render_to(&mut containers).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers), "Referenced");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Referenced"
+    );
 
     // Test &mut T implementation
     let number = 42;
     let mut containers_mut = Vec::new();
     number.render_to(&mut containers_mut).unwrap();
-    assert_eq!(ContainerVecExt::to_string(&containers_mut), "42");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers_mut, false, false).unwrap(),
+        "42"
+    );
 }
 
 #[test_log::test]
@@ -166,7 +214,10 @@ fn render_container_box() {
     boxed.render_to(&mut containers).unwrap();
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(ContainerVecExt::to_string(&containers), "Boxed Value");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Boxed Value"
+    );
 }
 
 #[test_log::test]
@@ -176,7 +227,10 @@ fn render_container_arc() {
     arc.render_to(&mut containers).unwrap();
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(ContainerVecExt::to_string(&containers), "Arc Value");
+    assert_eq!(
+        ContainerVecExt::display_to_string(&containers, false, false).unwrap(),
+        "Arc Value"
+    );
 }
 
 // ============================================================================
@@ -733,7 +787,7 @@ fn into_html_helper() {
 #[test_log::test]
 fn render_to_string_empty_containers() {
     let containers: Containers = Vec::new();
-    let html = ContainerVecExt::to_string(&containers);
+    let html = ContainerVecExt::display_to_string(&containers, false, false).unwrap();
     assert_eq!(html, "");
 }
 
@@ -748,7 +802,7 @@ fn render_multiple_primitives() {
     " - ".render_to(&mut containers).unwrap();
     3.25_f32.render_to(&mut containers).unwrap();
 
-    let result = ContainerVecExt::to_string(&containers);
+    let result = ContainerVecExt::display_to_string(&containers, false, false).unwrap();
     assert_eq!(result, "42 - true - 3.25");
 }
 

@@ -34,6 +34,10 @@ symphonia      = { workspace = true }
 thiserror      = { workspace = true }
 tokio          = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 default = []
 
@@ -54,6 +58,3 @@ aac  = []
 flac = []
 mp3  = []
 opus = ["dep:moosicbox_opus"]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }

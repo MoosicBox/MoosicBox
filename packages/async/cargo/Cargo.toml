@@ -20,6 +20,9 @@ pretty_env_logger = { workspace = true }
 syn               = { workspace = true, features = ["full", "visit"] }
 walkdir           = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 

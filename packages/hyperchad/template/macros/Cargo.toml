@@ -33,6 +33,7 @@ log = { workspace = true }
 
 [dev-dependencies]
 hyperchad_template = { workspace = true }
+test-log           = { workspace = true }
 
 [features]
 default = []

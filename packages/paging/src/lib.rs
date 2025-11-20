@@ -1260,7 +1260,7 @@ mod tests {
             has_more: true,
         };
 
-        let mapped = page.map(|s| s.to_uppercase());
+        let mapped = page.map(str::to_uppercase);
 
         assert_eq!(mapped.items(), &["A", "B"]);
         assert_eq!(mapped.offset(), 2);
@@ -1277,7 +1277,7 @@ mod tests {
 
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
-                To(f.0 * 10)
+                Self(f.0 * 10)
             }
         }
 
@@ -1473,7 +1473,7 @@ mod tests {
         };
 
         // Deref should give us access to Vec methods
-        let vec_ref: &Vec<i32> = &*page;
+        let vec_ref: &Vec<i32> = &page;
         assert_eq!(vec_ref.len(), 3);
         assert_eq!(vec_ref[0], 1);
     }
@@ -1723,7 +1723,10 @@ mod tests {
         let pages = response.rest_of_pages_in_batches().await.unwrap();
         assert_eq!(pages.len(), 2);
         // Order may vary in concurrent execution, but all items should be present
-        let all_items: Vec<i32> = pages.into_iter().flat_map(|p| p.into_items()).collect();
+        let all_items: Vec<i32> = pages
+            .into_iter()
+            .flat_map(super::Page::into_items)
+            .collect();
         assert_eq!(all_items.len(), 4);
         assert!(all_items.contains(&3));
         assert!(all_items.contains(&4));
@@ -1881,7 +1884,7 @@ mod tests {
 
         impl std::convert::From<From> for To {
             fn from(f: From) -> Self {
-                To(f.0 * 10)
+                Self(f.0 * 10)
             }
         }
 
@@ -1910,7 +1913,7 @@ mod tests {
 
         impl std::convert::From<ErrorA> for ErrorB {
             fn from(e: ErrorA) -> Self {
-                ErrorB(format!("converted: {}", e.0))
+                Self(format!("converted: {}", e.0))
             }
         }
 
@@ -1949,7 +1952,7 @@ mod tests {
         });
 
         // Deref should give us access to Page
-        let page_ref: &Page<i32> = &*response;
+        let page_ref: &Page<i32> = &response;
         assert_eq!(page_ref.items(), &[1, 2, 3]);
     }
 

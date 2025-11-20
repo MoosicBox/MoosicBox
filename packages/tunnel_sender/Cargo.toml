@@ -56,6 +56,10 @@ thiserror         = { workspace = true }
 tokio             = { workspace = true, features = ["tracing"] }
 tokio-tungstenite = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 default = ["all-encoders", "base64"]
 
@@ -163,6 +167,3 @@ format-opus = [
     "moosicbox_player/format-opus",
     "moosicbox_ws/opus",
 ]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }

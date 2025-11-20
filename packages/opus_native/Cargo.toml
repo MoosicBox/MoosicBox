@@ -22,6 +22,7 @@ thiserror           = { workspace = true }
 [dev-dependencies]
 moosicbox_opus_native_test_vectors = { workspace = true }
 test-case                          = { workspace = true }
+test-log                           = { workspace = true }
 
 [features]
 default = ["celt", "hybrid", "silk"]

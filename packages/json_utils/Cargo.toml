@@ -31,6 +31,10 @@ chrono      = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+uuid     = { workspace = true, features = ["v4"] }
+
 [features]
 default = ["database", "rusqlite", "serde_json", "tantivy"]
 

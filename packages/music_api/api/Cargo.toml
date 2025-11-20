@@ -57,3 +57,4 @@ auth-username-password = ["_auth", "moosicbox_music_api/auth-username-password"]
 
 [dev-dependencies]
 serde_json = { workspace = true }
+test-log   = { workspace = true }

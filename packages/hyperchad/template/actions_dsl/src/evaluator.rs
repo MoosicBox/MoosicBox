@@ -3021,7 +3021,7 @@ mod tests {
         };
         let result = generate_expression_code(&mut context, &expr).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("!"));
+        assert!(result_str.contains('!'));
     }
 
     #[test_log::test]
@@ -3034,7 +3034,7 @@ mod tests {
         };
         let result = generate_expression_code(&mut context, &expr).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("-"));
+        assert!(result_str.contains('-'));
     }
 
     #[test_log::test]
@@ -3082,9 +3082,9 @@ mod tests {
         ]);
         let result = generate_expression_code(&mut context, &expr).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("("));
-        assert!(result_str.contains(","));
-        assert!(result_str.contains(")"));
+        assert!(result_str.contains('('));
+        assert!(result_str.contains(','));
+        assert!(result_str.contains(')'));
     }
 
     #[test_log::test]
@@ -3096,9 +3096,9 @@ mod tests {
         };
         let result = generate_expression_code(&mut context, &expr).unwrap();
         let result_str = result.to_string();
-        assert!(result_str.contains("|"));
-        assert!(result_str.contains("x"));
-        assert!(result_str.contains("y"));
+        assert!(result_str.contains('|'));
+        assert!(result_str.contains('x'));
+        assert!(result_str.contains('y'));
     }
 
     #[test_log::test]
@@ -3128,7 +3128,7 @@ mod tests {
         let result = generate_statement_code(&mut context, &stmt).unwrap();
         let result_str = result.to_string();
         assert!(result_str.contains("hyperchad_actions :: ActionType :: Let"));
-        assert!(result_str.contains("x"));
+        assert!(result_str.contains('x'));
     }
 
     #[test_log::test]

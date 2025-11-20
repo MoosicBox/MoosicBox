@@ -51,6 +51,10 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "tracing"] }
 url             = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 default = ["api", "db", "openapi", "scan"]
 
@@ -88,6 +92,3 @@ openapi = [
 ]
 
 scan = ["db", "moosicbox_music_api_helpers/scan"]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }

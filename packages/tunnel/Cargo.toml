@@ -35,6 +35,9 @@ strum_macros = { workspace = true }
 thiserror    = { workspace = true }
 tokio        = { workspace = true, features = ["rt", "tracing"] }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["base64"]
 

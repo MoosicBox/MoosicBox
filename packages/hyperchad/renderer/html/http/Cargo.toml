@@ -34,6 +34,9 @@ serde      = { workspace = true, optional = true }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["actions", "assets", "debug", "json"]
 

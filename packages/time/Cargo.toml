@@ -23,6 +23,9 @@ chrono     = { workspace = true, optional = true }
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["simulator", "std"]
 

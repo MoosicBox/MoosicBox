@@ -35,6 +35,9 @@ serde_json  = { workspace = true, optional = true }
 strum       = { workspace = true, features = ["derive"] }
 thiserror   = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["json", "reqwest", "simulator", "stream"]
 

@@ -32,6 +32,9 @@ mp3lame-encoder = { workspace = true, optional = true }
 log       = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["aac", "flac", "mp3", "opus"]
 

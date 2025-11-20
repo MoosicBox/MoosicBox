@@ -23,6 +23,9 @@ futures-util = { workspace = true }
 log          = { workspace = true }
 tracing      = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["tunnel"]
 

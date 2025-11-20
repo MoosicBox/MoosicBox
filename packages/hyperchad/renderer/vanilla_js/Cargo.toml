@@ -37,6 +37,10 @@ log          = { workspace = true }
 maud         = { workspace = true }
 md5          = { workspace = true, optional = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
 [features]
 default = ["all-plugins", "debug"]
 
@@ -146,6 +150,3 @@ plugin-uuid = ["hyperchad_renderer_vanilla_js_hash/plugin-uuid"]
 plugin-uuid-insecure = [
     "hyperchad_renderer_vanilla_js_hash/plugin-uuid-insecure",
 ]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }

@@ -59,6 +59,7 @@ url             = { workspace = true }
 
 [dev-dependencies]
 switchy_async = { workspace = true }
+test-log      = { workspace = true }
 tokio         = { workspace = true, features = ["macros", "rt"] }
 
 [features]

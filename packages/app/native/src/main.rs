@@ -1,4 +1,4 @@
-//! Main entry point for the MoosicBox native desktop application.
+//! Main entry point for the `MoosicBox` native desktop application.
 //!
 //! This executable initializes the application runtime, logging, router, and UI framework.
 //! It handles platform-specific configurations and manages the application lifecycle from

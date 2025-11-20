@@ -59,6 +59,9 @@ tokio               = { workspace = true }
 tokio-stream        = { workspace = true, optional = true }
 tokio-util          = { workspace = true, optional = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = [
     "all-decoders",

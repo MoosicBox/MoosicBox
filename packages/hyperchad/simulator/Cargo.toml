@@ -29,6 +29,7 @@ thiserror  = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
+test-log   = { workspace = true }
 tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]

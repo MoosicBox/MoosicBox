@@ -123,7 +123,7 @@ mod tests {
     fn test_setup_cdn_optimization_with_no_root_route() {
         // Router with no root route should be returned unchanged
         let router = Router::new();
-        let result = setup_cdn_optimization(router.clone(), None, None);
+        let result = setup_cdn_optimization(router, None, None);
 
         // Should not have static route since no root route existed
         assert!(!result.has_static_route("/"));
@@ -236,7 +236,7 @@ mod tests {
     #[test_log::test]
     fn test_setup_cdn_optimization_return_value_is_router() {
         let router = Router::new().with_route("/", |_req| async { "content" });
-        let result = setup_cdn_optimization(router.clone(), None, None);
+        let result = setup_cdn_optimization(router, None, None);
 
         // Should return a Router instance
         assert!(result.has_route("/__hyperchad_dynamic_root__"));

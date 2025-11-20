@@ -35,6 +35,7 @@ strum_macros = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus", "ws"]

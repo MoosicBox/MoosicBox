@@ -611,7 +611,7 @@ mod tests {
         let sim_datetime = datetime_utc_now();
 
         // Get real datetime
-        let real_datetime = with_real_time(|| datetime_utc_now());
+        let real_datetime = with_real_time(datetime_utc_now);
 
         // They should be different
         assert_ne!(sim_datetime, real_datetime);

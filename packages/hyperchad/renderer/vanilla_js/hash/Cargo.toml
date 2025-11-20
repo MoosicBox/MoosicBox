@@ -21,6 +21,9 @@ const-hex         = { workspace = true }
 const_format      = { workspace = true }
 sha2-const-stable = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["all-plugins"]
 

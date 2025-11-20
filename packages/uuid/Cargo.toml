@@ -22,6 +22,9 @@ switchy_env    = { workspace = true, optional = true, features = ["simulator"] }
 switchy_random = { workspace = true, optional = true, features = ["simulator"] }
 uuid           = { workspace = true, features = ["v4"] }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["simulator", "uuid"]
 

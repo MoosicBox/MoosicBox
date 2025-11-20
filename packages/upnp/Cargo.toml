@@ -59,6 +59,9 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "tracing"] }
 xml             = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["api", "listener", "openapi", "player", "simulator"]
 

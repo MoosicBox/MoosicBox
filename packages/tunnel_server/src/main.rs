@@ -1,4 +1,4 @@
-//! MoosicBox tunnel server application.
+//! `MoosicBox` tunnel server application.
 //!
 //! This binary provides a WebSocket-based HTTP tunneling server that allows clients
 //! to establish persistent connections and proxy HTTP requests through them. The server

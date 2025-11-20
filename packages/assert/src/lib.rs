@@ -804,12 +804,7 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(value: i32) -> Result<i32, TestError> {
-            crate::assert_or_err!(
-                value >= 0,
-                TestError::InvalidValue,
-                "value was {}",
-                value
-            );
+            crate::assert_or_err!(value >= 0, TestError::InvalidValue, "value was {}", value);
             Ok(value * 2)
         }
 
@@ -1050,21 +1045,9 @@ mod tests {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
 
         fn test_function(a: i32, b: i32) -> Result<i32, TestError> {
-            crate::assert_or_err!(
-                a >= 0,
-                TestError::InvalidValue,
-                "a must be non-negative"
-            );
-            crate::assert_or_err!(
-                b >= 0,
-                TestError::InvalidValue,
-                "b must be non-negative"
-            );
-            crate::assert_or_err!(
-                a + b <= 100,
-                TestError::InvalidValue,
-                "sum too large"
-            );
+            crate::assert_or_err!(a >= 0, TestError::InvalidValue, "a must be non-negative");
+            crate::assert_or_err!(b >= 0, TestError::InvalidValue, "b must be non-negative");
+            crate::assert_or_err!(a + b <= 100, TestError::InvalidValue, "sum too large");
             Ok(a + b)
         }
 

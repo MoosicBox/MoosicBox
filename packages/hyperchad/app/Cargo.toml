@@ -47,6 +47,7 @@ thiserror   = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
 
 [features]
 default = [

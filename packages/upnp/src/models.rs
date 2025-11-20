@@ -125,7 +125,7 @@ mod tests {
             },
         ];
 
-        let updated = device.with_services(services.clone());
+        let updated = device.with_services(services);
         assert_eq!(updated.services.len(), 2);
         assert_eq!(updated.services[0].id, "urn:upnp-org:serviceId:AVTransport");
         assert_eq!(

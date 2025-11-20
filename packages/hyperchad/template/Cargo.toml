@@ -36,7 +36,9 @@ hyperchad_actions       = { workspace = true, features = ["logic"] }
 hyperchad_renderer_html = { workspace = true }
 hyperchad_template      = { workspace = true, features = ["logic"] }
 hyperchad_transformer   = { workspace = true, features = ["canvas"] }
+log                     = { workspace = true }
 pretty_assertions       = { workspace = true }
+test-log                = { workspace = true }
 trybuild                = { workspace = true, features = ["diff"] }
 
 [features]

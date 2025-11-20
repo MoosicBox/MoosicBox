@@ -44,6 +44,9 @@ log       = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, optional = true, features = ["sync"] }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = [
     "mysql-sqlx",

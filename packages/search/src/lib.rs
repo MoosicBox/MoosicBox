@@ -351,7 +351,7 @@ pub enum PopulateIndexError {
 ///
 /// This enum supports the three data types that can be stored in the Tantivy search index:
 /// text strings, boolean flags, and unsigned integers.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataValue {
     /// A text string value for fields like titles, names, and descriptions
     String(String),

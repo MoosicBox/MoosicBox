@@ -20,6 +20,9 @@ profiling = { workspace = true, optional = true }
 rubato    = { workspace = true }
 symphonia = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 

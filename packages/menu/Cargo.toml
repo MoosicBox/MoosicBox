@@ -39,6 +39,9 @@ serde     = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio     = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["api", "local", "openapi"]
 

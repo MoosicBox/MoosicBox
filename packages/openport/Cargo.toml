@@ -25,6 +25,9 @@ required-features = ["cli"]
 clap           = { workspace = true, features = ["derive"], optional = true }
 switchy_random = { workspace = true, features = ["rand"], optional = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 ### FEATURES #################################################################
 
 [features]

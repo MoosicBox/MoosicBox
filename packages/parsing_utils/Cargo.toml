@@ -16,6 +16,9 @@ examples = true
 [dependencies]
 thiserror = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = []
 

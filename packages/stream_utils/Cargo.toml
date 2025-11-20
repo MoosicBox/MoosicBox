@@ -14,7 +14,7 @@ version     = "0.1.4"
 examples = true
 
 [package.metadata.cargo-machete]
-ignored = ["tokio"]
+ignored = ["switchy_time", "tokio"]
 
 [dependencies]
 moosicbox_assert = { workspace = true }
@@ -38,8 +38,9 @@ pin-project = { workspace = true }
 thiserror   = { workspace = true, optional = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
-tokio    = { workspace = true, features = ["macros", "rt", "time"] }
+switchy_time = { workspace = true, features = ["std"] }
+test-log     = { workspace = true }
+tokio        = { workspace = true, features = ["macros", "rt", "time"] }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]

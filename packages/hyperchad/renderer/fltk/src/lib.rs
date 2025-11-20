@@ -1828,7 +1828,7 @@ mod tests {
 
     mod context {
         use super::*;
-        use hyperchad_transformer::{Size, models::LayoutOverflow};
+        use hyperchad_transformer::{Number, models::LayoutOverflow};
 
         #[test_log::test]
         fn test_new_creates_default_context() {
@@ -1885,8 +1885,8 @@ mod tests {
         fn test_with_container_calculates_dimensions_from_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
-            container.width = Some(Size::Px(500.0));
-            container.height = Some(Size::Px(400.0));
+            container.width = Some(Number::Real(500.0));
+            container.height = Some(Number::Real(400.0));
 
             let updated = context.with_container(&container);
 
@@ -1898,8 +1898,8 @@ mod tests {
         fn test_with_container_prefers_calculated_over_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
-            container.width = Some(Size::Px(500.0));
-            container.height = Some(Size::Px(400.0));
+            container.width = Some(Number::Real(500.0));
+            container.height = Some(Number::Real(400.0));
             container.calculated_width = Some(300.0);
             container.calculated_height = Some(200.0);
 

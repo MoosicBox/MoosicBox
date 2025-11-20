@@ -43,6 +43,9 @@ utoipa-redoc      = { workspace = true, optional = true }
 utoipa-scalar     = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["actix", "compress", "cors", "htmx", "openapi-all", "serde", "tls"]
 
