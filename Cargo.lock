@@ -18020,6 +18020,9 @@ dependencies = [
  "env_logger 0.11.8",
  "moosicbox_web_server",
  "switchy",
+ "switchy_async",
+ "test-log",
+ "tokio",
 ]
 
 [[package]]
