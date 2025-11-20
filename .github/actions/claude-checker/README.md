@@ -157,11 +157,11 @@ jobs:
 
 ### Prompt Template (required for `check` command)
 
-| Input                  | Description                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `prompt_template`      | Built-in template name: `readme`, `rustdoc`, `examples`, `issue`, `pr`, `code-review` |
-| `prompt_template_file` | Path to custom template file                                                          |
-| `prompt_template_text` | Inline template text                                                                  |
+| Input                  | Description                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `prompt_template`      | Built-in template name: `readme`, `rustdoc`, `examples`, `unit-tests`, `issue`, `pr`, `code-review` |
+| `prompt_template_file` | Path to custom template file                                                                        |
+| `prompt_template_text` | Inline template text                                                                                |
 
 ### Branch Management (`create-branch` command)
 
@@ -339,13 +339,90 @@ branch_name: ${is_root_readme ? 'docs/root-readme-updates-' + run_id : 'docs/rea
           package_path: packages/my-package
 ```
 
-### `rustdoc` (TODO)
+### `rustdoc`
 
 Ensures complete rustdoc for public APIs.
 
-### `examples` (TODO)
+**Default Variables:**
+
+```yaml
+project_name: ${repository_name}
+package_path: .
+package_name: ${derive_package_name(package_path)}
+target_path: src/**/*.rs
+branch_name: docs/rustdoc-updates-${run_id}
+```
+
+**Usage:**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'rustdoc'
+      template_vars: |
+          package_path: packages/my-package
+```
+
+### `examples`
 
 Validates and creates examples.
+
+**Default Variables:**
+
+```yaml
+project_name: ${repository_name}
+package_path: .
+package_name: ${derive_package_name(package_path)}
+examples_path: examples/
+branch_name: docs/examples-updates-${run_id}
+```
+
+**Usage:**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'examples'
+      template_vars: |
+          package_path: packages/my-package
+```
+
+### `unit-tests`
+
+Adds missing unit tests to increase test coverage.
+
+**Default Variables:**
+
+```yaml
+project_name: ${repository_name}
+package_path: .
+package_name: ${derive_package_name(package_path)}
+target_path: src/**/*.rs
+branch_name: test/coverage-${package_name}-${run_id}
+```
+
+**Key Features:**
+
+- Strict test selection criteria (only meaningful, non-duplicative tests)
+- MoosicBox-specific test conventions (switchy_async::test, test_log composition)
+- Simulator compatibility guidance
+- Verification includes simulator testing
+
+**Usage:**
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/claude-checker@v1
+  with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      claude_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      prompt_template: 'unit-tests'
+      template_vars: |
+          package_path: packages/my-package
+```
 
 ### `issue` (TODO)
 

@@ -13,7 +13,12 @@
 ### Rust Patterns
 
 - **Collections**: Always use `BTreeMap`/`BTreeSet`, never `HashMap`/`HashSet`
-- **Dependencies**: Use `workspace = true`, never path dependencies
+- **Dependencies**: Use `workspace = true`, never path dependencies or inline versions
+- **New Dependencies**: When adding a new dependency:
+    - Add to workspace `Cargo.toml` with `default-features = false`
+    - Specify full version including patch (e.g., `"0.4.28"` not `"0.4"`)
+    - Verify you're using the LATEST stable version from crates.io
+    - In package `Cargo.toml`, use `workspace = true` and opt-in to specific features only
 - **Clippy**: Required in every package:
     ```rust
     #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
