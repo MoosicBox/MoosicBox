@@ -21,6 +21,11 @@ futures   = { workspace = true, optional = true }
 qstring   = { workspace = true, optional = true }
 tokio     = { workspace = true, features = ["sync"] }
 
+[dev-dependencies]
+serial_test   = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "sync", "time"] }
+test-log      = { workspace = true }
+
 [features]
 default = ["api", "events"]
 

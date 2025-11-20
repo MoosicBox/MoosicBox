@@ -8986,6 +8986,9 @@ dependencies = [
  "futures",
  "moosicbox_assert",
  "qstring",
+ "serial_test",
+ "switchy_async",
+ "test-log",
  "tokio",
 ]
 

@@ -275,3 +275,314 @@ pub mod api {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_and_get_profile() {
+        let profiles = Profiles::default();
+        profiles.add("test_profile".to_string());
+
+        let result = profiles.get("test_profile");
+        assert_eq!(result, Some("test_profile".to_string()));
+    }
+
+    #[test]
+    fn test_get_nonexistent_profile() {
+        let profiles = Profiles::default();
+        let result = profiles.get("nonexistent");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_remove_profile() {
+        let profiles = Profiles::default();
+        profiles.add("to_remove".to_string());
+
+        assert!(profiles.get("to_remove").is_some());
+
+        profiles.remove("to_remove");
+
+        assert!(profiles.get("to_remove").is_none());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_profile() {
+        let profiles = Profiles::default();
+        // Should not panic when removing a profile that doesn't exist
+        profiles.remove("nonexistent");
+        assert!(profiles.get("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_add_fetch() {
+        let profiles = Profiles::default();
+        let result = profiles.add_fetch("test_fetch");
+
+        assert_eq!(result, "test_fetch");
+        assert_eq!(profiles.get("test_fetch"), Some("test_fetch".to_string()));
+    }
+
+    #[test]
+    fn test_names_returns_all_profiles() {
+        let profiles = Profiles::default();
+        profiles.add("profile1".to_string());
+        profiles.add("profile2".to_string());
+        profiles.add("profile3".to_string());
+
+        let names = profiles.names();
+        assert_eq!(names.len(), 3);
+        assert!(names.contains(&"profile1".to_string()));
+        assert!(names.contains(&"profile2".to_string()));
+        assert!(names.contains(&"profile3".to_string()));
+    }
+
+    #[test]
+    fn test_names_empty_when_no_profiles() {
+        let profiles = Profiles::default();
+        let names = profiles.names();
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_profile_names_are_case_sensitive() {
+        let profiles = Profiles::default();
+        profiles.add("TestProfile".to_string());
+
+        assert!(profiles.get("TestProfile").is_some());
+        assert!(profiles.get("testprofile").is_none());
+        assert!(profiles.get("TESTPROFILE").is_none());
+    }
+
+    #[test]
+    fn test_duplicate_profile_add() {
+        let profiles = Profiles::default();
+        profiles.add("duplicate".to_string());
+        profiles.add("duplicate".to_string());
+
+        let names = profiles.names();
+        // BTreeSet should deduplicate
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0], "duplicate");
+    }
+
+    #[test]
+    fn test_concurrent_reads() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let profiles = Arc::new(Profiles::default());
+        profiles.add("concurrent_test".to_string());
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let profiles_clone = Arc::clone(&profiles);
+            let handle = thread::spawn(move || {
+                for _ in 0..100 {
+                    let result = profiles_clone.get("concurrent_test");
+                    assert_eq!(result, Some("concurrent_test".to_string()));
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_concurrent_adds() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let profiles = Arc::new(Profiles::default());
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let profiles_clone = Arc::clone(&profiles);
+            let handle = thread::spawn(move || {
+                for j in 0..10 {
+                    profiles_clone.add(format!("profile_{i}_{j}"));
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Should have 100 unique profiles
+        let names = profiles.names();
+        assert_eq!(names.len(), 100);
+    }
+
+    #[test]
+    fn test_concurrent_mixed_operations() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let profiles = Arc::new(Profiles::default());
+        // Pre-populate some profiles
+        for i in 0..10 {
+            profiles.add(format!("initial_{i}"));
+        }
+
+        let mut handles = vec![];
+
+        // Readers
+        for _ in 0..5 {
+            let profiles_clone = Arc::clone(&profiles);
+            let handle = thread::spawn(move || {
+                for i in 0..10 {
+                    let _ = profiles_clone.get(&format!("initial_{i}"));
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Writers
+        for i in 0..5 {
+            let profiles_clone = Arc::clone(&profiles);
+            let handle = thread::spawn(move || {
+                for j in 0..10 {
+                    profiles_clone.add(format!("new_{i}_{j}"));
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let names = profiles.names();
+        // Should have 10 initial + 50 new = 60 profiles
+        assert_eq!(names.len(), 60);
+    }
+
+    #[cfg(feature = "api")]
+    mod api_tests {
+        use super::*;
+        use actix_web::test::TestRequest;
+
+        #[test]
+        fn test_profile_name_unverified_from_query() {
+            let req = TestRequest::default()
+                .uri("/?moosicboxProfile=unverified_profile")
+                .to_http_request();
+
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().0, "unverified_profile");
+        }
+
+        #[test]
+        fn test_profile_name_unverified_from_query_case_insensitive() {
+            let test_cases = vec![
+                "/?moosicboxProfile=test",
+                "/?MoosicboxProfile=test",
+                "/?MOOSICBOXPROFILE=test",
+                "/?moosicboxprofile=test",
+            ];
+
+            for uri in test_cases {
+                let req = TestRequest::default().uri(uri).to_http_request();
+                let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+                assert!(result.is_ok(), "Failed for URI: {uri}");
+                assert_eq!(result.unwrap().0, "test");
+            }
+        }
+
+        #[test]
+        fn test_profile_name_unverified_missing_both() {
+            let req = TestRequest::default().uri("/?other=value").to_http_request();
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_profile_name_unverified_from_header() {
+            let req = TestRequest::default()
+                .insert_header(("moosicbox-profile", "header_profile"))
+                .to_http_request();
+
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().0, "header_profile");
+        }
+
+        #[test]
+        fn test_profile_name_unverified_prefers_query_over_header() {
+            let req = TestRequest::default()
+                .uri("/?moosicboxProfile=query_profile")
+                .insert_header(("moosicbox-profile", "header_profile"))
+                .to_http_request();
+
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().0, "query_profile");
+        }
+
+        #[test]
+        fn test_profile_name_unverified_fallback_to_header() {
+            let req = TestRequest::default()
+                .insert_header(("moosicbox-profile", "header_profile"))
+                .to_http_request();
+
+            let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().0, "header_profile");
+        }
+
+        #[test]
+        fn test_profile_name_verified_with_existing_profile() {
+            PROFILES.add("verified_test".to_string());
+
+            let req = TestRequest::default()
+                .uri("/?moosicboxProfile=verified_test")
+                .to_http_request();
+
+            let result = super::super::api::ProfileName::from_request_inner(&req);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().0, "verified_test");
+
+            // Cleanup
+            PROFILES.remove("verified_test");
+        }
+
+        #[test]
+        fn test_profile_name_verified_with_nonexistent_profile() {
+            let req = TestRequest::default()
+                .uri("/?moosicboxProfile=nonexistent")
+                .to_http_request();
+
+            let result = super::super::api::ProfileName::from_request_inner(&req);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_profile_name_as_ref() {
+            let profile = super::super::api::ProfileName("test".to_string());
+            let as_str: &str = profile.as_ref();
+            assert_eq!(as_str, "test");
+        }
+
+        #[test]
+        fn test_profile_name_into_string() {
+            let profile = super::super::api::ProfileName("test".to_string());
+            let string: String = profile.into();
+            assert_eq!(string, "test");
+        }
+
+        #[test]
+        fn test_profile_name_unverified_into_string() {
+            let profile = super::super::api::ProfileNameUnverified("test".to_string());
+            let string: String = profile.into();
+            assert_eq!(string, "test");
+        }
+    }
+}
