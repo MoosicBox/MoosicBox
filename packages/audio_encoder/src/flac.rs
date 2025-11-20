@@ -102,3 +102,88 @@ pub fn encode_flac(
         input_consumed: input.len(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoder_creation() {
+        let result = encoder_flac();
+        assert!(
+            result.is_ok(),
+            "FLAC encoder should initialize successfully"
+        );
+
+        let encoder = result.unwrap();
+        assert_eq!(encoder.pos, 0, "Initial position should be 0");
+        assert_eq!(encoder.encoder.block_size, 512, "Block size should be 512");
+    }
+
+    #[test]
+    fn test_encode_position_tracking_single_call() {
+        let mut encoder = encoder_flac().expect("Failed to create encoder");
+
+        // Create a full block of samples (512 samples * 2 channels = 1024 samples)
+        let input: Vec<i32> = vec![0; 1024];
+        let mut output = vec![0u8; 8192];
+
+        let initial_pos = encoder.pos;
+        let result = encode_flac(&mut encoder, &input, &mut output);
+
+        assert!(result.is_ok(), "Encoding should succeed");
+        let info = result.unwrap();
+
+        assert!(info.output_size > 0, "Should produce output");
+        assert_eq!(info.input_consumed, input.len(), "Should consume all input");
+        assert_eq!(
+            encoder.pos,
+            initial_pos + info.output_size,
+            "Position should advance by output size"
+        );
+    }
+
+    #[test]
+    fn test_encode_position_tracking_multiple_calls() {
+        let mut encoder = encoder_flac().expect("Failed to create encoder");
+
+        // First encode
+        let input1: Vec<i32> = vec![100; 1024];
+        let mut output1 = vec![0u8; 8192];
+        let result1 = encode_flac(&mut encoder, &input1, &mut output1);
+        assert!(result1.is_ok());
+        let info1 = result1.unwrap();
+        let pos_after_first = encoder.pos;
+
+        // Second encode
+        let input2: Vec<i32> = vec![200; 1024];
+        let mut output2 = vec![0u8; 8192];
+        let result2 = encode_flac(&mut encoder, &input2, &mut output2);
+        assert!(result2.is_ok());
+        let info2 = result2.unwrap();
+
+        // Verify position tracking across multiple calls
+        assert_eq!(
+            pos_after_first, info1.output_size,
+            "Position after first encode"
+        );
+        assert_eq!(
+            encoder.pos,
+            info1.output_size + info2.output_size,
+            "Position should accumulate"
+        );
+    }
+
+    #[test]
+    fn test_encode_empty_input() {
+        let mut encoder = encoder_flac().expect("Failed to create encoder");
+
+        let input: Vec<i32> = vec![];
+        let mut output = vec![0u8; 8192];
+
+        let result = encode_flac(&mut encoder, &input, &mut output);
+
+        // Empty input should still be handled (may produce header/metadata)
+        assert!(result.is_ok());
+    }
+}
