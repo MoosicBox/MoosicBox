@@ -14,6 +14,11 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_web_server = { workspace = true, default-features = false }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
 [features]
 default = ["simulator"]
 
