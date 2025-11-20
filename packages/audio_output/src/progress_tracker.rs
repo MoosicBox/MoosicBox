@@ -251,3 +251,206 @@ impl Default for ProgressTracker {
         Self::new(None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn test_progress_tracker_new() {
+        let tracker = ProgressTracker::new(Some(0.5));
+        assert!((tracker.threshold - 0.5).abs() < f64::EPSILON);
+        assert_eq!(tracker.get_position(), None);
+    }
+
+    #[test]
+    fn test_progress_tracker_default() {
+        let tracker = ProgressTracker::default();
+        assert!((tracker.threshold - 0.1).abs() < f64::EPSILON);
+        assert_eq!(tracker.get_position(), None);
+    }
+
+    #[test]
+    fn test_set_audio_spec() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+
+        assert_eq!(tracker.sample_rate.load(Ordering::SeqCst), 44100);
+        assert_eq!(tracker.channels.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn test_get_position_without_spec() {
+        let tracker = ProgressTracker::new(None);
+        assert_eq!(tracker.get_position(), None);
+    }
+
+    #[test]
+    fn test_get_position_with_spec() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+        tracker.update_consumed_samples(88200); // 1 second worth of samples
+
+        let position = tracker.get_position().unwrap();
+        assert!((position - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_update_consumed_samples_zero() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+        tracker.update_consumed_samples(0);
+
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn test_update_consumed_samples_incremental() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+
+        tracker.update_consumed_samples(44100); // 0.5 seconds
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 44100);
+
+        tracker.update_consumed_samples(44100); // another 0.5 seconds
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 88200);
+    }
+
+    #[test]
+    fn test_set_consumed_samples() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+
+        tracker.set_consumed_samples(176_400); // 2 seconds
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 176_400);
+
+        let position = tracker.get_position().unwrap();
+        assert!((position - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_reset() {
+        let tracker = ProgressTracker::new(None);
+        tracker.set_audio_spec(44100, 2);
+        tracker.update_consumed_samples(88200);
+
+        assert!(tracker.consumed_samples.load(Ordering::SeqCst) > 0);
+
+        tracker.reset();
+        assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 0);
+        assert!(tracker.last_reported_position.load(Ordering::SeqCst).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_callback_triggered_on_threshold() {
+        let tracker = ProgressTracker::new(Some(0.5)); // 0.5 second threshold
+        tracker.set_audio_spec(44100, 2);
+
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+
+        tracker.set_callback(Some(Box::new(move |pos| {
+            callback_positions_clone.lock().unwrap().push(pos);
+        })));
+
+        // First update below threshold - should not trigger callback
+        tracker.update_consumed_samples(22050); // 0.25 seconds
+        assert_eq!(callback_positions.lock().unwrap().len(), 0);
+
+        // Second update crosses threshold - should trigger callback
+        tracker.update_consumed_samples(44100); // 0.5 seconds more (0.75 total)
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_callback_not_triggered_without_spec() {
+        let tracker = ProgressTracker::new(Some(0.1));
+
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+
+        tracker.set_callback(Some(Box::new(move |pos| {
+            callback_positions_clone.lock().unwrap().push(pos);
+        })));
+
+        tracker.update_consumed_samples(88200);
+        assert_eq!(callback_positions.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_consumed_samples_counter() {
+        let tracker = ProgressTracker::new(None);
+        let counter = tracker.consumed_samples_counter();
+
+        tracker.set_audio_spec(44100, 2);
+        tracker.update_consumed_samples(1000);
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1000);
+    }
+
+    #[test]
+    fn test_get_callback_refs() {
+        let tracker = ProgressTracker::new(Some(0.2));
+        tracker.set_audio_spec(48000, 2);
+        tracker.update_consumed_samples(1000);
+
+        let (consumed, rate, channels, _callback, last_pos) = tracker.get_callback_refs();
+
+        assert_eq!(consumed.load(Ordering::SeqCst), 1000);
+        assert_eq!(rate.load(Ordering::SeqCst), 48000);
+        assert_eq!(channels.load(Ordering::SeqCst), 2);
+        assert!(last_pos.load(Ordering::SeqCst).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_update_from_callback_refs() {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let sample_rate = Arc::new(AtomicU32::new(44100));
+        let channels = Arc::new(AtomicU32::new(2));
+        let callback = Arc::new(RwLock::new(None));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            88200, // 1 second
+            0.5,   // threshold
+        );
+
+        assert_eq!(consumed.load(Ordering::SeqCst), 88200);
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn test_update_from_callback_refs_with_callback() {
+        let consumed = Arc::new(AtomicUsize::new(0));
+        let sample_rate = Arc::new(AtomicU32::new(44100));
+        let channels = Arc::new(AtomicU32::new(2));
+        let callback_positions = Arc::new(Mutex::new(Vec::new()));
+        let callback_positions_clone = callback_positions.clone();
+        let callback: Arc<RwLock<Option<Box<dyn Fn(f64) + Send + Sync + 'static>>>> =
+            Arc::new(RwLock::new(Some(Box::new(move |pos| {
+                callback_positions_clone.lock().unwrap().push(pos);
+            }))));
+        let last_pos = Arc::new(AtomicF64::new(0.0));
+
+        // Update with enough samples to cross threshold
+        ProgressTracker::update_from_callback_refs(
+            &consumed,
+            &sample_rate,
+            &channels,
+            &callback,
+            &last_pos,
+            88200, // 1 second (crosses 0.5 threshold)
+            0.5,
+        );
+
+        assert_eq!(callback_positions.lock().unwrap().len(), 1);
+        let pos = callback_positions.lock().unwrap()[0];
+        assert!((pos - 1.0).abs() < 0.001);
+    }
+}

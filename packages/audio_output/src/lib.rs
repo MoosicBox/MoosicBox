@@ -689,3 +689,286 @@ impl Default for AudioOutputScanner {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn test_audio_output_error_debug() {
+        let err = AudioOutputError::NoOutputs;
+        assert_eq!(format!("{err:?}"), "NoOutputs");
+
+        let err = AudioOutputError::UnsupportedOutputConfiguration;
+        assert_eq!(format!("{err:?}"), "UnsupportedOutputConfiguration");
+
+        let err = AudioOutputError::UnsupportedChannels(5);
+        assert_eq!(format!("{err:?}"), "UnsupportedChannels(5)");
+
+        let err = AudioOutputError::OpenStream;
+        assert_eq!(format!("{err:?}"), "OpenStream");
+
+        let err = AudioOutputError::PlayStream;
+        assert_eq!(format!("{err:?}"), "PlayStream");
+
+        let err = AudioOutputError::StreamClosed;
+        assert_eq!(format!("{err:?}"), "StreamClosed");
+
+        let err = AudioOutputError::StreamEnd;
+        assert_eq!(format!("{err:?}"), "StreamEnd");
+
+        let err = AudioOutputError::Interrupt;
+        assert_eq!(format!("{err:?}"), "Interrupt");
+    }
+
+    #[test]
+    fn test_audio_output_error_display() {
+        let err = AudioOutputError::NoOutputs;
+        assert_eq!(format!("{err}"), "No audio outputs");
+
+        let err = AudioOutputError::UnsupportedOutputConfiguration;
+        assert_eq!(format!("{err}"), "Unsupported output configuration");
+
+        let err = AudioOutputError::UnsupportedChannels(5);
+        assert_eq!(format!("{err}"), "Unsupported channels: 5");
+
+        let err = AudioOutputError::OpenStream;
+        assert_eq!(format!("{err}"), "OpenStreamError");
+
+        let err = AudioOutputError::PlayStream;
+        assert_eq!(format!("{err}"), "PlayStreamError");
+
+        let err = AudioOutputError::StreamClosed;
+        assert_eq!(format!("{err}"), "StreamClosedError");
+
+        let err = AudioOutputError::StreamEnd;
+        assert_eq!(format!("{err}"), "StreamEndError");
+
+        let err = AudioOutputError::Interrupt;
+        assert_eq!(format!("{err}"), "InterruptError");
+    }
+
+    #[test]
+    fn test_audio_output_error_from_io() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err: AudioOutputError = io_err.into();
+        assert!(matches!(err, AudioOutputError::IO(_)));
+    }
+
+    #[test]
+    fn test_audio_output_scanner_error_debug() {
+        let err = AudioOutputScannerError::NoOutputs;
+        assert_eq!(format!("{err:?}"), "NoOutputs");
+    }
+
+    #[test]
+    fn test_audio_output_scanner_error_display() {
+        let err = AudioOutputScannerError::NoOutputs;
+        assert_eq!(format!("{err}"), "No outputs available");
+    }
+
+    #[test]
+    fn test_audio_output_scanner_error_from_audio_output() {
+        let err = AudioOutputError::NoOutputs;
+        let scanner_err: AudioOutputScannerError = err.into();
+        assert!(matches!(
+            scanner_err,
+            AudioOutputScannerError::AudioOutput(_)
+        ));
+    }
+
+    #[test]
+    fn test_audio_output_scanner_new() {
+        let scanner = AudioOutputScanner::new();
+        assert_eq!(scanner.outputs.len(), 0);
+        assert!(scanner.default_output.is_none());
+    }
+
+    #[test]
+    fn test_audio_output_scanner_default() {
+        let scanner = AudioOutputScanner::default();
+        assert_eq!(scanner.outputs.len(), 0);
+        assert!(scanner.default_output.is_none());
+    }
+
+    #[test]
+    fn test_audio_output_scanner_default_output_factory() {
+        let scanner = AudioOutputScanner::new();
+        assert!(scanner.default_output_factory().is_none());
+    }
+
+    #[test]
+    fn test_audio_output_scanner_default_output_error() {
+        let scanner = AudioOutputScanner::new();
+        let result = scanner.default_output();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            AudioOutputScannerError::NoOutputs
+        ));
+    }
+
+    #[test]
+    fn test_audio_output_factory_debug() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Err(AudioOutputError::NoOutputs),
+        );
+
+        let debug_str = format!("{factory:?}");
+        assert!(debug_str.contains("test-id"));
+        assert!(debug_str.contains("Test Output"));
+        assert!(debug_str.contains("get_writer"));
+    }
+
+    #[test]
+    fn test_audio_output_factory_clone() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Err(AudioOutputError::NoOutputs),
+        );
+
+        let cloned = factory.clone();
+        assert_eq!(cloned.id, factory.id);
+        assert_eq!(cloned.name, factory.name);
+    }
+
+    #[test]
+    fn test_audio_output_factory_new_box() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let writer: GetWriter = Box::new(|| Err(AudioOutputError::NoOutputs));
+        let factory = AudioOutputFactory::new_box(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            writer,
+        );
+
+        assert_eq!(factory.id, "test-id");
+        assert_eq!(factory.name, "Test Output");
+    }
+
+    #[test]
+    fn test_audio_output_factory_try_into_output_error() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Err(AudioOutputError::NoOutputs),
+        );
+
+        let result = factory.try_into_output();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AudioOutputError::NoOutputs));
+    }
+
+    #[test]
+    fn test_audio_output_factory_try_from_error() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Err(AudioOutputError::NoOutputs),
+        );
+
+        let result: Result<AudioOutput, _> = factory.try_into();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AudioOutputError::NoOutputs));
+    }
+
+    #[test]
+    fn test_audio_output_factory_try_from_ref_error() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let factory = AudioOutputFactory::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            || Err(AudioOutputError::NoOutputs),
+        );
+
+        let result: Result<AudioOutput, _> = (&factory).try_into();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AudioOutputError::NoOutputs));
+    }
+
+    // Mock AudioWrite for testing
+    struct MockAudioWrite {
+        handle: AudioHandle,
+    }
+
+    impl MockAudioWrite {
+        fn new() -> Self {
+            let (tx, _rx) = flume::bounded(1);
+            Self {
+                handle: AudioHandle::new(tx),
+            }
+        }
+    }
+
+    impl AudioWrite for MockAudioWrite {
+        fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            Ok(decoded.frames())
+        }
+
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            Ok(())
+        }
+
+        fn handle(&self) -> AudioHandle {
+            self.handle.clone()
+        }
+    }
+
+    #[test]
+    fn test_audio_output_new() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(MockAudioWrite::new()),
+        );
+
+        assert_eq!(output.id, "test-id");
+        assert_eq!(output.name, "Test Output");
+        assert_eq!(output.spec.rate, 44100);
+    }
+
+    #[test]
+    fn test_audio_output_debug() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(MockAudioWrite::new()),
+        );
+
+        let debug_str = format!("{output:?}");
+        assert!(debug_str.contains("test-id"));
+        assert!(debug_str.contains("Test Output"));
+        assert!(debug_str.contains("AudioOutput"));
+    }
+
+    #[test]
+    fn test_audio_output_handle() {
+        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let output = AudioOutput::new(
+            "test-id".to_string(),
+            "Test Output".to_string(),
+            spec,
+            Box::new(MockAudioWrite::new()),
+        );
+
+        let _handle = output.handle();
+    }
+}
