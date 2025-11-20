@@ -513,3 +513,151 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Da
 
     db::remove_scan_path(db, path).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_schema::get_sqlite_library_migrations;
+    use std::sync::Arc;
+    use switchy_schema_test_utils::MigrationTestBuilder;
+
+    #[test]
+    fn test_scanner_new_initializes_with_zero_counters() {
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let task = ScanTask::Api {
+            origin: ScanOrigin::Api(tidal),
+        };
+        let scanner = Scanner::new(task.clone());
+
+        assert_eq!(scanner.scanned.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(scanner.total.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(*scanner.task, task);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_enable_scan_origin_returns_ok_for_local() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        // Enabling Local should be a no-op
+        let result = enable_scan_origin(&db, &ScanOrigin::Local).await;
+        assert!(result.is_ok());
+
+        // Verify no scan location was added for Local
+        let locations = db::get_scan_locations(&db).await.unwrap();
+        assert_eq!(locations.len(), 0);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_scan_path_adds_new_path() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let path = "/music/library";
+        let result = add_scan_path(&db, path).await;
+        assert!(result.is_ok());
+
+        let paths = get_scan_paths(&db).await.unwrap();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0], path);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_add_scan_path_skips_duplicate_path() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let path = "/music/library";
+        add_scan_path(&db, path).await.unwrap();
+
+        // Try to add the same path again
+        let result = add_scan_path(&db, path).await;
+        assert!(result.is_ok());
+
+        // Should still only have one path
+        let paths = get_scan_paths(&db).await.unwrap();
+        assert_eq!(paths.len(), 1);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_remove_scan_path_removes_existing_path() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let path = "/music/library";
+        add_scan_path(&db, path).await.unwrap();
+
+        let result = remove_scan_path(&db, path).await;
+        assert!(result.is_ok());
+
+        let paths = get_scan_paths(&db).await.unwrap();
+        assert_eq!(paths.len(), 0);
+    }
+
+    #[cfg(feature = "local")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_remove_scan_path_is_noop_when_path_not_exists() {
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let result = remove_scan_path(&db, "/nonexistent/path").await;
+        assert!(result.is_ok());
+
+        let paths = get_scan_paths(&db).await.unwrap();
+        assert_eq!(paths.len(), 0);
+    }
+}

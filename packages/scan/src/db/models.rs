@@ -43,3 +43,23 @@ impl AsId for ScanLocation {
         DatabaseValue::Int64(i64::from(self.id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_location_as_id_converts_correctly() {
+        let scan_location = ScanLocation {
+            id: 123,
+            origin: crate::ScanOrigin::Local,
+            path: Some("/test".to_string()),
+            created: "2024-01-01T00:00:00Z".to_string(),
+            updated: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let id_value = scan_location.as_id();
+
+        assert_eq!(id_value, DatabaseValue::Int64(123));
+    }
+}

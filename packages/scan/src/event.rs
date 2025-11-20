@@ -223,3 +223,130 @@ pub(crate) static PROGRESS_LISTENERS: LazyLock<Arc<RwLock<Vec<Arc<ProgressListen
 pub async fn add_progress_listener(listener: ProgressListenerRef) {
     PROGRESS_LISTENERS.write().await.push(Arc::new(listener));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_task_to_api_scan_task_api_variant() {
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let scan_task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal.clone()),
+        };
+        let api_scan_task: ApiScanTask = scan_task.into();
+
+        assert_eq!(
+            api_scan_task,
+            ApiScanTask::Api {
+                origin: crate::ScanOrigin::Api(tidal)
+            }
+        );
+    }
+
+    #[cfg(feature = "local")]
+    #[test]
+    fn test_scan_task_to_api_scan_task_local_variant() {
+        let paths = vec!["/path/to/music".to_string(), "/another/path".to_string()];
+        let scan_task = ScanTask::Local {
+            paths: paths.clone(),
+        };
+        let api_scan_task: ApiScanTask = scan_task.into();
+
+        assert_eq!(api_scan_task, ApiScanTask::Local { paths });
+    }
+
+    #[test]
+    fn test_progress_event_to_api_progress_event_scan_finished() {
+        let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
+        let task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(qobuz),
+        };
+        let event = ProgressEvent::ScanFinished {
+            task: task.clone(),
+            scanned: 42,
+            total: 100,
+        };
+
+        let api_event: Option<ApiProgressEvent> = event.into();
+
+        assert_eq!(
+            api_event,
+            Some(ApiProgressEvent::Finished {
+                scanned: 42,
+                total: 100,
+                task: task.into(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_progress_event_to_api_progress_event_scan_count_updated() {
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal),
+        };
+        let event = ProgressEvent::ScanCountUpdated {
+            task: task.clone(),
+            scanned: 10,
+            total: 50,
+        };
+
+        let api_event: Option<ApiProgressEvent> = event.into();
+
+        assert_eq!(
+            api_event,
+            Some(ApiProgressEvent::Count {
+                scanned: 10,
+                total: 50,
+                task: task.into(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_progress_event_to_api_progress_event_item_scanned() {
+        let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
+        let task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(qobuz),
+        };
+        let event = ProgressEvent::ItemScanned {
+            task: task.clone(),
+            scanned: 25,
+            total: 75,
+        };
+
+        let api_event: Option<ApiProgressEvent> = event.into();
+
+        assert_eq!(
+            api_event,
+            Some(ApiProgressEvent::Scanned {
+                scanned: 25,
+                total: 75,
+                task: task.into(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_progress_event_to_api_progress_event_state_returns_none() {
+        let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
+        let task = ScanTask::Api {
+            origin: crate::ScanOrigin::Api(tidal),
+        };
+        let event = ProgressEvent::State {
+            task,
+            state: ScanTaskState::Started,
+        };
+
+        let api_event: Option<ApiProgressEvent> = event.into();
+
+        assert_eq!(api_event, None);
+    }
+
+    #[test]
+    fn test_scan_task_state_default_is_pending() {
+        let state = ScanTaskState::default();
+        assert_eq!(state, ScanTaskState::Pending);
+    }
+}
