@@ -1,3 +1,23 @@
+//! Main entry point for the MoosicBox native desktop application.
+//!
+//! This executable initializes the application runtime, logging, router, and UI framework.
+//! It handles platform-specific configurations and manages the application lifecycle from
+//! startup through shutdown.
+//!
+//! # Features
+//!
+//! * **Runtime initialization** - Configures async runtime with configurable thread pool
+//! * **Logging** - Initializes file and console logging with optional console subscriber for tokio
+//! * **UI frameworks** - Supports multiple rendering backends (HTML, FLTK, egui)
+//! * **Bundled mode** - Optional embedded server for standalone operation
+//! * **Visualization** - Real-time audio waveform display (with `_canvas` feature)
+//!
+//! # Platform Support
+//!
+//! * **Windows** - Hides console window in release builds (unless `windows-console` feature is enabled)
+//! * **Android** - Logging configured without file output
+//! * **Desktop** - Full feature set with file logging
+
 // hide console window on Windows in release
 #![cfg_attr(
     all(not(debug_assertions), not(feature = "windows-console")),
