@@ -225,3 +225,90 @@ async fn with_retry<T: Sized, E, F: Future<Output = Result<T, E>> + Send, U: (Fn
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    };
+
+    #[switchy_async::test]
+    async fn test_with_retry_succeeds_on_first_attempt() {
+        let result = with_retry(3, || async { Ok::<i32, String>(42) }).await;
+        assert_eq!(result, Ok(42));
+    }
+
+    #[switchy_async::test]
+    async fn test_with_retry_succeeds_after_failures() {
+        let attempt_count = Arc::new(AtomicU8::new(0));
+        let attempt_count_clone = Arc::clone(&attempt_count);
+
+        let result = with_retry(3, move || {
+            let count = attempt_count_clone.clone();
+            async move {
+                let current = count.fetch_add(1, Ordering::SeqCst);
+                if current < 2 { Err("Not yet") } else { Ok(100) }
+            }
+        })
+        .await;
+
+        assert_eq!(result, Ok(100));
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[switchy_async::test]
+    async fn test_with_retry_fails_after_max_retries() {
+        let attempt_count = Arc::new(AtomicU8::new(0));
+        let attempt_count_clone = Arc::clone(&attempt_count);
+
+        let result = with_retry(3, move || {
+            let count = attempt_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Err::<i32, &str>("Always fails")
+            }
+        })
+        .await;
+
+        assert_eq!(result, Err("Always fails"));
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[switchy_async::test]
+    async fn test_with_retry_with_single_retry() {
+        let attempt_count = Arc::new(AtomicU8::new(0));
+        let attempt_count_clone = Arc::clone(&attempt_count);
+
+        let result = with_retry(1, move || {
+            let count = attempt_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Err::<i32, &str>("Fail")
+            }
+        })
+        .await;
+
+        assert_eq!(result, Err("Fail"));
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[switchy_async::test]
+    async fn test_with_retry_succeeds_on_last_attempt() {
+        let attempt_count = Arc::new(AtomicU8::new(0));
+        let attempt_count_clone = Arc::clone(&attempt_count);
+
+        let result = with_retry(3, move || {
+            let count = attempt_count_clone.clone();
+            async move {
+                let current = count.fetch_add(1, Ordering::SeqCst);
+                if current < 2 { Err("Not yet") } else { Ok(999) }
+            }
+        })
+        .await;
+
+        assert_eq!(result, Ok(999));
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    }
+}

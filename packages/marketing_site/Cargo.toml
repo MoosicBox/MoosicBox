@@ -39,6 +39,7 @@ moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_marketing_site_ui = { workspace = true }
 switchy_async = { workspace = true, features = [
+    "macros",
     "net",
     "rt-multi-thread",
     "time",
@@ -53,6 +54,11 @@ log                = { workspace = true }
 regex              = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [features]
 default = [

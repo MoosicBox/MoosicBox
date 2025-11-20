@@ -185,3 +185,81 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_class_name_basic() {
+        assert_eq!(format_class_name("MyClass"), "myclass");
+    }
+
+    #[test]
+    fn test_format_class_name_with_spaces() {
+        assert_eq!(format_class_name("My Class Name"), "my-class-name");
+    }
+
+    #[test]
+    fn test_format_class_name_with_special_chars() {
+        assert_eq!(format_class_name("My@Class#Name"), "my_class_name");
+    }
+
+    #[test]
+    fn test_format_class_name_with_hyphens() {
+        assert_eq!(format_class_name("My-Class-Name"), "my-class-name");
+    }
+
+    #[test]
+    fn test_format_class_name_with_mixed_special_chars() {
+        assert_eq!(format_class_name("Version 1.2.3"), "version-1_2_3");
+    }
+
+    #[test]
+    fn test_format_class_name_with_multiple_spaces() {
+        assert_eq!(
+            format_class_name("Multiple   Spaces   Here"),
+            "multiple-spaces-here"
+        );
+    }
+
+    #[test]
+    fn test_format_class_name_empty_string() {
+        assert_eq!(format_class_name(""), "");
+    }
+
+    #[test]
+    fn test_format_class_name_with_underscores() {
+        assert_eq!(format_class_name("my_class_name"), "my_class_name");
+    }
+
+    #[test]
+    fn test_get_os_header_windows() {
+        assert_eq!(get_os_header("windows"), "Windows");
+    }
+
+    #[test]
+    fn test_get_os_header_mac_intel() {
+        assert_eq!(get_os_header("mac_intel"), "macOS");
+    }
+
+    #[test]
+    fn test_get_os_header_linux() {
+        assert_eq!(get_os_header("linux"), "Linux");
+    }
+
+    #[test]
+    fn test_get_os_header_android() {
+        assert_eq!(get_os_header("android"), "Android");
+    }
+
+    #[test]
+    fn test_get_os_header_unknown() {
+        assert_eq!(get_os_header("freebsd"), "freebsd");
+    }
+
+    #[test]
+    fn test_get_os_header_mac_apple_silicon() {
+        assert_eq!(get_os_header("mac_apple_silicon"), "mac_apple_silicon");
+    }
+}
