@@ -87,7 +87,7 @@ impl From<TidalArtist> for ApiGlobalSearchResult {
 }
 
 /// Available image sizes for Tidal artist pictures.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TidalArtistImageSize {
     /// Maximum resolution (750x750 pixels).
     Max,
@@ -331,7 +331,7 @@ impl TryFrom<Album> for TidalAlbum {
 }
 
 /// Available image sizes for Tidal album covers.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TidalAlbumImageSize {
     /// Maximum resolution (1280x1280 pixels).
     Max,
@@ -809,5 +809,520 @@ impl AsModelResult<TidalSearchResults, ParseError> for Value {
             offset,
             limit,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_api::models::ImageCoverSize;
+    use moosicbox_music_models::id::Id;
+    use pretty_assertions::assert_eq;
+
+    // TidalArtistImageSize tests
+    #[test]
+    fn test_tidal_artist_image_size_from_u16_boundary_values() {
+        assert_eq!(
+            TidalArtistImageSize::from(0_u16),
+            TidalArtistImageSize::Small
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(160_u16),
+            TidalArtistImageSize::Small
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(161_u16),
+            TidalArtistImageSize::Medium
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(320_u16),
+            TidalArtistImageSize::Medium
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(321_u16),
+            TidalArtistImageSize::Large
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(480_u16),
+            TidalArtistImageSize::Large
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(481_u16),
+            TidalArtistImageSize::Max
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(1000_u16),
+            TidalArtistImageSize::Max
+        );
+    }
+
+    #[test]
+    fn test_tidal_artist_image_size_to_u16() {
+        assert_eq!(u16::from(TidalArtistImageSize::Small), 160);
+        assert_eq!(u16::from(TidalArtistImageSize::Medium), 320);
+        assert_eq!(u16::from(TidalArtistImageSize::Large), 480);
+        assert_eq!(u16::from(TidalArtistImageSize::Max), 750);
+    }
+
+    #[test]
+    fn test_tidal_artist_image_size_from_image_cover_size() {
+        assert_eq!(
+            TidalArtistImageSize::from(ImageCoverSize::Max),
+            TidalArtistImageSize::Max
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(ImageCoverSize::Large),
+            TidalArtistImageSize::Large
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(ImageCoverSize::Medium),
+            TidalArtistImageSize::Medium
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(ImageCoverSize::Small),
+            TidalArtistImageSize::Small
+        );
+        assert_eq!(
+            TidalArtistImageSize::from(ImageCoverSize::Thumbnail),
+            TidalArtistImageSize::Small
+        );
+    }
+
+    #[test]
+    fn test_tidal_artist_image_size_display() {
+        assert_eq!(format!("{}", TidalArtistImageSize::Small), "160");
+        assert_eq!(format!("{}", TidalArtistImageSize::Medium), "320");
+        assert_eq!(format!("{}", TidalArtistImageSize::Large), "480");
+        assert_eq!(format!("{}", TidalArtistImageSize::Max), "750");
+    }
+
+    // TidalAlbumImageSize tests
+    #[test]
+    fn test_tidal_album_image_size_from_u16_boundary_values() {
+        assert_eq!(
+            TidalAlbumImageSize::from(0_u16),
+            TidalAlbumImageSize::Thumbnail
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(80_u16),
+            TidalAlbumImageSize::Thumbnail
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(81_u16),
+            TidalAlbumImageSize::Small
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(160_u16),
+            TidalAlbumImageSize::Small
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(161_u16),
+            TidalAlbumImageSize::Medium
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(320_u16),
+            TidalAlbumImageSize::Medium
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(321_u16),
+            TidalAlbumImageSize::Large
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(640_u16),
+            TidalAlbumImageSize::Large
+        );
+        assert_eq!(TidalAlbumImageSize::from(641_u16), TidalAlbumImageSize::Max);
+        assert_eq!(
+            TidalAlbumImageSize::from(2000_u16),
+            TidalAlbumImageSize::Max
+        );
+    }
+
+    #[test]
+    fn test_tidal_album_image_size_to_u16() {
+        assert_eq!(u16::from(TidalAlbumImageSize::Thumbnail), 80);
+        assert_eq!(u16::from(TidalAlbumImageSize::Small), 160);
+        assert_eq!(u16::from(TidalAlbumImageSize::Medium), 320);
+        assert_eq!(u16::from(TidalAlbumImageSize::Large), 640);
+        assert_eq!(u16::from(TidalAlbumImageSize::Max), 1280);
+    }
+
+    #[test]
+    fn test_tidal_album_image_size_from_image_cover_size() {
+        assert_eq!(
+            TidalAlbumImageSize::from(ImageCoverSize::Max),
+            TidalAlbumImageSize::Max
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(ImageCoverSize::Large),
+            TidalAlbumImageSize::Large
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(ImageCoverSize::Medium),
+            TidalAlbumImageSize::Medium
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(ImageCoverSize::Small),
+            TidalAlbumImageSize::Small
+        );
+        assert_eq!(
+            TidalAlbumImageSize::from(ImageCoverSize::Thumbnail),
+            TidalAlbumImageSize::Thumbnail
+        );
+    }
+
+    #[test]
+    fn test_tidal_album_image_size_display() {
+        assert_eq!(format!("{}", TidalAlbumImageSize::Thumbnail), "80");
+        assert_eq!(format!("{}", TidalAlbumImageSize::Small), "160");
+        assert_eq!(format!("{}", TidalAlbumImageSize::Medium), "320");
+        assert_eq!(format!("{}", TidalAlbumImageSize::Large), "640");
+        assert_eq!(format!("{}", TidalAlbumImageSize::Max), "1280");
+    }
+
+    // Artist picture URL tests
+    #[test]
+    fn test_tidal_artist_picture_url_construction() {
+        let artist = TidalArtist {
+            id: 12345,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        let url = artist.picture_url(TidalArtistImageSize::Max);
+        assert_eq!(
+            url,
+            Some("https://resources.tidal.com/images/abc/def/ghi/750x750.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tidal_artist_picture_url_different_sizes() {
+        let artist = TidalArtist {
+            id: 12345,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        assert_eq!(
+            artist.picture_url(TidalArtistImageSize::Small),
+            Some("https://resources.tidal.com/images/abc/def/ghi/160x160.jpg".to_string())
+        );
+        assert_eq!(
+            artist.picture_url(TidalArtistImageSize::Medium),
+            Some("https://resources.tidal.com/images/abc/def/ghi/320x320.jpg".to_string())
+        );
+        assert_eq!(
+            artist.picture_url(TidalArtistImageSize::Large),
+            Some("https://resources.tidal.com/images/abc/def/ghi/480x480.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tidal_artist_picture_url_none_when_no_picture() {
+        let artist = TidalArtist {
+            id: 12345,
+            picture: None,
+            contains_cover: false,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        assert_eq!(artist.picture_url(TidalArtistImageSize::Max), None);
+    }
+
+    // Album cover URL tests
+    #[test]
+    fn test_tidal_album_cover_url_construction() {
+        let album = TidalAlbum {
+            id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_id: 12345,
+            album_type: TidalAlbumType::Lp,
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: Some("2024 Test".to_string()),
+            cover: Some("xyz-abc-def".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: Some("2024-01-01".to_string()),
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec!["LOSSLESS".to_string()],
+        };
+
+        let url = album.cover_url(TidalAlbumImageSize::Max);
+        assert_eq!(
+            url,
+            Some("https://resources.tidal.com/images/xyz/abc/def/1280x1280.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tidal_album_cover_url_different_sizes() {
+        let album = TidalAlbum {
+            id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_id: 12345,
+            album_type: TidalAlbumType::Lp,
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            cover: Some("xyz-abc-def".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: None,
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(
+            album.cover_url(TidalAlbumImageSize::Thumbnail),
+            Some("https://resources.tidal.com/images/xyz/abc/def/80x80.jpg".to_string())
+        );
+        assert_eq!(
+            album.cover_url(TidalAlbumImageSize::Small),
+            Some("https://resources.tidal.com/images/xyz/abc/def/160x160.jpg".to_string())
+        );
+        assert_eq!(
+            album.cover_url(TidalAlbumImageSize::Medium),
+            Some("https://resources.tidal.com/images/xyz/abc/def/320x320.jpg".to_string())
+        );
+        assert_eq!(
+            album.cover_url(TidalAlbumImageSize::Large),
+            Some("https://resources.tidal.com/images/xyz/abc/def/640x640.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tidal_album_cover_url_none_when_no_cover() {
+        let album = TidalAlbum {
+            id: 67890,
+            artist: "Test Artist".to_string(),
+            artist_id: 12345,
+            album_type: TidalAlbumType::Lp,
+            contains_cover: false,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            cover: None,
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: None,
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        assert_eq!(album.cover_url(TidalAlbumImageSize::Max), None);
+    }
+
+    #[test]
+    fn test_tidal_search_album_cover_url_construction() {
+        let album = TidalSearchAlbum {
+            id: 67890,
+            artists: vec![],
+            contains_cover: true,
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            cover: Some("xyz-abc-def".to_string()),
+            duration: 3600,
+            explicit: false,
+            number_of_tracks: 12,
+            popularity: 90,
+            release_date: None,
+            title: "Test Album".to_string(),
+            media_metadata_tags: vec![],
+        };
+
+        let url = album.cover_url(TidalAlbumImageSize::Large);
+        assert_eq!(
+            url,
+            Some("https://resources.tidal.com/images/xyz/abc/def/640x640.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_tidal_search_artist_picture_url_construction() {
+        let artist = TidalSearchArtist {
+            id: 12345,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            r#type: "ARTIST".to_string(),
+            name: "Test Artist".to_string(),
+        };
+
+        let url = artist.picture_url(TidalArtistImageSize::Medium);
+        assert_eq!(
+            url,
+            Some("https://resources.tidal.com/images/abc/def/ghi/320x320.jpg".to_string())
+        );
+    }
+
+    // Search results position calculation tests
+    #[test]
+    fn test_search_results_position_calculation_within_bounds() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![],
+                offset: 10,
+                limit: 5,
+                total: 100,
+            },
+            artists: TidalSearchResultList {
+                items: vec![],
+                offset: 10,
+                limit: 5,
+                total: 50,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![],
+                offset: 10,
+                limit: 5,
+                total: 75,
+            },
+            offset: 10,
+            limit: 5,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        assert_eq!(api_response.position, 15); // offset (10) + limit (5)
+    }
+
+    #[test]
+    fn test_search_results_position_calculation_exceeds_total() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![],
+                offset: 95,
+                limit: 10,
+                total: 100,
+            },
+            artists: TidalSearchResultList {
+                items: vec![],
+                offset: 95,
+                limit: 10,
+                total: 50,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![],
+                offset: 95,
+                limit: 10,
+                total: 75,
+            },
+            offset: 95,
+            limit: 10,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        assert_eq!(api_response.position, 100); // Capped at total (100)
+    }
+
+    #[test]
+    fn test_search_results_position_calculation_at_start() {
+        let search_results = TidalSearchResults {
+            albums: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 100,
+            },
+            artists: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 50,
+            },
+            tracks: TidalSearchResultList {
+                items: vec![],
+                offset: 0,
+                limit: 10,
+                total: 75,
+            },
+            offset: 0,
+            limit: 10,
+        };
+
+        let api_response: ApiSearchResultsResponse = search_results.into();
+        assert_eq!(api_response.position, 10); // offset (0) + limit (10)
+    }
+
+    // Model conversion tests
+    #[test]
+    fn test_tidal_artist_to_artist_conversion() {
+        let tidal_artist = TidalArtist {
+            id: 12345,
+            picture: Some("abc-def-ghi".to_string()),
+            contains_cover: true,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        let artist: Artist = tidal_artist.into();
+        assert_eq!(artist.id, Id::from(12345_u64));
+        assert_eq!(artist.title, "Test Artist");
+        assert_eq!(
+            artist.cover,
+            Some("https://resources.tidal.com/images/abc/def/ghi/750x750.jpg".to_string())
+        );
+        assert_eq!(artist.api_source, *API_SOURCE);
+    }
+
+    #[test]
+    fn test_tidal_artist_to_api_artist_conversion() {
+        let tidal_artist = TidalArtist {
+            id: 12345,
+            picture: None,
+            contains_cover: false,
+            popularity: 80,
+            name: "Test Artist".to_string(),
+        };
+
+        let api_artist: ApiArtist = tidal_artist.into();
+        assert_eq!(api_artist.artist_id, Id::from(12345_u64));
+        assert_eq!(api_artist.title, "Test Artist");
+        assert!(!api_artist.contains_cover);
+        assert_eq!(api_artist.api_source, *API_SOURCE);
+    }
+
+    #[test]
+    fn test_tidal_track_to_track_conversion() {
+        let tidal_track = TidalTrack {
+            id: 98765,
+            track_number: 3,
+            artist_id: 12345,
+            artist: "Test Artist".to_string(),
+            artist_cover: Some("abc-def-ghi".to_string()),
+            album_id: 67890,
+            album_type: TidalAlbumType::Lp,
+            album: "Test Album".to_string(),
+            album_cover: Some("xyz-abc-def".to_string()),
+            audio_quality: "LOSSLESS".to_string(),
+            copyright: None,
+            duration: 180,
+            explicit: false,
+            isrc: "USRC12345678".to_string(),
+            popularity: 85,
+            title: "Test Track".to_string(),
+            media_metadata_tags: vec!["LOSSLESS".to_string()],
+        };
+
+        let track: Track = tidal_track.into();
+        assert_eq!(track.id, Id::from(98765_u64));
+        assert_eq!(track.number, 3);
+        assert_eq!(track.title, "Test Track");
+        assert!((track.duration - 180.0).abs() < f64::EPSILON);
+        assert_eq!(track.album, "Test Album");
+        assert_eq!(track.album_id, Id::from(67890_u64));
+        assert_eq!(track.artist, "Test Artist");
+        assert_eq!(track.artist_id, Id::from(12345_u64));
+        assert_eq!(track.api_source, *API_SOURCE);
     }
 }
