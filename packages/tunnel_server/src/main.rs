@@ -1,3 +1,9 @@
+//! MoosicBox tunnel server application.
+//!
+//! This binary provides a WebSocket-based HTTP tunneling server that allows clients
+//! to establish persistent connections and proxy HTTP requests through them. The server
+//! handles authentication, connection management, and bidirectional request/response streaming.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
