@@ -71,3 +71,13 @@ serde = [
 form = ["dep:base64", "dep:hyper_old", "dep:mime_old", "serde"]
 
 static-routes = []
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
+test-log = { workspace = true }
+tokio = { workspace = true }
