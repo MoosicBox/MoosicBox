@@ -306,7 +306,7 @@ mod tests {
         thread,
     };
 
-    use super::{thread_id, Builder, Error};
+    use super::{Builder, Error, thread_id};
 
     #[cfg(feature = "_any_backend")]
     use super::task;

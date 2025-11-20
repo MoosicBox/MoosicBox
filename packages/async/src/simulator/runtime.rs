@@ -823,7 +823,7 @@ mod test {
 
     use crate::{
         runtime::Builder,
-        simulator::runtime::{build_runtime, Handle, Runtime},
+        simulator::runtime::{Handle, Runtime, build_runtime},
         task,
     };
 

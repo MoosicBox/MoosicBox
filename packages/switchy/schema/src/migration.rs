@@ -374,4 +374,171 @@ mod tests {
         assert_eq!(list[1].description, None);
         assert!(!list[1].applied); // Default should be false
     }
+
+    #[test]
+    fn test_migration_status_display() {
+        assert_eq!(MigrationStatus::InProgress.to_string(), "in_progress");
+        assert_eq!(MigrationStatus::Completed.to_string(), "completed");
+        assert_eq!(MigrationStatus::Failed.to_string(), "failed");
+    }
+
+    #[test]
+    fn test_migration_status_from_str_valid() {
+        use std::str::FromStr;
+
+        assert_eq!(
+            MigrationStatus::from_str("in_progress").unwrap(),
+            MigrationStatus::InProgress
+        );
+        assert_eq!(
+            MigrationStatus::from_str("completed").unwrap(),
+            MigrationStatus::Completed
+        );
+        assert_eq!(
+            MigrationStatus::from_str("failed").unwrap(),
+            MigrationStatus::Failed
+        );
+    }
+
+    #[test]
+    fn test_migration_status_from_str_invalid() {
+        use std::str::FromStr;
+
+        let result = MigrationStatus::from_str("invalid_status");
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        let err_str = err.to_string();
+        assert!(err_str.contains("Invalid migration status"));
+        assert!(err_str.contains("invalid_status"));
+        assert!(err_str.contains("in_progress"));
+        assert!(err_str.contains("completed"));
+        assert!(err_str.contains("failed"));
+    }
+
+    #[test]
+    fn test_migration_status_from_str_case_sensitive() {
+        use std::str::FromStr;
+
+        // Should be case-sensitive
+        assert!(MigrationStatus::from_str("COMPLETED").is_err());
+        assert!(MigrationStatus::from_str("Completed").is_err());
+        assert!(MigrationStatus::from_str("IN_PROGRESS").is_err());
+        assert!(MigrationStatus::from_str("InProgress").is_err());
+    }
+
+    #[test]
+    fn test_migration_status_equality() {
+        assert_eq!(MigrationStatus::InProgress, MigrationStatus::InProgress);
+        assert_eq!(MigrationStatus::Completed, MigrationStatus::Completed);
+        assert_eq!(MigrationStatus::Failed, MigrationStatus::Failed);
+
+        assert_ne!(MigrationStatus::InProgress, MigrationStatus::Completed);
+        assert_ne!(MigrationStatus::InProgress, MigrationStatus::Failed);
+        assert_ne!(MigrationStatus::Completed, MigrationStatus::Failed);
+    }
+
+    #[test]
+    fn test_migration_status_copy() {
+        let status = MigrationStatus::Completed;
+        let status_copy = status;
+        assert_eq!(status, status_copy);
+    }
+
+    #[test]
+    fn test_migration_status_clone() {
+        let status = MigrationStatus::Failed;
+        let status_clone = status;
+        assert_eq!(status, status_clone);
+    }
+
+    #[test]
+    fn test_migration_info_equality() {
+        let info1 = MigrationInfo {
+            id: "001_test".to_string(),
+            description: Some("Test".to_string()),
+            applied: false,
+            status: None,
+            failure_reason: None,
+            run_on: None,
+            finished_on: None,
+        };
+
+        let info2 = MigrationInfo {
+            id: "001_test".to_string(),
+            description: Some("Test".to_string()),
+            applied: false,
+            status: None,
+            failure_reason: None,
+            run_on: None,
+            finished_on: None,
+        };
+
+        assert_eq!(info1, info2);
+    }
+
+    #[test]
+    fn test_migration_info_clone() {
+        let original = MigrationInfo {
+            id: "test".to_string(),
+            description: Some("Description".to_string()),
+            applied: true,
+            status: Some(MigrationStatus::Completed),
+            failure_reason: Some("Error".to_string()),
+            run_on: None,
+            finished_on: None,
+        };
+
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn test_migration_info_debug() {
+        let info = MigrationInfo {
+            id: "test".to_string(),
+            description: None,
+            applied: false,
+            status: Some(MigrationStatus::InProgress),
+            failure_reason: None,
+            run_on: None,
+            finished_on: None,
+        };
+
+        let debug = format!("{info:?}");
+        assert!(debug.contains("MigrationInfo"));
+        assert!(debug.contains("test"));
+        assert!(debug.contains("InProgress"));
+    }
+
+    #[switchy_async::test]
+    async fn test_migration_default_checksums() {
+        let migration = MockMigration {
+            id: "test".to_string(),
+            description: None,
+        };
+
+        // Default implementation returns 32 zero bytes
+        let up_checksum = migration.up_checksum().await.unwrap();
+        let down_checksum = migration.down_checksum().await.unwrap();
+
+        assert_eq!(up_checksum.len(), 32);
+        assert_eq!(down_checksum.len(), 32);
+        assert_eq!(up_checksum, bytes::Bytes::from(vec![0u8; 32]));
+        assert_eq!(down_checksum, bytes::Bytes::from(vec![0u8; 32]));
+    }
+
+    #[test]
+    fn test_migration_default_supported_databases() {
+        let migration = MockMigration {
+            id: "test".to_string(),
+            description: None,
+        };
+
+        let supported = migration.supported_databases();
+        assert_eq!(supported.len(), 3);
+        assert!(supported.contains(&"sqlite"));
+        assert!(supported.contains(&"postgres"));
+        assert!(supported.contains(&"mysql"));
+    }
 }
