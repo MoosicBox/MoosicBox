@@ -383,3 +383,76 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that the home page can be created without panicking
+    /// and returns a Container instance.
+    #[test]
+    fn test_create_home_page() {
+        let home_page = create_home_page();
+        // Verify the page is a Container (if it weren't, this would fail to compile)
+        let _: Container = home_page;
+    }
+
+    /// Test that the about page can be created without panicking
+    /// and returns a Container instance.
+    #[test]
+    fn test_create_about_page() {
+        let about_page = create_about_page();
+        let _: Container = about_page;
+    }
+
+    /// Test that the contact page can be created without panicking
+    /// and returns a Container instance.
+    #[test]
+    fn test_create_contact_page() {
+        let contact_page = create_contact_page();
+        let _: Container = contact_page;
+    }
+
+    /// Test that the router can be created and contains the expected routes.
+    /// This verifies that all routes are properly registered.
+    #[test]
+    fn test_create_router() {
+        let router = create_router();
+
+        // Verify router is created successfully
+        // The router should have routes registered for /, /about, /contact, and /api/status
+        let route_paths: Vec<String> = {
+            let read_routes = router.routes.read().unwrap();
+            assert_eq!(read_routes.len(), 4, "Router should have 4 routes");
+
+            // Verify specific routes exist
+            read_routes
+                .iter()
+                .filter_map(|(path_type, _)| {
+                    if let hyperchad::router::RoutePath::Literal(p) = path_type {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        assert!(
+            route_paths.contains(&"/".to_string()),
+            "Router should have home route"
+        );
+        assert!(
+            route_paths.contains(&"/about".to_string()),
+            "Router should have about route"
+        );
+        assert!(
+            route_paths.contains(&"/contact".to_string()),
+            "Router should have contact route"
+        );
+        assert!(
+            route_paths.contains(&"/api/status".to_string()),
+            "Router should have API status route"
+        );
+    }
+}
