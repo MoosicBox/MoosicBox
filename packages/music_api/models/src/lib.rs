@@ -321,7 +321,7 @@ pub enum ImageCoverSource {
 /// Predefined size options for cover images.
 ///
 /// Defines standard image dimensions for different use cases, from thumbnails to full resolution.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageCoverSize {
     /// Maximum resolution (1280px)
     Max,
@@ -419,5 +419,277 @@ impl FromId for u64 {
     /// Panics if the string cannot be parsed as a valid `u64` integer.
     fn into_id(str: &str) -> Self {
         str.parse::<Self>().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod image_cover_size {
+        use super::*;
+
+        #[test]
+        fn test_from_u16_boundaries() {
+            assert_eq!(ImageCoverSize::from(0_u16), ImageCoverSize::Thumbnail);
+            assert_eq!(ImageCoverSize::from(80_u16), ImageCoverSize::Thumbnail);
+            assert_eq!(ImageCoverSize::from(81_u16), ImageCoverSize::Small);
+            assert_eq!(ImageCoverSize::from(160_u16), ImageCoverSize::Small);
+            assert_eq!(ImageCoverSize::from(161_u16), ImageCoverSize::Medium);
+            assert_eq!(ImageCoverSize::from(320_u16), ImageCoverSize::Medium);
+            assert_eq!(ImageCoverSize::from(321_u16), ImageCoverSize::Large);
+            assert_eq!(ImageCoverSize::from(640_u16), ImageCoverSize::Large);
+            assert_eq!(ImageCoverSize::from(641_u16), ImageCoverSize::Max);
+            assert_eq!(ImageCoverSize::from(1280_u16), ImageCoverSize::Max);
+            assert_eq!(ImageCoverSize::from(5000_u16), ImageCoverSize::Max);
+        }
+
+        #[test]
+        fn test_into_u16() {
+            assert_eq!(u16::from(ImageCoverSize::Thumbnail), 80);
+            assert_eq!(u16::from(ImageCoverSize::Small), 160);
+            assert_eq!(u16::from(ImageCoverSize::Medium), 320);
+            assert_eq!(u16::from(ImageCoverSize::Large), 640);
+            assert_eq!(u16::from(ImageCoverSize::Max), 1280);
+        }
+
+        #[test]
+        fn test_display() {
+            assert_eq!(ImageCoverSize::Thumbnail.to_string(), "80");
+            assert_eq!(ImageCoverSize::Small.to_string(), "160");
+            assert_eq!(ImageCoverSize::Medium.to_string(), "320");
+            assert_eq!(ImageCoverSize::Large.to_string(), "640");
+            assert_eq!(ImageCoverSize::Max.to_string(), "1280");
+        }
+
+        #[test]
+        fn test_roundtrip_conversion() {
+            for size in &[
+                ImageCoverSize::Thumbnail,
+                ImageCoverSize::Small,
+                ImageCoverSize::Medium,
+                ImageCoverSize::Large,
+                ImageCoverSize::Max,
+            ] {
+                let value: u16 = (*size).into();
+                let back: ImageCoverSize = value.into();
+                assert_eq!(*size as u8, back as u8);
+            }
+        }
+    }
+
+    mod track_audio_quality {
+        use super::*;
+        use serde_json::json;
+
+        #[test]
+        fn test_to_value_type_from_database_value_valid() {
+            let db_value = DatabaseValue::String("LOW".to_string());
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::Low);
+
+            let db_value = DatabaseValue::String("FLAC_LOSSLESS".to_string());
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::FlacLossless);
+
+            let db_value = DatabaseValue::String("FLAC_HI_RES".to_string());
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::FlacHiRes);
+
+            let db_value = DatabaseValue::String("FLAC_HIGHEST_RES".to_string());
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::FlacHighestRes);
+        }
+
+        #[test]
+        fn test_to_value_type_from_database_value_invalid_type() {
+            let db_value = DatabaseValue::Int32(123);
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
+
+        #[test]
+        fn test_to_value_type_from_database_value_invalid_string() {
+            let db_value = DatabaseValue::String("INVALID_QUALITY".to_string());
+            let result: Result<TrackAudioQuality, ParseError> = db_value.to_value_type();
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
+
+        #[test]
+        fn test_to_value_type_from_json_value_valid() {
+            let json_value = json!("LOW");
+            let result: Result<TrackAudioQuality, ParseError> = (&json_value).to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::Low);
+
+            let json_value = json!("FLAC_LOSSLESS");
+            let result: Result<TrackAudioQuality, ParseError> = (&json_value).to_value_type();
+            assert_eq!(result.unwrap(), TrackAudioQuality::FlacLossless);
+        }
+
+        #[test]
+        fn test_to_value_type_from_json_value_invalid_type() {
+            let json_value = json!(123);
+            let result: Result<TrackAudioQuality, ParseError> = (&json_value).to_value_type();
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
+
+        #[test]
+        fn test_to_value_type_from_json_value_invalid_string() {
+            let json_value = json!("NOT_A_QUALITY");
+            let result: Result<TrackAudioQuality, ParseError> = (&json_value).to_value_type();
+            assert!(result.is_err());
+            assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+        }
+
+        #[test]
+        fn test_default() {
+            assert_eq!(
+                TrackAudioQuality::default(),
+                TrackAudioQuality::FlacHighestRes
+            );
+        }
+    }
+
+    mod from_id {
+        use super::*;
+
+        #[test]
+        fn test_string_as_string() {
+            let id = "test-id-123".to_string();
+            assert_eq!(id.as_string(), "test-id-123");
+        }
+
+        #[test]
+        fn test_string_into_id() {
+            let result = String::into_id("another-id");
+            assert_eq!(result, "another-id");
+        }
+
+        #[test]
+        fn test_u64_as_string() {
+            let id: u64 = 12345;
+            assert_eq!(id.as_string(), "12345");
+
+            let id: u64 = 0;
+            assert_eq!(id.as_string(), "0");
+
+            let id: u64 = u64::MAX;
+            assert_eq!(id.as_string(), "18446744073709551615");
+        }
+
+        #[test]
+        fn test_u64_into_id_valid() {
+            assert_eq!(u64::into_id("12345"), 12345_u64);
+            assert_eq!(u64::into_id("0"), 0_u64);
+            assert_eq!(u64::into_id("18446744073709551615"), u64::MAX);
+        }
+
+        #[test]
+        #[should_panic]
+        fn test_u64_into_id_invalid_panics() {
+            u64::into_id("not-a-number");
+        }
+
+        #[test]
+        #[should_panic]
+        fn test_u64_into_id_negative_panics() {
+            u64::into_id("-123");
+        }
+
+        #[test]
+        #[should_panic]
+        fn test_u64_into_id_overflow_panics() {
+            u64::into_id("18446744073709551616"); // u64::MAX + 1
+        }
+    }
+
+    mod track_source {
+        use super::*;
+
+        #[test]
+        fn test_format_local_file() {
+            let source = TrackSource::LocalFilePath {
+                path: "/path/to/file.flac".to_string(),
+                format: AudioFormat::Source,
+                track_id: Some(Id::Number(123)),
+                source: TrackApiSource::Local,
+            };
+            assert_eq!(source.format(), AudioFormat::Source);
+        }
+
+        #[test]
+        fn test_format_remote_url() {
+            let source = TrackSource::RemoteUrl {
+                url: "https://example.com/track.mp3".to_string(),
+                format: AudioFormat::Source,
+                track_id: Some(Id::Number(456)),
+                source: TrackApiSource::Local,
+                headers: None,
+            };
+            assert_eq!(source.format(), AudioFormat::Source);
+        }
+
+        #[test]
+        fn test_track_id_some() {
+            let source = TrackSource::LocalFilePath {
+                path: "/path/to/file.flac".to_string(),
+                format: AudioFormat::Source,
+                track_id: Some(Id::Number(789)),
+                source: TrackApiSource::Local,
+            };
+            assert_eq!(source.track_id(), Some(&Id::Number(789)));
+        }
+
+        #[test]
+        fn test_track_id_none() {
+            let source = TrackSource::RemoteUrl {
+                url: "https://example.com/track.mp3".to_string(),
+                format: AudioFormat::Source,
+                track_id: None,
+                source: TrackApiSource::Local,
+                headers: None,
+            };
+            assert_eq!(source.track_id(), None);
+        }
+    }
+
+    mod enum_display {
+        use super::*;
+
+        #[test]
+        fn test_artist_order_display() {
+            assert_eq!(ArtistOrder::DateAdded.to_string(), "DATE_ADDED");
+        }
+
+        #[test]
+        fn test_artist_order_direction_display() {
+            assert_eq!(ArtistOrderDirection::Ascending.to_string(), "ASCENDING");
+            assert_eq!(ArtistOrderDirection::Descending.to_string(), "DESCENDING");
+        }
+
+        #[test]
+        fn test_album_order_display() {
+            assert_eq!(AlbumOrder::DateAdded.to_string(), "DATE_ADDED");
+        }
+
+        #[test]
+        fn test_album_order_direction_display() {
+            assert_eq!(AlbumOrderDirection::Ascending.to_string(), "ASCENDING");
+            assert_eq!(AlbumOrderDirection::Descending.to_string(), "DESCENDING");
+        }
+
+        #[test]
+        fn test_track_order_display() {
+            assert_eq!(TrackOrder::DateAdded.to_string(), "DATE_ADDED");
+        }
+
+        #[test]
+        fn test_track_order_direction_display() {
+            assert_eq!(TrackOrderDirection::Ascending.to_string(), "ASCENDING");
+            assert_eq!(TrackOrderDirection::Descending.to_string(), "DESCENDING");
+        }
     }
 }
