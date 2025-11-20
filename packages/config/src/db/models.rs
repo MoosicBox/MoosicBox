@@ -6,6 +6,9 @@
 use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue};
 
 /// Represents a `MoosicBox` profile stored in the database.
+///
+/// Profiles allow users to organize settings and preferences into separate
+/// configurations, such as for different users or environments.
 pub struct Profile {
     /// Unique identifier for the profile
     pub id: u64,
