@@ -1934,7 +1934,7 @@ impl From<SearchType> for TidalSearchType {
 }
 
 /// Tidal-specific search type identifiers.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumString, AsRefStr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum TidalSearchType {
@@ -2975,5 +2975,170 @@ impl MusicApi for TidalMusicApi {
         .await?;
 
         Ok(results.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_replace_all_single_replacement() {
+        let input = "https://api.tidal.com/v1/artists/:artistId";
+        let result = replace_all(input, &[(":artistId", "12345")]);
+        assert_eq!(result, "https://api.tidal.com/v1/artists/12345");
+    }
+
+    #[test]
+    fn test_replace_all_multiple_replacements() {
+        let input = "https://api.tidal.com/v1/users/:userId/favorites/artists/:artistId";
+        let result = replace_all(input, &[(":userId", "999"), (":artistId", "12345")]);
+        assert_eq!(
+            result,
+            "https://api.tidal.com/v1/users/999/favorites/artists/12345"
+        );
+    }
+
+    #[test]
+    fn test_replace_all_no_replacements() {
+        let input = "https://api.tidal.com/v1/search";
+        let result = replace_all(input, &[]);
+        assert_eq!(result, "https://api.tidal.com/v1/search");
+    }
+
+    #[test]
+    fn test_replace_all_pattern_not_found() {
+        let input = "https://api.tidal.com/v1/search";
+        let result = replace_all(input, &[(":artistId", "12345")]);
+        assert_eq!(result, "https://api.tidal.com/v1/search");
+    }
+
+    #[test]
+    fn test_attach_query_string_single_param() {
+        let result = attach_query_string("https://api.tidal.com/v1/search", &[("query", "test")]);
+        assert_eq!(result, "https://api.tidal.com/v1/search?query=test");
+    }
+
+    #[test]
+    fn test_attach_query_string_multiple_params() {
+        let result = attach_query_string(
+            "https://api.tidal.com/v1/search",
+            &[("query", "test"), ("limit", "10"), ("offset", "0")],
+        );
+        assert_eq!(
+            result,
+            "https://api.tidal.com/v1/search?query=test&limit=10&offset=0"
+        );
+    }
+
+    #[test]
+    fn test_attach_query_string_url_encoding() {
+        let result = attach_query_string(
+            "https://api.tidal.com/v1/search",
+            &[("query", "test artist")],
+        );
+        assert_eq!(result, "https://api.tidal.com/v1/search?query=test+artist");
+    }
+
+    #[test]
+    fn test_attach_query_string_special_characters() {
+        let result = attach_query_string(
+            "https://api.tidal.com/v1/search",
+            &[("query", "test&special=chars")],
+        );
+        assert_eq!(
+            result,
+            "https://api.tidal.com/v1/search?query=test%26special%3Dchars"
+        );
+    }
+
+    #[test]
+    fn test_attach_query_string_empty_params() {
+        let result = attach_query_string("https://api.tidal.com/v1/search", &[]);
+        assert_eq!(result, "https://api.tidal.com/v1/search?");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_basic() {
+        let url = tidal_api_endpoint!(Album);
+        assert_eq!(url, "https://api.tidal.com/v1/albums/:albumId");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_with_params() {
+        let url = tidal_api_endpoint!(Album, &[(":albumId", "123456")]);
+        assert_eq!(url, "https://api.tidal.com/v1/albums/123456");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_with_query() {
+        let url = tidal_api_endpoint!(Album, &[(":albumId", "123456")], &[("locale", "en_US")]);
+        assert_eq!(url, "https://api.tidal.com/v1/albums/123456?locale=en_US");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_search() {
+        let url = tidal_api_endpoint!(Search);
+        assert_eq!(url, "https://api.tidal.com/v1/search/top-hits");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_favorite_artists() {
+        let url = tidal_api_endpoint!(FavoriteArtists, &[(":userId", "999")]);
+        assert_eq!(url, "https://api.tidal.com/v1/users/999/favorites/artists");
+    }
+
+    #[test]
+    fn test_tidal_api_endpoint_remove_favorite_artist() {
+        let url = tidal_api_endpoint!(
+            RemoveFavoriteArtist,
+            &[(":userId", "999"), (":artistId", "12345")]
+        );
+        assert_eq!(
+            url,
+            "https://api.tidal.com/v1/users/999/favorites/artists/12345"
+        );
+    }
+
+    #[test]
+    fn test_album_type_from_tidal_album_type() {
+        assert_eq!(AlbumType::from(TidalAlbumType::Lp), AlbumType::Lp);
+        assert_eq!(
+            AlbumType::from(TidalAlbumType::EpsAndSingles),
+            AlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            AlbumType::from(TidalAlbumType::Compilations),
+            AlbumType::Compilations
+        );
+    }
+
+    #[test]
+    fn test_search_type_from_tidal_search_type() {
+        assert_eq!(
+            TidalSearchType::from(SearchType::Artists),
+            TidalSearchType::Artists
+        );
+        assert_eq!(
+            TidalSearchType::from(SearchType::Albums),
+            TidalSearchType::Albums
+        );
+        assert_eq!(
+            TidalSearchType::from(SearchType::Tracks),
+            TidalSearchType::Tracks
+        );
+        assert_eq!(
+            TidalSearchType::from(SearchType::Videos),
+            TidalSearchType::Videos
+        );
+        assert_eq!(
+            TidalSearchType::from(SearchType::Playlists),
+            TidalSearchType::Playlists
+        );
+        assert_eq!(
+            TidalSearchType::from(SearchType::UserProfiles),
+            TidalSearchType::UserProfiles
+        );
     }
 }
