@@ -387,63 +387,39 @@ jobs:
                   fail_ci_if_error: true
 
             - name: Format ${{ matrix.package.name }}
-              shell: bash
-              run: |
-                  (cd ${{ matrix.package.path }}; cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      cargo{{if matrix.package.nightly}} +nightly{{endif}}{{if runner.debug}} -vv{{endif}} fmt --all -- --check
+                  run-matrix-strategy: "combined"
+                  run-matrix-continue-on-failure: "true"
+                  run-matrix-label: "Format Check"
+                  run-matrix-debug-shells: "fish,bash"
 
             - name: Download cargo-machete
               uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'macos-latest' }}
               with:
-                  name: cargo-machete-macos
-                  path: ~/.cargo/bin
-
-            - name: Download cargo-machete
-              uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              with:
-                  name: cargo-machete-ubuntu
-                  path: ~/.cargo/bin
-
-            - name: Download cargo-machete
-              uses: actions/download-artifact@master
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              with:
-                  name: cargo-machete.exe
+                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
                   path: ~/.cargo/bin
 
             - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
-
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete
-
-            - name: Make cargo-machete executable
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete.exe
+              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              if: ${{ matrix.package.os == 'macos-latest' }}
-              shell: bash
-              run: |
-                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
-
-            - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              if: ${{ matrix.package.os == 'ubuntu-latest' }}
-              shell: bash
-              run: |
-                  ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
-
-            - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              if: ${{ matrix.package.os == 'windows-latest' }}
-              shell: bash
-              run: |
-                  ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
+              uses: ./.github/actions/clippier
+              with:
+                  command: run-matrix
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-commands: |
+                      ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }} --with-metadata {{matrix.package.path}}
+                  run-matrix-strategy: "combined"
+                  run-matrix-continue-on-failure: "true"
+                  run-matrix-label: "Dependency Validation (Machete)"
+                  run-matrix-debug-shells: "fish,bash"
+                  run-matrix-working-directory: "."
 
     build-docker-images:
         runs-on: ubuntu-latest
