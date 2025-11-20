@@ -8,12 +8,6 @@
     "plugins": [],
     "overrides": [
         {
-            "files": "*.astro",
-            "options": {
-                "parser": "astro"
-            }
-        },
-        {
             "files": ["*.yml", "*.yaml"],
             "options": {
                 "singleQuote": false
