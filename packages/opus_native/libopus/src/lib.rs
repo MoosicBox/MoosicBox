@@ -33,6 +33,7 @@
 //! Raw FFI functions are also exported for advanced use cases requiring direct libopus access.
 //! These functions are unsafe and require careful memory management.
 
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(
     clippy::cast_possible_truncation,
