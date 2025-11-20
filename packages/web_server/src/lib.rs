@@ -1802,9 +1802,8 @@ mod tests {
 
     #[test]
     fn test_scope_get_method() {
-        let scope = Scope::new("/api").get("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").get("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Get);
@@ -1812,9 +1811,8 @@ mod tests {
 
     #[test]
     fn test_scope_post_method() {
-        let scope = Scope::new("/api").post("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").post("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Post);
@@ -1822,9 +1820,8 @@ mod tests {
 
     #[test]
     fn test_scope_put_method() {
-        let scope = Scope::new("/api").put("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").put("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Put);
@@ -1832,9 +1829,8 @@ mod tests {
 
     #[test]
     fn test_scope_delete_method() {
-        let scope = Scope::new("/api").delete("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").delete("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Delete);
@@ -1842,9 +1838,8 @@ mod tests {
 
     #[test]
     fn test_scope_patch_method() {
-        let scope = Scope::new("/api").patch("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").patch("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Patch);
@@ -1852,9 +1847,8 @@ mod tests {
 
     #[test]
     fn test_scope_head_method() {
-        let scope = Scope::new("/api").head("/users", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let scope =
+            Scope::new("/api").head("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
 
         assert_eq!(scope.routes.len(), 1);
         assert_eq!(scope.routes[0].method, Method::Head);
@@ -1900,49 +1894,37 @@ mod tests {
 
     #[test]
     fn test_route_get() {
-        let route = Route::get("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::get("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Get);
     }
 
     #[test]
     fn test_route_post() {
-        let route = Route::post("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::post("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Post);
     }
 
     #[test]
     fn test_route_put() {
-        let route = Route::put("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::put("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Put);
     }
 
     #[test]
     fn test_route_delete() {
-        let route = Route::delete("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::delete("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Delete);
     }
 
     #[test]
     fn test_route_patch() {
-        let route = Route::patch("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::patch("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Patch);
     }
 
     #[test]
     fn test_route_head() {
-        let route = Route::head("/test", |_req| {
-            Box::pin(async { Ok(HttpResponse::ok()) })
-        });
+        let route = Route::head("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Head);
     }
 }

@@ -2895,10 +2895,7 @@ mod tests {
     #[test]
     fn test_yt_album_type_to_album_type() {
         use moosicbox_music_models::AlbumType as MusicAlbumType;
-        assert_eq!(
-            MusicAlbumType::from(YtAlbumType::Lp),
-            MusicAlbumType::Lp
-        );
+        assert_eq!(MusicAlbumType::from(YtAlbumType::Lp), MusicAlbumType::Lp);
         assert_eq!(
             MusicAlbumType::from(YtAlbumType::EpsAndSingles),
             MusicAlbumType::EpsAndSingles
