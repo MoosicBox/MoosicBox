@@ -114,6 +114,267 @@ impl MusicApisProfiles {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use moosicbox_music_api_models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
+    };
+    use moosicbox_music_models::{
+        Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track, id::Id,
+    };
+    use moosicbox_paging::{PagingResponse, PagingResult};
+
+    use crate::{Error, MusicApi, SourceToMusicApi};
+
+    use super::MusicApisProfiles;
+
+    pub struct TestMusicApi {
+        source: ApiSource,
+    }
+
+    impl TestMusicApi {
+        fn new(source: ApiSource) -> Self {
+            Self { source }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl MusicApi for TestMusicApi {
+        fn source(&self) -> &ApiSource {
+            &self.source
+        }
+
+        async fn artists(
+            &self,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<ArtistOrder>,
+            _order_direction: Option<ArtistOrderDirection>,
+        ) -> PagingResult<Artist, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, Error> {
+            Ok(None)
+        }
+
+        async fn add_artist(&self, _artist_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn remove_artist(&self, _artist_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn album(&self, _album_id: &Id) -> Result<Option<Album>, Error> {
+            Ok(None)
+        }
+
+        async fn album_versions(
+            &self,
+            _album_id: &Id,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+        ) -> PagingResult<moosicbox_menu_models::AlbumVersion, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        async fn artist_albums(
+            &self,
+            _artist_id: &Id,
+            _album_type: Option<AlbumType>,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<AlbumOrder>,
+            _order_direction: Option<AlbumOrderDirection>,
+        ) -> PagingResult<Album, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn add_album(&self, _album_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn remove_album(&self, _album_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn tracks(
+            &self,
+            _track_ids: Option<&[Id]>,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<TrackOrder>,
+            _order_direction: Option<TrackOrderDirection>,
+        ) -> PagingResult<Track, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn track(&self, _track_id: &Id) -> Result<Option<Track>, Error> {
+            Ok(None)
+        }
+
+        async fn album_tracks(
+            &self,
+            _album_id: &Id,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+            _order: Option<TrackOrder>,
+            _order_direction: Option<TrackOrderDirection>,
+        ) -> PagingResult<Track, Error> {
+            Ok(PagingResponse::empty())
+        }
+
+        async fn add_track(&self, _track_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn remove_track(&self, _track_id: &Id) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn track_source(
+            &self,
+            _track: crate::TrackOrId,
+            _quality: TrackAudioQuality,
+        ) -> Result<Option<TrackSource>, Error> {
+            Ok(None)
+        }
+
+        async fn track_size(
+            &self,
+            _track: crate::TrackOrId,
+            _source: &TrackSource,
+            _quality: PlaybackQuality,
+        ) -> Result<Option<u64>, Error> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn profiles_add_stores_profile() {
+        let profiles = MusicApisProfiles::default();
+        let source = ApiSource::register("test_profiles_add", "test");
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source.clone())));
+        let mut map = BTreeMap::new();
+        map.insert(source, api);
+        let music_apis = Arc::new(map);
+
+        profiles.add("test_profile".to_owned(), music_apis);
+
+        let retrieved = profiles.get("test_profile");
+        assert!(retrieved.is_some());
+    }
+
+    #[test]
+    fn profiles_get_returns_none_for_unknown_profile() {
+        let profiles = MusicApisProfiles::default();
+
+        let retrieved = profiles.get("unknown_profile");
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn profiles_upsert_adds_new_profile() {
+        let profiles = MusicApisProfiles::default();
+        let source = ApiSource::register("test_profiles_upsert_add", "test");
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source.clone())));
+        let mut map = BTreeMap::new();
+        map.insert(source, api);
+        let music_apis = Arc::new(map);
+
+        profiles.upsert("new_profile".to_owned(), music_apis);
+
+        let retrieved = profiles.get("new_profile");
+        assert!(retrieved.is_some());
+    }
+
+    #[test]
+    fn profiles_upsert_updates_existing_profile() {
+        let profiles = MusicApisProfiles::default();
+        let source1 = ApiSource::register("test_profiles_upsert_update_1", "test");
+        let source2 = ApiSource::register("test_profiles_upsert_update_2", "test");
+
+        let api1: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source1.clone())));
+        let mut map1 = BTreeMap::new();
+        map1.insert(source1, api1);
+        let music_apis1 = Arc::new(map1);
+
+        let api2: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source2.clone())));
+        let mut map2 = BTreeMap::new();
+        map2.insert(source2.clone(), api2);
+        let music_apis2 = Arc::new(map2);
+
+        profiles.add("update_profile".to_owned(), music_apis1);
+        profiles.upsert("update_profile".to_owned(), music_apis2);
+
+        let retrieved = profiles.get("update_profile");
+        assert!(retrieved.is_some());
+        let retrieved_apis = retrieved.unwrap();
+        assert!(retrieved_apis.get(&source2).is_some());
+    }
+
+    #[test]
+    fn profiles_remove_removes_profile() {
+        let profiles = MusicApisProfiles::default();
+        let source = ApiSource::register("test_profiles_remove", "test");
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source.clone())));
+        let mut map = BTreeMap::new();
+        map.insert(source, api);
+        let music_apis = Arc::new(map);
+
+        profiles.add("remove_profile".to_owned(), music_apis);
+        assert!(profiles.get("remove_profile").is_some());
+
+        profiles.remove("remove_profile");
+        assert!(profiles.get("remove_profile").is_none());
+    }
+
+    #[test]
+    fn profiles_add_fetch_returns_added_profile() {
+        let profiles = MusicApisProfiles::default();
+        let source = ApiSource::register("test_profiles_add_fetch", "test");
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source.clone())));
+        let mut map = BTreeMap::new();
+        map.insert(source.clone(), api);
+        let music_apis = Arc::new(map);
+
+        let retrieved = profiles.add_fetch("add_fetch_profile", music_apis);
+
+        assert!(retrieved.get(&source).is_some());
+    }
+
+    #[test]
+    fn profiles_names_returns_all_profile_names() {
+        let profiles = MusicApisProfiles::default();
+        let source1 = ApiSource::register("test_profiles_names_1", "test");
+        let source2 = ApiSource::register("test_profiles_names_2", "test");
+
+        let api1: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source1.clone())));
+        let mut map1 = BTreeMap::new();
+        map1.insert(source1, api1);
+
+        let api2: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi::new(source2.clone())));
+        let mut map2 = BTreeMap::new();
+        map2.insert(source2, api2);
+
+        profiles.add("profile1".to_owned(), Arc::new(map1));
+        profiles.add("profile2".to_owned(), Arc::new(map2));
+
+        let names = profiles.names();
+        assert!(names.contains(&"profile1".to_owned()));
+        assert!(names.contains(&"profile2".to_owned()));
+    }
+}
+
 /// Actix-web integration for extracting `MusicApis` from HTTP requests.
 #[cfg(feature = "api")]
 pub mod api {

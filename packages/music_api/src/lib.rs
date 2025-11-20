@@ -1558,4 +1558,244 @@ mod test {
         let track = api.track(&track.id).await.unwrap();
         assert_eq!(track, None);
     }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_can_add_source_and_retrieve_it() {
+        let mut apis = MusicApis::new();
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+
+        apis.add_source(api.clone());
+
+        let retrieved = apis.get(&API_SOURCE);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().source(), &*API_SOURCE);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_returns_none_for_unknown_source() {
+        let apis = MusicApis::new();
+        let unknown_source = ApiSource::register("unknown", "unknown");
+
+        let retrieved = apis.get(&unknown_source);
+        assert!(retrieved.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_iter_returns_all_apis() {
+        let mut apis = MusicApis::new();
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+
+        apis.add_source(api);
+
+        let count = apis.iter().count();
+        assert_eq!(count, 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn music_apis_into_iter_returns_all_apis() {
+        let mut apis = MusicApis::new();
+        let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(TestMusicApi {}));
+
+        apis.add_source(api);
+
+        let count = (&apis).into_iter().count();
+        assert_eq!(count, 1);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn track_or_id_from_id_preserves_id() {
+        let id: Id = 42.into();
+        let track_or_id = TrackOrId::from(&id);
+
+        assert_eq!(track_or_id.id(), &id);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn track_or_id_from_track_preserves_id() {
+        let track = Track {
+            id: 42.into(),
+            title: "test".into(),
+            ..Default::default()
+        };
+        let track_or_id = TrackOrId::from(&track);
+
+        assert_eq!(track_or_id.id(), &track.id);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn track_or_id_track_method_returns_none_when_api_returns_none() {
+        let api = TestMusicApi {};
+        let id: Id = 42.into();
+        let track_or_id = TrackOrId::from(id);
+
+        let result = track_or_id.track(&api).await.unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn track_or_id_track_method_returns_track_when_already_track() {
+        let api = TestMusicApi {};
+        let track = Track {
+            id: 42.into(),
+            title: "test".into(),
+            ..Default::default()
+        };
+        let expected = track.clone();
+        let track_or_id = TrackOrId::from(track);
+
+        let result = track_or_id.track(&api).await.unwrap();
+        assert_eq!(result, Some(expected));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_clear_cache_clears_all_caches() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+
+        let artist = Artist {
+            id: 1.into(),
+            title: "artist".into(),
+            ..Default::default()
+        };
+        let album = Album {
+            id: 2.into(),
+            title: "album".into(),
+            ..Default::default()
+        };
+        let track = Track {
+            id: 3.into(),
+            title: "track".into(),
+            ..Default::default()
+        };
+
+        api.cache_artists(slice::from_ref(&artist)).await;
+        api.cache_albums(slice::from_ref(&album)).await;
+        api.cache_tracks(slice::from_ref(&track)).await;
+
+        api.clear_cache().await;
+
+        // After clearing, cache should be empty and API should be called
+        let cached_artist = api.get_artist_from_cache(&artist.id).await;
+        let cached_album = api.get_album_from_cache(&album.id).await;
+        let cached_track = api.get_track_from_cache(&track.id).await;
+
+        assert!(cached_artist.is_none());
+        assert!(cached_album.is_none());
+        assert!(cached_track.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_set_cascade_delete_updates_setting() {
+        let mut api = CachedMusicApi::new(TestMusicApi {});
+        assert!(!api.cascade_delete);
+
+        api.set_cascade_delete(true);
+        assert!(api.cascade_delete);
+
+        api.set_cascade_delete(false);
+        assert!(!api.cascade_delete);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_cache_empty_artists_stores_none() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let id: Id = 1.into();
+
+        api.cache_empty_artists(&[&id]).await;
+
+        let cached = api.get_artist_from_cache(&id).await;
+        assert_eq!(cached, Some(None));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_cache_empty_albums_stores_none() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let id: Id = 1.into();
+
+        api.cache_empty_albums(&[&id]).await;
+
+        let cached = api.get_album_from_cache(&id).await;
+        assert_eq!(cached, Some(None));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_cache_empty_tracks_stores_none() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let id: Id = 1.into();
+
+        api.cache_empty_tracks(&[&id]).await;
+
+        let cached = api.get_track_from_cache(&id).await;
+        assert_eq!(cached, Some(None));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_artists_removes_from_cache() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let artist = Artist {
+            id: 1.into(),
+            title: "artist".into(),
+            ..Default::default()
+        };
+
+        api.cache_artists(slice::from_ref(&artist)).await;
+        assert!(api.get_artist_from_cache(&artist.id).await.is_some());
+
+        api.remove_cache_artists(slice::from_ref(&artist)).await;
+        assert!(api.get_artist_from_cache(&artist.id).await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_albums_removes_from_cache() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let album = Album {
+            id: 1.into(),
+            title: "album".into(),
+            ..Default::default()
+        };
+
+        api.cache_albums(slice::from_ref(&album)).await;
+        assert!(api.get_album_from_cache(&album.id).await.is_some());
+
+        api.remove_cache_albums(slice::from_ref(&album)).await;
+        assert!(api.get_album_from_cache(&album.id).await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn cached_music_api_remove_cache_tracks_removes_from_cache() {
+        let api = CachedMusicApi::new(TestMusicApi {});
+        let track = Track {
+            id: 1.into(),
+            title: "track".into(),
+            ..Default::default()
+        };
+
+        api.cache_tracks(slice::from_ref(&track)).await;
+        assert!(api.get_track_from_cache(&track.id).await.is_some());
+
+        api.remove_cache_tracks(slice::from_ref(&track)).await;
+        assert!(api.get_track_from_cache(&track.id).await.is_none());
+    }
+
+    #[test]
+    fn error_display_shows_correct_message_for_not_found() {
+        let source = ApiSource::register("test", "test");
+        let error = Error::MusicApiNotFound(source.clone());
+        let message = format!("{error}");
+        assert!(message.contains("Music API for source not found"));
+        assert!(message.contains(&source.to_string()));
+    }
+
+    #[test]
+    fn error_display_shows_correct_message_for_unsupported_action() {
+        let error = Error::UnsupportedAction("test_action");
+        let message = format!("{error}");
+        assert_eq!(message, "Unsupported Action: test_action");
+    }
+
+    #[test]
+    fn error_display_shows_correct_message_for_unauthorized() {
+        let error = Error::Unauthorized;
+        let message = format!("{error}");
+        assert_eq!(message, "Unauthorized");
+    }
 }
