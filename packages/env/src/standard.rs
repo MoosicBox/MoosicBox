@@ -123,3 +123,255 @@ pub fn var_exists(name: &str) -> bool {
 pub fn vars() -> BTreeMap<String, String> {
     PROVIDER.vars()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::EnvProvider;
+
+    #[test]
+    fn test_standard_env_new() {
+        let _env = StandardEnv::new();
+        // Just verify we can create it without panicking
+    }
+
+    #[test]
+    fn test_standard_env_default_trait() {
+        let env1 = StandardEnv;
+        let env2 = StandardEnv::new();
+
+        // Both should access the same system environment
+        assert_eq!(env1.vars().len(), env2.vars().len());
+    }
+
+    #[test]
+    fn test_standard_env_var_not_found() {
+        let env = StandardEnv::new();
+        let result = env.var("VERY_UNLIKELY_TO_EXIST_VAR_123456789");
+        assert!(matches!(result, Err(EnvError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_standard_env_var_exists_with_set_var() {
+        // Set a test variable in the actual environment
+        unsafe {
+            std::env::set_var("STANDARD_ENV_TEST_VAR", "test_value");
+        }
+
+        let env = StandardEnv::new();
+        assert_eq!(env.var("STANDARD_ENV_TEST_VAR").unwrap(), "test_value");
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_TEST_VAR");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_or_with_existing() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_TEST_VAR_OR", "actual");
+        }
+
+        let env = StandardEnv::new();
+        assert_eq!(env.var_or("STANDARD_ENV_TEST_VAR_OR", "default"), "actual");
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_TEST_VAR_OR");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_or_with_missing() {
+        let env = StandardEnv::new();
+        assert_eq!(
+            env.var_or("DEFINITELY_MISSING_VAR_123456", "default_value"),
+            "default_value"
+        );
+    }
+
+    #[test]
+    fn test_standard_env_var_parse() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_NUMBER", "42");
+        }
+
+        let env = StandardEnv::new();
+        let result: i32 = env.var_parse("STANDARD_ENV_NUMBER").unwrap();
+        assert_eq!(result, 42);
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_NUMBER");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_error() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_NOT_A_NUMBER", "not_a_number");
+        }
+
+        let env = StandardEnv::new();
+        let result: Result<i32> = env.var_parse("STANDARD_ENV_NOT_A_NUMBER");
+        assert!(matches!(result, Err(EnvError::ParseError(_, _))));
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_NOT_A_NUMBER");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_or() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_PARSE_OR", "100");
+        }
+
+        let env = StandardEnv::new();
+        let result: i32 = env.var_parse_or("STANDARD_ENV_PARSE_OR", 42);
+        assert_eq!(result, 100);
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_PARSE_OR");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_or_missing() {
+        let env = StandardEnv::new();
+        let result: i32 = env.var_parse_or("MISSING_VAR_999", 42);
+        assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_opt_some() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_OPT", "123");
+        }
+
+        let env = StandardEnv::new();
+        let result: Option<i32> = env.var_parse_opt("STANDARD_ENV_OPT").unwrap();
+        assert_eq!(result, Some(123));
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_OPT");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_opt_none() {
+        let env = StandardEnv::new();
+        let result: Option<i32> = env.var_parse_opt("MISSING_VAR_888").unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_standard_env_var_parse_opt_error() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_OPT_ERROR", "not_a_number");
+        }
+
+        let env = StandardEnv::new();
+        let result: Result<Option<i32>> = env.var_parse_opt("STANDARD_ENV_OPT_ERROR");
+        assert!(matches!(result, Err(EnvError::ParseError(_, _))));
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_OPT_ERROR");
+        }
+    }
+
+    #[test]
+    fn test_standard_env_var_exists() {
+        unsafe {
+            std::env::set_var("STANDARD_ENV_EXISTS", "yes");
+        }
+
+        let env = StandardEnv::new();
+        assert!(env.var_exists("STANDARD_ENV_EXISTS"));
+
+        unsafe {
+            std::env::remove_var("STANDARD_ENV_EXISTS");
+        }
+        assert!(!env.var_exists("STANDARD_ENV_EXISTS"));
+    }
+
+    #[test]
+    fn test_standard_env_vars() {
+        let env = StandardEnv::new();
+        let vars = env.vars();
+
+        // System environment should have at least some variables
+        assert!(!vars.is_empty());
+    }
+
+    #[test]
+    fn test_global_var() {
+        unsafe {
+            std::env::set_var("GLOBAL_STANDARD_TEST", "global_value");
+        }
+
+        assert_eq!(var("GLOBAL_STANDARD_TEST").unwrap(), "global_value");
+
+        unsafe {
+            std::env::remove_var("GLOBAL_STANDARD_TEST");
+        }
+    }
+
+    #[test]
+    fn test_global_var_or() {
+        assert_eq!(var_or("MISSING_STANDARD_GLOBAL", "fallback"), "fallback");
+    }
+
+    #[test]
+    fn test_global_var_parse() {
+        unsafe {
+            std::env::set_var("GLOBAL_STANDARD_NUMBER", "777");
+        }
+
+        let result: i32 = var_parse("GLOBAL_STANDARD_NUMBER").unwrap();
+        assert_eq!(result, 777);
+
+        unsafe {
+            std::env::remove_var("GLOBAL_STANDARD_NUMBER");
+        }
+    }
+
+    #[test]
+    fn test_global_var_parse_or() {
+        let result: i32 = var_parse_or("MISSING_STANDARD_NUMBER", 999);
+        assert_eq!(result, 999);
+    }
+
+    #[test]
+    fn test_global_var_parse_opt() {
+        unsafe {
+            std::env::set_var("OPTIONAL_STANDARD_NUMBER", "555");
+        }
+
+        let result: Option<i32> = var_parse_opt("OPTIONAL_STANDARD_NUMBER").unwrap();
+        assert_eq!(result, Some(555));
+
+        unsafe {
+            std::env::remove_var("OPTIONAL_STANDARD_NUMBER");
+        }
+    }
+
+    #[test]
+    fn test_global_var_exists() {
+        unsafe {
+            std::env::set_var("EXISTS_STANDARD_GLOBAL", "yes");
+        }
+
+        assert!(var_exists("EXISTS_STANDARD_GLOBAL"));
+
+        unsafe {
+            std::env::remove_var("EXISTS_STANDARD_GLOBAL");
+        }
+        assert!(!var_exists("EXISTS_STANDARD_GLOBAL"));
+    }
+
+    #[test]
+    fn test_global_vars() {
+        let all_vars = vars();
+        assert!(!all_vars.is_empty());
+    }
+}
