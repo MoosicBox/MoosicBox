@@ -125,6 +125,79 @@ pub fn get_resource_attr(name: &'static str) -> Resource {
         .build()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_resource_attr_creates_resource_with_service_name() {
+        let service_name = "test-service";
+        let resource = get_resource_attr(service_name);
+
+        // Verify the resource contains the service.name attribute
+        let attrs: std::collections::BTreeMap<_, _> = resource
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        assert_eq!(
+            attrs.get("service.name"),
+            Some(&service_name.to_string()),
+            "Resource should contain service.name attribute with correct value"
+        );
+    }
+
+    #[test]
+    fn test_get_resource_attr_with_different_names() {
+        let names = ["service-a", "service-b", "my-telemetry-service"];
+
+        for name in names {
+            let resource = get_resource_attr(name);
+            let attrs: std::collections::BTreeMap<_, _> = resource
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+
+            assert_eq!(
+                attrs.get("service.name"),
+                Some(&name.to_string()),
+                "Resource for '{name}' should contain correct service.name"
+            );
+        }
+    }
+
+    #[cfg(feature = "actix")]
+    #[test]
+    fn test_get_http_metrics_handler_returns_valid_handler() {
+        let handler = get_http_metrics_handler();
+
+        // Verify we get a valid handler that implements the trait
+        // The handler should be Debug-able
+        assert!(
+            format!("{handler:?}").contains("Handler"),
+            "Handler should be a valid HttpMetricsHandler implementation"
+        );
+    }
+
+    #[cfg(all(feature = "actix", not(feature = "simulator")))]
+    #[test]
+    fn test_stub_handler_request_middleware() {
+        let handler = StubHttpMetricsHandler;
+        let _middleware = handler.request_middleware();
+        // If we can create the middleware without panicking, the test passes
+    }
+
+    #[cfg(feature = "simulator")]
+    #[test]
+    fn test_init_tracer_simulator_returns_ok() {
+        let result = init_tracer("test-service");
+        assert!(
+            result.is_ok(),
+            "init_tracer should succeed in simulator mode"
+        );
+    }
+}
+
 /// HTTP metrics handler for Actix web applications.
 ///
 /// Implementations of this trait provide metrics collection and reporting functionality

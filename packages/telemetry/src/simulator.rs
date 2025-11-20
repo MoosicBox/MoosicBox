@@ -46,3 +46,40 @@ impl crate::HttpMetricsHandler for SimulatorHttpMetricsHandler {
         RequestMetrics::builder().build()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    #[test]
+    fn test_simulator_layer_implements_layer_trait() {
+        // Create a basic subscriber with the simulator layer
+        let layer = SimulatorLayer;
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        // If we can create a subscriber with the layer, it implements the trait correctly
+        drop(subscriber);
+    }
+
+    #[cfg(feature = "actix")]
+    #[test]
+    fn test_simulator_http_metrics_handler_request_middleware() {
+        use crate::HttpMetricsHandler;
+
+        let handler = SimulatorHttpMetricsHandler;
+        let _middleware = handler.request_middleware();
+        // If we can create the middleware without panicking, the test passes
+    }
+
+    #[cfg(feature = "actix")]
+    #[test]
+    fn test_simulator_http_metrics_handler_debug() {
+        let handler = SimulatorHttpMetricsHandler;
+        let debug_output = format!("{handler:?}");
+        assert!(
+            debug_output.contains("SimulatorHttpMetricsHandler"),
+            "Debug output should contain the handler name"
+        );
+    }
+}
