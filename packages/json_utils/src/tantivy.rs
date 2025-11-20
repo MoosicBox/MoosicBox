@@ -59,6 +59,11 @@ where
 // All return `ParseError::ConvertType` if the value is not a compatible type.
 
 impl ToValueType<String> for &OwnedValue {
+    /// Converts a tantivy value to a String.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a string
     fn to_value_type(self) -> Result<String, ParseError> {
         Ok(self
             .as_str()
@@ -68,6 +73,11 @@ impl ToValueType<String> for &OwnedValue {
 }
 
 impl ToValueType<bool> for &OwnedValue {
+    /// Converts a tantivy value to a boolean.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a boolean
     fn to_value_type(self) -> Result<bool, ParseError> {
         self.as_bool()
             .ok_or_else(|| ParseError::ConvertType("bool".into()))
@@ -75,6 +85,11 @@ impl ToValueType<bool> for &OwnedValue {
 }
 
 impl ToValueType<f32> for &OwnedValue {
+    /// Converts a tantivy value to an f32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a number
     fn to_value_type(self) -> Result<f32, ParseError> {
         Ok(self
             .as_f64()
@@ -83,6 +98,11 @@ impl ToValueType<f32> for &OwnedValue {
 }
 
 impl ToValueType<f64> for &OwnedValue {
+    /// Converts a tantivy value to an f64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not a number
     fn to_value_type(self) -> Result<f64, ParseError> {
         self.as_f64()
             .ok_or_else(|| ParseError::ConvertType("f64".into()))
@@ -90,6 +110,11 @@ impl ToValueType<f64> for &OwnedValue {
 }
 
 impl ToValueType<u8> for &OwnedValue {
+    /// Converts a tantivy value to a u8.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u8, ParseError> {
         Ok(self
             .as_u64()
@@ -98,6 +123,11 @@ impl ToValueType<u8> for &OwnedValue {
 }
 
 impl ToValueType<u16> for &OwnedValue {
+    /// Converts a tantivy value to a u16.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u16, ParseError> {
         Ok(self
             .as_u64()
@@ -106,6 +136,11 @@ impl ToValueType<u16> for &OwnedValue {
 }
 
 impl ToValueType<u32> for &OwnedValue {
+    /// Converts a tantivy value to a u32.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u32, ParseError> {
         Ok(self
             .as_u64()
@@ -114,6 +149,11 @@ impl ToValueType<u32> for &OwnedValue {
 }
 
 impl ToValueType<u64> for &OwnedValue {
+    /// Converts a tantivy value to a u64.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ParseError::ConvertType`] if the value is not an unsigned integer
     fn to_value_type(self) -> Result<u64, ParseError> {
         self.as_u64()
             .ok_or_else(|| ParseError::ConvertType("u64".into()))
