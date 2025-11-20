@@ -9285,10 +9285,13 @@ dependencies = [
  "moosicbox_audio_zone_models",
  "moosicbox_json_utils",
  "moosicbox_music_models",
+ "pretty_assertions",
  "serde",
+ "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_database",
+ "test-log",
  "utoipa",
 ]
 
