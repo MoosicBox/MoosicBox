@@ -13,7 +13,10 @@ use std::{
 
 use switchy_env::var;
 
-/// Available npm package manager commands.
+/// Available npm package manager commands in priority order.
+///
+/// The package managers are listed in order of preference: pnpm, bun, npm.
+/// Actual availability is determined by enabled feature flags.
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
 /// List of enabled npm package managers based on feature flags.
