@@ -409,3 +409,29 @@ pub async fn update_session_audio_output_ids(
         PlaybackTarget::ConnectionOutput { output_id, .. } => vec![output_id.to_owned()],
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_players_error_display() {
+        let err = CreatePlayersError::InvalidConnection;
+        assert_eq!(err.to_string(), "Invalid connection");
+    }
+
+    #[test]
+    fn test_create_players_error_db_variant() {
+        let db_err = DatabaseFetchError::InvalidRequest;
+        let err = CreatePlayersError::Db(db_err);
+        // Just verify it's the Db variant and displays something
+        assert!(matches!(err, CreatePlayersError::Db(_)));
+    }
+
+    #[test]
+    fn test_create_players_error_from_database_error() {
+        let db_err = DatabaseFetchError::InvalidRequest;
+        let err: CreatePlayersError = db_err.into();
+        assert!(matches!(err, CreatePlayersError::Db(_)));
+    }
+}

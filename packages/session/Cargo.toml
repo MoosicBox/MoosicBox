@@ -37,6 +37,10 @@ serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+test-log      = { workspace = true }
+
 [features]
 default = ["all-formats", "api", "events", "openapi"]
 
