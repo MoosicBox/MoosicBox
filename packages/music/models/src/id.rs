@@ -504,6 +504,11 @@ mod db {
     }
 
     impl AsModelResult<NumberId, ParseError> for &switchy_database::Row {
+        /// Converts a database row to a `NumberId`.
+        ///
+        /// # Errors
+        ///
+        /// * If the "id" field is missing or cannot be converted to `i32`
         fn as_model(&self) -> Result<NumberId, ParseError> {
             Ok(NumberId {
                 id: self.to_value("id")?,
@@ -535,6 +540,11 @@ mod db {
     }
 
     impl AsModelResult<StringId, ParseError> for &switchy_database::Row {
+        /// Converts a database row to a `StringId`.
+        ///
+        /// # Errors
+        ///
+        /// * If the "id" field is missing or cannot be converted to `String`
         fn as_model(&self) -> Result<StringId, ParseError> {
             Ok(StringId {
                 id: self.to_value("id")?,
@@ -568,6 +578,11 @@ mod db {
 
     impl moosicbox_json_utils::MissingValue<Id> for &switchy_database::Row {}
     impl ToValueType<Id> for switchy_database::DatabaseValue {
+        /// Converts a database value to an `Id`.
+        ///
+        /// # Errors
+        ///
+        /// * If the value cannot be converted to a string or numeric ID
         fn to_value_type(self) -> Result<Id, ParseError> {
             match self {
                 Self::String(x) | Self::StringOpt(Some(x)) => Ok(Id::String(x)),
