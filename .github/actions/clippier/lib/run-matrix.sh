@@ -391,9 +391,13 @@ run_matrix_command() {
 
     # Generate feature combinations based on strategy
     # Use while-read loop for bash 3.2 compatibility (macOS)
+    # Manually strip trailing whitespace (newlines and carriage returns)
     FEATURE_COMBINATIONS=()
-    while IFS= read -r combo; do
-        FEATURE_COMBINATIONS+=("$combo")
+    while IFS= read -r combo || [[ -n "$combo" ]]; do
+        # Strip trailing and leading whitespace
+        combo="${combo#"${combo%%[![:space:]]*}"}"  # Strip leading
+        combo="${combo%"${combo##*[![:space:]]}"}"  # Strip trailing
+        [[ -n "$combo" ]] && FEATURE_COMBINATIONS+=("$combo")
     done < <(generate_feature_combinations "$features" "$strategy")
 
     if [[ $? -ne 0 ]]; then
