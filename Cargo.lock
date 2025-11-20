@@ -8402,6 +8402,7 @@ dependencies = [
  "switchy_env",
  "switchy_http",
  "switchy_uuid",
+ "test-log",
  "thiserror 2.0.17",
  "url 2.5.7",
  "utoipa",
