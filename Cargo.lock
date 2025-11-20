@@ -1768,9 +1768,6 @@ name = "basic_handler_example"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
- "switchy_async",
- "test-log",
- "tokio",
 ]
 
 [[package]]
@@ -1778,9 +1775,6 @@ name = "basic_handler_standalone_example"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
- "switchy_async",
- "test-log",
- "tokio",
 ]
 
 [[package]]
@@ -1800,11 +1794,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "env_logger 0.11.8",
- "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
- "test-log",
  "tokio",
 ]
 
@@ -5878,8 +5870,6 @@ dependencies = [
  "hyperchad",
  "log 0.4.28",
  "switchy",
- "switchy_async",
- "test-log",
 ]
 
 [[package]]
@@ -6259,7 +6249,6 @@ name = "hyperchad_test_utils"
 version = "0.1.0"
 dependencies = [
  "moosicbox_assert",
- "pretty_assertions",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -8067,7 +8056,6 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_logging",
- "pretty_assertions",
  "serde",
  "serde_json",
  "switchy_fs",
@@ -8080,7 +8068,6 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_music_api_api",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -8133,9 +8120,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "tauri",
- "test-log",
  "thiserror 2.0.17",
- "tokio",
 ]
 
 [[package]]
@@ -8162,7 +8147,6 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_session_models",
- "pretty_assertions",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
@@ -8369,7 +8353,6 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_json_utils",
  "serde",
- "serde_json",
  "switchy_database",
  "utoipa",
 ]
@@ -8765,7 +8748,6 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_music_models",
  "serde",
- "test-log",
  "utoipa",
 ]
 
@@ -8916,7 +8898,6 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_opus_native_libopus",
  "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -9289,13 +9270,10 @@ dependencies = [
  "moosicbox_audio_zone_models",
  "moosicbox_json_utils",
  "moosicbox_music_models",
- "pretty_assertions",
  "serde",
- "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_database",
- "test-log",
  "utoipa",
 ]
 
@@ -12091,7 +12069,6 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
  "serde",
- "test-log",
 ]
 
 [[package]]
@@ -17197,9 +17174,7 @@ dependencies = [
 name = "turso_transactions_example"
 version = "0.1.0"
 dependencies = [
- "switchy_async",
  "switchy_database",
- "test-log",
  "tokio",
 ]
 
@@ -17997,9 +17972,6 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.11.8",
  "moosicbox_web_server",
- "switchy_async",
- "switchy_http_models",
- "test-log",
  "tokio",
 ]
 
@@ -18010,7 +17982,6 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_logging",
  "moosicbox_web_server",
- "pretty_assertions",
  "tokio",
 ]
 
@@ -18021,9 +17992,6 @@ dependencies = [
  "env_logger 0.11.8",
  "moosicbox_web_server",
  "switchy",
- "switchy_async",
- "test-log",
- "tokio",
 ]
 
 [[package]]

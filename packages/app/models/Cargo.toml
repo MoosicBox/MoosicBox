@@ -20,9 +20,6 @@ serde = { workspace = true }
 
 moosicbox_music_api_api = { workspace = true, optional = true }
 
-[dev-dependencies]
-serde_json = { workspace = true }
-
 [features]
 default = ["auth-poll", "auth-username-password", "music-api-api"]
 

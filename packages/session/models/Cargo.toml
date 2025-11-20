@@ -56,8 +56,3 @@ aac  = ["moosicbox_music_models/aac"]
 flac = ["moosicbox_music_models/flac"]
 mp3  = ["moosicbox_music_models/mp3"]
 opus = ["moosicbox_music_models/opus"]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }
-serde_json        = { workspace = true }
-test-log          = { workspace = true }

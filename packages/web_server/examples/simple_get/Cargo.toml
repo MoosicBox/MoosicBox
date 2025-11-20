@@ -11,24 +11,8 @@ version     = "0.1.0"
 [package.metadata]
 tests = false
 
-[package.metadata.cargo-machete]
-ignored = ["tokio"]
-
-[features]
-default = ["simulator"]
-
-fail-on-warnings = [
-    "moosicbox_web_server/fail-on-warnings",
-    "switchy/fail-on-warnings",
-]
-simulator = ["moosicbox_web_server/simulator"]
-
 [dependencies]
-moosicbox_web_server = { workspace = true, features = [
-    "actix",
-    "cors",
-    "simulator",
-] }
+moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
 env_logger = { workspace = true }
 switchy = { workspace = true, features = [
@@ -38,7 +22,10 @@ switchy = { workspace = true, features = [
     "async-tokio",
 ] }
 
-[dev-dependencies]
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
-test-log      = { workspace = true }
-tokio         = { workspace = true, features = ["macros", "rt"] }
+[features]
+default = []
+
+fail-on-warnings = [
+    "moosicbox_web_server/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]

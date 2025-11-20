@@ -88,13 +88,3 @@ tidal = [
     "moosicbox_server/tidal",
 ]
 yt = ["format-flac", "moosicbox_server/yt"]
-
-[dev-dependencies]
-switchy_async = { workspace = true, features = [
-    "macros",
-    "sync",
-    "time",
-    "tokio",
-] }
-test-log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }

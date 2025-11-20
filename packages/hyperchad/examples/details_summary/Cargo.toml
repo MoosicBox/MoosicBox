@@ -44,10 +44,6 @@ switchy = { workspace = true, features = [
 env_logger = { workspace = true }
 log        = { workspace = true }
 
-[dev-dependencies]
-switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
-test-log      = { workspace = true }
-
 [features]
 actix = ["hyperchad/renderer-html-actix"]
 assets = ["hyperchad/renderer-assets"]

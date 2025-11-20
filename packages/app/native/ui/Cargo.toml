@@ -99,6 +99,3 @@ opus = [
     "moosicbox_music_models/opus",
     "moosicbox_session_models/opus",
 ]
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }

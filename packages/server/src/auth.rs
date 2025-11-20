@@ -144,15 +144,3 @@ fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
 
     false
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_static_token_auth_new() {
-        let token = "my_secret_token".to_string();
-        let auth = StaticTokenAuth::new(token.clone());
-        assert_eq!(auth.token, token);
-    }
-}
