@@ -881,4 +881,425 @@ mod test {
         log::debug!("Finished block_on. waiting for Runtime to finish");
         runtime.wait().unwrap();
     }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_connect_fails_for_nonexistent_hostname() {
+        reset_dns();
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            // Try to connect to a hostname that doesn't exist in DNS
+            let result = TcpStream::connect("nonexistent.server:9999".to_string()).await;
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert_eq!(err.kind(), io::ErrorKind::HostUnreachable);
+            }
+        });
+
+        log::debug!("Finished block_on. waiting for Runtime to finish");
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_connect_fails_for_nonexistent_listener_on_registered_host() {
+        reset_dns();
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            // Register a hostname but don't create a listener
+            let _result = parse_addr("registered.host:8080".to_string(), true).unwrap();
+
+            // Try to connect to a different port on the registered host
+            let result = TcpStream::connect("registered.host:9999".to_string()).await;
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert_eq!(err.kind(), io::ErrorKind::ConnectionRefused);
+            }
+        });
+
+        log::debug!("Finished block_on. waiting for Runtime to finish");
+        runtime.wait().unwrap();
+    }
+
+    #[switchy_async::test]
+    #[test_log::test]
+    #[serial]
+    async fn tcp_stream_into_split_returns_read_write_halves() {
+        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+        let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+        task::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (_read, _write) = stream.into_split();
+            // Successfully split the stream
+        });
+
+        let stream = TcpStream::connect(server_addr.to_string()).await.unwrap();
+        let (_read_half, _write_half) = stream.into_split();
+        // Verify we can split into read and write halves
+    }
+
+    #[switchy_async::test]
+    #[test_log::test]
+    #[serial]
+    async fn tcp_stream_local_addr_returns_correct_address() {
+        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+        let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+        task::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            assert_eq!(stream.local_addr().unwrap(), server_addr);
+        });
+
+        let stream = TcpStream::connect(server_addr.to_string()).await.unwrap();
+        let local_addr = stream.local_addr().unwrap();
+        assert_eq!(local_addr.ip(), Ipv4Addr::LOCALHOST);
+        assert!(local_addr.port() >= ephemeral_port_start());
+    }
+
+    #[switchy_async::test]
+    #[test_log::test]
+    #[serial]
+    async fn tcp_stream_peer_addr_returns_correct_address() {
+        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+        let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+        task::spawn(async move {
+            let (stream, client_addr) = listener.accept().await.unwrap();
+            assert_eq!(stream.peer_addr().unwrap(), client_addr);
+        });
+
+        let stream = TcpStream::connect(server_addr.to_string()).await.unwrap();
+        assert_eq!(stream.peer_addr().unwrap(), server_addr);
+    }
+
+    #[test]
+    #[serial]
+    fn reset_next_port_resets_to_ephemeral_start() {
+        // Allocate some ports
+        let _p1 = next_port();
+        let _p2 = next_port();
+        let p3 = next_port();
+
+        // Reset
+        reset_next_port();
+
+        // Next port should be back at the start
+        let p4 = next_port();
+        assert_eq!(p4, ephemeral_port_start());
+        assert_ne!(p3, p4);
+    }
+
+    #[test]
+    #[serial]
+    fn next_ip_increments_correctly() {
+        reset_next_ip();
+        let start = ip_start();
+        let first = next_ip();
+        assert_eq!(first, start);
+
+        let second = next_ip();
+        assert_ne!(second, first);
+
+        let expected_second = Ipv4Addr::new(
+            start.octets()[0],
+            start.octets()[1],
+            start.octets()[2],
+            start.octets()[3] + 1,
+        );
+        assert_eq!(second, expected_second);
+    }
+
+    #[test]
+    #[serial]
+    fn next_ip_wraps_fourth_octet_to_third() {
+        reset_next_ip();
+
+        // Manually set IP to near overflow of 4th octet
+        NEXT_IP.with_borrow_mut(|x| {
+            *x = Ipv4Addr::new(192, 168, 1, 255);
+        });
+
+        let current = next_ip();
+        assert_eq!(current, Ipv4Addr::new(192, 168, 1, 255));
+
+        let next = next_ip();
+        assert_eq!(next, Ipv4Addr::new(192, 168, 2, 1));
+    }
+
+    #[test]
+    #[serial]
+    fn reset_next_ip_returns_to_start() {
+        reset_next_ip();
+        let start = ip_start();
+
+        let _ip1 = next_ip();
+        let _ip2 = next_ip();
+
+        reset_next_ip();
+        let ip3 = next_ip();
+        assert_eq!(ip3, start);
+    }
+
+    #[test]
+    #[serial]
+    fn reset_dns_clears_all_entries() {
+        reset_dns();
+
+        // Add some DNS entries by binding
+        DNS.with_borrow_mut(|dns| {
+            dns.insert("test1.local".to_string(), Ipv4Addr::new(10, 0, 0, 1));
+            dns.insert("test2.local".to_string(), Ipv4Addr::new(10, 0, 0, 2));
+        });
+
+        DNS.with_borrow(|dns| {
+            assert_eq!(dns.len(), 2);
+        });
+
+        reset_dns();
+
+        DNS.with_borrow(|dns| {
+            assert!(dns.is_empty());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn reset_clears_all_simulator_state() {
+        // Set up some state
+        let _p1 = next_port();
+        let _p2 = next_port();
+        let _ip1 = next_ip();
+        DNS.with_borrow_mut(|dns| {
+            dns.insert("test.local".to_string(), Ipv4Addr::new(10, 0, 0, 1));
+        });
+
+        // Reset everything
+        reset();
+
+        // Verify state is reset
+        let port = next_port();
+        assert_eq!(port, ephemeral_port_start());
+
+        let ip = next_ip();
+        assert_eq!(ip, ip_start());
+
+        DNS.with_borrow(|dns| {
+            assert!(dns.is_empty());
+        });
+    }
+
+    #[test]
+    fn current_host_returns_none_when_not_set() {
+        assert_eq!(current_host(), None);
+    }
+
+    #[test]
+    fn with_host_sets_host_in_scope() {
+        let test_addr = "test.example.com:8080".to_string();
+        with_host(test_addr.clone(), |addr| {
+            assert_eq!(addr, test_addr);
+            assert_eq!(current_host(), Some(test_addr.clone()));
+        });
+
+        // Host should be unset outside the scope
+        assert_eq!(current_host(), None);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_hostname_creates_dns_entry() {
+        reset_dns();
+
+        let result = parse_addr("myhost:8080".to_string(), true);
+        assert!(result.is_ok());
+
+        let (sock_addr, host_name) = result.unwrap();
+        assert_eq!(sock_addr.port(), 8080);
+        assert_eq!(host_name, Some("myhost".to_string()));
+
+        // Verify DNS entry was created
+        DNS.with_borrow(|dns| {
+            assert!(dns.contains_key("myhost"));
+        });
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_fails_on_duplicate_hostname_bind() {
+        reset_dns();
+
+        // First bind should succeed
+        let result1 = parse_addr("duplicate.host:8080".to_string(), true);
+        assert!(result1.is_ok());
+
+        // Second bind to same hostname should fail with AddrInUse
+        let result2 = parse_addr("duplicate.host:9090".to_string(), true);
+        assert!(result2.is_err());
+        let err = result2.unwrap_err();
+        match err {
+            Error::IO(io_err) => {
+                assert_eq!(io_err.kind(), io::ErrorKind::AddrInUse);
+            }
+            _ => panic!("Expected IO error with AddrInUse"),
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_resolves_existing_hostname_for_client() {
+        reset_dns();
+
+        // First register the hostname
+        let _result = parse_addr("resolved.host:8080".to_string(), true).unwrap();
+
+        let registered_ip = DNS.with_borrow(|dns| dns.get("resolved.host").copied().unwrap());
+
+        // Now parse as client (host=false) and verify it resolves to same IP
+        let result = parse_addr("resolved.host:9090".to_string(), false);
+        assert!(result.is_ok());
+
+        let (sock_addr, _) = result.unwrap();
+        assert_eq!(sock_addr.ip(), registered_ip);
+        assert_eq!(sock_addr.port(), 9090);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_fails_for_unresolved_hostname() {
+        reset_dns();
+
+        // Try to connect to a hostname that doesn't exist in DNS
+        let result = parse_addr("nonexistent.host:8080".to_string(), false);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        match err {
+            Error::IO(io_err) => {
+                assert_eq!(io_err.kind(), io::ErrorKind::HostUnreachable);
+            }
+            _ => panic!("Expected IO error with HostUnreachable"),
+        }
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_localhost_uses_host_scope() {
+        reset_dns();
+
+        let scoped_addr = "scoped.host";
+        with_host(scoped_addr.to_string(), |_| {
+            let result = parse_addr("127.0.0.1:8080".to_string(), true);
+            assert!(result.is_ok());
+
+            let (_sock_addr, host_name) = result.unwrap();
+            assert_eq!(host_name, Some(scoped_addr.to_string()));
+        });
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn parse_addr_with_ip_address_works() {
+        let result = parse_addr("192.168.1.100:8080".to_string(), true);
+        assert!(result.is_ok());
+
+        let (sock_addr, _) = result.unwrap();
+        assert_eq!(sock_addr.ip(), Ipv4Addr::new(192, 168, 1, 100));
+        assert_eq!(sock_addr.port(), 8080);
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_listener_drop_triggers_shutdown() {
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+
+            {
+                let _listener = TcpListener::bind(addr.to_string()).await.unwrap();
+                TCP_LISTENERS.with_borrow(|x| {
+                    assert!(x.read().unwrap().contains_key(&addr));
+                });
+            } // listener dropped here
+
+            // Verify cleanup happened
+            TCP_LISTENERS.with_borrow(|x| {
+                assert!(!x.read().unwrap().contains_key(&addr));
+            });
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_read_handles_partial_data() {
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+            task::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+
+                // Read in small chunks
+                let mut buf = [0u8; 2];
+                let count1 = stream.read(&mut buf).await.unwrap();
+                assert_eq!(count1, 2);
+                assert_eq!(&buf[..count1], b"he");
+
+                let count2 = stream.read(&mut buf).await.unwrap();
+                assert_eq!(count2, 2);
+                assert_eq!(&buf[..count2], b"ll");
+
+                let count3 = stream.read(&mut buf).await.unwrap();
+                assert_eq!(count3, 1);
+                assert_eq!(&buf[..count3], b"o");
+            });
+
+            let mut connection = TcpStream::connect(server_addr.to_string()).await.unwrap();
+            connection.write_all(b"hello").await.unwrap();
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn tcp_stream_write_buffering_with_internal_buffer() {
+        let runtime = runtime::Runtime::new();
+
+        runtime.block_on(async move {
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
+
+            task::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+
+                // Write multiple small chunks
+                stream.write_all(b"a").await.unwrap();
+                stream.write_all(b"b").await.unwrap();
+                stream.write_all(b"c").await.unwrap();
+                stream.flush().await.unwrap();
+            });
+
+            let mut connection = TcpStream::connect(server_addr.to_string()).await.unwrap();
+            let mut buf = vec![0u8; 10];
+
+            // Read should get all the data that was written
+            let count = connection.read(&mut buf).await.unwrap();
+            assert!(count >= 1);
+            assert!(
+                buf[..count].contains(&b'a')
+                    || buf[..count].contains(&b'b')
+                    || buf[..count].contains(&b'c')
+            );
+        });
+
+        runtime.wait().unwrap();
+    }
 }
