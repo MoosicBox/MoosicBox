@@ -761,3 +761,237 @@ pub async fn init_postgres_raw_no_tls(
 
     Ok(Box::new(PostgresDatabase::new(pool)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_credentials_from_url_postgres_with_password() {
+        let url = "postgres://user:pass123@localhost:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), Some("pass123"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_postgres_without_password() {
+        let url = "postgres://user@localhost:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), None);
+    }
+
+    #[test]
+    fn test_credentials_from_url_postgresql_scheme() {
+        let url = "postgresql://user:pass@host:1234/database";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "host:1234");
+        assert_eq!(creds.name(), "database");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), Some("pass"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_mysql_scheme() {
+        let url = "mysql://dbuser:dbpass@dbhost:3306/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "dbhost:3306");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "dbuser");
+        assert_eq!(creds.password(), Some("dbpass"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_with_special_chars_in_password() {
+        let url = "postgres://user:p@ss:w0rd!@localhost:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), Some("p@ss:w0rd!"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_with_trailing_whitespace() {
+        let url = "  postgres://user:pass@localhost:5432/mydb  ";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "localhost:5432");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), Some("pass"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_invalid_no_scheme_separator() {
+        let url = "postgresuser:pass@localhost:5432/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(result, Err(CredentialsParseError::InvalidUrl)));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_database() {
+        let url = "postgres://user:pass@localhost:5432/";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::MissingDatabase)
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_database_no_slash() {
+        let url = "postgres://user:pass@localhost:5432";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::MissingDatabase)
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_host() {
+        let url = "postgres://user:pass@/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(result, Err(CredentialsParseError::MissingHost)));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_username() {
+        let url = "postgres://@localhost:5432/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::MissingUsername)
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_username_with_password() {
+        let url = "postgres://:pass@localhost:5432/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::MissingUsername)
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_missing_auth() {
+        let url = "postgres://localhost:5432/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::MissingUsername)
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_unsupported_scheme() {
+        let url = "mongodb://user:pass@localhost:27017/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::UnsupportedScheme(_))
+        ));
+
+        if let Err(CredentialsParseError::UnsupportedScheme(scheme)) = result {
+            assert_eq!(scheme, "mongodb");
+        }
+    }
+
+    #[test]
+    fn test_credentials_from_url_sqlite_scheme_unsupported() {
+        let url = "sqlite:///path/to/db.sqlite";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::UnsupportedScheme(_))
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_http_scheme_unsupported() {
+        let url = "http://user:pass@localhost/mydb";
+        let result = Credentials::from_url(url);
+
+        assert!(matches!(
+            result,
+            Err(CredentialsParseError::UnsupportedScheme(_))
+        ));
+    }
+
+    #[test]
+    fn test_credentials_from_url_complex_host_with_domain() {
+        let url = "postgres://user:pass@db.example.com:5432/production";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "db.example.com:5432");
+        assert_eq!(creds.name(), "production");
+        assert_eq!(creds.user(), "user");
+        assert_eq!(creds.password(), Some("pass"));
+    }
+
+    #[test]
+    fn test_credentials_from_url_ipv4_host() {
+        let url = "postgres://user:pass@192.168.1.100:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "192.168.1.100:5432");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+    }
+
+    #[test]
+    fn test_credentials_from_url_localhost_without_port() {
+        let url = "postgres://user:pass@localhost/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.host(), "localhost");
+        assert_eq!(creds.name(), "mydb");
+        assert_eq!(creds.user(), "user");
+    }
+
+    #[test]
+    fn test_credentials_from_url_database_with_underscore() {
+        let url = "postgres://user:pass@localhost:5432/my_database_name";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.name(), "my_database_name");
+    }
+
+    #[test]
+    fn test_credentials_from_url_username_with_underscore() {
+        let url = "postgres://db_user:pass@localhost:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.user(), "db_user");
+    }
+
+    #[test]
+    fn test_credentials_from_url_empty_password() {
+        let url = "postgres://user:@localhost:5432/mydb";
+        let creds = Credentials::from_url(url).expect("Failed to parse URL");
+
+        assert_eq!(creds.password(), Some(""));
+    }
+}
