@@ -249,3 +249,36 @@ pub fn page(slot: &Containers) -> Containers {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_public_img_macro_basic() {
+        let result = public_img!("icon128.png");
+        assert_eq!(result, "/public/img/icon128.png");
+    }
+
+    #[test]
+    fn test_public_img_macro_with_subdirectory() {
+        let result = public_img!("icons/large/icon.png");
+        assert_eq!(result, "/public/img/icons/large/icon.png");
+    }
+
+    #[test]
+    fn test_public_img_macro_different_extensions() {
+        assert_eq!(public_img!("image.jpg"), "/public/img/image.jpg");
+        assert_eq!(public_img!("image.webp"), "/public/img/image.webp");
+        assert_eq!(public_img!("image.svg"), "/public/img/image.svg");
+    }
+
+    #[test]
+    fn test_public_img_macro_with_numbers() {
+        assert_eq!(
+            public_img!("showcase-1x240.webp"),
+            "/public/img/showcase-1x240.webp"
+        );
+        assert_eq!(public_img!("icon512.png"), "/public/img/icon512.png");
+    }
+}
