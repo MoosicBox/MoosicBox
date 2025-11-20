@@ -52,6 +52,7 @@ pub fn current_time_nanos() -> u128 {
 }
 
 /// Request parameters for cache operations.
+#[derive(Debug)]
 pub struct CacheRequest<'a> {
     /// Cache key.
     pub key: &'a str,
