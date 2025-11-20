@@ -238,6 +238,9 @@ pub fn results_content(
     }
 }
 
+/// Renders a search result item for an artist.
+///
+/// Displays artist cover image and name with a link to the artist page.
 #[must_use]
 fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Containers {
     let artist_id = artist.artist_id.clone();
@@ -258,6 +261,9 @@ fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Containers
     }
 }
 
+/// Renders a search result item for an album.
+///
+/// Displays album cover image and title with a link to the album page.
 #[must_use]
 fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Containers {
     let album_id = album.album_id.clone();
@@ -278,6 +284,9 @@ fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Containers {
     }
 }
 
+/// Renders a search result item for a track.
+///
+/// Displays album cover image and track title with a link to the album page.
 #[must_use]
 fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Containers {
     let album_id = track.album_id.clone();

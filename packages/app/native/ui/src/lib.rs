@@ -397,6 +397,9 @@ pub const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-containe
 /// DOM element ID for the volume slider value display.
 pub const VOLUME_SLIDER_VALUE_ID: &str = "volume-slider-value";
 
+/// Renders the volume control button with hover-activated slider.
+///
+/// Returns a container with a speaker icon button that reveals a vertical volume slider on hover.
 fn volume(state: &State, size: u16) -> Containers {
     let volume_percent = state.player.playback.as_ref().map_or(1.0, |x| x.volume);
     container! {
@@ -418,6 +421,9 @@ fn volume(state: &State, size: u16) -> Containers {
     }
 }
 
+/// Renders the vertical volume slider control.
+///
+/// Displays an interactive vertical slider that updates volume on mouse interaction.
 fn volume_slider(size: u16, volume_percent: f64) -> Containers {
     container! {
         div
@@ -459,6 +465,9 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
     }
 }
 
+/// Renders the visual indicator for the current volume level.
+///
+/// Shows a filled bar within the volume slider representing the current volume percentage.
 fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
     container! {
         div
@@ -487,6 +496,9 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
     }
 }
 
+/// Renders the play/pause button with the appropriate icon.
+///
+/// Displays a pause icon when playing, or a play icon when paused.
 fn player_play_button(playing: bool) -> Containers {
     container! {
         @let button_size = 40;
@@ -517,6 +529,9 @@ fn player_play_button(playing: bool) -> Containers {
     }
 }
 
+/// Renders the play/pause button based on current playback state.
+///
+/// Extracts the playing state from the application state and renders the appropriate button.
 fn player_play_button_from_state(state: &State) -> Containers {
     state.player.playback.as_ref().map_or_else(
         || player_play_button(false),
@@ -524,6 +539,9 @@ fn player_play_button_from_state(state: &State) -> Containers {
     )
 }
 
+/// Renders the currently playing album information.
+///
+/// Displays album cover, track title, artist name, and album name with clickable links.
 fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Containers {
     container! {
         div #player-current-playing direction=row align-items=center {
@@ -547,6 +565,9 @@ fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Containers {
     }
 }
 
+/// Renders the currently playing album information from application state.
+///
+/// Extracts the current track from the playback state and renders its album information.
 fn player_current_album_from_state(state: &State, size: u16) -> Containers {
     if let Some(connection) = &state.connection
         && let Some(playback) = &state.player.playback
@@ -563,6 +584,9 @@ fn player_current_album_from_state(state: &State, size: u16) -> Containers {
     }
 }
 
+/// Renders the current playback progress indicator.
+///
+/// Displays the current seek position and total duration in a formatted time display.
 fn player_current_progress(progress: f64, duration: f64) -> Containers {
     container! {
         div #player-current-progress {
@@ -571,6 +595,9 @@ fn player_current_progress(progress: f64, duration: f64) -> Containers {
     }
 }
 
+/// Renders the current playback progress from application state.
+///
+/// Extracts the current seek position and track duration from state and displays them.
 fn player_current_progress_from_state(state: &State) -> Containers {
     if let Some(playback) = &state.player.playback {
         let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
