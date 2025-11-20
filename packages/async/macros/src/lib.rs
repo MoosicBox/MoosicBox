@@ -878,10 +878,7 @@ mod tests {
             result_str.contains("@ path") || result_str.contains("@path"),
             "Should contain @path syntax"
         );
-        assert!(
-            result_str.contains("crate"),
-            "Should contain crate keyword"
-        );
+        assert!(result_str.contains("crate"), "Should contain crate keyword");
         assert!(
             result_str.contains("async fn test_fn"),
             "Should contain function"
