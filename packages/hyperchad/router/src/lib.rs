@@ -1872,6 +1872,494 @@ mod tests {
     #[allow(unused)]
     use super::*;
 
+    mod route_path_tests {
+        use super::*;
+
+        #[test]
+        fn test_literal_exact_match() {
+            let route = RoutePath::Literal("/home".to_string());
+            assert!(route.matches("/home"));
+            assert!(!route.matches("/about"));
+            assert!(!route.matches("/home/page"));
+        }
+
+        #[test]
+        fn test_literals_multiple_matches() {
+            let route = RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()]);
+            assert!(route.matches("/api/v1"));
+            assert!(route.matches("/api/v2"));
+            assert!(!route.matches("/api/v3"));
+        }
+
+        #[test]
+        fn test_literal_prefix_matching() {
+            let route = RoutePath::LiteralPrefix("/static/".to_string());
+            assert!(route.matches("/static/"));
+            assert!(route.matches("/static/css/style.css"));
+            assert!(route.matches("/static/js/app.js"));
+            assert!(!route.matches("/api/static"));
+            assert!(!route.matches("/stati"));
+        }
+
+        #[test]
+        fn test_strip_match_literal() {
+            let route = RoutePath::Literal("/home".to_string());
+            assert_eq!(route.strip_match("/home"), Some(""));
+            assert_eq!(route.strip_match("/about"), None);
+        }
+
+        #[test]
+        fn test_strip_match_literals() {
+            let route = RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()]);
+            assert_eq!(route.strip_match("/api/v1"), Some(""));
+            assert_eq!(route.strip_match("/api/v2"), Some(""));
+            assert_eq!(route.strip_match("/api/v3"), None);
+        }
+
+        #[test]
+        fn test_strip_match_prefix() {
+            let route = RoutePath::LiteralPrefix("/static/".to_string());
+            assert_eq!(route.strip_match("/static/"), Some(""));
+            assert_eq!(
+                route.strip_match("/static/css/style.css"),
+                Some("css/style.css")
+            );
+            assert_eq!(route.strip_match("/static/js/app.js"), Some("js/app.js"));
+            assert_eq!(route.strip_match("/api/static"), None);
+        }
+
+        #[test]
+        fn test_from_str() {
+            let route: RoutePath = "/home".into();
+            assert_eq!(route, RoutePath::Literal("/home".to_string()));
+        }
+
+        #[test]
+        fn test_from_slice() {
+            let routes: &[&str] = &["/api/v1", "/api/v2"];
+            let route: RoutePath = routes.into();
+            assert_eq!(
+                route,
+                RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()])
+            );
+        }
+    }
+
+    mod route_request_tests {
+        use super::*;
+
+        #[test]
+        fn test_from_path_without_query() {
+            let req = RouteRequest::from_path("/home", RequestInfo::default());
+            assert_eq!(req.path, "/home");
+            assert_eq!(req.method, Method::Get);
+            assert!(req.query.is_empty());
+        }
+
+        #[test]
+        fn test_from_path_with_query() {
+            let req = RouteRequest::from_path("/search?q=rust&lang=en", RequestInfo::default());
+            assert_eq!(req.path, "/search");
+            assert_eq!(req.method, Method::Get);
+            assert_eq!(req.query.get("q"), Some(&"rust".to_string()));
+            assert_eq!(req.query.get("lang"), Some(&"en".to_string()));
+        }
+
+        #[test]
+        fn test_from_path_with_empty_query() {
+            let req = RouteRequest::from_path("/page?", RequestInfo::default());
+            assert_eq!(req.path, "/page");
+            assert!(req.query.is_empty());
+        }
+
+        #[test]
+        fn test_content_type_present() {
+            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+            req.headers
+                .insert("content-type".to_string(), "application/json".to_string());
+            assert_eq!(req.content_type(), Some("application/json"));
+        }
+
+        #[test]
+        fn test_content_type_missing() {
+            let req = RouteRequest::from_path("/api", RequestInfo::default());
+            assert_eq!(req.content_type(), None);
+        }
+
+        #[cfg(feature = "serde")]
+        #[test]
+        fn test_parse_body_missing() {
+            use serde::Deserialize;
+
+            #[derive(Deserialize)]
+            struct Data {
+                value: String,
+            }
+
+            let req = RouteRequest::from_path("/api", RequestInfo::default());
+            let result: Result<Data, _> = req.parse_body();
+            assert!(matches!(result, Err(ParseError::MissingBody)));
+        }
+
+        #[cfg(feature = "serde")]
+        #[test]
+        fn test_parse_body_valid_json() {
+            use serde::Deserialize;
+
+            #[derive(Deserialize, PartialEq, Debug)]
+            struct Data {
+                value: String,
+                count: u32,
+            }
+
+            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+            let json_data = r#"{"value":"test","count":42}"#;
+            req.body = Some(Arc::new(Bytes::from(json_data)));
+
+            let result: Result<Data, _> = req.parse_body();
+            assert!(result.is_ok());
+            let data = result.unwrap();
+            assert_eq!(data.value, "test");
+            assert_eq!(data.count, 42);
+        }
+
+        #[cfg(feature = "serde")]
+        #[test]
+        fn test_parse_body_invalid_json() {
+            use serde::Deserialize;
+
+            #[allow(dead_code)]
+            #[derive(Deserialize)]
+            struct Data {
+                value: String,
+            }
+
+            let mut req = RouteRequest::from_path("/api", RequestInfo::default());
+            req.body = Some(Arc::new(Bytes::from("not valid json")));
+
+            let result: Result<Data, _> = req.parse_body();
+            assert!(matches!(result, Err(ParseError::SerdeJson(_))));
+        }
+
+        #[test]
+        fn test_from_string() {
+            let req: RouteRequest = "/home".to_string().into();
+            assert_eq!(req.path, "/home");
+            assert_eq!(req.method, Method::Get);
+        }
+
+        #[test]
+        fn test_from_tuple_with_client_info() {
+            let client_info = ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            };
+            let req: RouteRequest = ("/api".to_string(), client_info).into();
+            assert_eq!(req.path, "/api");
+            assert_eq!(req.info.client.os.name, "TestOS");
+        }
+
+        #[test]
+        fn test_from_tuple_with_request_info() {
+            let client_info = Arc::new(ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            });
+            let req_info = RequestInfo {
+                client: client_info,
+            };
+            let req: RouteRequest = ("/search?q=test".to_string(), req_info).into();
+            assert_eq!(req.path, "/search");
+            assert_eq!(req.query.get("q"), Some(&"test".to_string()));
+            assert_eq!(req.info.client.os.name, "TestOS");
+        }
+    }
+
+    mod router_tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_router_new() {
+            let router = Router::new();
+            assert_eq!(router.routes.read().unwrap().len(), 0);
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_route_simple() {
+            let router =
+                Router::new().with_route("/home", |_req| async { "Home Page".to_string() });
+
+            let content = router.navigate("/home").await.unwrap();
+            assert!(content.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_route_not_found() {
+            let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+
+            let result = router.navigate("/about").await;
+            assert!(matches!(result, Err(NavigateError::InvalidPath)));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_multiple_routes() {
+            let router = Router::new()
+                .with_route("/home", |_req| async { "Home".to_string() })
+                .with_route("/about", |_req| async { "About".to_string() });
+
+            let home = router.navigate("/home").await.unwrap();
+            let about = router.navigate("/about").await.unwrap();
+            assert!(home.is_some());
+            assert!(about.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_route_with_prefix() {
+            let router = Router::new().with_route(
+                RoutePath::LiteralPrefix("/static/".to_string()),
+                |req| async move { format!("Static file: {}", req.path) },
+            );
+
+            let result = router.navigate("/static/css/style.css").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_route_with_multiple_paths() {
+            let router = Router::new().with_route(&["/api/v1", "/api/v2"][..], |_req| async {
+                "API".to_string()
+            });
+
+            let v1 = router.navigate("/api/v1").await.unwrap();
+            let v2 = router.navigate("/api/v2").await.unwrap();
+            assert!(v1.is_some());
+            assert!(v2.is_some());
+
+            let v3 = router.navigate("/api/v3").await;
+            assert!(matches!(v3, Err(NavigateError::InvalidPath)));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_route_result_success() {
+            let router = Router::new().with_route_result("/data", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>("Success".to_string())
+            });
+
+            let result = router.navigate("/data").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_route_result_error() {
+            let router = Router::new().with_route_result("/error", |_req| async {
+                Err::<String, _>(
+                    Box::new(std::io::Error::other("Test error")) as Box<dyn std::error::Error>
+                )
+            });
+
+            let result = router.navigate("/error").await;
+            assert!(matches!(result, Err(NavigateError::Handler(_))));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_no_content_result() {
+            let router = Router::new().with_no_content_result("/action", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>(())
+            });
+
+            let result = router.navigate("/action").await.unwrap();
+            assert!(result.is_none());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_has_route() {
+            let router = Router::new()
+                .with_route("/home", |_req| async { "Home".to_string() })
+                .with_route("/about", |_req| async { "About".to_string() });
+
+            assert!(router.has_route("/home"));
+            assert!(router.has_route("/about"));
+            assert!(!router.has_route("/contact"));
+        }
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_with_static_route() {
+            let router = Router::new()
+                .with_static_route("/static", |_req| async { "Static".to_string() })
+                .with_route("/dynamic", |_req| async { "Dynamic".to_string() });
+
+            assert!(!router.has_route("/static"));
+            assert!(router.has_static_route("/static"));
+            assert!(router.has_route("/dynamic"));
+        }
+
+        #[cfg(feature = "static-routes")]
+        #[test_log::test(switchy_async::test)]
+        async fn test_static_route_navigation() {
+            let router = Router::new()
+                .with_static_route("/page", |_req| async { "Static Page".to_string() });
+
+            let result = router.navigate("/page").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_get_route_func_present() {
+            let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+
+            let route_func = router.get_route_func("/home");
+            assert!(route_func.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_get_route_func_missing() {
+            let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+
+            let route_func = router.get_route_func("/about");
+            assert!(route_func.is_none());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_add_route_result() {
+            let router = Router::new();
+            router.add_route_result("/dynamic", |_req| async {
+                Ok::<_, Box<dyn std::error::Error>>("Added".to_string())
+            });
+
+            let result = router.navigate("/dynamic").await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_with_query_params() {
+            let router = Router::new().with_route("/search", |req| async move {
+                let query = req.query.get("q").cloned().unwrap_or_default();
+                format!("Search: {query}")
+            });
+
+            let req = RouteRequest::from_path("/search?q=rust", RequestInfo::default());
+            let result = router.navigate(req).await.unwrap();
+            assert!(result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_navigate_with_different_methods() {
+            let router = Router::new().with_route("/api", |req| async move {
+                match req.method {
+                    Method::Get => "GET request".to_string(),
+                    Method::Post => "POST request".to_string(),
+                    _ => "Other method".to_string(),
+                }
+            });
+
+            let mut get_req = RouteRequest::from_path("/api", RequestInfo::default());
+            get_req.method = Method::Get;
+            let get_result = router.navigate(get_req).await.unwrap();
+            assert!(get_result.is_some());
+
+            let mut post_req = RouteRequest::from_path("/api", RequestInfo::default());
+            post_req.method = Method::Post;
+            let post_result = router.navigate(post_req).await.unwrap();
+            assert!(post_result.is_some());
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_router_clone() {
+            let router = Router::new().with_route("/home", |_req| async { "Home".to_string() });
+
+            let cloned = router.clone();
+            let result = cloned.navigate("/home").await.unwrap();
+            assert!(result.is_some());
+        }
+    }
+
+    mod navigation_tests {
+        use super::*;
+
+        #[test]
+        fn test_navigation_from_str() {
+            let nav: Navigation = "/home".into();
+            assert_eq!(nav.0, "/home");
+        }
+
+        #[test]
+        fn test_navigation_from_string() {
+            let nav: Navigation = "/about".to_string().into();
+            assert_eq!(nav.0, "/about");
+        }
+
+        #[test]
+        fn test_navigation_from_tuple() {
+            let client = ClientInfo {
+                os: ClientOs {
+                    name: "TestOS".to_string(),
+                },
+            };
+            let nav: Navigation = ("/page".to_string(), client).into();
+            assert_eq!(nav.0, "/page");
+            assert_eq!(nav.1.os.name, "TestOS");
+        }
+
+        #[test]
+        fn test_navigation_from_route_request() {
+            let mut req = RouteRequest::from_path("/search", RequestInfo::default());
+            req.query.insert("q".to_string(), "test".to_string());
+            req.query.insert("limit".to_string(), "10".to_string());
+
+            let nav: Navigation = req.into();
+            assert!(nav.0.starts_with("/search?"));
+            assert!(nav.0.contains("q=test"));
+            assert!(nav.0.contains("limit=10"));
+        }
+
+        #[test]
+        fn test_route_request_from_navigation() {
+            let nav = Navigation("/page".to_string(), DEFAULT_CLIENT_INFO.clone());
+            let req: RouteRequest = nav.into();
+            assert_eq!(req.path, "/page");
+            assert_eq!(req.method, Method::Get);
+        }
+
+        #[test]
+        fn test_navigation_roundtrip() {
+            let original = Navigation("/test".to_string(), DEFAULT_CLIENT_INFO.clone());
+            let req: RouteRequest = original.clone().into();
+            let nav: Navigation = req.into();
+            assert_eq!(original.0, nav.0);
+        }
+    }
+
+    mod client_info_tests {
+        use super::*;
+
+        #[test]
+        fn test_client_os_default() {
+            let os = ClientOs::default();
+            assert_eq!(os.name, "");
+        }
+
+        #[test]
+        fn test_client_info_default() {
+            let info = ClientInfo::default();
+            assert!(!info.os.name.is_empty());
+        }
+
+        #[test]
+        fn test_default_client_info_static() {
+            let info = DEFAULT_CLIENT_INFO.clone();
+            assert!(!info.os.name.is_empty());
+        }
+
+        #[test]
+        fn test_request_info_default() {
+            let info = RequestInfo::default();
+            assert!(!info.client.os.name.is_empty());
+        }
+    }
+
     #[cfg(feature = "form")]
     mod form_deserializer_tests {
         use super::*;
