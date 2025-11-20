@@ -605,3 +605,31 @@ impl_gen_types!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "reqwest"))]
 impl_gen_types!(reqwest);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_header_as_ref_str() {
+        assert_eq!(Header::Authorization.as_ref(), "authorization");
+        assert_eq!(Header::UserAgent.as_ref(), "user-agent");
+        assert_eq!(Header::Range.as_ref(), "range");
+        assert_eq!(Header::ContentLength.as_ref(), "content-length");
+    }
+
+    #[test]
+    fn test_error_decode_display() {
+        let error = Error::Decode;
+        assert_eq!(error.to_string(), "Decode");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_error_deserialize_display() {
+        let json_error = serde_json::from_str::<serde_json::Value>("invalid json");
+        assert!(json_error.is_err());
+        let error = Error::from(json_error.unwrap_err());
+        assert!(error.to_string().contains("expected"));
+    }
+}

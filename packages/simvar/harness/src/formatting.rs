@@ -113,10 +113,7 @@ mod tests {
 
     #[test]
     fn test_format_hours() {
-        assert_eq!(
-            3_600_000u128.into_formatted(),
-            "1 hour, 0 minutes, 0s, 0ms"
-        );
+        assert_eq!(3_600_000u128.into_formatted(), "1 hour, 0 minutes, 0s, 0ms");
         assert_eq!(
             7_200_000u128.into_formatted(),
             "2 hours, 0 minutes, 0s, 0ms"
@@ -186,10 +183,7 @@ mod tests {
     fn test_format_singular_plural() {
         // Test singular forms
         assert_eq!(60_000u128.into_formatted(), "1 minute, 0s, 0ms");
-        assert_eq!(
-            3_600_000u128.into_formatted(),
-            "1 hour, 0 minutes, 0s, 0ms"
-        );
+        assert_eq!(3_600_000u128.into_formatted(), "1 hour, 0 minutes, 0s, 0ms");
         assert_eq!(
             86_400_000u128.into_formatted(),
             "1 day, 0 hours, 0 minutes, 0s, 0ms"
