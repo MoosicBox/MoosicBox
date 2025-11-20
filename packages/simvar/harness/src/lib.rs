@@ -98,6 +98,11 @@ pub mod client;
 mod config;
 
 /// Time formatting utilities.
+///
+/// Provides the [`TimeFormat`] trait for converting time durations
+/// in milliseconds into human-readable formatted strings.
+///
+/// [`TimeFormat`]: formatting::TimeFormat
 pub mod formatting;
 
 /// Host actor types and utilities.
