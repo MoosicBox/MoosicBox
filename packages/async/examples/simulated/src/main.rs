@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! # Async Simulated Example
 //!
 //! A demonstration of concurrent task spawning and execution using the switchy async runtime
@@ -48,6 +52,15 @@ use switchy_async::{Error, runtime::Runtime, task, time};
 use switchy_random::{rng, simulator::initial_seed};
 use switchy_time::now;
 
+/// Entry point for the async simulated example.
+///
+/// Demonstrates concurrent task execution with random delays using the switchy async runtime.
+/// Creates a runtime, spawns multiple concurrent tasks with nested futures, and waits for
+/// completion.
+///
+/// # Errors
+///
+/// * Returns an error if the runtime fails to wait on spawned tasks
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
