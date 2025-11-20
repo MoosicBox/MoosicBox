@@ -652,6 +652,85 @@ fn postgres_library_migrations() -> CodeMigrationSource<'static> {
     CodeMigrationSource::new()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_sqlite_library_migrations_returns_migrations() {
+        let migrations = get_sqlite_library_migrations().await.unwrap();
+        // Should have at least some migrations
+        assert!(
+            !migrations.is_empty(),
+            "Expected SQLite library migrations to be non-empty"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_sqlite_config_migrations_returns_migrations() {
+        let migrations = get_sqlite_config_migrations().await.unwrap();
+        // Should have at least some migrations
+        assert!(
+            !migrations.is_empty(),
+            "Expected SQLite config migrations to be non-empty"
+        );
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_postgres_library_migrations_returns_migrations() {
+        let migrations = get_postgres_library_migrations().await.unwrap();
+        // Should have at least some migrations
+        assert!(
+            !migrations.is_empty(),
+            "Expected PostgreSQL library migrations to be non-empty"
+        );
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_postgres_config_migrations_returns_migrations() {
+        let migrations = get_postgres_config_migrations().await.unwrap();
+        // Should have at least some migrations
+        assert!(
+            !migrations.is_empty(),
+            "Expected PostgreSQL config migrations to be non-empty"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_migrate_library_until_with_specific_migration() {
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        // Run migrations up to a specific migration
+        let result =
+            migrate_library_sqlite_until(&*db, Some("2024-09-21-130720_set_journal_mode_to_wal"))
+                .await;
+
+        assert!(
+            result.is_ok(),
+            "Migration until specific migration should succeed"
+        );
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test_log::test(switchy_async::test)]
+    async fn test_migrate_library_sqlite_until_with_none_runs_all() {
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        // Passing None should run all migrations
+        let result = migrate_library_sqlite_until(&*db, None).await;
+
+        assert!(
+            result.is_ok(),
+            "Migration with None should run all migrations successfully"
+        );
+    }
+}
+
 #[cfg(feature = "sqlite")]
 #[cfg(test)]
 mod sqlite_tests {
