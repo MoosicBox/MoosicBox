@@ -12086,6 +12086,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
  "serde",
+ "test-log",
 ]
 
 [[package]]
