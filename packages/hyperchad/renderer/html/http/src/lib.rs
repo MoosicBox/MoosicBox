@@ -496,3 +496,54 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         self.action_tx = Some(tx);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test file");
+        let err = Error::from(io_err);
+        assert!(err.to_string().contains("test file"));
+
+        let nav_err = hyperchad_router::NavigateError::InvalidPath;
+        let err = Error::from(nav_err);
+        assert_eq!(err.to_string(), "Invalid path");
+    }
+
+    #[test]
+    fn test_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err = Error::from(io_err);
+        assert!(matches!(err, Error::IO(_)));
+        assert!(err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn test_error_from_recv_error() {
+        let (_tx, rx) = flume::unbounded::<()>();
+        drop(_tx);
+        let recv_err = rx.recv().unwrap_err();
+        let err = Error::from(recv_err);
+        assert!(matches!(err, Error::Recv(_)));
+    }
+
+    #[test]
+    fn test_error_from_navigate_error() {
+        let nav_err = hyperchad_router::NavigateError::InvalidPath;
+        let err = Error::from(nav_err);
+        assert!(matches!(err, Error::Navigate(_)));
+        assert_eq!(err.to_string(), "Invalid path");
+    }
+
+    #[cfg(feature = "_json")]
+    #[test]
+    fn test_error_from_serde_json_error() {
+        let json_str = r#"{"invalid": json}"#;
+        let json_err: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>(json_str).unwrap_err();
+        let err = Error::from(json_err);
+        assert!(matches!(err, Error::SerdeJson(_)));
+    }
+}
