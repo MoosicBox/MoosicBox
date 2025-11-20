@@ -8078,6 +8078,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_music_api_api",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8192,6 +8193,7 @@ dependencies = [
  "switchy_async",
  "switchy_http",
  "switchy_upnp",
+ "test-log",
  "thiserror 2.0.17",
  "tokio",
 ]
