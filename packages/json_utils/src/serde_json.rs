@@ -561,4 +561,152 @@ mod tests {
 
         assert_eq!(numbers, vec![123_u64, 124_u64, 125_u64]);
     }
+
+    #[test]
+    fn test_get_nested_value_error_messages() {
+        let json = &serde_json::json!({
+            "level1": {
+                "level2": "value"
+            }
+        });
+
+        // Test missing nested value at level 2
+        let result = get_nested_value(json, &["level1", "missing"]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::Parse(_)));
+        assert!(err.to_string().contains("level1"));
+        assert!(err.to_string().contains("missing"));
+
+        // Test missing value at level 1
+        let result = get_nested_value(json, &["missing"]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::Parse(_)));
+        assert!(err.to_string().contains("missing"));
+    }
+
+    #[test]
+    fn test_to_nested_value_type_null_handling() {
+        let json = &serde_json::json!({
+            "outer": {
+                "inner": serde_json::Value::Null
+            }
+        });
+
+        // Test null value error
+        let result = get_nested_value_type::<String>(json, &["outer", "inner"]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ParseError::ConvertType(_)));
+        assert!(err.to_string().contains("null"));
+    }
+
+    #[test]
+    fn test_to_value_type_conversions() {
+        // Test i8
+        let value = &serde_json::json!(42);
+        let result: Result<i8, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 42_i8);
+
+        // Test i16
+        let value = &serde_json::json!(1234);
+        let result: Result<i16, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 1234_i16);
+
+        // Test i32
+        let value = &serde_json::json!(123_456);
+        let result: Result<i32, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 123_456_i32);
+
+        // Test i64
+        let value = &serde_json::json!(123_456_789);
+        let result: Result<i64, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 123_456_789_i64);
+
+        // Test isize
+        let value = &serde_json::json!(12_345);
+        let result: Result<isize, ParseError> = value.to_value_type();
+        assert_eq!(result.unwrap(), 12_345_isize);
+    }
+
+    #[test]
+    fn test_to_value_type_error_on_wrong_type() {
+        // Test string when expecting number
+        let value = &serde_json::json!("not a number");
+        let result: Result<u64, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        // Test number when expecting string
+        let value = &serde_json::json!(123);
+        let result: Result<String, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+
+        // Test number when expecting bool
+        let value = &serde_json::json!(1);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test]
+    fn test_to_value_type_vec_error() {
+        // Test non-array when expecting Vec
+        let value = &serde_json::json!({"not": "an array"});
+        let result: Result<Vec<u64>, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
+    }
+
+    #[test]
+    fn test_to_value_identity() {
+        let value = &serde_json::json!({"key": "value"});
+        let result: Result<&Value, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_to_nested_value_deep_path() {
+        let json = &serde_json::json!({
+            "a": {
+                "b": {
+                    "c": {
+                        "d": 42
+                    }
+                }
+            }
+        });
+
+        let result: Result<u64, ParseError> = json.to_nested_value(&["a", "b", "c", "d"]);
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_to_nested_value_with_value_ref() {
+        let json = serde_json::json!({
+            "nested": {
+                "value": "test"
+            }
+        });
+
+        let json_ref = &json;
+        let result: Result<String, ParseError> = json_ref.to_nested_value(&["nested", "value"]);
+        assert_eq!(result.unwrap(), "test");
+    }
+
+    #[test]
+    fn test_to_nested_missing_value_with_option() {
+        let json = &serde_json::json!({
+            "outer": {
+                "inner": "value"
+            }
+        });
+
+        // Missing nested value should return None for Option type
+        let result: Result<Option<String>, ParseError> =
+            json.to_nested_value(&["outer", "missing"]);
+        assert_eq!(result.unwrap(), None);
+    }
 }
