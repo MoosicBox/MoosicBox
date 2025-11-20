@@ -166,3 +166,131 @@ where
         () = local_token.cancelled() => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_worker_thread_id_returns_unique_ids() {
+        let id1 = worker_thread_id();
+        let id2 = worker_thread_id();
+        // Same thread should return same ID
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn test_worker_thread_id_uniqueness_across_threads() {
+        let id1 = worker_thread_id();
+        let handle = std::thread::spawn(worker_thread_id);
+        let id2 = handle.join().unwrap();
+        // Different threads should have different IDs
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_reset_simulator_cancellation_token() {
+        // Ensure global is not cancelled
+        reset_global_simulator_cancellation_token();
+
+        // Cancel the token
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+
+        // Reset should clear cancellation
+        reset_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+    }
+
+    #[test]
+    fn test_cancel_simulation_sets_cancelled_state() {
+        reset_simulator_cancellation_token();
+        assert!(!is_simulator_cancelled());
+
+        cancel_simulation();
+        assert!(is_simulator_cancelled());
+    }
+
+    #[test]
+    fn test_is_simulator_cancelled_respects_global_cancellation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        assert!(!is_simulator_cancelled());
+
+        cancel_global_simulation();
+        // Local cancellation should detect global cancellation
+        assert!(is_simulator_cancelled());
+    }
+
+    #[test]
+    fn test_global_cancellation_independent_from_local() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        cancel_simulation();
+        // Local cancelled but not global directly
+        assert!(!is_global_simulator_cancelled());
+        assert!(is_simulator_cancelled());
+    }
+
+    #[test]
+    fn test_reset_global_simulator_cancellation_token() {
+        cancel_global_simulation();
+        assert!(is_global_simulator_cancelled());
+
+        reset_global_simulator_cancellation_token();
+        assert!(!is_global_simulator_cancelled());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_run_until_simulation_cancelled_completes_normally() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        let result = run_until_simulation_cancelled(async { 42 }).await;
+        assert_eq!(result, Some(42));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_run_until_simulation_cancelled_with_local_cancellation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        let cancel_task = async {
+            cancel_simulation();
+        };
+
+        let work_task = async {
+            // This will never complete
+            std::future::pending::<()>().await;
+            42
+        };
+
+        // Cancel immediately
+        cancel_task.await;
+        let result = run_until_simulation_cancelled(work_task).await;
+        assert_eq!(result, None);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_run_until_simulation_cancelled_with_global_cancellation() {
+        reset_simulator_cancellation_token();
+        reset_global_simulator_cancellation_token();
+
+        let cancel_task = async {
+            cancel_global_simulation();
+        };
+
+        let work_task = async {
+            // This will never complete
+            std::future::pending::<()>().await;
+            42
+        };
+
+        // Cancel immediately
+        cancel_task.await;
+        let result = run_until_simulation_cancelled(work_task).await;
+        assert_eq!(result, None);
+    }
+}

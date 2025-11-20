@@ -192,7 +192,7 @@ impl SimConfig {
 /// Properties describing a simulation run.
 ///
 /// Contains the configuration and metadata about a specific simulation run.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimProperties {
     /// Configuration used for this simulation run.
     pub config: SimConfig,
@@ -207,7 +207,7 @@ pub struct SimProperties {
 /// Runtime metrics from a simulation run.
 ///
 /// Captures timing and step count information after a simulation completes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimRunProperties {
     /// Number of simulation steps executed.
     pub steps: u64,
@@ -463,4 +463,182 @@ fn get_run_command(skip_env: &[&str], seed: u64) -> String {
     }
 
     format!("SIMULATOR_SEED={seed} {env_vars}{cmd}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_simconfig_default() {
+        let config = SimConfig::default();
+        assert_eq!(config.seed, 0);
+        assert_eq!(config.fail_rate, 0.0);
+        assert_eq!(config.repair_rate, 1.0);
+        assert_eq!(config.tcp_capacity, 64);
+        assert_eq!(config.udp_capacity, 64);
+        assert!(!config.enable_random_order);
+        assert_eq!(config.min_message_latency, Duration::from_millis(0));
+        assert_eq!(config.max_message_latency, Duration::from_millis(1000));
+        assert_eq!(config.duration, Duration::MAX);
+        assert_eq!(config.tick_duration, Duration::from_millis(1));
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_simconfig_new() {
+        let config = SimConfig::new();
+        assert_eq!(config.seed, 0);
+        assert_eq!(config.fail_rate, 0.0);
+        assert_eq!(config.repair_rate, 1.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_simconfig_builder_methods() {
+        let mut config = SimConfig::new();
+
+        let _ = config
+            .fail_rate(0.5)
+            .repair_rate(0.8)
+            .tcp_capacity(128)
+            .udp_capacity(256)
+            .enable_random_order(true)
+            .min_message_latency(Duration::from_millis(10))
+            .max_message_latency(Duration::from_millis(2000))
+            .duration(Duration::from_secs(60))
+            .tick_duration(Duration::from_millis(5));
+
+        assert_eq!(config.fail_rate, 0.5);
+        assert_eq!(config.repair_rate, 0.8);
+        assert_eq!(config.tcp_capacity, 128);
+        assert_eq!(config.udp_capacity, 256);
+        assert!(config.enable_random_order);
+        assert_eq!(config.min_message_latency, Duration::from_millis(10));
+        assert_eq!(config.max_message_latency, Duration::from_millis(2000));
+        assert_eq!(config.duration, Duration::from_secs(60));
+        assert_eq!(config.tick_duration, Duration::from_millis(5));
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_simconfig_builder_method_chaining() {
+        let mut config = SimConfig::new();
+        let _ = config
+            .fail_rate(0.3)
+            .tcp_capacity(100)
+            .enable_random_order(true);
+
+        assert_eq!(config.fail_rate, 0.3);
+        assert_eq!(config.tcp_capacity, 100);
+        assert!(config.enable_random_order);
+    }
+
+    #[test]
+    fn test_simresult_is_success() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let success = SimResult::Success {
+            props: props.clone(),
+            run: run.clone(),
+        };
+        assert!(success.is_success());
+
+        let fail = SimResult::Fail {
+            props,
+            run,
+            error: Some("test error".to_string()),
+            panic: None,
+        };
+        assert!(!fail.is_success());
+    }
+
+    #[test]
+    fn test_simresult_props() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 42,
+            thread_id: Some(3),
+            extra: vec![("key".to_string(), "value".to_string())],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let result = SimResult::Success { props, run };
+
+        let result_props = result.props();
+        assert_eq!(result_props.run_number, 42);
+        assert_eq!(result_props.thread_id, Some(3));
+        assert_eq!(result_props.extra.len(), 1);
+    }
+
+    #[test]
+    fn test_simresult_config() {
+        let mut config = SimConfig::new();
+        let _ = config.tcp_capacity(256);
+
+        let props = SimProperties {
+            config,
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 100,
+            real_time_millis: 1000,
+            sim_time_millis: 5000,
+        };
+
+        let result = SimResult::Success { props, run };
+
+        assert_eq!(result.config().tcp_capacity, 256);
+    }
+
+    #[test]
+    fn test_simresult_run() {
+        let props = SimProperties {
+            config: SimConfig::new(),
+            run_number: 1,
+            thread_id: None,
+            extra: vec![],
+        };
+
+        let run = SimRunProperties {
+            steps: 12345,
+            real_time_millis: 9876,
+            sim_time_millis: 54321,
+        };
+
+        let result = SimResult::Success { props, run };
+
+        let result_run = result.run();
+        assert_eq!(result_run.steps, 12345);
+        assert_eq!(result_run.real_time_millis, 9876);
+        assert_eq!(result_run.sim_time_millis, 54321);
+    }
+
+    #[test]
+    fn test_get_cargoified_args_with_target_path() {
+        // Note: This test depends on the actual command line arguments,
+        // so we're just checking that it doesn't panic
+        let args = get_cargoified_args();
+        assert!(!args.is_empty());
+    }
 }
