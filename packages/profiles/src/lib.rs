@@ -499,7 +499,9 @@ mod tests {
 
         #[test]
         fn test_profile_name_unverified_missing_both() {
-            let req = TestRequest::default().uri("/?other=value").to_http_request();
+            let req = TestRequest::default()
+                .uri("/?other=value")
+                .to_http_request();
             let result = super::super::api::ProfileNameUnverified::from_request_inner(&req);
             assert!(result.is_err());
         }
