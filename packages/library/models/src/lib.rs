@@ -436,3 +436,368 @@ impl From<LibraryTrack> for Track {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
+    use std::str::FromStr;
+
+    #[test]
+    fn test_sort_album_versions_by_bit_depth() {
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(24),
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(8),
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        assert_eq!(versions[0].bit_depth, Some(24));
+        assert_eq!(versions[1].bit_depth, Some(16));
+        assert_eq!(versions[2].bit_depth, Some(8));
+    }
+
+    #[test]
+    fn test_sort_album_versions_by_sample_rate() {
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(96000),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(48000),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        assert_eq!(versions[0].sample_rate, Some(96000));
+        assert_eq!(versions[1].sample_rate, Some(48000));
+        assert_eq!(versions[2].sample_rate, Some(44100));
+    }
+
+    #[test]
+    fn test_sort_album_versions_by_source_then_quality() {
+        let tidal_source = ApiSource::register("Tidal", "Tidal");
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(24),
+                sample_rate: Some(96000),
+                channels: None,
+                source: TrackApiSource::Api(tidal_source),
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(24),
+                sample_rate: Some(96000),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // Local comes before Api sources (source is primary sort)
+        assert_eq!(versions[0].source, TrackApiSource::Local);
+        assert_eq!(versions[0].bit_depth, Some(24));
+        assert_eq!(versions[1].source, TrackApiSource::Local);
+        assert_eq!(versions[1].bit_depth, Some(16));
+        assert!(matches!(versions[2].source, TrackApiSource::Api(_)));
+    }
+
+    #[test]
+    fn test_sort_album_versions_with_none_values() {
+        let mut versions = vec![
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: None,
+                sample_rate: Some(44100),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(24),
+                sample_rate: None,
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+            AlbumVersionQuality {
+                format: None,
+                bit_depth: Some(16),
+                sample_rate: Some(48000),
+                channels: None,
+                source: TrackApiSource::Local,
+            },
+        ];
+
+        sort_album_versions(&mut versions);
+
+        // None values should be treated as 0 and sorted to the end
+        assert_eq!(versions[0].bit_depth, Some(24));
+        assert_eq!(versions[1].bit_depth, Some(16));
+        assert_eq!(versions[2].bit_depth, None);
+    }
+
+    #[test]
+    fn test_library_album_type_from_album_type() {
+        assert_eq!(LibraryAlbumType::from(AlbumType::Lp), LibraryAlbumType::Lp);
+        assert_eq!(
+            LibraryAlbumType::from(AlbumType::Live),
+            LibraryAlbumType::Live
+        );
+        assert_eq!(
+            LibraryAlbumType::from(AlbumType::Compilations),
+            LibraryAlbumType::Compilations
+        );
+        assert_eq!(
+            LibraryAlbumType::from(AlbumType::EpsAndSingles),
+            LibraryAlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            LibraryAlbumType::from(AlbumType::Other),
+            LibraryAlbumType::Other
+        );
+        assert_eq!(
+            LibraryAlbumType::from(AlbumType::Download),
+            LibraryAlbumType::Other
+        );
+    }
+
+    #[test]
+    fn test_album_type_from_library_album_type() {
+        assert_eq!(AlbumType::from(LibraryAlbumType::Lp), AlbumType::Lp);
+        assert_eq!(AlbumType::from(LibraryAlbumType::Live), AlbumType::Live);
+        assert_eq!(
+            AlbumType::from(LibraryAlbumType::Compilations),
+            AlbumType::Compilations
+        );
+        assert_eq!(
+            AlbumType::from(LibraryAlbumType::EpsAndSingles),
+            AlbumType::EpsAndSingles
+        );
+        assert_eq!(AlbumType::from(LibraryAlbumType::Other), AlbumType::Other);
+    }
+
+    #[test]
+    fn test_library_album_type_from_str() {
+        assert_eq!(
+            LibraryAlbumType::from_str("LP").unwrap(),
+            LibraryAlbumType::Lp
+        );
+        assert_eq!(
+            LibraryAlbumType::from_str("LIVE").unwrap(),
+            LibraryAlbumType::Live
+        );
+        assert_eq!(
+            LibraryAlbumType::from_str("COMPILATIONS").unwrap(),
+            LibraryAlbumType::Compilations
+        );
+        assert_eq!(
+            LibraryAlbumType::from_str("EPS_AND_SINGLES").unwrap(),
+            LibraryAlbumType::EpsAndSingles
+        );
+        assert_eq!(
+            LibraryAlbumType::from_str("OTHER").unwrap(),
+            LibraryAlbumType::Other
+        );
+        assert!(LibraryAlbumType::from_str("INVALID").is_err());
+    }
+
+    #[test]
+    fn test_library_album_type_to_value_type_from_json() {
+        let json_value = serde_json::json!("LP");
+        let result: Result<LibraryAlbumType, ParseError> = (&json_value).to_value_type();
+        assert_eq!(result.unwrap(), LibraryAlbumType::Lp);
+
+        let json_value = serde_json::json!("LIVE");
+        let result: Result<LibraryAlbumType, ParseError> = (&json_value).to_value_type();
+        assert_eq!(result.unwrap(), LibraryAlbumType::Live);
+
+        let json_value = serde_json::json!(123);
+        let result: Result<LibraryAlbumType, ParseError> = (&json_value).to_value_type();
+        assert!(result.is_err());
+
+        let json_value = serde_json::json!("INVALID");
+        let result: Result<LibraryAlbumType, ParseError> = (&json_value).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_library_track_directory_with_unix_path() {
+        let track = LibraryTrack {
+            file: Some("/home/user/music/album/track.flac".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            track.directory(),
+            Some("/home/user/music/album".to_string())
+        );
+    }
+
+    #[test]
+    fn test_library_track_directory_with_relative_path() {
+        let track = LibraryTrack {
+            file: Some("music/album/track.flac".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(track.directory(), Some("music/album".to_string()));
+    }
+
+    #[test]
+    fn test_library_track_directory_with_no_file() {
+        let track = LibraryTrack {
+            file: None,
+            ..Default::default()
+        };
+        assert_eq!(track.directory(), None);
+    }
+
+    #[test]
+    fn test_library_artist_to_artist_conversion() {
+        let library_artist = LibraryArtist {
+            id: 123,
+            title: "Test Artist".to_string(),
+            cover: Some("/path/to/cover.jpg".to_string()),
+            api_sources: ApiSources::default(),
+        };
+
+        let artist: Artist = library_artist.into();
+        assert_eq!(artist.id, 123.into());
+        assert_eq!(artist.title, "Test Artist");
+        assert_eq!(artist.cover, Some("/path/to/cover.jpg".to_string()));
+        assert_eq!(artist.api_source, ApiSource::library());
+    }
+
+    #[test]
+    fn test_library_album_to_album_conversion_with_valid_dates() {
+        let library_album = LibraryAlbum {
+            id: 456,
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: 123,
+            album_type: LibraryAlbumType::Lp,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            artwork: Some("/path/to/artwork.jpg".to_string()),
+            directory: Some("/path/to/album".to_string()),
+            source: AlbumSource::Local,
+            blur: false,
+            versions: vec![],
+            album_sources: ApiSources::default(),
+            artist_sources: ApiSources::default(),
+        };
+
+        let album: Album = library_album.try_into().unwrap();
+        assert_eq!(album.id, 456.into());
+        assert_eq!(album.title, "Test Album");
+        assert_eq!(album.artist, "Test Artist");
+        assert_eq!(album.artist_id, 123.into());
+        assert!(album.date_released.is_some());
+        assert!(album.date_added.is_some());
+        assert_eq!(album.api_source, ApiSource::library());
+    }
+
+    #[test]
+    fn test_library_album_to_album_conversion_with_invalid_date() {
+        let library_album = LibraryAlbum {
+            id: 456,
+            title: "Test Album".to_string(),
+            artist: "Test Artist".to_string(),
+            artist_id: 123,
+            album_type: LibraryAlbumType::Lp,
+            date_released: Some("invalid-date".to_string()),
+            date_added: None,
+            artwork: None,
+            directory: None,
+            source: AlbumSource::Local,
+            blur: false,
+            versions: vec![],
+            album_sources: ApiSources::default(),
+            artist_sources: ApiSources::default(),
+        };
+
+        let result: Result<Album, _> = library_album.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_library_track_to_track_conversion() {
+        let library_track = LibraryTrack {
+            id: 789,
+            number: 1,
+            title: "Test Track".to_string(),
+            duration: 180.5,
+            album: "Test Album".to_string(),
+            album_id: 456,
+            album_type: LibraryAlbumType::Lp,
+            date_released: Some("2023-01-15T00:00:00Z".to_string()),
+            date_added: Some("2024-01-01T12:00:00Z".to_string()),
+            artist: "Test Artist".to_string(),
+            artist_id: 123,
+            file: Some("/path/to/track.flac".to_string()),
+            artwork: Some("/path/to/artwork.jpg".to_string()),
+            blur: false,
+            bytes: 10_485_760,
+            format: Some(AudioFormat::Flac),
+            bit_depth: Some(24),
+            audio_bitrate: Some(1411),
+            overall_bitrate: Some(1411),
+            sample_rate: Some(96000),
+            channels: Some(2),
+            source: TrackApiSource::Local,
+            api_source: ApiSource::library(),
+            api_sources: ApiSources::default(),
+        };
+
+        let track: Track = library_track.into();
+        assert_eq!(track.id, 789.into());
+        assert_eq!(track.number, 1);
+        assert_eq!(track.title, "Test Track");
+        assert!((track.duration - 180.5).abs() < f64::EPSILON);
+        assert_eq!(track.bit_depth, Some(24));
+        assert_eq!(track.sample_rate, Some(96000));
+        assert_eq!(track.api_source, ApiSource::library());
+    }
+}
