@@ -112,3 +112,167 @@ pub fn setup_cdn_optimization(
 
     router
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperchad_router::RouteRequest;
+    use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_with_no_root_route() {
+        // Router with no root route should be returned unchanged
+        let router = Router::new();
+        let result = setup_cdn_optimization(router.clone(), None, None);
+
+        // Should not have static route since no root route existed
+        assert!(!result.has_static_route("/"));
+        // Should not have dynamic root endpoint
+        assert!(!result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_with_static_root_route() {
+        // Router with static root route should be returned unchanged
+        let router = Router::new().with_static_route("/", |_req| async { "Static content" });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Should still have the original static route
+        assert!(result.has_static_route("/"));
+        // Should NOT add the dynamic root endpoint
+        assert!(!result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_setup_cdn_optimization_with_dynamic_root_route() {
+        // Router with dynamic root route should be transformed
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Should now have a static route for root
+        assert!(result.has_static_route("/"));
+        // Should have the dynamic root endpoint
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+        // Note: The original dynamic "/" route still exists and takes precedence over the static route
+        // This is the current behavior - navigate() checks dynamic routes first
+        assert!(result.has_route("/"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_adds_static_route_with_title() {
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+
+        let result = setup_cdn_optimization(router, Some("My App Title"), None);
+
+        // Should have a static route for root (for static file generation)
+        assert!(result.has_static_route("/"));
+        // Should have the dynamic endpoint
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_adds_static_route_with_viewport() {
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+
+        let result =
+            setup_cdn_optimization(router, None, Some("width=device-width, initial-scale=1"));
+
+        // Should have a static route for root (for static file generation)
+        assert!(result.has_static_route("/"));
+        // Should have the dynamic endpoint
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_adds_static_route_with_both_title_and_viewport() {
+        let router = Router::new().with_route("/", |_req| async { "Dynamic content" });
+
+        let result = setup_cdn_optimization(
+            router,
+            Some("Test App"),
+            Some("width=device-width, initial-scale=1.0"),
+        );
+
+        // Should have a static route for root (for static file generation)
+        assert!(result.has_static_route("/"));
+        // Should have the dynamic endpoint
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_setup_cdn_optimization_dynamic_endpoint_preserves_original_handler() {
+        // Create a router with a dynamic root that returns specific content
+        let expected_content = "Original dynamic content from handler";
+        let router =
+            Router::new().with_route("/", move |_req| async move { expected_content.to_string() });
+
+        let result = setup_cdn_optimization(router, None, None);
+
+        // Navigate to the dynamic endpoint
+        use hyperchad_router::RequestInfo;
+        let req = RouteRequest::from_path(
+            "/__hyperchad_dynamic_root__",
+            RequestInfo {
+                client: hyperchad_router::DEFAULT_CLIENT_INFO.clone(),
+            },
+        );
+        let content = result
+            .navigate(req)
+            .await
+            .expect("Navigation should succeed")
+            .expect("Should return content");
+
+        // Verify the original handler's content is preserved
+        let text = match content {
+            Content::Raw { data, .. } => String::from_utf8(data.to_vec()).unwrap(),
+            _ => panic!("Expected Raw content"),
+        };
+
+        assert_eq!(text, expected_content);
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_return_value_is_router() {
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        let result = setup_cdn_optimization(router.clone(), None, None);
+
+        // Should return a Router instance
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+        assert!(result.has_static_route("/"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_with_empty_title() {
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        // Empty string title should still work
+        let result = setup_cdn_optimization(router, Some(""), None);
+
+        assert!(result.has_static_route("/"));
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_with_empty_viewport() {
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        // Empty string viewport should still work
+        let result = setup_cdn_optimization(router, None, Some(""));
+
+        assert!(result.has_static_route("/"));
+        assert!(result.has_route("/__hyperchad_dynamic_root__"));
+    }
+
+    #[test_log::test]
+    fn test_setup_cdn_optimization_idempotency() {
+        // Calling setup_cdn_optimization twice should be safe
+        let router = Router::new().with_route("/", |_req| async { "content" });
+        let result1 = setup_cdn_optimization(router, Some("App"), None);
+        // Second call should see the static route and return early
+        let result2 = setup_cdn_optimization(result1, Some("App2"), None);
+
+        // Should still have both routes
+        assert!(result2.has_static_route("/"));
+        assert!(result2.has_route("/__hyperchad_dynamic_root__"));
+    }
+}
