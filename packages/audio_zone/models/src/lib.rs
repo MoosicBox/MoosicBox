@@ -274,3 +274,384 @@ pub struct UpdateAudioZone {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub players: Option<Vec<u64>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use switchy_database::DatabaseValue;
+
+    // Test AudioZone <-> ApiAudioZone conversions
+    #[test]
+    fn test_audio_zone_from_api_audio_zone() {
+        let api_zone = ApiAudioZone {
+            id: 42,
+            name: "Living Room".to_string(),
+            players: vec![
+                ApiPlayer {
+                    player_id: 1,
+                    audio_output_id: "output1".to_string(),
+                    name: "Speaker 1".to_string(),
+                    playing: true,
+                },
+                ApiPlayer {
+                    player_id: 2,
+                    audio_output_id: "output2".to_string(),
+                    name: "Speaker 2".to_string(),
+                    playing: false,
+                },
+            ],
+        };
+
+        let zone: AudioZone = api_zone.into();
+
+        assert_eq!(zone.id, 42);
+        assert_eq!(zone.name, "Living Room");
+        assert_eq!(zone.players.len(), 2);
+        assert_eq!(zone.players[0].id, 1);
+        assert_eq!(zone.players[0].audio_output_id, "output1");
+        assert_eq!(zone.players[0].name, "Speaker 1");
+        assert!(zone.players[0].playing);
+        assert_eq!(zone.players[0].created, "");
+        assert_eq!(zone.players[0].updated, "");
+        assert_eq!(zone.players[1].id, 2);
+        assert!(!zone.players[1].playing);
+    }
+
+    #[test]
+    fn test_api_audio_zone_from_audio_zone() {
+        let zone = AudioZone {
+            id: 99,
+            name: "Bedroom".to_string(),
+            players: vec![Player {
+                id: 5,
+                audio_output_id: "bedroom_output".to_string(),
+                name: "Bedroom Speaker".to_string(),
+                playing: true,
+                created: "2024-01-01 00:00:00".to_string(),
+                updated: "2024-01-02 12:00:00".to_string(),
+            }],
+        };
+
+        let api_zone: ApiAudioZone = zone.into();
+
+        assert_eq!(api_zone.id, 99);
+        assert_eq!(api_zone.name, "Bedroom");
+        assert_eq!(api_zone.players.len(), 1);
+        assert_eq!(api_zone.players[0].player_id, 5);
+        assert_eq!(api_zone.players[0].audio_output_id, "bedroom_output");
+        assert_eq!(api_zone.players[0].name, "Bedroom Speaker");
+        assert!(api_zone.players[0].playing);
+    }
+
+    #[test]
+    fn test_audio_zone_conversion_empty_players() {
+        let api_zone = ApiAudioZone {
+            id: 1,
+            name: "Empty Zone".to_string(),
+            players: vec![],
+        };
+
+        let zone: AudioZone = api_zone.into();
+        assert_eq!(zone.players.len(), 0);
+
+        let api_zone_back: ApiAudioZone = zone.into();
+        assert_eq!(api_zone_back.players.len(), 0);
+    }
+
+    // Test AudioZoneWithSession <-> ApiAudioZoneWithSession conversions
+    #[test]
+    fn test_audio_zone_with_session_from_api() {
+        let api_zone = ApiAudioZoneWithSession {
+            id: 10,
+            session_id: 200,
+            name: "Kitchen".to_string(),
+            players: vec![ApiPlayer {
+                player_id: 3,
+                audio_output_id: "kitchen_out".to_string(),
+                name: "Kitchen Speaker".to_string(),
+                playing: false,
+            }],
+        };
+
+        let zone: AudioZoneWithSession = api_zone.into();
+
+        assert_eq!(zone.id, 10);
+        assert_eq!(zone.session_id, 200);
+        assert_eq!(zone.name, "Kitchen");
+        assert_eq!(zone.players.len(), 1);
+        assert_eq!(zone.players[0].id, 3);
+        assert_eq!(zone.players[0].created, "");
+        assert_eq!(zone.players[0].updated, "");
+    }
+
+    #[test]
+    fn test_api_audio_zone_with_session_from_audio_zone_with_session() {
+        let zone = AudioZoneWithSession {
+            id: 20,
+            session_id: 300,
+            name: "Bathroom".to_string(),
+            players: vec![Player {
+                id: 7,
+                audio_output_id: "bath_output".to_string(),
+                name: "Bathroom Speaker".to_string(),
+                playing: true,
+                created: "2024-03-01 00:00:00".to_string(),
+                updated: "2024-03-01 01:00:00".to_string(),
+            }],
+        };
+
+        let api_zone: ApiAudioZoneWithSession = zone.into();
+
+        assert_eq!(api_zone.id, 20);
+        assert_eq!(api_zone.session_id, 300);
+        assert_eq!(api_zone.name, "Bathroom");
+        assert_eq!(api_zone.players.len(), 1);
+        assert_eq!(api_zone.players[0].player_id, 7);
+    }
+
+    // Test Player <-> ApiPlayer conversions
+    #[test]
+    fn test_player_from_api_player() {
+        let api_player = ApiPlayer {
+            player_id: 15,
+            audio_output_id: "test_output".to_string(),
+            name: "Test Player".to_string(),
+            playing: true,
+        };
+
+        let player: Player = api_player.into();
+
+        assert_eq!(player.id, 15);
+        assert_eq!(player.audio_output_id, "test_output");
+        assert_eq!(player.name, "Test Player");
+        assert!(player.playing);
+        assert_eq!(player.created, "");
+        assert_eq!(player.updated, "");
+    }
+
+    #[test]
+    fn test_api_player_from_player() {
+        let player = Player {
+            id: 25,
+            audio_output_id: "prod_output".to_string(),
+            name: "Production Player".to_string(),
+            playing: false,
+            created: "2024-02-01 00:00:00".to_string(),
+            updated: "2024-02-15 12:30:00".to_string(),
+        };
+
+        let api_player: ApiPlayer = player.into();
+
+        assert_eq!(api_player.player_id, 25);
+        assert_eq!(api_player.audio_output_id, "prod_output");
+        assert_eq!(api_player.name, "Production Player");
+        assert!(!api_player.playing);
+    }
+
+    // Test Player database conversions
+    #[test]
+    fn test_player_from_row_success() {
+        let row = switchy_database::Row {
+            columns: vec![
+                ("id".to_string(), DatabaseValue::UInt64(100)),
+                (
+                    "audio_output_id".to_string(),
+                    DatabaseValue::String("device123".to_string()),
+                ),
+                (
+                    "name".to_string(),
+                    DatabaseValue::String("My Speaker".to_string()),
+                ),
+                ("playing".to_string(), DatabaseValue::Bool(true)),
+                (
+                    "created".to_string(),
+                    DatabaseValue::String("2024-01-01 10:00:00".to_string()),
+                ),
+                (
+                    "updated".to_string(),
+                    DatabaseValue::String("2024-01-02 15:30:00".to_string()),
+                ),
+            ],
+        };
+
+        let player: Player = (&row)
+            .to_value_type()
+            .expect("Failed to convert row to Player");
+
+        assert_eq!(player.id, 100);
+        assert_eq!(player.audio_output_id, "device123");
+        assert_eq!(player.name, "My Speaker");
+        assert!(player.playing);
+        assert_eq!(player.created, "2024-01-01 10:00:00");
+        assert_eq!(player.updated, "2024-01-02 15:30:00");
+    }
+
+    #[test]
+    fn test_player_from_row_missing_column() {
+        let row = switchy_database::Row {
+            columns: vec![
+                ("id".to_string(), DatabaseValue::UInt64(100)),
+                (
+                    "audio_output_id".to_string(),
+                    DatabaseValue::String("device123".to_string()),
+                ),
+                // Missing "name" column
+                ("playing".to_string(), DatabaseValue::Bool(true)),
+                (
+                    "created".to_string(),
+                    DatabaseValue::String("2024-01-01 10:00:00".to_string()),
+                ),
+                (
+                    "updated".to_string(),
+                    DatabaseValue::String("2024-01-02 15:30:00".to_string()),
+                ),
+            ],
+        };
+
+        let result: Result<Player, ParseError> = (&row).to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_player_from_row_wrong_type() {
+        let row = switchy_database::Row {
+            columns: vec![
+                ("id".to_string(), DatabaseValue::UInt64(100)),
+                (
+                    "audio_output_id".to_string(),
+                    DatabaseValue::String("device123".to_string()),
+                ),
+                (
+                    "name".to_string(),
+                    DatabaseValue::String("My Speaker".to_string()),
+                ),
+                // Wrong type: String instead of Bool
+                (
+                    "playing".to_string(),
+                    DatabaseValue::String("true".to_string()),
+                ),
+                (
+                    "created".to_string(),
+                    DatabaseValue::String("2024-01-01 10:00:00".to_string()),
+                ),
+                (
+                    "updated".to_string(),
+                    DatabaseValue::String("2024-01-02 15:30:00".to_string()),
+                ),
+            ],
+        };
+
+        let result: Result<Player, ParseError> = (&row).to_value_type();
+        assert!(result.is_err());
+    }
+
+    // Test Player AsId trait
+    #[test]
+    fn test_player_as_id() {
+        let player = Player {
+            id: 42,
+            audio_output_id: "test".to_string(),
+            name: "Test".to_string(),
+            playing: false,
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        let id_value = player.as_id();
+        assert_eq!(id_value, DatabaseValue::Int64(42));
+    }
+
+    #[test]
+    fn test_player_as_id_large_value() {
+        let player = Player {
+            id: u64::MAX,
+            audio_output_id: "test".to_string(),
+            name: "Test".to_string(),
+            playing: false,
+            created: String::new(),
+            updated: String::new(),
+        };
+
+        // This tests the potential wrap behavior with the cast
+        let id_value = player.as_id();
+        assert!(matches!(id_value, DatabaseValue::Int64(_)));
+    }
+
+    // Test JSON serialization/deserialization
+    #[test]
+    fn test_api_audio_zone_serde() {
+        let api_zone = ApiAudioZone {
+            id: 1,
+            name: "Test Zone".to_string(),
+            players: vec![ApiPlayer {
+                player_id: 2,
+                audio_output_id: "out1".to_string(),
+                name: "Player 1".to_string(),
+                playing: true,
+            }],
+        };
+
+        let json = serde_json::to_string(&api_zone).expect("Failed to serialize");
+        assert!(json.contains("\"id\":1"));
+        assert!(json.contains("\"name\":\"Test Zone\""));
+        assert!(json.contains("\"playerId\":2")); // camelCase
+        assert!(json.contains("\"audioOutputId\":\"out1\"")); // camelCase
+
+        let deserialized: ApiAudioZone =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+        assert_eq!(deserialized, api_zone);
+    }
+
+    #[test]
+    fn test_create_audio_zone_serde() {
+        let create = CreateAudioZone {
+            name: "New Zone".to_string(),
+        };
+
+        let json = serde_json::to_string(&create).expect("Failed to serialize");
+        assert!(json.contains("\"name\":\"New Zone\""));
+
+        let deserialized: CreateAudioZone =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+        assert_eq!(deserialized, create);
+    }
+
+    #[test]
+    fn test_update_audio_zone_serde_with_all_fields() {
+        let update = UpdateAudioZone {
+            id: 5,
+            name: Some("Updated Name".to_string()),
+            players: Some(vec![1, 2, 3]),
+        };
+
+        let json = serde_json::to_string(&update).expect("Failed to serialize");
+        assert!(json.contains("\"id\":5"));
+        assert!(json.contains("\"name\":\"Updated Name\""));
+        assert!(json.contains("\"players\":[1,2,3]"));
+
+        let deserialized: UpdateAudioZone =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+        assert_eq!(deserialized, update);
+    }
+
+    #[test]
+    fn test_update_audio_zone_serde_with_partial_fields() {
+        let update = UpdateAudioZone {
+            id: 10,
+            name: Some("Only Name".to_string()),
+            players: None,
+        };
+
+        let json = serde_json::to_string(&update).expect("Failed to serialize");
+        assert!(json.contains("\"id\":10"));
+        assert!(json.contains("\"name\":\"Only Name\""));
+        // players should be omitted due to skip_serializing_if
+        assert!(!json.contains("\"players\""));
+
+        let deserialized: UpdateAudioZone =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+        assert_eq!(deserialized.id, 10);
+        assert_eq!(deserialized.name, Some("Only Name".to_string()));
+        assert_eq!(deserialized.players, None);
+    }
+}
