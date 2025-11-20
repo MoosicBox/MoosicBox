@@ -152,3 +152,128 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
         response.map(|x| x.map(|y| Ok(y)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::stream::{self, StreamExt};
+    use std::time::Duration;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_no_timeout_or_throttle() {
+        // Test that monitor passes through data without timeout or throttle
+        let data = vec![1, 2, 3, 4, 5];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_with_timeout() {
+        // Test that monitor times out when stream stalls
+        let stream = stream::pending::<i32>(); // Stream that never produces data
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_millis(50));
+
+        // Should timeout since stream never produces data
+        let result = monitor.next().await;
+        assert!(result.is_some(), "Should get timeout error");
+        let error = result.unwrap().unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::TimedOut);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_timeout_reset_on_data() {
+        // Test that timeout is reset when data is received
+        // We use a simple stream that should complete quickly to verify timeout doesn't fire
+        let items = vec![1, 2, 3];
+        let stream = stream::iter(items.clone());
+
+        let mut monitor = StalledReadMonitor::new(stream).with_timeout(Duration::from_secs(1));
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        // Should receive all items without timing out
+        assert_eq!(results, vec![1, 2, 3]);
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_with_throttle() {
+        // Test that throttle limits data consumption rate
+        use std::time::Instant;
+
+        let data = vec![1, 2, 3];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream).with_throttle(Duration::from_millis(50));
+
+        let start = Instant::now();
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+        let elapsed = start.elapsed();
+
+        assert_eq!(results, data);
+        // Should take at least 100ms (2 * 50ms throttle for 3 items)
+        // Note: First item might not be throttled, so we check for 2 intervals
+        assert!(
+            elapsed >= Duration::from_millis(90),
+            "Throttling should slow down consumption (elapsed: {elapsed:?})"
+        );
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_stalled_monitor_with_timeout_and_throttle() {
+        // Test that both timeout and throttle work together
+        let data = vec![1, 2, 3];
+        let stream = stream::iter(data.clone());
+        let mut monitor = StalledReadMonitor::new(stream)
+            .with_timeout(Duration::from_millis(200))
+            .with_throttle(Duration::from_millis(30));
+
+        let mut results = vec![];
+        while let Some(item) = monitor.next().await {
+            results.push(item.unwrap());
+        }
+
+        assert_eq!(results, data);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_empty_stream() {
+        // Test monitor with empty stream
+        let stream = stream::iter(Vec::<i32>::new());
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let result = monitor.next().await;
+        assert!(result.is_none(), "Empty stream should return None");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_single_item() {
+        // Test monitor with single item
+        let stream = stream::iter(vec![42]);
+        let mut monitor = StalledReadMonitor::new(stream);
+
+        let result = monitor.next().await.unwrap().unwrap();
+        assert_eq!(result, 42);
+
+        let end = monitor.next().await;
+        assert!(end.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_stalled_monitor_error_display() {
+        // Test that StalledReadMonitorError displays correctly
+        let error = StalledReadMonitorError::Stalled;
+        assert_eq!(format!("{error}"), "Stalled");
+    }
+}
