@@ -9271,6 +9271,7 @@ dependencies = [
  "serde_json",
  "switchy_async",
  "switchy_database",
+ "test-log",
  "thiserror 2.0.17",
  "tokio",
  "utoipa",
