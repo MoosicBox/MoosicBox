@@ -18,6 +18,10 @@ tests = false
 switchy_database = { workspace = true, features = ["turso"] }
 tokio            = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros"] }
+test-log      = { workspace = true }
+
 [features]
 fail-on-warnings = ["switchy_database/fail-on-warnings"]
 

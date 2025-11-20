@@ -17197,7 +17197,9 @@ dependencies = [
 name = "turso_transactions_example"
 version = "0.1.0"
 dependencies = [
+ "switchy_async",
  "switchy_database",
+ "test-log",
  "tokio",
 ]
 
