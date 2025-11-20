@@ -1038,7 +1038,6 @@ mod tests {
         assert_eq!(test_function(), Ok(()));
     }
 
-
     // Test multiple consecutive assertions
     #[test]
     #[allow(clippy::items_after_statements)]
