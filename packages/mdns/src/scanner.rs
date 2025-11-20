@@ -188,3 +188,73 @@ impl service::Processor for service::Service {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    #[test]
+    fn test_moosicbox_creation() {
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080);
+        let server = MoosicBox {
+            id: "test-server".to_string(),
+            name: "Test Server".to_string(),
+            host: addr,
+            dns: "test-server._moosicboxserver._tcp.local.".to_string(),
+        };
+
+        assert_eq!(server.id, "test-server");
+        assert_eq!(server.name, "Test Server");
+        assert_eq!(server.host, addr);
+        assert_eq!(server.dns, "test-server._moosicboxserver._tcp.local.");
+    }
+
+    #[test]
+    fn test_moosicbox_clone() {
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080);
+        let server = MoosicBox {
+            id: "test-server".to_string(),
+            name: "Test Server".to_string(),
+            host: addr,
+            dns: "test-server._moosicboxserver._tcp.local.".to_string(),
+        };
+
+        let cloned = server.clone();
+
+        assert_eq!(server.id, cloned.id);
+        assert_eq!(server.name, cloned.name);
+        assert_eq!(server.host, cloned.host);
+        assert_eq!(server.dns, cloned.dns);
+    }
+
+    #[test]
+    fn test_moosicbox_with_different_ports() {
+        let server1 = MoosicBox {
+            id: "server1".to_string(),
+            name: "Server 1".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080),
+            dns: "server1.local.".to_string(),
+        };
+
+        let server2 = MoosicBox {
+            id: "server2".to_string(),
+            name: "Server 2".to_string(),
+            host: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 101)), 9000),
+            dns: "server2.local.".to_string(),
+        };
+
+        assert_eq!(server1.host.port(), 8080);
+        assert_eq!(server2.host.port(), 9000);
+    }
+
+    #[test]
+    fn test_context_new() {
+        let (tx, _rx) = kanal::unbounded_async();
+        let context = Context::new(tx);
+
+        // Verify context is created successfully
+        // We can't directly access private fields, but we can verify it doesn't panic
+        drop(context);
+    }
+}

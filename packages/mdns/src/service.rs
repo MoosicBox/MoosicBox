@@ -69,4 +69,60 @@ pub mod simulator {
             Ok(())
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_simulator_service_daemon_register() {
+            let daemon = SimulatorServiceDaemon;
+            let service_info = ServiceInfo::new(
+                "_moosicboxserver._tcp.local.",
+                "test-instance",
+                "test-host.local.",
+                "192.168.1.100",
+                8080,
+                None,
+            )
+            .expect("Failed to create ServiceInfo");
+
+            let result = daemon.register(service_info).await;
+            assert!(
+                result.is_ok(),
+                "Simulator daemon should successfully register service"
+            );
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn test_simulator_service_daemon_multiple_registrations() {
+            let daemon = SimulatorServiceDaemon;
+
+            let service1 = ServiceInfo::new(
+                "_moosicboxserver._tcp.local.",
+                "instance-1",
+                "host1.local.",
+                "192.168.1.100",
+                8080,
+                None,
+            )
+            .expect("Failed to create ServiceInfo");
+
+            let service2 = ServiceInfo::new(
+                "_moosicboxserver._tcp.local.",
+                "instance-2",
+                "host2.local.",
+                "192.168.1.101",
+                8081,
+                None,
+            )
+            .expect("Failed to create ServiceInfo");
+
+            let result1 = daemon.register(service1).await;
+            let result2 = daemon.register(service2).await;
+
+            assert!(result1.is_ok(), "First registration should succeed");
+            assert!(result2.is_ok(), "Second registration should succeed");
+        }
+    }
 }

@@ -36,6 +36,9 @@ log         = { workspace = true }
 mdns-sd     = { workspace = true }
 thiserror   = { workspace = true }
 
+[dev-dependencies]
+test-log = { workspace = true }
+
 [features]
 default = ["scanner", "simulator"]
 

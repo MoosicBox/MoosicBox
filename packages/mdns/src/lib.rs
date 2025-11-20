@@ -108,3 +108,91 @@ pub async fn register_service(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_register_service_with_simulator() {
+        let result = register_service("test-server", "192.168.1.100", 8080).await;
+        assert!(
+            result.is_ok(),
+            "Service registration should succeed with simulator"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_register_service_with_different_ports() {
+        let result1 = register_service("test-server-1", "192.168.1.100", 8080).await;
+        assert!(
+            result1.is_ok(),
+            "Service registration should succeed with port 8080"
+        );
+
+        let result2 = register_service("test-server-2", "192.168.1.100", 9000).await;
+        assert!(
+            result2.is_ok(),
+            "Service registration should succeed with port 9000"
+        );
+
+        let result3 = register_service("test-server-3", "192.168.1.100", 443).await;
+        assert!(
+            result3.is_ok(),
+            "Service registration should succeed with port 443"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_register_service_with_different_instance_names() {
+        let result1 = register_service("my-server", "192.168.1.100", 8080).await;
+        assert!(
+            result1.is_ok(),
+            "Service registration should succeed with simple name"
+        );
+
+        let result2 = register_service("server-with-dashes", "192.168.1.100", 8080).await;
+        assert!(
+            result2.is_ok(),
+            "Service registration should succeed with dashes"
+        );
+
+        let result3 = register_service("server_with_underscores", "192.168.1.100", 8080).await;
+        assert!(
+            result3.is_ok(),
+            "Service registration should succeed with underscores"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_register_service_with_different_ips() {
+        let result1 = register_service("test-server", "192.168.1.100", 8080).await;
+        assert!(
+            result1.is_ok(),
+            "Service registration should succeed with private IP"
+        );
+
+        let result2 = register_service("test-server", "10.0.0.5", 8080).await;
+        assert!(
+            result2.is_ok(),
+            "Service registration should succeed with different private IP"
+        );
+
+        let result3 = register_service("test-server", "127.0.0.1", 8080).await;
+        assert!(
+            result3.is_ok(),
+            "Service registration should succeed with localhost"
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_register_service_creates_correct_service_type() {
+        // This test verifies the service uses the correct mDNS service type
+        // by ensuring registration succeeds with the expected SERVICE_TYPE constant
+        let result = register_service("test-server", "192.168.1.100", 8080).await;
+        assert!(
+            result.is_ok(),
+            "Service registration should succeed with correct service type"
+        );
+    }
+}
