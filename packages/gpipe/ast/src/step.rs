@@ -142,3 +142,241 @@ impl Step {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_use_action_id() {
+        let step = Step::UseAction {
+            id: Some("test-id".to_string()),
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+
+        assert_eq!(step.id(), Some("test-id"));
+    }
+
+    #[test]
+    fn test_use_action_id_none() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+
+        assert_eq!(step.id(), None);
+    }
+
+    #[test]
+    fn test_run_script_id() {
+        let step = Step::RunScript {
+            id: Some("build".to_string()),
+            run: "cargo build".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        assert_eq!(step.id(), Some("build"));
+    }
+
+    #[test]
+    fn test_use_action_if_condition() {
+        let condition = Expression::boolean(true);
+        let step = Step::UseAction {
+            id: None,
+            uses: "checkout".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+        };
+
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+
+    #[test]
+    fn test_run_script_if_condition() {
+        let condition = Expression::variable(["success"]);
+        let step = Step::RunScript {
+            id: None,
+            run: "echo done".to_string(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+
+    #[test]
+    fn test_use_action_continue_on_error_true() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "test".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: true,
+        };
+
+        assert!(step.continue_on_error());
+    }
+
+    #[test]
+    fn test_use_action_continue_on_error_false() {
+        let step = Step::UseAction {
+            id: None,
+            uses: "test".to_string(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+
+        assert!(!step.continue_on_error());
+    }
+
+    #[test]
+    fn test_run_script_continue_on_error_true() {
+        let step = Step::RunScript {
+            id: None,
+            run: "cargo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: true,
+            working_directory: None,
+        };
+
+        assert!(step.continue_on_error());
+    }
+
+    #[test]
+    fn test_use_action_env() {
+        let mut env = BTreeMap::new();
+        env.insert("KEY1".to_string(), "value1".to_string());
+        env.insert("KEY2".to_string(), "value2".to_string());
+
+        let step = Step::UseAction {
+            id: None,
+            uses: "test".to_string(),
+            with: BTreeMap::new(),
+            env: env.clone(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+
+        assert_eq!(step.env(), &env);
+    }
+
+    #[test]
+    fn test_run_script_env() {
+        let mut env = BTreeMap::new();
+        env.insert("PATH".to_string(), "/usr/bin".to_string());
+
+        let step = Step::RunScript {
+            id: None,
+            run: "echo $PATH".to_string(),
+            env: env.clone(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        assert_eq!(step.env(), &env);
+    }
+
+    #[test]
+    fn test_run_script_env_empty() {
+        let step = Step::RunScript {
+            id: None,
+            run: "echo test".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        assert!(step.env().is_empty());
+    }
+
+    #[test]
+    fn test_use_action_serialization_roundtrip() {
+        let mut with = BTreeMap::new();
+        with.insert("ref".to_string(), "main".to_string());
+
+        let step = Step::UseAction {
+            id: Some("checkout".to_string()),
+            uses: "checkout".to_string(),
+            with,
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: false,
+        };
+
+        let yaml = serde_yaml::to_string(&step).unwrap();
+        let deserialized: Step = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized, step);
+    }
+
+    #[test]
+    fn test_run_script_serialization_roundtrip() {
+        let step = Step::RunScript {
+            id: Some("build".to_string()),
+            run: "cargo build --release".to_string(),
+            env: BTreeMap::new(),
+            if_condition: None,
+            continue_on_error: true,
+            working_directory: Some("./packages/core".to_string()),
+        };
+
+        let yaml = serde_yaml::to_string(&step).unwrap();
+        let deserialized: Step = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized, step);
+    }
+
+    #[test]
+    fn test_step_with_condition() {
+        let condition = Expression::variable(["success"]);
+        let step = Step::RunScript {
+            id: None,
+            run: "echo 'Success!'".to_string(),
+            env: BTreeMap::new(),
+            if_condition: Some(condition.clone()),
+            continue_on_error: false,
+            working_directory: None,
+        };
+
+        // Verify the condition is accessible via the getter
+        assert_eq!(step.if_condition(), Some(&condition));
+    }
+
+    #[test]
+    fn test_step_untagged_discrimination() {
+        // Test that UseAction is properly deserialized when 'uses' field is present
+        let yaml_use_action = r#"
+uses: my-action
+with:
+  param: value
+"#;
+        let step: Step = serde_yaml::from_str(yaml_use_action).unwrap();
+        assert!(matches!(step, Step::UseAction { .. }));
+
+        // Test that RunScript is properly deserialized when 'run' field is present
+        let yaml_run_script = r#"
+run: echo hello
+"#;
+        let step: Step = serde_yaml::from_str(yaml_run_script).unwrap();
+        assert!(matches!(step, Step::RunScript { .. }));
+    }
+}
