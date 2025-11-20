@@ -77,8 +77,3 @@ impl Arbitrary for XmlAttrNameString {
         Self(string)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}
