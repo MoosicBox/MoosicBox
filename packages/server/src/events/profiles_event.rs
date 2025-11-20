@@ -29,6 +29,23 @@ pub enum AddProfileError {
     YtConfig(#[from] moosicbox_yt::YtConfigError),
 }
 
+/// Adds a new profile with its database connection and music API instances.
+///
+/// This function creates a profile-specific database, runs migrations, and initializes music
+/// APIs for all enabled services (Library, Tidal, Qobuz, `YouTube` Music).
+///
+/// # Errors
+///
+/// * [`AddProfileError::DatabaseFetch`] - If database operations fail
+/// * [`AddProfileError::TidalConfig`] - If Tidal API initialization fails (with `tidal` feature)
+/// * [`AddProfileError::QobuzConfig`] - If Qobuz API initialization fails (with `qobuz` feature)
+/// * [`AddProfileError::YtConfig`] - If `YouTube` Music API initialization fails (with `yt` feature)
+///
+/// # Panics
+///
+/// * If the profile library database path cannot be created (with `sqlite` feature, non-simulator mode)
+/// * If database initialization fails
+/// * If database migration fails (with `sqlite` or `postgres` features)
 async fn add_profile(
     #[allow(unused)] app_type: AppType,
     profile: &str,
@@ -122,6 +139,14 @@ async fn add_profile(
     Ok(())
 }
 
+/// Removes a profile and cleans up its resources.
+///
+/// This function removes the profile from all registries (database profiles, music API profiles,
+/// library profiles) and optionally deletes the profile directory from disk.
+///
+/// # Errors
+///
+/// * If the profile directory deletion fails (with `sqlite` and without `postgres` features)
 #[allow(clippy::unused_async)]
 async fn remove_profile(
     #[allow(unused)] app_type: AppType,

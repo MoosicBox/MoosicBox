@@ -189,6 +189,18 @@ pub struct WsServer {
 }
 
 impl WsServer {
+    /// Creates a new WebSocket server instance with the given configuration database.
+    ///
+    /// This function initializes a WebSocket server with a default "main" room and profile-specific
+    /// rooms for all registered profiles. It returns both the server instance and a handle for
+    /// sending commands to the server.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// * [`WsServer`] - The server instance that should be run via [`run`](WsServer::run)
+    /// * [`WsServerHandle`] - A handle for sending commands to the server
+    #[must_use]
     pub fn new(config_db: ConfigDatabase) -> (Self, WsServerHandle) {
         // create empty server
         let mut rooms = BTreeMap::new();
