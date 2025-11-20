@@ -251,11 +251,7 @@ where
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::float_cmp,
-    clippy::doc_markdown
-)]
+#[allow(clippy::cast_precision_loss, clippy::float_cmp, clippy::doc_markdown)]
 mod tests {
     use super::*;
     use symphonia::core::audio::Channels;
