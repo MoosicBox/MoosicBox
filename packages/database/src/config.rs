@@ -141,3 +141,95 @@ mod api {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simulator::SimulationDatabase;
+
+    #[test]
+    fn test_config_database_from_arc() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let config_db: ConfigDatabase = db.clone().into();
+
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**config_db.database),
+            std::ptr::addr_of!(**db)
+        ));
+    }
+
+    #[test]
+    fn test_config_database_from_ref() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let config_db = ConfigDatabase {
+            database: db.clone(),
+        };
+
+        let arc_db: Arc<Box<dyn Database>> = (&config_db).into();
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**arc_db),
+            std::ptr::addr_of!(**db)
+        ));
+    }
+
+    #[test]
+    fn test_config_database_into_arc() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let config_db = ConfigDatabase {
+            database: db.clone(),
+        };
+
+        let arc_db: Arc<Box<dyn Database>> = config_db.into();
+        assert!(std::ptr::addr_eq(
+            std::ptr::addr_of!(**arc_db),
+            std::ptr::addr_of!(**db)
+        ));
+    }
+
+    #[test]
+    fn test_config_database_deref() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let config_db = ConfigDatabase {
+            database: db.clone(),
+        };
+
+        // Should be able to use as &dyn Database via Deref
+        let _db_ref: &dyn Database = &*config_db;
+    }
+
+    #[test]
+    fn test_config_database_ref_into_dyn_database() {
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        let config_db = ConfigDatabase { database: db };
+
+        let db_ref: &dyn Database = (&config_db).into();
+        // Just verify the conversion works
+        let _ = db_ref;
+    }
+
+    #[test]
+    fn test_init_and_reuse() {
+        // This test uses a static global, so we need to be careful
+        // We'll just verify init doesn't panic
+        let db = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        init(db);
+
+        // Calling init again should just replace the database
+        let db2 = Arc::new(
+            Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
+        );
+        init(db2);
+    }
+}
