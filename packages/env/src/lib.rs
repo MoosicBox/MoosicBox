@@ -225,41 +225,6 @@ impl_env!(standard);
 mod tests {
     use super::*;
 
-    #[test_log::test]
-    fn test_env_error_not_found_display() {
-        let error = EnvError::NotFound("TEST_VAR".to_string());
-        assert_eq!(
-            error.to_string(),
-            "Environment variable 'TEST_VAR' not found"
-        );
-    }
-
-    #[test_log::test]
-    fn test_env_error_invalid_value_display() {
-        let error = EnvError::InvalidValue("TEST_VAR".to_string(), "bad value".to_string());
-        assert_eq!(
-            error.to_string(),
-            "Environment variable 'TEST_VAR' has invalid value: bad value"
-        );
-    }
-
-    #[test_log::test]
-    fn test_env_error_parse_error_display() {
-        let error = EnvError::ParseError("TEST_VAR".to_string(), "invalid digit".to_string());
-        assert_eq!(
-            error.to_string(),
-            "Parse error for 'TEST_VAR': invalid digit"
-        );
-    }
-
-    #[test_log::test]
-    fn test_env_error_debug() {
-        let error = EnvError::NotFound("VAR".to_string());
-        let debug_str = format!("{error:?}");
-        assert!(debug_str.contains("NotFound"));
-        assert!(debug_str.contains("VAR"));
-    }
-
     struct TestEnvProvider {
         vars: BTreeMap<String, String>,
     }

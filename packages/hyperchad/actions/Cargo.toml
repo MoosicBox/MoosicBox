@@ -35,6 +35,7 @@ serde_json = { workspace = true, optional = true }
 flume                        = { workspace = true }
 hyperchad_transformer_models = { workspace = true, features = ["arb"] }
 moosicbox_arb                = { workspace = true, features = ["serde", "xml"] }
+test-log                     = { workspace = true }
 
 [features]
 default = ["arb", "handler", "logic", "serde"]

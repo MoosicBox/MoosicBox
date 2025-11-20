@@ -5821,6 +5821,7 @@ dependencies = [
  "serde",
  "serde_json",
  "switchy_time",
+ "test-log",
 ]
 
 [[package]]
@@ -15085,6 +15086,7 @@ name = "switchy_env"
 version = "0.1.0"
 dependencies = [
  "log 0.4.28",
+ "test-log",
  "thiserror 2.0.17",
 ]
 

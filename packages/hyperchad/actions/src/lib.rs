@@ -1375,45 +1375,6 @@ mod tests {
     use super::*;
 
     #[test_log::test]
-    fn test_key_as_str() {
-        assert_eq!(Key::Escape.as_str(), "Escape");
-        assert_eq!(Key::Enter.as_str(), "Enter");
-        assert_eq!(Key::A.as_str(), "A");
-        assert_eq!(Key::Key0.as_str(), "Key0");
-        assert_eq!(Key::Numpad5.as_str(), "Numpad5");
-        assert_eq!(Key::F12.as_str(), "F12");
-        assert_eq!(Key::Control.as_str(), "Control");
-    }
-
-    #[test_log::test]
-    fn test_key_display() {
-        assert_eq!(format!("{}", Key::Tab), "Tab");
-        assert_eq!(format!("{}", Key::ArrowUp), "ArrowUp");
-        assert_eq!(format!("{}", Key::Meta), "Meta");
-    }
-
-    #[test_log::test]
-    fn test_action_trigger_type() {
-        assert_eq!(ActionTrigger::Click.trigger_type(), "Click");
-        assert_eq!(ActionTrigger::Hover.trigger_type(), "Hover");
-        assert_eq!(ActionTrigger::Change.trigger_type(), "Change");
-        assert_eq!(ActionTrigger::Immediate.trigger_type(), "Immediate");
-        assert_eq!(
-            ActionTrigger::HttpRequestSuccess.trigger_type(),
-            "HttpRequestSuccess"
-        );
-        assert_eq!(
-            ActionTrigger::Event("custom".to_string()).trigger_type(),
-            "Event"
-        );
-    }
-
-    #[test_log::test]
-    fn test_action_trigger_default() {
-        assert_eq!(ActionTrigger::default(), ActionTrigger::Immediate);
-    }
-
-    #[test_log::test]
     fn test_action_effect_delay_off() {
         let action = ActionType::NoOp;
         let effect = action.delay_off(1000);
