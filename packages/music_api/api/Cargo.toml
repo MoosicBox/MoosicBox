@@ -54,3 +54,6 @@ api = [
 _auth                  = []
 auth-poll              = ["_auth", "moosicbox_music_api/auth-poll"]
 auth-username-password = ["_auth", "moosicbox_music_api/auth-username-password"]
+
+[dev-dependencies]
+serde_json = { workspace = true }

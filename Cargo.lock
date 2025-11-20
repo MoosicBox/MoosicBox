@@ -8820,6 +8820,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_profiles",
  "serde",
+ "serde_json",
  "utoipa",
 ]
 
