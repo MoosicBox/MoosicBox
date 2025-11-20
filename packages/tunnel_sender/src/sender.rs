@@ -1806,3 +1806,209 @@ impl TunnelSender {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_files::range::Range;
+    use pretty_assertions::assert_eq;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_does_range_overlap_with_unbounded_range() {
+        let range = Range {
+            start: None,
+            end: None,
+        };
+        assert!(TunnelSender::does_range_overlap(&range, 0, 100));
+        assert!(TunnelSender::does_range_overlap(&range, 50, 150));
+        assert!(TunnelSender::does_range_overlap(&range, 100, 200));
+    }
+
+    #[test]
+    fn test_does_range_overlap_with_start_only() {
+        let range = Range {
+            start: Some(50),
+            end: None,
+        };
+        // Packet before range start
+        assert!(!TunnelSender::does_range_overlap(&range, 0, 49));
+        // Packet overlapping range start
+        assert!(TunnelSender::does_range_overlap(&range, 40, 60));
+        // Packet entirely within range
+        assert!(TunnelSender::does_range_overlap(&range, 100, 200));
+        // Packet at exact start
+        assert!(TunnelSender::does_range_overlap(&range, 50, 100));
+    }
+
+    #[test]
+    fn test_does_range_overlap_with_end_only() {
+        let range = Range {
+            start: None,
+            end: Some(100),
+        };
+        // Packet before range end
+        assert!(TunnelSender::does_range_overlap(&range, 0, 50));
+        // Packet at exact end
+        assert!(TunnelSender::does_range_overlap(&range, 99, 100));
+        // Packet overlapping range end
+        assert!(TunnelSender::does_range_overlap(&range, 50, 150));
+        // Packet after range end
+        assert!(!TunnelSender::does_range_overlap(&range, 101, 200));
+    }
+
+    #[test]
+    fn test_does_range_overlap_with_bounded_range() {
+        let range = Range {
+            start: Some(50),
+            end: Some(150),
+        };
+        // Packet completely before range
+        assert!(!TunnelSender::does_range_overlap(&range, 0, 49));
+        // Packet overlapping start
+        assert!(TunnelSender::does_range_overlap(&range, 40, 60));
+        // Packet entirely within range
+        assert!(TunnelSender::does_range_overlap(&range, 75, 125));
+        // Packet overlapping end
+        assert!(TunnelSender::does_range_overlap(&range, 140, 160));
+        // Packet completely after range
+        assert!(!TunnelSender::does_range_overlap(&range, 151, 200));
+        // Packet exactly matching range
+        assert!(TunnelSender::does_range_overlap(&range, 50, 150));
+    }
+
+    #[test]
+    fn test_does_range_overlap_edge_cases() {
+        // Range with same start and end (point range)
+        let point_range = Range {
+            start: Some(50),
+            end: Some(50),
+        };
+        assert!(!TunnelSender::does_range_overlap(&point_range, 0, 49));
+        assert!(TunnelSender::does_range_overlap(&point_range, 49, 51));
+        assert!(!TunnelSender::does_range_overlap(&point_range, 51, 100));
+
+        // Packet boundary cases
+        let range = Range {
+            start: Some(50),
+            end: Some(100),
+        };
+        // Packet ending exactly at range start
+        assert!(!TunnelSender::does_range_overlap(&range, 40, 49));
+        // Packet starting exactly at range end + 1
+        assert!(!TunnelSender::does_range_overlap(&range, 101, 110));
+    }
+
+    #[test]
+    fn test_init_binary_request_buffer_first_packet() {
+        let request_id = 12345_u64;
+        let packet_id = 1_u32;
+        let last = false;
+        let status = 200_u16;
+        let mut headers = BTreeMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+
+        let mut buf = vec![0_u8; 1024];
+        let offset = TunnelSender::init_binary_request_buffer(
+            request_id, packet_id, last, status, &headers, &mut buf,
+        );
+
+        // Verify request_id is at the start
+        let stored_request_id = u64::from_be_bytes(buf[0..8].try_into().unwrap());
+        assert_eq!(stored_request_id, request_id);
+
+        // Verify packet_id
+        let stored_packet_id = u32::from_be_bytes(buf[8..12].try_into().unwrap());
+        assert_eq!(stored_packet_id, packet_id);
+
+        // Verify last flag
+        assert_eq!(buf[12], 0); // last = false
+
+        // Verify status is included for packet_id = 1
+        let stored_status = u16::from_be_bytes(buf[13..15].try_into().unwrap());
+        assert_eq!(stored_status, status);
+
+        // Verify offset is beyond the base header
+        assert!(offset > *BINARY_REQUEST_BUFFER_OFFSET);
+    }
+
+    #[test]
+    fn test_init_binary_request_buffer_subsequent_packet() {
+        let request_id = 67890_u64;
+        let packet_id = 5_u32;
+        let last = true;
+        let status = 200_u16;
+        let headers = BTreeMap::new();
+
+        let mut buf = vec![0_u8; 256];
+        let offset = TunnelSender::init_binary_request_buffer(
+            request_id, packet_id, last, status, &headers, &mut buf,
+        );
+
+        // Verify request_id
+        let stored_request_id = u64::from_be_bytes(buf[0..8].try_into().unwrap());
+        assert_eq!(stored_request_id, request_id);
+
+        // Verify packet_id
+        let stored_packet_id = u32::from_be_bytes(buf[8..12].try_into().unwrap());
+        assert_eq!(stored_packet_id, packet_id);
+
+        // Verify last flag
+        assert_eq!(buf[12], 1); // last = true
+
+        // For packet_id != 1, offset should equal BINARY_REQUEST_BUFFER_OFFSET
+        assert_eq!(offset, *BINARY_REQUEST_BUFFER_OFFSET);
+    }
+
+    #[test]
+    fn test_init_binary_request_buffer_with_empty_headers() {
+        let request_id = 1_u64;
+        let packet_id = 1_u32;
+        let last = false;
+        let status = 404_u16;
+        let headers = BTreeMap::new();
+
+        let mut buf = vec![0_u8; 512];
+        let offset = TunnelSender::init_binary_request_buffer(
+            request_id, packet_id, last, status, &headers, &mut buf,
+        );
+
+        // Even with empty headers, JSON serialization produces "{}"
+        // Verify the headers length is stored
+        let headers_len = u32::from_be_bytes(buf[15..19].try_into().unwrap());
+        assert_eq!(headers_len, 2); // "{}" = 2 bytes
+
+        // Verify offset accounts for empty headers
+        assert!(offset > 19);
+    }
+
+    #[test]
+    fn test_init_binary_request_buffer_consistent_offset() {
+        let mut headers = BTreeMap::new();
+        headers.insert("key1".to_string(), "value1".to_string());
+        headers.insert("key2".to_string(), "value2".to_string());
+
+        let mut buf1 = vec![0_u8; 1024];
+        let offset1 =
+            TunnelSender::init_binary_request_buffer(1, 1, false, 200, &headers, &mut buf1);
+
+        let mut buf2 = vec![0_u8; 1024];
+        let offset2 =
+            TunnelSender::init_binary_request_buffer(1, 1, false, 200, &headers, &mut buf2);
+
+        // Same inputs should produce same offset
+        assert_eq!(offset1, offset2);
+        // Buffers should be identical up to the offset
+        assert_eq!(&buf1[..offset1], &buf2[..offset2]);
+    }
+
+    #[test]
+    fn test_binary_request_buffer_offset_constant() {
+        // Verify the BINARY_REQUEST_BUFFER_OFFSET constant is calculated correctly
+        let expected_offset = std::mem::size_of::<u64>() // request_id
+            + std::mem::size_of::<u32>() // packet_id
+            + std::mem::size_of::<u8>(); // last
+        assert_eq!(*BINARY_REQUEST_BUFFER_OFFSET, expected_offset);
+        assert_eq!(*BINARY_REQUEST_BUFFER_OFFSET, 13);
+    }
+}
