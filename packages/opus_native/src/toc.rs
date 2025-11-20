@@ -471,18 +471,18 @@ mod tests {
     #[test]
     fn test_toc_frame_duration_tenths_ms_all_configs() {
         // Test SILK configs (0-11): 10, 20, 40, 60 ms
-        assert_eq!(Toc::parse(0 << 3).frame_duration_tenths_ms(), 100);  // Config 0: 10ms
-        assert_eq!(Toc::parse(1 << 3).frame_duration_tenths_ms(), 200);  // Config 1: 20ms
-        assert_eq!(Toc::parse(2 << 3).frame_duration_tenths_ms(), 400);  // Config 2: 40ms
-        assert_eq!(Toc::parse(3 << 3).frame_duration_tenths_ms(), 600);  // Config 3: 60ms
+        assert_eq!(Toc::parse(0 << 3).frame_duration_tenths_ms(), 100); // Config 0: 10ms
+        assert_eq!(Toc::parse(1 << 3).frame_duration_tenths_ms(), 200); // Config 1: 20ms
+        assert_eq!(Toc::parse(2 << 3).frame_duration_tenths_ms(), 400); // Config 2: 40ms
+        assert_eq!(Toc::parse(3 << 3).frame_duration_tenths_ms(), 600); // Config 3: 60ms
 
         // Test Hybrid configs (12-15): 10, 20, 10, 20 ms
         assert_eq!(Toc::parse(12 << 3).frame_duration_tenths_ms(), 100); // Config 12: 10ms
         assert_eq!(Toc::parse(13 << 3).frame_duration_tenths_ms(), 200); // Config 13: 20ms
 
         // Test CELT configs (16-31): 2.5, 5, 10, 20 ms
-        assert_eq!(Toc::parse(16 << 3).frame_duration_tenths_ms(), 25);  // Config 16: 2.5ms
-        assert_eq!(Toc::parse(17 << 3).frame_duration_tenths_ms(), 50);  // Config 17: 5ms
+        assert_eq!(Toc::parse(16 << 3).frame_duration_tenths_ms(), 25); // Config 16: 2.5ms
+        assert_eq!(Toc::parse(17 << 3).frame_duration_tenths_ms(), 50); // Config 17: 5ms
         assert_eq!(Toc::parse(18 << 3).frame_duration_tenths_ms(), 100); // Config 18: 10ms
         assert_eq!(Toc::parse(19 << 3).frame_duration_tenths_ms(), 200); // Config 19: 20ms
     }
