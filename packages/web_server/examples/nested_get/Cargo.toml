@@ -17,6 +17,13 @@ moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 env_logger = { workspace = true }
 tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
+[dev-dependencies]
+moosicbox_web_server = { workspace = true, features = ["simulator"] }
+
+switchy_async       = { workspace = true, features = ["macros"] }
+switchy_http_models = { workspace = true }
+test-log            = { workspace = true }
+
 [features]
 default = []
 
