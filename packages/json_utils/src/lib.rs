@@ -77,3 +77,39 @@ pub trait MissingValue<Type> {
         Err(error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_error_display() {
+        let err = ParseError::Parse("test property".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse property: \"test property\""
+        );
+
+        let err = ParseError::ConvertType("u64".to_string());
+        assert_eq!(err.to_string(), "Failed to convert to type: \"u64\"");
+
+        let err = ParseError::MissingValue("field_name".to_string());
+        assert_eq!(err.to_string(), "Missing required value: \"field_name\"");
+    }
+
+    #[test]
+    fn test_parse_error_eq() {
+        assert_eq!(
+            ParseError::Parse("test".to_string()),
+            ParseError::Parse("test".to_string())
+        );
+        assert_ne!(
+            ParseError::Parse("test".to_string()),
+            ParseError::Parse("other".to_string())
+        );
+        assert_ne!(
+            ParseError::Parse("test".to_string()),
+            ParseError::ConvertType("test".to_string())
+        );
+    }
+}
