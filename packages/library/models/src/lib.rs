@@ -215,6 +215,10 @@ pub struct LibraryAlbum {
 impl TryFrom<LibraryAlbum> for Album {
     type Error = chrono::ParseError;
 
+    /// Converts a library album to a generic album.
+    ///
+    /// Parses date strings and sets the API source to library.
+    ///
     /// # Errors
     ///
     /// * If `date_released` or `date_added` contains an invalid date string
@@ -250,6 +254,10 @@ impl TryFrom<LibraryAlbum> for Album {
 impl TryFrom<Album> for LibraryAlbum {
     type Error = TryFromIdError;
 
+    /// Converts a generic album to a library album.
+    ///
+    /// Converts date values to RFC3339 strings and sets the source to Local.
+    ///
     /// # Errors
     ///
     /// * If album or artist ID cannot be converted to `u64`
