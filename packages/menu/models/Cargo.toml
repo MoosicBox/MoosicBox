@@ -24,6 +24,10 @@ utoipa = { workspace = true, optional = true }
 log   = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
+[dev-dependencies]
+moosicbox_music_models = { workspace = true, features = ["flac"] }
+test-log               = { workspace = true }
+
 [features]
 default = ["api", "openapi"]
 
