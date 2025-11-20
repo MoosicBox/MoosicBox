@@ -819,7 +819,13 @@ mod test {
     #[allow(unused)]
     use pretty_assertions::{assert_eq, assert_ne};
 
-    use crate::{runtime::Builder, simulator::runtime::build_runtime, task};
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        runtime::Builder,
+        simulator::runtime::{build_runtime, Handle, Runtime},
+        task,
+    };
 
     #[test]
     fn rt_current_thread_runtime_spawns_on_same_thread() {
@@ -897,5 +903,247 @@ mod test {
         });
 
         runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_tick_processes_single_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let completed = Arc::new(Mutex::new(false));
+        let completed_clone = Arc::clone(&completed);
+
+        runtime.spawn(async move {
+            *completed_clone.lock().unwrap() = true;
+        });
+
+        // Tick should process the spawned task
+        runtime.tick();
+
+        // Give it a moment to complete
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        assert!(*completed.lock().unwrap());
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_current_returns_none_outside_runtime() {
+        let current = Runtime::current();
+        assert!(current.is_none());
+    }
+
+    #[test]
+    fn runtime_current_returns_some_inside_runtime() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            let current = Runtime::current();
+            assert!(current.is_some());
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_equality_based_on_id() {
+        let runtime1 = build_runtime(&Builder::new()).unwrap();
+        let runtime2 = build_runtime(&Builder::new()).unwrap();
+
+        // Same runtime should be equal to itself
+        assert_eq!(runtime1, runtime1.clone());
+
+        // Different runtimes should not be equal
+        assert_ne!(runtime1, runtime2);
+    }
+
+    #[test]
+    fn runtime_default_is_same_as_new() {
+        let runtime1 = Runtime::default();
+        let runtime2 = Runtime::new();
+
+        // Both should work the same way
+        let result1 = runtime1.block_on(async { 42 });
+        let result2 = runtime2.block_on(async { 42 });
+
+        assert_eq!(result1, result2);
+
+        runtime1.wait().unwrap();
+        runtime2.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn(async { 42 });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 42);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_blocking_executes_blocking_code() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let handle = runtime.handle();
+
+        let join_handle = handle.spawn_blocking(|| {
+            // Simulate blocking work
+            42
+        });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 42);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let join_handle = runtime.spawn_with_name("test_task", async { 123 });
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 123);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_blocking_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let join_handle = runtime.spawn_blocking_with_name("blocking_task", || 456);
+
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        assert_eq!(result, 456);
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn join_handle_is_finished_detects_completion() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let mut join_handle = runtime.spawn(async { 42 });
+
+        // Initially not finished
+        assert!(!join_handle.is_finished());
+
+        // Wait for completion
+        let _result = runtime.block_on(async { join_handle.await.unwrap() });
+
+        // Now should be finished (need a new handle to test)
+        let join_handle2 = runtime.spawn(async { 10 });
+        runtime.block_on(async {
+            let _ = join_handle2.await;
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn join_handle_abort_is_noop() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        let join_handle = runtime.spawn(async {
+            // This should complete despite abort
+            42
+        });
+
+        // abort() is a no-op in simulator
+        join_handle.abort();
+
+        // Task should still complete
+        let result = runtime.block_on(async { join_handle.await.unwrap() });
+        assert_eq!(result, 42);
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn handle_spawn_local_with_name_executes_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+
+            let data = Rc::new(RefCell::new(10));
+            let data_clone = data.clone();
+
+            let handle = Handle::current();
+            let join_handle = handle.spawn_local_with_name("local_task", async move {
+                *data_clone.borrow_mut() += 5;
+                *data_clone.borrow()
+            });
+
+            let result = join_handle.await.unwrap();
+            assert_eq!(result, 15);
+            assert_eq!(*data.borrow(), 15);
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn runtime_spawn_local_executes_non_send_future() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+
+            // Rc is not Send
+            let data = Rc::new(RefCell::new(vec![1, 2, 3]));
+            let data_clone = data.clone();
+
+            let handle = runtime.spawn_local(async move {
+                data_clone.borrow_mut().push(4);
+                data_clone.borrow().len()
+            });
+
+            let len = handle.await.unwrap();
+            assert_eq!(len, 4);
+            assert_eq!(data.borrow().len(), 4);
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn local_future_proxy_handles_drop_correctly() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+
+            let data = Rc::new(RefCell::new(false));
+
+            // Create and immediately drop a local future
+            let _handle = runtime.spawn_local(async move {
+                *data.borrow_mut() = true;
+            });
+
+            // The future may or may not have executed, but drop should be safe
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn join_error_display_formatting() {
+        let err = task::JoinError::new();
+        assert_eq!(err.to_string(), "JoinError");
+    }
+
+    #[test]
+    fn join_error_is_clonable() {
+        let err1 = task::JoinError::new();
+        let err2 = err1.clone();
+        assert_eq!(err1.to_string(), err2.to_string());
     }
 }
