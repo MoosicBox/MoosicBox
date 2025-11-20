@@ -306,7 +306,7 @@ jobs:
                   run-matrix-strategy: "sequential"
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Clippy"
-                  run-matrix-debug-shells: "fish"
+                  run-matrix-debug-shells: "fish,bash"
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
@@ -325,7 +325,7 @@ jobs:
                   run-matrix-strategy: "sequential"
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Tests"
-                  run-matrix-debug-shells: "fish"
+                  run-matrix-debug-shells: "fish,bash"
 
             - name: Run ${{ matrix.package.name }} doctests
               uses: ./.github/actions/clippier
@@ -344,7 +344,7 @@ jobs:
                   run-matrix-strategy: "sequential"
                   run-matrix-continue-on-failure: "true"
                   run-matrix-label: "Doctests"
-                  run-matrix-debug-shells: "fish"
+                  run-matrix-debug-shells: "fish,bash"
 
             - name: Create coverage report
               id: create_coverage_report
