@@ -146,3 +146,6 @@ plugin-uuid = ["hyperchad_renderer_vanilla_js_hash/plugin-uuid"]
 plugin-uuid-insecure = [
     "hyperchad_renderer_vanilla_js_hash/plugin-uuid-insecure",
 ]
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
