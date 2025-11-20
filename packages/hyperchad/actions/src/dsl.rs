@@ -668,3 +668,205 @@ impl From<DslValue> for ActionEffect {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_element_reference_parse_id_with_hash() {
+        let reference = ElementReference {
+            selector: "#my-element".to_string(),
+        };
+        let parsed = reference.parse_selector();
+
+        match parsed {
+            ParsedSelector::Id(id) => assert_eq!(id, "my-element"),
+            _ => panic!("Expected Id selector"),
+        }
+    }
+
+    #[test]
+    fn test_element_reference_parse_class_with_dot() {
+        let reference = ElementReference {
+            selector: ".my-class".to_string(),
+        };
+        let parsed = reference.parse_selector();
+
+        match parsed {
+            ParsedSelector::Class(class) => assert_eq!(class, "my-class"),
+            _ => panic!("Expected Class selector"),
+        }
+    }
+
+    #[test]
+    fn test_element_reference_parse_bare_string_as_id() {
+        let reference = ElementReference {
+            selector: "my-element".to_string(),
+        };
+        let parsed = reference.parse_selector();
+
+        match parsed {
+            ParsedSelector::Id(id) => assert_eq!(id, "my-element"),
+            _ => panic!("Expected Id selector for backward compatibility"),
+        }
+    }
+
+    #[test]
+    fn test_element_reference_parse_empty_as_invalid() {
+        let reference = ElementReference {
+            selector: String::new(),
+        };
+        let parsed = reference.parse_selector();
+
+        match parsed {
+            ParsedSelector::Invalid => {}
+            _ => panic!("Expected Invalid selector for empty string"),
+        }
+    }
+
+    #[test]
+    fn test_literal_constructors() {
+        let string = Literal::string("test");
+        assert_eq!(string, Literal::String("test".to_string()));
+
+        let integer = Literal::integer(42);
+        assert_eq!(integer, Literal::Integer(42));
+
+        let float = Literal::float(2.5);
+        assert_eq!(float, Literal::Float(2.5));
+
+        let boolean = Literal::bool(true);
+        assert_eq!(boolean, Literal::Bool(true));
+    }
+
+    #[test]
+    fn test_literal_display_string() {
+        let lit = Literal::String("hello".to_string());
+        assert_eq!(format!("{lit}"), "hello");
+    }
+
+    #[test]
+    fn test_literal_display_integer() {
+        let lit = Literal::Integer(42);
+        assert_eq!(format!("{lit}"), "42");
+    }
+
+    #[test]
+    fn test_literal_display_float() {
+        let lit = Literal::Float(2.5);
+        assert_eq!(format!("{lit}"), "2.5");
+    }
+
+    #[test]
+    fn test_literal_display_bool() {
+        let lit = Literal::Bool(true);
+        assert_eq!(format!("{lit}"), "true");
+    }
+
+    #[test]
+    fn test_literal_display_unit() {
+        let lit = Literal::Unit;
+        assert_eq!(format!("{lit}"), "");
+    }
+
+    #[test]
+    fn test_expression_display_literal() {
+        let expr = Expression::Literal(Literal::String("test".to_string()));
+        assert_eq!(format!("{expr}"), "test");
+    }
+
+    #[test]
+    fn test_expression_display_variable() {
+        let expr = Expression::Variable("my_var".to_string());
+        assert_eq!(format!("{expr}"), "my_var");
+    }
+
+    #[test]
+    fn test_dsl_value_from_literal_string() {
+        let lit = Literal::String("test".to_string());
+        let value: DslValue = lit.into();
+        match value {
+            DslValue::String(s) => assert_eq!(s, "test"),
+            _ => panic!("Expected String value"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_from_literal_integer() {
+        let lit = Literal::Integer(42);
+        let value: DslValue = lit.into();
+        match value {
+            DslValue::Number(n) => assert!((n - 42.0).abs() < f64::EPSILON),
+            _ => panic!("Expected Number value"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_from_literal_float() {
+        let lit = Literal::Float(2.5);
+        let value: DslValue = lit.into();
+        match value {
+            DslValue::Number(n) => assert!((n - 2.5).abs() < f64::EPSILON),
+            _ => panic!("Expected Number value"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_from_literal_bool() {
+        let lit = Literal::Bool(true);
+        let value: DslValue = lit.into();
+        match value {
+            DslValue::Bool(b) => assert!(b),
+            _ => panic!("Expected Bool value"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_from_literal_unit() {
+        let lit = Literal::Unit;
+        let value: DslValue = lit.into();
+        match value {
+            DslValue::Unit => {}
+            _ => panic!("Expected Unit value"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_to_action_effect_for_action() {
+        let action_effect = crate::ActionEffect {
+            action: crate::ActionType::NoOp,
+            delay_off: None,
+            throttle: None,
+            unique: None,
+        };
+        let dsl_value = DslValue::Action(action_effect);
+        let converted: crate::ActionEffect = dsl_value.into();
+
+        assert!(matches!(converted.action, crate::ActionType::NoOp));
+    }
+
+    #[test]
+    fn test_dsl_value_to_action_effect_for_element_ref() {
+        let element_ref = ElementReference {
+            selector: "#test".to_string(),
+        };
+        let dsl_value = DslValue::ElementRef(element_ref);
+        let converted: crate::ActionEffect = dsl_value.into();
+
+        match converted.action {
+            crate::ActionType::Custom { action } => {
+                assert_eq!(action, "element_ref:#test");
+            }
+            _ => panic!("Expected Custom action for element reference"),
+        }
+    }
+
+    #[test]
+    fn test_dsl_value_to_action_effect_for_non_action() {
+        let dsl_value = DslValue::String("test".to_string());
+        let converted: crate::ActionEffect = dsl_value.into();
+
+        assert!(matches!(converted.action, crate::ActionType::NoOp));
+    }
+}

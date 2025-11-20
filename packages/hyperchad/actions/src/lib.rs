@@ -1369,3 +1369,155 @@ pub mod prelude {
     #[cfg(feature = "logic")]
     pub use crate::logic::*;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_key_as_str_arrow_keys() {
+        assert_eq!(Key::ArrowUp.as_str(), "ArrowUp");
+        assert_eq!(Key::ArrowDown.as_str(), "ArrowDown");
+        assert_eq!(Key::ArrowLeft.as_str(), "ArrowLeft");
+        assert_eq!(Key::ArrowRight.as_str(), "ArrowRight");
+    }
+
+    #[test]
+    fn test_key_as_str_function_keys() {
+        assert_eq!(Key::F1.as_str(), "F1");
+        assert_eq!(Key::F6.as_str(), "F6");
+        assert_eq!(Key::F12.as_str(), "F12");
+    }
+
+    #[test]
+    fn test_key_as_str_letter_keys() {
+        assert_eq!(Key::A.as_str(), "A");
+        assert_eq!(Key::M.as_str(), "M");
+        assert_eq!(Key::Z.as_str(), "Z");
+    }
+
+    #[test]
+    fn test_key_as_str_number_keys() {
+        assert_eq!(Key::Key0.as_str(), "Key0");
+        assert_eq!(Key::Key5.as_str(), "Key5");
+        assert_eq!(Key::Key9.as_str(), "Key9");
+    }
+
+    #[test]
+    fn test_key_as_str_numpad_keys() {
+        assert_eq!(Key::Numpad0.as_str(), "Numpad0");
+        assert_eq!(Key::Numpad5.as_str(), "Numpad5");
+        assert_eq!(Key::Numpad9.as_str(), "Numpad9");
+    }
+
+    #[test]
+    fn test_key_display_trait() {
+        assert_eq!(format!("{}", Key::Enter), "Enter");
+        assert_eq!(format!("{}", Key::Escape), "Escape");
+        assert_eq!(format!("{}", Key::Tab), "Tab");
+    }
+
+    #[test]
+    fn test_action_trigger_trigger_type() {
+        assert_eq!(ActionTrigger::Click.trigger_type(), "Click");
+        assert_eq!(ActionTrigger::Hover.trigger_type(), "Hover");
+        assert_eq!(
+            ActionTrigger::Event("custom".to_string()).trigger_type(),
+            "Event"
+        );
+        assert_eq!(
+            ActionTrigger::HttpRequestSuccess.trigger_type(),
+            "HttpRequestSuccess"
+        );
+    }
+
+    #[test]
+    fn test_action_trigger_default() {
+        assert_eq!(ActionTrigger::default(), ActionTrigger::Immediate);
+    }
+
+    #[test]
+    fn test_action_effect_builder_methods() {
+        let effect = ActionType::NoOp.delay_off(100).throttle(50).unique();
+
+        assert_eq!(effect.delay_off, Some(100));
+        assert_eq!(effect.throttle, Some(50));
+        assert_eq!(effect.unique, Some(true));
+    }
+
+    #[test]
+    fn test_action_effect_chaining_delay_off_and_throttle() {
+        let effect = ActionType::NoOp.delay_off(200).throttle(100);
+
+        assert_eq!(effect.delay_off, Some(200));
+        assert_eq!(effect.throttle, Some(100));
+        assert_eq!(effect.unique, None);
+    }
+
+    #[test]
+    fn test_action_effect_from_action_type() {
+        let effect: ActionEffect = ActionType::NoOp.into();
+        assert!(matches!(effect.action, ActionType::NoOp));
+        assert_eq!(effect.delay_off, None);
+        assert_eq!(effect.throttle, None);
+        assert_eq!(effect.unique, None);
+    }
+
+    #[test]
+    fn test_action_type_and_simple_chain() {
+        let action = ActionType::NoOp.and(ActionType::show_str_id("test"));
+
+        match action {
+            ActionType::Multi(actions) => {
+                assert_eq!(actions.len(), 2);
+                assert!(matches!(actions[0], ActionType::NoOp));
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+
+    #[test]
+    fn test_action_type_and_extends_existing_multi() {
+        let action = ActionType::NoOp
+            .and(ActionType::show_str_id("test1"))
+            .and(ActionType::show_str_id("test2"));
+
+        match action {
+            ActionType::Multi(actions) => {
+                assert_eq!(actions.len(), 3);
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+
+    #[test]
+    fn test_action_effect_from_vec_action_effects() {
+        let effects = vec![
+            ActionType::NoOp.into_action_effect(),
+            ActionType::show_str_id("test").into_action_effect(),
+        ];
+
+        let combined: ActionEffect = effects.into();
+
+        match combined.action {
+            ActionType::MultiEffect(inner) => {
+                assert_eq!(inner.len(), 2);
+            }
+            _ => panic!("Expected MultiEffect action"),
+        }
+    }
+
+    #[test]
+    fn test_action_effect_from_vec_action_types() {
+        let actions = vec![ActionType::NoOp, ActionType::show_str_id("test")];
+
+        let effect: ActionEffect = actions.into();
+
+        match effect.action {
+            ActionType::Multi(inner) => {
+                assert_eq!(inner.len(), 2);
+            }
+            _ => panic!("Expected Multi action"),
+        }
+    }
+}

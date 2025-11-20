@@ -1041,3 +1041,251 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Layo
             .unwrap_or_else(|| if_expr.value.unwrap_or_default())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ActionType;
+
+    #[test]
+    fn test_arithmetic_plus() {
+        let result = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(8.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_minus() {
+        let result = Arithmetic::Minus(Value::Real(10.0), Value::Real(4.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(6.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_multiply() {
+        let result = Arithmetic::Multiply(Value::Real(3.0), Value::Real(4.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(12.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_divide() {
+        let result = Arithmetic::Divide(Value::Real(20.0), Value::Real(4.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(5.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_min() {
+        let result = Arithmetic::Min(Value::Real(5.0), Value::Real(3.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(3.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_max() {
+        let result = Arithmetic::Max(Value::Real(5.0), Value::Real(8.0));
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(8.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_chaining() {
+        let result =
+            Arithmetic::Plus(Value::Real(2.0), Value::Real(3.0)).multiply(Value::Real(2.0));
+        // (2 + 3) * 2 would require grouping, but this does Plus then creates new Multiply
+        // Result is Multiply(Plus(2, 3), 2)
+        match result {
+            Arithmetic::Multiply(..) => {}
+            _ => panic!("Expected Multiply"),
+        }
+    }
+
+    #[test]
+    fn test_arithmetic_clamp_within_bounds() {
+        let value = Value::Real(5.0);
+        let result = Arithmetic::Min(
+            Value::Real(10.0),
+            Arithmetic::Max(value, Value::Real(0.0)).into(),
+        );
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(5.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_clamp_below_min() {
+        let value = Value::Real(-5.0);
+        let result = Arithmetic::Min(
+            Value::Real(10.0),
+            Arithmetic::Max(value, Value::Real(0.0)).into(),
+        );
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_clamp_above_max() {
+        let value = Value::Real(15.0);
+        let result = Arithmetic::Min(
+            Value::Real(10.0),
+            Arithmetic::Max(value, Value::Real(0.0)).into(),
+        );
+        assert_eq!(
+            result.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(10.0)
+        );
+    }
+
+    #[test]
+    fn test_value_eq_creates_condition() {
+        let condition = Value::Real(5.0).eq(Value::Real(5.0));
+        match condition {
+            Condition::Eq(a, b) => {
+                assert_eq!(a, Value::Real(5.0));
+                assert_eq!(b, Value::Real(5.0));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    #[test]
+    fn test_value_as_str_for_string() {
+        let value = Value::String("test".to_string());
+        assert_eq!(value.as_str(), Some("test"));
+    }
+
+    #[test]
+    fn test_value_as_str_for_key() {
+        let value = Value::Key(crate::Key::Enter);
+        assert_eq!(value.as_str(), Some("Enter"));
+    }
+
+    #[test]
+    fn test_value_as_str_for_non_string() {
+        let value = Value::Real(5.0);
+        assert_eq!(value.as_str(), None);
+    }
+
+    #[test]
+    fn test_value_as_f32_for_real() {
+        let value = Value::Real(2.5);
+        assert_eq!(
+            value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>),
+            Some(2.5)
+        );
+    }
+
+    #[test]
+    fn test_value_as_f32_for_non_numeric() {
+        let value = Value::String("test".to_string());
+        assert_eq!(value.as_f32(None::<&fn(&CalcValue) -> Option<Value>>), None);
+    }
+
+    #[test]
+    fn test_calc_value_eq() {
+        let calc = CalcValue::Visibility {
+            target: crate::ElementTarget::Id(123),
+        };
+        let condition = calc.eq(visible());
+
+        match condition {
+            Condition::Eq(a, b) => {
+                assert!(matches!(a, Value::Calc(_)));
+                assert!(matches!(b, Value::Visibility(Visibility::Visible)));
+            }
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    #[test]
+    fn test_calc_value_then_pass_to() {
+        let calc = CalcValue::EventValue;
+        let action = calc.then_pass_to(ActionType::NoOp);
+
+        match action {
+            ActionType::Parameterized { action, value } => {
+                assert!(matches!(*action, ActionType::NoOp));
+                assert!(matches!(value, Value::Calc(CalcValue::EventValue)));
+            }
+            _ => panic!("Expected Parameterized action"),
+        }
+    }
+
+    #[test]
+    fn test_condition_then_creates_if() {
+        let condition = Condition::Bool(true);
+        let if_action = condition.then(ActionType::NoOp);
+
+        assert_eq!(if_action.actions.len(), 1);
+        assert_eq!(if_action.else_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_condition_or_else_creates_if() {
+        let condition = Condition::Bool(false);
+        let if_action = condition.or_else(ActionType::NoOp);
+
+        assert_eq!(if_action.actions.len(), 0);
+        assert_eq!(if_action.else_actions.len(), 1);
+    }
+
+    #[test]
+    fn test_if_then_adds_action() {
+        let if_action = Condition::Bool(true)
+            .then(ActionType::NoOp)
+            .then(ActionType::show_str_id("test"));
+
+        assert_eq!(if_action.actions.len(), 2);
+    }
+
+    #[test]
+    fn test_if_or_else_adds_action() {
+        let if_action = Condition::Bool(true)
+            .then(ActionType::NoOp)
+            .or_else(ActionType::hide_str_id("test"));
+
+        assert_eq!(if_action.actions.len(), 1);
+        assert_eq!(if_action.else_actions.len(), 1);
+    }
+
+    #[test]
+    fn test_helper_functions() {
+        assert_eq!(hidden(), Value::Visibility(Visibility::Hidden));
+        assert_eq!(visible(), Value::Visibility(Visibility::Visible));
+        assert_eq!(displayed(), Value::Display(true));
+        assert_eq!(not_displayed(), Value::Display(false));
+    }
+
+    #[test]
+    fn test_eq_helper_function() {
+        let condition = eq(Value::Real(5.0), Value::Real(5.0));
+        match condition {
+            Condition::Eq(..) => {}
+            Condition::Bool(_) => panic!("Expected Eq condition"),
+        }
+    }
+
+    #[test]
+    fn test_value_from_conversions() {
+        let _v1: Value = 2.5_f32.into();
+        let _v2: Value = 2.71_f64.into();
+        let _v3: Value = Visibility::Hidden.into();
+        let _v4: Value = hyperchad_transformer_models::LayoutDirection::Row.into();
+    }
+}
