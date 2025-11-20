@@ -102,6 +102,10 @@ pub mod api {
         type Error = actix_web::Error;
         type Future = Ready<Result<Self, actix_web::Error>>;
 
+        /// Extracts the `LibraryMusicApi` instance from an HTTP request based on the profile.
+        ///
+        /// Reads the profile name from the request and retrieves the corresponding
+        /// library music API instance from the global registry.
         fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
             let profile = ProfileName::from_request_inner(req);
             let profile = match profile {

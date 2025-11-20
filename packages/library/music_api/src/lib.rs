@@ -221,10 +221,17 @@ impl LibraryMusicApi {
 
 #[async_trait]
 impl MusicApi for LibraryMusicApi {
+    /// Returns the API source identifier for this library implementation.
     fn source(&self) -> &ApiSource {
         &LIBRARY_API_SOURCE
     }
 
+    /// Retrieves a paginated list of favorite artists.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch artists from the library
     async fn artists(
         &self,
         offset: Option<u32>,
@@ -245,6 +252,12 @@ impl MusicApi for LibraryMusicApi {
         .inner_into())
     }
 
+    /// Retrieves a library artist by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch the artist from the library
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         Ok(self
             .library_artist(artist_id)
@@ -253,16 +266,32 @@ impl MusicApi for LibraryMusicApi {
             .map(Into::into))
     }
 
+    /// Adds an artist to the favorite artists list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn add_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         add_favorite_artist(&self.db, artist_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Removes an artist from the favorite artists list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         remove_favorite_artist(&self.db, artist_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Retrieves the artist associated with an album.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch the album artist from the library
     async fn album_artist(
         &self,
         album_id: &Id,
@@ -270,6 +299,13 @@ impl MusicApi for LibraryMusicApi {
         Ok(self.library_album_artist(album_id).await?.map(Into::into))
     }
 
+    /// Gets the cover image source for an artist.
+    ///
+    /// Returns the local file path to the artist's cover image if available.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation does not return errors
     async fn artist_cover_source(
         &self,
         artist: &Artist,
@@ -278,6 +314,13 @@ impl MusicApi for LibraryMusicApi {
         Ok(artist.cover.clone().map(ImageCoverSource::LocalFilePath))
     }
 
+    /// Retrieves a paginated list of favorite albums based on the request parameters.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch albums from the library
+    /// * If failed to convert library albums to API albums
     async fn albums(
         &self,
         request: &AlbumsRequest,
@@ -290,6 +333,13 @@ impl MusicApi for LibraryMusicApi {
             .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
+    /// Retrieves a library album by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch the album from the library
+    /// * If failed to convert library album to API album
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         Ok(self
             .library_album(album_id)
@@ -427,16 +477,33 @@ impl MusicApi for LibraryMusicApi {
         })
     }
 
+    /// Adds an album to the favorite albums list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn add_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         add_favorite_album(&self.db, album_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Removes an album from the favorite albums list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn remove_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         remove_favorite_album(&self.db, album_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Gets the cover image source for an album.
+    ///
+    /// Returns the local file path to the album's artwork image if available.
+    ///
+    /// # Errors
+    ///
+    /// * This implementation does not return errors
     async fn album_cover_source(
         &self,
         album: &Album,
@@ -445,6 +512,12 @@ impl MusicApi for LibraryMusicApi {
         Ok(album.artwork.clone().map(ImageCoverSource::LocalFilePath))
     }
 
+    /// Retrieves a paginated list of favorite tracks.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch tracks from the library
     async fn tracks(
         &self,
         track_ids: Option<&[Id]>,
@@ -467,6 +540,12 @@ impl MusicApi for LibraryMusicApi {
         .inner_into())
     }
 
+    /// Retrieves tracks from an album with pagination support.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch album tracks from the library
     async fn album_tracks(
         &self,
         album_id: &Id,
@@ -483,6 +562,12 @@ impl MusicApi for LibraryMusicApi {
             .inner_into())
     }
 
+    /// Retrieves a library track by ID.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    /// * If failed to fetch the track from the library
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         Ok(self
             .library_track(track_id)
@@ -491,11 +576,21 @@ impl MusicApi for LibraryMusicApi {
             .map(Into::into))
     }
 
+    /// Adds a track to the favorite tracks list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn add_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         add_favorite_track(&self.db, track_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Removes a track from the favorite tracks list.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn remove_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         remove_favorite_track(&self.db, track_id)
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
@@ -631,10 +726,16 @@ impl MusicApi for LibraryMusicApi {
         Ok(Some(bytes))
     }
 
+    /// Indicates whether this API implementation supports search functionality.
     fn supports_search(&self) -> bool {
         true
     }
 
+    /// Searches the library for artists, albums, and tracks matching the query.
+    ///
+    /// # Errors
+    ///
+    /// * If database search query fails
     async fn search(
         &self,
         query: &str,
@@ -647,22 +748,39 @@ impl MusicApi for LibraryMusicApi {
         Ok(results)
     }
 
+    /// Indicates whether this API implementation supports library scanning.
     fn supports_scan(&self) -> bool {
         true
     }
 
+    /// Enables library scanning for local files.
+    ///
+    /// # Errors
+    ///
+    /// * If database update fails
     async fn enable_scan(&self) -> Result<(), moosicbox_music_api::Error> {
         moosicbox_scan::enable_scan_origin(&self.db, &ScanOrigin::Local)
             .await
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Checks whether library scanning is enabled.
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
     async fn scan_enabled(&self) -> Result<bool, moosicbox_music_api::Error> {
         moosicbox_scan::is_scan_origin_enabled(&self.db, &ScanOrigin::Local)
             .await
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
+    /// Initiates a scan of the local library.
+    ///
+    /// # Errors
+    ///
+    /// * If scanner initialization fails
+    /// * If scan operation fails
     async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
         let scanner =
             moosicbox_scan::Scanner::from_origin(&self.db, moosicbox_scan::ScanOrigin::Local)
