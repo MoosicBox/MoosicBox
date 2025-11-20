@@ -93,6 +93,7 @@ pub fn matches(filter: &PackageFilter, cargo_toml: &Value) -> Result<bool, Filte
 /// # Returns
 ///
 /// The value at the property path, or None if not found
+#[must_use]
 fn navigate_to_property<'a>(toml: &'a Value, path: &[String]) -> Option<&'a Value> {
     if path.is_empty() {
         return Some(toml);
@@ -112,6 +113,7 @@ fn navigate_to_property<'a>(toml: &'a Value, path: &[String]) -> Option<&'a Valu
 
 // Scalar matchers
 
+#[must_use]
 fn match_equals(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::Boolean(b)) => *b == (target == "true"),
@@ -122,6 +124,7 @@ fn match_equals(value: Option<&Value>, target: &str) -> bool {
     }
 }
 
+#[must_use]
 fn match_starts_with(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::String(s)) => s.starts_with(target),
@@ -129,6 +132,7 @@ fn match_starts_with(value: Option<&Value>, target: &str) -> bool {
     }
 }
 
+#[must_use]
 fn match_ends_with(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::String(s)) => s.ends_with(target),
@@ -136,6 +140,7 @@ fn match_ends_with(value: Option<&Value>, target: &str) -> bool {
     }
 }
 
+#[must_use]
 fn match_contains(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::String(s)) => s.contains(target),
@@ -154,6 +159,7 @@ fn match_regex(value: Option<&Value>, pattern: &str) -> Result<bool, FilterError
 
 // Array matchers
 
+#[must_use]
 fn match_array_contains(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::Array(arr)) => arr.iter().any(|v| {
@@ -167,6 +173,7 @@ fn match_array_contains(value: Option<&Value>, target: &str) -> bool {
     }
 }
 
+#[must_use]
 fn match_array_contains_substring(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::Array(arr)) => arr.iter().any(|v| {
@@ -180,6 +187,7 @@ fn match_array_contains_substring(value: Option<&Value>, target: &str) -> bool {
     }
 }
 
+#[must_use]
 fn match_array_contains_starts_with(value: Option<&Value>, target: &str) -> bool {
     match value {
         Some(Value::Array(arr)) => arr.iter().any(|v| {
