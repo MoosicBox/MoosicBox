@@ -118,7 +118,7 @@ pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&
 /// On Windows, checks if a `.CMD` version of the binary exists in the same directory
 /// and returns that path if found. Otherwise returns the original path.
 #[must_use]
-fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
+pub(crate) fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
     if cfg!(windows) {
         let parent = binary.parent();
 
@@ -135,4 +135,87 @@ fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
     }
 
     binary
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_fixup_binary_filename_non_windows() {
+        // On non-Windows systems, should always return the original path
+        if !cfg!(windows) {
+            let binary = PathBuf::from("/usr/bin/node");
+            let result = fixup_binary_filename(binary.clone());
+            assert_eq!(result, binary);
+
+            let binary_with_ext = PathBuf::from("/usr/bin/node.exe");
+            let result = fixup_binary_filename(binary_with_ext.clone());
+            assert_eq!(result, binary_with_ext);
+        }
+    }
+
+    #[test]
+    fn test_fixup_binary_filename_windows_no_cmd_exists() {
+        // On Windows, if no .CMD file exists, should return original path
+        if cfg!(windows) {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let binary = temp_dir.path().join("nonexistent");
+            let result = fixup_binary_filename(binary.clone());
+            assert_eq!(result, binary);
+        }
+    }
+
+    #[test]
+    fn test_fixup_binary_filename_windows_cmd_exists() {
+        // On Windows, if .CMD file exists, should return the .CMD path
+        if cfg!(windows) {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let binary = temp_dir.path().join("testbin");
+            let cmd_file = temp_dir.path().join("testbin.CMD");
+
+            // Create the .CMD file
+            fs::write(&cmd_file, "").unwrap();
+
+            let result = fixup_binary_filename(binary);
+            assert_eq!(result, cmd_file);
+        }
+    }
+
+    #[test]
+    fn test_fixup_binary_filename_no_parent() {
+        // Path with no parent directory should return original
+        let binary = PathBuf::from("node");
+        let result = fixup_binary_filename(binary.clone());
+        assert_eq!(result, binary);
+    }
+
+    #[test]
+    fn test_enabled_npm_commands_contains_valid_managers() {
+        // Test that ENABLED_NPM_COMMANDS only contains valid package managers
+        let valid_managers = ["pnpm", "bun", "npm"];
+        for manager in ENABLED_NPM_COMMANDS.iter() {
+            assert!(
+                valid_managers.contains(&manager.as_str()),
+                "Invalid npm manager: {manager}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_enabled_npm_commands_respects_features() {
+        // Verify that enabled commands match the feature flags
+        #[cfg(feature = "pnpm")]
+        assert!(ENABLED_NPM_COMMANDS.contains(&"pnpm".to_string()));
+
+        #[cfg(feature = "bun")]
+        assert!(ENABLED_NPM_COMMANDS.contains(&"bun".to_string()));
+
+        #[cfg(feature = "npm")]
+        assert!(ENABLED_NPM_COMMANDS.contains(&"npm".to_string()));
+
+        #[cfg(not(any(feature = "pnpm", feature = "bun", feature = "npm")))]
+        assert!(ENABLED_NPM_COMMANDS.is_empty());
+    }
 }
