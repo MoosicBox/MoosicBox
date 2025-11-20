@@ -48,7 +48,7 @@ mod tests {
     use super::*;
     use symphonia::core::audio::{Channels, Layout, SignalSpec};
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_reduces_amplitude() {
         // Create a test audio buffer with known values
         let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
@@ -75,7 +75,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_zero_mutes_audio() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
         let mut buffer = AudioBuffer::<f32>::new(50, spec);
@@ -94,7 +94,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_amplification() {
         let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut buffer = AudioBuffer::<f32>::new(100, spec);
@@ -117,7 +117,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_unity_gain_no_change() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
         let mut buffer = AudioBuffer::<f32>::new(50, spec);
@@ -139,7 +139,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_multichannel_independence() {
         // Test that volume is applied to all channels equally
         let spec = SignalSpec::new(48000, Layout::FivePointOne.into_channels());
@@ -172,7 +172,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mix_volume_handles_negative_samples() {
         // Audio samples can be negative (e.g., -1.0 to 1.0 range)
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);

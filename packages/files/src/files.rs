@@ -31,7 +31,7 @@ pub(crate) fn filename_from_path_str(path: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_unix_path() {
         assert_eq!(
             filename_from_path_str("/path/to/file.mp3"),
@@ -43,7 +43,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_filename_only() {
         assert_eq!(
             filename_from_path_str("track.mp3"),
@@ -55,7 +55,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_directory_path() {
         // Directory paths with trailing slash return the last component
         assert_eq!(
@@ -64,7 +64,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_with_spaces() {
         assert_eq!(
             filename_from_path_str("/music/my track.mp3"),
@@ -72,7 +72,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_with_special_chars() {
         assert_eq!(
             filename_from_path_str("/music/track [remastered].mp3"),
@@ -80,7 +80,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filename_from_path_str_empty() {
         assert_eq!(filename_from_path_str(""), None);
     }

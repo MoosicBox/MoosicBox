@@ -3,7 +3,7 @@
 use moosicbox_opus::{create_opus_registry, register_opus_codec};
 use symphonia::core::codecs::{CODEC_TYPE_OPUS, CodecRegistry};
 
-#[test]
+#[test_log::test]
 fn test_register_opus_codec() {
     let mut registry = CodecRegistry::new();
     register_opus_codec(&mut registry);
@@ -12,7 +12,7 @@ fn test_register_opus_codec() {
     assert!(registry.get_codec(CODEC_TYPE_OPUS).is_some());
 }
 
-#[test]
+#[test_log::test]
 fn test_create_opus_registry() {
     let registry = create_opus_registry();
 
@@ -27,7 +27,7 @@ fn test_create_opus_registry() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn test_register_opus_codec_multiple_times() {
     let mut registry = CodecRegistry::new();
 

@@ -349,7 +349,7 @@ pub const CONFIGURATIONS: [Configuration; 32] = [
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_toc_parsing_silk_nb() {
         let toc = Toc::parse(0b0000_0000);
         assert_eq!(toc.config(), 0);
@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(toc.frame_size_ms(), 10);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_toc_parsing_hybrid_swb() {
         let toc = Toc::parse(0b0110_0101);
         assert_eq!(toc.config(), 12);
@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(toc.bandwidth(), Bandwidth::SuperWideband);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_configuration_silk_nb() {
         let toc = Toc::parse(0b0000_0000);
         let config = toc.configuration();
@@ -380,7 +380,7 @@ mod tests {
         assert_eq!(config.frame_size, FrameSize::Ms10);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_configuration_hybrid_fb() {
         let toc = Toc::parse(0b0111_0100);
         let config = toc.configuration();
@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(config.frame_size, FrameSize::Ms10);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_configuration_celt_swb() {
         let toc = Toc::parse(0b1100_0000);
         let config = toc.configuration();
@@ -398,19 +398,19 @@ mod tests {
         assert_eq!(config.frame_size, FrameSize::Ms2_5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_channels_mono() {
         let toc = Toc::parse(0b0000_0000);
         assert_eq!(toc.channels(), Channels::Mono);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_channels_stereo() {
         let toc = Toc::parse(0b0000_0100);
         assert_eq!(toc.channels(), Channels::Stereo);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_all_configurations_match_rfc_table_2() {
         for config in 0..32_u8 {
             let toc = Toc::parse(config << 3);
@@ -458,7 +458,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_frame_size_to_ms_all_variants() {
         assert_eq!(FrameSize::Ms2_5.to_ms(), 2); // Truncates to 2 (acceptable for SILK)
         assert_eq!(FrameSize::Ms5.to_ms(), 5);
@@ -468,7 +468,7 @@ mod tests {
         assert_eq!(FrameSize::Ms60.to_ms(), 60);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_toc_frame_duration_tenths_ms_all_configs() {
         // Test SILK configs (0-11): 10, 20, 40, 60 ms
         assert_eq!(Toc::parse(0 << 3).frame_duration_tenths_ms(), 100); // Config 0: 10ms
@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(Toc::parse(19 << 3).frame_duration_tenths_ms(), 200); // Config 19: 20ms
     }
 
-    #[test]
+    #[test_log::test]
     fn test_toc_frame_count_code_all_values() {
         assert_eq!(Toc::parse(0b0000_0000).frame_count_code(), 0);
         assert_eq!(Toc::parse(0b0000_0001).frame_count_code(), 1);
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(Toc::parse(0b0000_0011).frame_count_code(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bandwidth_debug_display() {
         // Verify all bandwidth variants can be formatted
         let _ = format!("{:?}", Bandwidth::Narrowband);
@@ -505,7 +505,7 @@ mod tests {
         let _ = format!("{:?}", Bandwidth::Fullband);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_opus_mode_debug_display() {
         // Verify all mode variants can be formatted
         let _ = format!("{:?}", OpusMode::SilkOnly);

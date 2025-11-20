@@ -4297,7 +4297,7 @@ fn kebab_to_pascal_case(s: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_special_cases() {
         assert_eq!(kebab_to_pascal_case("space-between"), "SpaceBetween");
         assert_eq!(kebab_to_pascal_case("space-evenly"), "SpaceEvenly");
@@ -4306,44 +4306,44 @@ mod tests {
         assert_eq!(kebab_to_pascal_case("line-through"), "LineThrough");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_general() {
         assert_eq!(kebab_to_pascal_case("foo-bar"), "FooBar");
         assert_eq!(kebab_to_pascal_case("hello-world"), "HelloWorld");
         assert_eq!(kebab_to_pascal_case("one-two-three"), "OneTwoThree");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_single_word() {
         assert_eq!(kebab_to_pascal_case("hello"), "Hello");
         assert_eq!(kebab_to_pascal_case("world"), "World");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_empty_string() {
         assert_eq!(kebab_to_pascal_case(""), "");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_uppercase_preservation() {
         // The function lowercases everything except the first char
         assert_eq!(kebab_to_pascal_case("HELLO-WORLD"), "HelloWorld");
         assert_eq!(kebab_to_pascal_case("FoO-BaR"), "FooBar");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_kebab_to_pascal_case_multiple_hyphens() {
         assert_eq!(kebab_to_pascal_case("a-b-c-d-e"), "ABCDE");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_element_parent_summary_in_details() {
         // summary is allowed in details parent
         let result = validate_element_parent("summary", ParentContext::Details);
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_element_parent_summary_in_generic() {
         // summary is NOT allowed in generic parent
         let result = validate_element_parent("summary", ParentContext::Generic);
@@ -4354,7 +4354,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_element_parent_summary_at_root() {
         // summary is NOT allowed at root
         let result = validate_element_parent("summary", ParentContext::Root);
@@ -4365,7 +4365,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_element_parent_regular_element() {
         // Regular elements are allowed anywhere
         assert!(validate_element_parent("div", ParentContext::Root).is_ok());
@@ -4375,7 +4375,7 @@ mod tests {
         assert!(validate_element_parent("button", ParentContext::Root).is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_child_element_summary_as_first_child() {
         let tracker = ChildPositionTracker::new();
         // summary is valid as first child of details
@@ -4383,7 +4383,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_child_element_summary_not_first_child() {
         let mut tracker = ChildPositionTracker::new();
         tracker.increment("div"); // Add a child before summary
@@ -4396,7 +4396,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_child_element_multiple_summaries() {
         let mut tracker = ChildPositionTracker::new();
         // First summary is ok
@@ -4416,7 +4416,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_child_element_regular_elements() {
         let tracker = ChildPositionTracker::new();
         // Regular elements have no special constraints
@@ -4425,7 +4425,7 @@ mod tests {
         assert!(validate_child_element("button", ParentContext::Details, &tracker).is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_child_position_tracker_increment() {
         let mut tracker = ChildPositionTracker::new();
         assert_eq!(tracker.index, 0);
@@ -4445,13 +4445,13 @@ mod tests {
         assert_eq!(tracker.get_count("div"), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_child_position_tracker_get_count_nonexistent() {
         let tracker = ChildPositionTracker::new();
         assert_eq!(tracker.get_count("nonexistent"), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parent_context_child_context() {
         assert_eq!(
             ParentContext::child_context("details"),
@@ -4465,7 +4465,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_count_constraint_at_most() {
         let constraint = CountConstraint::AtMost(1);
         assert!(constraint.validate(0));

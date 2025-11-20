@@ -1209,50 +1209,50 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_plus() {
             let arithmetic = Arithmetic::Plus(Value::Real(10.0), Value::Real(20.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "10+20");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_minus() {
             let arithmetic = Arithmetic::Minus(Value::Real(100.0), Value::Real(50.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "100-50");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_multiply() {
             let arithmetic = Arithmetic::Multiply(Value::Real(5.0), Value::Real(3.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "5*3");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_divide() {
             let arithmetic = Arithmetic::Divide(Value::Real(10.0), Value::Real(2.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "10/2");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_min() {
             let arithmetic = Arithmetic::Min(Value::Real(10.0), Value::Real(20.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "Math.min(10,20)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_max() {
             let arithmetic = Arithmetic::Max(Value::Real(10.0), Value::Real(20.0));
             assert_eq!(arithmetic_to_js(&arithmetic), "Math.max(10,20)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_arithmetic_grouping() {
             let inner = Arithmetic::Plus(Value::Real(1.0), Value::Real(2.0));
             let arithmetic = Arithmetic::Grouping(Box::new(inner));
             assert_eq!(arithmetic_to_js(&arithmetic), "(1+2)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_nested_arithmetic() {
             let inner = Arithmetic::Plus(Value::Real(1.0), Value::Real(2.0));
             let arithmetic =
@@ -1266,37 +1266,37 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_event_value_serializable() {
             let calc = CalcValue::EventValue;
             assert_eq!(calc_value_to_js(&calc, true), "{String:ctx.value}");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_event_value_non_serializable() {
             let calc = CalcValue::EventValue;
             assert_eq!(calc_value_to_js(&calc, false), "ctx.value");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_key() {
             let calc = CalcValue::Key { key: Key::Enter };
             assert_eq!(calc_value_to_js(&calc, false), "'Enter'");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_mouse_x_no_target() {
             let calc = CalcValue::MouseX { target: None };
             assert_eq!(calc_value_to_js(&calc, false), "ctx.event.clientX");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_mouse_y_no_target() {
             let calc = CalcValue::MouseY { target: None };
             assert_eq!(calc_value_to_js(&calc, false), "ctx.event.clientY");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_id_with_literal_target() {
             let calc = CalcValue::Id {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1307,7 +1307,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_width_px() {
             let calc = CalcValue::WidthPx {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1318,7 +1318,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_height_px() {
             let calc = CalcValue::HeightPx {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1329,7 +1329,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_position_x() {
             let calc = CalcValue::PositionX {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1340,7 +1340,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_position_y() {
             let calc = CalcValue::PositionY {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1351,7 +1351,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_mouse_x_with_target() {
             let calc = CalcValue::MouseX {
                 target: Some(ElementTarget::StrId(Target::Literal("myId".to_string()))),
@@ -1362,7 +1362,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_mouse_y_with_target() {
             let calc = CalcValue::MouseY {
                 target: Some(ElementTarget::StrId(Target::Literal("myId".to_string()))),
@@ -1373,7 +1373,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_data_attr_value() {
             let calc = CalcValue::DataAttrValue {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1385,7 +1385,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_visibility() {
             let calc = CalcValue::Visibility {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1396,7 +1396,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_calc_value_display() {
             let calc = CalcValue::Display {
                 target: ElementTarget::StrId(Target::Literal("myId".to_string())),
@@ -1414,13 +1414,13 @@ mod tests {
         use hyperchad_transformer::models::LayoutDirection;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_value_real() {
             let value = Value::Real(42.5);
             assert_eq!(value_to_js(&value, false), ("42.5".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_string_serializable() {
             let value = Value::String("test".to_string());
             assert_eq!(
@@ -1429,61 +1429,61 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_string_non_serializable() {
             let value = Value::String("test".to_string());
             assert_eq!(value_to_js(&value, false), ("'test'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_key() {
             let value = Value::Key(Key::Escape);
             assert_eq!(value_to_js(&value, false), ("'Escape'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_visibility_visible() {
             let value = Value::Visibility(Visibility::Visible);
             assert_eq!(value_to_js(&value, false), ("'visible'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_visibility_hidden() {
             let value = Value::Visibility(Visibility::Hidden);
             assert_eq!(value_to_js(&value, false), ("'hidden'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_display_true() {
             let value = Value::Display(true);
             assert_eq!(value_to_js(&value, false), ("'none'".to_string(), false));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_display_false() {
             let value = Value::Display(false);
             assert_eq!(value_to_js(&value, false), ("'none'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_layout_direction_row() {
             let value = Value::LayoutDirection(LayoutDirection::Row);
             assert_eq!(value_to_js(&value, false), ("'row'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_layout_direction_column() {
             let value = Value::LayoutDirection(LayoutDirection::Column);
             assert_eq!(value_to_js(&value, false), ("'column'".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_calc() {
             let value = Value::Calc(CalcValue::EventValue);
             assert_eq!(value_to_js(&value, false), ("ctx.value".to_string(), true));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_value_arithmetic() {
             let arithmetic = Arithmetic::Plus(Value::Real(1.0), Value::Real(2.0));
             let value = Value::Arithmetic(Box::new(arithmetic));
@@ -1496,7 +1496,7 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_str_id_literal() {
             let target = ElementTarget::StrId(Target::Literal("myElement".to_string()));
             assert_eq!(
@@ -1505,13 +1505,13 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_str_id_ref() {
             let target = ElementTarget::StrId(Target::Ref("myRef".to_string()));
             assert_eq!(element_target_to_js(&target), "[myRef]");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_class_literal() {
             let target = ElementTarget::Class(Target::Literal("myClass".to_string()));
             assert_eq!(
@@ -1520,13 +1520,13 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_class_ref() {
             let target = ElementTarget::Class(Target::Ref("myRef".to_string()));
             assert_eq!(element_target_to_js(&target), "[myRef]");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_child_class_literal() {
             let target = ElementTarget::ChildClass(Target::Literal("childClass".to_string()));
             assert_eq!(
@@ -1535,19 +1535,19 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_child_class_ref() {
             let target = ElementTarget::ChildClass(Target::Ref("childRef".to_string()));
             assert_eq!(element_target_to_js(&target), "[childRef]");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_self() {
             let target = ElementTarget::SelfTarget;
             assert_eq!(element_target_to_js(&target), "[ctx.element]");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_element_target_last_child() {
             let target = ElementTarget::LastChild;
             assert_eq!(
@@ -1562,82 +1562,82 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_add() {
             assert_eq!(binary_op_to_js(&BinaryOp::Add), "+");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_subtract() {
             assert_eq!(binary_op_to_js(&BinaryOp::Subtract), "-");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_multiply() {
             assert_eq!(binary_op_to_js(&BinaryOp::Multiply), "*");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_divide() {
             assert_eq!(binary_op_to_js(&BinaryOp::Divide), "/");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_modulo() {
             assert_eq!(binary_op_to_js(&BinaryOp::Modulo), "%");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_equal() {
             assert_eq!(binary_op_to_js(&BinaryOp::Equal), "==");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_not_equal() {
             assert_eq!(binary_op_to_js(&BinaryOp::NotEqual), "!=");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_less() {
             assert_eq!(binary_op_to_js(&BinaryOp::Less), "<");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_less_equal() {
             assert_eq!(binary_op_to_js(&BinaryOp::LessEqual), "<=");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_greater() {
             assert_eq!(binary_op_to_js(&BinaryOp::Greater), ">");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_greater_equal() {
             assert_eq!(binary_op_to_js(&BinaryOp::GreaterEqual), ">=");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_and() {
             assert_eq!(binary_op_to_js(&BinaryOp::And), "&&");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_or() {
             assert_eq!(binary_op_to_js(&BinaryOp::Or), "||");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_bit_and() {
             assert_eq!(binary_op_to_js(&BinaryOp::BitAnd), "&");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_bit_or() {
             assert_eq!(binary_op_to_js(&BinaryOp::BitOr), "|");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_binary_op_bit_xor() {
             assert_eq!(binary_op_to_js(&BinaryOp::BitXor), "^");
         }
@@ -1648,22 +1648,22 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_unary_op_not() {
             assert_eq!(unary_op_to_js(&UnaryOp::Not), "!");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_unary_op_minus() {
             assert_eq!(unary_op_to_js(&UnaryOp::Minus), "-");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_unary_op_plus() {
             assert_eq!(unary_op_to_js(&UnaryOp::Plus), "+");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_unary_op_ref() {
             assert_eq!(unary_op_to_js(&UnaryOp::Ref), "&");
         }
@@ -1674,49 +1674,49 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_string() {
             let expr = Expression::Literal(Literal::String("hello".to_string()));
             assert_eq!(expression_to_js(&expr), "'hello'");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_integer() {
             let expr = Expression::Literal(Literal::Integer(42));
             assert_eq!(expression_to_js(&expr), "42");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_float() {
             let expr = Expression::Literal(Literal::Float(3.15));
             assert_eq!(expression_to_js(&expr), "3.15");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_bool_true() {
             let expr = Expression::Literal(Literal::Bool(true));
             assert_eq!(expression_to_js(&expr), "true");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_bool_false() {
             let expr = Expression::Literal(Literal::Bool(false));
             assert_eq!(expression_to_js(&expr), "false");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_literal_unit() {
             let expr = Expression::Literal(Literal::Unit);
             assert_eq!(expression_to_js(&expr), "null");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_variable() {
             let expr = Expression::Variable("myVar".to_string());
             assert_eq!(expression_to_js(&expr), "myVar");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_element_ref_literal() {
             let expr = Expression::ElementRef(Box::new(Expression::Literal(Literal::String(
                 "#myElement".to_string(),
@@ -1727,14 +1727,14 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_element_ref_variable() {
             let expr =
                 Expression::ElementRef(Box::new(Expression::Variable("selector".to_string())));
             assert_eq!(expression_to_js(&expr), "document.querySelector(selector)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_call() {
             let expr = Expression::Call {
                 function: "console.log".to_string(),
@@ -1743,7 +1743,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "console.log('test')");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_call_multiple_args() {
             let expr = Expression::Call {
                 function: "sum".to_string(),
@@ -1756,7 +1756,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "sum(1,2,3)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_method_call() {
             let expr = Expression::MethodCall {
                 receiver: Box::new(Expression::Variable("arr".to_string())),
@@ -1766,7 +1766,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "arr.push(5)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_field() {
             let expr = Expression::Field {
                 object: Box::new(Expression::Variable("obj".to_string())),
@@ -1775,7 +1775,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "obj.name");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_binary() {
             let expr = Expression::Binary {
                 left: Box::new(Expression::Literal(Literal::Integer(5))),
@@ -1785,7 +1785,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "(5 + 3)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_unary() {
             let expr = Expression::Unary {
                 op: UnaryOp::Not,
@@ -1794,7 +1794,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "(! flag)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_if_with_else() {
             let expr = Expression::If {
                 condition: Box::new(Expression::Variable("condition".to_string())),
@@ -1804,7 +1804,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "if(condition){1}else {0}");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_if_without_else() {
             let expr = Expression::If {
                 condition: Box::new(Expression::Variable("condition".to_string())),
@@ -1814,7 +1814,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "if(condition){1}");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_range_inclusive() {
             let expr = Expression::Range {
                 start: Some(Box::new(Expression::Literal(Literal::Integer(1)))),
@@ -1824,7 +1824,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "ctx.range(1,10,true)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_range_exclusive() {
             let expr = Expression::Range {
                 start: Some(Box::new(Expression::Literal(Literal::Integer(0)))),
@@ -1834,7 +1834,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "ctx.range(0,5,false)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_range_no_start() {
             let expr = Expression::Range {
                 start: None,
@@ -1844,7 +1844,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "ctx.range(0,10,false)");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_grouping() {
             let expr = Expression::Grouping(Box::new(Expression::Binary {
                 left: Box::new(Expression::Literal(Literal::Integer(1))),
@@ -1854,7 +1854,7 @@ mod tests {
             assert_eq!(expression_to_js(&expr), "((1 + 2))");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_expression_raw_rust() {
             let expr = Expression::RawRust("alert('custom');".to_string());
             assert_eq!(expression_to_js(&expr), "alert('custom');");
@@ -1866,7 +1866,7 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_action_noop() {
             let action = ActionType::NoOp;
             let (result, reset) = action_to_js(&action, true);
@@ -1874,7 +1874,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_let() {
             let action = ActionType::Let {
                 name: "x".to_string(),
@@ -1885,7 +1885,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_input_select() {
             let action = ActionType::Input(InputActionType::Select {
                 target: ElementTarget::StrId(Target::Literal("myInput".to_string())),
@@ -1898,7 +1898,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_visibility_visible() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1915,7 +1915,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_visibility_hidden() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1932,7 +1932,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_focus() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1943,7 +1943,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_blur() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1954,7 +1954,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_display_true() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1971,7 +1971,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_display_false() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -1988,7 +1988,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_background_color() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -2005,7 +2005,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_style_set_background_none() {
             let action = ActionType::Style {
                 target: ElementTarget::StrId(Target::Literal("elem".to_string())),
@@ -2022,7 +2022,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_error() {
             let action = ActionType::Log {
                 message: "Error occurred".to_string(),
@@ -2033,7 +2033,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_warn() {
             let action = ActionType::Log {
                 message: "Warning".to_string(),
@@ -2044,7 +2044,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_info() {
             let action = ActionType::Log {
                 message: "Info".to_string(),
@@ -2055,7 +2055,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_debug() {
             let action = ActionType::Log {
                 message: "Debug".to_string(),
@@ -2066,7 +2066,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_trace() {
             let action = ActionType::Log {
                 message: "Trace".to_string(),
@@ -2077,7 +2077,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_log_escapes_quotes() {
             let action = ActionType::Log {
                 message: "Message with \"quotes\"".to_string(),
@@ -2087,7 +2087,7 @@ mod tests {
             assert_eq!(result, "console.log(`Message with &quot;quotes&quot;`);");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_navigate() {
             let action = ActionType::Navigate {
                 url: "/home".to_string(),
@@ -2097,7 +2097,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_multi_empty() {
             let action = ActionType::Multi(vec![]);
             let (result, reset) = action_to_js(&action, true);
@@ -2105,7 +2105,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_multi_single() {
             let action = ActionType::Multi(vec![ActionType::Log {
                 message: "test".to_string(),
@@ -2116,7 +2116,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_multi_multiple() {
             let action = ActionType::Multi(vec![
                 ActionType::Log {
@@ -2133,7 +2133,7 @@ mod tests {
             assert_eq!(reset, None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_logic_eq_true() {
             let action = ActionType::Logic(If {
                 condition: Condition::Eq(Value::Real(5.0), Value::Real(5.0)),
@@ -2153,7 +2153,7 @@ mod tests {
             assert!(result.contains("console.log(`equal`);"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_logic_bool() {
             let action = ActionType::Logic(If {
                 condition: Condition::Bool(true),
@@ -2183,7 +2183,7 @@ mod tests {
             assert!(result.contains("console.log(`false`);"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_custom() {
             let action = ActionType::Custom {
                 action: "customAction()".to_string(),
@@ -2199,7 +2199,7 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_action_effect_basic() {
             let effect = ActionEffect {
                 action: ActionType::Log {
@@ -2214,7 +2214,7 @@ mod tests {
             assert_eq!(result, "console.log(`test`);");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_effect_with_throttle() {
             let effect = ActionEffect {
                 action: ActionType::Log {
@@ -2229,7 +2229,7 @@ mod tests {
             assert_eq!(result, "ctx.throttle(()=>{console.log(`test`);},100);");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_effect_with_delay_off() {
             let effect = ActionEffect {
                 action: ActionType::Style {
@@ -2245,7 +2245,7 @@ mod tests {
             assert!(result.contains(",500);"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_action_effect_with_both_throttle_and_delay() {
             let effect = ActionEffect {
                 action: ActionType::Style {
@@ -2267,25 +2267,25 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[test]
+        #[test_log::test]
         fn test_script_name_debug() {
             #[cfg(debug_assertions)]
             assert_eq!(SCRIPT_NAME, "hyperchad.js");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_script_name_release() {
             #[cfg(not(debug_assertions))]
             assert_eq!(SCRIPT_NAME, "hyperchad.min.js");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_vanilla_js_tag_renderer_default() {
             let renderer = VanillaJsTagRenderer::default();
             assert!(renderer.default.responsive_triggers.is_empty());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_add_responsive_trigger() {
             use hyperchad_transformer::{Number, ResponsiveTrigger};
 

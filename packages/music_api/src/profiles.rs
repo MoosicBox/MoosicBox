@@ -259,7 +259,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_add_stores_profile() {
         let profiles = MusicApisProfiles::default();
         let source = ApiSource::register("test_profiles_add", "test");
@@ -274,7 +274,7 @@ mod test {
         assert!(retrieved.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_get_returns_none_for_unknown_profile() {
         let profiles = MusicApisProfiles::default();
 
@@ -282,7 +282,7 @@ mod test {
         assert!(retrieved.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_upsert_adds_new_profile() {
         let profiles = MusicApisProfiles::default();
         let source = ApiSource::register("test_profiles_upsert_add", "test");
@@ -297,7 +297,7 @@ mod test {
         assert!(retrieved.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_upsert_updates_existing_profile() {
         let profiles = MusicApisProfiles::default();
         let source1 = ApiSource::register("test_profiles_upsert_update_1", "test");
@@ -322,7 +322,7 @@ mod test {
         assert!(retrieved_apis.get(&source2).is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_remove_removes_profile() {
         let profiles = MusicApisProfiles::default();
         let source = ApiSource::register("test_profiles_remove", "test");
@@ -338,7 +338,7 @@ mod test {
         assert!(profiles.get("remove_profile").is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_add_fetch_returns_added_profile() {
         let profiles = MusicApisProfiles::default();
         let source = ApiSource::register("test_profiles_add_fetch", "test");
@@ -352,7 +352,7 @@ mod test {
         assert!(retrieved.get(&source).is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn profiles_names_returns_all_profile_names() {
         let profiles = MusicApisProfiles::default();
         let source1 = ApiSource::register("test_profiles_names_1", "test");

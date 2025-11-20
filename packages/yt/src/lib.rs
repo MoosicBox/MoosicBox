@@ -2834,41 +2834,41 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_single() {
         let input = "Hello :name, welcome!";
         let result = replace_all(input, &[(":name", "World")]);
         assert_eq!(result, "Hello World, welcome!");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_multiple() {
         let input = "User :userId has :count items";
         let result = replace_all(input, &[(":userId", "123"), (":count", "5")]);
         assert_eq!(result, "User 123 has 5 items");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_no_matches() {
         let input = "No placeholders here";
         let result = replace_all(input, &[(":missing", "value")]);
         assert_eq!(result, "No placeholders here");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_empty() {
         let input = "Test string";
         let result = replace_all(input, &[]);
         assert_eq!(result, "Test string");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_single() {
         let result = attach_query_string("https://api.example.com/endpoint", &[("key", "value")]);
         assert_eq!(result, "https://api.example.com/endpoint?key=value");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_multiple() {
         let result = attach_query_string(
             "https://api.example.com/data",
@@ -2880,19 +2880,19 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_empty() {
         let result = attach_query_string("https://api.example.com/test", &[]);
         assert_eq!(result, "https://api.example.com/test?");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_special_chars() {
         let result = attach_query_string("https://api.example.com/search", &[("q", "hello world")]);
         assert_eq!(result, "https://api.example.com/search?q=hello+world");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_type_to_album_type() {
         use moosicbox_music_models::AlbumType as MusicAlbumType;
         assert_eq!(MusicAlbumType::from(YtAlbumType::Lp), MusicAlbumType::Lp);
@@ -2906,7 +2906,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_audio_quality_from_track_audio_quality() {
         assert_eq!(
             YtAudioQuality::from(TrackAudioQuality::Low),
@@ -2926,7 +2926,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_order_direction_from_album_sort() {
         assert_eq!(
             YtAlbumOrderDirection::from(AlbumSort::ArtistAsc),
@@ -2962,14 +2962,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_method_display() {
         assert_eq!(Method::Get.to_string(), "GET");
         assert_eq!(Method::Post.to_string(), "POST");
         assert_eq!(Method::Delete.to_string(), "DELETE");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_method_from_str() {
         assert_eq!(Method::from_str("GET").unwrap(), Method::Get);
         assert_eq!(Method::from_str("POST").unwrap(), Method::Post);
@@ -2977,7 +2977,7 @@ mod tests {
         assert!(Method::from_str("PUT").is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_device_type_enum() {
         assert_eq!(YtDeviceType::Browser.as_ref(), "BROWSER");
         assert_eq!(
@@ -2986,7 +2986,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_order_enum() {
         assert_eq!(YtArtistOrder::Date.as_ref(), "DATE");
         assert_eq!(
@@ -2995,7 +2995,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_order_direction_enum() {
         assert_eq!(YtArtistOrderDirection::Asc.as_ref(), "ASC");
         assert_eq!(YtArtistOrderDirection::Desc.as_ref(), "DESC");
@@ -3009,13 +3009,13 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_order_enum() {
         assert_eq!(YtAlbumOrder::Date.as_ref(), "DATE");
         assert_eq!(YtAlbumOrder::from_str("DATE").unwrap(), YtAlbumOrder::Date);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_order_from_album_sort() {
         // All AlbumSort variants should map to Date for YouTube Music
         assert_eq!(YtAlbumOrder::from(AlbumSort::ArtistAsc), YtAlbumOrder::Date);
@@ -3030,7 +3030,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_order_direction_enum() {
         assert_eq!(YtAlbumOrderDirection::Asc.as_ref(), "ASC");
         assert_eq!(YtAlbumOrderDirection::Desc.as_ref(), "DESC");
@@ -3044,13 +3044,13 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_track_order_enum() {
         assert_eq!(YtTrackOrder::Date.as_ref(), "DATE");
         assert_eq!(YtTrackOrder::from_str("DATE").unwrap(), YtTrackOrder::Date);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_track_order_direction_enum() {
         assert_eq!(YtTrackOrderDirection::Asc.as_ref(), "ASC");
         assert_eq!(YtTrackOrderDirection::Desc.as_ref(), "DESC");
@@ -3064,7 +3064,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_type_enum() {
         assert_eq!(YtAlbumType::Lp.as_ref(), "LP");
         assert_eq!(YtAlbumType::EpsAndSingles.as_ref(), "EPSANDSINGLES");
@@ -3080,7 +3080,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_audio_quality_enum() {
         assert_eq!(YtAudioQuality::High.as_ref(), "HIGH");
         assert_eq!(YtAudioQuality::Lossless.as_ref(), "LOSSLESS");

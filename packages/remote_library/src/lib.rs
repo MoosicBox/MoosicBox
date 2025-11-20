@@ -1022,7 +1022,7 @@ mod tests {
         )
     }
 
-    #[test]
+    #[test_log::test]
     fn test_new_creates_instance_with_correct_fields() {
         let host = "http://example.com".to_string();
         let api_source = ApiSource::library();
@@ -1035,7 +1035,7 @@ mod tests {
         assert_eq!(api.profile, profile);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_source_returns_api_source() {
         let api = create_test_api();
         let source = api.source();
@@ -1043,7 +1043,7 @@ mod tests {
         assert_eq!(source, &ApiSource::library());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_supports_search_returns_true() {
         let api = create_test_api();
 

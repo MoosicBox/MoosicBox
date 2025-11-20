@@ -129,7 +129,7 @@ pub fn get_resource_attr(name: &'static str) -> Resource {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_get_resource_attr_creates_resource_with_service_name() {
         let service_name = "test-service";
         let resource = get_resource_attr(service_name);
@@ -147,7 +147,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_resource_attr_with_different_names() {
         let names = ["service-a", "service-b", "my-telemetry-service"];
 
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[cfg(feature = "actix")]
-    #[test]
+    #[test_log::test]
     fn test_get_http_metrics_handler_returns_valid_handler() {
         let handler = get_http_metrics_handler();
 
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[cfg(all(feature = "actix", not(feature = "simulator")))]
-    #[test]
+    #[test_log::test]
     fn test_stub_handler_request_middleware() {
         let handler = StubHttpMetricsHandler;
         let _middleware = handler.request_middleware();
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[cfg(feature = "simulator")]
-    #[test]
+    #[test_log::test]
     fn test_init_tracer_simulator_returns_ok() {
         let result = init_tracer("test-service");
         assert!(

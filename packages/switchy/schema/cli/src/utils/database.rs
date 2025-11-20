@@ -89,7 +89,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_postgres_scheme_recognition() {
         let pg_schemes = vec![
             "postgresql://user@localhost/db",
@@ -172,7 +172,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scheme_extraction() {
         // Test scheme extraction logic
         let test_cases = vec![

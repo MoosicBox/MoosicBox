@@ -123,20 +123,20 @@ impl UsernamePasswordAuth {
 mod test {
     use super::{UsernamePasswordAuth, UsernamePasswordAuthBuilder};
 
-    #[test]
+    #[test_log::test]
     fn username_password_auth_builder_new_creates_empty_builder() {
         let builder = UsernamePasswordAuthBuilder::new();
         assert!(builder.handle_login.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn username_password_auth_builder_build_fails_without_handler() {
         let builder = UsernamePasswordAuthBuilder::new();
         let result = builder.build();
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn username_password_auth_builder_with_handler_sets_handler() {
         let builder = UsernamePasswordAuthBuilder::new().with_handler(|_u, _p| async { Ok(true) });
 

@@ -820,7 +820,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     // TidalArtistImageSize tests
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_image_size_from_u16_boundary_values() {
         assert_eq!(
             TidalArtistImageSize::from(0_u16),
@@ -856,7 +856,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_image_size_to_u16() {
         assert_eq!(u16::from(TidalArtistImageSize::Small), 160);
         assert_eq!(u16::from(TidalArtistImageSize::Medium), 320);
@@ -864,7 +864,7 @@ mod tests {
         assert_eq!(u16::from(TidalArtistImageSize::Max), 750);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_image_size_from_image_cover_size() {
         assert_eq!(
             TidalArtistImageSize::from(ImageCoverSize::Max),
@@ -888,7 +888,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_image_size_display() {
         assert_eq!(format!("{}", TidalArtistImageSize::Small), "160");
         assert_eq!(format!("{}", TidalArtistImageSize::Medium), "320");
@@ -897,7 +897,7 @@ mod tests {
     }
 
     // TidalAlbumImageSize tests
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_image_size_from_u16_boundary_values() {
         assert_eq!(
             TidalAlbumImageSize::from(0_u16),
@@ -938,7 +938,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_image_size_to_u16() {
         assert_eq!(u16::from(TidalAlbumImageSize::Thumbnail), 80);
         assert_eq!(u16::from(TidalAlbumImageSize::Small), 160);
@@ -947,7 +947,7 @@ mod tests {
         assert_eq!(u16::from(TidalAlbumImageSize::Max), 1280);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_image_size_from_image_cover_size() {
         assert_eq!(
             TidalAlbumImageSize::from(ImageCoverSize::Max),
@@ -971,7 +971,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_image_size_display() {
         assert_eq!(format!("{}", TidalAlbumImageSize::Thumbnail), "80");
         assert_eq!(format!("{}", TidalAlbumImageSize::Small), "160");
@@ -981,7 +981,7 @@ mod tests {
     }
 
     // Artist picture URL tests
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_picture_url_construction() {
         let artist = TidalArtist {
             id: 12345,
@@ -998,7 +998,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_picture_url_different_sizes() {
         let artist = TidalArtist {
             id: 12345,
@@ -1022,7 +1022,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_picture_url_none_when_no_picture() {
         let artist = TidalArtist {
             id: 12345,
@@ -1036,7 +1036,7 @@ mod tests {
     }
 
     // Album cover URL tests
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_cover_url_construction() {
         let album = TidalAlbum {
             id: 67890,
@@ -1063,7 +1063,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_cover_url_different_sizes() {
         let album = TidalAlbum {
             id: 67890,
@@ -1101,7 +1101,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_album_cover_url_none_when_no_cover() {
         let album = TidalAlbum {
             id: 67890,
@@ -1124,7 +1124,7 @@ mod tests {
         assert_eq!(album.cover_url(TidalAlbumImageSize::Max), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_search_album_cover_url_construction() {
         let album = TidalSearchAlbum {
             id: 67890,
@@ -1149,7 +1149,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_search_artist_picture_url_construction() {
         let artist = TidalSearchArtist {
             id: 12345,
@@ -1167,7 +1167,7 @@ mod tests {
     }
 
     // Search results position calculation tests
-    #[test]
+    #[test_log::test]
     fn test_search_results_position_calculation_within_bounds() {
         let search_results = TidalSearchResults {
             albums: TidalSearchResultList {
@@ -1196,7 +1196,7 @@ mod tests {
         assert_eq!(api_response.position, 15); // offset (10) + limit (5)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_search_results_position_calculation_exceeds_total() {
         let search_results = TidalSearchResults {
             albums: TidalSearchResultList {
@@ -1225,7 +1225,7 @@ mod tests {
         assert_eq!(api_response.position, 100); // Capped at total (100)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_search_results_position_calculation_at_start() {
         let search_results = TidalSearchResults {
             albums: TidalSearchResultList {
@@ -1255,7 +1255,7 @@ mod tests {
     }
 
     // Model conversion tests
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_to_artist_conversion() {
         let tidal_artist = TidalArtist {
             id: 12345,
@@ -1275,7 +1275,7 @@ mod tests {
         assert_eq!(artist.api_source, *API_SOURCE);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_artist_to_api_artist_conversion() {
         let tidal_artist = TidalArtist {
             id: 12345,
@@ -1292,7 +1292,7 @@ mod tests {
         assert_eq!(api_artist.api_source, *API_SOURCE);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_track_to_track_conversion() {
         let tidal_track = TidalTrack {
             id: 98765,

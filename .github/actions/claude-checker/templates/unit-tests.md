@@ -61,17 +61,18 @@ You must ONLY add tests that meet ALL of the following criteria:
 
 ### Test Attribute Usage
 
+**CRITICAL: ALL tests (both synchronous and asynchronous) MUST use `#[test_log::test]` or its variants.**
+
 **Async Tests:**
 
 - Use `#[test_log::test(switchy_async::test)]` for async tests (NEVER use `tokio::test`)
 - Use `#[test_log::test(switchy_async::test(no_simulator))]` for tests that must NOT run in simulator mode
 - Use `#[test_log::test(switchy_async::test(real_time))]` for tests requiring real (not simulated) time
-- Use `#[switchy_async::test]` when test_log is not needed
 
 **Synchronous Tests:**
 
-- Use `#[test]` for basic synchronous tests
-- Use `#[test_log::test]` for synchronous tests that need logging
+- Use `#[test_log::test]` for ALL synchronous tests (NEVER use raw `#[test]`)
+- This ensures consistent logging and test infrastructure across all tests
 
 **Examples:**
 
@@ -94,15 +95,9 @@ async fn test_timeout_behavior() {
     // Test code that relies on actual time passage
 }
 
-// Simple synchronous test
-#[test]
-fn test_sync_function() {
-    // Test code
-}
-
-// Synchronous test with logging
+// Synchronous test with test_log (REQUIRED - do NOT use raw #[test])
 #[test_log::test]
-fn test_sync_with_logging() {
+fn test_sync_function() {
     // Test code
 }
 ```

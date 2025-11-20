@@ -489,7 +489,7 @@ pub type TransportInfoSubscriptionAction =
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_context_new() {
         let ctx = UpnpContext::new();
         assert_eq!(ctx.subscription_id, 1);
@@ -498,7 +498,7 @@ mod tests {
         assert!(ctx.token.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_context_default() {
         let ctx = UpnpContext::default();
         assert_eq!(ctx.subscription_id, 1);
@@ -507,7 +507,7 @@ mod tests {
         assert!(ctx.token.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_listener_error_from_send_error() {
         let (tx, _rx) = flume::bounded::<usize>(1);
         drop(_rx);
@@ -516,7 +516,7 @@ mod tests {
         assert!(matches!(listener_error, ListenerError::Send));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_listener_error_display() {
         let error = ListenerError::Send;
         assert_eq!(error.to_string(), "Failed to send");

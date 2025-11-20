@@ -127,13 +127,13 @@ pub fn encode_mp3(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_encoder_creation() {
         let result = encoder_mp3();
         assert!(result.is_ok(), "MP3 encoder should initialize successfully");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_mp3_basic() {
         let mut encoder = encoder_mp3().expect("Failed to create encoder");
 
@@ -149,7 +149,7 @@ mod tests {
         assert_eq!(info.input_consumed, input.len(), "Should consume all input");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_mp3_non_zero_samples() {
         let mut encoder = encoder_mp3().expect("Failed to create encoder");
 
@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(info.input_consumed, input.len(), "Should consume all input");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_mp3_multiple_calls() {
         let mut encoder = encoder_mp3().expect("Failed to create encoder");
 

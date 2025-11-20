@@ -1,7 +1,7 @@
 use hyperchad_template::container;
 use hyperchad_transformer_models::WhiteSpace;
 
-#[test]
+#[test_log::test]
 fn test_white_space_with_quoted_string_literals() {
     let containers = container! {
         div white-space="normal" { "Normal text" }
@@ -19,7 +19,7 @@ fn test_white_space_with_quoted_string_literals() {
     assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_with_unquoted_identifiers() {
     let containers = container! {
         div white-space=normal { "Normal text" }
@@ -37,7 +37,7 @@ fn test_white_space_with_unquoted_identifiers() {
     assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_with_expressions() {
     let containers = container! {
         div white-space=(WhiteSpace::Normal) { "Normal with expression" }
@@ -55,7 +55,7 @@ fn test_white_space_with_expressions() {
     assert_eq!(containers[0].white_space, Some(WhiteSpace::PreserveWrap));
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_with_function_calls() {
     fn get_white_space() -> WhiteSpace {
         WhiteSpace::Preserve
@@ -67,7 +67,7 @@ fn test_white_space_with_function_calls() {
     assert_eq!(containers[0].white_space, Some(WhiteSpace::Preserve));
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_html_output() {
     let containers = container! {
         div white-space=normal { "Normal" }
@@ -97,7 +97,7 @@ fn test_white_space_html_output() {
     assert!(html.contains("preserve-wrap"));
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_combined_with_other_attributes() {
     let containers = container! {
         div
@@ -117,7 +117,7 @@ fn test_white_space_combined_with_other_attributes() {
     assert!(container.background.is_some());
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_default_is_none() {
     let containers = container! {
         div { "No white-space specified" }
@@ -125,7 +125,7 @@ fn test_white_space_default_is_none() {
     assert_eq!(containers[0].white_space, None);
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_nested_elements() {
     let containers = container! {
         div white-space=normal {
@@ -143,7 +143,7 @@ fn test_white_space_nested_elements() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn test_white_space_with_conditional() {
     let preserve_whitespace = true;
 

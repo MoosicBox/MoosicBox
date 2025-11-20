@@ -245,12 +245,12 @@ mod tests {
     use super::pick_random_unused_port;
 
     #[cfg(feature = "rand")]
-    #[test]
+    #[test_log::test]
     fn it_works() {
         assert!(pick_random_unused_port().is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn port_range_test() {
         if let Some(p) = pick_unused_port(15000..16000) {
             assert!((15000..16000).contains(&p));
@@ -260,7 +260,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn port_range_inclusize_test() {
         if let Some(p) = pick_unused_port(15000..=16000) {
             assert!((15000..=16000).contains(&p));
@@ -270,7 +270,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_free_tcp() {
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
@@ -289,7 +289,7 @@ mod tests {
         panic!("Could not find a port to test with after 10 attempts");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_free_udp() {
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
@@ -308,7 +308,7 @@ mod tests {
         panic!("Could not find a port to test with after 10 attempts");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_free() {
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
@@ -327,7 +327,7 @@ mod tests {
         panic!("Could not find a port to test with after 10 attempts");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_free_udp_binding() {
         // Try multiple times to find a port and bind to it
         for _ in 0..10 {
@@ -346,7 +346,7 @@ mod tests {
         panic!("Could not find a port to test with after 10 attempts");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_port_range_trait_exclusive() {
         let range = 15000..15010;
 
@@ -364,7 +364,7 @@ mod tests {
         assert_eq!(ports2[9], 15009);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_port_range_trait_inclusive() {
         let range = 15000..=15010;
 
@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(ports2[10], 15010);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_port_range_empty() {
         // Test with empty exclusive range
         let range = 15000..15000;
@@ -393,7 +393,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_port_range_single_port() {
         // Test with inclusive range containing a single port
         let range = 15000..=15000;

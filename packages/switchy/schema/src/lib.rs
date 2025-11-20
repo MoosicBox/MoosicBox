@@ -243,26 +243,26 @@ impl std::fmt::Display for ChecksumType {
 mod checksum_type_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_type_display() {
         assert_eq!(ChecksumType::Up.to_string(), "up");
         assert_eq!(ChecksumType::Down.to_string(), "down");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_type_equality() {
         assert_eq!(ChecksumType::Up, ChecksumType::Up);
         assert_eq!(ChecksumType::Down, ChecksumType::Down);
         assert_ne!(ChecksumType::Up, ChecksumType::Down);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_type_debug() {
         assert_eq!(format!("{:?}", ChecksumType::Up), "Up");
         assert_eq!(format!("{:?}", ChecksumType::Down), "Down");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_type_copy() {
         let up = ChecksumType::Up;
         let up_copy = up;
@@ -273,7 +273,7 @@ mod checksum_type_tests {
         assert_eq!(down, down_copy);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_type_clone() {
         let up = ChecksumType::Up;
         let up_clone = up;
@@ -388,7 +388,7 @@ pub type Result<T> = std::result::Result<T, MigrationError>;
 mod checksum_mismatch_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_mismatch_display() {
         let mismatch = ChecksumMismatch {
             migration_id: "001_create_users".to_string(),
@@ -405,7 +405,7 @@ mod checksum_mismatch_tests {
         assert!(display.contains("mismatch"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_mismatch_down_type() {
         let mismatch = ChecksumMismatch {
             migration_id: "002_add_indexes".to_string(),
@@ -421,7 +421,7 @@ mod checksum_mismatch_tests {
         assert!(display.contains("current_hash"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_mismatch_debug() {
         let mismatch = ChecksumMismatch {
             migration_id: "test".to_string(),
@@ -435,7 +435,7 @@ mod checksum_mismatch_tests {
         assert!(debug.contains("test"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checksum_mismatch_clone() {
         let original = ChecksumMismatch {
             migration_id: "test".to_string(),
@@ -456,7 +456,7 @@ mod checksum_mismatch_tests {
 mod validation_error_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_not_tracked() {
         let err = ValidationError::NotTracked {
             id: "001_test".to_string(),
@@ -466,7 +466,7 @@ mod validation_error_tests {
         assert!(display.contains("has not been run"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_wrong_state() {
         let err = ValidationError::WrongState {
             id: "002_test".to_string(),
@@ -479,7 +479,7 @@ mod validation_error_tests {
         assert!(display.contains("Completed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_not_in_source() {
         let err = ValidationError::NotInSource {
             id: "003_test".to_string(),
@@ -489,7 +489,7 @@ mod validation_error_tests {
         assert!(display.contains("not found in migration source"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_already_in_state() {
         let err = ValidationError::AlreadyInState {
             id: "004_test".to_string(),
@@ -501,7 +501,7 @@ mod validation_error_tests {
         assert!(display.contains("Completed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_invalid_status() {
         let err = ValidationError::InvalidStatus {
             value: "unknown_status".to_string(),
@@ -514,13 +514,13 @@ mod validation_error_tests {
         assert!(display.contains("failed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_generic() {
         let err = ValidationError::Generic("Custom error message".to_string());
         assert_eq!(err.to_string(), "Custom error message");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_from_string() {
         let err: ValidationError = "Test error".into();
         assert_eq!(err.to_string(), "Test error");
@@ -529,7 +529,7 @@ mod validation_error_tests {
         assert_eq!(err.to_string(), "Another error");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validation_error_debug() {
         let err = ValidationError::NotTracked {
             id: "test".to_string(),
@@ -545,7 +545,7 @@ mod migration_error_tests {
     use super::*;
     use switchy_database::DatabaseError;
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_discovery() {
         let err = MigrationError::Discovery("Failed to find migrations".to_string());
         let display = err.to_string();
@@ -553,7 +553,7 @@ mod migration_error_tests {
         assert!(display.contains("Failed to find migrations"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_validation() {
         let err = MigrationError::Validation("Invalid migration format".to_string());
         let display = err.to_string();
@@ -561,7 +561,7 @@ mod migration_error_tests {
         assert!(display.contains("Invalid migration format"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_execution() {
         let err = MigrationError::Execution("SQL execution failed".to_string());
         let display = err.to_string();
@@ -569,7 +569,7 @@ mod migration_error_tests {
         assert!(display.contains("SQL execution failed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_dirty_state() {
         let err = MigrationError::DirtyState {
             migrations: vec!["001_first".to_string(), "002_second".to_string()],
@@ -580,7 +580,7 @@ mod migration_error_tests {
         assert!(display.contains("002_second"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_dirty_state_single() {
         let err = MigrationError::DirtyState {
             migrations: vec!["single_migration".to_string()],
@@ -589,7 +589,7 @@ mod migration_error_tests {
         assert!(display.contains("single_migration"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_invalid_checksum() {
         let err = MigrationError::InvalidChecksum("Checksum too short".to_string());
         let display = err.to_string();
@@ -597,7 +597,7 @@ mod migration_error_tests {
         assert!(display.contains("Checksum too short"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_checksum_validation_failed() {
         let mismatches = vec![
             ChecksumMismatch {
@@ -619,7 +619,7 @@ mod migration_error_tests {
         assert!(display.contains("2 mismatch(es)"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_from_database_error() {
         let db_err = DatabaseError::TransactionFailed;
         let migration_err: MigrationError = db_err.into();
@@ -627,7 +627,7 @@ mod migration_error_tests {
         assert!(display.contains("Transaction failed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_from_io_error() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
         let migration_err: MigrationError = io_err.into();
@@ -635,7 +635,7 @@ mod migration_error_tests {
         assert!(display.contains("IO error"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_from_parse_error() {
         let parse_err = moosicbox_json_utils::ParseError::ConvertType("test type".to_string());
         let migration_err: MigrationError = parse_err.into();
@@ -644,7 +644,7 @@ mod migration_error_tests {
         assert!(display.contains("test type"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_error_debug() {
         let err = MigrationError::Discovery("test".to_string());
         let debug = format!("{err:?}");

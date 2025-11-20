@@ -17,7 +17,7 @@ use std::sync::Arc;
 // RenderContainer trait implementation tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn render_container_str() {
     let text = "Hello, World!";
     let mut containers = Vec::new();
@@ -27,7 +27,7 @@ fn render_container_str() {
     assert_eq!(ContainerVecExt::to_string(&containers), "Hello, World!");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_str_empty() {
     let text = "";
     let mut containers = Vec::new();
@@ -37,7 +37,7 @@ fn render_container_str_empty() {
     assert_eq!(containers.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn render_container_string() {
     let text = String::from("Test String");
     let mut containers = Vec::new();
@@ -47,7 +47,7 @@ fn render_container_string() {
     assert_eq!(ContainerVecExt::to_string(&containers), "Test String");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_string_empty() {
     let text = String::new();
     let mut containers = Vec::new();
@@ -57,7 +57,7 @@ fn render_container_string_empty() {
     assert_eq!(containers.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn render_container_bool() {
     let mut containers_true = Vec::new();
     true.render_to(&mut containers_true).unwrap();
@@ -68,7 +68,7 @@ fn render_container_bool() {
     assert_eq!(ContainerVecExt::to_string(&containers_false), "false");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_char() {
     let mut containers = Vec::new();
     'A'.render_to(&mut containers).unwrap();
@@ -79,7 +79,7 @@ fn render_container_char() {
     assert_eq!(ContainerVecExt::to_string(&containers_unicode), "🦀");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_integers() {
     // Test various integer types
     let mut containers_i8 = Vec::new();
@@ -108,7 +108,7 @@ fn render_container_integers() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn render_container_floats() {
     let mut containers_f32 = Vec::new();
     3.15_f32.render_to(&mut containers_f32).unwrap();
@@ -124,7 +124,7 @@ fn render_container_floats() {
     assert_eq!(ContainerVecExt::to_string(&containers_zero), "0.0");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_option_some() {
     let value = Some("Present");
     let mut containers = Vec::new();
@@ -134,7 +134,7 @@ fn render_container_option_some() {
     assert_eq!(ContainerVecExt::to_string(&containers), "Present");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_option_none() {
     let value: Option<&str> = None;
     let mut containers = Vec::new();
@@ -144,7 +144,7 @@ fn render_container_option_none() {
     assert_eq!(containers.len(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn render_container_reference_types() {
     // Test &T implementation
     let text = String::from("Referenced");
@@ -159,7 +159,7 @@ fn render_container_reference_types() {
     assert_eq!(ContainerVecExt::to_string(&containers_mut), "42");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_box() {
     let boxed = Box::new("Boxed Value");
     let mut containers = Vec::new();
@@ -169,7 +169,7 @@ fn render_container_box() {
     assert_eq!(ContainerVecExt::to_string(&containers), "Boxed Value");
 }
 
-#[test]
+#[test_log::test]
 fn render_container_arc() {
     let arc = Arc::new("Arc Value");
     let mut containers = Vec::new();
@@ -183,7 +183,7 @@ fn render_container_arc() {
 // ContainerVecMethods and ContainerVecExt tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn container_vec_to_string_vs_into_string() {
     use hyperchad_template::container;
 
@@ -199,7 +199,7 @@ fn container_vec_to_string_vs_into_string() {
     assert!(str1.contains("Test"));
 }
 
-#[test]
+#[test_log::test]
 fn container_list_new_and_into_inner() {
     use hyperchad_template::container;
 
@@ -213,7 +213,7 @@ fn container_list_new_and_into_inner() {
     assert_eq!(inner, containers);
 }
 
-#[test]
+#[test_log::test]
 fn container_list_iteration() {
     use hyperchad_template::container;
 
@@ -229,7 +229,7 @@ fn container_list_iteration() {
     assert_eq!(count, 3);
 }
 
-#[test]
+#[test_log::test]
 fn container_list_display() {
     use hyperchad_template::container;
 
@@ -247,7 +247,7 @@ fn container_list_display() {
 // calc module tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn calc_add_numbers_same_unit() {
     // Integer addition
     let result = calc::add_numbers(&Number::Integer(10), &Number::Integer(20));
@@ -262,7 +262,7 @@ fn calc_add_numbers_same_unit() {
     assert_eq!(result, Number::IntegerPercent(75));
 }
 
-#[test]
+#[test_log::test]
 fn calc_add_numbers_mixed_types() {
     // Integer + Real
     let result = calc::add_numbers(&Number::Integer(10), &Number::Real(5.5));
@@ -277,7 +277,7 @@ fn calc_add_numbers_mixed_types() {
     assert_eq!(result, Number::RealVw(75.5));
 }
 
-#[test]
+#[test_log::test]
 fn calc_subtract_numbers_same_unit() {
     let result = calc::subtract_numbers(&Number::Integer(30), &Number::Integer(10));
     assert_eq!(result, Number::Integer(20));
@@ -286,13 +286,13 @@ fn calc_subtract_numbers_same_unit() {
     assert_eq!(result, Number::RealPercent(50.0));
 }
 
-#[test]
+#[test_log::test]
 fn calc_subtract_numbers_negative_result() {
     let result = calc::subtract_numbers(&Number::Integer(10), &Number::Integer(20));
     assert_eq!(result, Number::Integer(-10));
 }
 
-#[test]
+#[test_log::test]
 fn calc_multiply_numbers() {
     // Integer multiplication
     let result = calc::multiply_numbers(&Number::Integer(5), &Number::Integer(4));
@@ -307,7 +307,7 @@ fn calc_multiply_numbers() {
     assert_eq!(result, Number::IntegerPercent(100));
 }
 
-#[test]
+#[test_log::test]
 fn calc_divide_numbers() {
     // Integer division (returns Real)
     let result = calc::divide_numbers(&Number::Integer(20), &Number::Integer(4));
@@ -322,7 +322,7 @@ fn calc_divide_numbers() {
     assert_eq!(result, Number::RealPercent(50.0));
 }
 
-#[test]
+#[test_log::test]
 fn calc_divide_by_zero() {
     // Division by zero should return 0.0 to avoid panics
     let result = calc::divide_numbers(&Number::Integer(10), &Number::Integer(0));
@@ -332,7 +332,7 @@ fn calc_divide_by_zero() {
     assert_eq!(result, Number::Real(0.0));
 }
 
-#[test]
+#[test_log::test]
 fn calc_to_percent_number() {
     let result = calc::to_percent_number(50);
     assert_eq!(result, Number::IntegerPercent(50));
@@ -345,7 +345,7 @@ fn calc_to_percent_number() {
     assert_eq!(result, Number::IntegerPercent(100));
 }
 
-#[test]
+#[test_log::test]
 fn calc_viewport_unit_conversions() {
     // Test vw conversion
     let result = calc::to_vw_number(50);
@@ -368,31 +368,31 @@ fn calc_viewport_unit_conversions() {
 // unit_functions module tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn unit_functions_vw() {
     assert_eq!(unit_functions::vw(50), Number::IntegerVw(50));
     assert_eq!(unit_functions::vw(75.5), Number::RealVw(75.5));
 }
 
-#[test]
+#[test_log::test]
 fn unit_functions_vh() {
     assert_eq!(unit_functions::vh(100), Number::IntegerVh(100));
     assert_eq!(unit_functions::vh(50.5), Number::RealVh(50.5));
 }
 
-#[test]
+#[test_log::test]
 fn unit_functions_dvw() {
     assert_eq!(unit_functions::dvw(80), Number::IntegerDvw(80));
     assert_eq!(unit_functions::dvw(90.5), Number::RealDvw(90.5));
 }
 
-#[test]
+#[test_log::test]
 fn unit_functions_dvh() {
     assert_eq!(unit_functions::dvh(60), Number::IntegerDvh(60));
     assert_eq!(unit_functions::dvh(70.5), Number::RealDvh(70.5));
 }
 
-#[test]
+#[test_log::test]
 fn unit_functions_with_number_types() {
     // Test converting existing Number types
     let num = Number::Integer(50);
@@ -406,7 +406,7 @@ fn unit_functions_with_number_types() {
 // color_functions module tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn color_rgb_basic() {
     let color = color_functions::rgb(255, 0, 0);
     assert_eq!(
@@ -420,7 +420,7 @@ fn color_rgb_basic() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_rgb_with_different_types() {
     // Test with i32
     let color = color_functions::rgb(255_i32, 128_i32, 64_i32);
@@ -459,7 +459,7 @@ fn color_rgb_with_different_types() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_rgb_clamping() {
     // Values over 255 should be clamped
     let color = color_functions::rgb(300_i32, 400_i32, 500_i32);
@@ -486,7 +486,7 @@ fn color_rgb_clamping() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_rgba_with_float_alpha() {
     let color = color_functions::rgba(255, 0, 0, 0.5);
     assert_eq!(
@@ -511,7 +511,7 @@ fn color_rgba_with_float_alpha() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_rgba_with_integer_alpha() {
     let color = color_functions::rgba(255, 0, 0, 128_u8);
     assert_eq!(
@@ -536,7 +536,7 @@ fn color_rgba_with_integer_alpha() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_rgba_with_percentage_alpha() {
     let color = color_functions::rgba(255, 0, 0, "50%");
     assert_eq!(
@@ -572,7 +572,7 @@ fn color_rgba_with_percentage_alpha() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn color_alpha_value_conversions() {
     use color_functions::AlphaValue;
 
@@ -592,7 +592,7 @@ fn color_alpha_value_conversions() {
     assert_eq!(AlphaValue::Percentage(100.0).to_u8(), 255);
 }
 
-#[test]
+#[test_log::test]
 fn color_alpha_value_clamping() {
     use color_functions::AlphaValue;
 
@@ -605,7 +605,7 @@ fn color_alpha_value_clamping() {
     assert_eq!(AlphaValue::Percentage(150.0).to_u8(), 255);
 }
 
-#[test]
+#[test_log::test]
 fn color_alpha_value_from_string() {
     use color_functions::AlphaValue;
 
@@ -626,7 +626,7 @@ fn color_alpha_value_from_string() {
     assert_eq!(alpha.to_u8(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn color_rgb_alpha_function() {
     // Test the rgb_alpha function directly
     let color = color_functions::rgb_alpha(255, 128, 64, 0.8);
@@ -645,28 +645,28 @@ fn color_rgb_alpha_function() {
 // IntoBorder trait tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn into_border_color_number() {
     let border = (Color::from_hex("#FF0000"), Number::Integer(2)).into_border();
     assert_eq!(border.0, Color::from_hex("#FF0000"));
     assert_eq!(border.1, Number::Integer(2));
 }
 
-#[test]
+#[test_log::test]
 fn into_border_color_i32() {
     let border = (Color::from_hex("#00FF00"), 4_i32).into_border();
     assert_eq!(border.0, Color::from_hex("#00FF00"));
     assert_eq!(border.1, Number::Integer(4));
 }
 
-#[test]
+#[test_log::test]
 fn into_border_color_f32() {
     let border = (Color::from_hex("#0000FF"), 2.5_f32).into_border();
     assert_eq!(border.0, Color::from_hex("#0000FF"));
     assert_eq!(border.1, Number::Real(2.5));
 }
 
-#[test]
+#[test_log::test]
 fn into_border_reversed_order() {
     // Test (i32, Color) order
     let border = (3_i32, Color::from_hex("#FF00FF")).into_border();
@@ -679,7 +679,7 @@ fn into_border_reversed_order() {
     assert_eq!(border.1, Number::Real(1.5));
 }
 
-#[test]
+#[test_log::test]
 fn into_border_hex_string() {
     let border = ("#FF0000", 2_i32).into_border();
     assert_eq!(border.0, Color::from_hex("#FF0000"));
@@ -690,7 +690,7 @@ fn into_border_hex_string() {
     assert_eq!(border.1, Number::Integer(2));
 }
 
-#[test]
+#[test_log::test]
 fn into_border_owned_string() {
     let color_str = String::from("#0000FF");
     let border = (color_str, 3_i32).into_border();
@@ -702,7 +702,7 @@ fn into_border_owned_string() {
 // Helper function tests
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn to_html_helper() {
     use hyperchad_template::{container, to_html};
 
@@ -714,7 +714,7 @@ fn to_html_helper() {
     assert!(html.contains("Test Content"));
 }
 
-#[test]
+#[test_log::test]
 fn into_html_helper() {
     use hyperchad_template::{container, into_html};
 
@@ -730,14 +730,14 @@ fn into_html_helper() {
 // Edge cases and error handling
 // ============================================================================
 
-#[test]
+#[test_log::test]
 fn render_to_string_empty_containers() {
     let containers: Containers = Vec::new();
     let html = ContainerVecExt::to_string(&containers);
     assert_eq!(html, "");
 }
 
-#[test]
+#[test_log::test]
 fn render_multiple_primitives() {
     let mut containers = Vec::new();
 
@@ -752,7 +752,7 @@ fn render_multiple_primitives() {
     assert_eq!(result, "42 - true - 3.25");
 }
 
-#[test]
+#[test_log::test]
 fn container_list_deref() {
     use hyperchad_template::container;
 
@@ -767,7 +767,7 @@ fn container_list_deref() {
     assert!(!list.is_empty());
 }
 
-#[test]
+#[test_log::test]
 fn calc_operations_preserve_units() {
     // Adding two vh values should preserve vh unit
     let result = calc::add_numbers(&Number::IntegerVh(50), &Number::IntegerVh(30));
@@ -778,7 +778,7 @@ fn calc_operations_preserve_units() {
     assert_eq!(result, Number::RealDvw(74.5));
 }
 
-#[test]
+#[test_log::test]
 fn color_rgb_value_trait_edge_cases() {
     use color_functions::ToRgbValue;
 
@@ -796,7 +796,7 @@ fn color_rgb_value_trait_edge_cases() {
     assert_eq!((-10.0_f64).to_rgb_value(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn alpha_value_from_various_integer_types() {
     use color_functions::AlphaValue;
 

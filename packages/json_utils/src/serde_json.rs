@@ -445,7 +445,7 @@ where
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_u64() {
         let json = &serde_json::json!({
             "outer": {
@@ -460,7 +460,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_null_string() {
         let json = &serde_json::json!({
             "str": serde_json::Value::Null,
@@ -469,7 +469,7 @@ mod tests {
         assert_eq!(json.to_value::<Option<String>>("str").unwrap(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_string() {
         let json = &serde_json::json!({
             "str": "hey there",
@@ -497,7 +497,7 @@ mod tests {
         assert_eq!(result, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_option_u64() {
         let json = &serde_json::json!({
             "outer": {
@@ -528,7 +528,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_vec_u64() {
         let json = &serde_json::json!({
             "outer": {
@@ -543,7 +543,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_nested_vec_u64() {
         let json = &serde_json::json!({
             "items": [
@@ -562,7 +562,7 @@ mod tests {
         assert_eq!(numbers, vec![123_u64, 124_u64, 125_u64]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_nested_value_error_messages() {
         let json = &serde_json::json!({
             "level1": {
@@ -586,7 +586,7 @@ mod tests {
         assert!(err.to_string().contains("missing"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_type_null_handling() {
         let json = &serde_json::json!({
             "outer": {
@@ -602,7 +602,7 @@ mod tests {
         assert!(err.to_string().contains("null"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_conversions() {
         // Test i8
         let value = &serde_json::json!(42);
@@ -630,7 +630,7 @@ mod tests {
         assert_eq!(result.unwrap(), 12_345_isize);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_error_on_wrong_type() {
         // Test string when expecting number
         let value = &serde_json::json!("not a number");
@@ -651,7 +651,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_vec_error() {
         // Test non-array when expecting Vec
         let value = &serde_json::json!({"not": "an array"});
@@ -660,14 +660,14 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_identity() {
         let value = &serde_json::json!({"key": "value"});
         let result: Result<&Value, ParseError> = value.to_value_type();
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_deep_path() {
         let json = &serde_json::json!({
             "a": {
@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_value_with_value_ref() {
         let json = serde_json::json!({
             "nested": {
@@ -696,7 +696,7 @@ mod tests {
         assert_eq!(result.unwrap(), "test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_nested_missing_value_with_option() {
         let json = &serde_json::json!({
             "outer": {

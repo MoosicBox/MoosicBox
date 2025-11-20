@@ -556,7 +556,7 @@ mod tests {
     use super::*;
     use moosicbox_music_models::{ApiSource, TrackApiSource};
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_local_file_with_id() {
         let source = TrackSource::LocalFilePath {
             format: AudioFormat::Flac,
@@ -568,7 +568,7 @@ mod tests {
         assert_eq!(key, "local:API:Library:FLAC:id:123:FLAC");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_local_file_without_id() {
         let source = TrackSource::LocalFilePath {
             format: AudioFormat::Flac,
@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[cfg(feature = "format-aac")]
-    #[test]
+    #[test_log::test]
     fn test_track_key_format_conversion() {
         let source = TrackSource::LocalFilePath {
             format: AudioFormat::Flac,
@@ -593,7 +593,7 @@ mod tests {
         assert_eq!(key, "local:API:Library:FLAC:id:456:AAC");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_remote_url_with_id() {
         let source = TrackSource::RemoteUrl {
             format: AudioFormat::Flac,
@@ -606,7 +606,7 @@ mod tests {
         assert_eq!(key, "remote:API:Library:FLAC:id:789:FLAC:");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_remote_url_without_id() {
         let source = TrackSource::RemoteUrl {
             format: AudioFormat::Flac,
@@ -622,7 +622,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_remote_url_with_headers() {
         let headers = vec![
             ("Authorization".to_string(), "Bearer token".to_string()),
@@ -642,7 +642,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_different_sources_different_keys() {
         let source1 = TrackSource::LocalFilePath {
             format: AudioFormat::Flac,
@@ -663,7 +663,7 @@ mod tests {
         assert_ne!(key1, key2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_key_same_source_same_key() {
         let source = TrackSource::LocalFilePath {
             format: AudioFormat::Flac,

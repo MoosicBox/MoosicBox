@@ -1182,7 +1182,7 @@ mod test {
 
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_empty_albums_returns_empty_albums() {
         let albums = vec![];
         let result = filter_albums(
@@ -1202,7 +1202,7 @@ mod test {
         assert_eq!(result, vec![]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
         use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
 
@@ -1257,7 +1257,7 @@ mod test {
         assert_eq!(result, vec![local]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_name_that_dont_match() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1304,7 +1304,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_name_that_dont_match_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1351,7 +1351,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_artist_that_dont_match() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1398,7 +1398,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_artist_that_dont_match_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1445,7 +1445,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1492,7 +1492,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_search_that_dont_match_artist_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1539,7 +1539,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1586,7 +1586,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_search_that_dont_match_name_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1633,7 +1633,7 @@ mod test {
         assert_eq!(result, vec![test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn filter_albums_filters_albums_of_search_that_dont_match_and_searches_across_properties() {
         let bob = LibraryAlbum {
             id: 0,
@@ -1680,7 +1680,7 @@ mod test {
         assert_eq!(result, vec![bob, test]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_artist_asc() {
         let zebra = LibraryAlbum {
             id: 1,
@@ -1711,7 +1711,7 @@ mod test {
         assert_eq!(result, vec![&alpha, &beta, &zebra]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_artist_desc() {
         let zebra = LibraryAlbum {
             id: 1,
@@ -1742,7 +1742,7 @@ mod test {
         assert_eq!(result, vec![&zebra, &beta, &alpha]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_name_asc() {
         let zoo = LibraryAlbum {
             id: 1,
@@ -1773,7 +1773,7 @@ mod test {
         assert_eq!(result, vec![&apple, &banana, &zoo]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_name_desc() {
         let zoo = LibraryAlbum {
             id: 1,
@@ -1804,7 +1804,7 @@ mod test {
         assert_eq!(result, vec![&zoo, &banana, &apple]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_release_date_asc_with_none_values() {
         let no_date = LibraryAlbum {
             id: 1,
@@ -1839,7 +1839,7 @@ mod test {
         assert_eq!(result, vec![&old, &new, &no_date]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_release_date_desc_with_none_values() {
         let no_date = LibraryAlbum {
             id: 1,
@@ -1874,7 +1874,7 @@ mod test {
         assert_eq!(result, vec![&new, &old, &no_date]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_date_added_asc() {
         let old = LibraryAlbum {
             id: 1,
@@ -1901,7 +1901,7 @@ mod test {
         assert_eq!(result, vec![&old, &new]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_by_date_added_desc() {
         let old = LibraryAlbum {
             id: 1,
@@ -1928,7 +1928,7 @@ mod test {
         assert_eq!(result, vec![&new, &old]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_case_insensitive_artist() {
         let upper = LibraryAlbum {
             id: 1,
@@ -1960,7 +1960,7 @@ mod test {
         assert_eq!(result, vec![&lower, &mixed, &upper]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_albums_case_insensitive_name() {
         let upper = LibraryAlbum {
             id: 1,
@@ -1992,7 +1992,7 @@ mod test {
         assert_eq!(result, vec![&lower, &mixed, &upper]);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_album_versions_by_sample_rate() {
         use moosicbox_menu_models::AlbumVersion;
         use moosicbox_music_models::TrackApiSource;
@@ -2032,7 +2032,7 @@ mod test {
         assert_eq!(versions[2].sample_rate, Some(44100));
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_album_versions_by_bit_depth() {
         use moosicbox_menu_models::AlbumVersion;
         use moosicbox_music_models::TrackApiSource;
@@ -2072,7 +2072,7 @@ mod test {
         assert_eq!(versions[2].bit_depth, Some(16));
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_album_versions_by_source() {
         use moosicbox_menu_models::AlbumVersion;
         use moosicbox_music_models::TrackApiSource;
@@ -2114,7 +2114,7 @@ mod test {
         assert_eq!(versions[0].source, TrackApiSource::Local);
     }
 
-    #[test]
+    #[test_log::test]
     fn sort_album_versions_with_none_values() {
         use moosicbox_menu_models::AlbumVersion;
         use moosicbox_music_models::TrackApiSource;
@@ -2154,7 +2154,7 @@ mod test {
         assert_eq!(versions[2].sample_rate, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_artist_order_to_library_artist_order() {
         use moosicbox_music_api_models::ArtistOrder;
 
@@ -2162,7 +2162,7 @@ mod test {
         assert_eq!(result, LibraryArtistOrder::Date);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_artist_order_direction_to_library_artist_order_direction() {
         use moosicbox_music_api_models::ArtistOrderDirection;
 
@@ -2173,7 +2173,7 @@ mod test {
         assert_eq!(desc, LibraryArtistOrderDirection::Desc);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_album_order_to_library_album_order() {
         use moosicbox_music_api_models::AlbumOrder;
 
@@ -2181,7 +2181,7 @@ mod test {
         assert_eq!(result, LibraryAlbumOrder::Date);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_album_order_direction_to_library_album_order_direction() {
         use moosicbox_music_api_models::AlbumOrderDirection;
 
@@ -2192,7 +2192,7 @@ mod test {
         assert_eq!(desc, LibraryAlbumOrderDirection::Desc);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_track_order_to_library_track_order() {
         use moosicbox_music_api_models::TrackOrder;
 
@@ -2200,7 +2200,7 @@ mod test {
         assert_eq!(result, LibraryTrackOrder::Date);
     }
 
-    #[test]
+    #[test_log::test]
     fn from_track_order_direction_to_library_track_order_direction() {
         use moosicbox_music_api_models::TrackOrderDirection;
 

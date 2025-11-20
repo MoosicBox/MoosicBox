@@ -2352,7 +2352,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_image_size_from_u16() {
         assert_eq!(YtArtistImageSize::from(50u16), YtArtistImageSize::Small);
         assert_eq!(YtArtistImageSize::from(160u16), YtArtistImageSize::Small);
@@ -2364,7 +2364,7 @@ mod tests {
         assert_eq!(YtArtistImageSize::from(1000u16), YtArtistImageSize::Max);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_image_size_to_u16() {
         assert_eq!(u16::from(YtArtistImageSize::Small), 160);
         assert_eq!(u16::from(YtArtistImageSize::Medium), 320);
@@ -2372,7 +2372,7 @@ mod tests {
         assert_eq!(u16::from(YtArtistImageSize::Max), 750);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_image_size_display() {
         assert_eq!(YtArtistImageSize::Small.to_string(), "160");
         assert_eq!(YtArtistImageSize::Medium.to_string(), "320");
@@ -2380,7 +2380,7 @@ mod tests {
         assert_eq!(YtArtistImageSize::Max.to_string(), "750");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_image_size_from_u16() {
         assert_eq!(YtAlbumImageSize::from(50u16), YtAlbumImageSize::Thumbnail);
         assert_eq!(YtAlbumImageSize::from(80u16), YtAlbumImageSize::Thumbnail);
@@ -2394,7 +2394,7 @@ mod tests {
         assert_eq!(YtAlbumImageSize::from(2000u16), YtAlbumImageSize::Max);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_image_size_to_u16() {
         assert_eq!(u16::from(YtAlbumImageSize::Thumbnail), 80);
         assert_eq!(u16::from(YtAlbumImageSize::Small), 160);
@@ -2403,7 +2403,7 @@ mod tests {
         assert_eq!(u16::from(YtAlbumImageSize::Max), 1280);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_image_size_display() {
         assert_eq!(YtAlbumImageSize::Thumbnail.to_string(), "80");
         assert_eq!(YtAlbumImageSize::Small.to_string(), "160");
@@ -2412,7 +2412,7 @@ mod tests {
         assert_eq!(YtAlbumImageSize::Max.to_string(), "1280");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_search_artist_picture_url() {
         let artist = YtSearchArtist {
             id: 123,
@@ -2432,7 +2432,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_search_artist_picture_url_none() {
         let artist = YtSearchArtist {
             id: 123,
@@ -2445,7 +2445,7 @@ mod tests {
         assert_eq!(artist.picture_url(YtArtistImageSize::Small), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_search_album_cover_url() {
         let album = YtSearchAlbum {
             id: 456,
@@ -2473,7 +2473,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_search_album_cover_url_none() {
         let album = YtSearchAlbum {
             id: 456,
@@ -2494,7 +2494,7 @@ mod tests {
         assert_eq!(album.cover_url(YtAlbumImageSize::Medium), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_cover_url() {
         let album = YtAlbum {
             id: "album123".to_string(),
@@ -2524,7 +2524,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_artist_to_api_global_search_result() {
         let artist = YtArtist {
             id: "artist789".to_string(),
@@ -2545,7 +2545,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_track_to_api_global_search_result() {
         let track = YtTrack {
             id: "track123".to_string(),
@@ -2580,7 +2580,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_yt_album_to_api_global_search_result() {
         let album = YtAlbum {
             id: "album_id".to_string(),

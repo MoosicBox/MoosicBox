@@ -1,7 +1,7 @@
 use hyperchad_template::container;
 use hyperchad_transformer_models::TextOverflow;
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_quoted_string_literals() {
     let containers = container! {
         div text-overflow="clip" { "Clipped text" }
@@ -14,7 +14,7 @@ fn test_text_overflow_with_quoted_string_literals() {
     assert_eq!(containers[0].text_overflow, Some(TextOverflow::Ellipsis));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_unquoted_identifiers() {
     let containers = container! {
         div text-overflow=clip { "Clipped text" }
@@ -27,7 +27,7 @@ fn test_text_overflow_with_unquoted_identifiers() {
     assert_eq!(containers[0].text_overflow, Some(TextOverflow::Ellipsis));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_expressions() {
     let containers = container! {
         div text-overflow=(TextOverflow::Clip) { "Clip with expression" }
@@ -40,7 +40,7 @@ fn test_text_overflow_with_expressions() {
     assert_eq!(containers[0].text_overflow, Some(TextOverflow::Ellipsis));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_function_calls() {
     fn get_text_overflow() -> TextOverflow {
         TextOverflow::Ellipsis
@@ -52,7 +52,7 @@ fn test_text_overflow_with_function_calls() {
     assert_eq!(containers[0].text_overflow, Some(TextOverflow::Ellipsis));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_html_output() {
     let containers = container! {
         div text-overflow=clip { "Clip" }
@@ -73,7 +73,7 @@ fn test_text_overflow_html_output() {
     assert!(html.contains("ellipsis"));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_combined_with_other_attributes() {
     let containers = container! {
         div
@@ -93,7 +93,7 @@ fn test_text_overflow_combined_with_other_attributes() {
     assert!(container.background.is_some());
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_default_is_none() {
     let containers = container! {
         div { "No text-overflow specified" }
@@ -101,7 +101,7 @@ fn test_text_overflow_default_is_none() {
     assert_eq!(containers[0].text_overflow, None);
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_nested_elements() {
     let containers = container! {
         div text-overflow=clip {
@@ -119,7 +119,7 @@ fn test_text_overflow_nested_elements() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_conditional() {
     let use_ellipsis = true;
 
@@ -132,7 +132,7 @@ fn test_text_overflow_with_conditional() {
     assert_eq!(containers[0].text_overflow, Some(TextOverflow::Ellipsis));
 }
 
-#[test]
+#[test_log::test]
 fn test_text_overflow_with_width_constraint() {
     let containers = container! {
         div

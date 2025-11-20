@@ -225,7 +225,7 @@ impl_env!(standard);
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_env_error_not_found_display() {
         let error = EnvError::NotFound("TEST_VAR".to_string());
         assert_eq!(
@@ -234,7 +234,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_error_invalid_value_display() {
         let error = EnvError::InvalidValue("TEST_VAR".to_string(), "bad value".to_string());
         assert_eq!(
@@ -243,7 +243,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_error_parse_error_display() {
         let error = EnvError::ParseError("TEST_VAR".to_string(), "invalid digit".to_string());
         assert_eq!(
@@ -252,7 +252,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_error_debug() {
         let error = EnvError::NotFound("VAR".to_string());
         let debug_str = format!("{error:?}");
@@ -277,7 +277,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_custom_env_provider_implementation() {
         let mut vars = BTreeMap::new();
         vars.insert("KEY1".to_string(), "value1".to_string());
@@ -290,7 +290,7 @@ mod tests {
         assert!(matches!(provider.var("KEY3"), Err(EnvError::NotFound(_))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_or() {
         let provider = TestEnvProvider {
             vars: BTreeMap::new(),
@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(provider.var_or("MISSING", "default"), "default");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_or_with_existing() {
         let mut vars = BTreeMap::new();
         vars.insert("EXISTS".to_string(), "actual".to_string());
@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(provider.var_or("EXISTS", "default"), "actual");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_success() {
         let mut vars = BTreeMap::new();
         vars.insert("NUMBER".to_string(), "42".to_string());
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(result, 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_error() {
         let mut vars = BTreeMap::new();
         vars.insert("NOT_NUMBER".to_string(), "abc".to_string());
@@ -331,7 +331,7 @@ mod tests {
         assert!(matches!(result, Err(EnvError::ParseError(_, _))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_missing() {
         let provider = TestEnvProvider {
             vars: BTreeMap::new(),
@@ -341,7 +341,7 @@ mod tests {
         assert!(matches!(result, Err(EnvError::NotFound(_))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_or_success() {
         let mut vars = BTreeMap::new();
         vars.insert("NUMBER".to_string(), "100".to_string());
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(result, 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_or_with_parse_error() {
         let mut vars = BTreeMap::new();
         vars.insert("NOT_NUMBER".to_string(), "xyz".to_string());
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(result, 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_or_with_missing() {
         let provider = TestEnvProvider {
             vars: BTreeMap::new(),
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(result, 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_opt_some() {
         let mut vars = BTreeMap::new();
         vars.insert("NUMBER".to_string(), "123".to_string());
@@ -384,7 +384,7 @@ mod tests {
         assert_eq!(result, Some(123));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_opt_none() {
         let provider = TestEnvProvider {
             vars: BTreeMap::new(),
@@ -394,7 +394,7 @@ mod tests {
         assert_eq!(result, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_parse_opt_parse_error() {
         let mut vars = BTreeMap::new();
         vars.insert("NOT_NUMBER".to_string(), "not_an_int".to_string());
@@ -405,7 +405,7 @@ mod tests {
         assert!(matches!(result, Err(EnvError::ParseError(_, _))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_exists_true() {
         let mut vars = BTreeMap::new();
         vars.insert("EXISTS".to_string(), "yes".to_string());
@@ -415,7 +415,7 @@ mod tests {
         assert!(provider.var_exists("EXISTS"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_var_exists_false() {
         let provider = TestEnvProvider {
             vars: BTreeMap::new(),
@@ -424,7 +424,7 @@ mod tests {
         assert!(!provider.var_exists("MISSING"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_env_provider_vars() {
         let mut vars = BTreeMap::new();
         vars.insert("KEY1".to_string(), "value1".to_string());
@@ -436,7 +436,7 @@ mod tests {
         assert_eq!(result, vars);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_result_type_alias() {
         let ok_result: Result<String> = Ok("test".to_string());
         assert!(ok_result.is_ok());

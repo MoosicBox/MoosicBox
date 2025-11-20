@@ -71,13 +71,13 @@ pub fn encode_aac(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_encoder_creation() {
         let result = encoder_aac();
         assert!(result.is_ok(), "AAC encoder should initialize successfully");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_aac_basic() {
         let encoder = encoder_aac().expect("Failed to create encoder");
 
@@ -94,7 +94,7 @@ mod tests {
         assert!(info.input_consumed > 0, "Should consume input");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_info_conversion() {
         let fdk_info = fdk_aac::enc::EncodeInfo {
             output_size: 1024,

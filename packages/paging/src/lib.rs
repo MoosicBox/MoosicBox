@@ -1158,7 +1158,7 @@ mod tests {
 
     // ===== Page Tests =====
 
-    #[test]
+    #[test_log::test]
     fn test_page_empty() {
         let page: Page<i32> = Page::empty();
         assert_eq!(page.offset(), 0);
@@ -1168,7 +1168,7 @@ mod tests {
         assert!(!page.has_more());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_with_total_has_more_true() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1181,7 +1181,7 @@ mod tests {
         assert_eq!(page.remaining(), Some(7));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_with_total_has_more_false() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1194,7 +1194,7 @@ mod tests {
         assert_eq!(page.remaining(), Some(0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_with_has_more_true() {
         let page = Page::WithHasMore {
             items: vec![1, 2, 3],
@@ -1207,7 +1207,7 @@ mod tests {
         assert_eq!(page.remaining(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_with_has_more_false() {
         let page = Page::WithHasMore {
             items: vec![1, 2, 3],
@@ -1220,7 +1220,7 @@ mod tests {
         assert_eq!(page.remaining(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_items_and_into_items() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1234,7 +1234,7 @@ mod tests {
         assert_eq!(items, vec![1, 2, 3]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_map_with_total() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1251,7 +1251,7 @@ mod tests {
         assert_eq!(mapped.total(), Some(20));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_map_with_has_more() {
         let page = Page::WithHasMore {
             items: vec!["a", "b"],
@@ -1268,7 +1268,7 @@ mod tests {
         assert!(mapped.has_more());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_into_conversion() {
         #[derive(Debug, PartialEq)]
         struct From(i32);
@@ -1293,7 +1293,7 @@ mod tests {
         assert_eq!(converted.total(), Some(5));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_try_into_success() {
         #[derive(Debug, Clone)]
         struct Value(i32);
@@ -1323,7 +1323,7 @@ mod tests {
         assert_eq!(converted.items(), &[1, 2]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_try_into_failure() {
         #[derive(Debug, Clone)]
         struct Value(i32);
@@ -1352,7 +1352,7 @@ mod tests {
         assert_eq!(result.unwrap_err(), "negative");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_transpose_success() {
         let page = Page::WithTotal {
             items: vec![Ok(1), Ok(2), Ok(3)],
@@ -1368,7 +1368,7 @@ mod tests {
         assert_eq!(transposed.total(), Some(5));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_transpose_failure() {
         let page = Page::WithTotal {
             items: vec![Ok(1), Err("error"), Ok(3)],
@@ -1382,7 +1382,7 @@ mod tests {
         assert_eq!(result.unwrap_err(), "error");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_transpose_with_has_more() {
         let page = Page::WithHasMore {
             items: vec![Ok(1), Ok(2)],
@@ -1399,7 +1399,7 @@ mod tests {
         assert_eq!(transposed.total(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_serialization_with_total() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1418,7 +1418,7 @@ mod tests {
         assert_eq!(parsed["hasMore"], true);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_serialization_with_has_more() {
         let page = Page::WithHasMore {
             items: vec!["a", "b"],
@@ -1437,7 +1437,7 @@ mod tests {
         assert!(parsed["total"].is_null());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_deserialization_with_total() {
         let json = r#"{"items":[1,2,3],"offset":0,"limit":3,"total":10,"hasMore":true}"#;
 
@@ -1450,7 +1450,7 @@ mod tests {
         assert!(page.has_more());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_deserialization_without_total() {
         let json = r#"{"items":["x","y"],"offset":2,"limit":2,"hasMore":false}"#;
 
@@ -1463,7 +1463,7 @@ mod tests {
         assert!(!page.has_more());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_deref() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -1478,7 +1478,7 @@ mod tests {
         assert_eq!(vec_ref[0], 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_page_into_vec() {
         let page = Page::WithTotal {
             items: vec![1, 2, 3],
@@ -2030,7 +2030,7 @@ mod tests {
 
     // ===== PagingRequest Tests =====
 
-    #[test]
+    #[test_log::test]
     fn test_paging_request_serialization() {
         let request = PagingRequest {
             offset: 10,
@@ -2044,7 +2044,7 @@ mod tests {
         assert_eq!(parsed["limit"], 20);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_paging_request_deserialization() {
         let json = r#"{"offset":5,"limit":15}"#;
 
@@ -2054,7 +2054,7 @@ mod tests {
         assert_eq!(request.limit, 15);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_paging_request_equality() {
         let req1 = PagingRequest {
             offset: 10,

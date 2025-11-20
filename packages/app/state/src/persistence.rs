@@ -394,7 +394,7 @@ impl AppState {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_display() {
         assert_eq!(PersistenceKey::ConnectionId.to_string(), "CONNECTION_ID");
         assert_eq!(
@@ -409,14 +409,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_as_ref() {
         let key = PersistenceKey::ConnectionId;
         let key_ref: &str = key.as_ref();
         assert_eq!(key_ref, "CONNECTION_ID");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_from_string() {
         use std::str::FromStr;
 
@@ -442,7 +442,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_from_string_invalid() {
         use std::str::FromStr;
 
@@ -451,14 +451,14 @@ mod tests {
         assert!(PersistenceKey::from_str("").is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_into_string() {
         let key = PersistenceKey::ConnectionId;
         let key_string: String = key.into();
         assert_eq!(key_string, "CONNECTION_ID");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_persistence_key_debug() {
         let key = PersistenceKey::Connection;
         let debug_str = format!("{key:?}");

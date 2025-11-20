@@ -173,7 +173,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn clear_cache_removes_all_entries() {
         // Add some entries via direct write to test clearing
         CACHE_MAP.write().unwrap().insert(
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(CACHE_MAP.read().unwrap().len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn current_time_nanos_returns_positive_value() {
         let time = current_time_nanos();
         assert!(time > 0);

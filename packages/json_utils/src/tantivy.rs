@@ -294,21 +294,21 @@ where
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_str() {
         let value = OwnedValue::Str("test".to_string());
         let result: Result<&str, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), "test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_string() {
         let value = OwnedValue::Str("test".to_string());
         let result: Result<String, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), "test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_bool() {
         let value = OwnedValue::Bool(true);
         let result: Result<bool, ParseError> = (&value).to_value_type();
@@ -319,77 +319,77 @@ mod tests {
         assert!(!result.unwrap());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u64() {
         let value = OwnedValue::U64(123);
         let result: Result<u64, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), 123);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_f64() {
         let value = OwnedValue::F64(2.5);
         let result: Result<f64, ParseError> = (&value).to_value_type();
         assert!((result.unwrap() - 2.5).abs() < f64::EPSILON);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_f32() {
         let value = OwnedValue::F64(2.5);
         let result: Result<f32, ParseError> = (&value).to_value_type();
         assert!((result.unwrap() - 2.5_f32).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u8() {
         let value = OwnedValue::U64(42);
         let result: Result<u8, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u16() {
         let value = OwnedValue::U64(1234);
         let result: Result<u16, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), 1234);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u32() {
         let value = OwnedValue::U64(12345);
         let result: Result<u32, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), 12345);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_option() {
         let value = OwnedValue::Str("test".to_string());
         let result: Result<Option<String>, ParseError> = (&value).to_value_type();
         assert_eq!(result.unwrap(), Some("test".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_owned_value_identity() {
         let value = OwnedValue::U64(123);
         let result: Result<&OwnedValue, ParseError> = (&value).to_value_type();
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_vec_owned_value_to_vec() {
         let values = vec![OwnedValue::U64(1), OwnedValue::U64(2), OwnedValue::U64(3)];
         let result: Result<Vec<u64>, ParseError> = (&values).to_value_type();
         assert_eq!(result.unwrap(), vec![1, 2, 3]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_vec_owned_value_to_first_value() {
         let values = vec![OwnedValue::U64(42)];
         let result: Result<u64, ParseError> = (&values).to_value_type();
         assert_eq!(result.unwrap(), 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_vec_owned_value_empty_error() {
         let values: Vec<OwnedValue> = vec![];
         let result: Result<u64, ParseError> = (&values).to_value_type();
@@ -397,7 +397,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_vec_owned_value_identity() {
         let values = vec![OwnedValue::U64(1), OwnedValue::U64(2)];
         let result: Result<&Vec<OwnedValue>, ParseError> = (&values).to_value_type();
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(result.unwrap().len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_value_type_from_document() {
         use std::collections::BTreeMap;
 
@@ -420,7 +420,7 @@ mod tests {
         assert_eq!(result.unwrap(), "test_value");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_value_type_missing_field() {
         use std::collections::BTreeMap;
 
@@ -432,7 +432,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ParseError::Parse(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_doc_value_types() {
         use std::collections::BTreeMap;
 
@@ -447,7 +447,7 @@ mod tests {
         assert_eq!(result.unwrap(), vec![1, 2, 3]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_trait_on_document() {
         use std::collections::BTreeMap;
 
@@ -462,7 +462,7 @@ mod tests {
         assert_eq!(result.unwrap(), "value");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_trait_on_document_ref() {
         use std::collections::BTreeMap;
 

@@ -281,7 +281,7 @@ mod tests {
     use super::*;
     use crate::simulator::SimulationDatabase;
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_add_and_get() {
         let profiles = DatabaseProfiles::default();
         let db = Arc::new(
@@ -294,7 +294,7 @@ mod tests {
         assert!(retrieved.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_get_nonexistent() {
         let profiles = DatabaseProfiles::default();
 
@@ -302,7 +302,7 @@ mod tests {
         assert!(retrieved.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_remove() {
         let profiles = DatabaseProfiles::default();
         let db = Arc::new(
@@ -316,7 +316,7 @@ mod tests {
         assert!(profiles.get("test_profile").is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_remove_nonexistent() {
         let profiles = DatabaseProfiles::default();
 
@@ -324,7 +324,7 @@ mod tests {
         profiles.remove("nonexistent_profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_add_fetch() {
         let profiles = DatabaseProfiles::default();
         let db = Arc::new(
@@ -340,7 +340,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_names() {
         let profiles = DatabaseProfiles::default();
         let db1 = Arc::new(
@@ -359,14 +359,14 @@ mod tests {
         assert!(names.contains(&"profile2".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_names_empty() {
         let profiles = DatabaseProfiles::default();
         let names = profiles.names();
         assert!(names.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_profiles_replace_existing() {
         let profiles = DatabaseProfiles::default();
         let db1 = Arc::new(
@@ -389,7 +389,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_library_database_from_arc() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -402,7 +402,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_library_database_into_arc() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -418,7 +418,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_library_database_deref() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -431,7 +431,7 @@ mod tests {
         let _db_ref: &dyn Database = &*library_db;
     }
 
-    #[test]
+    #[test_log::test]
     fn test_library_database_ref_into_dyn_database() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>

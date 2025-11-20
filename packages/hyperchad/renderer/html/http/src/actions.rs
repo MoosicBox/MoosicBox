@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use hyperchad_renderer::transformer::actions::logic::Value;
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_deserialize_string_action() {
         let json = r#"{"action":"click"}"#;
         let payload: ActionPayload = serde_json::from_str(json).unwrap();
@@ -79,7 +79,7 @@ mod tests {
         assert!(payload.value.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_deserialize_with_value() {
         let json = r#"{"action":"setValue","value":42}"#;
         let payload: ActionPayload = serde_json::from_str(json).unwrap();
@@ -88,7 +88,7 @@ mod tests {
         assert!(payload.value.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_deserialize_complex_action() {
         let json = r#"{"action":{"type":"navigate","path":"/home"}}"#;
         let payload: ActionPayload = serde_json::from_str(json).unwrap();
@@ -98,7 +98,7 @@ mod tests {
         assert_eq!(payload.action["path"].as_str(), Some("/home"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_serialize_string_action() {
         let payload = ActionPayload {
             action: serde_json::json!("submit"),
@@ -110,7 +110,7 @@ mod tests {
         assert!(!json.contains("value"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_serialize_with_value() {
         let payload = ActionPayload {
             action: serde_json::json!("update"),
@@ -122,7 +122,7 @@ mod tests {
         assert!(json.contains(r#""value""#));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_roundtrip() {
         let original = ActionPayload {
             action: serde_json::json!({"command": "delete", "id": 456}),
@@ -153,14 +153,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_missing_action_field() {
         let json = r#"{"value":42}"#;
         let result = serde_json::from_str::<ActionPayload>(json);
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_payload_debug_format() {
         let payload = ActionPayload {
             action: serde_json::json!("test"),

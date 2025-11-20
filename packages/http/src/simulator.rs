@@ -135,7 +135,7 @@ impl GenericResponse for Response {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_client_builder_succeeds() {
         let builder = ClientBuilder;
         let result =
@@ -145,20 +145,20 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_response_returns_ok_status() {
         let response = Response::default();
         assert_eq!(response.status(), StatusCode::Ok);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_response_returns_empty_headers() {
         let mut response = Response::default();
         let headers = response.headers();
         assert!(headers.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_client_creates_request_builder() {
         let client = Client::new();
         let _builder = client.request(Method::Get, "http://example.com");

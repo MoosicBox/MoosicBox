@@ -1,7 +1,7 @@
 use hyperchad_template::container;
 use hyperchad_transformer_models::UserSelect;
 
-#[test]
+#[test_log::test]
 fn test_user_select_with_quoted_string_literals() {
     let containers = container! {
         div user-select="auto" { "Auto text" }
@@ -24,7 +24,7 @@ fn test_user_select_with_quoted_string_literals() {
     assert_eq!(containers[0].user_select, Some(UserSelect::All));
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_with_unquoted_identifiers() {
     let containers = container! {
         div user-select=auto { "Auto text" }
@@ -47,7 +47,7 @@ fn test_user_select_with_unquoted_identifiers() {
     assert_eq!(containers[0].user_select, Some(UserSelect::All));
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_with_expressions() {
     let containers = container! {
         div user-select=(UserSelect::Auto) { "Auto with expression" }
@@ -70,7 +70,7 @@ fn test_user_select_with_expressions() {
     assert_eq!(containers[0].user_select, Some(UserSelect::All));
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_with_function_calls() {
     fn get_user_select() -> UserSelect {
         UserSelect::None
@@ -82,7 +82,7 @@ fn test_user_select_with_function_calls() {
     assert_eq!(containers[0].user_select, Some(UserSelect::None));
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_html_output() {
     let containers = container! {
         div user-select=auto { "Auto" }
@@ -121,7 +121,7 @@ fn test_user_select_html_output() {
     assert!(html.contains("all"));
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_combined_with_other_attributes() {
     let containers = container! {
         div
@@ -141,7 +141,7 @@ fn test_user_select_combined_with_other_attributes() {
     assert!(container.background.is_some());
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_default_is_none() {
     let containers = container! {
         div { "No user-select specified" }
@@ -149,7 +149,7 @@ fn test_user_select_default_is_none() {
     assert_eq!(containers[0].user_select, None);
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_nested_elements() {
     let containers = container! {
         div user-select=auto {
@@ -167,7 +167,7 @@ fn test_user_select_nested_elements() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn test_user_select_with_conditional() {
     let prevent_select = true;
 

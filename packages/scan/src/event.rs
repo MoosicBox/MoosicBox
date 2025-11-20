@@ -228,7 +228,7 @@ pub async fn add_progress_listener(listener: ProgressListenerRef) {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_scan_task_to_api_scan_task_api_variant() {
         let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
         let scan_task = ScanTask::Api {
@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[cfg(feature = "local")]
-    #[test]
+    #[test_log::test]
     fn test_scan_task_to_api_scan_task_local_variant() {
         let paths = vec!["/path/to/music".to_string(), "/another/path".to_string()];
         let scan_task = ScanTask::Local {
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(api_scan_task, ApiScanTask::Local { paths });
     }
 
-    #[test]
+    #[test_log::test]
     fn test_progress_event_to_api_progress_event_scan_finished() {
         let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
         let task = ScanTask::Api {
@@ -280,7 +280,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_progress_event_to_api_progress_event_scan_count_updated() {
         let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
         let task = ScanTask::Api {
@@ -304,7 +304,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_progress_event_to_api_progress_event_item_scanned() {
         let qobuz = moosicbox_music_models::ApiSource::register("Qobuz", "Qobuz");
         let task = ScanTask::Api {
@@ -328,7 +328,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_progress_event_to_api_progress_event_state_returns_none() {
         let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
         let task = ScanTask::Api {
@@ -344,7 +344,7 @@ mod tests {
         assert_eq!(api_event, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scan_task_state_default_is_pending() {
         let state = ScanTaskState::default();
         assert_eq!(state, ScanTaskState::Pending);

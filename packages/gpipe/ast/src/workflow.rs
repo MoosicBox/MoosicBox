@@ -285,7 +285,7 @@ pub struct Matrix {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_serde_basic() {
         let workflow = Workflow {
             version: "1.0".to_string(),
@@ -300,7 +300,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_serde_with_triggers() {
         let workflow = Workflow {
             version: "1.0".to_string(),
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_serde_with_schedule_trigger() {
         let workflow = Workflow {
             version: "1.0".to_string(),
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_serde_with_manual_trigger() {
         let workflow = Workflow {
             version: "1.0".to_string(),
@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_github_action() {
         let mut actions = BTreeMap::new();
         actions.insert(
@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_file_action() {
         let mut actions = BTreeMap::new();
         actions.insert(
@@ -440,7 +440,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_inline_action() {
         let mut actions = BTreeMap::new();
         actions.insert(
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_jobs() {
         let mut jobs = BTreeMap::new();
         jobs.insert(
@@ -527,7 +527,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_job_dependencies() {
         let mut jobs = BTreeMap::new();
         jobs.insert(
@@ -574,7 +574,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_matrix_strategy() {
         let matrix = Matrix {
             variables: BTreeMap::from([
@@ -626,7 +626,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_matrix_exclusions() {
         let matrix = Matrix {
             variables: BTreeMap::from([
@@ -680,7 +680,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_workflow_with_job_condition() {
         let condition = Expression::binary_op(
             Expression::variable(["github", "ref"]),
@@ -713,7 +713,7 @@ mod tests {
         assert_eq!(workflow, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_complete_workflow() {
         let mut actions = BTreeMap::new();
         actions.insert(

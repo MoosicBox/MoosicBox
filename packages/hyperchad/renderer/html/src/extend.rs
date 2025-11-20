@@ -90,7 +90,7 @@ pub trait ExtendHtmlRenderer {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_html_renderer_event_pub_new() {
         let (pub_handle, rx) = HtmlRendererEventPub::new();
         assert!(!rx.is_disconnected());
@@ -98,7 +98,7 @@ mod tests {
         assert!(rx.is_disconnected());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_html_renderer_event_pub_publish() {
         let (pub_handle, rx) = HtmlRendererEventPub::new();
         let event = RendererEvent::Event {
@@ -110,7 +110,7 @@ mod tests {
         assert!(matches!(received, RendererEvent::Event { .. }));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_html_renderer_event_pub_publish_disconnected() {
         let (pub_handle, rx) = HtmlRendererEventPub::new();
         drop(rx);
@@ -122,7 +122,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_html_renderer_event_pub_clone() {
         let (pub_handle, rx) = HtmlRendererEventPub::new();
         let pub_handle_clone = pub_handle.clone();

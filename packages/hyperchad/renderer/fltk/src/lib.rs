@@ -1830,7 +1830,7 @@ mod tests {
         use super::*;
         use hyperchad_transformer::{Size, models::LayoutOverflow};
 
-        #[test]
+        #[test_log::test]
         fn test_new_creates_default_context() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
 
@@ -1844,7 +1844,7 @@ mod tests {
             assert_eq!(context.root_height, 1080.0);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_updates_direction() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
@@ -1855,7 +1855,7 @@ mod tests {
             assert_eq!(updated.direction, LayoutDirection::Column);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_updates_overflow() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
@@ -1868,7 +1868,7 @@ mod tests {
             assert_eq!(updated.overflow_y, LayoutOverflow::Auto);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_uses_calculated_dimensions() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
@@ -1881,7 +1881,7 @@ mod tests {
             assert_eq!(updated.height, 300.0);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_calculates_dimensions_from_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
@@ -1894,7 +1894,7 @@ mod tests {
             assert_eq!(updated.height, 400.0);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_prefers_calculated_over_size() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let mut container = Container::default();
@@ -1909,7 +1909,7 @@ mod tests {
             assert_eq!(updated.height, 200.0);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_with_container_falls_back_to_context_dimensions() {
             let context = Context::new(800.0, 600.0, 1920.0, 1080.0);
             let container = Container::default();
@@ -1925,7 +1925,7 @@ mod tests {
         use super::*;
         use std::cell::RefCell;
 
-        #[test]
+        #[test_log::test]
         fn test_row_direction_with_width_applies_rounded_width() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Row, Some(100.7), Some(200.0), |size| {
@@ -1935,7 +1935,7 @@ mod tests {
             assert_eq!(*captured.borrow(), Some(101));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_row_direction_without_width_does_not_call() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Row, None, Some(200.0), |size| {
@@ -1945,7 +1945,7 @@ mod tests {
             assert_eq!(*captured.borrow(), None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_column_direction_with_height_applies_rounded_height() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Column, Some(100.0), Some(200.3), |size| {
@@ -1955,7 +1955,7 @@ mod tests {
             assert_eq!(*captured.borrow(), Some(200));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_column_direction_without_height_does_not_call() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Column, Some(100.0), None, |size| {
@@ -1965,7 +1965,7 @@ mod tests {
             assert_eq!(*captured.borrow(), None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_row_direction_rounds_down_correctly() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Row, Some(100.4), None, |size| {
@@ -1975,7 +1975,7 @@ mod tests {
             assert_eq!(*captured.borrow(), Some(100));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_column_direction_rounds_down_correctly() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Column, None, Some(200.4), |size| {
@@ -1985,7 +1985,7 @@ mod tests {
             assert_eq!(*captured.borrow(), Some(200));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_row_direction_ignores_height() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Row, Some(100.0), Some(200.0), |size| {
@@ -1996,7 +1996,7 @@ mod tests {
             assert_eq!(*captured.borrow(), Some(100));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_column_direction_ignores_width() {
             let captured = RefCell::new(None);
             call_fixed_size(LayoutDirection::Column, Some(100.0), Some(200.0), |size| {

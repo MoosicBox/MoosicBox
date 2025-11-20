@@ -1226,7 +1226,7 @@ impl UpnpDeviceScanner {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_str_to_duration_valid_formats() {
         assert_eq!(str_to_duration("00:00:00"), 0);
         assert_eq!(str_to_duration("00:00:01"), 1);
@@ -1237,7 +1237,7 @@ mod tests {
         assert_eq!(str_to_duration("10:15:20"), 36_920);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_duration_to_string_various_durations() {
         assert_eq!(duration_to_string(0), "00:00:00");
         assert_eq!(duration_to_string(1), "00:00:01");
@@ -1248,7 +1248,7 @@ mod tests {
         assert_eq!(duration_to_string(36_920), "10:15:20");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_duration_roundtrip_conversion() {
         let test_cases = vec![
             "00:00:00", "00:00:30", "00:05:45", "01:23:45", "10:00:00", "23:59:59",
@@ -1264,7 +1264,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_complete() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
             <item id="0" parentID="-1" restricted="false">
@@ -1299,7 +1299,7 @@ mod tests {
         assert_eq!(item.res.source, "http://192.168.1.1:8001/track?trackId=123");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_minimal() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
             <item id="0" parentID="-1" restricted="false">
@@ -1322,7 +1322,7 @@ mod tests {
         assert_eq!(item.res.source, "http://example.com/track.mp3");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_multiple_items() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/">
             <item id="0" parentID="-1" restricted="false">
@@ -1341,7 +1341,7 @@ mod tests {
         assert_eq!(result.items[1].dc_title.as_deref(), Some("Track 2"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_missing_res_element() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
             <item id="0" parentID="-1" restricted="false">
@@ -1359,7 +1359,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_empty_document() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"></DIDL-Lite>"#;
 
@@ -1367,7 +1367,7 @@ mod tests {
         assert_eq!(result.items.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_track_metadata_with_xml_escaping() {
         let xml = r#"<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/">
             <item id="0" parentID="-1" restricted="false">
@@ -1388,7 +1388,7 @@ mod tests {
     mod cache_tests {
         use super::*;
 
-        #[test]
+        #[test_log::test]
         fn test_cache_device_not_found_by_udn() {
             let result = cache::get_device("uuid:nonexistent-device");
             assert!(result.is_err());
@@ -1400,7 +1400,7 @@ mod tests {
             }
         }
 
-        #[test]
+        #[test_log::test]
         fn test_cache_device_not_found_by_url() {
             let result = cache::get_device_from_url("http://192.168.1.100:1234/device");
             assert!(result.is_err());
@@ -1412,7 +1412,7 @@ mod tests {
             }
         }
 
-        #[test]
+        #[test_log::test]
         fn test_cache_service_not_found() {
             let result = cache::get_service(
                 "uuid:nonexistent-device",
@@ -1427,32 +1427,32 @@ mod tests {
             }
         }
 
-        #[test]
+        #[test_log::test]
         fn test_public_get_device_not_found() {
             let result = get_device("uuid:nonexistent");
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_public_get_service_not_found() {
             let result = get_service("uuid:nonexistent", "urn:upnp-org:serviceId:AVTransport");
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_public_get_device_and_service_not_found() {
             let result =
                 get_device_and_service("uuid:nonexistent", "urn:upnp-org:serviceId:AVTransport");
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_public_get_device_from_url_not_found() {
             let result = get_device_from_url("http://192.168.1.100:1234/device");
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_public_get_device_and_service_from_url_not_found() {
             let result = get_device_and_service_from_url(
                 "http://192.168.1.100:1234/device",

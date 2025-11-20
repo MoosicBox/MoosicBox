@@ -405,19 +405,19 @@ pub enum SignalChainProcessorError {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_new_creates_empty_chain() {
         let chain = SignalChain::new();
         assert_eq!(chain.steps.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_default_creates_empty_chain() {
         let chain = SignalChain::default();
         assert_eq!(chain.steps.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_add_step_increases_count() {
         let chain = SignalChain::new();
         assert_eq!(chain.steps.len(), 0);
@@ -429,7 +429,7 @@ mod tests {
         assert_eq!(chain.steps.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_next_step_adds_empty_step() {
         let chain = SignalChain::new().next_step();
         assert_eq!(chain.steps.len(), 1);
@@ -438,7 +438,7 @@ mod tests {
         assert_eq!(chain.steps.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_with_hint_modifies_last_step() {
         let mut hint = Hint::new();
         hint.with_extension("mp3");
@@ -449,7 +449,7 @@ mod tests {
         // but we verify the chain structure is correct)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_with_hint_on_empty_chain_does_nothing() {
         let mut hint = Hint::new();
         hint.with_extension("flac");
@@ -458,19 +458,19 @@ mod tests {
         assert_eq!(chain.steps.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_with_verify_modifies_last_step() {
         let chain = SignalChain::new().next_step().with_verify(false);
         assert_eq!(chain.steps.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_with_seek_modifies_last_step() {
         let chain = SignalChain::new().next_step().with_seek(Some(30.0));
         assert_eq!(chain.steps.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_new_has_defaults() {
         let step = SignalChainStep::new();
         assert!(step.hint.is_none());
@@ -482,7 +482,7 @@ mod tests {
         assert!(step.seek.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_default_has_defaults() {
         let step = SignalChainStep::default();
         assert!(step.hint.is_none());
@@ -494,7 +494,7 @@ mod tests {
         assert!(step.seek.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_with_verify_sets_value() {
         let step = SignalChainStep::new().with_verify(false);
         assert!(!step.verify);
@@ -503,7 +503,7 @@ mod tests {
         assert!(step.verify);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_with_seek_sets_value() {
         let step = SignalChainStep::new().with_seek(Some(45.5));
         assert_eq!(step.seek, Some(45.5));
@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(step.seek, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_with_hint_sets_value() {
         let mut hint = Hint::new();
         hint.with_extension("opus");
@@ -521,7 +521,7 @@ mod tests {
         assert!(step.hint.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_builder_pattern_chaining() {
         // Test that builder methods can be chained together
         let mut hint = Hint::new();
@@ -538,7 +538,7 @@ mod tests {
         assert_eq!(chain.steps.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_signal_chain_step_builder_pattern_chaining() {
         let mut hint = Hint::new();
         hint.with_extension("flac");

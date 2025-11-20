@@ -114,7 +114,7 @@ impl ::rand::RngCore for RandRng {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_seeded_reproducibility() {
         let rng1 = RandRng::new(12345_u64);
         let rng2 = RandRng::new(12345_u64);
@@ -128,7 +128,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_different_seeds_produce_different_values() {
         let rng1 = RandRng::new(12345_u64);
         let rng2 = RandRng::new(54321_u64);
@@ -142,7 +142,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_with_none_seed_from_entropy() {
         let rng = RandRng::new::<u64, Option<u64>>(None);
 
@@ -151,7 +151,7 @@ mod tests {
         let _value = rng.next_u64();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_global_rng_function() {
         let rng1 = rng();
         let rng2 = rng();
@@ -164,7 +164,7 @@ mod tests {
         assert_ne!(val1, val2, "Global RNGs share state");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_next_i32_produces_valid_range() {
         let rng = RandRng::new(42_u64);
 
@@ -176,7 +176,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_fill_bytes() {
         let rng = RandRng::new(42_u64);
         let mut buffer = [0_u8; 32];
@@ -190,7 +190,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_try_fill_bytes_success() {
         let rng = RandRng::new(42_u64);
         let mut buffer = [0_u8; 32];
@@ -205,7 +205,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rand_rng_core_trait_implementation() {
         let rng = RandRng::new(42_u64);
 
@@ -223,7 +223,7 @@ mod tests {
         assert!(bytes2.iter().any(|&x| x != 0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_global_rng_static_initialization() {
         // Access the global RNG multiple times
         let _rng1 = &*RNG;

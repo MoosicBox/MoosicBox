@@ -189,7 +189,7 @@ impl ::rand::RngCore for SimulatorRng {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_rng_seeded_reproducibility() {
         let rng1 = SimulatorRng::new(12345_u64);
         let rng2 = SimulatorRng::new(12345_u64);
@@ -203,7 +203,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_initial_seed_returns_consistent_value() {
         let seed1 = initial_seed();
         let seed2 = initial_seed();
@@ -213,7 +213,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_gen_seed_produces_different_values() {
         let seed1 = gen_seed();
         let seed2 = gen_seed();
@@ -223,7 +223,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_seed_changes_seed() {
         let original_seed = seed();
         reset_seed();
@@ -235,7 +235,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_seed_produces_reproducible_sequence() {
         reset_seed();
         let current_seed = seed();
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(current_seed, seed(), "Seed should remain unchanged");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_rng_with_none_seed_uses_thread_local() {
         // Set a known seed
         reset_seed();
@@ -277,7 +277,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_rng_function_returns_thread_local() {
         let rng1 = rng();
         let rng2 = rng();
@@ -290,7 +290,7 @@ mod tests {
         assert_ne!(val1, val2, "Thread-local RNGs share state");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_seed_function_returns_current_thread_seed() {
         reset_seed();
         let current_seed = seed();
@@ -312,7 +312,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_contains_fixed_seed_reflects_env_var() {
         // This test documents the behavior but doesn't change env vars
         // as that would affect other tests
@@ -322,7 +322,7 @@ mod tests {
         // Test passes if no panic occurs
     }
 
-    #[test]
+    #[test_log::test]
     fn test_thread_isolation() {
         use std::sync::mpsc;
         use std::thread;

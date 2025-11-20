@@ -747,42 +747,42 @@ fn filter_dangerous_url(url: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_basic_markdown() {
         let md = "**bold** and *italic*";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_headings() {
         let md = "# H1\n## H2\n### H3";
         let container = markdown_to_container(md);
         assert_eq!(container.children.len(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_links() {
         let md = "[link](https://example.com)";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code_block() {
         let md = "```rust\nfn main() {}\n```";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_list() {
         let md = "- Item 1\n- Item 2\n- Item 3";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_table() {
         let md = "| Header |\n|--------|\n| Cell   |";
         let container = markdown_to_container(md);
@@ -790,7 +790,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection() {
         let md = "Text <script>alert('xss')</script> more";
         let _container = markdown_to_container(md);
@@ -798,7 +798,7 @@ mod tests {
     }
 
     #[cfg(feature = "emoji")]
-    #[test]
+    #[test_log::test]
     fn test_emoji() {
         let md = ":rocket: Launch!";
         let container = markdown_to_container(md);
@@ -810,7 +810,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_empty_markdown() {
         let md = "";
         let container = markdown_to_container(md);
@@ -819,7 +819,7 @@ mod tests {
         assert!(container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_blockquote() {
         let md = "> This is a quote\n> with multiple lines";
         let container = markdown_to_container(md);
@@ -834,7 +834,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_strikethrough() {
         let md = "~~strikethrough text~~";
         let options = MarkdownOptions {
@@ -845,7 +845,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_strikethrough_disabled() {
         let md = "~~strikethrough text~~";
         let options = MarkdownOptions {
@@ -857,7 +857,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_task_list() {
         let md = "- [ ] Unchecked task\n- [x] Checked task";
         let options = MarkdownOptions {
@@ -868,7 +868,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_horizontal_rule() {
         let md = "---";
         let container = markdown_to_container(md);
@@ -880,14 +880,14 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hard_break() {
         let md = "Line 1  \nLine 2";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inline_code() {
         let md = "This is `inline code` text";
         let container = markdown_to_container(md);
@@ -902,7 +902,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ordered_list() {
         let md = "1. First item\n2. Second item\n3. Third item";
         let container = markdown_to_container(md);
@@ -913,7 +913,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_unordered_list() {
         let md = "* First item\n* Second item\n* Third item";
         let container = markdown_to_container(md);
@@ -923,21 +923,21 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_nested_formatting() {
         let md = "**bold with *italic* inside**";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_mixed_features() {
         let md = "# Header\n\n**Bold** and *italic*\n\n- List item\n\n[Link](https://example.com)";
         let container = markdown_to_container(md);
         assert!(container.children.len() >= 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_image() {
         let md = "![Alt text](https://example.com/image.png)";
         let container = markdown_to_container(md);
@@ -952,7 +952,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_all_heading_levels() {
         let md = "# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6";
         let container = markdown_to_container(md);
@@ -963,7 +963,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code_block_with_language() {
         let md = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
         let container = markdown_to_container(md);
@@ -978,7 +978,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_code_block_without_language() {
         let md = "```\nplain code\n```";
         let container = markdown_to_container(md);
@@ -992,7 +992,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_options_with_all_features_disabled() {
         let options = MarkdownOptions {
             enable_tables: false,
@@ -1008,7 +1008,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_options_default() {
         let options = MarkdownOptions::default();
         assert!(options.enable_tables);
@@ -1018,7 +1018,7 @@ mod tests {
         assert!(options.enable_smart_punctuation);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_table_with_multiple_rows() {
         let md = "| Col1 | Col2 |\n|------|------|\n| A    | B    |\n| C    | D    |";
         let container = markdown_to_container(md);
@@ -1030,7 +1030,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_script_tag() {
         let md = "<script>alert('xss')</script>";
         let options = MarkdownOptions {
@@ -1048,7 +1048,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_iframe_tag() {
         let md = "<iframe src=\"evil.com\"></iframe>";
         let options = MarkdownOptions {
@@ -1066,7 +1066,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_javascript_url() {
         let md = "[Click](javascript:alert('xss'))";
         let options = MarkdownOptions {
@@ -1084,7 +1084,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_data_url() {
         let md = "[Click](data:text/html,<script>alert('xss')</script>)";
         let options = MarkdownOptions {
@@ -1102,7 +1102,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_vbscript_url() {
         let md = "[Click](vbscript:msgbox('xss'))";
         let options = MarkdownOptions {
@@ -1120,7 +1120,7 @@ mod tests {
     }
 
     #[cfg(feature = "xss-protection")]
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_safe_html() {
         let md = "<p>Safe paragraph</p>";
         let options = MarkdownOptions {
@@ -1132,7 +1132,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_xss_protection_disabled() {
         let md = "<script>alert('test')</script>";
         let options = MarkdownOptions {
@@ -1148,7 +1148,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_link_with_title() {
         let md = "[Link](https://example.com)";
         let container = markdown_to_container(md);
@@ -1162,7 +1162,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_multiple_paragraphs() {
         let md = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
         let container = markdown_to_container(md);
@@ -1172,7 +1172,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_smart_punctuation_ellipsis() {
         let md = "Wait...";
         let options = MarkdownOptions {
@@ -1183,7 +1183,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_smart_punctuation_disabled() {
         let md = "Wait...";
         let options = MarkdownOptions {
@@ -1194,7 +1194,7 @@ mod tests {
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h1() {
         let size = HeaderSize::from(HeadingLevel::H1);
         assert_eq!(size, HeaderSize::H1);
@@ -1202,51 +1202,51 @@ mod tests {
         assert!(matches!(transformed, hyperchad_transformer::HeaderSize::H1));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h2() {
         let size = HeaderSize::from(HeadingLevel::H2);
         assert_eq!(size, HeaderSize::H2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h3() {
         let size = HeaderSize::from(HeadingLevel::H3);
         assert_eq!(size, HeaderSize::H3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h4() {
         let size = HeaderSize::from(HeadingLevel::H4);
         assert_eq!(size, HeaderSize::H4);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h5() {
         let size = HeaderSize::from(HeadingLevel::H5);
         assert_eq!(size, HeaderSize::H5);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_size_conversion_h6() {
         let size = HeaderSize::from(HeadingLevel::H6);
         assert_eq!(size, HeaderSize::H6);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_nested_lists() {
         let md = "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bold_and_italic_combined() {
         let md = "***bold and italic***";
         let container = markdown_to_container(md);
         assert!(!container.children.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_link_color_styling() {
         let md = "[test](https://example.com)";
         let container = markdown_to_container(md);
@@ -1259,7 +1259,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tables_disabled() {
         let md = "| Header |\n|--------|\n| Cell   |";
         let options = MarkdownOptions {

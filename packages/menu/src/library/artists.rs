@@ -122,7 +122,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filter_artists_by_name() {
         let artists = vec![
             create_test_artist(1, "The Beatles"),
@@ -147,7 +147,7 @@ mod tests {
         assert!(!filtered.iter().any(|a| a.title == "Pink Floyd"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filter_artists_by_name_case_insensitive() {
         let artists = vec![
             create_test_artist(1, "METALLICA"),
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(filtered.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filter_artists_by_search() {
         let artists = vec![
             create_test_artist(1, "AC/DC"),
@@ -192,7 +192,7 @@ mod tests {
         assert!(filtered.iter().any(|a| a.title == "AC/DC Tribute Band"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filter_artists_with_no_filters() {
         let artists = vec![
             create_test_artist(1, "Artist One"),
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(filtered.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_filter_artists_no_matches() {
         let artists = vec![
             create_test_artist(1, "Artist One"),
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(filtered.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sort_artists_name_asc() {
         let artists = vec![
             create_test_artist(1, "Zebra"),
@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(sorted[2].title, "Zebra");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sort_artists_name_desc() {
         let artists = vec![
             create_test_artist(1, "alpha"),
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(sorted[2].title, "alpha");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sort_artists_no_sort_specified() {
         let artists = vec![
             create_test_artist(1, "Zebra"),
@@ -305,7 +305,7 @@ mod tests {
         assert_eq!(sorted[1].title, "Zebra");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sort_artists_case_insensitive() {
         let artists = vec![
             create_test_artist(1, "abc"),

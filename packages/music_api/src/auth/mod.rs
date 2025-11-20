@@ -502,14 +502,14 @@ mod test {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn auth_from_option_none_converts_to_auth_none() {
         let auth: Auth = None::<Auth>.into();
         assert!(matches!(auth, Auth::None));
     }
 
     #[cfg(feature = "auth-poll")]
-    #[test]
+    #[test_log::test]
     fn auth_as_poll_returns_some_for_poll_variant() {
         use super::poll::PollAuth;
 
@@ -520,14 +520,14 @@ mod test {
     }
 
     #[cfg(feature = "auth-poll")]
-    #[test]
+    #[test_log::test]
     fn auth_as_poll_returns_none_for_other_variants() {
         let auth = Auth::None;
         assert!(auth.as_poll().is_none());
     }
 
     #[cfg(feature = "auth-username-password")]
-    #[test]
+    #[test_log::test]
     fn auth_as_username_password_returns_some_for_username_password_variant() {
         use super::username_password::UsernamePasswordAuth;
 
@@ -541,7 +541,7 @@ mod test {
     }
 
     #[cfg(feature = "auth-username-password")]
-    #[test]
+    #[test_log::test]
     fn auth_as_username_password_returns_none_for_other_variants() {
         let auth = Auth::None;
         assert!(auth.as_username_password().is_none());

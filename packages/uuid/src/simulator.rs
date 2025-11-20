@@ -40,7 +40,7 @@ pub fn new_v4_string() -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_deterministic_generation() {
         // The RNG is static, so we can't easily reset it between tests.
         // Instead, we verify that consecutive calls produce different UUIDs
@@ -55,7 +55,7 @@ mod tests {
         assert_ne!(uuid1, uuid3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_uuid_v4_format_compliance() {
         let uuid = new_v4();
         let bytes = uuid.as_bytes();
@@ -77,7 +77,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_string_conversion_consistency() {
         let uuid = new_v4();
         let string_from_uuid = uuid.to_string();
@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(string_from_uuid.chars().nth(23).unwrap(), '-');
     }
 
-    #[test]
+    #[test_log::test]
     fn test_multiple_uuids_are_unique() {
         // Generate multiple UUIDs and verify they're all unique
         let mut uuids = std::collections::BTreeSet::new();
@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(uuids.len(), 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_new_v4_string_produces_valid_uuid() {
         let uuid_string = new_v4_string();
 

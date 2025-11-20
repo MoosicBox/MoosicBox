@@ -36,7 +36,7 @@ impl Arbitrary for CssIdentifierString {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_css_identifier_string_never_empty() {
         // Generate multiple CSS identifiers and verify none are empty
         let mut g = Gen::new(100);
@@ -49,7 +49,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_css_identifier_string_valid_characters() {
         // Verify that generated identifiers only contain valid characters
         let mut g = Gen::new(100);
@@ -66,7 +66,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_css_identifier_string_not_only_hyphens_underscores() {
         // Critical constraint: identifiers must contain at least one alphanumeric character
         let mut g = Gen::new(100);
@@ -80,7 +80,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_css_identifier_string_has_alphanumeric() {
         // Verify that generated identifiers contain at least one alphanumeric character
         let mut g = Gen::new(100);

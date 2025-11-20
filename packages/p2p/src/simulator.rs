@@ -698,35 +698,35 @@ mod tests {
 
     // === SimulatorNodeId Tests ===
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_deterministic() {
         let id1 = test_node_id("alice");
         let id2 = test_node_id("alice");
         assert_eq!(id1, id2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_different() {
         let alice = test_node_id("alice");
         let bob = test_node_id("bob");
         assert_ne!(alice, bob);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fmt_short() {
         let id = test_node_id("test");
         let short = id.fmt_short();
         assert_eq!(short.len(), 10); // 5 bytes = 10 hex chars
     }
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_from_bytes() {
         let bytes = [42u8; 32];
         let id = SimulatorNodeId::from_bytes(bytes);
         assert_eq!(id.as_bytes(), &bytes);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_display() {
         let bytes = [
             0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89, 0x0A, 0xBC, 0xDE, 0xF0, 0x12, 0x34,
@@ -739,7 +739,7 @@ mod tests {
         assert!(display.starts_with("abcdef"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_generate_creates_unique_ids() {
         let id1 = SimulatorNodeId::generate();
         let id2 = SimulatorNodeId::generate();
@@ -747,7 +747,7 @@ mod tests {
         assert_ne!(id1, id2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_node_id_ordering() {
         let id1 = SimulatorNodeId::from_bytes([1u8; 32]);
         let id2 = SimulatorNodeId::from_bytes([2u8; 32]);
@@ -757,14 +757,14 @@ mod tests {
 
     // === NetworkGraph Tests ===
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_new() {
         let graph = NetworkGraph::new();
         assert!(graph.nodes.is_empty());
         assert!(graph.links.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_add_node() {
         let mut graph = NetworkGraph::new();
         let node_id = test_node_id("alice");
@@ -779,7 +779,7 @@ mod tests {
         assert!(node.message_queues.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_add_node_idempotent() {
         let mut graph = NetworkGraph::new();
         let node_id = test_node_id("alice");
@@ -791,7 +791,7 @@ mod tests {
         assert_eq!(graph.nodes.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_connect_nodes() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -816,7 +816,7 @@ mod tests {
         assert!(forward_link.is_active);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_find_path_same_node() {
         let graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -826,7 +826,7 @@ mod tests {
         assert_eq!(path, Some(vec![alice]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_find_path_direct() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -850,7 +850,7 @@ mod tests {
         assert_eq!(path, Some(vec![alice, bob]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_find_path_multi_hop() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -877,7 +877,7 @@ mod tests {
         assert_eq!(path, Some(vec![alice, bob, charlie]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_find_path_no_route() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -892,7 +892,7 @@ mod tests {
         assert_eq!(path, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_find_path_inactive_link() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -919,7 +919,7 @@ mod tests {
         assert_eq!(path, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_add_partition() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -960,7 +960,7 @@ mod tests {
         assert_eq!(graph.find_path(alice, charlie), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_heal_partition() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -984,7 +984,7 @@ mod tests {
         assert!(graph.find_path(alice, bob).is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_get_node_mut() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -999,7 +999,7 @@ mod tests {
         assert!(node.registered_names.contains_key("test"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_network_graph_get_node_nonexistent() {
         let graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -1010,14 +1010,14 @@ mod tests {
 
     // === SimulatorP2P Tests ===
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_p2p_new() {
         let sim = SimulatorP2P::new();
         let id = sim.local_node_id();
         assert_eq!(id.as_bytes().len(), 32);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_p2p_with_seed() {
         let sim1 = SimulatorP2P::with_seed("alice");
         let sim2 = SimulatorP2P::with_seed("alice");
@@ -1162,7 +1162,7 @@ mod tests {
         assert!(!conn.is_connected());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_connection_calculate_path_latency() {
         let mut graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -1200,7 +1200,7 @@ mod tests {
         assert_eq!(latency, Duration::from_millis(30));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_connection_calculate_path_latency_empty_path() {
         let graph = NetworkGraph::new();
         let path = vec![];
@@ -1210,7 +1210,7 @@ mod tests {
         assert_eq!(latency, Duration::from_millis(0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_connection_calculate_path_latency_single_node() {
         let graph = NetworkGraph::new();
         let alice = test_node_id("alice");
@@ -1223,7 +1223,7 @@ mod tests {
 
     // === P2PNodeId Trait Implementation Tests ===
 
-    #[test]
+    #[test_log::test]
     fn test_p2p_node_id_trait_from_bytes() {
         use crate::traits::P2PNodeId;
 
@@ -1233,7 +1233,7 @@ mod tests {
         assert_eq!(id.as_bytes(), &bytes);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_p2p_node_id_trait_as_bytes() {
         use crate::traits::P2PNodeId;
 
@@ -1243,7 +1243,7 @@ mod tests {
         assert_eq!(id.as_bytes(), &bytes);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_p2p_node_id_trait_fmt_short() {
         use crate::traits::P2PNodeId;
 

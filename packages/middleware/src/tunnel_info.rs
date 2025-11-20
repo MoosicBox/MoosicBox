@@ -89,7 +89,7 @@ impl FromRequest for TunnelInfo {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_with_host() {
         let info = TunnelInfo {
             host: Arc::new(Some("tunnel.example.com".to_string())),
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(info.host.as_ref().as_ref().unwrap(), "tunnel.example.com");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_without_host() {
         let info = TunnelInfo {
             host: Arc::new(None),
@@ -108,7 +108,7 @@ mod tests {
         assert!(info.host.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_init_returns_error_on_double_init() {
         // Create two TunnelInfo instances
         let info1 = TunnelInfo {
@@ -144,7 +144,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_clone() {
         let info = TunnelInfo {
             host: Arc::new(Some("tunnel.example.com".to_string())),
@@ -159,7 +159,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_debug() {
         let info = TunnelInfo {
             host: Arc::new(Some("tunnel.example.com".to_string())),
@@ -169,7 +169,7 @@ mod tests {
         assert!(debug_str.contains("tunnel.example.com"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_info_arc_sharing() {
         let host = Arc::new(Some("shared.example.com".to_string()));
         let info1 = TunnelInfo { host: host.clone() };

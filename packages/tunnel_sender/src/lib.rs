@@ -186,74 +186,74 @@ pub enum TunnelMessage {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_send_bytes_error_display() {
         let error = SendBytesError::Unknown("connection failed".to_string());
         assert_eq!(error.to_string(), "Unknown \"connection failed\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_send_message_error_display() {
         let error = SendMessageError::Unknown("timeout occurred".to_string());
         assert_eq!(error.to_string(), "Unknown \"timeout occurred\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_bad_request() {
         let error = TunnelRequestError::BadRequest("invalid parameter".to_string());
         assert_eq!(error.to_string(), "Bad request: invalid parameter");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_not_found() {
         let error = TunnelRequestError::NotFound("resource missing".to_string());
         assert_eq!(error.to_string(), "Not found: resource missing");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_invalid_query() {
         let error = TunnelRequestError::InvalidQuery("malformed query string".to_string());
         assert_eq!(error.to_string(), "Invalid Query: malformed query string");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_request() {
         let error = TunnelRequestError::Request("network error".to_string());
         assert_eq!(error.to_string(), "Request error: network error");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_other() {
         let error = TunnelRequestError::Other("unexpected error".to_string());
         assert_eq!(error.to_string(), "Other: unexpected error");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_unsupported_method() {
         let error = TunnelRequestError::UnsupportedMethod;
         assert_eq!(error.to_string(), "Unsupported Method");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_unsupported_route() {
         let error = TunnelRequestError::UnsupportedRoute;
         assert_eq!(error.to_string(), "Unsupported Route");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_missing_profile() {
         let error = TunnelRequestError::MissingProfile;
         assert_eq!(error.to_string(), "Missing profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_from_io_error() {
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let error: TunnelRequestError = io_error.into();
         assert!(error.to_string().contains("file not found"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_error_from_serde_json() {
         let json_error = serde_json::from_str::<serde_json::Value>("{invalid json")
             .expect_err("should fail to parse");
@@ -262,7 +262,7 @@ mod tests {
         assert!(!error.to_string().is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::invalid_regex)]
     fn test_tunnel_request_error_from_regex() {
         // Use a regex with unclosed parenthesis which is a valid runtime error
@@ -271,7 +271,7 @@ mod tests {
         assert!(!error.to_string().is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_track_query_deserialization_with_track_id() {
         // Test basic deserialization with just trackId (required field)
         let json = r#"{"trackId":"789"}"#;
@@ -282,7 +282,7 @@ mod tests {
         assert!(query.source.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_track_info_query_deserialization_with_track_id() {
         // Test basic deserialization with just trackId (required field)
         let json = r#"{"trackId":"456"}"#;

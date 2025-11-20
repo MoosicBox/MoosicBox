@@ -107,7 +107,7 @@ pub fn encode_flac(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_encoder_creation() {
         let result = encoder_flac();
         assert!(
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(encoder.encoder.block_size, 512, "Block size should be 512");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_position_tracking_single_call() {
         let mut encoder = encoder_flac().expect("Failed to create encoder");
 
@@ -143,7 +143,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_position_tracking_multiple_calls() {
         let mut encoder = encoder_flac().expect("Failed to create encoder");
 
@@ -174,7 +174,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_empty_input() {
         let mut encoder = encoder_flac().expect("Failed to create encoder");
 

@@ -768,7 +768,7 @@ mod tests {
     }
 
     // Test assert! macro with ENABLE_ASSERT disabled (no-op)
-    #[test]
+    #[test_log::test]
     fn test_assert_disabled_no_op() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         // Should not exit or do anything when condition is false
@@ -776,7 +776,7 @@ mod tests {
         assert!(false, "this message should not appear");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_assert_disabled_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert!(true);
@@ -784,7 +784,7 @@ mod tests {
     }
 
     // Test assert_or_err! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_assert_or_err_returns_error_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -798,7 +798,7 @@ mod tests {
         assert_eq!(result, Err(TestError::InvalidValue));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_assert_or_err_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -812,7 +812,7 @@ mod tests {
         assert_eq!(result, Ok(10));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_assert_or_err_with_message() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -844,42 +844,42 @@ mod tests {
         assert_or_error!(false, "Value is {}", value);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_assert_or_error_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert_or_error!(true, "This should not log");
     }
 
     // Test assert_or_panic! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Expected panic message")]
     fn test_assert_or_panic_panics_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert_or_panic!(false, "Expected panic message");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_assert_or_panic_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert_or_panic!(true, "Should not panic");
     }
 
     // Test assert_or_unimplemented! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "not implemented")]
     fn test_assert_or_unimplemented_calls_unimplemented_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert_or_unimplemented!(false, "Feature not implemented");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_assert_or_unimplemented_succeeds_with_true_condition() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert_or_unimplemented!(true, "Should not call unimplemented");
     }
 
     // Test die! macro with ENABLE_ASSERT disabled (no-op)
-    #[test]
+    #[test_log::test]
     fn test_die_disabled_no_op() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         die!();
@@ -887,7 +887,7 @@ mod tests {
     }
 
     // Test die_or_err! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_die_or_err_returns_error_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -900,7 +900,7 @@ mod tests {
         assert_eq!(result, Err(TestError::Critical));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_die_or_err_with_formatting() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -930,14 +930,14 @@ mod tests {
     }
 
     // Test die_or_panic! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Expected panic")]
     fn test_die_or_panic_panics_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         die_or_panic!("Expected panic");
     }
 
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Panic with code: 404")]
     fn test_die_or_panic_with_formatting() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -945,7 +945,7 @@ mod tests {
     }
 
     // Test die_or_unimplemented! macro with ENABLE_ASSERT disabled
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "not implemented")]
     fn test_die_or_unimplemented_calls_unimplemented_when_disabled() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -958,7 +958,7 @@ mod tests {
     // and the macro is tested through actual usage, we skip these tests.
 
     // Test with complex expressions and side effects
-    #[test]
+    #[test_log::test]
     fn test_assert_with_side_effects() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         let mut counter = 0;
@@ -973,7 +973,7 @@ mod tests {
         assert_eq!(counter, 0);
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_assert_or_err_with_complex_error_types() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -1005,7 +1005,7 @@ mod tests {
     }
 
     // Test macro hygiene - ensure macros work with different imports
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_macro_works_without_explicit_imports() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -1019,13 +1019,13 @@ mod tests {
     }
 
     // Test with trailing commas
-    #[test]
+    #[test_log::test]
     fn test_assert_with_trailing_comma() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
         assert!(true,);
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_assert_or_err_with_trailing_comma() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };
@@ -1039,7 +1039,7 @@ mod tests {
     }
 
     // Test multiple consecutive assertions
-    #[test]
+    #[test_log::test]
     #[allow(clippy::items_after_statements)]
     fn test_multiple_assert_or_err_in_sequence() {
         unsafe { std::env::set_var("ENABLE_ASSERT", "0") };

@@ -970,14 +970,14 @@ pub trait AsModelQuery<T> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_u64() {
         let value = &DatabaseValue::UInt64(123);
 
         assert_eq!(ToValueType::<u64>::to_value_type(value).unwrap(), 123_u64);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_string_where_property_doesnt_exist() {
         let row = Row {
             columns: vec![("test".to_string(), DatabaseValue::UInt64(123))],
@@ -985,7 +985,7 @@ mod tests {
         assert_eq!(row.to_value::<Option<String>>("bob").unwrap(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_u64_where_property_doesnt_exist() {
         let row = Row {
             columns: vec![("test".to_string(), DatabaseValue::UInt64(123))],
@@ -993,7 +993,7 @@ mod tests {
         assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_u64_where_property_exists_but_is_null() {
         let row = Row {
             columns: vec![("bob".to_string(), DatabaseValue::Null)],
@@ -1001,7 +1001,7 @@ mod tests {
         assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_option_u64_where_property_exists_but_is_null_bool() {
         let row = Row {
             columns: vec![("bob".to_string(), DatabaseValue::BoolOpt(None))],
@@ -1009,7 +1009,7 @@ mod tests {
         assert_eq!(row.to_value::<Option<u64>>("bob").unwrap(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_option_u64() {
         let value = &DatabaseValue::UInt64(123);
         assert_eq!(
@@ -1030,7 +1030,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_datetime_utc_from_string() {
         use chrono::{DateTime, Datelike, Timelike, Utc};
 
@@ -1069,7 +1069,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_bool() {
         // Test DatabaseValue::Bool variants (PostgreSQL style)
         let value = &DatabaseValue::Bool(true);
@@ -1095,7 +1095,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_string_from_datetime() {
         use chrono::NaiveDate;
 
@@ -1108,7 +1108,7 @@ mod tests {
         assert_eq!(result.unwrap(), "2025-08-01T20:06:35+00:00");
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(feature = "uuid")]
     fn test_to_value_type_string_from_uuid() {
         use uuid::Uuid;
@@ -1119,7 +1119,7 @@ mod tests {
         assert_eq!(result.unwrap(), "550e8400-e29b-41d4-a716-446655440000");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_naive_datetime_from_string() {
         use chrono::{Datelike, NaiveDateTime, Timelike};
 
@@ -1147,7 +1147,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), ParseError::ConvertType(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_naive_datetime_from_database_value() {
         use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 
@@ -1167,7 +1167,7 @@ mod tests {
         assert_eq!(dt.second(), 35);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_vec_rows() {
         // Test converting vector of Rows to Vec<T>
         let rows = [
@@ -1191,7 +1191,7 @@ mod tests {
         assert_eq!(row_refs.len(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_to_value_type_float_conversions() {
         // Test f32 from Real32
         let value = &DatabaseValue::Real32(2.5_f32);
@@ -1214,7 +1214,7 @@ mod tests {
         assert!((result.unwrap() - 2.5_f64).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_owned_database_value_conversions() {
         // Test owned String conversion
         let value = DatabaseValue::String("test".to_string());
@@ -1232,7 +1232,7 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_database_value_to_value_identity() {
         // Test that DatabaseValue can be converted to itself
         let value = DatabaseValue::UInt64(123);

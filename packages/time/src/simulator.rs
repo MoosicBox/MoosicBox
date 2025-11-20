@@ -262,7 +262,7 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    #[test]
+    #[test_log::test]
     fn test_epoch_offset_initialization() {
         // Reset to get a fresh epoch offset
         reset_epoch_offset();
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(offset, epoch_offset());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_epoch_offset() {
         reset_epoch_offset();
         let first = epoch_offset();
@@ -289,7 +289,7 @@ mod tests {
         assert_ne!(first, second);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_step_multiplier_initialization() {
         reset_step_multiplier();
         let multiplier = step_multiplier();
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(multiplier, step_multiplier());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_step_multiplier() {
         reset_step_multiplier();
         let first = step_multiplier();
@@ -313,13 +313,13 @@ mod tests {
         assert_ne!(first, second);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_current_step_starts_at_zero() {
         reset_step();
         assert_eq!(current_step(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_step() {
         reset_step();
 
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(current_step(), 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_next_step() {
         reset_step();
         assert_eq!(current_step(), 0);
@@ -345,7 +345,7 @@ mod tests {
         assert_eq!(current_step(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_step() {
         set_step(100);
         assert_eq!(current_step(), 100);
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(current_step(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_advances_with_steps() {
         reset_epoch_offset();
         reset_step_multiplier();
@@ -380,7 +380,7 @@ mod tests {
         assert_eq!(diff2, Duration::from_millis(multiplier));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_calculation() {
         reset_step();
         reset_epoch_offset();
@@ -405,7 +405,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_instant_now_advances_with_steps() {
         reset_step_multiplier();
         reset_step();
@@ -430,7 +430,7 @@ mod tests {
         assert_eq!(diff2, Duration::from_millis(multiplier));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_instant_now_calculation() {
         reset_step();
         reset_step_multiplier();
@@ -445,7 +445,7 @@ mod tests {
         assert_eq!(elapsed, Duration::from_millis(10 * multiplier));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_real_time_now() {
         reset_step();
         reset_epoch_offset();
@@ -478,7 +478,7 @@ mod tests {
         assert!(sim_diff > Duration::from_secs(86400));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_real_time_instant() {
         reset_step();
         reset_step_multiplier();
@@ -500,7 +500,7 @@ mod tests {
         assert_ne!(sim_instant, real_instant);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_real_time_nested() {
         reset_step();
 
@@ -533,7 +533,7 @@ mod tests {
         assert!(diff < Duration::from_secs(1));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_step_counter_independence_across_resets() {
         // Set up initial state
         set_step(100);
@@ -548,7 +548,7 @@ mod tests {
         assert_eq!(current_step(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_time_simulation_consistency() {
         // Test that time calculation is consistent
         reset_step();
@@ -569,7 +569,7 @@ mod tests {
     }
 
     #[cfg(feature = "chrono")]
-    #[test]
+    #[test_log::test]
     fn test_datetime_utc_now() {
         reset_step();
         reset_epoch_offset();
@@ -586,7 +586,7 @@ mod tests {
     }
 
     #[cfg(feature = "chrono")]
-    #[test]
+    #[test_log::test]
     fn test_datetime_local_now() {
         reset_step();
         reset_epoch_offset();
@@ -603,7 +603,7 @@ mod tests {
     }
 
     #[cfg(feature = "chrono")]
-    #[test]
+    #[test_log::test]
     fn test_datetime_with_real_time() {
         reset_step();
 
@@ -628,7 +628,7 @@ mod tests {
         assert!(diff < chrono::Duration::seconds(1));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_step_multiplier_never_zero() {
         // Even if random generation produces 0, it should be corrected to 1
         // We can't easily test this directly, but we can verify the invariant
@@ -637,7 +637,7 @@ mod tests {
         assert!(multiplier >= 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_large_step_values() {
         reset_step_multiplier();
         let multiplier = step_multiplier();
@@ -659,7 +659,7 @@ mod tests {
         assert_eq!(actual_duration, expected_duration);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_epoch_offset_caching() {
         reset_epoch_offset();
 
@@ -674,7 +674,7 @@ mod tests {
         assert_eq!(second, third);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_step_multiplier_caching() {
         reset_step_multiplier();
 

@@ -827,7 +827,7 @@ mod test {
         task,
     };
 
-    #[test]
+    #[test_log::test]
     fn rt_current_thread_runtime_spawns_on_same_thread() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -840,7 +840,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn rt_spawn_local_works_with_non_send() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -864,7 +864,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn rt_current_thread_runtime_block_on_same_thread() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -878,7 +878,7 @@ mod test {
     }
 
     #[cfg(feature = "rt-multi-thread")]
-    #[test]
+    #[test_log::test]
     fn rt_multi_thread_runtime_spawns_on_same_thread() {
         let runtime = build_runtime(Builder::new().max_blocking_threads(1)).unwrap();
 
@@ -892,7 +892,7 @@ mod test {
     }
 
     #[cfg(feature = "rt-multi-thread")]
-    #[test]
+    #[test_log::test]
     fn rt_multi_thread_runtime_block_on_same_thread() {
         let runtime = build_runtime(Builder::new().max_blocking_threads(1)).unwrap();
 
@@ -905,7 +905,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_tick_processes_single_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
         let completed = Arc::new(Mutex::new(false));
@@ -925,13 +925,13 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_current_returns_none_outside_runtime() {
         let current = Runtime::current();
         assert!(current.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_current_returns_some_inside_runtime() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -943,7 +943,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_equality_based_on_id() {
         let runtime1 = build_runtime(&Builder::new()).unwrap();
         let runtime2 = build_runtime(&Builder::new()).unwrap();
@@ -955,7 +955,7 @@ mod test {
         assert_ne!(runtime1, runtime2);
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_default_is_same_as_new() {
         let runtime1 = Runtime::default();
         let runtime2 = Runtime::new();
@@ -970,7 +970,7 @@ mod test {
         runtime2.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn handle_spawn_executes_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
         let handle = runtime.handle();
@@ -983,7 +983,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn handle_spawn_blocking_executes_blocking_code() {
         let runtime = build_runtime(&Builder::new()).unwrap();
         let handle = runtime.handle();
@@ -999,7 +999,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_spawn_with_name_executes_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1011,7 +1011,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_spawn_blocking_with_name_executes_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1023,7 +1023,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn join_handle_is_finished_detects_completion() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1044,7 +1044,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn join_handle_abort_is_noop() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1063,7 +1063,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn handle_spawn_local_with_name_executes_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1088,7 +1088,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn runtime_spawn_local_executes_non_send_future() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1113,7 +1113,7 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn local_future_proxy_handles_drop_correctly() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
@@ -1134,13 +1134,13 @@ mod test {
         runtime.wait().unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn join_error_display_formatting() {
         let err = task::JoinError::new();
         assert_eq!(err.to_string(), "JoinError");
     }
 
-    #[test]
+    #[test_log::test]
     fn join_error_is_clonable() {
         let err1 = task::JoinError::new();
         let err2 = err1.clone();

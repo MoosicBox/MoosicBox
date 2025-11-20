@@ -745,7 +745,7 @@ impl AppState {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_ws_connect_message_serialization() {
         let message = WsConnectMessage {
             connection_id: "conn-123".to_string(),
@@ -759,7 +759,7 @@ mod tests {
         assert!(json.contains("wss://example.com/ws"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ws_connect_message_clone() {
         let message = WsConnectMessage {
             connection_id: "conn-456".to_string(),
@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(message.ws_url, cloned.ws_url);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ws_connect_message_debug() {
         let message = WsConnectMessage {
             connection_id: "debug-id".to_string(),
@@ -783,26 +783,26 @@ mod tests {
         assert!(debug_str.contains("debug-id"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_ws_error_missing_profile() {
         let error = InitWsError::MissingProfile;
         assert_eq!(error.to_string(), "Missing profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_close_ws_error_display() {
         // Test that CloseWsError can be displayed
         // We can't easily construct the underlying error types without integration setup
         // so we just verify the error types exist and are properly structured
     }
 
-    #[test]
+    #[test_log::test]
     fn test_send_ws_message_error_display() {
         // Test that SendWsMessageError can be displayed
         // We can't easily construct the underlying error types without integration setup
     }
 
-    #[test]
+    #[test_log::test]
     fn test_handle_ws_message_error_display() {
         // Test that HandleWsMessageError exists and is properly structured
         // Error construction requires complex setup

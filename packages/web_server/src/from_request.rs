@@ -575,7 +575,7 @@ mod tests {
         HttpRequest::Stub(Stub::Simulator(sim_req.into()))
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_request_data_extraction() {
         let req = create_test_request();
@@ -591,7 +591,7 @@ mod tests {
         assert_eq!(data.content_type, Some("application/json".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_request_data_header_methods() {
         let req = create_test_request();
@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(data.header("non-existent"), None);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_request_info_extraction() {
         let req = create_test_request();
@@ -624,7 +624,7 @@ mod tests {
         assert!(info.remote_addr.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_headers_extraction() {
         let req = create_test_request();
@@ -649,7 +649,7 @@ mod tests {
         assert_eq!(headers.user_agent(), Some(&"TestAgent/1.0".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_headers_all() {
         let req = create_test_request();
@@ -661,7 +661,7 @@ mod tests {
         assert!(all_headers.contains_key("content-type"));
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_string_from_request() {
         let req = create_test_request();
@@ -672,7 +672,7 @@ mod tests {
         assert_eq!(query, "page=1&limit=20");
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_u32_from_request_valid() {
         let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("42");
@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(result.unwrap(), 42);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_u32_from_request_invalid() {
         let sim_req =
@@ -694,7 +694,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_i32_from_request_valid() {
         let sim_req = SimulationRequest::new(Method::Get, "/test").with_query_string("-123");
@@ -705,7 +705,7 @@ mod tests {
         assert_eq!(result.unwrap(), -123);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_bool_from_request_true_values() {
         for true_value in &["true", "1", "yes", "on", "TRUE", "YES", "ON"] {
@@ -719,7 +719,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_bool_from_request_false_values() {
         for false_value in &[
@@ -742,7 +742,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_http_request_from_request_error() {
         let req = create_test_request();
@@ -752,7 +752,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_into_handler_error() {
         let error = Error::bad_request("Test error");
         let handler_error = error.into_handler_error();

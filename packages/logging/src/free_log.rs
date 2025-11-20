@@ -92,7 +92,7 @@ pub fn init(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_init_succeeds_or_already_initialized() {
         // Test that init either succeeds or fails with SetLogger error
         // (which indicates the logger was already set by another test)
@@ -111,7 +111,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_configurations_are_valid() {
         // Test that different configuration combinations don't panic
         // We can't test actual initialization due to global logger state,
@@ -143,7 +143,7 @@ mod tests {
         config3();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_error_is_error() {
         // Test that InitError implements the Error trait properly
         use std::error::Error;
@@ -153,7 +153,7 @@ mod tests {
         assert_error::<InitError>();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_error_from_conversions() {
         // Test that From trait implementations work correctly for InitError
         use std::error::Error;

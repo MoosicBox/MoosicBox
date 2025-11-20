@@ -82,7 +82,7 @@ pub trait MissingValue<Type> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_parse_error_display() {
         let err = ParseError::Parse("test property".to_string());
         assert_eq!(
@@ -97,7 +97,7 @@ mod tests {
         assert_eq!(err.to_string(), "Missing required value: \"field_name\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_error_eq() {
         assert_eq!(
             ParseError::Parse("test".to_string()),

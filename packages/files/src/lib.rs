@@ -589,33 +589,33 @@ pub async fn search_for_cover(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_filename_removes_special_characters() {
         assert_eq!(sanitize_filename("hello world"), "hello_world");
         assert_eq!(sanitize_filename("test@file#123"), "test_file_123");
         assert_eq!(sanitize_filename("my-track.mp3"), "my_track_mp3");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_filename_preserves_alphanumeric_and_underscores() {
         assert_eq!(sanitize_filename("Track_123"), "Track_123");
         assert_eq!(sanitize_filename("Album2024"), "Album2024");
         assert_eq!(sanitize_filename("a_b_c_123"), "a_b_c_123");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_filename_handles_empty_string() {
         assert_eq!(sanitize_filename(""), "");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_filename_handles_unicode_characters() {
         assert_eq!(sanitize_filename("café"), "caf_");
         assert_eq!(sanitize_filename("日本語"), "___");
         assert_eq!(sanitize_filename("Ñoño"), "_o_o");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_filename_multiple_special_chars() {
         assert_eq!(sanitize_filename("!!!???"), "______");
         assert_eq!(sanitize_filename("a!!!b???c"), "a___b___c");

@@ -3,7 +3,7 @@
 use moosicbox_opus::packet::OpusPacket;
 use pretty_assertions::assert_eq;
 
-#[test]
+#[test_log::test]
 fn test_code_2_dtx_first_frame() {
     // Code 2 with first frame as DTX (length 0)
     let packet = vec![0x02, 0x00, 0xAA, 0xBB, 0xCC];
@@ -16,7 +16,7 @@ fn test_code_2_dtx_first_frame() {
     assert!(!result.frames[1].is_dtx);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_2_with_two_byte_frame_length() {
     // Code 2 with frame length requiring two-byte encoding (>= 252)
     let mut packet = vec![0x02, 252, 0]; // First frame length = 252
@@ -30,7 +30,7 @@ fn test_code_2_with_two_byte_frame_length() {
     assert_eq!(result.frames[1].data, vec![0xBB, 0xCC]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_single_frame() {
     // Code 3 VBR mode with frame_count = 1
     let packet = vec![0x03, 0x41, 0xAA, 0xBB, 0xCC];
@@ -40,7 +40,7 @@ fn test_code_3_vbr_single_frame() {
     assert_eq!(result.frames[0].data, vec![0xAA, 0xBB, 0xCC]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_cbr_single_frame() {
     // Code 3 CBR mode with frame_count = 1
     let packet = vec![0x03, 0x01, 0xAA, 0xBB, 0xCC];
@@ -50,7 +50,7 @@ fn test_code_3_cbr_single_frame() {
     assert_eq!(result.frames[0].data, vec![0xAA, 0xBB, 0xCC]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_vbr_with_dtx_frames() {
     // Code 3 VBR with DTX frames (length 0)
     let packet = vec![0x03, 0x43, 0, 2, 0xAA, 0xBB];
@@ -65,7 +65,7 @@ fn test_code_3_vbr_with_dtx_frames() {
     assert!(result.frames[2].is_dtx); // Last frame has length 0, so marked as DTX
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_max_frame_count() {
     // Code 3 with maximum frame count (48)
     let mut packet = vec![0x03, 0x30]; // frame_count = 48, CBR mode
@@ -79,14 +79,14 @@ fn test_code_3_max_frame_count() {
     }
 }
 
-#[test]
+#[test_log::test]
 fn test_code_3_frame_count_49_fails() {
     // Frame count > 48 should fail
     let packet = vec![0x03, 0x31]; // frame_count = 49
     assert!(OpusPacket::parse(&packet).is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_code_1_minimum_size() {
     // Code 1 with minimum valid size (2 bytes total: 1 per frame)
     let packet = vec![0x01, 0xAA, 0xBB];
@@ -97,7 +97,7 @@ fn test_code_1_minimum_size() {
     assert_eq!(result.frames[1].data, vec![0xBB]);
 }
 
-#[test]
+#[test_log::test]
 fn test_code_2_empty_second_frame() {
     // Code 2 where second frame is empty (all remaining data consumed by first)
     let packet = vec![0x02, 3, 0xAA, 0xBB, 0xCC];

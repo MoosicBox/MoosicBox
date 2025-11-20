@@ -592,7 +592,7 @@ pub trait HtmlTagRenderer {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_replace_container_from_container_with_id() {
         let container = Container {
             str_id: Some("test-id".to_string()),
@@ -605,7 +605,7 @@ mod tests {
         assert_eq!(replace.container.str_id, container.str_id);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_container_from_container_without_id() {
         let container = Container {
             str_id: None,
@@ -617,7 +617,7 @@ mod tests {
         assert_eq!(replace.selector, Selector::SelfTarget);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_container_from_vec_containers() {
         let containers = vec![
             Container {
@@ -636,7 +636,7 @@ mod tests {
         assert_eq!(replace.container.children.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_builder_with_primary() {
         let container = Container::default();
         let view = View::builder().with_primary(container).build();
@@ -646,7 +646,7 @@ mod tests {
         assert!(view.delete_selectors.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_builder_with_fragments() {
         let fragment1 = Container {
             str_id: Some("frag1".to_string()),
@@ -666,7 +666,7 @@ mod tests {
         assert_eq!(view.fragments.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_builder_with_delete_selectors() {
         let view = View::builder()
             .with_delete_selector(Selector::Id("remove-me".to_string()))
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(view.delete_selectors.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_builder_mutable_methods() {
         let mut builder = View::builder();
         builder
@@ -694,7 +694,7 @@ mod tests {
         assert_eq!(view.delete_selectors.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_builder_creates_view_content() {
         let container = Container::default();
         let content = Content::builder().with_primary(container).build();
@@ -709,7 +709,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_from_container() {
         let container = Container::default();
         let content: Content = container.into();
@@ -725,7 +725,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_from_vec_containers() {
         let containers = vec![Container::default(), Container::default()];
         let content: Content = containers.into();
@@ -743,7 +743,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_from_view() {
         let view = View::builder().with_primary(Container::default()).build();
         let content: Content = view.into();
@@ -758,7 +758,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_try_from_str() {
         let html = "<div>test</div>";
         let content = Content::try_from(html);
@@ -775,7 +775,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_try_from_string() {
         let html = String::from("<div>test</div>");
         let content = Content::try_from(html);
@@ -783,7 +783,7 @@ mod tests {
         assert!(content.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_from_container() {
         let container = Container::default();
         let view: View = container.into();
@@ -793,7 +793,7 @@ mod tests {
         assert!(view.delete_selectors.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_view_from_vec_containers() {
         let containers = vec![Container::default(), Container::default()];
         let view: View = containers.into();

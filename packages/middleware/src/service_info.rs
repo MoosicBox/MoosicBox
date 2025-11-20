@@ -82,7 +82,7 @@ impl FromRequest for ServiceInfo {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_service_info_init_success() {
         // Note: This test will fail if run after other tests that initialize SERVICE_INFO
         // Since OnceLock can only be set once per process, we test the behavior when it's not set
@@ -93,7 +93,7 @@ mod tests {
         assert_eq!(info.port, 8080);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_service_info_init_returns_error_on_double_init() {
         // Create a new ServiceInfo
         let info1 = ServiceInfo { port: 8080 };
@@ -122,14 +122,14 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_service_info_clone() {
         let info = ServiceInfo { port: 8080 };
         let cloned = info.clone();
         assert_eq!(info.port, cloned.port);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_service_info_debug() {
         let info = ServiceInfo { port: 8080 };
         let debug_str = format!("{info:?}");

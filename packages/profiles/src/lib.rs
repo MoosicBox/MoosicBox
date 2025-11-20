@@ -280,7 +280,7 @@ pub mod api {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_add_and_get_profile() {
         let profiles = Profiles::default();
         profiles.add("test_profile".to_string());
@@ -289,14 +289,14 @@ mod tests {
         assert_eq!(result, Some("test_profile".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_nonexistent_profile() {
         let profiles = Profiles::default();
         let result = profiles.get("nonexistent");
         assert_eq!(result, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_remove_profile() {
         let profiles = Profiles::default();
         profiles.add("to_remove".to_string());
@@ -308,7 +308,7 @@ mod tests {
         assert!(profiles.get("to_remove").is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_remove_nonexistent_profile() {
         let profiles = Profiles::default();
         // Should not panic when removing a profile that doesn't exist
@@ -316,7 +316,7 @@ mod tests {
         assert!(profiles.get("nonexistent").is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_add_fetch() {
         let profiles = Profiles::default();
         let result = profiles.add_fetch("test_fetch");
@@ -325,7 +325,7 @@ mod tests {
         assert_eq!(profiles.get("test_fetch"), Some("test_fetch".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_names_returns_all_profiles() {
         let profiles = Profiles::default();
         profiles.add("profile1".to_string());
@@ -339,14 +339,14 @@ mod tests {
         assert!(names.contains(&"profile3".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_names_empty_when_no_profiles() {
         let profiles = Profiles::default();
         let names = profiles.names();
         assert!(names.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_profile_names_are_case_sensitive() {
         let profiles = Profiles::default();
         profiles.add("TestProfile".to_string());
@@ -356,7 +356,7 @@ mod tests {
         assert!(profiles.get("TESTPROFILE").is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_duplicate_profile_add() {
         let profiles = Profiles::default();
         profiles.add("duplicate".to_string());
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(names[0], "duplicate");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_concurrent_reads() {
         use std::sync::Arc;
         use std::thread;
@@ -393,7 +393,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_concurrent_adds() {
         use std::sync::Arc;
         use std::thread;
@@ -420,7 +420,7 @@ mod tests {
         assert_eq!(names.len(), 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_concurrent_mixed_operations() {
         use std::sync::Arc;
         use std::thread;
@@ -469,7 +469,7 @@ mod tests {
         use super::*;
         use actix_web::test::TestRequest;
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_from_query() {
             let req = TestRequest::default()
                 .uri("/?moosicboxProfile=unverified_profile")
@@ -480,7 +480,7 @@ mod tests {
             assert_eq!(result.unwrap().0, "unverified_profile");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_from_query_case_insensitive() {
             let test_cases = vec![
                 "/?moosicboxProfile=test",
@@ -497,7 +497,7 @@ mod tests {
             }
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_missing_both() {
             let req = TestRequest::default()
                 .uri("/?other=value")
@@ -506,7 +506,7 @@ mod tests {
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_from_header() {
             let req = TestRequest::default()
                 .insert_header(("moosicbox-profile", "header_profile"))
@@ -517,7 +517,7 @@ mod tests {
             assert_eq!(result.unwrap().0, "header_profile");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_prefers_query_over_header() {
             let req = TestRequest::default()
                 .uri("/?moosicboxProfile=query_profile")
@@ -529,7 +529,7 @@ mod tests {
             assert_eq!(result.unwrap().0, "query_profile");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_fallback_to_header() {
             let req = TestRequest::default()
                 .insert_header(("moosicbox-profile", "header_profile"))
@@ -540,7 +540,7 @@ mod tests {
             assert_eq!(result.unwrap().0, "header_profile");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_verified_with_existing_profile() {
             PROFILES.add("verified_test".to_string());
 
@@ -556,7 +556,7 @@ mod tests {
             PROFILES.remove("verified_test");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_verified_with_nonexistent_profile() {
             let req = TestRequest::default()
                 .uri("/?moosicboxProfile=nonexistent")
@@ -566,21 +566,21 @@ mod tests {
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_as_ref() {
             let profile = super::super::api::ProfileName("test".to_string());
             let as_str: &str = profile.as_ref();
             assert_eq!(as_str, "test");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_into_string() {
             let profile = super::super::api::ProfileName("test".to_string());
             let string: String = profile.into();
             assert_eq!(string, "test");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_profile_name_unverified_into_string() {
             let profile = super::super::api::ProfileNameUnverified("test".to_string());
             let string: String = profile.into();

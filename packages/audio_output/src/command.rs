@@ -253,7 +253,7 @@ impl AudioHandle {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_audio_handle_fire_and_forget_success() {
         let (tx, rx) = flume::bounded(10);
         let handle = AudioHandle::new(tx);
@@ -266,7 +266,7 @@ mod tests {
         assert!(msg.response_sender.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_handle_pause_immediate() {
         let (tx, rx) = flume::bounded(10);
         let handle = AudioHandle::new(tx);
@@ -279,7 +279,7 @@ mod tests {
         assert!(msg.response_sender.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_handle_resume_immediate() {
         let (tx, rx) = flume::bounded(10);
         let handle = AudioHandle::new(tx);
@@ -292,7 +292,7 @@ mod tests {
         assert!(msg.response_sender.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_handle_fire_and_forget_channel_full() {
         let (tx, _rx) = flume::bounded(0);
         let handle = AudioHandle::new(tx);

@@ -82,7 +82,7 @@ impl Arbitrary for XmlAttrNameString {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_is_invalid_xml_char_control_characters() {
         // Test control characters (U+0000 through U+001F)
         assert!(is_invalid_xml_char('\u{0000}'));
@@ -91,14 +91,14 @@ mod tests {
         assert!(is_invalid_xml_char('\u{001F}'));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_invalid_xml_char_non_characters() {
         // Test Unicode non-characters
         assert!(is_invalid_xml_char('\u{FFFE}'));
         assert!(is_invalid_xml_char('\u{FFFF}'));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_invalid_xml_char_valid_characters() {
         // Test valid characters that should NOT be considered invalid
         assert!(!is_invalid_xml_char('\u{0020}')); // Space (just after control range)
@@ -109,7 +109,7 @@ mod tests {
         assert!(!is_invalid_xml_char('\u{FFFD}')); // Replacement character (just before non-chars)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_valid_xml_char_is_inverse_of_invalid() {
         // Test that is_valid_xml_char is the logical inverse of is_invalid_xml_char
         let test_chars = [
@@ -122,7 +122,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_xml_attr_name_string_never_empty() {
         // Generate multiple attribute names and verify none are empty
         let mut g = Gen::new(100);
@@ -135,7 +135,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_xml_attr_name_string_valid_characters() {
         // Verify that generated attribute names only contain valid characters
         let mut g = Gen::new(100);
@@ -151,7 +151,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_xml_string_no_invalid_characters() {
         // Verify that generated XML strings contain no invalid XML characters
         let mut g = Gen::new(100);

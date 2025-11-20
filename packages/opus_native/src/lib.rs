@@ -1209,7 +1209,7 @@ impl Decoder {
 mod lbrr_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_decode_silk_header_flags_mono_20ms() {
         let data = vec![0x80, 0x00, 0x00, 0x00];
         let mut ec = range::RangeDecoder::new(&data).unwrap();
@@ -1222,7 +1222,7 @@ mod lbrr_tests {
         assert_eq!(flags.lbrr_flags.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_silk_header_flags_stereo_40ms() {
         let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
         let mut ec = range::RangeDecoder::new(&data).unwrap();
@@ -1236,7 +1236,7 @@ mod lbrr_tests {
         assert_eq!(flags.per_frame_lbrr.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_silk_header_flags_stereo_60ms() {
         let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
         let mut ec = range::RangeDecoder::new(&data).unwrap();
@@ -1250,7 +1250,7 @@ mod lbrr_tests {
         assert_eq!(flags.per_frame_lbrr.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_per_frame_lbrr_flags_20ms() {
         let result = Decoder::decode_per_frame_lbrr_flags(
             &mut range::RangeDecoder::new(&[0x80, 0x00, 0x00, 0x00]).unwrap(),
@@ -1263,7 +1263,7 @@ mod lbrr_tests {
         assert!(flags[0]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_per_frame_lbrr_flags_40ms() {
         let result = Decoder::decode_per_frame_lbrr_flags(
             &mut range::RangeDecoder::new(&[0x80, 0xFF, 0xFF, 0xFF]).unwrap(),
@@ -1275,7 +1275,7 @@ mod lbrr_tests {
         assert_eq!(flags.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_per_frame_lbrr_flags_60ms() {
         let result = Decoder::decode_per_frame_lbrr_flags(
             &mut range::RangeDecoder::new(&[0x80, 0xFF, 0xFF, 0xFF]).unwrap(),
@@ -1287,7 +1287,7 @@ mod lbrr_tests {
         assert_eq!(flags.len(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_vad_flag_indexing_stereo_40ms() {
         let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
         let mut ec = range::RangeDecoder::new(&data).unwrap();
@@ -1298,7 +1298,7 @@ mod lbrr_tests {
         assert_eq!(flags.vad_flags.len(), 4);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lbrr_40ms_icdf_values() {
         const LBRR_40MS_ICDF: &[u8] = &[203, 150, 0];
         assert_eq!(LBRR_40MS_ICDF[0], 203);
@@ -1306,7 +1306,7 @@ mod lbrr_tests {
         assert_eq!(LBRR_40MS_ICDF[2], 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lbrr_60ms_icdf_values() {
         const LBRR_60MS_ICDF: &[u8] = &[215, 195, 166, 125, 110, 82, 0];
         assert_eq!(LBRR_60MS_ICDF[0], 215);
@@ -1323,7 +1323,7 @@ mod lbrr_tests {
 mod sample_rate_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_from_hz_all_valid_rates() {
         assert_eq!(SampleRate::from_hz(8000).unwrap(), SampleRate::Hz8000);
         assert_eq!(SampleRate::from_hz(12000).unwrap(), SampleRate::Hz12000);
@@ -1332,7 +1332,7 @@ mod sample_rate_tests {
         assert_eq!(SampleRate::from_hz(48000).unwrap(), SampleRate::Hz48000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_from_hz_invalid_rates() {
         assert!(SampleRate::from_hz(11025).is_err());
         assert!(SampleRate::from_hz(22050).is_err());
@@ -1341,7 +1341,7 @@ mod sample_rate_tests {
         assert!(SampleRate::from_hz(0).is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_from_hz_error_message_includes_rate() {
         let result = SampleRate::from_hz(44100);
         assert!(result.is_err());
@@ -1356,17 +1356,17 @@ mod sample_rate_tests {
 mod channels_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_channels_mono_value() {
         assert_eq!(Channels::Mono as usize, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_channels_stereo_value() {
         assert_eq!(Channels::Stereo as usize, 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_channels_equality() {
         assert_eq!(Channels::Mono, Channels::Mono);
         assert_eq!(Channels::Stereo, Channels::Stereo);
@@ -1378,7 +1378,7 @@ mod channels_tests {
 mod decoder_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_calculate_samples_all_frame_sizes() {
         // At 48kHz
         assert_eq!(Decoder::calculate_samples(FrameSize::Ms2_5, 48000), 120);
@@ -1389,7 +1389,7 @@ mod decoder_tests {
         assert_eq!(Decoder::calculate_samples(FrameSize::Ms60, 48000), 2880);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calculate_samples_different_rates() {
         // Ms10 at different sample rates
         assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 8000), 80);
@@ -1399,14 +1399,14 @@ mod decoder_tests {
         assert_eq!(Decoder::calculate_samples(FrameSize::Ms10, 48000), 480);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calculate_samples_ms20_at_16khz() {
         // Common SILK configuration
         assert_eq!(Decoder::calculate_samples(FrameSize::Ms20, 16000), 320);
     }
 
     #[cfg(feature = "silk")]
-    #[test]
+    #[test_log::test]
     fn test_calculate_silk_delay_samples() {
         assert_eq!(Decoder::calculate_silk_delay_samples(8000), 5);
         assert_eq!(Decoder::calculate_silk_delay_samples(12000), 10);
@@ -1414,20 +1414,20 @@ mod decoder_tests {
     }
 
     #[cfg(feature = "silk")]
-    #[test]
+    #[test_log::test]
     fn test_calculate_silk_delay_samples_unknown_rate() {
         assert_eq!(Decoder::calculate_silk_delay_samples(48000), 0);
         assert_eq!(Decoder::calculate_silk_delay_samples(0), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_algorithmic_delay_samples_without_silk() {
         let _decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         #[cfg(not(feature = "silk"))]
         assert_eq!(_decoder.algorithmic_delay_samples(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_handle_packet_loss_zeros_output() {
         let decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
         let mut output = vec![42i16; 960];
@@ -1438,7 +1438,7 @@ mod decoder_tests {
         assert!(output.iter().all(|&s| s == 0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_empty_packet_error() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         let mut output = vec![0i16; 480];
@@ -1451,7 +1451,7 @@ mod decoder_tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_packet_loss_returns_silence() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         let mut output = vec![42i16; 480];
@@ -1467,13 +1467,13 @@ mod decoder_tests {
 mod no_features_tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_decoder_new_succeeds_with_no_features() {
         let decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo);
         assert!(decoder.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_fails_with_no_features() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         let mut output = vec![0i16; 480];
@@ -1486,7 +1486,7 @@ mod no_features_tests {
 
     // TODO: Remove ignore when implemented in Phase 6
     #[ignore = "Will be implemented in Phase 6"]
-    #[test]
+    #[test_log::test]
     fn test_reset_state_succeeds_with_no_features() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         let _ = decoder.reset_state();

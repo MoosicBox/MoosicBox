@@ -77,7 +77,7 @@ impl From<&Service> for UpnpService {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_device_with_volume() {
         let device = UpnpDevice {
             name: "Test Device".to_string(),
@@ -92,7 +92,7 @@ mod tests {
         assert_eq!(updated.udn, "uuid:test-123");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_device_with_volume_none() {
         let device = UpnpDevice {
             name: "Test Device".to_string(),
@@ -105,7 +105,7 @@ mod tests {
         assert!(updated.volume.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_device_with_services() {
         let device = UpnpDevice {
             name: "Test Device".to_string(),
@@ -134,7 +134,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_upnp_device_builder_pattern() {
         let device = UpnpDevice {
             name: "Test Device".to_string(),

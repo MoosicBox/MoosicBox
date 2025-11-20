@@ -302,13 +302,13 @@ mod tests {
     use super::*;
     use actix_web::test::TestRequest;
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_without_user_agent() {
         let req = TestRequest::default().to_http_request();
         assert!(is_authorized(&req));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_with_regular_user_agent() {
         let req = TestRequest::default()
             .insert_header(("User-Agent", "Mozilla/5.0"))
@@ -316,7 +316,7 @@ mod tests {
         assert!(is_authorized(&req));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_with_tunnel_user_agent() {
         let req = TestRequest::default()
             .insert_header(("User-Agent", "MOOSICBOX_TUNNEL"))
@@ -324,7 +324,7 @@ mod tests {
         assert!(!is_authorized(&req));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_with_empty_user_agent() {
         let req = TestRequest::default()
             .insert_header(("User-Agent", ""))
@@ -332,7 +332,7 @@ mod tests {
         assert!(is_authorized(&req));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_with_case_sensitive_tunnel() {
         // Test that the check is case-sensitive
         let req = TestRequest::default()
@@ -341,7 +341,7 @@ mod tests {
         assert!(is_authorized(&req));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_authorized_with_partial_match() {
         // Test that partial matches don't trigger unauthorized
         let req = TestRequest::default()
@@ -365,7 +365,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_non_tunnel_request_authorized_allows_regular_requests() {
         let req = TestRequest::default()
             .insert_header(("User-Agent", "Mozilla/5.0"))
@@ -377,7 +377,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_non_tunnel_request_authorized_allows_no_user_agent() {
         let req = TestRequest::default().to_http_request();
 
@@ -387,7 +387,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_client_id_returns_valid_uuid() {
         let client_id = create_client_id();
         // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(client_id.chars().filter(|&c| c == '-').count(), 4);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_client_id_generates_unique_ids() {
         let id1 = create_client_id();
         let id2 = create_client_id();

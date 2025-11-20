@@ -31,13 +31,13 @@ impl Default for MigrationValidator {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_migration_validator_new() {
         let _validator = MigrationValidator::new();
         // Constructor should not panic
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_validator_default() {
         let validator1 = MigrationValidator::new();
         let validator2 = MigrationValidator::default();
@@ -48,7 +48,7 @@ mod tests {
         let _v2 = validator2;
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_validator_multiple_instances() {
         // Test that we can create multiple instances
         let _validator1 = MigrationValidator::new();
@@ -56,7 +56,7 @@ mod tests {
         let _validator3 = MigrationValidator::default();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_validator_const_fn() {
         // Test that new() is a const fn by using it in a const context
         const _VALIDATOR: MigrationValidator = MigrationValidator::new();

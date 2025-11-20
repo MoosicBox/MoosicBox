@@ -252,7 +252,7 @@ pub async fn handle_sse<
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_event_data_new() {
         let data = EventData::new("test data");
         assert_eq!(data.data, "test data");
@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(data.id, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_data_with_id() {
         let data = EventData::new("test data").id("event-123");
         assert_eq!(data.data, "test data");
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(data.event, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_data_with_event() {
         let data = EventData::new("test data").event("custom-event");
         assert_eq!(data.data, "test data");
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(data.id, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_data_with_id_and_event() {
         let data = EventData::new("test data").id("event-456").event("update");
         assert_eq!(data.data, "test data");
@@ -284,28 +284,28 @@ mod tests {
         assert_eq!(data.event, Some("update".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_simple_data() {
         let event = Event::Data(EventData::new("hello"));
         let bytes = event.into_bytes();
         assert_eq!(bytes.as_ref(), b"data: hello\n\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_with_id() {
         let event = Event::Data(EventData::new("test message").id("123"));
         let bytes = event.into_bytes();
         assert_eq!(bytes.as_ref(), b"id: 123\ndata: test message\n\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_with_event_type() {
         let event = Event::Data(EventData::new("payload").event("custom"));
         let bytes = event.into_bytes();
         assert_eq!(bytes.as_ref(), b"event: custom\ndata: payload\n\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_with_all_fields() {
         let event = Event::Data(
             EventData::new("complete message")
@@ -319,14 +319,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_multiline_data() {
         let event = Event::Data(EventData::new("line1\nline2\nline3"));
         let bytes = event.into_bytes();
         assert_eq!(bytes.as_ref(), b"data: line1\ndata: line2\ndata: line3\n\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_multiline_with_id_and_event() {
         let event = Event::Data(
             EventData::new("first line\nsecond line")
@@ -340,42 +340,42 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_into_bytes_empty_data() {
         let event = Event::Data(EventData::new(""));
         let bytes = event.into_bytes();
         assert_eq!(bytes.as_ref(), b"data: \n\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_line_split_with_prefix_single_line() {
         let mut buf = BytesMut::new();
         Event::line_split_with_prefix(&mut buf, "data: ", "single line");
         assert_eq!(buf.as_ref(), b"data: single line\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_line_split_with_prefix_multiple_lines() {
         let mut buf = BytesMut::new();
         Event::line_split_with_prefix(&mut buf, "data: ", "line1\nline2\nline3");
         assert_eq!(buf.as_ref(), b"data: line1\ndata: line2\ndata: line3\n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_line_split_with_prefix_empty_string() {
         let mut buf = BytesMut::new();
         Event::line_split_with_prefix(&mut buf, "data: ", "");
         assert_eq!(buf.as_ref(), b"data: \n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_line_split_with_prefix_trailing_newline() {
         let mut buf = BytesMut::new();
         Event::line_split_with_prefix(&mut buf, "data: ", "line1\nline2\n");
         assert_eq!(buf.as_ref(), b"data: line1\ndata: line2\ndata: \n");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_event_data_from_conversion() {
         let data = EventData::new("test");
         let event: Event = data.into();

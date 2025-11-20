@@ -293,7 +293,7 @@ async fn test_barrier_stress() {
     assert_eq!(results.len(), n);
 }
 
-#[test]
+#[test_log::test]
 #[should_panic(expected = "barrier size must be positive")]
 fn test_barrier_zero_size_panics() {
     let _ = Barrier::new(0);

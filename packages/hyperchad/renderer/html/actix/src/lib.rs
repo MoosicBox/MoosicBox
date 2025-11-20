@@ -424,7 +424,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_actix_app_new() {
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let processor = TestProcessor;
@@ -438,7 +438,7 @@ mod tests {
     }
 
     #[cfg(feature = "actions")]
-    #[test]
+    #[test_log::test]
     fn test_actix_app_with_action_tx() {
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let (action_tx, _action_rx) = flume::unbounded();
@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[cfg(feature = "actions")]
-    #[test]
+    #[test_log::test]
     fn test_actix_app_set_action_tx() {
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let (action_tx, _action_rx) = flume::unbounded();
@@ -471,7 +471,7 @@ mod tests {
     }
 
     #[cfg(feature = "actions")]
-    #[test]
+    #[test_log::test]
     fn test_actix_app_with_action_tx_chaining() {
         let (_tx, rx) = flume::unbounded::<RendererEvent>();
         let (action_tx1, _action_rx1) = flume::unbounded();

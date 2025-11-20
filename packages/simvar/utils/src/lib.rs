@@ -171,7 +171,7 @@ where
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_worker_thread_id_returns_unique_ids() {
         let id1 = worker_thread_id();
         let id2 = worker_thread_id();
@@ -179,7 +179,7 @@ mod tests {
         assert_eq!(id1, id2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_worker_thread_id_uniqueness_across_threads() {
         let id1 = worker_thread_id();
         let handle = std::thread::spawn(worker_thread_id);
@@ -188,7 +188,7 @@ mod tests {
         assert_ne!(id1, id2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_simulator_cancellation_token() {
         // Ensure global is not cancelled
         reset_global_simulator_cancellation_token();
@@ -202,7 +202,7 @@ mod tests {
         assert!(!is_simulator_cancelled());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cancel_simulation_sets_cancelled_state() {
         reset_simulator_cancellation_token();
         assert!(!is_simulator_cancelled());
@@ -211,7 +211,7 @@ mod tests {
         assert!(is_simulator_cancelled());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_simulator_cancelled_respects_global_cancellation() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -223,7 +223,7 @@ mod tests {
         assert!(is_simulator_cancelled());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_global_cancellation_independent_from_local() {
         reset_simulator_cancellation_token();
         reset_global_simulator_cancellation_token();
@@ -234,7 +234,7 @@ mod tests {
         assert!(is_simulator_cancelled());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset_global_simulator_cancellation_token() {
         cancel_global_simulation();
         assert!(is_global_simulator_cancelled());

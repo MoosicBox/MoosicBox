@@ -88,14 +88,14 @@ impl TimeFormat for u128 {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_format_milliseconds_only() {
         assert_eq!(0u128.into_formatted(), "0ms");
         assert_eq!(1u128.into_formatted(), "1ms");
         assert_eq!(999u128.into_formatted(), "999ms");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_seconds() {
         assert_eq!(1000u128.into_formatted(), "1s, 0ms");
         assert_eq!(5000u128.into_formatted(), "5s, 0ms");
@@ -103,7 +103,7 @@ mod tests {
         assert_eq!(59_999u128.into_formatted(), "59s, 999ms");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_minutes() {
         assert_eq!(60_000u128.into_formatted(), "1 minute, 0s, 0ms");
         assert_eq!(120_000u128.into_formatted(), "2 minutes, 0s, 0ms");
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(125_432u128.into_formatted(), "2 minutes, 5s, 432ms");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_hours() {
         assert_eq!(3_600_000u128.into_formatted(), "1 hour, 0 minutes, 0s, 0ms");
         assert_eq!(
@@ -128,7 +128,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_days() {
         assert_eq!(
             86_400_000u128.into_formatted(),
@@ -144,7 +144,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_years() {
         // 1 year = 365 days
         let one_year = 365u128 * 24 * 60 * 60 * 1000;
@@ -167,19 +167,19 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_u32() {
         assert_eq!(1000u32.into_formatted(), "1s, 0ms");
         assert_eq!(5432u32.into_formatted(), "5s, 432ms");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_u64() {
         assert_eq!(1000u64.into_formatted(), "1s, 0ms");
         assert_eq!(5432u64.into_formatted(), "5s, 432ms");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_singular_plural() {
         // Test singular forms
         assert_eq!(60_000u128.into_formatted(), "1 minute, 0s, 0ms");

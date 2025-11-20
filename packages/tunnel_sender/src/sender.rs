@@ -1814,7 +1814,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::collections::BTreeMap;
 
-    #[test]
+    #[test_log::test]
     fn test_does_range_overlap_with_unbounded_range() {
         let range = Range {
             start: None,
@@ -1825,7 +1825,7 @@ mod tests {
         assert!(TunnelSender::does_range_overlap(&range, 100, 200));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_does_range_overlap_with_start_only() {
         let range = Range {
             start: Some(50),
@@ -1841,7 +1841,7 @@ mod tests {
         assert!(TunnelSender::does_range_overlap(&range, 50, 100));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_does_range_overlap_with_end_only() {
         let range = Range {
             start: None,
@@ -1857,7 +1857,7 @@ mod tests {
         assert!(!TunnelSender::does_range_overlap(&range, 101, 200));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_does_range_overlap_with_bounded_range() {
         let range = Range {
             start: Some(50),
@@ -1877,7 +1877,7 @@ mod tests {
         assert!(TunnelSender::does_range_overlap(&range, 50, 150));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_does_range_overlap_edge_cases() {
         // Range with same start and end (point range)
         let point_range = Range {
@@ -1899,7 +1899,7 @@ mod tests {
         assert!(!TunnelSender::does_range_overlap(&range, 101, 110));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_binary_request_buffer_first_packet() {
         let request_id = 12345_u64;
         let packet_id = 1_u32;
@@ -1932,7 +1932,7 @@ mod tests {
         assert!(offset > *BINARY_REQUEST_BUFFER_OFFSET);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_binary_request_buffer_subsequent_packet() {
         let request_id = 67890_u64;
         let packet_id = 5_u32;
@@ -1960,7 +1960,7 @@ mod tests {
         assert_eq!(offset, *BINARY_REQUEST_BUFFER_OFFSET);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_binary_request_buffer_with_empty_headers() {
         let request_id = 1_u64;
         let packet_id = 1_u32;
@@ -1982,7 +1982,7 @@ mod tests {
         assert!(offset > 19);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_binary_request_buffer_consistent_offset() {
         let mut headers = BTreeMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
@@ -2002,7 +2002,7 @@ mod tests {
         assert_eq!(&buf1[..offset1], &buf2[..offset2]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_binary_request_buffer_offset_constant() {
         // Verify the BINARY_REQUEST_BUFFER_OFFSET constant is calculated correctly
         let expected_offset = std::mem::size_of::<u64>() // request_id

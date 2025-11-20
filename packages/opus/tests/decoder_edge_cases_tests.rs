@@ -6,7 +6,7 @@ use symphonia::core::{
     codecs::{CodecParameters, Decoder, DecoderOptions},
 };
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_unsupported_channel_count() {
     let mut params = CodecParameters::new();
     params
@@ -17,7 +17,7 @@ fn test_decoder_creation_unsupported_channel_count() {
     assert!(decoder.is_err());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_default_sample_rate() {
     let mut params = CodecParameters::new();
     params.with_channels(Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
@@ -28,7 +28,7 @@ fn test_decoder_creation_default_sample_rate() {
     // Decoder should be created successfully with default sample rate
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_default_channels() {
     let mut params = CodecParameters::new();
     params.with_sample_rate(48000);
@@ -39,7 +39,7 @@ fn test_decoder_creation_default_channels() {
     // Decoder should be created successfully with default channels
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_creation_12khz() {
     let mut params = CodecParameters::new();
     params
@@ -50,7 +50,7 @@ fn test_decoder_creation_12khz() {
     assert!(decoder.is_ok());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_finalize_returns_default() {
     let mut params = CodecParameters::new();
     params
@@ -64,7 +64,7 @@ fn test_decoder_finalize_returns_default() {
     assert!(result.verify_ok.is_none());
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_last_decoded_empty() {
     let mut params = CodecParameters::new();
     params
@@ -78,7 +78,7 @@ fn test_decoder_last_decoded_empty() {
     assert_eq!(audio_buf.frames(), 0);
 }
 
-#[test]
+#[test_log::test]
 fn test_decoder_reset() {
     let mut params = CodecParameters::new();
     params

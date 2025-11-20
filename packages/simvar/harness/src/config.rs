@@ -469,7 +469,7 @@ fn get_run_command(skip_env: &[&str], seed: u64) -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_simconfig_default() {
         let config = SimConfig::default();
@@ -485,7 +485,7 @@ mod tests {
         assert_eq!(config.tick_duration, Duration::from_millis(1));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_simconfig_new() {
         let config = SimConfig::new();
@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(config.repair_rate, 1.0);
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_simconfig_builder_methods() {
         let mut config = SimConfig::new();
@@ -521,7 +521,7 @@ mod tests {
         assert_eq!(config.tick_duration, Duration::from_millis(5));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::float_cmp)]
     fn test_simconfig_builder_method_chaining() {
         let mut config = SimConfig::new();
@@ -535,7 +535,7 @@ mod tests {
         assert!(config.enable_random_order);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simresult_is_success() {
         let props = SimProperties {
             config: SimConfig::new(),
@@ -565,7 +565,7 @@ mod tests {
         assert!(!fail.is_success());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simresult_props() {
         let props = SimProperties {
             config: SimConfig::new(),
@@ -588,7 +588,7 @@ mod tests {
         assert_eq!(result_props.extra.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simresult_config() {
         let mut config = SimConfig::new();
         let _ = config.tcp_capacity(256);
@@ -611,7 +611,7 @@ mod tests {
         assert_eq!(result.config().tcp_capacity, 256);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simresult_run() {
         let props = SimProperties {
             config: SimConfig::new(),
@@ -634,7 +634,7 @@ mod tests {
         assert_eq!(result_run.sim_time_millis, 54321);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_cargoified_args_with_target_path() {
         // Note: This test depends on the actual command line arguments,
         // so we're just checking that it doesn't panic

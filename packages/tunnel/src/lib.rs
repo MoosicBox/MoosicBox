@@ -602,7 +602,7 @@ mod tests {
         Bytes::from(data)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_first_packet() {
         let mut headers = BTreeMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
@@ -621,7 +621,7 @@ mod tests {
         assert_eq!(response.bytes.as_ref(), body);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_subsequent_packet() {
         let body = b"more data";
         let bytes = create_binary_response(12345, 2, false, None, None, body);
@@ -636,7 +636,7 @@ mod tests {
         assert_eq!(response.bytes.as_ref(), body);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_final_packet() {
         let body = b"final chunk";
         let bytes = create_binary_response(12345, 3, true, None, None, body);
@@ -651,7 +651,7 @@ mod tests {
         assert_eq!(response.bytes.as_ref(), body);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_empty_body() {
         let headers = BTreeMap::new();
         let bytes = create_binary_response(999, 1, true, Some(204), Some(headers.clone()), &[]);
@@ -666,7 +666,7 @@ mod tests {
         assert!(response.bytes.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_large_headers() {
         let mut headers = BTreeMap::new();
         for i in 0..50 {
@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(response.bytes.as_ref(), body);
     }
 
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "range start must not be greater than end")]
     fn test_tunnel_response_from_bytes_too_short() {
         // Less than 13 bytes minimum
@@ -691,7 +691,7 @@ mod tests {
         let _response = TunnelResponse::try_from(bytes).unwrap();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_bytes_error_invalid_json_headers() {
         let mut data = Vec::new();
         data.extend_from_slice(&123_u64.to_be_bytes()); // request_id
@@ -709,7 +709,7 @@ mod tests {
     }
 
     #[cfg(feature = "base64")]
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_base64_missing_prefix() {
         let result = TunnelResponse::try_from("12345|1|0200{}|dGVzdA==");
         assert!(result.is_err());
@@ -720,7 +720,7 @@ mod tests {
     }
 
     #[cfg(feature = "base64")]
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_base64_missing_request_id_delimiter() {
         let invalid = format!("{BASE64_TUNNEL_RESPONSE_PREFIX}12345");
         let result = TunnelResponse::try_from(invalid.as_str());
@@ -732,7 +732,7 @@ mod tests {
     }
 
     #[cfg(feature = "base64")]
-    #[test]
+    #[test_log::test]
     fn test_tunnel_response_from_base64_missing_packet_id_delimiter() {
         let invalid = format!("{BASE64_TUNNEL_RESPONSE_PREFIX}12345|1");
         let result = TunnelResponse::try_from(invalid.as_str());
@@ -743,7 +743,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_http_serialization() {
         let request = TunnelRequest::Http(TunnelHttpRequest {
             request_id: 123,
@@ -770,7 +770,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_ws_serialization() {
         let request = TunnelRequest::Ws(TunnelWsRequest {
             conn_id: 456,
@@ -793,7 +793,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_abort_serialization() {
         let request = TunnelRequest::Abort(TunnelAbortRequest { request_id: 999 });
 
@@ -808,7 +808,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_ws_response_serialization() {
         let response = TunnelWsResponse {
             request_id: 123,
@@ -825,7 +825,7 @@ mod tests {
         assert_eq!(deserialized.to_connection_ids, Some(vec![4, 5, 6]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_ws_response_optional_fields_omitted() {
         let response = TunnelWsResponse {
             request_id: 456,
@@ -846,7 +846,7 @@ mod tests {
         assert_eq!(deserialized.to_connection_ids, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_encoding_serialization() {
         let binary = TunnelEncoding::Binary;
         let json = serde_json::to_string(&binary).unwrap();
@@ -857,7 +857,7 @@ mod tests {
     }
 
     #[cfg(feature = "base64")]
-    #[test]
+    #[test_log::test]
     fn test_tunnel_encoding_base64_serialization() {
         let base64 = TunnelEncoding::Base64;
         let json = serde_json::to_string(&base64).unwrap();
@@ -867,7 +867,7 @@ mod tests {
         assert_eq!(deserialized, TunnelEncoding::Base64);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_http_request_optional_fields() {
         let request = TunnelHttpRequest {
             request_id: 1,
@@ -892,7 +892,7 @@ mod tests {
         assert_eq!(deserialized.profile, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tunnel_request_tagged_enum_format() {
         let http_request = TunnelRequest::Http(TunnelHttpRequest {
             request_id: 1,

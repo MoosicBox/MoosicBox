@@ -975,7 +975,7 @@ mod test {
         assert_eq!(stream.peer_addr().unwrap(), server_addr);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn reset_next_port_resets_to_ephemeral_start() {
         // Allocate some ports
@@ -992,7 +992,7 @@ mod test {
         assert_ne!(p3, p4);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn next_ip_increments_correctly() {
         reset_next_ip();
@@ -1012,7 +1012,7 @@ mod test {
         assert_eq!(second, expected_second);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn next_ip_wraps_fourth_octet_to_third() {
         reset_next_ip();
@@ -1029,7 +1029,7 @@ mod test {
         assert_eq!(next, Ipv4Addr::new(192, 168, 2, 1));
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn reset_next_ip_returns_to_start() {
         reset_next_ip();
@@ -1043,7 +1043,7 @@ mod test {
         assert_eq!(ip3, start);
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn reset_dns_clears_all_entries() {
         reset_dns();
@@ -1065,7 +1065,7 @@ mod test {
         });
     }
 
-    #[test]
+    #[test_log::test]
     #[serial]
     fn reset_clears_all_simulator_state() {
         // Set up some state
@@ -1091,12 +1091,12 @@ mod test {
         });
     }
 
-    #[test]
+    #[test_log::test]
     fn current_host_returns_none_when_not_set() {
         assert_eq!(current_host(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn with_host_sets_host_in_scope() {
         let test_addr = "test.example.com:8080".to_string();
         with_host(test_addr.clone(), |addr| {

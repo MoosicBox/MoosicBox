@@ -229,7 +229,7 @@ mod tests {
     };
     use pretty_assertions::assert_eq;
 
-    #[test]
+    #[test_log::test]
     fn test_artist_as_data_values() {
         let artist = Artist {
             id: Id::Number(123),
@@ -251,7 +251,7 @@ mod tests {
         assert!(data.contains(&("blur", DataValue::Bool(false))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_artist_as_data_values_no_cover() {
         let artist = Artist {
             id: Id::Number(456),
@@ -266,7 +266,7 @@ mod tests {
         assert!(data.contains(&("cover", DataValue::String(String::new()))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_album_as_data_values() {
         let album = Album {
             id: Id::Number(789),
@@ -306,7 +306,7 @@ mod tests {
         assert!(data.contains(&("version_sample_rates", DataValue::Number(96000))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_album_as_data_values_no_versions() {
         let album = Album {
             id: Id::Number(111),
@@ -335,7 +335,7 @@ mod tests {
         assert!(!data.iter().any(|(key, _)| *key == "version_formats" && matches!(data.iter().find(|(k, _)| *k == "version_formats").map(|(_, v)| v), Some(DataValue::String(s)) if !s.is_empty())));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_as_data_values() {
         let track = Track {
             id: Id::Number(999),
@@ -381,7 +381,7 @@ mod tests {
         assert!(data.contains(&("version_sample_rates", DataValue::Number(44100))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_as_data_values_minimal() {
         let track = Track {
             id: Id::Number(888),
@@ -422,7 +422,7 @@ mod tests {
         assert!(data.contains(&("version_sample_rates", DataValue::Number(0))));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_artist_as_delete_term() {
         let artist = Artist {
             id: Id::Number(555),
@@ -438,7 +438,7 @@ mod tests {
         assert!(matches!(term.1, DataValue::String(ref s) if s == "555"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_album_as_delete_term() {
         let album = Album {
             id: Id::Number(666),
@@ -464,7 +464,7 @@ mod tests {
         assert!(matches!(term.1, DataValue::String(ref s) if s == "666"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_track_as_delete_term() {
         let track = Track {
             id: Id::Number(777),

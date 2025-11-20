@@ -1400,7 +1400,7 @@ impl_web_server!(actix);
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_with_header() {
         let response = HttpResponse::ok().with_header("X-Custom-Header", "custom-value");
 
@@ -1410,7 +1410,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_headers() {
         let mut headers = BTreeMap::new();
         headers.insert("X-Header-1".to_string(), "value-1".to_string());
@@ -1428,7 +1428,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_content_type() {
         let response = HttpResponse::ok().with_content_type("application/json");
 
@@ -1438,7 +1438,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(feature = "serde")]
     fn test_json_response() {
         let data = serde_json::json!({
@@ -1454,7 +1454,7 @@ mod tests {
         assert_eq!(response.status_code, StatusCode::Ok);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_html_response() {
         let response = HttpResponse::html("<h1>Hello, World!</h1>");
 
@@ -1465,7 +1465,7 @@ mod tests {
         assert_eq!(response.status_code, StatusCode::Ok);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_text_response() {
         let response = HttpResponse::text("Hello, World!");
 
@@ -1476,7 +1476,7 @@ mod tests {
         assert_eq!(response.status_code, StatusCode::Ok);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_header_chaining() {
         let response = HttpResponse::ok()
             .with_header("X-First", "first-value")
@@ -1498,46 +1498,46 @@ mod tests {
     }
 
     // HttpResponseBody From implementations tests
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_str() {
         let body = HttpResponseBody::from("Hello, World!");
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_static() {
         let body = HttpResponseBody::from_static("Static content");
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_string() {
         let body = HttpResponseBody::from(String::from("Owned string"));
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_vec_u8() {
         let vec = vec![72, 101, 108, 108, 111]; // "Hello"
         let body = HttpResponseBody::from(vec);
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_slice() {
         let slice: &[u8] = &[72, 101, 108, 108, 111]; // "Hello"
         let body = HttpResponseBody::from(slice);
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_body_from_bytes() {
         let bytes = Bytes::from("test");
         let body = HttpResponseBody::from(bytes);
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(feature = "serde")]
     fn test_response_body_from_json_value() {
         let json = serde_json::json!({"key": "value"});
@@ -1545,7 +1545,7 @@ mod tests {
         assert!(matches!(body, HttpResponseBody::Bytes(_)));
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(feature = "serde")]
     fn test_response_body_from_json_value_ref() {
         let json = serde_json::json!({"key": "value"});
@@ -1554,7 +1554,7 @@ mod tests {
     }
 
     // Error creation methods tests
-    #[test]
+    #[test_log::test]
     fn test_error_bad_request() {
         let err = Error::bad_request("Invalid input");
         match err {
@@ -1564,7 +1564,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_unauthorized() {
         let err = Error::unauthorized("Not authenticated");
         match err {
@@ -1574,7 +1574,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_not_found() {
         let err = Error::not_found("Resource not found");
         match err {
@@ -1584,7 +1584,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_internal_server_error() {
         let err = Error::internal_server_error("Something went wrong");
         match err {
@@ -1594,7 +1594,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_from_http_status_code() {
         #[derive(Debug)]
         struct CustomError;
@@ -1613,7 +1613,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_from_http_status_code_u16() {
         #[derive(Debug)]
         struct CustomError;
@@ -1633,7 +1633,7 @@ mod tests {
     }
 
     // HttpResponse builder methods tests
-    #[test]
+    #[test_log::test]
     fn test_http_response_new() {
         let response = HttpResponse::new(StatusCode::Ok);
         assert_eq!(response.status_code, StatusCode::Ok);
@@ -1642,31 +1642,31 @@ mod tests {
         assert!(response.body.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_from_status_code() {
         let response = HttpResponse::from_status_code(StatusCode::Created);
         assert_eq!(response.status_code, StatusCode::Created);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_temporary_redirect() {
         let response = HttpResponse::temporary_redirect();
         assert_eq!(response.status_code, StatusCode::TemporaryRedirect);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_permanent_redirect() {
         let response = HttpResponse::permanent_redirect();
         assert_eq!(response.status_code, StatusCode::PermanentRedirect);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_not_found() {
         let response = HttpResponse::not_found();
         assert_eq!(response.status_code, StatusCode::NotFound);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_with_location() {
         let response = HttpResponse::temporary_redirect().with_location("/new-url");
         assert_eq!(response.location, Some("/new-url".to_string()));
@@ -1676,27 +1676,27 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_with_location_none() {
         let response = HttpResponse::ok().with_location::<String, Option<String>>(None);
         assert!(response.location.is_none());
         assert!(!response.headers.contains_key("Location"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_with_body() {
         let response = HttpResponse::ok().with_body("Response body");
         assert!(response.body.is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_response_with_body_none() {
         let response = HttpResponse::ok().with_body::<&str, Option<&str>>(None);
         assert!(response.body.is_none());
     }
 
     // WebServerBuilder tests
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_new() {
         let builder = WebServerBuilder::new();
         assert_eq!(builder.addr, "0.0.0.0");
@@ -1704,26 +1704,26 @@ mod tests {
         assert!(builder.scopes.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_default() {
         let builder = WebServerBuilder::default();
         assert_eq!(builder.addr, "0.0.0.0");
         assert_eq!(builder.port, 8080);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_with_addr() {
         let builder = WebServerBuilder::new().with_addr("127.0.0.1");
         assert_eq!(builder.addr, "127.0.0.1");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_with_port() {
         let builder = WebServerBuilder::new().with_port(3000_u16);
         assert_eq!(builder.port, 3000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_with_scope() {
         let scope = Scope::new("/api");
         let builder = WebServerBuilder::new().with_scope(scope);
@@ -1731,7 +1731,7 @@ mod tests {
         assert_eq!(builder.scopes[0].path, "/api");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_web_server_builder_chaining() {
         let builder = WebServerBuilder::new()
             .with_addr("localhost")
@@ -1744,7 +1744,7 @@ mod tests {
         assert_eq!(builder.scopes.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg(feature = "compress")]
     fn test_web_server_builder_with_compress() {
         let builder = WebServerBuilder::new().with_compress(true);
@@ -1755,7 +1755,7 @@ mod tests {
     }
 
     // Scope builder tests
-    #[test]
+    #[test_log::test]
     fn test_scope_new() {
         let scope = Scope::new("/api");
         assert_eq!(scope.path, "/api");
@@ -1763,7 +1763,7 @@ mod tests {
         assert!(scope.scopes.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_with_route() {
         let route = Route::new(Method::Get, "/test", |_req| {
             Box::pin(async { Ok(HttpResponse::ok()) })
@@ -1774,7 +1774,7 @@ mod tests {
         assert_eq!(scope.routes[0].path, "/test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_with_routes() {
         let routes = vec![
             Route::new(Method::Get, "/route1", |_req| {
@@ -1789,7 +1789,7 @@ mod tests {
         assert_eq!(scope.routes.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_route_method() {
         let scope = Scope::new("/api").route(Method::Get, "/test", |_req| {
             Box::pin(async { Ok(HttpResponse::ok()) })
@@ -1800,7 +1800,7 @@ mod tests {
         assert_eq!(scope.routes[0].path, "/test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_get_method() {
         let scope =
             Scope::new("/api").get("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1809,7 +1809,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Get);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_post_method() {
         let scope =
             Scope::new("/api").post("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1818,7 +1818,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Post);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_put_method() {
         let scope =
             Scope::new("/api").put("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1827,7 +1827,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Put);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_delete_method() {
         let scope =
             Scope::new("/api").delete("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1836,7 +1836,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Delete);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_patch_method() {
         let scope =
             Scope::new("/api").patch("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1845,7 +1845,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Patch);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_head_method() {
         let scope =
             Scope::new("/api").head("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
@@ -1854,7 +1854,7 @@ mod tests {
         assert_eq!(scope.routes[0].method, Method::Head);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_with_scope() {
         let inner_scope = Scope::new("/users");
         let outer_scope = Scope::new("/api").with_scope(inner_scope);
@@ -1863,7 +1863,7 @@ mod tests {
         assert_eq!(outer_scope.scopes[0].path, "/users");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_with_scopes() {
         let scopes = vec![Scope::new("/users"), Scope::new("/posts")];
         let scope = Scope::new("/api").with_scopes(scopes);
@@ -1871,7 +1871,7 @@ mod tests {
         assert_eq!(scope.scopes.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_scope_builder_chaining() {
         let scope = Scope::new("/api")
             .get("/users", |_req| Box::pin(async { Ok(HttpResponse::ok()) }))
@@ -1883,7 +1883,7 @@ mod tests {
     }
 
     // Route builder tests
-    #[test]
+    #[test_log::test]
     fn test_route_new() {
         let route = Route::new(Method::Get, "/test", |_req| {
             Box::pin(async { Ok(HttpResponse::ok()) })
@@ -1892,37 +1892,37 @@ mod tests {
         assert_eq!(route.path, "/test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_get() {
         let route = Route::get("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Get);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_post() {
         let route = Route::post("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Post);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_put() {
         let route = Route::put("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Put);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_delete() {
         let route = Route::delete("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Delete);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_patch() {
         let route = Route::patch("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Patch);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_route_head() {
         let route = Route::head("/test", |_req| Box::pin(async { Ok(HttpResponse::ok()) }));
         assert_eq!(route.method, Method::Head);

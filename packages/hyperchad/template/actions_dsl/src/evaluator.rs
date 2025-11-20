@@ -2661,33 +2661,33 @@ mod tests {
     use super::*;
     use hyperchad_actions::dsl::{BinaryOp, Expression, Literal, Pattern, Statement};
 
-    #[test]
+    #[test_log::test]
     fn test_context_default_creates_one_scope() {
         let context = Context::default();
         assert_eq!(context.scopes.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_add_variable() {
         let mut context = Context::default();
         context.add_variable("x");
         assert!(context.is_variable_defined("x"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_is_variable_defined_returns_false_for_undefined() {
         let context = Context::default();
         assert!(!context.is_variable_defined("undefined_var"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_is_variable_defined_returns_true_after_adding() {
         let mut context = Context::default();
         context.add_variable("my_var");
         assert!(context.is_variable_defined("my_var"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_multiple_variables_in_same_scope() {
         let mut context = Context::default();
         context.add_variable("x");
@@ -2698,7 +2698,7 @@ mod tests {
         assert!(context.is_variable_defined("z"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_resolve_enum_variant_generates_correct_code() {
         let result = Context::resolve_enum_variant("Visibility", "Hidden");
         let result_str = result.to_string();
@@ -2706,7 +2706,7 @@ mod tests {
         assert!(result_str.contains("Hidden"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_pattern_code_for_literal_integer() {
         let pattern = Pattern::Literal(Literal::Integer(42));
         let result = generate_pattern_code(&pattern);
@@ -2714,7 +2714,7 @@ mod tests {
         assert!(result_str.contains("42"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_pattern_code_for_literal_string() {
         let pattern = Pattern::Literal(Literal::String("test".to_string()));
         let result = generate_pattern_code(&pattern);
@@ -2722,7 +2722,7 @@ mod tests {
         assert!(result_str.contains("test"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_pattern_code_for_variable() {
         let pattern = Pattern::Variable("x".to_string());
         let result = generate_pattern_code(&pattern);
@@ -2730,7 +2730,7 @@ mod tests {
         assert_eq!(result_str, "x");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_pattern_code_for_wildcard() {
         let pattern = Pattern::Wildcard;
         let result = generate_pattern_code(&pattern);
@@ -2738,7 +2738,7 @@ mod tests {
         assert_eq!(result_str, "_");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_pattern_code_for_enum_variant() {
         let pattern = Pattern::Variant {
             enum_name: "Option".to_string(),
@@ -2751,7 +2751,7 @@ mod tests {
         assert!(result_str.contains("Some"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_integer() {
         let literal = Literal::Integer(123);
         let result = generate_literal_code(&literal);
@@ -2759,7 +2759,7 @@ mod tests {
         assert!(result_str.contains("123i64"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_float() {
         let literal = Literal::Float(3.14);
         let result = generate_literal_code(&literal);
@@ -2767,7 +2767,7 @@ mod tests {
         assert!(result_str.contains("3.14f64"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_string() {
         let literal = Literal::String("hello".to_string());
         let result = generate_literal_code(&literal);
@@ -2776,7 +2776,7 @@ mod tests {
         assert!(result_str.contains("to_string"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_bool_true() {
         let literal = Literal::Bool(true);
         let result = generate_literal_code(&literal);
@@ -2785,7 +2785,7 @@ mod tests {
         assert!(result_str.contains("true"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_bool_false() {
         let literal = Literal::Bool(false);
         let result = generate_literal_code(&literal);
@@ -2794,7 +2794,7 @@ mod tests {
         assert!(result_str.contains("false"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_literal_code_for_unit() {
         let literal = Literal::Unit;
         let result = generate_literal_code(&literal);
@@ -2802,84 +2802,84 @@ mod tests {
         assert!(result_str.contains("Literal :: Unit"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_add() {
         let result = generate_binary_op_code(&BinaryOp::Add);
         let result_str = result.to_string();
         assert_eq!(result_str, "+");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_subtract() {
         let result = generate_binary_op_code(&BinaryOp::Subtract);
         let result_str = result.to_string();
         assert_eq!(result_str, "-");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_multiply() {
         let result = generate_binary_op_code(&BinaryOp::Multiply);
         let result_str = result.to_string();
         assert_eq!(result_str, "*");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_divide() {
         let result = generate_binary_op_code(&BinaryOp::Divide);
         let result_str = result.to_string();
         assert_eq!(result_str, "/");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_modulo() {
         let result = generate_binary_op_code(&BinaryOp::Modulo);
         let result_str = result.to_string();
         assert_eq!(result_str, "%");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_and() {
         let result = generate_binary_op_code(&BinaryOp::And);
         let result_str = result.to_string();
         assert_eq!(result_str, "&&");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_binary_op_code_or() {
         let result = generate_binary_op_code(&BinaryOp::Or);
         let result_str = result.to_string();
         assert_eq!(result_str, "||");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_unary_op_code_not() {
         let result = generate_unary_op_code(&UnaryOp::Not);
         let result_str = result.to_string();
         assert_eq!(result_str, "!");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_unary_op_code_minus() {
         let result = generate_unary_op_code(&UnaryOp::Minus);
         let result_str = result.to_string();
         assert_eq!(result_str, "-");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_unary_op_code_plus() {
         let result = generate_unary_op_code(&UnaryOp::Plus);
         let result_str = result.to_string();
         assert_eq!(result_str, "+");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_unary_op_code_ref() {
         let result = generate_unary_op_code(&UnaryOp::Ref);
         let result_str = result.to_string();
         assert_eq!(result_str, "&");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_literal() {
         let mut context = Context::default();
         let expr = Expression::Literal(Literal::Integer(42));
@@ -2888,7 +2888,7 @@ mod tests {
         assert!(result_str.contains("hyperchad_actions :: dsl :: Expression :: Literal"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_undefined_variable() {
         let mut context = Context::default();
         let expr = Expression::Variable("undefined".to_string());
@@ -2897,7 +2897,7 @@ mod tests {
         assert_eq!(result_str, "undefined");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_defined_variable() {
         let mut context = Context::default();
         context.add_variable("my_var");
@@ -2908,7 +2908,7 @@ mod tests {
         assert!(result_str.contains("my_var"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_enum_variant() {
         let mut context = Context::default();
         let expr = Expression::Variable("Key::Escape".to_string());
@@ -2918,7 +2918,7 @@ mod tests {
         assert!(result_str.contains("Escape"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_add() {
         let mut context = Context::default();
         let left = Expression::Literal(Literal::Integer(1));
@@ -2933,7 +2933,7 @@ mod tests {
         assert!(result_str.contains("plus"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_subtract() {
         let mut context = Context::default();
         let left = Expression::Literal(Literal::Integer(5));
@@ -2948,7 +2948,7 @@ mod tests {
         assert!(result_str.contains("minus"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_multiply() {
         let mut context = Context::default();
         let left = Expression::Literal(Literal::Integer(3));
@@ -2963,7 +2963,7 @@ mod tests {
         assert!(result_str.contains("multiply"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_divide() {
         let mut context = Context::default();
         let left = Expression::Literal(Literal::Integer(10));
@@ -2978,7 +2978,7 @@ mod tests {
         assert!(result_str.contains("divide"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_equal() {
         let mut context = Context::default();
         let left = Expression::Variable("x".to_string());
@@ -2993,7 +2993,7 @@ mod tests {
         assert!(result_str.contains("hyperchad_actions :: logic :: eq"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_binary_equal_with_enum_variant() {
         let mut context = Context::default();
         let left = Expression::Variable("value".to_string());
@@ -3011,7 +3011,7 @@ mod tests {
         assert!(result_str.contains("Escape"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_unary_not() {
         let mut context = Context::default();
         let inner = Expression::Literal(Literal::Bool(true));
@@ -3024,7 +3024,7 @@ mod tests {
         assert!(result_str.contains("!"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_unary_minus() {
         let mut context = Context::default();
         let inner = Expression::Literal(Literal::Integer(42));
@@ -3037,7 +3037,7 @@ mod tests {
         assert!(result_str.contains("-"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_grouping() {
         let mut context = Context::default();
         let inner = Expression::Binary {
@@ -3051,7 +3051,7 @@ mod tests {
         assert!(result_str.contains("Grouping"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_array() {
         let mut context = Context::default();
         let expr = Expression::Array(vec![
@@ -3064,7 +3064,7 @@ mod tests {
         assert!(result_str.contains("vec !"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_empty_array() {
         let mut context = Context::default();
         let expr = Expression::Array(vec![]);
@@ -3073,7 +3073,7 @@ mod tests {
         assert!(result_str.contains("vec !"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_tuple() {
         let mut context = Context::default();
         let expr = Expression::Tuple(vec![
@@ -3087,7 +3087,7 @@ mod tests {
         assert!(result_str.contains(")"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_closure_with_params() {
         let mut context = Context::default();
         let expr = Expression::Closure {
@@ -3101,7 +3101,7 @@ mod tests {
         assert!(result_str.contains("y"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_raw_rust() {
         let mut context = Context::default();
         let expr = Expression::RawRust("some_function()".to_string());
@@ -3110,7 +3110,7 @@ mod tests {
         assert_eq!(result_str, "some_function ()");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_expression_code_for_raw_rust_invalid() {
         let mut context = Context::default();
         let expr = Expression::RawRust("{{{{invalid".to_string());
@@ -3118,7 +3118,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_statement_code_for_let() {
         let mut context = Context::default();
         let stmt = Statement::Let {
@@ -3131,7 +3131,7 @@ mod tests {
         assert!(result_str.contains("x"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_id_show_no_args() {
         let mut context = Context::default();
         let id = quote::quote! { "test-id" };
@@ -3140,7 +3140,7 @@ mod tests {
         assert!(result_str.contains("show_str_id"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_id_hide_no_args() {
         let mut context = Context::default();
         let id = quote::quote! { "test-id" };
@@ -3149,7 +3149,7 @@ mod tests {
         assert!(result_str.contains("hide_str_id"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_id_show_with_args_returns_error() {
         let mut context = Context::default();
         let id = quote::quote! { "test-id" };
@@ -3159,7 +3159,7 @@ mod tests {
         assert!(result.unwrap_err().contains("expects no arguments"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_id_unknown_method_returns_error() {
         let mut context = Context::default();
         let id = quote::quote! { "test-id" };
@@ -3168,7 +3168,7 @@ mod tests {
         assert!(result.unwrap_err().contains("Unknown method"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_class_show_no_args() {
         let mut context = Context::default();
         let result = generate_action_for_class(&mut context, "test-class", "show", &[]).unwrap();
@@ -3177,7 +3177,7 @@ mod tests {
         assert!(result_str.contains("test-class"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_class_hide_no_args() {
         let mut context = Context::default();
         let result = generate_action_for_class(&mut context, "test-class", "hide", &[]).unwrap();
@@ -3185,7 +3185,7 @@ mod tests {
         assert!(result_str.contains("hide_str_class"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_generate_action_for_class_unknown_method_returns_error() {
         let mut context = Context::default();
         let result = generate_action_for_class(&mut context, "test-class", "unknown", &[]);

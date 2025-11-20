@@ -232,133 +232,133 @@ mod tests {
     use super::*;
     use quote::quote;
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_percentage() {
         let input = quote! { 100 % };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"100%\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_float_percentage() {
         let input = quote! { 33.3 % };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"33.3%\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_vw() {
         let input = quote! { 50 vw };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"50vw\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_vh() {
         let input = quote! { 100 vh };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"100vh\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_dvw() {
         let input = quote! { 90 dvw };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"90dvw\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_dvh() {
         let input = quote! { 75 dvh };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"75dvh\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_px() {
         let input = quote! { 16 px };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"16px\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_em() {
         let input = quote! { 1.5 em };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"1.5em\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_rem() {
         let input = quote! { 2 rem };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"2rem\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_ch() {
         let input = quote! { 10 ch };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"10ch\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_ex() {
         let input = quote! { 5 ex };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"5ex\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_pt() {
         let input = quote! { 12 pt };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"12pt\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_pc() {
         let input = quote! { 1 pc };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"1pc\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_inches() {
         let input = quote! { 2 in };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"2in\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_cm() {
         let input = quote! { 5 cm };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"5cm\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_mm() {
         let input = quote! { 10 mm };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "\"10mm\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_plain_number() {
         let input = quote! { 42 };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "42");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_plain_float() {
         let input = quote! { 3.14 };
         let result = preprocess_numeric_units(input);
         assert_eq!(result.to_string(), "3.14");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_non_unit_identifier() {
         // Non-unit identifiers should be left unchanged
         let input = quote! { 10 foo };
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(result.to_string(), "10 foo");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_in_braces() {
         // Test that preprocessing works recursively inside braces
         let input = quote! { { 50 vw } };
@@ -374,7 +374,7 @@ mod tests {
         assert_eq!(result.to_string(), "{ \"50vw\" }");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_in_parentheses() {
         // Test that preprocessing works recursively inside parentheses
         let input = quote! { ( 100 % ) };
@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(result.to_string(), "(\"100%\")");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_multiple_values() {
         // Test multiple numeric+unit combinations in same stream
         let input = quote! { width = 50 vw height = 100 vh };
@@ -390,7 +390,7 @@ mod tests {
         assert_eq!(result.to_string(), "width = \"50vw\" height = \"100vh\"");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_preprocess_numeric_units_mixed_with_other_tokens() {
         // Test that non-numeric tokens are preserved
         let input = quote! { div { width = 50 % } };

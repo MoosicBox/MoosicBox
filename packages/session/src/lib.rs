@@ -414,13 +414,13 @@ pub async fn update_session_audio_output_ids(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_create_players_error_display() {
         let err = CreatePlayersError::InvalidConnection;
         assert_eq!(err.to_string(), "Invalid connection");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_players_error_db_variant() {
         let db_err = DatabaseFetchError::InvalidRequest;
         let err = CreatePlayersError::Db(db_err);
@@ -428,7 +428,7 @@ mod tests {
         assert!(matches!(err, CreatePlayersError::Db(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_players_error_from_database_error() {
         let db_err = DatabaseFetchError::InvalidRequest;
         let err: CreatePlayersError = db_err.into();

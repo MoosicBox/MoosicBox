@@ -1878,7 +1878,7 @@ mod tests {
     mod route_path_tests {
         use super::*;
 
-        #[test]
+        #[test_log::test]
         fn test_literal_exact_match() {
             let route = RoutePath::Literal("/home".to_string());
             assert!(route.matches("/home"));
@@ -1886,7 +1886,7 @@ mod tests {
             assert!(!route.matches("/home/page"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_literals_multiple_matches() {
             let route = RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()]);
             assert!(route.matches("/api/v1"));
@@ -1894,7 +1894,7 @@ mod tests {
             assert!(!route.matches("/api/v3"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_literal_prefix_matching() {
             let route = RoutePath::LiteralPrefix("/static/".to_string());
             assert!(route.matches("/static/"));
@@ -1904,14 +1904,14 @@ mod tests {
             assert!(!route.matches("/stati"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_strip_match_literal() {
             let route = RoutePath::Literal("/home".to_string());
             assert_eq!(route.strip_match("/home"), Some(""));
             assert_eq!(route.strip_match("/about"), None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_strip_match_literals() {
             let route = RoutePath::Literals(vec!["/api/v1".to_string(), "/api/v2".to_string()]);
             assert_eq!(route.strip_match("/api/v1"), Some(""));
@@ -1919,7 +1919,7 @@ mod tests {
             assert_eq!(route.strip_match("/api/v3"), None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_strip_match_prefix() {
             let route = RoutePath::LiteralPrefix("/static/".to_string());
             assert_eq!(route.strip_match("/static/"), Some(""));
@@ -1931,13 +1931,13 @@ mod tests {
             assert_eq!(route.strip_match("/api/static"), None);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_str() {
             let route: RoutePath = "/home".into();
             assert_eq!(route, RoutePath::Literal("/home".to_string()));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_slice() {
             let routes: &[&str] = &["/api/v1", "/api/v2"];
             let route: RoutePath = routes.into();
@@ -1951,7 +1951,7 @@ mod tests {
     mod route_request_tests {
         use super::*;
 
-        #[test]
+        #[test_log::test]
         fn test_from_path_without_query() {
             let req = RouteRequest::from_path("/home", RequestInfo::default());
             assert_eq!(req.path, "/home");
@@ -1959,7 +1959,7 @@ mod tests {
             assert!(req.query.is_empty());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_path_with_query() {
             let req = RouteRequest::from_path("/search?q=rust&lang=en", RequestInfo::default());
             assert_eq!(req.path, "/search");
@@ -1968,14 +1968,14 @@ mod tests {
             assert_eq!(req.query.get("lang"), Some(&"en".to_string()));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_path_with_empty_query() {
             let req = RouteRequest::from_path("/page?", RequestInfo::default());
             assert_eq!(req.path, "/page");
             assert!(req.query.is_empty());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_content_type_present() {
             let mut req = RouteRequest::from_path("/api", RequestInfo::default());
             req.headers
@@ -1983,14 +1983,14 @@ mod tests {
             assert_eq!(req.content_type(), Some("application/json"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_content_type_missing() {
             let req = RouteRequest::from_path("/api", RequestInfo::default());
             assert_eq!(req.content_type(), None);
         }
 
         #[cfg(feature = "serde")]
-        #[test]
+        #[test_log::test]
         fn test_parse_body_missing() {
             use serde::Deserialize;
 
@@ -2005,7 +2005,7 @@ mod tests {
         }
 
         #[cfg(feature = "serde")]
-        #[test]
+        #[test_log::test]
         fn test_parse_body_valid_json() {
             use serde::Deserialize;
 
@@ -2027,7 +2027,7 @@ mod tests {
         }
 
         #[cfg(feature = "serde")]
-        #[test]
+        #[test_log::test]
         fn test_parse_body_invalid_json() {
             use serde::Deserialize;
 
@@ -2044,14 +2044,14 @@ mod tests {
             assert!(matches!(result, Err(ParseError::SerdeJson(_))));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_string() {
             let req: RouteRequest = "/home".to_string().into();
             assert_eq!(req.path, "/home");
             assert_eq!(req.method, Method::Get);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_tuple_with_client_info() {
             let client_info = ClientInfo {
                 os: ClientOs {
@@ -2063,7 +2063,7 @@ mod tests {
             assert_eq!(req.info.client.os.name, "TestOS");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_from_tuple_with_request_info() {
             let client_info = Arc::new(ClientInfo {
                 os: ClientOs {
@@ -2282,19 +2282,19 @@ mod tests {
     mod navigation_tests {
         use super::*;
 
-        #[test]
+        #[test_log::test]
         fn test_navigation_from_str() {
             let nav: Navigation = "/home".into();
             assert_eq!(nav.0, "/home");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_navigation_from_string() {
             let nav: Navigation = "/about".to_string().into();
             assert_eq!(nav.0, "/about");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_navigation_from_tuple() {
             let client = ClientInfo {
                 os: ClientOs {
@@ -2306,7 +2306,7 @@ mod tests {
             assert_eq!(nav.1.os.name, "TestOS");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_navigation_from_route_request() {
             let mut req = RouteRequest::from_path("/search", RequestInfo::default());
             req.query.insert("q".to_string(), "test".to_string());
@@ -2318,7 +2318,7 @@ mod tests {
             assert!(nav.0.contains("limit=10"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_route_request_from_navigation() {
             let nav = Navigation("/page".to_string(), DEFAULT_CLIENT_INFO.clone());
             let req: RouteRequest = nav.into();
@@ -2326,7 +2326,7 @@ mod tests {
             assert_eq!(req.method, Method::Get);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_navigation_roundtrip() {
             let original = Navigation("/test".to_string(), DEFAULT_CLIENT_INFO.clone());
             let req: RouteRequest = original.clone().into();
@@ -2338,25 +2338,25 @@ mod tests {
     mod client_info_tests {
         use super::*;
 
-        #[test]
+        #[test_log::test]
         fn test_client_os_default() {
             let os = ClientOs::default();
             assert_eq!(os.name, "");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_client_info_default() {
             let info = ClientInfo::default();
             assert!(!info.os.name.is_empty());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_default_client_info_static() {
             let info = DEFAULT_CLIENT_INFO.clone();
             assert!(!info.os.name.is_empty());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_request_info_default() {
             let info = RequestInfo::default();
             assert!(!info.client.os.name.is_empty());
@@ -2369,7 +2369,7 @@ mod tests {
         use serde::Deserialize;
         use std::collections::BTreeMap;
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_primitives() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2399,7 +2399,7 @@ mod tests {
             assert_eq!(form.letter, 'A');
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_strings() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2420,7 +2420,7 @@ mod tests {
             assert_eq!(form.email, "alice@example.com");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_options() {
             #[allow(clippy::struct_field_names)]
             #[derive(Debug, Deserialize, PartialEq)]
@@ -2448,7 +2448,7 @@ mod tests {
             assert_eq!(form.present_field, Some("value".to_string()));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_all_integer_types() {
             #[allow(clippy::struct_field_names)]
             #[derive(Debug, Deserialize, PartialEq)]
@@ -2488,7 +2488,7 @@ mod tests {
             assert_eq!(form.i64_field, -9_223_372_036_854_775_808);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_booleans() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2509,7 +2509,7 @@ mod tests {
             assert!(!form.bool2);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_with_serde_rename() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2532,7 +2532,7 @@ mod tests {
             assert_eq!(form.name, "Bob");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_with_default() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2553,7 +2553,7 @@ mod tests {
             assert_eq!(form.optional, "");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_invalid_integer_format() {
             #[allow(dead_code)]
             #[derive(Debug, Deserialize)]
@@ -2570,7 +2570,7 @@ mod tests {
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_integer_overflow() {
             #[allow(dead_code)]
             #[derive(Debug, Deserialize)]
@@ -2587,7 +2587,7 @@ mod tests {
             assert!(result.is_err());
         }
 
-        #[test]
+        #[test_log::test]
         fn test_original_error_case() {
             #[derive(Debug, Deserialize, PartialEq)]
             struct TestForm {
@@ -2605,7 +2605,7 @@ mod tests {
             assert_eq!(form.id, 2_445_072_108);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_flatten_with_tagged_enum() {
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             #[serde(tag = "comment_type")]
@@ -2640,7 +2640,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_flatten_with_tagged_enum_general_variant() {
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             #[serde(tag = "comment_type")]
@@ -2669,7 +2669,7 @@ mod tests {
             assert_eq!(comment.comment_type, CommentType::General);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_flatten_with_multiple_integer_fields() {
             #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
             #[serde(tag = "action_type")]
@@ -2707,7 +2707,7 @@ mod tests {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_deserialize_any_type_inference() {
             use serde::de::Deserialize;
 
@@ -2736,7 +2736,7 @@ mod tests {
             assert_eq!(result.unwrap(), "hello");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_flatten_with_mixed_types() {
             #[derive(Debug, Clone, Deserialize, PartialEq)]
             #[serde(tag = "type")]

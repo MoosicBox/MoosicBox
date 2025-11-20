@@ -326,7 +326,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_info_creation() {
         let info = MigrationInfo {
             id: "001_test_migration".to_string(),
@@ -375,14 +375,14 @@ mod tests {
         assert!(!list[1].applied); // Default should be false
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_display() {
         assert_eq!(MigrationStatus::InProgress.to_string(), "in_progress");
         assert_eq!(MigrationStatus::Completed.to_string(), "completed");
         assert_eq!(MigrationStatus::Failed.to_string(), "failed");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_from_str_valid() {
         use std::str::FromStr;
 
@@ -400,7 +400,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_from_str_invalid() {
         use std::str::FromStr;
 
@@ -416,7 +416,7 @@ mod tests {
         assert!(err_str.contains("failed"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_from_str_case_sensitive() {
         use std::str::FromStr;
 
@@ -427,7 +427,7 @@ mod tests {
         assert!(MigrationStatus::from_str("InProgress").is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_equality() {
         assert_eq!(MigrationStatus::InProgress, MigrationStatus::InProgress);
         assert_eq!(MigrationStatus::Completed, MigrationStatus::Completed);
@@ -438,21 +438,21 @@ mod tests {
         assert_ne!(MigrationStatus::Completed, MigrationStatus::Failed);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_copy() {
         let status = MigrationStatus::Completed;
         let status_copy = status;
         assert_eq!(status, status_copy);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_status_clone() {
         let status = MigrationStatus::Failed;
         let status_clone = status;
         assert_eq!(status, status_clone);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_info_equality() {
         let info1 = MigrationInfo {
             id: "001_test".to_string(),
@@ -477,7 +477,7 @@ mod tests {
         assert_eq!(info1, info2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_info_clone() {
         let original = MigrationInfo {
             id: "test".to_string(),
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(original, cloned);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_info_debug() {
         let info = MigrationInfo {
             id: "test".to_string(),
@@ -528,7 +528,7 @@ mod tests {
         assert_eq!(down_checksum, bytes::Bytes::from(vec![0u8; 32]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_migration_default_supported_databases() {
         let migration = MockMigration {
             id: "test".to_string(),

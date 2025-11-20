@@ -257,21 +257,21 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    #[test]
+    #[test_log::test]
     fn test_progress_tracker_new() {
         let tracker = ProgressTracker::new(Some(0.5));
         assert!((tracker.threshold - 0.5).abs() < f64::EPSILON);
         assert_eq!(tracker.get_position(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_progress_tracker_default() {
         let tracker = ProgressTracker::default();
         assert!((tracker.threshold - 0.1).abs() < f64::EPSILON);
         assert_eq!(tracker.get_position(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_audio_spec() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -280,13 +280,13 @@ mod tests {
         assert_eq!(tracker.channels.load(Ordering::SeqCst), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_position_without_spec() {
         let tracker = ProgressTracker::new(None);
         assert_eq!(tracker.get_position(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_position_with_spec() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -296,7 +296,7 @@ mod tests {
         assert!((position - 1.0).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_consumed_samples_zero() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -305,7 +305,7 @@ mod tests {
         assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_consumed_samples_incremental() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(tracker.consumed_samples.load(Ordering::SeqCst), 88200);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_consumed_samples() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -329,7 +329,7 @@ mod tests {
         assert!((position - 2.0).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reset() {
         let tracker = ProgressTracker::new(None);
         tracker.set_audio_spec(44100, 2);
@@ -342,7 +342,7 @@ mod tests {
         assert!(tracker.last_reported_position.load(Ordering::SeqCst).abs() < f64::EPSILON);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_callback_triggered_on_threshold() {
         let tracker = ProgressTracker::new(Some(0.5)); // 0.5 second threshold
         tracker.set_audio_spec(44100, 2);
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(callback_positions.lock().unwrap().len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_callback_not_triggered_without_spec() {
         let tracker = ProgressTracker::new(Some(0.1));
 
@@ -378,7 +378,7 @@ mod tests {
         assert_eq!(callback_positions.lock().unwrap().len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_consumed_samples_counter() {
         let tracker = ProgressTracker::new(None);
         let counter = tracker.consumed_samples_counter();
@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(counter.load(Ordering::SeqCst), 1000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_callback_refs() {
         let tracker = ProgressTracker::new(Some(0.2));
         tracker.set_audio_spec(48000, 2);
@@ -403,7 +403,7 @@ mod tests {
         assert!(last_pos.load(Ordering::SeqCst).abs() < f64::EPSILON);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_from_callback_refs() {
         let consumed = Arc::new(AtomicUsize::new(0));
         let sample_rate = Arc::new(AtomicU32::new(44100));
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(consumed.load(Ordering::SeqCst), 88200);
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::type_complexity)]
     fn test_update_from_callback_refs_with_callback() {
         let consumed = Arc::new(AtomicUsize::new(0));

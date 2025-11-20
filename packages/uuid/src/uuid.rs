@@ -20,7 +20,7 @@ pub fn new_v4_string() -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_uuid_v4_format_compliance() {
         let uuid = new_v4();
         let bytes = uuid.as_bytes();
@@ -42,7 +42,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_string_format() {
         let uuid_string = new_v4_string();
 
@@ -63,7 +63,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_randomness() {
         // Generate multiple UUIDs and verify they're all unique
         let mut uuids = std::collections::BTreeSet::new();
@@ -77,7 +77,7 @@ mod tests {
         assert_eq!(uuids.len(), 100);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_consistency_between_methods() {
         let uuid = new_v4();
         let direct_string = uuid.to_string();

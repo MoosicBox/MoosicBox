@@ -178,14 +178,14 @@ fn headers_to_btree(value: &reqwest::header::HeaderMap) -> BTreeMap<String, Stri
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_headers_to_btree_empty() {
         let header_map = reqwest::header::HeaderMap::new();
         let result = headers_to_btree(&header_map);
         assert!(result.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_headers_to_btree_single_header() {
         let mut header_map = reqwest::header::HeaderMap::new();
         header_map.insert("content-type", "application/json".parse().unwrap());
@@ -197,7 +197,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_headers_to_btree_multiple_headers() {
         let mut header_map = reqwest::header::HeaderMap::new();
         header_map.insert("content-type", "application/json".parse().unwrap());
@@ -214,7 +214,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_headers_to_btree_sorted_order() {
         let mut header_map = reqwest::header::HeaderMap::new();
         header_map.insert("zebra", "value1".parse().unwrap());
@@ -225,14 +225,14 @@ mod tests {
         assert_eq!(keys, vec!["alpha", "middle", "zebra"]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_client_new() {
         let reqwest_client = reqwest::Client::new();
         let _client = Client::new(reqwest_client);
         // If we get here without panic, the test passes
     }
 
-    #[test]
+    #[test_log::test]
     fn test_client_builder_build() {
         let builder = ClientBuilder;
         let result =

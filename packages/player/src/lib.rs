@@ -1952,7 +1952,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_no_changes() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let playback = Playback::new(
@@ -1969,7 +1969,7 @@ mod tests {
         assert!(same_active_track(None, None, &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_same_position_no_tracks() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let playback = Playback::new(
@@ -1986,7 +1986,7 @@ mod tests {
         assert!(same_active_track(Some(0), None, &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_different_position_no_tracks() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let playback = Playback::new(
@@ -2003,7 +2003,7 @@ mod tests {
         assert!(!same_active_track(Some(1), None, &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_same_track_at_position() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let playback = Playback::new(
@@ -2020,7 +2020,7 @@ mod tests {
         assert!(same_active_track(None, Some(&playback.tracks), &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_different_track_at_position() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let playback = Playback::new(
@@ -2038,7 +2038,7 @@ mod tests {
         assert!(!same_active_track(None, Some(&new_tracks), &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_same_active_track_with_position_and_tracks() {
         let tracks = vec![
             create_test_track(1),
@@ -2062,7 +2062,7 @@ mod tests {
         assert!(!same_active_track(Some(2), Some(&tracks), &playback));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_new_creates_valid_instance() {
         let tracks = vec![create_test_track(1)];
         let playback = Playback::new(
@@ -2084,7 +2084,7 @@ mod tests {
         assert!((playback.progress - 0.0).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_new_defaults_position_to_zero() {
         let tracks = vec![create_test_track(1)];
         let playback = Playback::new(
@@ -2100,7 +2100,7 @@ mod tests {
         assert_eq!(playback.position, 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_to_api_playback_conversion() {
         let tracks = vec![create_test_track(1), create_test_track(2)];
         let mut playback = Playback::new(
@@ -2125,7 +2125,7 @@ mod tests {
         assert!((api_playback.seek - 45.5).abs() < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_status_struct() {
         let status = PlaybackStatus { success: true };
         assert!(status.success);
@@ -2134,13 +2134,13 @@ mod tests {
         assert!(!status.success);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_type_default_is_default() {
         let playback_type = PlaybackType::default();
         assert!(matches!(playback_type, PlaybackType::Default));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_retry_options_constants() {
         assert_eq!(DEFAULT_SEEK_RETRY_OPTIONS.max_attempts, 10);
         assert_eq!(
@@ -2155,7 +2155,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_player_source_debug_format() {
         let source = PlayerSource::Local;
         let debug_str = format!("{source:?}");
@@ -2171,13 +2171,13 @@ mod tests {
         assert!(debug_str.contains("localhost"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_service_port() {
         set_service_port(9876);
         assert_eq!(*SERVICE_PORT.read().unwrap(), Some(9876));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_playback_handler_new_creates_valid_instance() {
         #[derive(Debug)]
         struct MockPlayer;
@@ -2214,7 +2214,7 @@ mod tests {
         assert!(handler.output.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_player_error_display() {
         let error = PlayerError::NoPlayersPlaying;
         assert_eq!(error.to_string(), "No players playing");
@@ -2228,7 +2228,7 @@ mod tests {
         assert!(error.to_string().contains("99"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_trigger_playback_event_with_no_changes() {
         let tracks = vec![create_test_track(1)];
         let playback = Playback::new(
@@ -2246,7 +2246,7 @@ mod tests {
         // No assertion needed - just verifying it doesn't panic
     }
 
-    #[test]
+    #[test_log::test]
     fn test_trigger_playback_event_with_playing_change() {
         let tracks = vec![create_test_track(1)];
         let mut playback1 = Playback::new(
@@ -2268,7 +2268,7 @@ mod tests {
         // No assertion needed - just verifying it doesn't panic
     }
 
-    #[test]
+    #[test_log::test]
     fn test_trigger_playback_event_without_target_does_nothing() {
         let tracks = vec![create_test_track(1)];
         let playback = Playback::new(

@@ -211,19 +211,19 @@ impl UnaryOperator {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_expression_string_literal() {
         let expr = Expression::string("hello");
         assert_eq!(expr, Expression::String("hello".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_number_literal() {
         let expr = Expression::number(42.5);
         assert_eq!(expr, Expression::Number(42.5));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_boolean_literal() {
         let expr_true = Expression::boolean(true);
         assert_eq!(expr_true, Expression::Boolean(true));
@@ -232,19 +232,19 @@ mod tests {
         assert_eq!(expr_false, Expression::Boolean(false));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_null_literal() {
         let expr = Expression::null();
         assert_eq!(expr, Expression::Null);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_variable_single_path() {
         let expr = Expression::variable(["github"]);
         assert_eq!(expr, Expression::Variable(vec!["github".to_string()]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_variable_nested_path() {
         let expr = Expression::variable(["github", "event", "head_commit", "message"]);
         assert_eq!(
@@ -258,7 +258,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_binary_op_equal() {
         let left = Expression::variable(["github", "ref"]);
         let right = Expression::string("refs/heads/main");
@@ -278,7 +278,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_binary_op_not_equal() {
         let expr = Expression::binary_op(
             Expression::number(1.0),
@@ -293,7 +293,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_binary_op_and() {
         let expr = Expression::binary_op(
             Expression::boolean(true),
@@ -308,7 +308,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_binary_op_or() {
         let expr = Expression::binary_op(
             Expression::boolean(true),
@@ -323,7 +323,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_unary_op_not() {
         let inner = Expression::boolean(true);
         let expr = Expression::unary_op(UnaryOperator::Not, inner.clone());
@@ -336,7 +336,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_function_call_no_args() {
         let expr = Expression::function_call("toJson", vec![]);
 
@@ -348,7 +348,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_function_call_with_args() {
         let expr = Expression::function_call(
             "contains",
@@ -376,7 +376,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_index() {
         let array = Expression::variable(["matrix", "os"]);
         let index = Expression::number(0.0);
@@ -390,7 +390,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_nested_binary_ops() {
         // Build: (a == b) && (c != d)
         let left = Expression::binary_op(
@@ -419,7 +419,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_binary_operator_as_str() {
         assert_eq!(BinaryOperator::Equal.as_str(), "==");
         assert_eq!(BinaryOperator::NotEqual.as_str(), "!=");
@@ -427,12 +427,12 @@ mod tests {
         assert_eq!(BinaryOperator::Or.as_str(), "||");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_unary_operator_as_str() {
         assert_eq!(UnaryOperator::Not.as_str(), "!");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_string() {
         let expr = Expression::string("test");
         let json = serde_json::to_string(&expr).unwrap();
@@ -440,7 +440,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_number() {
         let expr = Expression::number(42.5);
         let json = serde_json::to_string(&expr).unwrap();
@@ -448,7 +448,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_boolean() {
         let expr = Expression::boolean(true);
         let json = serde_json::to_string(&expr).unwrap();
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_null() {
         let expr = Expression::null();
         let json = serde_json::to_string(&expr).unwrap();
@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_variable() {
         let expr = Expression::variable(["github", "ref"]);
         let json = serde_json::to_string(&expr).unwrap();
@@ -472,7 +472,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_binary_op() {
         let expr = Expression::binary_op(
             Expression::variable(["a"]),
@@ -484,7 +484,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_unary_op() {
         let expr = Expression::unary_op(UnaryOperator::Not, Expression::boolean(true));
         let json = serde_json::to_string(&expr).unwrap();
@@ -492,7 +492,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_function_call() {
         let expr = Expression::function_call(
             "contains",
@@ -506,7 +506,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_expression_serde_index() {
         let expr = Expression::index(Expression::variable(["array"]), Expression::number(0.0));
         let json = serde_json::to_string(&expr).unwrap();
@@ -514,7 +514,7 @@ mod tests {
         assert_eq!(expr, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_complex_expression_building() {
         // Build: !contains(github.event.head_commit.message, '[skip ci]') && github.ref == 'refs/heads/main'
         let contains_call = Expression::function_call(

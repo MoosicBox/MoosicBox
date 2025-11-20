@@ -1200,7 +1200,7 @@ mod tests {
     use super::*;
 
     #[cfg(feature = "format-aac")]
-    #[test]
+    #[test_log::test]
     fn test_audio_format_to_content_type_aac() {
         assert_eq!(
             audio_format_to_content_type(&AudioFormat::Aac),
@@ -1209,7 +1209,7 @@ mod tests {
     }
 
     #[cfg(feature = "format-flac")]
-    #[test]
+    #[test_log::test]
     fn test_audio_format_to_content_type_flac() {
         assert_eq!(
             audio_format_to_content_type(&AudioFormat::Flac),
@@ -1218,7 +1218,7 @@ mod tests {
     }
 
     #[cfg(feature = "format-mp3")]
-    #[test]
+    #[test_log::test]
     fn test_audio_format_to_content_type_mp3() {
         assert_eq!(
             audio_format_to_content_type(&AudioFormat::Mp3),
@@ -1227,7 +1227,7 @@ mod tests {
     }
 
     #[cfg(feature = "format-opus")]
-    #[test]
+    #[test_log::test]
     fn test_audio_format_to_content_type_opus() {
         assert_eq!(
             audio_format_to_content_type(&AudioFormat::Opus),
@@ -1235,12 +1235,12 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_format_to_content_type_source() {
         assert_eq!(audio_format_to_content_type(&AudioFormat::Source), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_visualize_empty_buffer() {
         use symphonia::core::audio::AudioBuffer;
 
@@ -1254,7 +1254,7 @@ mod tests {
         assert_eq!(result.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_visualize_with_data() {
         use symphonia::core::audio::Signal as _;
 

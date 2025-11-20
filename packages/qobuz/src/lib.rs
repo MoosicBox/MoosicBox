@@ -2688,14 +2688,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_title_without_version() {
         let title = "My Album";
         let result = format_title(title, None);
         assert_eq!(result, "My Album");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_title_with_version() {
         let title = "My Album";
         let version = "Deluxe Edition";
@@ -2703,7 +2703,7 @@ mod tests {
         assert_eq!(result, "My Album - Deluxe Edition");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_format_title_with_empty_version() {
         let title = "My Album";
         let version = "";

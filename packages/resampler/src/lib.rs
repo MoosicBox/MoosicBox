@@ -257,7 +257,7 @@ mod tests {
     use symphonia::core::audio::Channels;
 
     /// Test that a resampler can be created with valid parameters
-    #[test]
+    #[test_log::test]
     fn test_resampler_creation() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -268,7 +268,7 @@ mod tests {
     }
 
     /// Test that resampler returns None when insufficient samples are buffered
-    #[test]
+    #[test_log::test]
     fn test_resample_insufficient_samples() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -291,7 +291,7 @@ mod tests {
     }
 
     /// Test that resampler produces output once sufficient samples are accumulated
-    #[test]
+    #[test_log::test]
     fn test_resample_sufficient_samples() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -320,7 +320,7 @@ mod tests {
     }
 
     /// Test that resampler accumulates samples across multiple calls
-    #[test]
+    #[test_log::test]
     fn test_resample_accumulation() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -351,7 +351,7 @@ mod tests {
     }
 
     /// Test that flush returns None when buffer is empty
-    #[test]
+    #[test_log::test]
     fn test_flush_empty_buffer() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -362,7 +362,7 @@ mod tests {
     }
 
     /// Test that flush processes partial buffers by padding with silence
-    #[test]
+    #[test_log::test]
     fn test_flush_partial_buffer() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -389,7 +389,7 @@ mod tests {
     }
 
     /// Test that flush handles exact multiples of duration correctly
-    #[test]
+    #[test_log::test]
     fn test_flush_exact_multiple() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -413,7 +413,7 @@ mod tests {
     }
 
     /// Test to_audio_buffer conversion for stereo audio
-    #[test]
+    #[test_log::test]
     fn test_to_audio_buffer_stereo() {
         let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
 
@@ -440,7 +440,7 @@ mod tests {
     }
 
     /// Test resample_to_audio_buffer method
-    #[test]
+    #[test_log::test]
     fn test_resample_to_audio_buffer() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
@@ -465,7 +465,7 @@ mod tests {
     }
 
     /// Test that resampler handles different sample rates correctly
-    #[test]
+    #[test_log::test]
     fn test_resample_rate_change() {
         let input_rate = 44100;
         let output_rate = 48000;
@@ -500,7 +500,7 @@ mod tests {
     }
 
     /// Test resampling with mono audio
-    #[test]
+    #[test_log::test]
     fn test_resample_mono() {
         let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);

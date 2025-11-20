@@ -966,7 +966,7 @@ pub mod sync {
             assert_eq!(read_count, 3);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_write_without_write_permission() {
             use std::io::Write as _;
 
@@ -997,7 +997,7 @@ pub mod sync {
             );
         }
 
-        #[test]
+        #[test_log::test]
         fn test_truncate_existing_file() {
             use std::io::Write as _;
 
@@ -1031,7 +1031,7 @@ pub mod sync {
             assert_eq!(content, "new");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_partial_reads() {
             use std::io::Read as _;
 
@@ -1063,7 +1063,7 @@ pub mod sync {
             assert_eq!(total_read.as_slice(), test_data);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_seek_and_read() {
             use std::io::{Read as _, Seek as _, SeekFrom};
 
@@ -1099,7 +1099,7 @@ pub mod sync {
             assert_eq!(&buf, b"Hello");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_seek_from_end() {
             use std::io::{Read as _, Seek as _, SeekFrom};
 
@@ -1131,7 +1131,7 @@ pub mod sync {
             // This is a known bug - negative offsets subtract instead of add
         }
 
-        #[test]
+        #[test_log::test]
         fn test_seek_from_current() {
             use std::io::{Read as _, Seek as _, SeekFrom};
 
@@ -1167,7 +1167,7 @@ pub mod sync {
             assert_eq!(&buf, b"456");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_seek_past_eof() {
             use std::io::{Seek as _, SeekFrom};
 
@@ -1190,7 +1190,7 @@ pub mod sync {
             // The overflow happens because: length - large_negative_offset overflows
         }
 
-        #[test]
+        #[test_log::test]
         fn test_multiple_handles_same_file() {
             use std::io::{Read as _, Write as _};
 
@@ -1223,7 +1223,7 @@ pub mod sync {
             assert_eq!(buf, b"updated content");
         }
 
-        #[test]
+        #[test_log::test]
         fn test_empty_buffer_read() {
             super::super::reset_fs();
             super::create_dir_all("/tmp").unwrap();
@@ -1241,7 +1241,7 @@ pub mod sync {
             assert_eq!(count, 0);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_file_position_after_operations() {
             use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 
@@ -1276,7 +1276,7 @@ pub mod sync {
             assert_eq!(pos, 5);
         }
 
-        #[test]
+        #[test_log::test]
         #[cfg(feature = "sync")]
         fn test_into_async_conversion() {
             use std::io::{Seek as _, SeekFrom, Write as _};
@@ -1307,7 +1307,7 @@ pub mod sync {
             assert_eq!(async_file.write, true);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_remove_empty_directory() {
             super::super::reset_fs();
 
@@ -1324,7 +1324,7 @@ pub mod sync {
             assert!(!super::super::exists("/tmp/empty_dir"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_remove_nonexistent_directory() {
             super::super::reset_fs();
 
@@ -1334,7 +1334,7 @@ pub mod sync {
             assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
         }
 
-        #[test]
+        #[test_log::test]
         fn test_root_directory_operations() {
             super::super::reset_fs();
             super::create_dir_all("/").unwrap();
@@ -1346,7 +1346,7 @@ pub mod sync {
             assert!(super::super::exists("/"));
         }
 
-        #[test]
+        #[test_log::test]
         fn test_create_file_in_current_directory() {
             use std::io::Write as _;
 

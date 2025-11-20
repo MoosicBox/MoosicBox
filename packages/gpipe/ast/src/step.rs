@@ -147,7 +147,7 @@ impl Step {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_id_present() {
         let step = Step::RunScript {
             id: Some("test-step".to_string()),
@@ -160,7 +160,7 @@ mod tests {
         assert_eq!(step.id(), Some("test-step"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_id_absent() {
         let step = Step::RunScript {
             id: None,
@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(step.id(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_id_present() {
         let step = Step::UseAction {
             id: Some("action-step".to_string()),
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(step.id(), Some("action-step"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_id_absent() {
         let step = Step::UseAction {
             id: None,
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(step.id(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_if_condition_present() {
         let condition = Expression::boolean(true);
         let step = Step::RunScript {
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(step.if_condition(), Some(&condition));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_if_condition_absent() {
         let step = Step::RunScript {
             id: None,
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(step.if_condition(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_if_condition_present() {
         let condition = Expression::boolean(false);
         let step = Step::UseAction {
@@ -240,7 +240,7 @@ mod tests {
         assert_eq!(step.if_condition(), Some(&condition));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_if_condition_absent() {
         let step = Step::UseAction {
             id: None,
@@ -253,7 +253,7 @@ mod tests {
         assert_eq!(step.if_condition(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_continue_on_error_true() {
         let step = Step::RunScript {
             id: None,
@@ -266,7 +266,7 @@ mod tests {
         assert!(step.continue_on_error());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_continue_on_error_false() {
         let step = Step::RunScript {
             id: None,
@@ -279,7 +279,7 @@ mod tests {
         assert!(!step.continue_on_error());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_continue_on_error_true() {
         let step = Step::UseAction {
             id: None,
@@ -292,7 +292,7 @@ mod tests {
         assert!(step.continue_on_error());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_continue_on_error_false() {
         let step = Step::UseAction {
             id: None,
@@ -305,7 +305,7 @@ mod tests {
         assert!(!step.continue_on_error());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_env_empty() {
         let step = Step::RunScript {
             id: None,
@@ -318,7 +318,7 @@ mod tests {
         assert!(step.env().is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_env_with_values() {
         let env = BTreeMap::from([
             ("VAR1".to_string(), "value1".to_string()),
@@ -335,7 +335,7 @@ mod tests {
         assert_eq!(step.env(), &env);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_env_empty() {
         let step = Step::UseAction {
             id: None,
@@ -348,7 +348,7 @@ mod tests {
         assert!(step.env().is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_env_with_values() {
         let env = BTreeMap::from([
             ("ENV_VAR".to_string(), "env_value".to_string()),
@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(step.env(), &env);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_run_script_serde() {
         let step = Step::RunScript {
             id: Some("test".to_string()),
@@ -381,7 +381,7 @@ mod tests {
         assert_eq!(step, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_use_action_serde() {
         let step = Step::UseAction {
             id: Some("checkout".to_string()),
@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(step, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_step_with_complex_condition() {
         let condition = Expression::binary_op(
             Expression::variable(["github", "event_name"]),

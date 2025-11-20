@@ -521,7 +521,7 @@ mod tests {
     use std::sync::Arc;
     use switchy_schema_test_utils::MigrationTestBuilder;
 
-    #[test]
+    #[test_log::test]
     fn test_scanner_new_initializes_with_zero_counters() {
         let tidal = moosicbox_music_models::ApiSource::register("Tidal", "Tidal");
         let task = ScanTask::Api {

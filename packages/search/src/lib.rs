@@ -1510,14 +1510,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_query_removes_special_characters() {
         assert_eq!(sanitize_query("hello@world!"), "hello world");
         assert_eq!(sanitize_query("test#123$456"), "test 123 456");
         assert_eq!(sanitize_query("foo&bar*baz"), "foo bar baz");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_query_collapses_whitespace() {
         assert_eq!(sanitize_query("hello    world"), "hello world");
         assert_eq!(
@@ -1527,18 +1527,18 @@ mod tests {
         assert_eq!(sanitize_query("tab\ttab"), "tab tab");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_query_preserves_alphanumeric() {
         assert_eq!(sanitize_query("abc123 XYZ789"), "abc123 XYZ789");
         assert_eq!(sanitize_query("MixedCase123"), "MixedCase123");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_query_empty_string() {
         assert_eq!(sanitize_query(""), "");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sanitize_query_only_special_characters() {
         assert_eq!(sanitize_query("@#$%^&*()"), "");
         assert_eq!(sanitize_query("!!!???"), "");

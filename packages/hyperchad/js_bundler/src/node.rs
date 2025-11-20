@@ -142,7 +142,7 @@ mod tests {
     use super::*;
     use std::fs;
 
-    #[test]
+    #[test_log::test]
     fn test_fixup_binary_filename_non_windows() {
         // On non-Windows systems, should always return the original path
         if !cfg!(windows) {
@@ -156,7 +156,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fixup_binary_filename_windows_no_cmd_exists() {
         // On Windows, if no .CMD file exists, should return original path
         if cfg!(windows) {
@@ -167,7 +167,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fixup_binary_filename_windows_cmd_exists() {
         // On Windows, if .CMD file exists, should return the .CMD path
         if cfg!(windows) {
@@ -183,7 +183,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fixup_binary_filename_no_parent() {
         // Path with no parent directory should return original
         let binary = PathBuf::from("node");
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(result, binary);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_enabled_npm_commands_contains_valid_managers() {
         // Test that ENABLED_NPM_COMMANDS only contains valid package managers
         let valid_managers = ["pnpm", "bun", "npm"];
@@ -203,7 +203,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_enabled_npm_commands_respects_features() {
         // Verify that enabled commands match the feature flags
         #[cfg(feature = "pnpm")]

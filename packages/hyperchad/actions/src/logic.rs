@@ -1046,7 +1046,7 @@ impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Layo
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_value_as_str() {
         let string_value = Value::String("test".to_string());
         assert_eq!(string_value.as_str(), Some("test"));
@@ -1061,7 +1061,7 @@ mod tests {
         assert_eq!(visibility_value.as_str(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_value_as_f32_real() {
         let value = Value::Real(42.5);
         assert_eq!(
@@ -1070,35 +1070,35 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_plus_evaluation() {
         let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(15.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_minus_evaluation() {
         let arith = Arithmetic::Minus(Value::Real(10.0), Value::Real(3.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(7.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_multiply_evaluation() {
         let arith = Arithmetic::Multiply(Value::Real(4.0), Value::Real(3.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(12.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_divide_evaluation() {
         let arith = Arithmetic::Divide(Value::Real(10.0), Value::Real(2.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
         assert_eq!(result, Some(5.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_min_evaluation() {
         let arith = Arithmetic::Min(Value::Real(10.0), Value::Real(5.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
@@ -1109,7 +1109,7 @@ mod tests {
         assert_eq!(result2, Some(3.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_max_evaluation() {
         let arith = Arithmetic::Max(Value::Real(10.0), Value::Real(5.0));
         let result = arith.as_f32(None::<&fn(&CalcValue) -> Option<Value>>);
@@ -1120,7 +1120,7 @@ mod tests {
         assert_eq!(result2, Some(8.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_grouping_evaluation() {
         let inner = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
         let grouped = Arithmetic::Grouping(Box::new(inner));
@@ -1128,7 +1128,7 @@ mod tests {
         assert_eq!(result, Some(8.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_complex_expression() {
         // (10 + 5) * 2
         let add = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
@@ -1137,7 +1137,7 @@ mod tests {
         assert_eq!(result, Some(30.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_chaining_plus() {
         let arith = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
         let chained = arith.plus(2.0);
@@ -1146,7 +1146,7 @@ mod tests {
         assert_eq!(result, Some(10.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_chaining_minus() {
         let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
         let chained = arith.minus(3.0);
@@ -1155,7 +1155,7 @@ mod tests {
         assert_eq!(result, Some(12.0));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_clamp() {
         // Test clamp with simple value
         let clamped = Arithmetic::Plus(Value::Real(15.0), Value::Real(0.0)).clamp(5.0, 10.0);
@@ -1171,7 +1171,7 @@ mod tests {
         assert_eq!(result3, Some(7.0)); // 7 is within range
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calc_value_eq() {
         let calc = CalcValue::Display {
             target: ElementTarget::Id(1),
@@ -1187,7 +1187,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calc_value_plus() {
         let calc = CalcValue::WidthPx {
             target: ElementTarget::Id(1),
@@ -1197,7 +1197,7 @@ mod tests {
         assert!(matches!(arith, Arithmetic::Plus(_, _)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calc_value_clamp() {
         let calc = CalcValue::HeightPx {
             target: ElementTarget::Id(1),
@@ -1208,7 +1208,7 @@ mod tests {
         assert!(matches!(clamped, Arithmetic::Min(_, _)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_condition_then() {
         let condition = Condition::Bool(true);
         let if_action = condition.then(ActionType::NoOp);
@@ -1218,7 +1218,7 @@ mod tests {
         assert_eq!(if_action.else_actions.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_condition_or_else() {
         let condition = Condition::Bool(false);
         let if_action = condition.or_else(ActionType::NoOp);
@@ -1228,7 +1228,7 @@ mod tests {
         assert_eq!(if_action.else_actions.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_if_chaining() {
         let condition = Condition::Bool(true);
         let if_action = condition
@@ -1240,7 +1240,7 @@ mod tests {
         assert_eq!(if_action.else_actions.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_eq_condition_helper() {
         let condition = eq(Value::Real(5.0), Value::Real(5.0));
 
@@ -1253,7 +1253,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_if_stmt_helper() {
         let condition = Condition::Bool(true);
         let if_action = if_stmt(condition, ActionType::NoOp);
@@ -1262,19 +1262,19 @@ mod tests {
         assert_eq!(if_action.else_actions.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_visibility_helpers() {
         assert_eq!(hidden(), Value::Visibility(Visibility::Hidden));
         assert_eq!(visible(), Value::Visibility(Visibility::Visible));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_display_helpers() {
         assert_eq!(displayed(), Value::Display(true));
         assert_eq!(not_displayed(), Value::Display(false));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_visibility_str_id() {
         let calc = get_visibility_str_id("my-element");
 
@@ -1286,7 +1286,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_visibility_id() {
         let calc = get_visibility_id(42);
 
@@ -1298,7 +1298,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_display_str_id() {
         let calc = get_display_str_id("my-element");
 
@@ -1310,7 +1310,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_display_id() {
         let calc = get_display_id(42);
 
@@ -1322,7 +1322,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_width_px() {
         let calc = get_width_px_str_id("my-element");
 
@@ -1334,7 +1334,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_height_px() {
         let calc = get_height_px_id(42);
 
@@ -1346,7 +1346,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_mouse_x() {
         let calc = get_mouse_x();
 
@@ -1358,7 +1358,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_mouse_x_str_id() {
         let calc = get_mouse_x_str_id("my-element");
 
@@ -1373,7 +1373,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_mouse_y() {
         let calc = get_mouse_y();
 
@@ -1385,7 +1385,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_mouse_y_self() {
         let calc = get_mouse_y_self();
 
@@ -1397,7 +1397,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_position_x() {
         let calc = get_position_x_id(42);
 
@@ -1409,7 +1409,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_position_y() {
         let calc = get_position_y_self();
 
@@ -1421,7 +1421,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_id_self() {
         let calc = get_id_self();
 
@@ -1433,7 +1433,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_event_value() {
         let calc = get_event_value();
 
@@ -1443,7 +1443,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_data_attr_value_self() {
         let calc = get_data_attr_value_self("data-value");
 
@@ -1456,7 +1456,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_if_responsive_single_target() {
         let responsive = if_responsive("mobile");
 
@@ -1468,7 +1468,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_if_responsive_multiple_targets() {
         let responsive = if_responsive_any(vec!["mobile", "tablet"]);
 
@@ -1482,7 +1482,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_responsive_then() {
         let responsive = if_responsive("mobile");
         let if_expr = responsive.then(10);
@@ -1491,7 +1491,7 @@ mod tests {
         assert_eq!(if_expr.default, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_responsive_or_else() {
         let responsive = if_responsive("desktop");
         let if_expr = responsive.or_else(20);
@@ -1500,7 +1500,7 @@ mod tests {
         assert_eq!(if_expr.default, Some(20));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_if_expression_chaining() {
         let responsive = if_responsive("mobile");
         let if_expr = responsive.then(10).or_else(20);
@@ -1509,7 +1509,7 @@ mod tests {
         assert_eq!(if_expr.default, Some(20));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_value_from_conversions() {
         let from_f32: Value = 42.5f32.into();
         assert_eq!(from_f32, Value::Real(42.5));
@@ -1524,7 +1524,7 @@ mod tests {
         assert_eq!(from_key, Value::Key(Key::Enter));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_from_into_value() {
         let arith = Arithmetic::Plus(Value::Real(5.0), Value::Real(3.0));
         let value: Value = arith.into();
@@ -1532,7 +1532,7 @@ mod tests {
         assert!(matches!(value, Value::Arithmetic(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_calc_value_then_pass_to() {
         let calc = get_width_px_id(42);
         let action = calc.then_pass_to(ActionType::NoOp);
@@ -1551,7 +1551,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_arithmetic_then_pass_to() {
         let arith = Arithmetic::Plus(Value::Real(10.0), Value::Real(5.0));
         let action = arith.then_pass_to(ActionType::show_str_id("element"));

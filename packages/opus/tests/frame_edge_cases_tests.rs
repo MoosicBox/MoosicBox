@@ -3,7 +3,7 @@
 use moosicbox_opus::frame::decode_frame_length;
 use test_case::test_case;
 
-#[test]
+#[test_log::test]
 fn test_frame_length_max_invalid() {
     // Frame length over 1275 should error
     let data = [252, 0]; // 4 * 0 + 252 = 252 (valid)
@@ -14,7 +14,7 @@ fn test_frame_length_max_invalid() {
     assert_eq!(result.0, 1275);
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_boundary_251() {
     // 251 is the last single-byte encoding
     let data = [251];
@@ -23,7 +23,7 @@ fn test_frame_length_boundary_251() {
     assert_eq!(bytes_read, 1);
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_boundary_252() {
     // 252 requires two bytes
     let data = [252, 0];
@@ -41,7 +41,7 @@ fn test_frame_length_two_byte_variations(data: &[u8], expected: usize) {
     assert_eq!(bytes_read, 2);
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_dtx_explicit() {
     // DTX (discontinuous transmission) is encoded as 0
     let data = [0];
@@ -50,7 +50,7 @@ fn test_frame_length_dtx_explicit() {
     assert_eq!(bytes_read, 1);
 }
 
-#[test]
+#[test_log::test]
 fn test_frame_length_single_byte_mid() {
     // Test a middle value in single-byte range
     let data = [127];

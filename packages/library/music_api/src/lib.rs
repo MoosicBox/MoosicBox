@@ -802,7 +802,7 @@ mod tests {
     /// Verifies that Unix-style mount paths like "/mnt/c" are correctly
     /// converted to Windows drive letters like "C:".
     #[cfg(target_os = "windows")]
-    #[test]
+    #[test_log::test]
     fn test_windows_path_conversion_single_drive() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/c/Users/test/file.mp3";
@@ -819,7 +819,7 @@ mod tests {
     /// Tests Windows path conversion with lowercase drive letters.
     /// Ensures that the drive letter is properly uppercased during conversion.
     #[cfg(target_os = "windows")]
-    #[test]
+    #[test_log::test]
     fn test_windows_path_conversion_lowercase_drive() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/d/data/music.flac";
@@ -837,7 +837,7 @@ mod tests {
     /// Verifies that paths without "/mnt/" are still processed correctly
     /// (slashes converted to backslashes).
     #[cfg(target_os = "windows")]
-    #[test]
+    #[test_log::test]
     fn test_windows_path_conversion_no_mount() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/some/other/path.mp3";
@@ -854,7 +854,7 @@ mod tests {
     /// Tests that Unix systems don't perform Windows path conversion.
     /// Paths should remain unchanged on non-Windows platforms.
     #[cfg(not(target_os = "windows"))]
-    #[test]
+    #[test_log::test]
     fn test_unix_path_no_conversion() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/c/Users/test/file.mp3";
@@ -876,7 +876,7 @@ mod tests {
     /// Tests path conversion with multiple directory levels.
     /// Ensures deep directory structures are handled correctly.
     #[cfg(target_os = "windows")]
-    #[test]
+    #[test_log::test]
     fn test_windows_path_conversion_deep_directory() {
         let regex = Regex::new(r"/mnt/(\w+)").unwrap();
         let path = "/mnt/e/Music/Albums/2023/Best/track.flac";

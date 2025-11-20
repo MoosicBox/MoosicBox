@@ -173,7 +173,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    #[test]
+    #[test_log::test]
     fn test_daemon_state_debug() {
         let state: DaemonState<String> = DaemonState::Holding;
         assert_eq!(format!("{state:?}"), "Holding");
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(format!("{state:?}"), "Quit(None)");
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::redundant_clone)]
     fn test_daemon_state_clone() {
         let state: DaemonState<String> = DaemonState::Holding;
@@ -197,7 +197,7 @@ mod tests {
         assert!(matches!(cloned, DaemonState::Quitting(Some(ref s)) if s == "test"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_daemon_state_equality() {
         let state1: DaemonState<String> = DaemonState::Holding;
         let state2: DaemonState<String> = DaemonState::Holding;
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(state1, state2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_daemon_state_ordering() {
         let holding: DaemonState<String> = DaemonState::Holding;
         let quitting: DaemonState<String> = DaemonState::Quitting(None);
@@ -223,14 +223,14 @@ mod tests {
         assert!(holding < quit);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_resource_daemon_new_success() {
         let daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
 
         assert_eq!(daemon.state(), DaemonState::Holding);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_resource_daemon_new_with_error() {
         let daemon = ResourceDaemon::<i32, String>::new(|_signal| Err("error".to_string()));
 
@@ -241,7 +241,7 @@ mod tests {
         assert!(matches!(state, DaemonState::Quit(Some(ref s)) if s == "error"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_resource_daemon_quit() {
         let counter = Arc::new(Mutex::new(0));
         let counter_clone = counter.clone();
@@ -263,7 +263,7 @@ mod tests {
         assert!(matches!(state, DaemonState::Quit(Some(ref s)) if s == "test reason"));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::redundant_clone)]
     #[allow(clippy::items_after_statements)]
     fn test_resource_daemon_drop() {
@@ -299,7 +299,7 @@ mod tests {
         assert!(*dropped.lock().unwrap());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_quit_signal_dispatch() {
         let daemon = ResourceDaemon::<i32, String>::new(|signal| {
             // Dispatch quit signal from within the provider
@@ -320,7 +320,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_quit_signal_debug() {
         let daemon = ResourceDaemon::<i32, String>::new(|signal| {
             let debug_str = format!("{signal:?}");
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(daemon.state(), DaemonState::Holding);
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::redundant_clone)]
     fn test_quit_signal_clone() {
         let daemon = ResourceDaemon::<i32, String>::new(|signal| {
@@ -356,7 +356,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::redundant_clone)]
     fn test_resource_daemon_state_transitions() {
         let state_log = Arc::new(Mutex::new(Vec::new()));
@@ -379,7 +379,7 @@ mod tests {
         assert!(matches!(state, DaemonState::Quit(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_multiple_quit_calls() {
         let mut daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
 
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(state1, state2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_resource_daemon_send_sync() {
         fn assert_send<T: Send>() {}
         fn assert_sync<T: Sync>() {}
@@ -407,7 +407,7 @@ mod tests {
         assert_sync::<ResourceDaemon<i32, String>>();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_resource_daemon_debug() {
         let daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
 

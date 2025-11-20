@@ -356,7 +356,7 @@ impl std::io::Write for OpusWrite<'_> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_encoder_creation() {
         let result = encoder_opus();
         assert!(
@@ -365,7 +365,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_opus_float_basic() {
         let mut encoder = encoder_opus().expect("Failed to create encoder");
 
@@ -386,7 +386,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_audiopus_packet_framing() {
         // Create a small sample set (less than one frame)
         let samples: Vec<f32> = vec![0.1; 1000];
@@ -422,7 +422,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_audiopus_multiple_frames() {
         // Create enough samples for multiple frames
         // Frame size at 48kHz stereo with 20ms = 1920 samples per frame
@@ -455,7 +455,7 @@ mod tests {
         assert!(packet_count >= 1, "Should have encoded at least one packet");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_encode_audiopus_empty_input() {
         let samples: Vec<f32> = vec![];
 
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(sample_count, 0);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
     fn test_opus_write_creation() {
         let temp_file = "/tmp/test_opus_write.ogg";
@@ -486,7 +486,7 @@ mod tests {
         let _ = std::fs::remove_file(temp_file);
     }
 
-    #[test]
+    #[test_log::test]
     #[cfg_attr(not(target_family = "wasm"), ignore = "Requires file system access")]
     fn test_opus_write_buffering_behavior() {
         use std::io::Write;
@@ -517,7 +517,7 @@ mod tests {
         let _ = std::fs::remove_file(temp_file);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_opus_stream_headers_format() {
         // Verify OpusHead magic signature
         assert_eq!(&OPUS_STREAM_IDENTIFICATION_HEADER[0..8], b"OpusHead");

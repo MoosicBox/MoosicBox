@@ -1374,7 +1374,7 @@ pub mod prelude {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_key_as_str() {
         assert_eq!(Key::Escape.as_str(), "Escape");
         assert_eq!(Key::Enter.as_str(), "Enter");
@@ -1385,14 +1385,14 @@ mod tests {
         assert_eq!(Key::Control.as_str(), "Control");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_key_display() {
         assert_eq!(format!("{}", Key::Tab), "Tab");
         assert_eq!(format!("{}", Key::ArrowUp), "ArrowUp");
         assert_eq!(format!("{}", Key::Meta), "Meta");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_trigger_type() {
         assert_eq!(ActionTrigger::Click.trigger_type(), "Click");
         assert_eq!(ActionTrigger::Hover.trigger_type(), "Hover");
@@ -1408,12 +1408,12 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_trigger_default() {
         assert_eq!(ActionTrigger::default(), ActionTrigger::Immediate);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_delay_off() {
         let action = ActionType::NoOp;
         let effect = action.delay_off(1000);
@@ -1423,7 +1423,7 @@ mod tests {
         assert_eq!(effect.unique, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_throttle() {
         let action = ActionType::NoOp;
         let effect = action.throttle(500);
@@ -1433,7 +1433,7 @@ mod tests {
         assert_eq!(effect.unique, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_unique() {
         let action = ActionType::NoOp;
         let effect = action.unique();
@@ -1443,7 +1443,7 @@ mod tests {
         assert_eq!(effect.delay_off, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_chaining() {
         let effect = ActionEffect::default()
             .delay_off(1000)
@@ -1455,7 +1455,7 @@ mod tests {
         assert_eq!(effect.unique, Some(true));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_hide_str_id() {
         let action = ActionType::hide_str_id("my-element");
 
@@ -1468,7 +1468,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_show_str_id() {
         let action = ActionType::show_str_id("my-element");
 
@@ -1481,7 +1481,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_hide_id() {
         let action = ActionType::hide_id(42);
 
@@ -1494,7 +1494,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_show_id() {
         let action = ActionType::show_id(42);
 
@@ -1507,7 +1507,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_hide_self() {
         let action = ActionType::hide_self();
 
@@ -1520,7 +1520,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_show_self() {
         let action = ActionType::show_self();
 
@@ -1533,7 +1533,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_display_str_id() {
         let action = ActionType::display_str_id("my-element");
 
@@ -1546,7 +1546,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_no_display_str_id() {
         let action = ActionType::no_display_str_id("my-element");
 
@@ -1559,7 +1559,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_set_focus() {
         let action = ActionType::set_focus_str_id(true, "my-element");
 
@@ -1572,7 +1572,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_focus_str_id() {
         let action = ActionType::focus_str_id("my-element");
 
@@ -1585,7 +1585,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_set_background() {
         let action = ActionType::set_background_str_id("red", "my-element");
 
@@ -1598,7 +1598,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_remove_background() {
         let action = ActionType::remove_background_str_id("my-element");
 
@@ -1611,7 +1611,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_navigate() {
         let action = ActionType::Navigate {
             url: "/home".to_string(),
@@ -1625,7 +1625,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_log() {
         let action = ActionType::Log {
             message: "test".to_string(),
@@ -1641,7 +1641,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::similar_names)]
     fn test_action_type_and_chaining() {
         let action1 = ActionType::hide_str_id("element1");
@@ -1656,7 +1656,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     #[allow(clippy::similar_names)]
     fn test_action_type_and_chaining_with_existing_multi() {
         let action1 = ActionType::hide_str_id("element1");
@@ -1673,7 +1673,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_on_event() {
         let inner_action = ActionType::show_str_id("element");
         let event_action = ActionType::on_event("custom-event", inner_action);
@@ -1690,7 +1690,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_select_str_id() {
         let action = ActionType::select_str_id("input-field");
 
@@ -1702,7 +1702,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_from_vec_action_types() {
         let actions = vec![
             ActionType::hide_str_id("element1"),
@@ -1718,7 +1718,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_effect_from_vec_action_effects() {
         let effects = vec![
             ActionEffect {
@@ -1746,7 +1746,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_from_action_type() {
         let action_type = ActionType::NoOp;
         let action: Action = action_type.into();
@@ -1755,7 +1755,7 @@ mod tests {
         assert_eq!(action.effect.action, ActionType::NoOp);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_event_context_creation() {
         let context = HttpEventContext {
             url: "https://example.com".to_string(),
@@ -1773,7 +1773,7 @@ mod tests {
         assert_eq!(context.error, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_http_event_context_with_error() {
         let context = HttpEventContext {
             url: "https://example.com".to_string(),
@@ -1788,7 +1788,7 @@ mod tests {
         assert_eq!(context.status, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_visibility_class() {
         let action = ActionType::hide_class("my-class");
 
@@ -1801,7 +1801,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_display_class() {
         let action = ActionType::display_class("my-class");
 
@@ -1814,7 +1814,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_background_last_child() {
         let action = ActionType::set_background_last_child("blue");
 
@@ -1827,7 +1827,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_action_type_remove_background_last_child() {
         let action = ActionType::remove_background_last_child();
 

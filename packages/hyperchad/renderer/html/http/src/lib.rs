@@ -501,7 +501,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_error_display() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test file");
         let err = Error::from(io_err);
@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(err.to_string(), "Invalid path");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_from_io_error() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let err = Error::from(io_err);
@@ -520,7 +520,7 @@ mod tests {
         assert!(err.to_string().contains("file not found"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_from_recv_error() {
         let (_tx, rx) = flume::unbounded::<()>();
         drop(_tx);
@@ -529,7 +529,7 @@ mod tests {
         assert!(matches!(err, Error::Recv(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_error_from_navigate_error() {
         let nav_err = hyperchad_router::NavigateError::InvalidPath;
         let err = Error::from(nav_err);
@@ -538,7 +538,7 @@ mod tests {
     }
 
     #[cfg(feature = "_json")]
-    #[test]
+    #[test_log::test]
     fn test_error_from_serde_json_error() {
         let json_str = r#"{"invalid": json}"#;
         let json_err: serde_json::Error =

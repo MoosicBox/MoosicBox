@@ -2983,14 +2983,14 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_single_replacement() {
         let input = "https://api.tidal.com/v1/artists/:artistId";
         let result = replace_all(input, &[(":artistId", "12345")]);
         assert_eq!(result, "https://api.tidal.com/v1/artists/12345");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_multiple_replacements() {
         let input = "https://api.tidal.com/v1/users/:userId/favorites/artists/:artistId";
         let result = replace_all(input, &[(":userId", "999"), (":artistId", "12345")]);
@@ -3000,27 +3000,27 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_no_replacements() {
         let input = "https://api.tidal.com/v1/search";
         let result = replace_all(input, &[]);
         assert_eq!(result, "https://api.tidal.com/v1/search");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_replace_all_pattern_not_found() {
         let input = "https://api.tidal.com/v1/search";
         let result = replace_all(input, &[(":artistId", "12345")]);
         assert_eq!(result, "https://api.tidal.com/v1/search");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_single_param() {
         let result = attach_query_string("https://api.tidal.com/v1/search", &[("query", "test")]);
         assert_eq!(result, "https://api.tidal.com/v1/search?query=test");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_multiple_params() {
         let result = attach_query_string(
             "https://api.tidal.com/v1/search",
@@ -3032,7 +3032,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_url_encoding() {
         let result = attach_query_string(
             "https://api.tidal.com/v1/search",
@@ -3041,7 +3041,7 @@ mod tests {
         assert_eq!(result, "https://api.tidal.com/v1/search?query=test+artist");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_special_characters() {
         let result = attach_query_string(
             "https://api.tidal.com/v1/search",
@@ -3053,43 +3053,43 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_attach_query_string_empty_params() {
         let result = attach_query_string("https://api.tidal.com/v1/search", &[]);
         assert_eq!(result, "https://api.tidal.com/v1/search?");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_basic() {
         let url = tidal_api_endpoint!(Album);
         assert_eq!(url, "https://api.tidal.com/v1/albums/:albumId");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_with_params() {
         let url = tidal_api_endpoint!(Album, &[(":albumId", "123456")]);
         assert_eq!(url, "https://api.tidal.com/v1/albums/123456");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_with_query() {
         let url = tidal_api_endpoint!(Album, &[(":albumId", "123456")], &[("locale", "en_US")]);
         assert_eq!(url, "https://api.tidal.com/v1/albums/123456?locale=en_US");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_search() {
         let url = tidal_api_endpoint!(Search);
         assert_eq!(url, "https://api.tidal.com/v1/search/top-hits");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_favorite_artists() {
         let url = tidal_api_endpoint!(FavoriteArtists, &[(":userId", "999")]);
         assert_eq!(url, "https://api.tidal.com/v1/users/999/favorites/artists");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tidal_api_endpoint_remove_favorite_artist() {
         let url = tidal_api_endpoint!(
             RemoveFavoriteArtist,
@@ -3101,7 +3101,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_album_type_from_tidal_album_type() {
         assert_eq!(AlbumType::from(TidalAlbumType::Lp), AlbumType::Lp);
         assert_eq!(
@@ -3114,7 +3114,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_search_type_from_tidal_search_type() {
         assert_eq!(
             TidalSearchType::from(SearchType::Artists),

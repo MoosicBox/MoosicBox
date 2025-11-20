@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(close_signal.len(), 0, "close() should send empty bytes");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_byte_writer_empty_write() {
         // Test that writing empty buffer returns 0
         let mut writer = ByteWriter::default();
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(result, 0, "Writing empty buffer should return 0");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_byte_writer_bytes_written() {
         // Test that bytes_written counter is accurate
         let mut writer = ByteWriter::default();
@@ -473,7 +473,7 @@ mod tests {
         assert_eq!(writer.bytes_written(), 11);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_byte_writer_flush() {
         // Test that flush is a no-op and doesn't error
         let mut writer = ByteWriter::default();
@@ -519,7 +519,7 @@ mod tests {
         assert_eq!(writer.bytes_written(), 4);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_byte_writer_id_uniqueness() {
         // Test that each writer gets a unique ID
         let writer1 = ByteWriter::default();
@@ -617,7 +617,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_typed_writer_id_uniqueness() {
         // Test that each typed writer gets a unique ID
         let writer1 = TypedWriter::<i32>::default();
@@ -640,7 +640,7 @@ mod tests {
     }
 
     #[cfg(feature = "stalled-monitor")]
-    #[test]
+    #[test_log::test]
     fn test_byte_stream_stalled_monitor_conversion() {
         // Test that ByteStream can be converted to StalledReadMonitor
         let writer = ByteWriter::default();
@@ -651,7 +651,7 @@ mod tests {
     }
 
     #[cfg(feature = "stalled-monitor")]
-    #[test]
+    #[test_log::test]
     fn test_typed_stream_stalled_monitor_conversion() {
         // Test that TypedStream can be converted to StalledReadMonitor
         let writer = TypedWriter::<i32>::default();

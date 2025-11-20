@@ -1776,7 +1776,7 @@ mod test {
         assert!(api.get_track_from_cache(&track.id).await.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn error_display_shows_correct_message_for_not_found() {
         let source = ApiSource::register("test", "test");
         let error = Error::MusicApiNotFound(source.clone());
@@ -1785,14 +1785,14 @@ mod test {
         assert!(message.contains(&source.to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn error_display_shows_correct_message_for_unsupported_action() {
         let error = Error::UnsupportedAction("test_action");
         let message = format!("{error}");
         assert_eq!(message, "Unsupported Action: test_action");
     }
 
-    #[test]
+    #[test_log::test]
     fn error_display_shows_correct_message_for_unauthorized() {
         let error = Error::Unauthorized;
         let message = format!("{error}");

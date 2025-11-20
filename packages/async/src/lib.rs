@@ -311,7 +311,7 @@ mod tests {
     #[cfg(feature = "_any_backend")]
     use super::task;
 
-    #[test]
+    #[test_log::test]
     fn thread_id_is_unique_across_threads() {
         let ids = Arc::new(Mutex::new(Vec::new()));
 
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(sorted_len, ids_len);
     }
 
-    #[test]
+    #[test_log::test]
     fn thread_id_is_consistent_within_thread() {
         let id1 = thread_id();
         let id2 = thread_id();
@@ -351,7 +351,7 @@ mod tests {
         assert_eq!(id2, id3);
     }
 
-    #[test]
+    #[test_log::test]
     fn thread_id_is_monotonically_increasing() {
         let main_id = thread_id();
 
@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[cfg(feature = "_any_backend")]
-    #[test]
+    #[test_log::test]
     fn error_from_io_error() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
         let err: Error = io_err.into();
@@ -370,7 +370,7 @@ mod tests {
     }
 
     #[cfg(feature = "_any_backend")]
-    #[test]
+    #[test_log::test]
     fn error_from_join_error() {
         let join_err = task::JoinError::new();
         let err: Error = join_err.into();
@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[cfg(feature = "_any_backend")]
-    #[test]
+    #[test_log::test]
     fn builder_default_is_same_as_new() {
         let builder1 = Builder::default();
         let builder2 = Builder::new();
@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[cfg(all(feature = "_any_backend", feature = "rt-multi-thread"))]
-    #[test]
+    #[test_log::test]
     fn builder_max_blocking_threads_configuration() {
         let mut builder = Builder::new();
 

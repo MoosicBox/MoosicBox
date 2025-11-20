@@ -179,7 +179,7 @@ mod tests {
     use super::*;
     use crate::DefaultHtmlTagRenderer;
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_new() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let app = StubApp::new(tag_renderer);
@@ -188,7 +188,7 @@ mod tests {
         assert!(app.inline_css.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_with_css_url() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let app = StubApp::new(tag_renderer).with_css_url("https://example.com/style.css");
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(app.css_urls()[0], "https://example.com/style.css");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_add_css_url() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let mut app = StubApp::new(tag_renderer);
@@ -205,7 +205,7 @@ mod tests {
         assert_eq!(app.css_urls().len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_with_css_path() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let app = StubApp::new(tag_renderer).with_css_path("/static/style.css");
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(app.css_paths()[0], "/static/style.css");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_add_css_path() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let mut app = StubApp::new(tag_renderer);
@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(app.css_paths().len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_with_inline_css() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let css = "body { margin: 0; }";
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(app.inline_css_blocks()[0], css);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_add_inline_css() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let mut app = StubApp::new(tag_renderer);
@@ -240,7 +240,7 @@ mod tests {
         assert_eq!(app.inline_css_blocks().len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_with_responsive_trigger() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let app = StubApp::new(tag_renderer).with_responsive_trigger(
@@ -251,7 +251,7 @@ mod tests {
         // Test that the responsive trigger was added (implicitly through tag_renderer)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_app_add_responsive_trigger() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let mut app = StubApp::new(tag_renderer);
@@ -262,7 +262,7 @@ mod tests {
         let _renderer = app.tag_renderer();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_stub_runner_run() {
         let mut runner = StubRunner;
         let result = runner.run();
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[cfg(feature = "assets")]
-    #[test]
+    #[test_log::test]
     fn test_stub_app_with_static_asset_routes() {
         use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
         use std::path::PathBuf;

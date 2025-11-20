@@ -358,7 +358,7 @@ impl<
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_content_html_creation() {
         let html = Content::Html("<h1>Test</h1>".to_string());
         match html {
@@ -367,7 +367,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_html_empty() {
         let html = Content::Html(String::new());
         match html {
@@ -376,7 +376,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_raw_creation() {
         let data = Bytes::from_static(b"test data");
         let content_type = "application/octet-stream".to_string();
@@ -397,7 +397,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_content_raw_with_image_mime_type() {
         let data = Bytes::from_static(b"\x89PNG\r\n\x1a\n");
         let raw = Content::Raw {
@@ -418,7 +418,7 @@ mod tests {
     }
 
     #[cfg(feature = "json")]
-    #[test]
+    #[test_log::test]
     fn test_content_json_creation() {
         let value = serde_json::json!({"key": "value"});
         let json = Content::Json(value.clone());
@@ -430,7 +430,7 @@ mod tests {
     }
 
     #[cfg(feature = "json")]
-    #[test]
+    #[test_log::test]
     fn test_content_json_array() {
         let value = serde_json::json!([1, 2, 3]);
         let json = Content::Json(value.clone());
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[cfg(feature = "json")]
-    #[test]
+    #[test_log::test]
     fn test_content_json_null() {
         let value = serde_json::json!(null);
         let json = Content::Json(value.clone());
@@ -459,7 +459,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_lambda_app_new() {
         #[derive(Clone)]
         struct TestProcessor;
@@ -507,7 +507,7 @@ mod tests {
     }
 
     #[cfg(feature = "assets")]
-    #[test]
+    #[test_log::test]
     fn test_lambda_app_with_static_routes() {
         #[derive(Clone)]
         struct TestProcessor;

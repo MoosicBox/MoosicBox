@@ -1,7 +1,7 @@
 use hyperchad_template::container;
 use hyperchad_transformer_models::OverflowWrap;
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_with_quoted_string_literals() {
     let containers = container! {
         div overflow-wrap="normal" { "Normal wrapping" }
@@ -19,7 +19,7 @@ fn test_overflow_wrap_with_quoted_string_literals() {
     assert_eq!(containers[0].overflow_wrap, Some(OverflowWrap::Anywhere));
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_with_unquoted_identifiers() {
     let containers = container! {
         div overflow-wrap=normal { "Normal wrapping" }
@@ -37,7 +37,7 @@ fn test_overflow_wrap_with_unquoted_identifiers() {
     assert_eq!(containers[0].overflow_wrap, Some(OverflowWrap::Anywhere));
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_with_expressions() {
     let containers = container! {
         div overflow-wrap=(OverflowWrap::Normal) { "Normal with expression" }
@@ -55,7 +55,7 @@ fn test_overflow_wrap_with_expressions() {
     assert_eq!(containers[0].overflow_wrap, Some(OverflowWrap::Anywhere));
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_with_function_calls() {
     fn get_overflow_wrap() -> OverflowWrap {
         OverflowWrap::BreakWord
@@ -67,7 +67,7 @@ fn test_overflow_wrap_with_function_calls() {
     assert_eq!(containers[0].overflow_wrap, Some(OverflowWrap::BreakWord));
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_html_output() {
     let containers = container! {
         div overflow-wrap=normal { "Normal" }
@@ -97,7 +97,7 @@ fn test_overflow_wrap_html_output() {
     assert!(html.contains("anywhere"));
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_combined_with_other_attributes() {
     let containers = container! {
         div
@@ -117,7 +117,7 @@ fn test_overflow_wrap_combined_with_other_attributes() {
     assert!(container.background.is_some());
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_default_is_none() {
     let containers = container! {
         div { "No overflow-wrap specified" }
@@ -125,7 +125,7 @@ fn test_overflow_wrap_default_is_none() {
     assert_eq!(containers[0].overflow_wrap, None);
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_nested_elements() {
     let containers = container! {
         div overflow-wrap=normal {
@@ -143,7 +143,7 @@ fn test_overflow_wrap_nested_elements() {
     );
 }
 
-#[test]
+#[test_log::test]
 fn test_overflow_wrap_with_conditional() {
     let allow_breaking = true;
 

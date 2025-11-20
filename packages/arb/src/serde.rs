@@ -67,7 +67,7 @@ impl Arbitrary for JsonF32 {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_json_f64_always_finite() {
         // Critical constraint: JsonF64 should never generate NaN or infinity
         let mut g = Gen::new(100);
@@ -81,7 +81,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_f64_not_nan() {
         // Verify that JsonF64 never generates NaN
         let mut g = Gen::new(100);
@@ -91,7 +91,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_f64_not_infinite() {
         // Verify that JsonF64 never generates positive or negative infinity
         let mut g = Gen::new(100);
@@ -105,7 +105,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_f32_always_finite() {
         // Critical constraint: JsonF32 should never generate NaN or infinity
         let mut g = Gen::new(100);
@@ -119,7 +119,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_f32_not_nan() {
         // Verify that JsonF32 never generates NaN
         let mut g = Gen::new(100);
@@ -129,7 +129,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_f32_not_infinite() {
         // Verify that JsonF32 never generates positive or negative infinity
         let mut g = Gen::new(100);
@@ -143,7 +143,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_json_value_is_string() {
         // Verify that JsonValue currently generates string values
         let mut g = Gen::new(100);

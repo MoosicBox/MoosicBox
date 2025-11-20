@@ -402,7 +402,7 @@ impl SimBootstrap for HyperChadSimulationBootstrap {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_creation() {
         let simulator = HyperChadSimulator::new()
             .with_renderer(RendererType::VanillaJs)
@@ -417,7 +417,7 @@ mod tests {
         assert!(simulator.enabled_renderers.contains(&RendererType::Html));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_renderer_type_display() {
         assert_eq!(RendererType::Html.to_string(), "html");
         assert_eq!(RendererType::VanillaJs.to_string(), "vanilla-js");
@@ -425,7 +425,7 @@ mod tests {
         assert_eq!(RendererType::Fltk.to_string(), "fltk");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_config_default() {
         let config = AppConfig::default();
         assert_eq!(config.name, "test-app");
@@ -435,7 +435,7 @@ mod tests {
         assert!(config.environment.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulation_data_default() {
         let data = SimulationData::default();
         assert!(data.users.is_empty());
@@ -443,7 +443,7 @@ mod tests {
         assert!(data.database_state.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_default() {
         let simulator = HyperChadSimulator::default();
         assert_eq!(simulator.app_config.name, "test-app");
@@ -452,7 +452,7 @@ mod tests {
         assert!(simulator.web_server.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_app_config() {
         let config = AppConfig {
             name: "my-app".to_string(),
@@ -467,7 +467,7 @@ mod tests {
         assert_eq!(simulator.app_config.routes.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_mock_data() {
         let mut api_responses = BTreeMap::new();
         api_responses.insert("/api/test".to_string(), serde_json::json!({"status": "ok"}));
@@ -484,7 +484,7 @@ mod tests {
         assert_eq!(simulator.mock_data.api_responses.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_renderer_deduplication() {
         let simulator = HyperChadSimulator::new()
             .with_renderer(RendererType::Html)
@@ -501,7 +501,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_renderers_batch() {
         let renderers = vec![
             RendererType::Html,
@@ -521,7 +521,7 @@ mod tests {
         assert!(simulator.enabled_renderers.contains(&RendererType::Egui));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_with_renderers_deduplication() {
         let renderers = vec![
             RendererType::Html,
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(simulator.enabled_renderers.len(), 2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_clone() {
         let mut environment = BTreeMap::new();
         environment.insert("ENV".to_string(), "test".to_string());
@@ -584,7 +584,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_renderer_type_equality() {
         assert_eq!(RendererType::Html, RendererType::Html);
         assert_eq!(RendererType::VanillaJs, RendererType::VanillaJs);
@@ -595,7 +595,7 @@ mod tests {
         assert_ne!(RendererType::Egui, RendererType::Fltk);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_error_display() {
         let error = SimulatorError::SimulationFailed("test failure".to_string());
         assert_eq!(error.to_string(), "Simulation failed: test failure");
@@ -607,7 +607,7 @@ mod tests {
         assert_eq!(error.to_string(), "Test plan execution failed: plan error");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_renderer_type_serialization() {
         let html = RendererType::Html;
         let serialized = serde_json::to_string(&html).unwrap();
@@ -620,7 +620,7 @@ mod tests {
         assert_eq!(vanilla_js, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_config_with_static_assets() {
         let mut static_assets = BTreeMap::new();
         static_assets.insert("/style.css".to_string(), "body { margin: 0; }".to_string());
@@ -650,7 +650,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_simulation_data_with_database_state() {
         let mut database_state = BTreeMap::new();
         database_state.insert("users:1".to_string(), serde_json::json!({"name": "Alice"}));

@@ -370,14 +370,14 @@ mod tests {
     // Test lock to ensure tests that modify ROOT_DIR run serially
     static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-    #[test]
+    #[test_log::test]
     fn test_app_type_display() {
         assert_eq!(AppType::App.to_string(), "app");
         assert_eq!(AppType::Server.to_string(), "server");
         assert_eq!(AppType::Local.to_string(), "local");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_type_from_to_str() {
         let app_str: &str = AppType::App.into();
         assert_eq!(app_str, "app");
@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(local_str, "local");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_and_get_root_dir() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -405,7 +405,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_config_dir_path() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -422,7 +422,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_app_config_dir_path() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -444,7 +444,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_profiles_dir_path() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -463,7 +463,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_profile_dir_path() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -488,7 +488,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_cache_dir_path() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -504,7 +504,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_make_config_dir_path_creates_directory() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -527,7 +527,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_make_config_dir_path_returns_existing_directory() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -550,7 +550,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_make_profile_dir_path_creates_directory() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -579,7 +579,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_make_cache_dir_path_creates_directory() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -602,7 +602,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_tests_dir_path_uniqueness() {
         // Each call should return a different path (different timestamp)
         let path1 = get_tests_dir_path();
@@ -625,7 +625,7 @@ mod tests {
         assert!(path2_str.contains(&format!("moosicbox_tests_{pid}_")));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_get_root_dir_caches_result() {
         let _lock = TEST_LOCK.lock().unwrap();
 
@@ -647,7 +647,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_path_functions_with_different_app_types() {
         let _lock = TEST_LOCK.lock().unwrap();
 

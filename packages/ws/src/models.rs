@@ -229,7 +229,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
-    #[test]
+    #[test_log::test]
     fn test_inbound_payload_ping_serialization() {
         let payload = InboundPayload::Ping(EmptyPayload {});
         let json = serde_json::to_value(&payload).unwrap();
@@ -237,7 +237,7 @@ mod tests {
         assert_eq!(json["type"], "PING");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inbound_payload_ping_deserialization() {
         let json = json!({"type": "PING"});
         let payload: InboundPayload = serde_json::from_value(json).unwrap();
@@ -248,7 +248,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inbound_payload_get_connection_id_serialization() {
         let payload = InboundPayload::GetConnectionId(EmptyPayload {});
         let json = serde_json::to_value(&payload).unwrap();
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(json["type"], "GET_CONNECTION_ID");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inbound_payload_get_sessions_serialization() {
         let payload = InboundPayload::GetSessions(EmptyPayload {});
         let json = serde_json::to_value(&payload).unwrap();
@@ -264,7 +264,7 @@ mod tests {
         assert_eq!(json["type"], "GET_SESSIONS");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inbound_payload_display() {
         let payload = InboundPayload::Ping(EmptyPayload {});
         assert_eq!(payload.to_string(), "Ping");
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(payload.to_string(), "GetSessions");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_outbound_payload_connection_id_serialization() {
         let payload = OutboundPayload::ConnectionId(ConnectionIdPayload {
             connection_id: "test-123".to_string(),
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(json["connectionId"], "test-123");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_outbound_payload_connection_id_deserialization() {
         let json = json!({
             "type": "CONNECTION_ID",
@@ -303,7 +303,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_outbound_payload_display() {
         let payload = OutboundPayload::ConnectionId(ConnectionIdPayload {
             connection_id: "test".to_string(),
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(payload.to_string(), "Sessions");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_seek_serialization() {
         let seek = SetSeek {
             session_id: 42,
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(json["seek"], 120);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_seek_deserialization() {
         let json = json!({
             "sessionId": 99,
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(seek.seek, 300);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_seek_default() {
         let seek = SetSeek::default();
 
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(seek.seek, 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_set_seek_clone_and_equality() {
         let seek1 = SetSeek {
             session_id: 10,
@@ -379,7 +379,7 @@ mod tests {
         assert_ne!(seek1, seek3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_empty_payload_serialization() {
         let payload = EmptyPayload {};
         let json = serde_json::to_value(&payload).unwrap();
@@ -388,7 +388,7 @@ mod tests {
         assert_eq!(json.as_object().unwrap().len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_sessions_payload_serialization() {
         let payload = SessionsPayload { payload: vec![] };
         let json = serde_json::to_value(&payload).unwrap();
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(json["payload"], json!([]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_connections_payload_serialization() {
         let payload = ConnectionsPayload { payload: vec![] };
         let json = serde_json::to_value(&payload).unwrap();
@@ -404,7 +404,7 @@ mod tests {
         assert_eq!(json["payload"], json!([]));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_zone_with_sessions_payload_serialization() {
         let payload = AudioZoneWithSessionsPayload { payload: vec![] };
         let json = serde_json::to_value(&payload).unwrap();

@@ -348,13 +348,13 @@ mod tests {
     use super::*;
     use std::future::ready;
 
-    #[test]
+    #[test_log::test]
     fn sleep_future_implements_fused_future() {
         let sleep = Sleep::new(Duration::from_millis(10));
         assert!(!sleep.is_terminated());
     }
 
-    #[test]
+    #[test_log::test]
     fn interval_reset_restarts_timing() {
         let mut interval = Interval::new(Duration::from_millis(100));
 
@@ -369,7 +369,7 @@ mod tests {
         assert!(!interval.completed);
     }
 
-    #[test]
+    #[test_log::test]
     fn interval_poll_tick_returns_ready_after_duration() {
         use std::task::{Context, Poll};
 
@@ -389,13 +389,13 @@ mod tests {
         assert!(matches!(result, Poll::Ready(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn instant_future_implements_fused_future() {
         let instant = Instant::new(instant_now() + Duration::from_millis(10));
         assert!(!instant.is_terminated());
     }
 
-    #[test]
+    #[test_log::test]
     fn timeout_into_inner_returns_original_future() {
         let original_future = ready(42);
         let timeout = Timeout::new(Duration::from_millis(100), original_future);
@@ -406,20 +406,20 @@ mod tests {
         assert_eq!(result, 42);
     }
 
-    #[test]
+    #[test_log::test]
     fn elapsed_error_displays_correctly() {
         let err = Elapsed;
         assert_eq!(err.to_string(), "deadline has elapsed");
     }
 
-    #[test]
+    #[test_log::test]
     fn elapsed_error_is_clonable() {
         let err1 = Elapsed;
         let err2 = err1.clone();
         assert_eq!(err1, err2);
     }
 
-    #[test]
+    #[test_log::test]
     fn sleep_creates_with_current_time() {
         let sleep = Sleep::new(Duration::from_millis(100));
         let now = switchy_time::now();
@@ -432,7 +432,7 @@ mod tests {
         assert!(diff < Duration::from_millis(10));
     }
 
-    #[test]
+    #[test_log::test]
     fn interval_creates_with_current_time() {
         let interval = Interval::new(Duration::from_millis(100));
         let now = switchy_time::now();
@@ -445,21 +445,21 @@ mod tests {
         assert!(diff < Duration::from_millis(10));
     }
 
-    #[test]
+    #[test_log::test]
     fn system_time_to_instant_handles_future_time() {
         let future_time = now() + Duration::from_secs(10);
         let result = system_time_to_instant(future_time);
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn system_time_to_instant_handles_past_time() {
         let past_time = now() - Duration::from_secs(10);
         let result = system_time_to_instant(past_time);
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn system_time_to_instant_handles_current_time() {
         let current_time = now();
         let result = system_time_to_instant(current_time);

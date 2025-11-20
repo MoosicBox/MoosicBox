@@ -48,7 +48,7 @@ impl AsId for ScanLocation {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_scan_location_as_id_converts_correctly() {
         let scan_location = ScanLocation {
             id: 123,

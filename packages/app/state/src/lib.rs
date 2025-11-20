@@ -2200,7 +2200,7 @@ impl AppState {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_update_app_state_default() {
         let update = UpdateAppState::default();
         assert!(update.connection_id.is_none());
@@ -2214,7 +2214,7 @@ mod tests {
         assert!(update.current_session_id.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_app_state_display() {
         let update = UpdateAppState {
             connection_id: Some(Some("conn-123".to_string())),
@@ -2228,7 +2228,7 @@ mod tests {
         assert!(display_str.contains("conn-123"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_app_state_serialization() {
         let update = UpdateAppState {
             connection_id: Some(Some("conn-456".to_string())),
@@ -2245,26 +2245,26 @@ mod tests {
         assert_eq!(deserialized.profile, update.profile);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_error_unknown() {
         let error = AppStateError::unknown("Test error message");
         assert!(matches!(error, AppStateError::Unknown(_)));
         assert_eq!(error.to_string(), "Unknown(Test error message)");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_error_action_missing_param() {
         let error = AppStateError::ActionMissingParam;
         assert_eq!(error.to_string(), "Action missing param");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_error_action_invalid_param() {
         let error = AppStateError::ActionInvalidParam;
         assert_eq!(error.to_string(), "Action invalid param");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_proxy_request_error_failure_response() {
         let error = ProxyRequestError::FailureResponse {
             status: 404,
@@ -2276,33 +2276,33 @@ mod tests {
         assert!(error_str.contains("Not found"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_fetch_audio_zones_error_missing_profile() {
         let error = FetchAudioZonesError::MissingProfile;
         assert_eq!(error.to_string(), "Missing profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_register_players_error_missing_profile() {
         let error = RegisterPlayersError::MissingProfile;
         assert_eq!(error.to_string(), "Missing profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_new() {
         let state = AppState::new();
         // Just verify it constructs without panicking
         assert!(state.api_url.try_read().is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_default() {
         let state = AppState::default();
         // Verify default construction
         assert!(state.api_url.try_read().is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_app_state_clone() {
         let state = AppState::new();
         // Verify cloning works without panicking and produces valid state
@@ -2311,7 +2311,7 @@ mod tests {
         assert!(cloned.api_url.try_read().is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_player_type_debug_local() {
         let player_type = PlayerType::Local;
         let debug_str = format!("{player_type:?}");

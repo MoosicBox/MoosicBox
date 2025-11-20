@@ -881,7 +881,7 @@ mod tests {
     use symphonia::core::codecs::CodecParameters;
     use symphonia::core::formats::Track;
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_new() {
         let handler = AudioDecodeHandler::new();
         assert!(handler.cancellation_token.is_none());
@@ -890,7 +890,7 @@ mod tests {
         assert_eq!(handler.outputs.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_default() {
         let handler = AudioDecodeHandler::default();
         assert!(handler.cancellation_token.is_none());
@@ -899,7 +899,7 @@ mod tests {
         assert_eq!(handler.outputs.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_with_cancellation_token() {
         let token = CancellationToken::new();
         let handler = AudioDecodeHandler::new().with_cancellation_token(token);
@@ -907,7 +907,7 @@ mod tests {
         assert!(!handler.cancellation_token.unwrap().is_cancelled());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_contains_outputs_to_open() {
         let handler = AudioDecodeHandler::new();
         assert!(!handler.contains_outputs_to_open());
@@ -918,7 +918,7 @@ mod tests {
         assert!(handler.contains_outputs_to_open());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_try_open_success() {
         struct MockOutput;
         impl AudioDecode for MockOutput {
@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(handler.outputs.len(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_handler_try_open_error() {
         let mut handler = AudioDecodeHandler::new().with_output(Box::new(|_spec, _duration| {
             Err(AudioDecodeError::OpenStream)
@@ -957,13 +957,13 @@ mod tests {
         assert_eq!(handler.outputs.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_first_supported_track_empty() {
         let tracks: Vec<Track> = vec![];
         assert!(first_supported_track(&tracks).is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_first_supported_track_all_null() {
         let tracks = vec![
             Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
@@ -972,7 +972,7 @@ mod tests {
         assert!(first_supported_track(&tracks).is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_first_supported_track_finds_supported() {
         use symphonia::core::codecs::CODEC_TYPE_FLAC;
 
@@ -986,13 +986,13 @@ mod tests {
         assert_eq!(result.unwrap().id, 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ignore_end_of_stream_error_ok() {
         let result = ignore_end_of_stream_error(Ok(()));
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ignore_end_of_stream_error_expected_eof() {
         let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "end of stream");
         let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
@@ -1000,7 +1000,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ignore_end_of_stream_error_unexpected_eof_different_message() {
         let io_error = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "unexpected end");
         let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
@@ -1008,7 +1008,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_ignore_end_of_stream_error_other_io_error() {
         let io_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
         let decode_error = DecodeError::Symphonia(Error::IoError(io_error));
@@ -1016,13 +1016,13 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_do_verification_none() {
         let finalization = FinalizeResult { verify_ok: None };
         assert_eq!(do_verification(finalization), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_do_verification_passed() {
         let finalization = FinalizeResult {
             verify_ok: Some(true),
@@ -1030,7 +1030,7 @@ mod tests {
         assert_eq!(do_verification(finalization), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_do_verification_failed() {
         let finalization = FinalizeResult {
             verify_ok: Some(false),
@@ -1038,14 +1038,14 @@ mod tests {
         assert_eq!(do_verification(finalization), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_io_error_to_decode_error_conversion() {
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let decode_error: DecodeError = io_error.into();
         assert!(matches!(decode_error, DecodeError::Symphonia(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_audio_decode_error_display() {
         let error = AudioDecodeError::OpenStream;
         assert_eq!(error.to_string(), "OpenStreamError");
@@ -1057,7 +1057,7 @@ mod tests {
         assert_eq!(error.to_string(), "InterruptError");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_decode_error_display() {
         let error = DecodeError::NoAudioOutputs;
         assert_eq!(error.to_string(), "No audio outputs");

@@ -52,7 +52,7 @@ mod tests {
     use super::*;
     use tracing_subscriber::layer::SubscriberExt;
 
-    #[test]
+    #[test_log::test]
     fn test_simulator_layer_implements_layer_trait() {
         // Create a basic subscriber with the simulator layer
         let layer = SimulatorLayer;
@@ -63,7 +63,7 @@ mod tests {
     }
 
     #[cfg(feature = "actix")]
-    #[test]
+    #[test_log::test]
     fn test_simulator_http_metrics_handler_request_middleware() {
         use crate::HttpMetricsHandler;
 
@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[cfg(feature = "actix")]
-    #[test]
+    #[test_log::test]
     fn test_simulator_http_metrics_handler_debug() {
         let handler = SimulatorHttpMetricsHandler;
         let debug_output = format!("{handler:?}");

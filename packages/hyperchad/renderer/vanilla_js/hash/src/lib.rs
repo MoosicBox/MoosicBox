@@ -207,7 +207,7 @@ pub const PLUGIN_HASH_HEX: &str = HEX_BUF.as_str();
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_plugin_hash_starts_with_plugins() {
         // PLUGIN_HASH should always start with "plugins" regardless of enabled features
         assert!(
@@ -216,7 +216,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_plugin_hash_is_not_empty() {
         // PLUGIN_HASH should never be empty - at minimum it contains "plugins"
         const PLUGIN_MIN_LEN: usize = "plugins".len();
@@ -226,7 +226,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_raw_hash_has_correct_size() {
         // SHA-256 produces a 32-byte (256-bit) digest
         assert_eq!(
@@ -236,7 +236,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_plugin_hash_hex_format() {
         // SHA-256 hash as hex should be 64 characters (32 bytes * 2 hex chars per byte)
         assert_eq!(
@@ -258,7 +258,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hash_computation_is_deterministic() {
         // The hash should be consistent - recomputing should give same result
         use sha2_const_stable::Sha256;
@@ -271,7 +271,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hex_encoding_matches_raw_hash() {
         // Verify that PLUGIN_HASH_HEX is the correct hex encoding of RAW_HASH
         use const_hex::{Buffer, const_encode};
@@ -285,7 +285,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hash_differs_from_empty_string() {
         // The hash should not be the hash of an empty string
         use sha2_const_stable::Sha256;
@@ -298,7 +298,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hash_differs_from_just_plugins_string() {
         // The hash should differ from just "plugins" if any features are enabled
         use sha2_const_stable::Sha256;
@@ -313,7 +313,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_plugin_hash_contains_feature_markers() {
         // When all-plugins is enabled, PLUGIN_HASH should contain feature markers
         #[cfg(feature = "all-plugins")]
@@ -335,7 +335,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_hex_buf_is_valid_buffer() {
         // HEX_BUF should be a valid buffer that can be converted to string
         let hex_str = HEX_BUF.as_str();
@@ -351,7 +351,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_specific_feature_inclusion() {
         // Test that specific features are included in the hash string when enabled
         #[cfg(feature = "plugin-idiomorph")]
@@ -385,7 +385,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_uuid_insecure_exclusivity() {
         // When uuid-insecure is enabled, the regular uuid should not be in the hash
         #[cfg(feature = "plugin-uuid-insecure")]
@@ -410,7 +410,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_actions_plugin_features() {
         // Test various action plugin features
         #[cfg(feature = "plugin-actions-click")]

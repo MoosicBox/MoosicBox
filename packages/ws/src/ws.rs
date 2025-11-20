@@ -760,7 +760,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_context_default() {
         let context = WebsocketContext::default();
 
@@ -769,7 +769,7 @@ mod tests {
         assert_eq!(context.player_actions.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_context_clone() {
         let context1 = WebsocketContext {
             connection_id: "test-123".to_string(),
@@ -782,7 +782,7 @@ mod tests {
         assert_eq!(context1.profile, context2.profile);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_serialization() {
         let response = Response {
             status_code: 200,
@@ -794,7 +794,7 @@ mod tests {
         assert_eq!(json["body"], "Success");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_response_deserialization() {
         let json = serde_json::json!({
             "statusCode": 404,
@@ -806,14 +806,14 @@ mod tests {
         assert_eq!(response.body, "Not Found");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_send_error_display() {
         let error = WebsocketSendError::Unknown("test error".to_string());
         let error_str = error.to_string();
         assert!(error_str.contains("test error"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_message_error_display() {
         let error = WebsocketMessageError::MissingMessageType;
         assert_eq!(error.to_string(), "Missing message type");
@@ -828,7 +828,7 @@ mod tests {
         assert_eq!(error.to_string(), "Missing profile");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_message_error_invalid_payload() {
         let error =
             WebsocketMessageError::InvalidPayload("field_name".to_string(), "reason".to_string());
@@ -837,26 +837,26 @@ mod tests {
         assert!(error_str.contains("reason"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_session_error_display() {
         let error = UpdateSessionError::NoSessionFound;
         assert_eq!(error.to_string(), "No session found");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_connect_error_display() {
         let error = WebsocketConnectError::Unknown;
         assert_eq!(error.to_string(), "Unknown");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_connection_data_serialization() {
         let data = WebsocketConnectionData { playing: true };
         let json = serde_json::to_value(&data).unwrap();
         assert_eq!(json["playing"], true);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_connection_data_deserialization() {
         let json = serde_json::json!({
             "playing": false
@@ -890,7 +890,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_connect_returns_success_response() {
         let sender = MockWebsocketSender;
         let context = WebsocketContext {
@@ -905,14 +905,14 @@ mod tests {
         assert_eq!(response.body, "Connected");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_sender_debug() {
         let sender = MockWebsocketSender;
         let debug_str = format!("{:?}", &sender as &dyn WebsocketSender);
         assert_eq!(debug_str, "{WebsocketSender}");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_send_error_from_parse_int() {
         let parse_error = "invalid".parse::<u64>().unwrap_err();
         let ws_error = WebsocketSendError::from(parse_error);
@@ -923,7 +923,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_send_error_from_serde() {
         // Create a value that will fail during deserialization
         let invalid_json = r#"{"key": invalid}"#;
@@ -937,7 +937,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_message_error_from_websocket_send_error() {
         let send_error = WebsocketSendError::Unknown("test".to_string());
         let message_error = WebsocketMessageError::from(send_error);
@@ -948,7 +948,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_message_error_from_serde() {
         let invalid_json = r#"{"key": invalid}"#;
         let serde_error: serde_json::Error =
@@ -961,7 +961,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_session_error_from_websocket_send_error() {
         let send_error = WebsocketSendError::Unknown("test".to_string());
         let update_error = UpdateSessionError::from(send_error);
@@ -972,7 +972,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_update_session_error_from_serde() {
         let invalid_json = r#"{"key": invalid}"#;
         let serde_error: serde_json::Error =
@@ -985,7 +985,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_disconnect_error_from_websocket_send_error() {
         let send_error = WebsocketSendError::Unknown("test".to_string());
         let disconnect_error = WebsocketDisconnectError::from(send_error);
@@ -996,7 +996,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_websocket_disconnect_error_from_serde() {
         let invalid_json = r#"{"key": invalid}"#;
         let serde_error: serde_json::Error =

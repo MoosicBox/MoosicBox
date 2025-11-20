@@ -169,25 +169,25 @@ mod tests {
     use super::*;
     use syn::parse_quote;
 
-    #[test]
+    #[test_log::test]
     fn test_has_inject_attr_with_inject_yields() {
         let attrs: Vec<Attribute> = vec![parse_quote!(#[inject_yields])];
         assert!(has_inject_attr(&attrs));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_has_inject_attr_without_inject_yields() {
         let attrs: Vec<Attribute> = vec![parse_quote!(#[allow(dead_code)])];
         assert!(!has_inject_attr(&attrs));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_has_inject_attr_empty_attributes() {
         let attrs: Vec<Attribute> = vec![];
         assert!(!has_inject_attr(&attrs));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_has_inject_attr_multiple_attributes_with_inject_yields() {
         let attrs: Vec<Attribute> = vec![
             parse_quote!(#[allow(dead_code)]),
@@ -197,14 +197,14 @@ mod tests {
         assert!(has_inject_attr(&attrs));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_has_inject_attr_similar_named_attributes() {
         let attrs: Vec<Attribute> =
             vec![parse_quote!(#[inject_something]), parse_quote!(#[yields])];
         assert!(!has_inject_attr(&attrs));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_detects_async_fn_without_attribute() {
         let code = r#"
             async fn test_function() {
@@ -223,7 +223,7 @@ mod tests {
         assert!(checker.warnings[0].contains("missing #[inject_yields]"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_allows_async_fn_with_attribute() {
         let code = r#"
             #[inject_yields]
@@ -241,7 +241,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_ignores_sync_fn() {
         let code = r#"
             fn test_function() {
@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_detects_async_method_in_impl_without_attribute() {
         let code = r#"
             struct MyStruct;
@@ -281,7 +281,7 @@ mod tests {
         assert!(checker.warnings[0].contains("missing #[inject_yields]"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_allows_async_method_with_method_level_attribute() {
         let code = r#"
             struct MyStruct;
@@ -302,7 +302,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_allows_async_method_with_impl_level_attribute() {
         let code = r#"
             struct MyStruct;
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_allows_functions_in_module_with_attribute() {
         let code = r#"
             #[inject_yields]
@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_detects_multiple_async_functions() {
         let code = r#"
             async fn first_function() {
@@ -366,7 +366,7 @@ mod tests {
         assert!(checker.warnings[1].contains("second_function"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_mixed_async_and_sync_functions() {
         let code = r#"
             async fn async_function() {
@@ -393,7 +393,7 @@ mod tests {
         assert!(checker.warnings[0].contains("async_function"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_impl_with_multiple_methods() {
         let code = r"
             struct MyStruct;
@@ -422,7 +422,7 @@ mod tests {
         assert!(!checker.warnings.iter().any(|w| w.contains("sync_method")));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_trait_impl_methods() {
         let code = r#"
             struct MyStruct;
@@ -444,7 +444,7 @@ mod tests {
         assert!(checker.warnings[0].contains("trait_method"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_exempts_trait_impl_with_attribute() {
         let code = r#"
             struct MyStruct;
@@ -466,7 +466,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_nested_items() {
         let code = r"
             mod outer {
@@ -499,7 +499,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_attribute_with_arguments() {
         let code = r#"
             #[inject_yields(some_arg)]
@@ -518,7 +518,7 @@ mod tests {
         assert_eq!(checker.warnings.len(), 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_checker_warning_format_includes_filename() {
         let code = r#"
             async fn test_function() {

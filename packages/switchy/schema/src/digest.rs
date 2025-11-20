@@ -26,7 +26,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_trait_custom_implementation() {
         let data = TestData {
             value: "hello".to_string(),
@@ -43,7 +43,7 @@ mod tests {
         assert_ne!(&result[..], &[0u8; 32]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_deterministic() {
         let data = TestData {
             value: "test_value".to_string(),
@@ -62,7 +62,7 @@ mod tests {
         assert_eq!(result1, result2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_different_data_different_hash() {
         let data1 = TestData {
             value: "value1".to_string(),
@@ -83,7 +83,7 @@ mod tests {
         assert_ne!(result1, result2);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_multiple_updates() {
         let data1 = TestData {
             value: "part1".to_string(),
@@ -103,7 +103,7 @@ mod tests {
         assert_ne!(&result[..], &[0u8; 32]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_empty_string() {
         let data = TestData {
             value: String::new(),
@@ -118,7 +118,7 @@ mod tests {
         assert_ne!(&result[..], &[0u8; 32]);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_digest_order_matters() {
         let data1 = TestData {
             value: "abc".to_string(),

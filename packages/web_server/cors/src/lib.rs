@@ -93,7 +93,7 @@ impl<T> AllOrSome<T> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_all_or_some_is_all_and_is_some() {
         assert!(AllOrSome::<()>::All.is_all());
         assert!(!AllOrSome::<()>::All.is_some());
@@ -102,13 +102,13 @@ mod tests {
         assert!(AllOrSome::Some(()).is_some());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_all_or_some_default_is_all() {
         let default: AllOrSome<Vec<String>> = AllOrSome::default();
         assert!(default.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_all_or_some_as_ref() {
         let all = AllOrSome::<String>::All;
         assert_eq!(all.as_ref(), None);
@@ -117,7 +117,7 @@ mod tests {
         assert_eq!(some.as_ref(), Some(&String::from("test")));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_all_or_some_as_mut() {
         let mut all = AllOrSome::<String>::All;
         assert_eq!(all.as_mut(), None);
@@ -129,7 +129,7 @@ mod tests {
         assert_eq!(some.as_ref(), Some(&String::from("test_modified")));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_default() {
         let cors = Cors::default();
         assert!(matches!(cors.allowed_origins, AllOrSome::Some(ref v) if v.is_empty()));
@@ -140,13 +140,13 @@ mod tests {
         assert_eq!(cors.max_age, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_any_origin() {
         let cors = Cors::default().allow_any_origin();
         assert!(cors.allowed_origins.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_origin_single() {
         let cors = Cors::default().allow_origin("https://example.com");
         match cors.allowed_origins {
@@ -158,7 +158,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_origin_multiple() {
         let cors = Cors::default()
             .allow_origin("https://example.com")
@@ -173,7 +173,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_origin_after_allow_any_has_no_effect() {
         let cors = Cors::default()
             .allow_any_origin()
@@ -181,7 +181,7 @@ mod tests {
         assert!(cors.allowed_origins.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_origins_iterator() {
         let origins = vec!["https://a.com", "https://b.com", "https://c.com"];
         let cors = Cors::default().allowed_origins(origins);
@@ -196,20 +196,20 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_origins_after_allow_any_has_no_effect() {
         let origins = vec!["https://a.com", "https://b.com"];
         let cors = Cors::default().allow_any_origin().allowed_origins(origins);
         assert!(cors.allowed_origins.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_any_method() {
         let cors = Cors::default().allow_any_method();
         assert!(cors.allowed_methods.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_method_single() {
         let cors = Cors::default().allow_method(Method::Get);
         match cors.allowed_methods {
@@ -221,7 +221,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_method_multiple() {
         let cors = Cors::default()
             .allow_method(Method::Get)
@@ -238,13 +238,13 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_method_after_allow_any_has_no_effect() {
         let cors = Cors::default().allow_any_method().allow_method(Method::Get);
         assert!(cors.allowed_methods.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_methods_iterator() {
         let methods = vec![Method::Get, Method::Post, Method::Delete];
         let cors = Cors::default().allowed_methods(methods);
@@ -259,20 +259,20 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_methods_after_allow_any_has_no_effect() {
         let methods = vec![Method::Get, Method::Post];
         let cors = Cors::default().allow_any_method().allowed_methods(methods);
         assert!(cors.allowed_methods.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_any_header() {
         let cors = Cors::default().allow_any_header();
         assert!(cors.allowed_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_header_single() {
         let cors = Cors::default().allow_header("Content-Type");
         match cors.allowed_headers {
@@ -284,7 +284,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_header_multiple() {
         let cors = Cors::default()
             .allow_header("Content-Type")
@@ -301,7 +301,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allow_header_after_allow_any_has_no_effect() {
         let cors = Cors::default()
             .allow_any_header()
@@ -309,7 +309,7 @@ mod tests {
         assert!(cors.allowed_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_headers_iterator() {
         let headers = vec!["Content-Type", "Authorization", "X-Api-Key"];
         let cors = Cors::default().allowed_headers(headers);
@@ -324,20 +324,20 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_allowed_headers_after_allow_any_has_no_effect() {
         let headers = vec!["Content-Type", "Authorization"];
         let cors = Cors::default().allow_any_header().allowed_headers(headers);
         assert!(cors.allowed_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_any_header() {
         let cors = Cors::default().expose_any_header();
         assert!(cors.expose_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_header_single() {
         let cors = Cors::default().expose_header("X-Custom-Header");
         match cors.expose_headers {
@@ -349,7 +349,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_header_multiple() {
         let cors = Cors::default()
             .expose_header("X-Custom-Header")
@@ -366,7 +366,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_header_after_expose_any_has_no_effect() {
         let cors = Cors::default()
             .expose_any_header()
@@ -374,7 +374,7 @@ mod tests {
         assert!(cors.expose_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_headers_iterator() {
         let headers = vec!["X-Header-1", "X-Header-2", "X-Header-3"];
         let cors = Cors::default().expose_headers(headers);
@@ -389,26 +389,26 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_expose_headers_after_expose_any_has_no_effect() {
         let headers = vec!["X-Header-1", "X-Header-2"];
         let cors = Cors::default().expose_any_header().expose_headers(headers);
         assert!(cors.expose_headers.is_all());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_support_credentials() {
         let cors = Cors::default().support_credentials();
         assert!(cors.supports_credentials);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_max_age() {
         let cors = Cors::default().max_age(3600);
         assert_eq!(cors.max_age, Some(3600));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_max_age_with_option() {
         let cors = Cors::default().max_age(Some(7200));
         assert_eq!(cors.max_age, Some(7200));
@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(cors_none.max_age, None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_builder_chain_permissive() {
         let cors = Cors::default()
             .allow_any_origin()
@@ -435,7 +435,7 @@ mod tests {
         assert_eq!(cors.max_age, Some(3600));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_builder_chain_restrictive() {
         let cors = Cors::default()
             .allow_origin("https://example.com")
@@ -485,7 +485,7 @@ mod tests {
         assert_eq!(cors.max_age, Some(1800));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cors_combining_individual_and_iterator_methods() {
         let cors = Cors::default()
             .allow_origin("https://example.com")

@@ -193,7 +193,7 @@ impl ViewportListener {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_initial_check_visible() {
         let viewport = Viewport {
             parent: None,
@@ -221,7 +221,7 @@ mod tests {
         assert!(prev_dist.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_initial_check_not_visible() {
         let viewport = Viewport {
             parent: None,
@@ -249,7 +249,7 @@ mod tests {
         assert!(prev_dist.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_visibility_change() {
         let viewport = Viewport {
             parent: None,
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(prev_visible, Some(true)); // Previous state was visible
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_no_viewport() {
         // No viewport means always visible
         let mut listener = ViewportListener::new(None, 100.0, 100.0, 50.0, 50.0);
@@ -307,7 +307,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_no_change() {
         let viewport = Viewport {
             parent: None,
@@ -338,7 +338,7 @@ mod tests {
         assert!(prev_dist.is_none()); // No significant distance change
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_with_parent_both_visible() {
         let parent = Viewport {
             parent: None,
@@ -379,7 +379,7 @@ mod tests {
         assert!(visible);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_with_parent_child_not_visible() {
         let parent = Viewport {
             parent: None,

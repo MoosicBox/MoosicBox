@@ -113,7 +113,7 @@ pub enum AuthValues {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_api_music_api_serialization() {
         let api = ApiMusicApi {
             id: "qobuz".to_string(),
@@ -130,7 +130,7 @@ mod tests {
         assert_eq!(api, deserialized);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_api_music_api_camel_case_serialization() {
         let api = ApiMusicApi {
             id: "tidal".to_string(),
@@ -149,7 +149,7 @@ mod tests {
         assert!(json.contains("\"authMethod\":null"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_auth_method_serialization() {
         let username_password = AuthMethod::UsernamePassword;
         let poll = AuthMethod::Poll;
@@ -167,7 +167,7 @@ mod tests {
         assert_eq!(deserialized_poll, AuthMethod::Poll);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_auth_values_username_password_serialization() {
         let auth = AuthValues::UsernamePassword {
             username: "test_user".to_string(),
@@ -188,7 +188,7 @@ mod tests {
         assert!(json.contains("\"type\":\"username-password\""));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_auth_values_poll_serialization() {
         let auth = AuthValues::Poll;
 
@@ -203,7 +203,7 @@ mod tests {
         assert!(json.contains("\"type\":\"poll\""));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_auth_values_kebab_case_tag() {
         let auth = AuthValues::UsernamePassword {
             username: "user".to_string(),

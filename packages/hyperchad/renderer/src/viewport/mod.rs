@@ -101,7 +101,7 @@ pub fn is_visible(
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_fully_inside_viewport() {
         // Widget at (10, 10) with size 50x50, viewport at (0, 0) with size 800x600
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 10.0, 10.0, 50.0, 50.0);
@@ -110,7 +110,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_partially_overlapping_viewport() {
         // Widget partially overlapping viewport from the right
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 750.0, 100.0, 100.0, 100.0);
@@ -119,7 +119,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_completely_outside_viewport_right() {
         // Widget completely to the right of viewport
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 850.0, 100.0, 50.0, 50.0);
@@ -128,7 +128,7 @@ mod tests {
         assert!(dist > 0.0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_completely_outside_viewport_left() {
         // Widget completely to the left of viewport
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, -100.0, 100.0, 50.0, 50.0);
@@ -137,7 +137,7 @@ mod tests {
         assert!(dist > 0.0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_completely_outside_viewport_below() {
         // Widget completely below viewport
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 100.0, 650.0, 50.0, 50.0);
@@ -146,7 +146,7 @@ mod tests {
         assert!(dist > 0.0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_completely_outside_viewport_above() {
         // Widget completely above viewport
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 100.0, -100.0, 50.0, 50.0);
@@ -155,7 +155,7 @@ mod tests {
         assert!(dist > 0.0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_at_viewport_edge() {
         // Widget touching the right edge of viewport
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 750.0, 100.0, 50.0, 50.0);
@@ -164,7 +164,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_widget_at_viewport_corner() {
         // Widget at bottom-right corner
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 750.0, 550.0, 50.0, 50.0);
@@ -173,7 +173,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_with_negative_viewport_position() {
         // Viewport scrolled to negative position
         let (visible, dist) = is_visible(-100.0, -50.0, 800.0, 600.0, 10.0, 10.0, 50.0, 50.0);
@@ -182,7 +182,7 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_visible_zero_size_widget() {
         // Widget with zero size at origin
         let (visible, dist) = is_visible(0.0, 0.0, 800.0, 600.0, 0.0, 0.0, 0.0, 0.0);
@@ -191,14 +191,14 @@ mod tests {
         assert!(dist < 0.001);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_max_f32_returns_larger_value() {
         assert!((max_f32(5.0, 10.0) - 10.0).abs() < f32::EPSILON);
         assert!((max_f32(10.0, 5.0) - 10.0).abs() < f32::EPSILON);
         assert!((max_f32(7.5, 7.5) - 7.5).abs() < f32::EPSILON);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_max_f32_with_negative_values() {
         assert!((max_f32(-5.0, -10.0) - (-5.0)).abs() < f32::EPSILON);
         assert!((max_f32(-10.0, -5.0) - (-5.0)).abs() < f32::EPSILON);

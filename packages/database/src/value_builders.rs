@@ -297,14 +297,14 @@ impl From<NowBuilder> for DatabaseValue {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_basic() {
         let builder = NowBuilder::new();
         assert!(builder.interval.is_zero());
         assert!(builder.timezone.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_plus_operations() {
         let result = DatabaseValue::now()
             .plus_years(1)
@@ -327,7 +327,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_minus_operations() {
         let result = DatabaseValue::now()
             .minus_years(1)
@@ -344,7 +344,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_timezone() {
         let builder = DatabaseValue::now().tz("America/Los_Angeles");
 
@@ -353,7 +353,7 @@ mod tests {
         let _result = builder.build();
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_duration() {
         let duration = Duration::from_secs(3661); // 1 hour, 1 minute, 1 second
         let result = DatabaseValue::now().plus_duration(duration).build();
@@ -367,33 +367,33 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_zero_interval_returns_now() {
         let result = DatabaseValue::now().build();
         assert_eq!(result, DatabaseValue::Now);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_non_zero_interval_returns_now_plus() {
         let result = DatabaseValue::now().plus_days(1).build();
         assert!(matches!(result, DatabaseValue::NowPlus(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_plus_direct() {
         let interval = SqlInterval::from_hours(24);
         let result = DatabaseValue::now_plus(interval.clone());
         assert_eq!(result, DatabaseValue::NowPlus(interval));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_from_trait() {
         let builder = DatabaseValue::now().plus_days(1);
         let result: DatabaseValue = builder.into();
         assert!(matches!(result, DatabaseValue::NowPlus(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_normalization_in_build() {
         let result = DatabaseValue::now()
             .plus_minutes(90) // Should normalize to 1 hour 30 minutes
@@ -407,7 +407,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_duration_subtraction() {
         let duration = Duration::from_secs(3600); // 1 hour
         let result = DatabaseValue::now()
@@ -422,7 +422,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_duration_with_nanoseconds() {
         let duration = Duration::new(1, 500_000_000); // 1.5 seconds
         let result = DatabaseValue::now().plus_duration(duration).build();
@@ -435,7 +435,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_minus_duration_with_nanos_borrow() {
         // Test nanosecond borrowing from seconds
         let add_duration = Duration::new(2, 100_000_000); // 2.1 seconds
@@ -455,25 +455,25 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_timezone_local() {
         let builder = DatabaseValue::now().local();
         assert_eq!(builder.timezone, Some("LOCAL".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_timezone_utc() {
         let builder = DatabaseValue::now().tz("America/Los_Angeles").utc();
         assert_eq!(builder.timezone, None); // UTC is represented as None
     }
 
-    #[test]
+    #[test_log::test]
     fn test_timezone_custom() {
         let builder = DatabaseValue::now().tz("Europe/London");
         assert_eq!(builder.timezone, Some("Europe/London".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_complex_interval_combination() {
         let result = DatabaseValue::now()
             .plus_years(1)
@@ -496,14 +496,14 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_default_now_builder() {
         let builder = NowBuilder::default();
         assert!(builder.interval.is_zero());
         assert!(builder.timezone.is_none());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_now_builder_chaining() {
         // Test that builder methods can be chained fluently
         let result = NowBuilder::new()
@@ -515,7 +515,7 @@ mod tests {
         assert!(matches!(result, DatabaseValue::NowPlus(_)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_nanos_overflow_in_plus_duration() {
         // Test that large nanosecond values are properly normalized
         let duration1 = Duration::new(0, 800_000_000); // 0.8 seconds

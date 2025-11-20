@@ -908,32 +908,32 @@ impl AsModelResult<QobuzSearchResults, ParseError> for Value {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_magic_qobuz_album_release_type_determinizer_single_track() {
         let result = magic_qobuz_album_release_type_determinizer(180, 1);
         assert_eq!(result, QobuzAlbumReleaseType::Single);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_magic_qobuz_album_release_type_determinizer_short_ep() {
         let result = magic_qobuz_album_release_type_determinizer(300, 3);
         assert_eq!(result, QobuzAlbumReleaseType::EpSingle);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_magic_qobuz_album_release_type_determinizer_long_ep_becomes_album() {
         // 21 minutes (longer than 20 minutes threshold)
         let result = magic_qobuz_album_release_type_determinizer(1260, 6);
         assert_eq!(result, QobuzAlbumReleaseType::Album);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_magic_qobuz_album_release_type_determinizer_many_tracks() {
         let result = magic_qobuz_album_release_type_determinizer(2400, 12);
         assert_eq!(result, QobuzAlbumReleaseType::Album);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_magic_qobuz_album_release_type_determinizer_boundary_cases() {
         // Exactly at EP/Single boundary with short duration
         let result = magic_qobuz_album_release_type_determinizer(100, 2);
@@ -944,7 +944,7 @@ mod tests {
         assert_eq!(result, QobuzAlbumReleaseType::Album);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_size_from_u16() {
         assert_eq!(QobuzImageSize::from(50), QobuzImageSize::Thumbnail);
         assert_eq!(QobuzImageSize::from(100), QobuzImageSize::Thumbnail);
@@ -960,7 +960,7 @@ mod tests {
         assert_eq!(QobuzImageSize::from(5000), QobuzImageSize::Mega);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_size_to_u16() {
         assert_eq!(u16::from(QobuzImageSize::Thumbnail), 100);
         assert_eq!(u16::from(QobuzImageSize::Small), 300);
@@ -970,7 +970,7 @@ mod tests {
         assert_eq!(u16::from(QobuzImageSize::Mega), 4800);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_size_from_image_cover_size() {
         assert_eq!(
             QobuzImageSize::from(ImageCoverSize::Thumbnail),
@@ -994,7 +994,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_all_available() {
         let image = QobuzImage {
             thumbnail: Some("thumb.jpg".to_string()),
@@ -1008,7 +1008,7 @@ mod tests {
         assert_eq!(image.cover_url(), Some("mega.jpg".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_for_size_with_fallback() {
         let image = QobuzImage {
             thumbnail: None,
@@ -1038,7 +1038,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_for_size_prefers_higher_quality() {
         let image = QobuzImage {
             thumbnail: Some("thumb.jpg".to_string()),
@@ -1057,7 +1057,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_for_size_no_images() {
         let image = QobuzImage::default();
 
@@ -1065,7 +1065,7 @@ mod tests {
         assert_eq!(image.cover_url_for_size(QobuzImageSize::Thumbnail), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_for_size_exact_match() {
         let image = QobuzImage {
             thumbnail: None,
@@ -1082,7 +1082,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_cover_url_for_size_thumbnail_fallback_chain() {
         let image = QobuzImage {
             thumbnail: None,
@@ -1100,7 +1100,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_qobuz_image_display() {
         assert_eq!(format!("{}", QobuzImageSize::Thumbnail), "100");
         assert_eq!(format!("{}", QobuzImageSize::Small), "300");

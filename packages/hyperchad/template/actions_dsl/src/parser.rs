@@ -919,7 +919,7 @@ mod tests {
     use super::*;
     use quote::quote;
 
-    #[test]
+    #[test_log::test]
     fn test_parse_pattern_literal_integer() {
         let input = quote! { 42 };
         let result = Parser::parse2(parse_pattern, input).unwrap();
@@ -929,7 +929,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_pattern_literal_string() {
         let input = quote! { "test" };
         let result = Parser::parse2(parse_pattern, input).unwrap();
@@ -939,7 +939,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_pattern_variable() {
         let input = quote! { x };
         let result = Parser::parse2(parse_pattern, input).unwrap();
@@ -949,14 +949,14 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_pattern_wildcard() {
         let input = quote! { _ };
         let result = Parser::parse2(parse_pattern, input).unwrap();
         assert!(matches!(result, Pattern::Wildcard));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_pattern_enum_variant() {
         let input = quote! { Option::Some };
         let result = Parser::parse2(parse_pattern, input).unwrap();
@@ -974,21 +974,21 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_literal_bool_true() {
         let lit = syn::parse_quote! { true };
         let result = parse_literal(lit).unwrap();
         assert!(matches!(result, Literal::Bool(true)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_literal_bool_false() {
         let lit = syn::parse_quote! { false };
         let result = parse_literal(lit).unwrap();
         assert!(matches!(result, Literal::Bool(false)));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_literal_float() {
         let lit = syn::parse_quote! { 3.14 };
         let result = parse_literal(lit).unwrap();
@@ -998,7 +998,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_closure_single_param() {
         let input = quote! { |x| x };
         let result = Parser::parse2(parse_closure, input).unwrap();
@@ -1011,7 +1011,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_closure_multiple_params() {
         let input = quote! { |x, y| x };
         let result = Parser::parse2(parse_closure, input).unwrap();
@@ -1025,7 +1025,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_closure_no_params() {
         let input = quote! { || 42 };
         let result = Parser::parse2(parse_closure, input).unwrap();
@@ -1037,7 +1037,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_unary_not() {
         let input = quote! { !true };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1049,7 +1049,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_unary_minus() {
         let input = quote! { -42 };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1061,7 +1061,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_unary_reference() {
         let input = quote! { &value };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1073,7 +1073,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_binary_add() {
         let input = quote! { 1 + 2 };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1089,7 +1089,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_binary_multiply() {
         let input = quote! { 3 * 4 };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1105,7 +1105,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_binary_equal() {
         let input = quote! { x == y };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1121,7 +1121,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_binary_and() {
         let input = quote! { true && false };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1137,7 +1137,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_binary_or() {
         let input = quote! { true || false };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1153,7 +1153,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_grouping_preserves_expression() {
         let input = quote! { (a + b) };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1172,7 +1172,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_empty_array() {
         let input = quote! { [] };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1184,7 +1184,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_array_with_elements() {
         let input = quote! { [1, 2, 3] };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1196,7 +1196,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_enum_variant_simple() {
         let input = quote! { Key::Escape };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1208,7 +1208,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_struct_variant_with_fields() {
         let input = quote! { Action::Update { id: 123, name: "test" } };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1221,7 +1221,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_let_statement() {
         let input = quote! { let x = 42; };
         let result = Parser::parse2(parse_statement, input).unwrap();
@@ -1233,7 +1233,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_if_statement_with_else() {
         let input = quote! {
             if true {
@@ -1256,7 +1256,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_if_statement_without_else() {
         let input = quote! {
             if true {
@@ -1277,7 +1277,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_for_statement() {
         let input = quote! {
             for item in items {
@@ -1298,7 +1298,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_while_statement() {
         let input = quote! {
             while true {
@@ -1314,14 +1314,14 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_empty_dsl() {
         let input = quote! {};
         let result = parse_dsl.parse2(input).unwrap();
         assert!(result.statements.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_multiple_statements() {
         let input = quote! {
             let x = 1;
@@ -1332,7 +1332,7 @@ mod tests {
         assert_eq!(result.statements.len(), 3);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_nested_blocks() {
         let input = quote! {
             {
@@ -1351,7 +1351,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_operator_precedence_add_multiply() {
         let input = quote! { 1 + 2 * 3 };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1373,7 +1373,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_comparison_less_than() {
         let input = quote! { a < b };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1389,7 +1389,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_comparison_greater_than() {
         let input = quote! { a > b };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1405,7 +1405,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_comparison_not_equal() {
         let input = quote! { a != b };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1421,7 +1421,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_method_call() {
         let input = quote! { value.to_string() };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1438,7 +1438,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_method_call_with_args() {
         let input = quote! { value.clamp(0, 100) };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1455,7 +1455,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_field_access() {
         let input = quote! { obj.field };
         let result = Parser::parse2(parse_expression, input).unwrap();
@@ -1467,7 +1467,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_dsl_with_fallback_for_unknown_function() {
         let input = quote! { unknown_function(1, 2, 3) };
         let result = parse_dsl_with_fallback(&input);
@@ -1478,7 +1478,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_parse_element_function() {
         let input = quote! { element(".selector") };
         let result = Parser::parse2(parse_expression, input).unwrap();

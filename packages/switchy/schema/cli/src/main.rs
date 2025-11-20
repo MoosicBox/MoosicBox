@@ -1540,7 +1540,7 @@ mod tests {
     use clap::Parser;
     use switchy_fs::TempDir;
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_create_command() {
         let cli = Cli::parse_from(["switchy-migrate", "create", "test_migration"]);
 
@@ -1556,7 +1556,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_rollback_command() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1589,7 +1589,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_error_display() {
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
         let cli_error = CliError::Io(io_error);
@@ -1598,14 +1598,14 @@ mod tests {
         assert!(error_string.contains("File not found"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_config_error() {
         let config_error = CliError::Config("Invalid configuration".to_string());
         let error_string = format!("{config_error}");
         assert_eq!(error_string, "Configuration error: Invalid configuration");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_rollback_with_dry_run() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1639,7 +1639,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_rollback_all_dry_run() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1659,7 +1659,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_rollback_to_migration() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1679,7 +1679,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_with_short_flag() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1701,7 +1701,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_status_with_all_custom_options() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1731,7 +1731,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_file() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
@@ -1786,7 +1786,7 @@ mod tests {
         assert!(down_content.contains("Rollback: test_migration"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_retry_command() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1812,7 +1812,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_retry_with_custom_paths() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1842,7 +1842,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_mark_completed_command() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1870,7 +1870,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_mark_completed_with_force() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1896,7 +1896,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_migrate_with_force() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1919,7 +1919,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_migrate_force_with_other_options() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -1949,7 +1949,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_status_show_failed() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2045,7 +2045,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_validate_command() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2076,7 +2076,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_validate_with_flags() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2105,7 +2105,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_validate_command_default_values() {
         let cli = Cli::parse_from(["switchy-migrate", "validate", "-d", "sqlite://memory"]);
 
@@ -2127,7 +2127,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_with_empty_name() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
@@ -2144,7 +2144,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_creates_directory_structure() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
@@ -2176,7 +2176,7 @@ mod tests {
         assert!(switchy_fs::exists(&down_sql), "down.sql should exist");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_with_special_characters_in_name() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
@@ -2207,7 +2207,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_create_migration_file_content() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
@@ -2257,7 +2257,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_mark_all_completed_pending_only() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2290,7 +2290,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_mark_all_completed_with_all_flags() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2325,7 +2325,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_migrate_with_require_checksum_validation() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2348,7 +2348,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_migrate_with_up_to() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2374,7 +2374,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_parsing_migrate_with_steps() {
         let cli = Cli::parse_from([
             "switchy-migrate",
@@ -2400,7 +2400,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_error_from_migration_error() {
         let migration_error =
             switchy_schema::MigrationError::Discovery("test_migration not found".to_string());
@@ -2410,7 +2410,7 @@ mod tests {
         assert!(error_string.contains("test_migration"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_error_from_io_error() {
         let io_error = std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
@@ -2422,7 +2422,7 @@ mod tests {
         assert!(error_string.contains("Access denied") || error_string.contains("migration"));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_cli_error_from_validation_error() {
         let migration_error =
             switchy_schema::MigrationError::Validation("Invalid migration format".to_string());

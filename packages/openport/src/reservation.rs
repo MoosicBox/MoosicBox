@@ -297,7 +297,7 @@ impl<R: PortRange> PortReservation<R> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_reserve_port() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port();
@@ -308,7 +308,7 @@ mod tests {
         assert!(reservation.is_reserved(port));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reserve_ports() {
         let reservation = PortReservation::new(15000..15100);
         let ports = reservation.reserve_ports(5);
@@ -326,7 +326,7 @@ mod tests {
         assert_eq!(unique_ports.len(), ports.len());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_release_port() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port().unwrap();
@@ -336,7 +336,7 @@ mod tests {
         assert!(!reservation.is_reserved(port));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_release_ports() {
         let reservation = PortReservation::new(15000..15100);
         let ports = reservation.reserve_ports(10);
@@ -353,7 +353,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_default_implementation() {
         let reservation: PortReservation<std::ops::Range<u16>> = PortReservation::default();
         let port = reservation.reserve_port();
@@ -361,7 +361,7 @@ mod tests {
         assert!((15000..65535).contains(&port.unwrap()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_default_implementation_inclusive() {
         let reservation: PortReservation<std::ops::RangeInclusive<u16>> =
             PortReservation::default();
@@ -370,7 +370,7 @@ mod tests {
         assert!((15000..=65535).contains(&port.unwrap()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reserve_more_than_available() {
         // Use a very small range to test this edge case
         let reservation = PortReservation::new(15000..15002);
@@ -386,7 +386,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_no_free_ports() {
         // Use a range that's likely to have no free ports (very high numbers)
         // Note: This test might be flaky on different systems, but it's worth testing
@@ -400,7 +400,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_inclusive_range() {
         let reservation = PortReservation::new(15000..=15010);
         let ports = reservation.reserve_ports(5);
@@ -412,7 +412,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reserve_after_release() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -434,7 +434,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_concurrent_reservations() {
         use std::sync::Arc;
         use std::thread;
@@ -475,7 +475,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_concurrent_reserve_and_release() {
         use std::sync::Arc;
         use std::thread;
@@ -526,7 +526,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_is_reserved_non_reserved_port() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -534,7 +534,7 @@ mod tests {
         assert!(!reservation.is_reserved(15050));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_release_non_reserved_port() {
         let reservation = PortReservation::new(15000..15100);
 
@@ -543,7 +543,7 @@ mod tests {
         assert!(!reservation.is_reserved(15050));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_reserve_port_returns_none_when_all_occupied() {
         // Create a reservation with a very limited range
         let reservation = PortReservation::new(15000..15002);
@@ -573,7 +573,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_double_release() {
         let reservation = PortReservation::new(15000..15100);
         let port = reservation.reserve_port().unwrap();

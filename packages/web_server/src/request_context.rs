@@ -58,7 +58,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_new() {
         let mut params = BTreeMap::new();
         params.insert("id".to_string(), "123".to_string());
@@ -67,13 +67,13 @@ mod tests {
         assert_eq!(context.path_params, params);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_default() {
         let context = RequestContext::default();
         assert!(context.path_params.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_with_path_params() {
         let mut params1 = BTreeMap::new();
         params1.insert("id".to_string(), "123".to_string());
@@ -89,13 +89,13 @@ mod tests {
         assert_eq!(context.path_params.get("post_id"), Some(&"789".to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_path_params_empty() {
         let context = RequestContext::new(BTreeMap::new());
         assert!(context.path_params.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_path_params_multiple() {
         let mut params = BTreeMap::new();
         params.insert("category".to_string(), "electronics".to_string());
@@ -119,7 +119,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_clone() {
         let mut params = BTreeMap::new();
         params.insert("id".to_string(), "123".to_string());
@@ -130,7 +130,7 @@ mod tests {
         assert_eq!(context1.path_params, context2.path_params);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_request_context_builder_chaining() {
         let mut params = BTreeMap::new();
         params.insert("id".to_string(), "999".to_string());

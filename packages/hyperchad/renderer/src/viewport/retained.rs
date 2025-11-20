@@ -410,7 +410,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_initial_callback() {
         let widget = TestWidget {
             x: 100,
@@ -439,7 +439,7 @@ mod tests {
         assert!(*called.lock().unwrap(), "Callback should be called on init");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_visibility_change_triggers_callback() {
         let widget = TestWidget {
             x: 100,
@@ -473,7 +473,7 @@ mod tests {
         assert_eq!(*call_count.lock().unwrap(), 1);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_listener_no_viewport_always_visible() {
         let widget = TestWidget {
             x: 100,
@@ -496,7 +496,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_new_with_parent() {
         let parent = Viewport::new(
             None,
@@ -525,7 +525,7 @@ mod tests {
         assert_eq!(child.h(), 400);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_is_widget_visible_calls_is_visible() {
         let viewport = Viewport::new(
             None,
@@ -548,7 +548,7 @@ mod tests {
         let (_visible, _dist) = viewport.is_widget_visible(&widget);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_is_widget_visible_outside_viewport() {
         let viewport = Viewport::new(
             None,
@@ -573,7 +573,7 @@ mod tests {
         assert!(dist > 0);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_with_parent_checks_parent_visibility() {
         let parent = Viewport::new(
             None,
@@ -606,7 +606,7 @@ mod tests {
         let (_visible, _dist) = child.is_widget_visible(&widget);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_widget_position_debug_format() {
         let widget = TestWidget {
             x: 10,
@@ -624,7 +624,7 @@ mod tests {
         assert!(debug_str.contains(&40.to_string()));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_viewport_position_debug_format() {
         let vp = TestViewportPosition {
             x: 5,

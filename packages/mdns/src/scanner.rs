@@ -194,7 +194,7 @@ mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
 
-    #[test]
+    #[test_log::test]
     fn test_moosicbox_creation() {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080);
         let server = MoosicBox {
@@ -210,7 +210,7 @@ mod tests {
         assert_eq!(server.dns, "test-server._moosicboxserver._tcp.local.");
     }
 
-    #[test]
+    #[test_log::test]
     fn test_moosicbox_clone() {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 8080);
         let server = MoosicBox {
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(server.dns, cloned.dns);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_moosicbox_with_different_ports() {
         let server1 = MoosicBox {
             id: "server1".to_string(),
@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(server2.host.port(), 9000);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_context_new() {
         let (tx, _rx) = kanal::unbounded_async();
         let context = Context::new(tx);

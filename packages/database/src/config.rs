@@ -147,7 +147,7 @@ mod tests {
     use super::*;
     use crate::simulator::SimulationDatabase;
 
-    #[test]
+    #[test_log::test]
     fn test_config_database_from_arc() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -160,7 +160,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_config_database_from_ref() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -176,7 +176,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_config_database_into_arc() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -192,7 +192,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[test_log::test]
     fn test_config_database_deref() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -205,7 +205,7 @@ mod tests {
         let _db_ref: &dyn Database = &*config_db;
     }
 
-    #[test]
+    #[test_log::test]
     fn test_config_database_ref_into_dyn_database() {
         let db = Arc::new(
             Box::new(SimulationDatabase::new_for_path(None).unwrap()) as Box<dyn Database>
@@ -217,7 +217,7 @@ mod tests {
         let _ = db_ref;
     }
 
-    #[test]
+    #[test_log::test]
     fn test_init_and_reuse() {
         // This test uses a static global, so we need to be careful
         // We'll just verify init doesn't panic
