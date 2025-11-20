@@ -67,3 +67,259 @@ pub fn parse_date_time(value: &str) -> Result<NaiveDateTime, chrono::ParseError>
         log::error!("Error parsing full {value}: {e:?}");
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for year-only parsing
+    #[test]
+    fn test_parse_year_only_valid() {
+        let dt = parse_date_time("2024").unwrap();
+        assert_eq!(dt.to_string(), "2024-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_year_only_single_digit() {
+        let dt = parse_date_time("1").unwrap();
+        assert_eq!(dt.to_string(), "0001-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_year_only_with_leading_zeros() {
+        let dt = parse_date_time("0001").unwrap();
+        assert_eq!(dt.to_string(), "0001-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_year_only_max_valid() {
+        let dt = parse_date_time("9999").unwrap();
+        assert_eq!(dt.to_string(), "9999-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_year_only_invalid_non_numeric() {
+        // String with 4 chars but not a number should fail
+        let result = parse_date_time("abcd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_year_only_too_long() {
+        // More than 4 chars shouldn't use year-only path
+        let result = parse_date_time("12345");
+        assert!(result.is_err());
+    }
+
+    // Tests for ISO date parsing (10 characters)
+    #[test]
+    fn test_parse_iso_date_valid() {
+        let dt = parse_date_time("2024-10-24").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_iso_date_leap_year_valid() {
+        // Feb 29 on a leap year should succeed
+        let dt = parse_date_time("2024-02-29").unwrap();
+        assert_eq!(dt.to_string(), "2024-02-29 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_iso_date_leap_year_invalid() {
+        // Feb 29 on a non-leap year should fail
+        let result = parse_date_time("2023-02-29");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_invalid_month_zero() {
+        let result = parse_date_time("2024-00-15");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_invalid_month_thirteen() {
+        let result = parse_date_time("2024-13-15");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_invalid_day_zero() {
+        let result = parse_date_time("2024-10-00");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_invalid_day_too_high() {
+        let result = parse_date_time("2024-10-32");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_invalid_day_for_month() {
+        // April only has 30 days
+        let result = parse_date_time("2024-04-31");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_date_ten_chars_not_date() {
+        // String that's 10 chars but not a valid date format
+        let result = parse_date_time("abcdefghij");
+        assert!(result.is_err());
+    }
+
+    // Tests for ISO datetime with Z suffix
+    #[test]
+    fn test_parse_iso_datetime_z_valid() {
+        let dt = parse_date_time("2024-10-24T12:30:45Z").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_z_midnight() {
+        let dt = parse_date_time("2024-10-24T00:00:00Z").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 00:00:00");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_z_end_of_day() {
+        let dt = parse_date_time("2024-10-24T23:59:59Z").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 23:59:59");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_z_invalid_hour() {
+        let result = parse_date_time("2024-10-24T24:00:00Z");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_z_invalid_minute() {
+        let result = parse_date_time("2024-10-24T12:60:00Z");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_z_invalid_second() {
+        // Note: Second 60 is actually valid for leap seconds in chrono
+        // So we test with 61 instead
+        let result = parse_date_time("2024-10-24T12:30:61Z");
+        assert!(result.is_err());
+    }
+
+    // Tests for ISO datetime with timezone offset
+    #[test]
+    fn test_parse_iso_datetime_with_timezone_valid() {
+        let dt = parse_date_time("2024-10-24T12:30:45+00:00").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_with_timezone_fractional_seconds() {
+        let dt = parse_date_time("2024-10-24T12:30:45.123+00:00").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45.123");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_with_timezone_nanoseconds() {
+        let dt = parse_date_time("2024-10-24T12:30:45.123456789+00:00").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45.123456789");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_with_timezone_invalid_hour() {
+        let result = parse_date_time("2024-10-24T25:00:00+00:00");
+        assert!(result.is_err());
+    }
+
+    // Tests for ISO datetime with fractional seconds (no timezone)
+    #[test]
+    fn test_parse_iso_datetime_fractional_valid() {
+        let dt = parse_date_time("2024-10-24T12:30:45.123").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45.123");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_fractional_single_digit() {
+        let dt = parse_date_time("2024-10-24T12:30:45.1").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45.100");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_fractional_nanoseconds() {
+        let dt = parse_date_time("2024-10-24T12:30:45.123456789").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45.123456789");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_no_fractional() {
+        // This falls through to the final parser which expects fractional
+        // but should still work without it
+        let dt = parse_date_time("2024-10-24T12:30:45").unwrap();
+        assert_eq!(dt.to_string(), "2024-10-24 12:30:45");
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_fractional_invalid_hour() {
+        let result = parse_date_time("2024-10-24T24:30:45.123");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_fractional_invalid_minute() {
+        let result = parse_date_time("2024-10-24T12:61:45.123");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_iso_datetime_fractional_invalid_second() {
+        let result = parse_date_time("2024-10-24T12:30:61.123");
+        assert!(result.is_err());
+    }
+
+    // Tests for format mismatches and edge cases
+    #[test]
+    fn test_parse_empty_string() {
+        let result = parse_date_time("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_wrong_date_separator() {
+        let result = parse_date_time("2024/10/24");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_wrong_datetime_separator() {
+        let result = parse_date_time("2024-10-24 12:30:45");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_mixed_format() {
+        let result = parse_date_time("24-10-2024");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_with_extra_whitespace() {
+        let result = parse_date_time(" 2024-10-24 ");
+        assert!(result.is_err());
+    }
+
+    // Tests for boundary years
+    #[test]
+    fn test_parse_year_boundary_year_1() {
+        let dt = parse_date_time("1").unwrap();
+        assert_eq!(dt.year(), 1);
+    }
+
+    #[test]
+    fn test_parse_date_boundary_year_9999() {
+        let dt = parse_date_time("9999-12-31").unwrap();
+        assert_eq!(dt.to_string(), "9999-12-31 00:00:00");
+    }
+}
