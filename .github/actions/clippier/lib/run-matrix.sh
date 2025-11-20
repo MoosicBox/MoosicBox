@@ -454,18 +454,25 @@ run_matrix_command() {
         # Determine whether to stream output based on stream_output setting
         if [[ "$stream_output" == "true" ]]; then
             # Stream output to console while capturing to file
-            if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" 2>&1 | tee "$output_file"); then
+            # Capture exit code inside subshell and return it
+            (
+                cd "$working_dir"
+                bash -e -o pipefail <<< "$rendered_script" 2>&1 | tee "$output_file"
+                exit ${PIPESTATUS[0]}
+            )
+            exit_code=$?
+            if [[ $exit_code -eq 0 ]]; then
                 echo "✅ SUCCESS for features [$feature_combo]"
             else
-                exit_code=$?
                 echo "❌ FAILED for features [$feature_combo] (exit code: $exit_code)" >&2
             fi
         else
             # Silent mode - only capture to file
-            if (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" > "$output_file" 2>&1); then
+            (cd "$working_dir" && bash -e -o pipefail <<< "$rendered_script" > "$output_file" 2>&1)
+            exit_code=$?
+            if [[ $exit_code -eq 0 ]]; then
                 echo "✅ SUCCESS for features [$feature_combo]"
             else
-                exit_code=$?
                 echo "❌ FAILED for features [$feature_combo] (exit code: $exit_code)" >&2
             fi
         fi
