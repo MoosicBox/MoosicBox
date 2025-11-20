@@ -1,3 +1,7 @@
+//! Font metrics implementation for FLTK.
+//!
+//! Provides font measurement capabilities for layout calculations in the FLTK renderer.
+
 use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds};
 
 /// Font metrics implementation for FLTK rendering.
