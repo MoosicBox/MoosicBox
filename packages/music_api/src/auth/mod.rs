@@ -189,7 +189,6 @@ impl ApiAuthBuilder {
     }
 
     /// Sets the authentication configuration (mutable version).
-    #[must_use]
     pub fn auth(&mut self, auth: impl Into<Auth>) -> &mut Self {
         self.auth = Some(auth.into());
         self
