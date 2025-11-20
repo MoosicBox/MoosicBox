@@ -1,3 +1,9 @@
+//! Core load balancer implementation and HTTP proxy routing logic.
+//!
+//! This module implements the [`Router`] struct which provides HTTP/HTTPS reverse proxy
+//! functionality using the Pingora framework. It handles hostname-based routing and
+//! request forwarding to upstream servers.
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, LazyLock},
