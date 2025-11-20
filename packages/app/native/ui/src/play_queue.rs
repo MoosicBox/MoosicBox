@@ -10,6 +10,9 @@ use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};
 
+/// Renders a single track item in the play queue.
+///
+/// Displays track cover art, title, album, and artist with reduced opacity for historical tracks.
 fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> Containers {
     let Some(connection) = &state.connection else {
         return container! {};

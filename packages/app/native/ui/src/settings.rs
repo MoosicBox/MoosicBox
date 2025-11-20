@@ -422,6 +422,9 @@ pub enum ConnectionInput {
     ApiUrl,
 }
 
+/// Renders an input field for connection configuration.
+///
+/// Creates a text input element with the current connection value pre-filled.
 fn connection_input(
     connection: &Connection,
     input: ConnectionInput,
