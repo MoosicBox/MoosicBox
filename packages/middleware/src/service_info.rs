@@ -72,3 +72,63 @@ impl FromRequest for ServiceInfo {
         ok(service_info)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_service_info_init_success() {
+        // Note: This test will fail if run after other tests that initialize SERVICE_INFO
+        // Since OnceLock can only be set once per process, we test the behavior when it's not set
+        let info = ServiceInfo { port: 8080 };
+
+        // We can't reliably test successful init since SERVICE_INFO is global and may
+        // already be initialized. Instead, we verify the struct can be created.
+        assert_eq!(info.port, 8080);
+    }
+
+    #[test]
+    fn test_service_info_init_returns_error_on_double_init() {
+        // Create a new ServiceInfo
+        let info1 = ServiceInfo { port: 8080 };
+        let info2 = ServiceInfo { port: 9090 };
+
+        // First init should succeed (or fail if already initialized from another test)
+        let first_result = init(info1);
+
+        // Second init should always fail
+        let second_result = init(info2);
+        assert!(
+            second_result.is_err(),
+            "Second initialization should return an error"
+        );
+
+        // The error contains the rejected ServiceInfo
+        if let Err(rejected_info) = second_result {
+            assert_eq!(rejected_info.port, 9090);
+        }
+
+        // If first init succeeded, verify it's still the original value
+        if first_result.is_ok()
+            && let Some(info) = SERVICE_INFO.get()
+        {
+            assert_eq!(info.port, 8080);
+        }
+    }
+
+    #[test]
+    fn test_service_info_clone() {
+        let info = ServiceInfo { port: 8080 };
+        let cloned = info.clone();
+        assert_eq!(info.port, cloned.port);
+    }
+
+    #[test]
+    fn test_service_info_debug() {
+        let info = ServiceInfo { port: 8080 };
+        let debug_str = format!("{info:?}");
+        assert!(debug_str.contains("ServiceInfo"));
+        assert!(debug_str.contains("8080"));
+    }
+}

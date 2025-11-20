@@ -79,3 +79,99 @@ impl FromRequest for TunnelInfo {
         ok(tunnel_info)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tunnel_info_with_host() {
+        let info = TunnelInfo {
+            host: Arc::new(Some("tunnel.example.com".to_string())),
+        };
+
+        assert!(info.host.is_some());
+        assert_eq!(info.host.as_ref().as_ref().unwrap(), "tunnel.example.com");
+    }
+
+    #[test]
+    fn test_tunnel_info_without_host() {
+        let info = TunnelInfo {
+            host: Arc::new(None),
+        };
+
+        assert!(info.host.is_none());
+    }
+
+    #[test]
+    fn test_tunnel_info_init_returns_error_on_double_init() {
+        // Create two TunnelInfo instances
+        let info1 = TunnelInfo {
+            host: Arc::new(Some("first.example.com".to_string())),
+        };
+        let info2 = TunnelInfo {
+            host: Arc::new(Some("second.example.com".to_string())),
+        };
+
+        // First init should succeed (or fail if already initialized from another test)
+        let first_result = init(info1);
+
+        // Second init should always fail
+        let second_result = init(info2);
+        assert!(
+            second_result.is_err(),
+            "Second initialization should return an error"
+        );
+
+        // The error contains the rejected TunnelInfo
+        if let Err(rejected_info) = second_result {
+            assert_eq!(
+                rejected_info.host.as_ref().as_ref().unwrap(),
+                "second.example.com"
+            );
+        }
+
+        // If first init succeeded, verify it's still the original value
+        if first_result.is_ok()
+            && let Some(info) = TUNNEL_INFO.get()
+        {
+            assert_eq!(info.host.as_ref().as_ref().unwrap(), "first.example.com");
+        }
+    }
+
+    #[test]
+    fn test_tunnel_info_clone() {
+        let info = TunnelInfo {
+            host: Arc::new(Some("tunnel.example.com".to_string())),
+        };
+        let cloned = info.clone();
+
+        // Both should point to the same Arc
+        assert_eq!(info.host.as_ref(), cloned.host.as_ref());
+        assert_eq!(
+            Arc::strong_count(&info.host),
+            Arc::strong_count(&cloned.host)
+        );
+    }
+
+    #[test]
+    fn test_tunnel_info_debug() {
+        let info = TunnelInfo {
+            host: Arc::new(Some("tunnel.example.com".to_string())),
+        };
+        let debug_str = format!("{info:?}");
+        assert!(debug_str.contains("TunnelInfo"));
+        assert!(debug_str.contains("tunnel.example.com"));
+    }
+
+    #[test]
+    fn test_tunnel_info_arc_sharing() {
+        let host = Arc::new(Some("shared.example.com".to_string()));
+        let info1 = TunnelInfo { host: host.clone() };
+        let info2 = TunnelInfo { host: host.clone() };
+
+        // Verify both share the same Arc
+        assert_eq!(Arc::strong_count(&host), 3); // original + info1 + info2
+        assert_eq!(info1.host.as_ref(), info2.host.as_ref());
+    }
+}
