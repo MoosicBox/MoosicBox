@@ -8912,6 +8912,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_opus_native_libopus",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
