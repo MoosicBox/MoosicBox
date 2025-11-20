@@ -46,3 +46,90 @@ pub trait FontMetrics {
     /// Returns measurements for each row when text wraps.
     fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn font_metrics_bounds_width_returns_max_width_across_rows() {
+        let bounds = FontMetricsBounds {
+            rows: vec![
+                FontMetricsRow {
+                    width: 100.0,
+                    height: 20.0,
+                },
+                FontMetricsRow {
+                    width: 150.0,
+                    height: 20.0,
+                },
+                FontMetricsRow {
+                    width: 75.0,
+                    height: 20.0,
+                },
+            ],
+        };
+
+        assert!((bounds.width() - 150.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn font_metrics_bounds_width_returns_zero_for_empty_rows() {
+        let bounds = FontMetricsBounds { rows: vec![] };
+
+        assert!((bounds.width() - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn font_metrics_bounds_height_returns_sum_of_all_row_heights() {
+        let bounds = FontMetricsBounds {
+            rows: vec![
+                FontMetricsRow {
+                    width: 100.0,
+                    height: 20.0,
+                },
+                FontMetricsRow {
+                    width: 150.0,
+                    height: 25.0,
+                },
+                FontMetricsRow {
+                    width: 75.0,
+                    height: 15.0,
+                },
+            ],
+        };
+
+        assert!((bounds.height() - 60.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn font_metrics_bounds_height_returns_zero_for_empty_rows() {
+        let bounds = FontMetricsBounds { rows: vec![] };
+
+        assert!((bounds.height() - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn font_metrics_bounds_width_handles_single_row() {
+        let bounds = FontMetricsBounds {
+            rows: vec![FontMetricsRow {
+                width: 42.5,
+                height: 10.0,
+            }],
+        };
+
+        assert!((bounds.width() - 42.5).abs() < f32::EPSILON);
+    }
+
+    #[test_log::test]
+    fn font_metrics_bounds_height_handles_single_row() {
+        let bounds = FontMetricsBounds {
+            rows: vec![FontMetricsRow {
+                width: 42.5,
+                height: 10.0,
+            }],
+        };
+
+        assert!((bounds.height() - 10.0).abs() < f32::EPSILON);
+    }
+}
