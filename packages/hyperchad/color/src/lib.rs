@@ -387,4 +387,376 @@ mod test {
             "#FF02FE04".to_string(),
         );
     }
+
+    // Short hex format tests (3 and 4 character formats)
+    #[test_log::test]
+    fn can_parse_short_rgb_hex_string() {
+        // #ABC should expand to #AABBCC
+        assert_eq!(
+            Color::from_hex("#ABC"),
+            Color {
+                r: 0xAA,
+                g: 0xBB,
+                b: 0xCC,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_short_rgba_hex_string() {
+        // #ABCD should expand to #AABBCCDD
+        assert_eq!(
+            Color::from_hex("#ABCD"),
+            Color {
+                r: 0xAA,
+                g: 0xBB,
+                b: 0xCC,
+                a: Some(0xDD)
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_short_rgb_with_zero_values() {
+        // #000 should expand to #000000
+        assert_eq!(
+            Color::from_hex("#000"),
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_short_rgb_with_max_values() {
+        // #FFF should expand to #FFFFFF
+        assert_eq!(
+            Color::from_hex("#FFF"),
+            Color {
+                r: 255,
+                g: 255,
+                b: 255,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_short_rgba_with_zero_alpha() {
+        // #ABC0 should expand to #AABBCC00
+        assert_eq!(
+            Color::from_hex("#ABC0"),
+            Color {
+                r: 0xAA,
+                g: 0xBB,
+                b: 0xCC,
+                a: Some(0)
+            }
+        );
+    }
+
+    // Error handling tests
+    #[test_log::test]
+    fn invalid_character_returns_error() {
+        let result = Color::try_from_hex("#GGHHII");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidCharacter(idx, ch) => {
+                assert_eq!(idx, 0);
+                assert_eq!(ch, 'G');
+            }
+            _ => panic!("Expected InvalidCharacter error"),
+        }
+    }
+
+    #[test_log::test]
+    fn non_ascii_character_returns_error() {
+        let result = Color::try_from_hex("#日本語");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidNonAsciiCharacter(idx) => {
+                assert_eq!(idx, 0);
+            }
+            _ => panic!("Expected InvalidNonAsciiCharacter error"),
+        }
+    }
+
+    #[test_log::test]
+    fn string_too_long_returns_error() {
+        let result = Color::try_from_hex("#123456789");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::StringTooLong => {}
+            _ => panic!("Expected StringTooLong error"),
+        }
+    }
+
+    #[test_log::test]
+    fn invalid_length_returns_error() {
+        // 7 characters is invalid (incomplete alpha channel)
+        let result = Color::try_from_hex("#1234567");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidLength => {}
+            _ => panic!("Expected InvalidLength error"),
+        }
+    }
+
+    // Edge cases in parsing
+    #[test_log::test]
+    fn can_parse_hex_without_hash_prefix() {
+        assert_eq!(
+            Color::from_hex("FF5733"),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_hex_with_trailing_whitespace() {
+        assert_eq!(
+            Color::from_hex("#FF5733  "),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_hex_with_trailing_whitespace_no_prefix() {
+        assert_eq!(
+            Color::from_hex("FF5733  "),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_lowercase_hex() {
+        assert_eq!(
+            Color::from_hex("#ff5733"),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_mixed_case_hex() {
+        assert_eq!(
+            Color::from_hex("#Ff5733"),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_uppercase_hex() {
+        assert_eq!(
+            Color::from_hex("#FF5733"),
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    // From trait implementations
+    #[test_log::test]
+    fn can_convert_from_str_ref() {
+        let color = Color::from("#FF5733");
+        assert_eq!(
+            color,
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_convert_from_string() {
+        let hex_string = String::from("#FF5733");
+        let color = Color::from(hex_string);
+        assert_eq!(
+            color,
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_convert_from_string_ref() {
+        let hex_string = String::from("#FF5733");
+        let color = Color::from(&hex_string);
+        assert_eq!(
+            color,
+            Color {
+                r: 255,
+                g: 87,
+                b: 51,
+                a: None
+            }
+        );
+    }
+
+    // Color constants tests
+    #[test_log::test]
+    fn black_constant_has_correct_values() {
+        assert_eq!(Color::BLACK.r, 0);
+        assert_eq!(Color::BLACK.g, 0);
+        assert_eq!(Color::BLACK.b, 0);
+        assert_eq!(Color::BLACK.a, None);
+    }
+
+    #[test_log::test]
+    fn white_constant_has_correct_values() {
+        assert_eq!(Color::WHITE.r, 255);
+        assert_eq!(Color::WHITE.g, 255);
+        assert_eq!(Color::WHITE.b, 255);
+        assert_eq!(Color::WHITE.a, None);
+    }
+
+    #[test_log::test]
+    fn black_constant_displays_as_hex() {
+        assert_eq!(Color::BLACK.to_string(), "#000000");
+    }
+
+    #[test_log::test]
+    fn white_constant_displays_as_hex() {
+        assert_eq!(Color::WHITE.to_string(), "#FFFFFF");
+    }
+
+    // Additional edge cases for robustness
+    #[test_log::test]
+    fn can_parse_all_zeros_rgba() {
+        assert_eq!(
+            Color::from_hex("#00000000"),
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: Some(0)
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn can_parse_all_max_rgba() {
+        assert_eq!(
+            Color::from_hex("#FFFFFFFF"),
+            Color {
+                r: 255,
+                g: 255,
+                b: 255,
+                a: Some(255)
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn invalid_character_in_middle_returns_error() {
+        let result = Color::try_from_hex("#FF5G33");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidCharacter(idx, ch) => {
+                assert_eq!(idx, 3);
+                assert_eq!(ch, 'G');
+            }
+            _ => panic!("Expected InvalidCharacter error"),
+        }
+    }
+
+    #[test_log::test]
+    fn special_ascii_character_returns_error() {
+        let result = Color::try_from_hex("#FF5@33");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::ParseHexError::InvalidCharacter(idx, ch) => {
+                assert_eq!(idx, 3);
+                assert_eq!(ch, '@');
+            }
+            _ => panic!("Expected InvalidCharacter error"),
+        }
+    }
+
+    #[test_log::test]
+    fn empty_string_parses_as_black() {
+        // Empty strings result in all zeros (black)
+        assert_eq!(
+            Color::from_hex(""),
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn only_hash_parses_as_black() {
+        // Just a hash results in all zeros (black)
+        assert_eq!(
+            Color::from_hex("#"),
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: None
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn single_character_parses_as_color() {
+        // Single character is treated as incomplete short format
+        // Based on the logic, this would set short_r and r
+        let result = Color::try_from_hex("#A");
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn two_characters_parses_as_color() {
+        // Two characters would set r and g values
+        let result = Color::try_from_hex("#AB");
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test]
+    fn five_characters_parses_as_color() {
+        // Five characters would parse successfully
+        let result = Color::try_from_hex("#ABCDE");
+        assert!(result.is_ok());
+    }
 }
