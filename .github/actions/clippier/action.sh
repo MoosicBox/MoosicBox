@@ -11,11 +11,128 @@ CLIPPIER_BIN="${GITHUB_WORKSPACE}/target/release/clippier"
 GIT_BASE=""
 GIT_HEAD=""
 
+# =============================================================================
+# Error Handling Infrastructure
+# =============================================================================
+
+# Global context variables for error reporting
+CONTEXT_COMMAND="${INPUT_COMMAND:-unknown}"
+CONTEXT_PACKAGE_NAME=""
+CONTEXT_PACKAGE_PATH=""
+CONTEXT_LABEL=""
+CONTEXT_PHASE="initialization"
+
+# Generic error summary generator
+# Called by ERR trap for unexpected failures
+generate_error_summary() {
+    local exit_code=$?
+    local failed_command="$BASH_COMMAND"
+    local line_number="${BASH_LINENO[0]}"
+
+    # Don't generate summary if we're already in error handler (prevent recursion)
+    [[ "${IN_ERROR_HANDLER:-false}" == "true" ]] && return
+    IN_ERROR_HANDLER=true
+
+    echo "❌ Clippier action failed with exit code $exit_code" >&2
+
+    # Generate GitHub Actions summary
+    {
+        echo "## ❌ Clippier Action Failed"
+        echo ""
+        echo "**Command**: \`$CONTEXT_COMMAND\`"
+        echo "**Phase**: $CONTEXT_PHASE"
+        echo "**Exit Code**: $exit_code"
+        echo ""
+        echo "<details open>"
+        echo "<summary><b>📋 Error Details</b></summary>"
+        echo ""
+        echo "**Failed at**: Line $line_number"
+        echo ""
+        echo "\`\`\`bash"
+        echo "$failed_command"
+        echo "\`\`\`"
+        echo ""
+
+        # Add context-specific information
+        if [[ -n "$CONTEXT_PACKAGE_NAME" ]]; then
+            echo "**Package**: $CONTEXT_PACKAGE_NAME"
+            [[ -n "$CONTEXT_PACKAGE_PATH" ]] && echo "**Path**: \`$CONTEXT_PACKAGE_PATH\`"
+        fi
+
+        if [[ -n "$CONTEXT_LABEL" ]]; then
+            echo "**Label**: $CONTEXT_LABEL"
+        fi
+
+        echo ""
+        echo "</details>"
+        echo ""
+        echo "### 🔄 Troubleshooting"
+        echo ""
+        echo "- Check the logs above for detailed error messages"
+        echo "- Verify all required inputs are provided"
+        echo "- Ensure dependencies are properly configured"
+
+        # Command-specific troubleshooting
+        case "$CONTEXT_COMMAND" in
+            "setup")
+                echo "- Verify \`package-json\` input is properly formatted"
+                echo "- Check that all dependencies can be installed"
+                echo "- Ensure git submodules are accessible (if applicable)"
+                ;;
+            "run-matrix")
+                echo "- Verify \`run-matrix-package-json\` is properly formatted"
+                echo "- Check command templates for syntax errors"
+                echo "- Ensure working directory exists"
+                ;;
+            "features"|"packages"|"affected-packages")
+                echo "- Verify workspace structure is valid"
+                echo "- Check git history is accessible"
+                echo "- Ensure Cargo.toml files are valid"
+                ;;
+        esac
+    } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+}
+
+# Set trap to catch ALL errors
+trap 'generate_error_summary' ERR
+
+# =============================================================================
+# End of Error Handling Infrastructure
+# =============================================================================
+
+# Specific error handler for missing clippier binary
+handle_binary_not_found() {
+    {
+        echo "## ❌ Clippier Binary Not Found"
+        echo ""
+        echo "**Expected Location**: \`$CLIPPIER_BIN\`"
+        echo ""
+        echo "<details open>"
+        echo "<summary><b>🔧 How to Fix</b></summary>"
+        echo ""
+        echo "The clippier binary must be built before running this action."
+        echo ""
+        echo "**Required steps in your workflow:**"
+        echo ""
+        echo "\`\`\`yaml"
+        echo "- name: Build clippier"
+        echo "  run: |"
+        echo "    cargo build --package clippier --features git-diff --release"
+        echo "\`\`\`"
+        echo ""
+        echo "Or use the clippier action's built-in build step (automatic for most commands)."
+        echo ""
+        echo "</details>"
+    } >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+}
+
 # Skip clippier binary check for setup command (doesn't need clippier)
+CONTEXT_PHASE="binary validation"
 if [[ "$INPUT_COMMAND" != "setup" ]]; then
     if [[ ! -f "$CLIPPIER_BIN" ]]; then
         echo "Error: clippier binary not found at $CLIPPIER_BIN"
-        exit 1
+        handle_binary_not_found
     fi
 fi
 
@@ -871,12 +988,48 @@ source "${SCRIPT_DIR}/lib/run-matrix.sh"
 # End of Library Sourcing
 # =============================================================================
 
+# Specific error handler for setup command
+handle_setup_error() {
+    local reason="$1"
+    {
+        echo "## ❌ CI Setup Failed"
+        echo ""
+        if [[ -n "$CONTEXT_PACKAGE_NAME" ]]; then
+            echo "**Package**: $CONTEXT_PACKAGE_NAME"
+            [[ -n "$CONTEXT_PACKAGE_PATH" ]] && echo "**Path**: \`$CONTEXT_PACKAGE_PATH\`"
+            echo ""
+        fi
+        echo "**Reason**: $reason"
+        echo ""
+        echo "<details open>"
+        echo "<summary><b>🔧 Setup Details</b></summary>"
+        echo ""
+        echo "The CI environment setup process failed. This typically occurs when:"
+        echo ""
+        echo "- Required inputs are missing or malformed"
+        echo "- Git submodules cannot be initialized"
+        echo "- Dependencies fail to install"
+        echo "- Custom CI steps fail"
+        echo ""
+        echo "</details>"
+        echo ""
+        echo "### 🔄 Troubleshooting"
+        echo ""
+        echo "- Verify \`package-json\` input contains all required fields"
+        echo "- Check that dependencies are accessible and installable"
+        echo "- Ensure git submodules (if any) are accessible"
+        echo "- Review custom CI steps for errors"
+    } >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+}
+
 setup_ci_environment() {
+    CONTEXT_PHASE="setup"
     echo "🔧 Setting up CI environment"
 
     if [[ -z "$INPUT_PACKAGE_JSON" ]]; then
         echo "❌ ERROR: package-json input is required for setup command"
-        exit 1
+        handle_setup_error "Missing package-json input"
     fi
 
     local package_json="$INPUT_PACKAGE_JSON"
@@ -890,6 +1043,10 @@ setup_ci_environment() {
     local ci_steps=$(echo "$package_json" | jq -r '.ciSteps // ""')
     local dependencies=$(echo "$package_json" | jq -r '.dependencies // ""')
     local env_vars=$(echo "$package_json" | jq -r '.env // ""')
+
+    # Set global context for error handling
+    CONTEXT_PACKAGE_NAME="$name"
+    CONTEXT_PACKAGE_PATH="$path"
 
     echo "📦 Package: $name"
     echo "📂 Path: $path"
@@ -946,10 +1103,15 @@ main() {
         run_matrix_command
         return
     fi
+
+    # Set phase for other commands
+    CONTEXT_PHASE="git detection"
     detect_git_range
 
     echo "git-base=$GIT_BASE" >> $GITHUB_OUTPUT
     echo "git-head=$GIT_HEAD" >> $GITHUB_OUTPUT
+
+    CONTEXT_PHASE="matrix generation"
 
     # Check force-full-matrix BEFORE skip-on-no-changes
     # This ensures workflow_dispatch/schedule events build all packages

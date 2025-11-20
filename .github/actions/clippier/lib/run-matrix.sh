@@ -343,8 +343,10 @@ generate_run_matrix_summary() {
 #   0: All tests passed
 #   1: One or more tests failed OR configuration error
 run_matrix_command() {
+    CONTEXT_PHASE="run-matrix"
     echo "🧪 Running matrix tests with template-based commands"
 
+    # Validate required inputs
     if [[ -z "$INPUT_RUN_MATRIX_PACKAGE_JSON" ]]; then
         echo "❌ ERROR: run-matrix-package-json is required"
         exit 1
@@ -367,6 +369,11 @@ run_matrix_command() {
     local package_path=$(echo "$package_json" | jq -r '.path // "."')
     local features=$(echo "$package_json" | jq -c '.features // []')
     local required_features=$(echo "$package_json" | jq -r '.requiredFeatures // ""')
+
+    # Set global context for error handling
+    CONTEXT_PACKAGE_NAME="$package_name"
+    CONTEXT_PACKAGE_PATH="$package_path"
+    CONTEXT_LABEL="$label"
 
     # Use custom working directory or default to package path
     working_dir="${working_dir:-$package_path}"
