@@ -46,6 +46,8 @@ impl Default for SimConfig {
 
 impl SimConfig {
     /// Creates a new `SimConfig` with default values.
+    ///
+    /// Returns a configuration with reasonable defaults for testing.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -123,14 +125,14 @@ impl SimConfig {
         *config
     }
 
-    /// Sets the failure rate and returns a mutable reference to self.
+    /// Sets the failure rate (0.0 to 1.0) and returns a mutable reference to self.
     #[must_use]
     pub const fn fail_rate(&mut self, fail_rate: f64) -> &mut Self {
         self.fail_rate = fail_rate;
         self
     }
 
-    /// Sets the repair rate and returns a mutable reference to self.
+    /// Sets the repair rate (0.0 to 1.0) and returns a mutable reference to self.
     #[must_use]
     pub const fn repair_rate(&mut self, repair_rate: f64) -> &mut Self {
         self.repair_rate = repair_rate;
