@@ -15,6 +15,7 @@ use moosicbox_web_server::{FromRequest, HttpRequest, Method, RequestData, Stub};
 /// * Query: `name=john&age=30&active=true`
 /// * Headers: user-agent, content-type, authorization
 /// * Remote address: `127.0.0.1:8080`
+#[must_use]
 fn create_test_request() -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
@@ -33,6 +34,7 @@ fn create_test_request() -> HttpRequest {
 /// # Arguments
 ///
 /// * `query` - The query string to include in the request
+#[must_use]
 fn create_test_request_with_query(query: &str) -> HttpRequest {
     use moosicbox_web_server::simulator::{SimulationRequest, SimulationStub};
 
