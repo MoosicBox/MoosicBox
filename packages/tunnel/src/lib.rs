@@ -558,3 +558,373 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
         self.poll_next(cx)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    /// Helper function to create test binary bytes for `TunnelResponse`
+    fn create_binary_response(
+        request_id: u64,
+        packet_id: u32,
+        last: bool,
+        status: Option<u16>,
+        headers: Option<BTreeMap<String, String>>,
+        body: &[u8],
+    ) -> Bytes {
+        let mut data = Vec::new();
+
+        // Request ID (8 bytes)
+        data.extend_from_slice(&request_id.to_be_bytes());
+
+        // Packet ID (4 bytes)
+        data.extend_from_slice(&packet_id.to_be_bytes());
+
+        // Last flag (1 byte)
+        data.push(u8::from(last));
+
+        // If first packet, add status and headers
+        if packet_id == 1 {
+            let status = status.expect("First packet must have status");
+            data.extend_from_slice(&status.to_be_bytes());
+
+            let headers = headers.expect("First packet must have headers");
+            let headers_json = serde_json::to_vec(&headers).unwrap();
+            let headers_len = u32::try_from(headers_json.len()).unwrap();
+            data.extend_from_slice(&headers_len.to_be_bytes());
+            data.extend_from_slice(&headers_json);
+        }
+
+        // Body
+        data.extend_from_slice(body);
+
+        Bytes::from(data)
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_first_packet() {
+        let mut headers = BTreeMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        headers.insert("x-custom".to_string(), "test-value".to_string());
+
+        let body = b"test response body";
+        let bytes = create_binary_response(12345, 1, false, Some(200), Some(headers.clone()), body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 12345);
+        assert_eq!(response.packet_id, 1);
+        assert!(!response.last);
+        assert_eq!(response.status, Some(200));
+        assert_eq!(response.headers, Some(headers));
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_subsequent_packet() {
+        let body = b"more data";
+        let bytes = create_binary_response(12345, 2, false, None, None, body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 12345);
+        assert_eq!(response.packet_id, 2);
+        assert!(!response.last);
+        assert_eq!(response.status, None);
+        assert_eq!(response.headers, None);
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_final_packet() {
+        let body = b"final chunk";
+        let bytes = create_binary_response(12345, 3, true, None, None, body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 12345);
+        assert_eq!(response.packet_id, 3);
+        assert!(response.last);
+        assert_eq!(response.status, None);
+        assert_eq!(response.headers, None);
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_empty_body() {
+        let headers = BTreeMap::new();
+        let bytes = create_binary_response(999, 1, true, Some(204), Some(headers.clone()), &[]);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 999);
+        assert_eq!(response.packet_id, 1);
+        assert!(response.last);
+        assert_eq!(response.status, Some(204));
+        assert_eq!(response.headers, Some(headers));
+        assert!(response.bytes.is_empty());
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_large_headers() {
+        let mut headers = BTreeMap::new();
+        for i in 0..50 {
+            headers.insert(format!("header-{i}"), format!("value-{i}"));
+        }
+
+        let body = b"body";
+        let bytes = create_binary_response(7777, 1, false, Some(200), Some(headers.clone()), body);
+
+        let response = TunnelResponse::try_from(bytes).unwrap();
+
+        assert_eq!(response.request_id, 7777);
+        assert_eq!(response.headers, Some(headers));
+        assert_eq!(response.bytes.as_ref(), body);
+    }
+
+    #[test]
+    #[should_panic(expected = "range start must not be greater than end")]
+    fn test_tunnel_response_from_bytes_too_short() {
+        // Less than 13 bytes minimum
+        let bytes = Bytes::from(vec![1, 2, 3, 4, 5]);
+        let _response = TunnelResponse::try_from(bytes).unwrap();
+    }
+
+    #[test]
+    fn test_tunnel_response_from_bytes_error_invalid_json_headers() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&123_u64.to_be_bytes()); // request_id
+        data.extend_from_slice(&1_u32.to_be_bytes()); // packet_id
+        data.push(0); // last = false
+        data.extend_from_slice(&200_u16.to_be_bytes()); // status
+        data.extend_from_slice(&5_u32.to_be_bytes()); // headers length
+        data.extend_from_slice(b"{bad}"); // invalid JSON
+
+        let bytes = Bytes::from(data);
+        let result = TunnelResponse::try_from(bytes);
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), TryFromBytesError::Serde(_)));
+    }
+
+
+    #[cfg(feature = "base64")]
+    #[test]
+    fn test_tunnel_response_from_base64_missing_prefix() {
+        let result = TunnelResponse::try_from("12345|1|0200{}|dGVzdA==");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Base64DecodeError::InvalidContent(_)
+        ));
+    }
+
+    #[cfg(feature = "base64")]
+    #[test]
+    fn test_tunnel_response_from_base64_missing_request_id_delimiter() {
+        let invalid = format!("{BASE64_TUNNEL_RESPONSE_PREFIX}12345");
+        let result = TunnelResponse::try_from(invalid.as_str());
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Base64DecodeError::InvalidContent(_)
+        ));
+    }
+
+    #[cfg(feature = "base64")]
+    #[test]
+    fn test_tunnel_response_from_base64_missing_packet_id_delimiter() {
+        let invalid = format!("{BASE64_TUNNEL_RESPONSE_PREFIX}12345|1");
+        let result = TunnelResponse::try_from(invalid.as_str());
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Base64DecodeError::InvalidContent(_)
+        ));
+    }
+
+
+    #[test]
+    fn test_tunnel_request_http_serialization() {
+        let request = TunnelRequest::Http(TunnelHttpRequest {
+            request_id: 123,
+            method: Method::Get,
+            path: "/api/test".to_string(),
+            query: serde_json::json!({"foo": "bar"}),
+            payload: Some(serde_json::json!({"data": "value"})),
+            headers: Some(serde_json::json!({"Authorization": "Bearer token"})),
+            encoding: TunnelEncoding::Binary,
+            profile: Some("test-profile".to_string()),
+        });
+
+        let json = serde_json::to_string(&request).unwrap();
+        let deserialized: TunnelRequest = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            TunnelRequest::Http(req) => {
+                assert_eq!(req.request_id, 123);
+                assert_eq!(req.method, Method::Get);
+                assert_eq!(req.path, "/api/test");
+                assert_eq!(req.encoding, TunnelEncoding::Binary);
+            }
+            _ => panic!("Expected HTTP request"),
+        }
+    }
+
+    #[test]
+    fn test_tunnel_request_ws_serialization() {
+        let request = TunnelRequest::Ws(TunnelWsRequest {
+            conn_id: 456,
+            request_id: 789,
+            body: serde_json::json!({"message": "hello"}),
+            connection_id: Some(serde_json::json!(42)),
+            profile: None,
+        });
+
+        let json = serde_json::to_string(&request).unwrap();
+        let deserialized: TunnelRequest = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            TunnelRequest::Ws(req) => {
+                assert_eq!(req.conn_id, 456);
+                assert_eq!(req.request_id, 789);
+                assert_eq!(req.body, serde_json::json!({"message": "hello"}));
+            }
+            _ => panic!("Expected WS request"),
+        }
+    }
+
+    #[test]
+    fn test_tunnel_request_abort_serialization() {
+        let request = TunnelRequest::Abort(TunnelAbortRequest { request_id: 999 });
+
+        let json = serde_json::to_string(&request).unwrap();
+        let deserialized: TunnelRequest = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            TunnelRequest::Abort(req) => {
+                assert_eq!(req.request_id, 999);
+            }
+            _ => panic!("Expected Abort request"),
+        }
+    }
+
+    #[test]
+    fn test_tunnel_ws_response_serialization() {
+        let response = TunnelWsResponse {
+            request_id: 123,
+            body: serde_json::json!({"status": "ok"}),
+            exclude_connection_ids: Some(vec![1, 2, 3]),
+            to_connection_ids: Some(vec![4, 5, 6]),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let deserialized: TunnelWsResponse = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.request_id, 123);
+        assert_eq!(deserialized.exclude_connection_ids, Some(vec![1, 2, 3]));
+        assert_eq!(deserialized.to_connection_ids, Some(vec![4, 5, 6]));
+    }
+
+    #[test]
+    fn test_tunnel_ws_response_optional_fields_omitted() {
+        let response = TunnelWsResponse {
+            request_id: 456,
+            body: serde_json::json!({"data": "test"}),
+            exclude_connection_ids: None,
+            to_connection_ids: None,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+
+        // Verify that None fields are not serialized
+        assert!(!json.contains("exclude_connection_ids"));
+        assert!(!json.contains("to_connection_ids"));
+
+        let deserialized: TunnelWsResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.request_id, 456);
+        assert_eq!(deserialized.exclude_connection_ids, None);
+        assert_eq!(deserialized.to_connection_ids, None);
+    }
+
+    #[test]
+    fn test_tunnel_encoding_serialization() {
+        let binary = TunnelEncoding::Binary;
+        let json = serde_json::to_string(&binary).unwrap();
+        assert_eq!(json, "\"BINARY\"");
+
+        let deserialized: TunnelEncoding = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, TunnelEncoding::Binary);
+    }
+
+    #[cfg(feature = "base64")]
+    #[test]
+    fn test_tunnel_encoding_base64_serialization() {
+        let base64 = TunnelEncoding::Base64;
+        let json = serde_json::to_string(&base64).unwrap();
+        assert_eq!(json, "\"BASE64\"");
+
+        let deserialized: TunnelEncoding = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, TunnelEncoding::Base64);
+    }
+
+    #[test]
+    fn test_tunnel_http_request_optional_fields() {
+        let request = TunnelHttpRequest {
+            request_id: 1,
+            method: Method::Post,
+            path: "/test".to_string(),
+            query: serde_json::json!({}),
+            payload: None,
+            headers: None,
+            encoding: TunnelEncoding::Binary,
+            profile: None,
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+
+        // Verify optional fields are omitted when None
+        assert!(!json.contains("payload"));
+        assert!(!json.contains("headers"));
+
+        let deserialized: TunnelHttpRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.payload, None);
+        assert_eq!(deserialized.headers, None);
+        assert_eq!(deserialized.profile, None);
+    }
+
+    #[test]
+    fn test_tunnel_request_tagged_enum_format() {
+        let http_request = TunnelRequest::Http(TunnelHttpRequest {
+            request_id: 1,
+            method: Method::Get,
+            path: "/".to_string(),
+            query: serde_json::json!({}),
+            payload: None,
+            headers: None,
+            encoding: TunnelEncoding::Binary,
+            profile: None,
+        });
+
+        let json = serde_json::to_string(&http_request).unwrap();
+
+        // Verify SCREAMING_SNAKE_CASE and tag format
+        assert!(json.contains("\"type\":\"HTTP\""));
+
+        let ws_request = TunnelRequest::Ws(TunnelWsRequest {
+            conn_id: 1,
+            request_id: 2,
+            body: serde_json::json!({}),
+            connection_id: None,
+            profile: None,
+        });
+
+        let json = serde_json::to_string(&ws_request).unwrap();
+        assert!(json.contains("\"type\":\"WS\""));
+
+        let abort_request = TunnelRequest::Abort(TunnelAbortRequest { request_id: 3 });
+        let json = serde_json::to_string(&abort_request).unwrap();
+        assert!(json.contains("\"type\":\"ABORT\""));
+    }
+}
