@@ -143,6 +143,7 @@ pub enum TunnelRequestError {
     MusicApi(#[from] Error),
 }
 
+/// Query parameters for retrieving track audio data.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GetTrackQuery {
@@ -153,6 +154,7 @@ struct GetTrackQuery {
     source: Option<ApiSource>,
 }
 
+/// Query parameters for retrieving track metadata information.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GetTrackInfoQuery {
