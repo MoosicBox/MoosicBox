@@ -35,6 +35,9 @@ swc_ecma_transforms_base       = { workspace = true, optional = true }
 swc_ecma_transforms_typescript = { workspace = true, optional = true }
 swc_ecma_visit                 = { workspace = true, optional = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [features]
 default = ["all-web-toolchains", "esbuild", "swc"]
 
