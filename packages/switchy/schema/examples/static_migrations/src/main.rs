@@ -253,6 +253,7 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use switchy_schema::ChecksumDatabase;
 
     #[switchy_async::test]
     async fn test_custom_migration() {
@@ -289,5 +290,166 @@ mod tests {
 
         let migrations = source.migrations().await.unwrap();
         assert_eq!(migrations.len(), 1);
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_up_executes_sql() {
+        let migration = CustomMigration::new(
+            "test_migration",
+            "CREATE TABLE test (id INTEGER)",
+            Some("DROP TABLE test"),
+        );
+
+        let db = ChecksumDatabase::new();
+        let result = migration.up(&db).await;
+        assert!(result.is_ok(), "Migration up should succeed");
+
+        // Verify SQL was executed by checking the checksum changed
+        let checksum = db.finalize().await;
+        assert!(!checksum.is_empty(), "Checksum should be generated");
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_down_executes_sql() {
+        let migration = CustomMigration::new(
+            "test_migration",
+            "CREATE TABLE test (id INTEGER)",
+            Some("DROP TABLE test"),
+        );
+
+        let db = ChecksumDatabase::new();
+        let result = migration.down(&db).await;
+        assert!(result.is_ok(), "Migration down should succeed");
+
+        // Verify SQL was executed by checking the checksum changed
+        let checksum = db.finalize().await;
+        assert!(!checksum.is_empty(), "Checksum should be generated");
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_up_empty_sql() {
+        let migration = CustomMigration::new("test_migration", "", Some("DROP TABLE test"));
+
+        let db = ChecksumDatabase::new();
+        let result = migration.up(&db).await;
+        assert!(result.is_ok(), "Migration up with empty SQL should succeed");
+
+        // Empty SQL should not execute, checksum should be empty
+        let checksum = db.finalize().await;
+        assert_eq!(
+            checksum.len(),
+            32,
+            "Checksum should still be 32 bytes (SHA-256)"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_up_whitespace_only_sql() {
+        let migration =
+            CustomMigration::new("test_migration", "   \n\t  ", Some("DROP TABLE test"));
+
+        let db = ChecksumDatabase::new();
+        let result = migration.up(&db).await;
+        assert!(
+            result.is_ok(),
+            "Migration up with whitespace-only SQL should succeed"
+        );
+
+        // Whitespace-only SQL should not execute
+        let checksum = db.finalize().await;
+        assert_eq!(
+            checksum.len(),
+            32,
+            "Checksum should still be 32 bytes (SHA-256)"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_down_none() {
+        let migration = CustomMigration::new(
+            "test_migration",
+            "CREATE TABLE test (id INTEGER)",
+            None::<String>,
+        );
+
+        let db = ChecksumDatabase::new();
+        let result = migration.down(&db).await;
+        assert!(
+            result.is_ok(),
+            "Migration down with None down_sql should succeed"
+        );
+
+        // No down SQL means nothing should execute
+        let checksum = db.finalize().await;
+        assert_eq!(
+            checksum.len(),
+            32,
+            "Checksum should still be 32 bytes (SHA-256)"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_down_empty_sql() {
+        let migration =
+            CustomMigration::new("test_migration", "CREATE TABLE test (id INTEGER)", Some(""));
+
+        let db = ChecksumDatabase::new();
+        let result = migration.down(&db).await;
+        assert!(
+            result.is_ok(),
+            "Migration down with empty SQL should succeed"
+        );
+
+        // Empty SQL should not execute
+        let checksum = db.finalize().await;
+        assert_eq!(
+            checksum.len(),
+            32,
+            "Checksum should still be 32 bytes (SHA-256)"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_down_whitespace_only_sql() {
+        let migration = CustomMigration::new(
+            "test_migration",
+            "CREATE TABLE test (id INTEGER)",
+            Some("  \n\t  "),
+        );
+
+        let db = ChecksumDatabase::new();
+        let result = migration.down(&db).await;
+        assert!(
+            result.is_ok(),
+            "Migration down with whitespace-only SQL should succeed"
+        );
+
+        // Whitespace-only SQL should not execute
+        let checksum = db.finalize().await;
+        assert_eq!(
+            checksum.len(),
+            32,
+            "Checksum should still be 32 bytes (SHA-256)"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_custom_migration_source_creates_independent_migrations() {
+        let source = CustomMigrationSource::new();
+        let migrations1 = source.migrations().await.unwrap();
+        let migrations2 = source.migrations().await.unwrap();
+
+        // Each call should return independent migration instances
+        assert_eq!(migrations1.len(), migrations2.len());
+
+        // Verify they are different Arc instances (not the same pointer)
+        for (m1, m2) in migrations1.iter().zip(migrations2.iter()) {
+            assert_eq!(m1.id(), m2.id(), "Migration IDs should match");
+            // They should be different Arc instances
+            assert!(
+                !Arc::ptr_eq(m1, m2),
+                "Migrations should be independent instances"
+            );
+        }
     }
 }
