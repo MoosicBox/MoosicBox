@@ -274,3 +274,204 @@ pub struct UpdateAudioZone {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub players: Option<Vec<u64>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_audio_zone_from_api_audio_zone() {
+        let api_zone = ApiAudioZone {
+            id: 42,
+            name: "Living Room".to_string(),
+            players: vec![
+                ApiPlayer {
+                    player_id: 1,
+                    audio_output_id: "output-1".to_string(),
+                    name: "Speaker 1".to_string(),
+                    playing: true,
+                },
+                ApiPlayer {
+                    player_id: 2,
+                    audio_output_id: "output-2".to_string(),
+                    name: "Speaker 2".to_string(),
+                    playing: false,
+                },
+            ],
+        };
+
+        let zone: AudioZone = api_zone.into();
+
+        assert_eq!(zone.id, 42);
+        assert_eq!(zone.name, "Living Room");
+        assert_eq!(zone.players.len(), 2);
+        assert_eq!(zone.players[0].id, 1);
+        assert_eq!(zone.players[0].audio_output_id, "output-1");
+        assert_eq!(zone.players[0].name, "Speaker 1");
+        assert!(zone.players[0].playing);
+        assert_eq!(zone.players[1].id, 2);
+    }
+
+    #[test]
+    fn test_api_audio_zone_from_audio_zone() {
+        let zone = AudioZone {
+            id: 99,
+            name: "Kitchen".to_string(),
+            players: vec![Player {
+                id: 5,
+                audio_output_id: "output-5".to_string(),
+                name: "Kitchen Speaker".to_string(),
+                playing: false,
+                created: "2024-01-01T00:00:00Z".to_string(),
+                updated: "2024-01-02T00:00:00Z".to_string(),
+            }],
+        };
+
+        let api_zone: ApiAudioZone = zone.into();
+
+        assert_eq!(api_zone.id, 99);
+        assert_eq!(api_zone.name, "Kitchen");
+        assert_eq!(api_zone.players.len(), 1);
+        assert_eq!(api_zone.players[0].player_id, 5);
+        assert_eq!(api_zone.players[0].audio_output_id, "output-5");
+        assert_eq!(api_zone.players[0].name, "Kitchen Speaker");
+        assert!(!api_zone.players[0].playing);
+    }
+
+    #[test]
+    fn test_audio_zone_with_session_from_api() {
+        let api_zone = ApiAudioZoneWithSession {
+            id: 10,
+            session_id: 20,
+            name: "Bedroom".to_string(),
+            players: vec![ApiPlayer {
+                player_id: 3,
+                audio_output_id: "output-3".to_string(),
+                name: "Bedroom Speaker".to_string(),
+                playing: true,
+            }],
+        };
+
+        let zone: AudioZoneWithSession = api_zone.into();
+
+        assert_eq!(zone.id, 10);
+        assert_eq!(zone.session_id, 20);
+        assert_eq!(zone.name, "Bedroom");
+        assert_eq!(zone.players.len(), 1);
+        assert_eq!(zone.players[0].id, 3);
+    }
+
+    #[test]
+    fn test_api_audio_zone_with_session_from_internal() {
+        let zone = AudioZoneWithSession {
+            id: 15,
+            session_id: 25,
+            name: "Office".to_string(),
+            players: vec![Player {
+                id: 7,
+                audio_output_id: "output-7".to_string(),
+                name: "Office Speaker".to_string(),
+                playing: true,
+                created: "2024-01-01T00:00:00Z".to_string(),
+                updated: "2024-01-02T00:00:00Z".to_string(),
+            }],
+        };
+
+        let api_zone: ApiAudioZoneWithSession = zone.into();
+
+        assert_eq!(api_zone.id, 15);
+        assert_eq!(api_zone.session_id, 25);
+        assert_eq!(api_zone.name, "Office");
+        assert_eq!(api_zone.players.len(), 1);
+        assert_eq!(api_zone.players[0].player_id, 7);
+    }
+
+    #[test]
+    fn test_player_from_api_player_creates_empty_timestamps() {
+        let api_player = ApiPlayer {
+            player_id: 100,
+            audio_output_id: "test-output".to_string(),
+            name: "Test Player".to_string(),
+            playing: false,
+        };
+
+        let player: Player = api_player.into();
+
+        assert_eq!(player.id, 100);
+        assert_eq!(player.audio_output_id, "test-output");
+        assert_eq!(player.name, "Test Player");
+        assert!(!player.playing);
+        assert_eq!(player.created, "");
+        assert_eq!(player.updated, "");
+    }
+
+    #[test]
+    fn test_api_player_from_player_omits_timestamps() {
+        let player = Player {
+            id: 200,
+            audio_output_id: "another-output".to_string(),
+            name: "Another Player".to_string(),
+            playing: true,
+            created: "2024-01-01T00:00:00Z".to_string(),
+            updated: "2024-01-02T00:00:00Z".to_string(),
+        };
+
+        let api_player: ApiPlayer = player.into();
+
+        assert_eq!(api_player.player_id, 200);
+        assert_eq!(api_player.audio_output_id, "another-output");
+        assert_eq!(api_player.name, "Another Player");
+        assert!(api_player.playing);
+    }
+
+    #[test]
+    fn test_audio_zone_conversion_with_empty_players() {
+        let api_zone = ApiAudioZone {
+            id: 1,
+            name: "Empty Zone".to_string(),
+            players: vec![],
+        };
+
+        let zone: AudioZone = api_zone.into();
+
+        assert_eq!(zone.id, 1);
+        assert_eq!(zone.name, "Empty Zone");
+        assert_eq!(zone.players.len(), 0);
+    }
+
+    #[test]
+    fn test_audio_zone_with_session_conversion_with_multiple_players() {
+        let api_zone = ApiAudioZoneWithSession {
+            id: 50,
+            session_id: 100,
+            name: "Multi-Player Zone".to_string(),
+            players: vec![
+                ApiPlayer {
+                    player_id: 1,
+                    audio_output_id: "out-1".to_string(),
+                    name: "Player 1".to_string(),
+                    playing: true,
+                },
+                ApiPlayer {
+                    player_id: 2,
+                    audio_output_id: "out-2".to_string(),
+                    name: "Player 2".to_string(),
+                    playing: false,
+                },
+                ApiPlayer {
+                    player_id: 3,
+                    audio_output_id: "out-3".to_string(),
+                    name: "Player 3".to_string(),
+                    playing: true,
+                },
+            ],
+        };
+
+        let zone: AudioZoneWithSession = api_zone.into();
+
+        assert_eq!(zone.players.len(), 3);
+        assert_eq!(zone.players[0].id, 1);
+        assert_eq!(zone.players[1].id, 2);
+        assert_eq!(zone.players[2].id, 3);
+    }
+}

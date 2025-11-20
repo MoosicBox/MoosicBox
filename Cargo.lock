@@ -8347,6 +8347,7 @@ dependencies = [
  "serde",
  "switchy_async",
  "switchy_database",
+ "test-log",
  "tokio",
  "utoipa",
 ]

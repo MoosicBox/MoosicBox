@@ -57,3 +57,7 @@ openapi = [
 ]
 
 events = []
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros"] }
+test-log      = { workspace = true }
