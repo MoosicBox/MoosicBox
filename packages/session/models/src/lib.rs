@@ -75,10 +75,7 @@ static DEFAULT_CONNECTION_OUTPUT: LazyLock<PlaybackTarget> =
 impl PlaybackTarget {
     /// Returns a default playback target based on the type string.
     ///
-    /// # Returns
-    ///
-    /// * `Some(PlaybackTarget)` - Default target for the given type
-    /// * `None` - If the type string doesn't match any known type
+    /// Returns `Some(PlaybackTarget)` for recognized type strings, or `None` if the type is unknown.
     #[must_use]
     pub fn default_from_str(r#type: &str) -> Option<Self> {
         if DEFAULT_AUDIO_ZONE.as_ref() == r#type {
@@ -161,9 +158,7 @@ pub struct UpdateSession {
 impl UpdateSession {
     /// Checks if any playback-related fields have been updated.
     ///
-    /// # Returns
-    ///
-    /// `true` if any playback field (play, stop, active, playing, position, volume, seek, or playlist) is set.
+    /// Returns `true` if any playback field (play, stop, active, playing, position, volume, seek, or playlist) is set.
     #[must_use]
     pub const fn playback_updated(&self) -> bool {
         self.play.is_some()
@@ -390,7 +385,9 @@ impl ToValueType<Session> for &switchy_database::Row {
     ///
     /// # Errors
     ///
-    /// * Returns an error if required database columns are missing or have invalid types
+    /// Returns `ParseError` if:
+    /// * Required database columns are missing
+    /// * Database column values have invalid or incompatible types
     fn to_value_type(self) -> Result<Session, ParseError> {
         let playback_target_type: Option<String> = self.to_value("playback_target")?;
         let playback_target_type =
@@ -490,7 +487,9 @@ impl ToValueType<SessionPlaylist> for &switchy_database::Row {
     ///
     /// # Errors
     ///
-    /// * Returns an error if required database columns are missing or have invalid types
+    /// Returns `ParseError` if:
+    /// * Required database columns are missing
+    /// * Database column values have invalid or incompatible types
     fn to_value_type(self) -> Result<SessionPlaylist, ParseError> {
         Ok(SessionPlaylist {
             id: self.to_value("id")?,
@@ -571,7 +570,9 @@ impl ToValueType<Connection> for &switchy_database::Row {
     ///
     /// # Errors
     ///
-    /// * Returns an error if required database columns are missing or have invalid types
+    /// Returns `ParseError` if:
+    /// * Required database columns are missing
+    /// * Database column values have invalid or incompatible types
     fn to_value_type(self) -> Result<Connection, ParseError> {
         Ok(Connection {
             id: self.to_value("id")?,
