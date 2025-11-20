@@ -49,6 +49,14 @@ pub enum RegisterServiceError {
     IO(#[from] std::io::Error),
 }
 
+/// Returns the appropriate mDNS service daemon implementation.
+///
+/// Returns a simulator daemon when the `simulator` feature is enabled,
+/// otherwise returns a real `mdns_sd` service daemon.
+///
+/// # Errors
+///
+/// * [`mdns_sd::Error`] - If the real service daemon fails to initialize (simulator always succeeds)
 #[allow(clippy::unnecessary_wraps)]
 fn get_service_daemon() -> Result<Box<dyn MdnsServiceDaemon>, mdns_sd::Error> {
     #[cfg(feature = "simulator")]
