@@ -8159,6 +8159,7 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_session_models",
+ "pretty_assertions",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
