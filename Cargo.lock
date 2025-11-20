@@ -6062,6 +6062,10 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_router",
  "log 0.4.28",
+ "pretty_assertions",
+ "switchy_async",
+ "test-log",
+ "tokio",
 ]
 
 [[package]]
