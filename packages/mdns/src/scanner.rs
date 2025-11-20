@@ -87,6 +87,14 @@ pub mod service {
 impl service::Processor for service::Service {
     type Error = service::Error;
 
+    /// Starts the mDNS scanner service.
+    ///
+    /// Spawns a background task that browses for `MoosicBox` servers on the network
+    /// and sends discovered servers through the channel.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::MdnsSd`] - If the mDNS service daemon fails to initialize or browse
     async fn on_start(&mut self) -> Result<(), Self::Error> {
         let mut ctx = self.ctx.write().await;
 
@@ -146,6 +154,14 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
+    /// Shuts down the mDNS scanner service.
+    ///
+    /// Cancels the background scanning task and waits for it to complete.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::Join`] - If the background task fails to join
+    /// * [`Error::MdnsSd`] - If the background task encountered an mDNS error
     async fn on_shutdown(ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
         let handle = &mut ctx.write().await.handle;
 
@@ -157,6 +173,13 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
+    /// Processes commands sent to the scanner service.
+    ///
+    /// Currently no commands are defined, so this is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// This method never returns an error.
     async fn process_command(
         _ctx: Arc<RwLock<Context>>,
         command: Command,
