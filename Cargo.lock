@@ -8414,8 +8414,12 @@ version = "0.1.4"
 dependencies = [
  "futures-channel",
  "futures-core",
+ "futures-util",
  "log 0.4.28",
  "moosicbox_assert",
+ "switchy_async",
+ "test-log",
+ "tokio",
 ]
 
 [[package]]
