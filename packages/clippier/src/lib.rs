@@ -4612,6 +4612,387 @@ pub fn handle_packages_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Tests for the `split` function that divides slices into chunks
+    mod split_tests {
+        use super::*;
+
+        #[test]
+        fn test_split_empty_slice() {
+            let data: Vec<i32> = vec![];
+            assert!(split(&data, 3).next().is_none(), "Empty slice should produce no chunks");
+        }
+
+        #[test]
+        fn test_split_zero_chunks() {
+            let data = vec![1, 2, 3, 4, 5];
+            assert!(split(&data, 0).next().is_none(), "Zero chunks should produce no chunks");
+        }
+
+        #[test]
+        fn test_split_single_chunk() {
+            let data = vec![1, 2, 3, 4, 5];
+            let chunks: Vec<_> = split(&data, 1).collect();
+            assert_eq!(chunks.len(), 1, "Should produce exactly one chunk");
+            assert_eq!(
+                chunks[0],
+                &[1, 2, 3, 4, 5],
+                "Chunk should contain all elements"
+            );
+        }
+
+        #[test]
+        fn test_split_evenly_divisible() {
+            let data = vec![1, 2, 3, 4, 5, 6];
+            let chunks: Vec<_> = split(&data, 3).collect();
+            assert_eq!(chunks.len(), 3, "Should produce 3 chunks");
+            assert_eq!(chunks[0], &[1, 2], "First chunk");
+            assert_eq!(chunks[1], &[3, 4], "Second chunk");
+            assert_eq!(chunks[2], &[5, 6], "Third chunk");
+        }
+
+        #[test]
+        fn test_split_not_evenly_divisible() {
+            let data = vec![1, 2, 3, 4, 5];
+            let chunks: Vec<_> = split(&data, 2).collect();
+            assert_eq!(chunks.len(), 2, "Should produce 2 chunks");
+            assert_eq!(chunks[0], &[1, 2, 3], "First chunk should have 3 elements");
+            assert_eq!(chunks[1], &[4, 5], "Second chunk should have 2 elements");
+        }
+
+        #[test]
+        fn test_split_more_chunks_than_elements() {
+            let data = vec![1, 2, 3];
+            let chunks: Vec<_> = split(&data, 5).collect();
+            assert_eq!(chunks.len(), 3, "Should produce 3 chunks (one per element)");
+            assert_eq!(chunks[0], &[1]);
+            assert_eq!(chunks[1], &[2]);
+            assert_eq!(chunks[2], &[3]);
+        }
+    }
+
+    /// Tests for configuration merging functions
+    mod merge_tests {
+        use super::*;
+
+        #[test]
+        fn test_merge_steps_empty_base() {
+            let base = vec![];
+            let overlay = vec![Step {
+                command: Some("test".to_string()),
+                toolchain: None,
+                features: None,
+            }];
+            let result = merge_steps(base, overlay);
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].command, Some("test".to_string()));
+        }
+
+        #[test]
+        fn test_merge_steps_no_duplicates() {
+            let base = vec![Step {
+                command: Some("build".to_string()),
+                toolchain: None,
+                features: None,
+            }];
+            let overlay = vec![Step {
+                command: Some("test".to_string()),
+                toolchain: None,
+                features: None,
+            }];
+            let result = merge_steps(base, overlay);
+            assert_eq!(result.len(), 2);
+        }
+
+        #[test]
+        fn test_merge_steps_with_duplicate() {
+            let step = Step {
+                command: Some("test".to_string()),
+                toolchain: Some("stable".to_string()),
+                features: None,
+            };
+            let base = vec![step.clone()];
+            let overlay = vec![step];
+            let result = merge_steps(base, overlay);
+            assert_eq!(result.len(), 1, "Duplicate should not be added");
+        }
+
+        #[test]
+        fn test_merge_env_maps_empty_base() {
+            let base = BTreeMap::new();
+            let mut overlay = BTreeMap::new();
+            overlay.insert("KEY1".to_string(), ClippierEnv::Value("value1".to_string()));
+            let result = merge_env_maps(base, overlay);
+            assert_eq!(result.len(), 1);
+            assert!(matches!(
+                result.get("KEY1"),
+                Some(ClippierEnv::Value(v)) if v == "value1"
+            ));
+        }
+
+        #[test]
+        fn test_merge_env_maps_overlay_overrides() {
+            let mut base = BTreeMap::new();
+            base.insert("KEY1".to_string(), ClippierEnv::Value("old".to_string()));
+            let mut overlay = BTreeMap::new();
+            overlay.insert("KEY1".to_string(), ClippierEnv::Value("new".to_string()));
+            let result = merge_env_maps(base, overlay);
+            assert_eq!(result.len(), 1);
+            assert!(matches!(
+                result.get("KEY1"),
+                Some(ClippierEnv::Value(v)) if v == "new"
+            ));
+        }
+
+        #[test]
+        fn test_merge_propagated_configs_git_submodules_logic() {
+            let base = PropagatedConfig {
+                git_submodules: Some(false),
+                dependencies: vec![],
+                ci_steps: vec![],
+                env: BTreeMap::new(),
+            };
+            let overlay = PropagatedConfig {
+                git_submodules: Some(true),
+                dependencies: vec![],
+                ci_steps: vec![],
+                env: BTreeMap::new(),
+            };
+            let result = merge_propagated_configs(base, overlay);
+            assert_eq!(
+                result.git_submodules,
+                Some(true),
+                "True should take priority"
+            );
+        }
+
+        #[test]
+        fn test_merge_propagated_configs_preserves_true() {
+            let base = PropagatedConfig {
+                git_submodules: Some(true),
+                dependencies: vec![],
+                ci_steps: vec![],
+                env: BTreeMap::new(),
+            };
+            let overlay = PropagatedConfig {
+                git_submodules: Some(false),
+                dependencies: vec![],
+                ci_steps: vec![],
+                env: BTreeMap::new(),
+            };
+            let result = merge_propagated_configs(base, overlay);
+            assert_eq!(
+                result.git_submodules,
+                Some(true),
+                "True should be preserved"
+            );
+        }
+    }
+
+    /// Tests for git URL detection
+    mod git_url_tests {
+        use super::*;
+
+        #[test]
+        fn test_is_git_url_http() {
+            assert!(is_git_url("http://github.com/user/repo.git"));
+        }
+
+        #[test]
+        fn test_is_git_url_https() {
+            assert!(is_git_url("https://github.com/user/repo.git"));
+        }
+
+        #[test]
+        fn test_is_git_url_git_protocol() {
+            assert!(is_git_url("git://github.com/user/repo.git"));
+        }
+
+        #[test]
+        fn test_is_git_url_ssh_git() {
+            assert!(is_git_url("git@github.com:user/repo.git"));
+        }
+
+        #[test]
+        fn test_is_git_url_ssh_protocol() {
+            assert!(is_git_url("ssh://git@github.com/user/repo.git"));
+        }
+
+        #[test]
+        fn test_is_git_url_local_path() {
+            assert!(!is_git_url("/path/to/local/repo"));
+        }
+
+        #[test]
+        fn test_is_git_url_relative_path() {
+            assert!(!is_git_url("../relative/path"));
+        }
+
+        #[test]
+        fn test_is_git_url_empty() {
+            assert!(!is_git_url(""));
+        }
+    }
+
+    /// Tests for binary name resolution
+    mod binary_name_tests {
+        use super::*;
+        use std::fs;
+        use tempfile::TempDir;
+
+        #[test]
+        fn test_get_binary_name_with_override() {
+            let temp_dir = TempDir::new().unwrap();
+            let result = get_binary_name(
+                temp_dir.path(),
+                "my_package",
+                "packages/my_package",
+                Some("custom_bin"),
+            );
+            assert_eq!(result, "custom_bin", "Override should be used directly");
+        }
+
+        #[test]
+        fn test_get_binary_name_fallback_to_package_name() {
+            let temp_dir = TempDir::new().unwrap();
+            // Non-existent path, should fall back
+            let result =
+                get_binary_name(temp_dir.path(), "my-package", "packages/my-package", None);
+            assert_eq!(result, "my_package", "Should convert dashes to underscores");
+        }
+
+        #[test]
+        fn test_get_binary_name_from_cargo_toml_array() {
+            let temp_dir = TempDir::new().unwrap();
+            let pkg_dir = temp_dir.path().join("packages/my_package");
+            fs::create_dir_all(&pkg_dir).unwrap();
+            fs::write(
+                pkg_dir.join("Cargo.toml"),
+                r#"
+[package]
+name = "my_package"
+
+[[bin]]
+name = "custom_binary"
+path = "src/main.rs"
+                "#,
+            )
+            .unwrap();
+
+            let result =
+                get_binary_name(temp_dir.path(), "my_package", "packages/my_package", None);
+            assert_eq!(result, "custom_binary");
+        }
+
+        #[test]
+        fn test_get_binary_name_from_cargo_toml_table() {
+            let temp_dir = TempDir::new().unwrap();
+            let pkg_dir = temp_dir.path().join("packages/my_package");
+            fs::create_dir_all(&pkg_dir).unwrap();
+            fs::write(
+                pkg_dir.join("Cargo.toml"),
+                r#"
+[package]
+name = "my_package"
+
+[bin]
+name = "single_binary"
+                "#,
+            )
+            .unwrap();
+
+            let result =
+                get_binary_name(temp_dir.path(), "my_package", "packages/my_package", None);
+            assert_eq!(result, "single_binary");
+        }
+    }
+
+    /// Tests for workspace dependency checks
+    mod workspace_dependency_tests {
+        use super::*;
+        use toml::map::Map;
+
+        #[test]
+        fn test_is_workspace_dependency_true() {
+            let mut map = Map::new();
+            map.insert("workspace".to_string(), Value::Boolean(true));
+            let value = Value::Table(map);
+            assert!(is_workspace_dependency(&value));
+        }
+
+        #[test]
+        fn test_is_workspace_dependency_false() {
+            let mut map = Map::new();
+            map.insert("version".to_string(), Value::String("1.0".to_string()));
+            let value = Value::Table(map);
+            assert!(!is_workspace_dependency(&value));
+        }
+
+        #[test]
+        fn test_is_workspace_dependency_string() {
+            let value = Value::String("1.0".to_string());
+            assert!(!is_workspace_dependency(&value));
+        }
+
+        #[test]
+        fn test_is_workspace_dependency_with_features_optional() {
+            let mut map = Map::new();
+            map.insert("workspace".to_string(), Value::Boolean(true));
+            map.insert("optional".to_string(), Value::Boolean(true));
+            let value = Value::Table(map);
+            assert!(
+                !is_workspace_dependency_with_features(&value),
+                "Optional deps should return false"
+            );
+        }
+
+        #[test]
+        fn test_is_workspace_dependency_with_features_non_optional() {
+            let mut map = Map::new();
+            map.insert("workspace".to_string(), Value::Boolean(true));
+            let value = Value::Table(map);
+            assert!(is_workspace_dependency_with_features(&value));
+        }
+    }
+
+    /// Tests for dependency default-features handling
+    mod default_features_tests {
+        use super::*;
+        use toml::map::Map;
+
+        #[test]
+        fn test_get_dependency_default_features_dash_syntax() {
+            let mut map = Map::new();
+            map.insert("version".to_string(), Value::String("1.0".to_string()));
+            map.insert("default-features".to_string(), Value::Boolean(false));
+            let value = Value::Table(map);
+            assert_eq!(get_dependency_default_features(&value), Some(false));
+        }
+
+        #[test]
+        fn test_get_dependency_default_features_underscore_syntax() {
+            let mut map = Map::new();
+            map.insert("version".to_string(), Value::String("1.0".to_string()));
+            map.insert("default_features".to_string(), Value::Boolean(false));
+            let value = Value::Table(map);
+            assert_eq!(get_dependency_default_features(&value), Some(false));
+        }
+
+        #[test]
+        fn test_get_dependency_default_features_not_present() {
+            let mut map = Map::new();
+            map.insert("version".to_string(), Value::String("1.0".to_string()));
+            let value = Value::Table(map);
+            assert_eq!(get_dependency_default_features(&value), None);
+        }
+
+        #[test]
+        fn test_get_dependency_default_features_string_value() {
+            let value = Value::String("1.0".to_string());
+            assert_eq!(get_dependency_default_features(&value), None);
+        }
+    }
+
     use tempfile::TempDir;
 
     #[test]
