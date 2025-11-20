@@ -623,3 +623,270 @@ async fn run_edge_case_tests(
 
 // Global data store for the API (in a real app, this would be a database)
 static DATA_STORE: std::sync::LazyLock<ApiDataStore> = std::sync::LazyLock::new(ApiDataStore::new);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_results_new_creates_empty_state() {
+        let results = TestResults::new();
+
+        assert_eq!(results.total_tests, 0);
+        assert_eq!(results.passed_tests, 0);
+        assert_eq!(results.failed_tests, 0);
+        assert!(results.test_details.is_empty());
+    }
+
+    #[test]
+    fn test_results_record_passed_test() {
+        let mut results = TestResults::new();
+
+        let detail = TestDetail {
+            scenario: "TestScenario".to_string(),
+            test_name: "test_operation".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 42,
+        };
+
+        results.record_test(detail);
+
+        assert_eq!(results.total_tests, 1);
+        assert_eq!(results.passed_tests, 1);
+        assert_eq!(results.failed_tests, 0);
+        assert_eq!(results.test_details.len(), 1);
+    }
+
+    #[test]
+    fn test_results_record_failed_test() {
+        let mut results = TestResults::new();
+
+        let detail = TestDetail {
+            scenario: "ErrorScenario".to_string(),
+            test_name: "test_failure".to_string(),
+            passed: false,
+            error_message: Some("Connection timeout".to_string()),
+            response_time_ms: 5000,
+        };
+
+        results.record_test(detail);
+
+        assert_eq!(results.total_tests, 1);
+        assert_eq!(results.passed_tests, 0);
+        assert_eq!(results.failed_tests, 1);
+        assert_eq!(results.test_details.len(), 1);
+    }
+
+    #[test]
+    fn test_results_record_multiple_tests() {
+        let mut results = TestResults::new();
+
+        // Record 3 passed tests
+        for i in 0..3 {
+            results.record_test(TestDetail {
+                scenario: "HappyPath".to_string(),
+                test_name: format!("test_{i}"),
+                passed: true,
+                error_message: None,
+                response_time_ms: 100,
+            });
+        }
+
+        // Record 2 failed tests
+        for i in 0..2 {
+            results.record_test(TestDetail {
+                scenario: "ErrorHandling".to_string(),
+                test_name: format!("test_{i}"),
+                passed: false,
+                error_message: Some("Error occurred".to_string()),
+                response_time_ms: 200,
+            });
+        }
+
+        assert_eq!(results.total_tests, 5);
+        assert_eq!(results.passed_tests, 3);
+        assert_eq!(results.failed_tests, 2);
+        assert_eq!(results.test_details.len(), 5);
+    }
+
+    #[test]
+    fn test_results_summary_empty() {
+        let results = TestResults::new();
+        let summary = results.summary();
+
+        assert_eq!(summary, "Tests: 0 (Passed: 0, Failed: 0)");
+    }
+
+    #[test]
+    fn test_results_summary_with_tests() {
+        let mut results = TestResults::new();
+
+        results.record_test(TestDetail {
+            scenario: "Test".to_string(),
+            test_name: "pass".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 50,
+        });
+
+        results.record_test(TestDetail {
+            scenario: "Test".to_string(),
+            test_name: "fail".to_string(),
+            passed: false,
+            error_message: Some("Failed".to_string()),
+            response_time_ms: 100,
+        });
+
+        let summary = results.summary();
+        assert_eq!(summary, "Tests: 2 (Passed: 1, Failed: 1)");
+    }
+
+    #[test]
+    fn test_results_detailed_report_includes_passed_test() {
+        let mut results = TestResults::new();
+
+        results.record_test(TestDetail {
+            scenario: "HappyPath".to_string(),
+            test_name: "create_user".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 42,
+        });
+
+        let report = results.detailed_report();
+
+        assert!(report.contains("Tests: 1 (Passed: 1, Failed: 0)"));
+        assert!(report.contains("[PASS]"));
+        assert!(report.contains("HappyPath"));
+        assert!(report.contains("create_user"));
+        assert!(report.contains("42ms"));
+    }
+
+    #[test]
+    fn test_results_detailed_report_includes_failed_test_with_error() {
+        let mut results = TestResults::new();
+
+        results.record_test(TestDetail {
+            scenario: "ErrorHandling".to_string(),
+            test_name: "timeout_test".to_string(),
+            passed: false,
+            error_message: Some("Connection timeout after 5s".to_string()),
+            response_time_ms: 5000,
+        });
+
+        let report = results.detailed_report();
+
+        assert!(report.contains("Tests: 1 (Passed: 0, Failed: 1)"));
+        assert!(report.contains("[FAIL]"));
+        assert!(report.contains("ErrorHandling"));
+        assert!(report.contains("timeout_test"));
+        assert!(report.contains("5000ms"));
+        assert!(report.contains("Error: Connection timeout after 5s"));
+    }
+
+    #[test]
+    fn test_results_detailed_report_empty_state() {
+        let results = TestResults::new();
+        let report = results.detailed_report();
+
+        assert_eq!(report, "Tests: 0 (Passed: 0, Failed: 0)");
+        assert!(!report.contains("Test Details:"));
+    }
+
+    #[test]
+    fn test_results_test_detail_key_format() {
+        let mut results = TestResults::new();
+
+        results.record_test(TestDetail {
+            scenario: "Scenario1".to_string(),
+            test_name: "test1".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 10,
+        });
+
+        results.record_test(TestDetail {
+            scenario: "Scenario2".to_string(),
+            test_name: "test2".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 20,
+        });
+
+        // Keys should be "{scenario}_{test_name}"
+        assert!(results.test_details.contains_key("Scenario1_test1"));
+        assert!(results.test_details.contains_key("Scenario2_test2"));
+    }
+
+    #[test]
+    fn test_results_duplicate_scenario_test_overwrites() {
+        let mut results = TestResults::new();
+
+        // First test
+        results.record_test(TestDetail {
+            scenario: "Test".to_string(),
+            test_name: "operation".to_string(),
+            passed: true,
+            error_message: None,
+            response_time_ms: 100,
+        });
+
+        // Same scenario+test name, different result
+        results.record_test(TestDetail {
+            scenario: "Test".to_string(),
+            test_name: "operation".to_string(),
+            passed: false,
+            error_message: Some("Failed on retry".to_string()),
+            response_time_ms: 200,
+        });
+
+        // Should have 2 total tests but only 1 detail entry (overwritten)
+        assert_eq!(results.total_tests, 2);
+        assert_eq!(results.test_details.len(), 1);
+
+        let detail = results.test_details.get("Test_operation").unwrap();
+        assert!(!detail.passed);
+        assert_eq!(detail.response_time_ms, 200);
+    }
+
+    #[test]
+    fn test_api_data_store_new() {
+        let store = ApiDataStore::new();
+
+        let users = store.users.lock().unwrap();
+        assert!(users.is_empty());
+    }
+
+    #[test]
+    fn test_user_serialization() {
+        let user = User {
+            id: "test-id-123".to_string(),
+            name: "John Doe".to_string(),
+            email: "john@example.com".to_string(),
+            created_at: 1234567890,
+        };
+
+        let json = serde_json::to_string(&user).unwrap();
+        let deserialized: User = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, user.id);
+        assert_eq!(deserialized.name, user.name);
+        assert_eq!(deserialized.email, user.email);
+        assert_eq!(deserialized.created_at, user.created_at);
+    }
+
+    #[test]
+    fn test_create_user_request_serialization() {
+        let request = CreateUserRequest {
+            name: "Jane Smith".to_string(),
+            email: "jane@example.com".to_string(),
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let deserialized: CreateUserRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.name, request.name);
+        assert_eq!(deserialized.email, request.email);
+    }
+}
