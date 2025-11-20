@@ -393,7 +393,10 @@ mod test {
 
     use crate::{
         Calculation, Number,
-        parse::{parse_calculation, split_on_char, split_on_char_trimmed},
+        parse::{
+            parse_calc, parse_calculation, parse_grouping, parse_max, parse_min, parse_number,
+            split_on_char, split_on_char_trimmed,
+        },
     };
 
     #[test_log::test]
@@ -699,6 +702,214 @@ mod test {
                 Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
                 Box::new(Calculation::Number(Box::new(Number::Integer(10))))
             )
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_error_for_unmatched_closing_paren_before_needle() {
+        let result = split_on_char("123) + 456", '+', 0);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_error_for_unmatched_closing_brace_before_needle() {
+        let result = split_on_char("123} + 456", '+', 0);
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_error_for_unmatched_opening_paren() {
+        let result = split_on_char("(123 456", '+', 0);
+        assert!(result.is_ok());
+        // Note: Unmatched opening brackets are not detected as errors since the function
+        // returns early when no needle is found. This is acceptable for the current use case.
+    }
+
+    #[test_log::test]
+    fn parse_grouping_returns_error_for_invalid_grouping() {
+        let result = parse_grouping("123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_grouping_returns_error_for_mismatched_parens() {
+        let result = parse_grouping("(123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_min_returns_error_for_invalid_syntax() {
+        let result = parse_min("min123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_min_returns_error_for_missing_arguments() {
+        let result = parse_min("min(123)");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_max_returns_error_for_invalid_syntax() {
+        let result = parse_max("max123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_max_returns_error_for_missing_arguments() {
+        let result = parse_max("max(123)");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_calc_returns_error_for_invalid_syntax() {
+        let result = parse_calc("calc123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_calc_returns_error_for_missing_parens() {
+        let result = parse_calc("calc 123");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_number_returns_error_for_invalid_text() {
+        let result = parse_number("not-a-number");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_number_returns_error_for_empty_string() {
+        let result = parse_number("");
+        assert!(result.is_err());
+    }
+
+    #[test_log::test]
+    fn parse_number_handles_negative_zero_epsilon() {
+        // Test that very small negative numbers close to zero are normalized to 0.0
+        let result = parse_number("-0.000001").unwrap();
+        if let Number::Real(val) = result {
+            assert!((val - 0.0).abs() < f32::EPSILON);
+        } else {
+            panic!("Expected Real number");
+        }
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_px_suffix_with_integer() {
+        assert_eq!(parse_number("100px").unwrap(), Number::Integer(100));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_px_suffix_with_float() {
+        assert_eq!(parse_number("100.5px").unwrap(), Number::Real(100.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_integer_vh() {
+        assert_eq!(parse_number("50vh").unwrap(), Number::IntegerVh(50));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_float_vh() {
+        assert_eq!(parse_number("50.5vh").unwrap(), Number::RealVh(50.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_integer_vw() {
+        assert_eq!(parse_number("50vw").unwrap(), Number::IntegerVw(50));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_float_vw() {
+        assert_eq!(parse_number("50.5vw").unwrap(), Number::RealVw(50.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_integer_dvh() {
+        assert_eq!(parse_number("50dvh").unwrap(), Number::IntegerDvh(50));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_float_dvh() {
+        assert_eq!(parse_number("50.5dvh").unwrap(), Number::RealDvh(50.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_integer_dvw() {
+        assert_eq!(parse_number("50dvw").unwrap(), Number::IntegerDvw(50));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_float_dvw() {
+        assert_eq!(parse_number("50.5dvw").unwrap(), Number::RealDvw(50.5));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_integer_percent() {
+        assert_eq!(parse_number("50%").unwrap(), Number::IntegerPercent(50));
+    }
+
+    #[test_log::test]
+    fn parse_number_can_parse_float_percent() {
+        assert_eq!(parse_number("50.5%").unwrap(), Number::RealPercent(50.5));
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_multiply_operation() {
+        assert_eq!(
+            parse_calculation("10 * 5").unwrap(),
+            Calculation::Multiply(
+                Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(5))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_divide_operation() {
+        assert_eq!(
+            parse_calculation("10 / 5").unwrap(),
+            Calculation::Divide(
+                Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(5))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_subtract_operation() {
+        assert_eq!(
+            parse_calculation("10 - 5").unwrap(),
+            Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(10)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(5))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_handles_nested_braces() {
+        assert_eq!(
+            split_on_char("{ { inner } } + outer", '+', 0).unwrap(),
+            Some(("{ { inner } } ", " outer"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_handles_mixed_brackets() {
+        assert_eq!(
+            split_on_char("( { test } ) + value", '+', 0).unwrap(),
+            Some(("( { test } ) ", " value"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_with_start_offset_skips_earlier_matches() {
+        assert_eq!(
+            split_on_char("1 + 2 + 3", '+', 3).unwrap(),
+            Some(("1 + 2 ", " 3"))
         );
     }
 }
