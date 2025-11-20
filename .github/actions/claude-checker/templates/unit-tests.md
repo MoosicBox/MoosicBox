@@ -38,15 +38,26 @@ You must ONLY add tests that meet ALL of the following criteria:
 
 **DO NOT** add tests for:
 
-- Simple getters/setters with no logic
-- Trivial constructors that just assign values
-- Code that is already well-tested through integration tests
-- Obvious behavior that doesn't need verification
-- Simple forwarding functions with no logic
-- **Debug/Display trait implementations** - Do not test formatting output of Debug or Display traits
-- **Clone trait implementations** - Do not test that Clone works correctly, trust the derive macro or manual impl
+- **Simple getters/setters with no logic** - Functions that just return or set a field value without any transformation, validation, or business logic
+- **Trivial type conversions** - Standard trait implementations like `ToString`, `AsRef`, `Into`, `From`, `FromStr` that simply convert between types without complex logic
+- **Trivial constructors** - Constructors that just assign values to fields without validation or setup logic
+- **Code already well-tested through integration tests** - Avoid redundant unit tests for behavior that is thoroughly covered by integration/end-to-end tests
+- **Obvious behavior that doesn't need verification** - Self-evident functionality that would fail to compile if incorrect
+- **Simple forwarding functions with no logic** - Functions that just call another function or method without transformation
+- **Debug/Display trait implementations** - Do not test formatting output of Debug or Display traits (e.g., `format!("{:?}", value)` or `value.to_string()`)
+- **Clone trait implementations** - Do not test that Clone works correctly, trust the derive macro or manual implementation
 - **External dependency behavior** - Do not test that external libraries (e.g., flume channels, tokio, etc.) work correctly. Trust that dependencies are tested by their maintainers
-- **Derived or auto-generated trait implementations** - Do not test traits that are derived (Debug, Clone, PartialEq, etc.)
+- **Derived or auto-generated trait implementations** - Do not test traits that are derived (Debug, Clone, PartialEq, Eq, Hash, etc.)
+- **Standard library trait implementations** - Do not test standard conversions (AsRef, Into, From) unless they contain complex logic beyond simple type conversion
+
+**Why avoid these tests?**
+These tests provide minimal value because:
+
+1. They test the compiler or standard library, not your code
+2. They're brittle - they break when refactoring without indicating real bugs
+3. They clutter the test suite and reduce signal-to-noise ratio
+4. They give false confidence in coverage metrics
+5. If these basic operations fail, many other tests will also fail, making the failure obvious
 
 **DO** add tests for:
 
