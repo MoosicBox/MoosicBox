@@ -1,3 +1,8 @@
+//! Image resizing command-line tool.
+//!
+//! This binary provides a command-line interface for resizing images using
+//! the `moosicbox_image` library. It supports various encodings and quality settings.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -58,18 +63,34 @@ async fn main() {
     .expect("Failed to compress image");
 }
 
+/// Error type for local file resizing operations.
 #[derive(Error, Debug)]
 pub enum ResizeLocalFileError {
+    /// Image resize error from the image module.
     #[error(transparent)]
     ResizeImage(#[from] image::ResizeImageError),
+    /// Image processing error from the `image` crate.
     #[error(transparent)]
     Image(#[from] ::image::error::ImageError),
+    /// I/O error during file operations.
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    /// Generic failure during resize operation.
     #[error("Failed")]
     Failed,
 }
 
+/// Resizes a local image file with optional width and height constraints.
+///
+/// If only one dimension is provided, the other is calculated to maintain aspect ratio.
+/// If neither dimension is provided, the original dimensions are used.
+///
+/// # Errors
+///
+/// * [`ResizeLocalFileError::Image`] - If the image file cannot be opened or decoded
+/// * [`ResizeLocalFileError::ResizeImage`] - If the image resize operation fails
+/// * [`ResizeLocalFileError::IO`] - If file I/O operations fail
+/// * [`ResizeLocalFileError::Failed`] - If the resize operation returns no data
 async fn try_resize_local_file(
     width: Option<u32>,
     height: Option<u32>,
@@ -142,6 +163,17 @@ async fn try_resize_local_file(
     Ok(())
 }
 
+/// Saves bytes to a file, creating parent directories if needed.
+///
+/// # Errors
+///
+/// * [`std::io::Error`] - If parent directory creation fails
+/// * [`std::io::Error`] - If file cannot be opened or written to
+/// * [`std::io::Error`] - If seeking to the start position fails
+///
+/// # Panics
+///
+/// Panics if the path has no parent directory.
 fn save_bytes_to_file(bytes: &[u8], path: &Path, start: Option<u64>) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
