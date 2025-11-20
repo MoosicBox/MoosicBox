@@ -118,3 +118,63 @@ impl UsernamePasswordAuth {
         (self.handle_login)(username.into(), password.into()).await
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{UsernamePasswordAuth, UsernamePasswordAuthBuilder};
+
+    #[test]
+    fn username_password_auth_builder_new_creates_empty_builder() {
+        let builder = UsernamePasswordAuthBuilder::new();
+        assert!(builder.handle_login.is_none());
+    }
+
+    #[test]
+    fn username_password_auth_builder_build_fails_without_handler() {
+        let builder = UsernamePasswordAuthBuilder::new();
+        let result = builder.build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn username_password_auth_builder_with_handler_sets_handler() {
+        let builder = UsernamePasswordAuthBuilder::new().with_handler(|_u, _p| async { Ok(true) });
+
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn username_password_auth_login_calls_handler() {
+        let auth = UsernamePasswordAuth::builder()
+            .with_handler(|username, password| async move {
+                if username == "test_user" && password == "test_pass" {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            })
+            .build()
+            .unwrap();
+
+        let result = auth.login("test_user", "test_pass").await.unwrap();
+        assert!(result);
+
+        let result = auth.login("wrong_user", "wrong_pass").await.unwrap();
+        assert!(!result);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn username_password_auth_login_propagates_handler_error() {
+        let auth = UsernamePasswordAuth::builder()
+            .with_handler(|_u, _p| async {
+                Err(Box::new(std::io::Error::other("handler error"))
+                    as Box<dyn std::error::Error + Send>)
+            })
+            .build()
+            .unwrap();
+
+        let result = auth.login("user", "pass").await;
+        assert!(result.is_err());
+    }
+}
