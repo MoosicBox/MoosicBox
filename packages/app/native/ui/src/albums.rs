@@ -734,6 +734,7 @@ pub fn album_display(
     }
 }
 
+/// Converts a list of track API sources to a comma-separated string.
 fn filtered_sources_to_string(filtered_sources: &[TrackApiSource]) -> String {
     filtered_sources
         .iter()
@@ -742,6 +743,9 @@ fn filtered_sources_to_string(filtered_sources: &[TrackApiSource]) -> String {
         .join(",")
 }
 
+/// Builds a URL query string from key-value pairs.
+///
+/// Skips empty values and formats the result as a proper URL query string.
 fn build_query(start: char, values: &[(&str, &str)]) -> String {
     let mut query = String::new();
 

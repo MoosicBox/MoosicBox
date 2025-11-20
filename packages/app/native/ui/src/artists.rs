@@ -66,6 +66,9 @@ pub fn artist_cover_url(
     }
 }
 
+/// Renders an artist cover image element with lazy loading.
+///
+/// Requests a higher resolution image (1.33x) for better display quality.
 fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Containers {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
