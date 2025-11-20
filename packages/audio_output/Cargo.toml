@@ -48,6 +48,10 @@ symphonia = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
+test-log      = { workspace = true }
+
 [features]
 default = ["api", "default-windows", "openapi"]
 

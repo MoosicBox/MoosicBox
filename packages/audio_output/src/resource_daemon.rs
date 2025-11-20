@@ -166,3 +166,252 @@ impl<T, QuitReason: Clone + Send + 'static> Drop for ResourceDaemon<T, QuitReaso
         log::debug!("ResourceDaemon: Drop completed");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    #[test]
+    fn test_daemon_state_debug() {
+        let state: DaemonState<String> = DaemonState::Holding;
+        assert_eq!(format!("{state:?}"), "Holding");
+
+        let state: DaemonState<String> = DaemonState::Quitting(Some("reason".to_string()));
+        assert_eq!(format!("{state:?}"), "Quitting(Some(\"reason\"))");
+
+        let state: DaemonState<String> = DaemonState::Quit(None);
+        assert_eq!(format!("{state:?}"), "Quit(None)");
+    }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn test_daemon_state_clone() {
+        let state: DaemonState<String> = DaemonState::Holding;
+        let cloned = state.clone();
+        assert_eq!(cloned, DaemonState::Holding);
+
+        let state = DaemonState::Quitting(Some("test".to_string()));
+        let cloned = state.clone();
+        assert!(matches!(cloned, DaemonState::Quitting(Some(ref s)) if s == "test"));
+    }
+
+    #[test]
+    fn test_daemon_state_equality() {
+        let state1: DaemonState<String> = DaemonState::Holding;
+        let state2: DaemonState<String> = DaemonState::Holding;
+        assert_eq!(state1, state2);
+
+        let state1 = DaemonState::Quitting(Some("reason".to_string()));
+        let state2 = DaemonState::Quitting(Some("reason".to_string()));
+        assert_eq!(state1, state2);
+
+        let state1: DaemonState<String> = DaemonState::Quit(None);
+        let state2: DaemonState<String> = DaemonState::Quit(None);
+        assert_eq!(state1, state2);
+    }
+
+    #[test]
+    fn test_daemon_state_ordering() {
+        let holding: DaemonState<String> = DaemonState::Holding;
+        let quitting: DaemonState<String> = DaemonState::Quitting(None);
+        let quit: DaemonState<String> = DaemonState::Quit(None);
+
+        assert!(holding < quitting);
+        assert!(quitting < quit);
+        assert!(holding < quit);
+    }
+
+    #[test]
+    fn test_resource_daemon_new_success() {
+        let daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
+
+        assert_eq!(daemon.state(), DaemonState::Holding);
+    }
+
+    #[test]
+    fn test_resource_daemon_new_with_error() {
+        let daemon = ResourceDaemon::<i32, String>::new(|_signal| Err("error".to_string()));
+
+        // Give the thread time to complete
+        std::thread::sleep(Duration::from_millis(50));
+
+        let state = daemon.state();
+        assert!(matches!(state, DaemonState::Quit(Some(ref s)) if s == "error"));
+    }
+
+    #[test]
+    fn test_resource_daemon_quit() {
+        let counter = Arc::new(Mutex::new(0));
+        let counter_clone = counter.clone();
+
+        let mut daemon = ResourceDaemon::<i32, String>::new(move |_signal| {
+            *counter_clone.lock().unwrap() = 1;
+            Ok(42)
+        });
+
+        // Verify resource was created
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(*counter.lock().unwrap(), 1);
+
+        // Quit the daemon
+        daemon.quit("test reason".to_string());
+
+        // Verify state is now Quit
+        let state = daemon.state();
+        assert!(matches!(state, DaemonState::Quit(Some(ref s)) if s == "test reason"));
+    }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    #[allow(clippy::items_after_statements)]
+    fn test_resource_daemon_drop() {
+        let dropped = Arc::new(Mutex::new(false));
+        let dropped_clone = dropped.clone();
+
+        struct DropTracker {
+            dropped: Arc<Mutex<bool>>,
+        }
+
+        impl Drop for DropTracker {
+            fn drop(&mut self) {
+                *self.dropped.lock().unwrap() = true;
+            }
+        }
+
+        {
+            let _daemon = ResourceDaemon::<DropTracker, String>::new(move |_signal| {
+                Ok(DropTracker {
+                    dropped: dropped_clone.clone(),
+                })
+            });
+
+            // Wait for resource to be created
+            std::thread::sleep(Duration::from_millis(50));
+            assert!(!*dropped.lock().unwrap());
+        } // daemon is dropped here
+
+        // Wait for daemon thread to clean up
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Verify resource was dropped
+        assert!(*dropped.lock().unwrap());
+    }
+
+    #[test]
+    fn test_quit_signal_dispatch() {
+        let daemon = ResourceDaemon::<i32, String>::new(|signal| {
+            // Dispatch quit signal from within the provider
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                signal.dispatch("internal quit".to_string());
+            });
+            Ok(42)
+        });
+
+        // Wait for signal to be dispatched
+        std::thread::sleep(Duration::from_millis(100));
+
+        let state = daemon.state();
+        assert!(matches!(
+            state,
+            DaemonState::Quitting(_) | DaemonState::Quit(_)
+        ));
+    }
+
+    #[test]
+    fn test_quit_signal_debug() {
+        let daemon = ResourceDaemon::<i32, String>::new(|signal| {
+            let debug_str = format!("{signal:?}");
+            assert!(debug_str.contains("QuitSignal"));
+            Ok(42)
+        });
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(daemon.state(), DaemonState::Holding);
+    }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn test_quit_signal_clone() {
+        let daemon = ResourceDaemon::<i32, String>::new(|signal| {
+            let signal_clone = signal.clone();
+
+            // Both signals should work
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                signal_clone.dispatch("cloned signal".to_string());
+            });
+
+            Ok(42)
+        });
+
+        std::thread::sleep(Duration::from_millis(100));
+
+        let state = daemon.state();
+        assert!(matches!(
+            state,
+            DaemonState::Quitting(_) | DaemonState::Quit(_)
+        ));
+    }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn test_resource_daemon_state_transitions() {
+        let state_log = Arc::new(Mutex::new(Vec::new()));
+        let state_log_clone = state_log.clone();
+
+        let mut daemon = ResourceDaemon::<i32, String>::new(move |_signal| {
+            state_log_clone.lock().unwrap().push("created".to_string());
+            Ok(42)
+        });
+
+        // Initial state should be Holding
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(daemon.state(), DaemonState::Holding);
+
+        // Quit the daemon
+        daemon.quit("test".to_string());
+
+        // State should transition to Quit
+        let state = daemon.state();
+        assert!(matches!(state, DaemonState::Quit(_)));
+    }
+
+    #[test]
+    fn test_multiple_quit_calls() {
+        let mut daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(daemon.state(), DaemonState::Holding);
+
+        // First quit
+        daemon.quit("first".to_string());
+        let state1 = daemon.state();
+
+        // Second quit should be a no-op
+        daemon.quit("second".to_string());
+        let state2 = daemon.state();
+
+        // State should remain the same
+        assert_eq!(state1, state2);
+    }
+
+    #[test]
+    fn test_resource_daemon_send_sync() {
+        fn assert_send<T: Send>() {}
+        fn assert_sync<T: Sync>() {}
+
+        assert_send::<ResourceDaemon<i32, String>>();
+        assert_sync::<ResourceDaemon<i32, String>>();
+    }
+
+    #[test]
+    fn test_resource_daemon_debug() {
+        let daemon = ResourceDaemon::<i32, String>::new(|_signal| Ok(42));
+
+        let debug_str = format!("{daemon:?}");
+        assert!(debug_str.contains("ResourceDaemon"));
+    }
+}
